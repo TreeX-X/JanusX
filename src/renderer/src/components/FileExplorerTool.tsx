@@ -567,7 +567,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
             style={{
               background: 'rgba(255, 255, 255, 0.04)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              color: '#d4d4d4',
+              color: 'var(--shell-text)',
             }}
             placeholder={t('editor:fileTree.searchPlaceholder')}
             value={searchQuery}
@@ -581,7 +581,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
           />
           <button
             type="button"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[rgba(255,255,255,0.08)] text-[#999] transition-colors hover:border-[rgba(255,120,48,0.4)] hover:text-[#ff7830] disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[rgba(255,255,255,0.08)] text-[var(--shell-muted)] transition-colors hover:border-[rgba(255,120,48,0.4)] hover:text-[var(--shell-accent)] disabled:cursor-not-allowed disabled:opacity-40"
             title={t('editor:fileTree.openInVSCode')}
             aria-label={t('editor:fileTree.openInVSCode')}
             disabled={!activeScopePath || openingVSCode}
@@ -613,7 +613,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
               </div>
             ) : visibleTree.length === 0 ? (
               <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-3">
-                <div className="text-[#555]">
+                <div className="text-[var(--shell-dim)]">
                   {fileTree.length === 0 ? t('editor:fileTree.emptyWorkspace') : t('editor:fileTree.noMatch')}
                 </div>
               </div>

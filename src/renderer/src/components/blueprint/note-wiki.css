@@ -40,3 +40,59 @@
 .bp-composition button { background: transparent; border: 0; color: #e78b63; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
 .bp-composition button:disabled { color: #93939d; cursor: default; }
 .bp-composition-overlay { position: absolute; top: 12px; left: 12px; z-index: 4; max-width: min(460px, 65%); background: rgba(25, 25, 29, .94); border: 1px solid #34343b; border-radius: 8px; }
+
+/* ── Planche 纸面覆盖（加法层，dark 原样不动） ── */
+[data-theme='planche'] .bp-note-wiki { color: var(--ink, #1C343B); }
+[data-theme='planche'] .bp-note-wiki button:focus-visible,
+[data-theme='planche'] .bp-note-wiki input:focus-visible,
+[data-theme='planche'] .bp-note-wiki summary:focus-visible { outline-color: var(--planche-red, #D43D2A); }
+[data-theme='planche'] .bp-note-wiki button {
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  background: transparent;
+  color: var(--ink, #1C343B);
+}
+[data-theme='planche'] .bp-note-wiki__scope strong { color: var(--planche-red, #D43D2A); }
+[data-theme='planche'] .bp-note-wiki small,
+[data-theme='planche'] .bp-note-wiki__identity,
+[data-theme='planche'] .bp-note-wiki--compact .bp-note-wiki__scope,
+[data-theme='planche'] .bp-note-wiki__provenance { color: var(--ink-soft, rgba(28, 52, 59, 0.62)); }
+[data-theme='planche'] .bp-note-wiki__directory { border-block: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22)); }
+[data-theme='planche'] .bp-note-wiki__directory input {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+[data-theme='planche'] .bp-note-wiki__directory nav button[aria-current] {
+  background: var(--shell-accent-soft);
+  border-color: var(--shell-accent-border);
+}
+[data-theme='planche'] .bp-note-wiki__directory nav button:hover { background: var(--paper-deep, #DCCFA8); }
+[data-theme='planche'] .bp-note-wiki__tabs [aria-selected=true] {
+  color: var(--planche-red, #D43D2A);
+  border-color: var(--shell-accent-border);
+  background: var(--shell-accent-soft);
+}
+[data-theme='planche'] .bp-note-wiki__metadata dt { color: var(--ink-soft, rgba(28, 52, 59, 0.62)); }
+[data-theme='planche'] .bp-note-wiki .bp-note-link { color: var(--planche-red, #D43D2A); }
+[data-theme='planche'] .bp-note-source {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink, #1C343B);
+}
+[data-theme='planche'] .bp-note-wiki__group { border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22)); }
+[data-theme='planche'] .bp-note-wiki__group h4 { color: var(--ink, #1C343B); }
+[data-theme='planche'] .bp-note-relation { border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22)); }
+[data-theme='planche'] .bp-note-warning {
+  border-left: 2px solid #A86F0B;
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+[data-theme='planche'] .bp-composition { color: var(--shell-muted); }
+[data-theme='planche'] .bp-composition summary { color: var(--shell-text); }
+[data-theme='planche'] .bp-composition button { color: var(--planche-red, #D43D2A); }
+[data-theme='planche'] .bp-composition button:disabled { color: var(--ink-faint, rgba(28, 52, 59, 0.38)); }
+[data-theme='planche'] .bp-composition-overlay {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+}

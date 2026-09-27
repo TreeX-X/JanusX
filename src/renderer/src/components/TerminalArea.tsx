@@ -60,6 +60,9 @@ import {
 } from '@/lib/terminal-launch'
 import { useTerminalLifecycle } from '@/features/terminal/useTerminalLifecycle'
 import { useTurnChangesStore } from '@/stores/turn-changes'
+import { useThemeStore } from '@/stores/theme'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
+import { getThemeDefinition } from '../../../shared/theme/registry'
 import {
   buildWorkspaceTerminalSurfaces,
   HOT_WORKSPACE_EVICTION_GRACE_MS,
@@ -173,24 +176,30 @@ function contextRatio(terminal: Terminal): number | undefined {
   return Math.min(1, terminal.contextTokens / windowTokens)
 }
 
-/** 上下文渐变颜色：用量越多越红，越接近满越警告。
- *  0%   → 冷青蓝（#58a6ff，宽裕）
- *  50%  → 暖橙（#ff7830，正常）
- *  85%+ → 警告红（#ff5858，逼近上限） */
-function contextRatioColor(ratio: number | undefined): string {
-  if (ratio === undefined) return 'rgba(255,255,255,0.18)'
+/** 上下文用量颜色：三段刻度插值，用量越多越警告。
+ *  锚点来自 theme definition ctxScale（dark：青蓝→橙→红；planche：深绿→赭黄→朱红），
+ *  调用方无需传主题，默认读当前主题（M1 统一结构）。 */
+function contextRatioColor(ratio: number | undefined, theme: unknown = useThemeStore.getState().theme): string {
+  const scale = getThemeDefinition(theme).ctxScale
+  if (ratio === undefined) return scale.empty
   const r = Math.max(0, Math.min(1, ratio))
-  // 三段插值：[0,0.5] 青蓝→橙，[0.5,0.85] 橙→红，[0.85,1] 红加深
+  const [c0, c50, c85, c100] = scale.stops.map(hexToRgb)
+  // 三段插值：[0,0.5] 宽裕→正常，[0.5,0.85] 正常→警告，[0.85,1] 警告加深
   if (r <= 0.5) {
     const t = r / 0.5
-    return mixColor([0x58, 0xa6, 0xff], [0xff, 0x78, 0x30], t)
+    return mixColor(c0, c50, t)
   }
   if (r <= 0.85) {
     const t = (r - 0.5) / 0.35
-    return mixColor([0xff, 0x78, 0x30], [0xff, 0x58, 0x58], t)
+    return mixColor(c50, c85, t)
   }
   const t = (r - 0.85) / 0.15
-  return mixColor([0xff, 0x58, 0x58], [0xe0, 0x2b, 0x2b], t)
+  return mixColor(c85, c100, t)
+}
+
+function hexToRgb(hex: string): number[] {
+  const h = hex.replace('#', '')
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
 }
 
 function mixColor(a: number[], b: number[], t: number): string {
@@ -227,8 +236,8 @@ type ContextPopoverRow = [label: string, value: string]
 function ContextPopoverRows({ rows }: { rows: ContextPopoverRow[] }) {
   return rows.map(([label, value]) => (
     <div key={label} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-1">
-      <span className="truncate text-[#858585]">{label}</span>
-      <span className="min-w-0 max-w-[170px] truncate text-right text-[#ededed]">{value}</span>
+      <span className="truncate text-[var(--shell-muted)]">{label}</span>
+      <span className="min-w-0 max-w-[170px] truncate text-right text-[var(--shell-text)]">{value}</span>
     </div>
   ))
 }
@@ -355,20 +364,20 @@ function ContextUsagePopover({
         left: position.left,
         borderColor: 'rgba(255,255,255,0.12)',
         background: 'var(--shell-chrome-raised)',
-        color: '#e8e8e8',
+        color: 'var(--shell-text)',
       }}
     >
       <div className="mb-3 flex items-start justify-between gap-3">
         <span className="min-w-0">
-          <span className="block text-[10px] uppercase tracking-[0.12em] text-[#8c8c8c]">{t('terminal:context.popoverTitle')}</span>
-          <span className="mt-1 block truncate text-[12px] text-[#d9d9d9]">
+          <span className="block text-[10px] uppercase tracking-[0.12em] text-[var(--shell-muted)]">{t('terminal:context.popoverTitle')}</span>
+          <span className="mt-1 block truncate text-[12px] text-[var(--shell-text)]">
             {terminal.contextTokens === undefined || windowTokens === undefined
               ? t('terminal:telemetry.contextUnknown')
               : `${formatExactTokenCount(terminal.contextTokens)} / ${formatExactTokenCount(windowTokens)}`}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-2">
-          <span className="rounded border border-[rgba(255,255,255,0.08)] px-1.5 py-0.5 text-[9px] uppercase text-[#929292]">
+          <span className="rounded border border-[var(--control-border)] px-1.5 py-0.5 text-[9px] uppercase text-[var(--shell-muted)]">
             {telemetryQualityLabel(terminal, t)}
           </span>
           <span className="text-[18px] leading-none" style={{ color: contextRatioColor(contextRatio(terminal)) }}>
@@ -389,14 +398,14 @@ function ContextUsagePopover({
         <div className="grid grid-cols-2 gap-x-5 border-t border-[rgba(255,255,255,0.07)] py-2.5">
           {remainingTokens !== undefined && (
             <div className="min-w-0">
-              <div className="text-[9px] uppercase text-[#777]">{t('terminal:context.row.remaining')}</div>
-              <div className="mt-1 truncate text-[13px] text-[#ededed]">{formatExactTokenCount(remainingTokens)}</div>
+              <div className="text-[9px] uppercase text-[var(--shell-dim)]">{t('terminal:context.row.remaining')}</div>
+              <div className="mt-1 truncate text-[13px] text-[var(--shell-text)]">{formatExactTokenCount(remainingTokens)}</div>
             </div>
           )}
           {compacted !== undefined && (
             <div className="min-w-0">
-              <div className="text-[9px] uppercase text-[#777]">{t('terminal:context.row.compactions')}</div>
-              <div className="mt-1 truncate text-[13px] text-[#ededed]">{compacted}</div>
+              <div className="text-[9px] uppercase text-[var(--shell-dim)]">{t('terminal:context.row.compactions')}</div>
+              <div className="mt-1 truncate text-[13px] text-[var(--shell-text)]">{compacted}</div>
             </div>
           )}
         </div>
@@ -404,7 +413,7 @@ function ContextUsagePopover({
       {openMode === 'preview' ? (
         sessionSummaryRows.length > 0 && (
           <div className="border-t border-[rgba(255,255,255,0.07)] pt-2.5">
-            <div className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[#777]">{t('terminal:context.section.session')}</div>
+            <div className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[var(--shell-dim)]">{t('terminal:context.section.session')}</div>
             <ContextPopoverRows rows={sessionSummaryRows} />
           </div>
         )
@@ -412,26 +421,26 @@ function ContextUsagePopover({
         <div className="space-y-3 border-t border-[rgba(255,255,255,0.07)] pt-3">
           {capacityRows.length > 0 && (
             <section>
-              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[#777]">{t('terminal:context.section.capacity')}</h3>
+              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[var(--shell-dim)]">{t('terminal:context.section.capacity')}</h3>
               <ContextPopoverRows rows={capacityRows} />
             </section>
           )}
           {sessionDetailRows.length > 0 && (
             <section className="border-t border-[rgba(255,255,255,0.07)] pt-3">
-              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[#777]">{t('terminal:context.section.session')}</h3>
+              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[var(--shell-dim)]">{t('terminal:context.section.session')}</h3>
               <ContextPopoverRows rows={sessionDetailRows} />
             </section>
           )}
           {telemetryRows.length > 0 && (
             <section className="border-t border-[rgba(255,255,255,0.07)] pt-3">
-              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[#777]">{t('terminal:context.section.telemetry')}</h3>
+              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[var(--shell-dim)]">{t('terminal:context.section.telemetry')}</h3>
               <ContextPopoverRows rows={telemetryRows} />
             </section>
           )}
         </div>
       )}
       {terminal.telemetryUpdatedAt !== undefined && openMode === 'preview' && (
-        <div className="mt-2.5 border-t border-[rgba(255,255,255,0.07)] pt-2 text-[9px] text-[#686868]">
+        <div className="mt-2.5 border-t border-[rgba(255,255,255,0.07)] pt-2 text-[9px] text-[var(--shell-dim)]">
           {t('terminal:context.updatedAgo', { age: formatAge(terminal.telemetryUpdatedAt) })}
         </div>
       )}
@@ -552,7 +561,7 @@ function PaneTreeView(props: PaneTreeViewProps) {
   const { t } = useI18n('terminal')
   if (!props.node) {
     return (
-      <div className="flex h-full items-center justify-center text-sm font-mono text-[#666]">
+      <div className="flex h-full items-center justify-center text-sm font-mono text-[var(--shell-dim)]">
         {t('terminal:paneTree.waitingTerminal')}
       </div>
     )
@@ -646,6 +655,8 @@ function TerminalPresetCapsule({
   // renderPanel 滞后于 open：关闭时先播收回动画再卸载；exiting 期间仍按旧锚点定位
   const [renderPanel, setRenderPanel] = useState(false)
   const [exiting, setExiting] = useState(false)
+  // planche 下预设菜单走纸面 + 朱红，悬浮不再是深棕黑底
+  const plancheMenu = useThemeStore((s) => s.theme) === 'planche'
 
   useEffect(() => {
     if (open) {
@@ -738,20 +749,20 @@ function TerminalPresetCapsule({
       className="flex shrink-0 items-center font-mono"
       onMouseDown={(event) => event.stopPropagation()}
     >
+      <ThemedTooltip label={open ? 'Close terminal menu' : 'New Terminal'}>
       <button
         type="button"
-        title={open ? 'Close terminal menu' : 'New Terminal'}
         aria-label={open ? 'Close terminal menu' : 'New Terminal'}
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={onToggle}
-        className="flex shrink-0 items-center justify-center rounded border focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.35)] hover:bg-[rgba(255,255,255,0.055)]"
+        className={`flex shrink-0 items-center justify-center rounded border focus:outline-none focus-visible:ring-1 hover:bg-[rgba(255,255,255,0.055)] ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
         style={{
           width: TERMINAL_MENU_COLLAPSED_SIZE,
           height: TERMINAL_MENU_COLLAPSED_SIZE,
-          borderColor: open ? 'rgba(255,120,48,0.46)' : 'var(--shell-border)',
-          background: open ? 'rgb(36, 27, 21)' : 'var(--shell-chrome-raised)',
-          color: open ? '#ffb27d' : '#999',
+          borderColor: open ? (plancheMenu ? 'rgba(212,61,42,0.5)' : 'rgba(255,120,48,0.46)') : 'var(--shell-border)',
+          background: open ? (plancheMenu ? 'var(--shell-chrome-raised)' : 'rgb(36, 27, 21)') : 'var(--shell-chrome-raised)',
+          color: open ? (plancheMenu ? '#D43D2A' : '#ffb27d') : 'var(--shell-muted)',
           boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
           transition: 'color 180ms ease, background-color 150ms ease, border-color 180ms ease',
         }}
@@ -766,6 +777,7 @@ function TerminalPresetCapsule({
           <span className="absolute left-[4px] top-0 h-full w-px bg-current" />
         </span>
       </button>
+      </ThemedTooltip>
       {/* 外壳浮层都在菜单默认层级之上（toast 栈 10000 / Titlebar 9999 /
           TeamSetupGate 2000 / 侧栏弹窗 1200），菜单落点又在右上角，正好会被盖住；
           提到所有外壳浮层之上。 */}
@@ -784,10 +796,11 @@ function TerminalPresetCapsule({
               left: position.left,
               width: TERMINAL_MENU_PANEL_WIDTH,
               maxWidth: 'calc(100vw - 16px)',
-              borderColor: 'rgba(255,120,48,0.28)',
+              borderColor: plancheMenu ? '#1C343B' : 'rgba(255,120,48,0.28)',
               background: 'var(--shell-chrome-raised)',
-              boxShadow:
-                '0 8px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)',
+              boxShadow: plancheMenu
+                ? '3px 3px 0 #E8A08A'
+                : '0 8px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)',
               transformOrigin: position.placement === 'above' ? 'bottom right' : 'top right',
               animation: exiting
                 ? `terminal-menu-out ${TERMINAL_MENU_EXIT_MS}ms ease-in forwards`
@@ -803,34 +816,26 @@ function TerminalPresetCapsule({
               }}
             >
               {PRESETS.map((preset) => (
+                <ThemedTooltip key={preset.type} label={preset.name}>
                 <button
-                  key={preset.type}
                   type="button"
                   role="menuitem"
-                  title={preset.name}
                   aria-label={`New ${preset.name} terminal`}
-                  className="flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.35)]"
+                  className={`terminal-preset-item flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
                   style={{
                     borderColor: 'transparent',
                     background: 'transparent',
-                    color: '#d4d4d4',
+                    color: plancheMenu ? '#1C343B' : '#d4d4d4',
                   }}
                   onClick={(event) => {
                     event.stopPropagation()
                     onSelect(preset)
                   }}
-                  onMouseEnter={(event) => {
-                    event.currentTarget.style.borderColor = 'rgba(255,120,48,0.46)'
-                    event.currentTarget.style.background = 'rgb(36, 27, 21)'
-                  }}
-                  onMouseLeave={(event) => {
-                    event.currentTarget.style.borderColor = 'transparent'
-                    event.currentTarget.style.background = 'transparent'
-                  }}
                 >
                   <img src={preset.icon} alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{preset.name}</span>
                 </button>
+                </ThemedTooltip>
               ))}
             </div>
           </div>,
@@ -868,6 +873,7 @@ function LeafPane({
   onCreateTerminal,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
   const { t } = useI18n('terminal')
+  const plancheEmpty = useThemeStore((s) => s.theme) === 'planche'
   const [dragHint, setDragHint] = useState<{ zone: PaneDropHint; ratio: number } | null>(null)
   const isFocused = leaf.id === focusedPaneId
   const showFocus = showFocusChrome && isFocused
@@ -1012,8 +1018,11 @@ function LeafPane({
           const tabStatusLabel = tabVisual ? t(tabVisual.labelKey) : undefined
           const tabAttentionPulse = !!terminal && !isActive && terminal.status !== 'running' && terminal.status !== 'wait'
           return (
-            <div
+            <ThemedTooltip
               key={tab.id}
+              label={terminal && tabStatusLabel ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
+            >
+            <div
               role="button"
               tabIndex={0}
               draggable={tab.type === 'terminal' || tab.type === 'browser'}
@@ -1047,14 +1056,12 @@ function LeafPane({
                 background: isActive ? 'var(--shell-canvas)' : undefined,
                 boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.045)' : 'none',
               }}
-              title={terminal && tabStatusLabel ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
             >
               {/*-- tab 左侧状态点（独立占位）：128px 时 opencode（8 字符 ≈53px）会被截断，
                    固定宽度放到 144px，多出的 16px 正好覆盖圆点 6px + 1 个 gap + 呼吸余量。 --*/}
               {tabVisual && (
                 <span
                   aria-hidden="true"
-                  title={tabStatusLabel}
                   className={tabAttentionPulse ? 'term-status-pulse h-1.5 w-1.5 shrink-0 rounded-full' : 'h-1.5 w-1.5 shrink-0 rounded-full'}
                   style={{ background: tabVisual.color }}
                 />
@@ -1088,7 +1095,7 @@ function LeafPane({
                   as="span"
                   label={t('terminal:tab.closeTerminal')}
                   className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
-                  style={{ color: '#b86b6b' }}
+                  style={{ color: 'var(--shell-diff-del)' }}
                   onConfirm={() => {
                     onKillTerminalFromTab(tab.terminalId)
                   }}
@@ -1096,11 +1103,11 @@ function LeafPane({
                   <X size={12} strokeWidth={1.8} />
                 </HoldToConfirm>
               ) : (
+                <ThemedTooltip label={t('terminal:tab.closeBrowser')}>
                 <span
                   tabIndex={-1}
-                  title={t('terminal:tab.closeBrowser')}
                   className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
-                  style={{ color: '#999' }}
+                  style={{ color: 'var(--shell-muted)' }}
                   onClick={(event) => {
                     event.stopPropagation()
                     onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
@@ -1108,6 +1115,7 @@ function LeafPane({
                 >
                   <X size={12} strokeWidth={1.8} aria-hidden="true" />
                 </span>
+                </ThemedTooltip>
               )}
               {isActive && (
                 <span
@@ -1118,22 +1126,23 @@ function LeafPane({
                 />
               )}
             </div>
+            </ThemedTooltip>
           )
         })}
         <div className="ml-auto flex h-8 shrink-0 items-center gap-1 pl-1">
           <span
             aria-hidden="true"
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none font-mono"
-            style={{ color: '#999', visibility: 'hidden' }}
+            style={{ color: 'var(--shell-muted)', visibility: 'hidden' }}
           >
             x
           </span>
+          <ThemedTooltip label={t('terminal:tab.newBrowser')}>
           <button
             type="button"
-            title={t('terminal:tab.newBrowser')}
             aria-label={t('terminal:tab.newBrowser')}
             className="flex h-6 w-6 items-center justify-center rounded border text-[11px] leading-none transition-colors hover:bg-[rgba(255,120,48,0.1)]"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', color: '#999' }}
+            style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--shell-muted)' }}
             onClick={(event) => {
               event.stopPropagation()
               onOpenBrowser(leaf.id)
@@ -1141,6 +1150,7 @@ function LeafPane({
           >
             <Globe size={11} />
           </button>
+          </ThemedTooltip>
           <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} onClose={onCloseTerminalMenu} />
           <HoldToConfirm
             label={t('terminal:tab.killCurrentTerminal')}
@@ -1222,16 +1232,16 @@ function LeafPane({
                       boxShadow: '0 12px 32px rgba(0,0,0,0.35)',
                     }}
                   >
-                    <div className="text-[12px]" style={{ color: '#ff8585' }}>
+                    <div className="text-[12px]" style={{ color: 'var(--shell-diff-del)' }}>
                       Terminal failed to start
                     </div>
-                    <div className="text-[11px] leading-relaxed text-[#8a8a8a]">
+                    <div className="text-[11px] leading-relaxed text-[var(--shell-muted)]">
                       {terminal.errorMessage || t('terminal:error.unknown')}
                     </div>
                     <button
                       type="button"
                       className="rounded border px-3 py-1.5 text-[11px] transition-colors hover:bg-[rgba(255,120,48,0.08)]"
-                      style={{ borderColor: 'rgba(255,120,48,0.28)', color: '#ffb27d' }}
+                      style={{ borderColor: 'rgba(255,120,48,0.28)', color: 'var(--shell-accent)' }}
                       onClick={() => {
                         void retryTerminalCreate(terminal.id)
                       }}
@@ -1249,13 +1259,20 @@ function LeafPane({
           )
         })}
         {leaf.tabs.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center font-mono text-[12px] text-[#666]">
+          <div
+            className="flex h-full flex-col items-center justify-center gap-3 text-center font-mono text-[12px]"
+            style={{ color: plancheEmpty ? 'rgba(28,52,59,0.62)' : '#666' }}
+          >
             <div>Empty pane</div>
             <button
               type="button"
               onClick={openMenu}
-              className="rounded border px-3 py-1.5 text-[11px] transition-colors hover:bg-[rgba(255,120,48,0.08)]"
-              style={{ borderColor: 'rgba(255,120,48,0.22)', color: '#ffb27d' }}
+              className="terminal-empty-new rounded border px-3 py-1.5 text-[11px] transition-colors"
+              style={{
+                borderColor: plancheEmpty ? '#1C343B' : 'rgba(255,120,48,0.22)',
+                color: plancheEmpty ? '#D43D2A' : '#ffb27d',
+                background: 'transparent',
+              }}
             >
               New Terminal
             </button>
@@ -1269,6 +1286,8 @@ function LeafPane({
 export function TerminalArea() {
   const { t } = useI18n('terminal')
   useTerminalLifecycle()
+  // 底部抽屉折叠箭头等纸面点睛走分支（与菜单 plancheMenu 同构，作用域独立）
+  const plancheBottomBar = useThemeStore((s) => s.theme) === 'planche'
   // P5: useShallow 细粒度订阅——整 store 订阅会让任意无关字段变化都重渲染这棵大组件树
   const {
     workspaces,
@@ -1786,8 +1805,8 @@ export function TerminalArea() {
               <span
                 className="h-[7px] w-[7px] transition-transform"
                 style={{
-                  borderRight: '1.5px solid rgba(255, 255, 255, 0.2)',
-                  borderBottom: '1.5px solid rgba(255, 255, 255, 0.2)',
+                  borderRight: plancheBottomBar ? '1.5px solid var(--shell-dim)' : '1.5px solid rgba(255, 255, 255, 0.2)',
+                  borderBottom: plancheBottomBar ? '1.5px solid var(--shell-dim)' : '1.5px solid rgba(255, 255, 255, 0.2)',
                   transform: drawerOpen ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg)',
                 }}
               />
@@ -1795,13 +1814,13 @@ export function TerminalArea() {
             {activeTerminal ? (
               <span className="flex min-w-0 items-center gap-1.5">
                 {focusedTerminalWorkspace && (
+                  <ThemedTooltip label={t('terminal:tab.focusWorkspaceTitle', { name: focusedTerminalWorkspace.name, path: focusedTerminalWorkspace.path })}>
                   <span
                     className="hidden min-w-0 max-w-[150px] items-center gap-1.5 border-r pr-2 font-mono text-[10px] sm:inline-flex"
                     style={{
                       borderColor: 'rgba(255,255,255,0.055)',
                       color: 'var(--shell-dim)',
                     }}
-                    title={t('terminal:tab.focusWorkspaceTitle', { name: focusedTerminalWorkspace.name, path: focusedTerminalWorkspace.path })}
                   >
                     <span
                       aria-hidden="true"
@@ -1810,13 +1829,14 @@ export function TerminalArea() {
                     />
                     <span className="truncate">{focusedTerminalWorkspace.name}</span>
                   </span>
+                  </ThemedTooltip>
                 )}
                 <span
                   className="inline-flex h-5 min-w-0 max-w-[180px] items-center rounded border px-2 font-mono"
                   style={{
                     borderColor: 'rgba(255,255,255,0.055)',
                     background: 'rgba(255,255,255,0.014)',
-                    color: '#8a8a8a',
+                    color: 'var(--shell-muted)',
                   }}
                 >
                   <span className="truncate">{modelLabel(activeTerminal, t)}</span>
@@ -1836,21 +1856,20 @@ export function TerminalArea() {
                 </ContextUsagePopover>
               </span>
             ) : (
-              <span className="truncate font-mono text-[#666]">No model or context data</span>
+              <span className="truncate font-mono text-[var(--shell-dim)]">No model or context data</span>
             )}
           </div>
           <div className="flex h-full shrink-0 items-center gap-2 text-[10px]">
             <div className="hidden h-full items-center gap-1.5 md:flex">
               {otherTerminals.slice(0, 3).map((terminal) => (
+                <ThemedTooltip key={terminal.id} label={`${providerLabel(terminal.preset, t)} · ${modelLabel(terminal, t)} · ${contextLabel(terminal, t)}`}>
                 <span
-                  key={terminal.id}
                   className="inline-flex h-5 max-w-[126px] items-center gap-1.5 overflow-hidden rounded border px-1.5 font-mono"
                   style={{
                     borderColor: 'rgba(255,255,255,0.055)',
                     background: 'rgba(255,255,255,0.018)',
-                    color: '#777',
+                    color: 'var(--shell-dim)',
                   }}
-                  title={`${providerLabel(terminal.preset, t)} · ${modelLabel(terminal, t)} · ${contextLabel(terminal, t)}`}
                 >
                   <span
                     className="h-[5px] w-[5px] shrink-0 rounded-full"
@@ -1858,9 +1877,10 @@ export function TerminalArea() {
                   />
                   <span className="truncate">{providerLabel(terminal.preset, t)}</span>
                 </span>
+                </ThemedTooltip>
               ))}
               {otherTerminals.length > 3 && (
-                <span className="inline-flex h-5 items-center rounded border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[#555]">
+                <span className="inline-flex h-5 items-center rounded border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[var(--shell-dim)]">
                   +{otherTerminals.length - 3}
                 </span>
               )}
@@ -1893,7 +1913,7 @@ export function TerminalArea() {
                 onPasteToTerminal={(data) => window.electron.terminal.input(activeTerminalId, data)}
               />
             ) : (
-              <div className="grid h-full place-items-center text-[#666]">{t('terminal:tab.noActiveTerminal')}</div>
+              <div className="grid h-full place-items-center text-[var(--shell-dim)]">{t('terminal:tab.noActiveTerminal')}</div>
             ) : (
               <section
                 className="flex h-full min-h-0 flex-col overflow-hidden border"
@@ -1901,12 +1921,12 @@ export function TerminalArea() {
                 aria-label={t('terminal:tab.runtimeAria')}
               >
               <div className="flex h-8 shrink-0 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,255,255,0.055)' }}>
-                <span className="text-[#8a8a8a]">{t('terminal:tab.terminalRuntime')}</span>
-                <span className="text-[#666]">{terminals.length} {t('terminal:sessions.countSuffix')}</span>
+                <span className="text-[var(--shell-muted)]">{t('terminal:tab.terminalRuntime')}</span>
+                <span className="text-[var(--shell-dim)]">{terminals.length} {t('terminal:sessions.countSuffix')}</span>
               </div>
               <div className="min-h-0 flex-1 overflow-auto p-2">
                 {terminals.length === 0 ? (
-                  <div className="px-1 py-3 text-[#555]">{t('terminal:tab.noTelemetryData')}</div>
+                  <div className="px-1 py-3 text-[var(--shell-dim)]">{t('terminal:tab.noTelemetryData')}</div>
                 ) : (
                   <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
                     {terminals.map((terminal) => {
@@ -1914,8 +1934,8 @@ export function TerminalArea() {
                       const ratioColor = contextRatioColor(ratio)
                       const isActiveCard = terminal.id === activeTerminalId
                       return (
+                        <ThemedTooltip key={terminal.id} label={`${providerLabel(terminal.preset, t)} · ${terminal.cwd}`}>
                         <button
-                          key={terminal.id}
                           type="button"
                           className="flex min-w-0 cursor-pointer flex-col gap-2 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
                           style={{
@@ -1924,10 +1944,9 @@ export function TerminalArea() {
                           }}
                           aria-current={isActiveCard ? 'true' : undefined}
                           onClick={() => setActiveTerminal(terminal.id)}
-                          title={`${providerLabel(terminal.preset, t)} · ${terminal.cwd}`}
                         >
                           <span className="flex min-w-0 items-center justify-between gap-2">
-                            <span className="flex min-w-0 items-center gap-1.5 text-[#d4d4d4]">
+                            <span className="flex min-w-0 items-center gap-1.5 text-[var(--shell-text)]">
                               <span
                                 className="h-[6px] w-[6px] shrink-0 rounded-full"
                                 style={{
@@ -1937,16 +1956,18 @@ export function TerminalArea() {
                               />
                               <span className="truncate">{providerLabel(terminal.preset, t)}</span>
                             </span>
-                            <span className="shrink-0 text-[10px] text-[#555]" title={t('terminal:tab.tokenSummaryTitle', { input: formatTokenCount(terminal.inputTokens), output: formatTokenCount(terminal.outputTokens) })}>
+                            <ThemedTooltip label={t('terminal:tab.tokenSummaryTitle', { input: formatTokenCount(terminal.inputTokens), output: formatTokenCount(terminal.outputTokens) })}>
+                            <span className="shrink-0 text-[10px] text-[var(--shell-dim)]">
                               {formatAge(terminal.telemetryUpdatedAt)}
                             </span>
+                            </ThemedTooltip>
                           </span>
                           <span
                             className="inline-flex h-5 min-w-0 max-w-full items-center self-start rounded border px-2"
                             style={{
                               borderColor: 'rgba(255,255,255,0.055)',
                               background: 'rgba(255,255,255,0.014)',
-                              color: '#8a8a8a',
+                              color: 'var(--shell-muted)',
                             }}
                           >
                             <span className="truncate">{modelLabel(terminal, t)}</span>
@@ -1957,7 +1978,7 @@ export function TerminalArea() {
                             className="group relative flex min-w-0 flex-col gap-1"
                           >
                             <span className="flex items-center justify-between gap-2">
-                              <span className="truncate text-[10px] text-[#777]">{contextLabel(terminal, t)}</span>
+                              <span className="truncate text-[10px] text-[var(--shell-dim)]">{contextLabel(terminal, t)}</span>
                               <span className="shrink-0 tabular-nums" style={{ color: ratioColor }}>{contextPercentLabel(terminal)}</span>
                             </span>
                             <span
@@ -1974,6 +1995,7 @@ export function TerminalArea() {
                             </span>
                           </ContextUsagePopover>
                         </button>
+                        </ThemedTooltip>
                       )
                     })}
                   </div>

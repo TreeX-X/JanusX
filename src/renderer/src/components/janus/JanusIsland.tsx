@@ -7,7 +7,7 @@ import { useI18n } from '@/i18n/useI18n'
 import { JanusEye } from './JanusEye'
 import { useIslandGesture } from './useIslandGesture'
 import { useJanusState } from './useJanusState'
-import { STATUS_VISUALS } from '../blueprint/blueprintStatus'
+import { getBlueprintStatusVisual } from '../blueprint/blueprintStatus'
 import { formatKnowledgeMatch } from './islandKnowledgePeek'
 import {
   assembleNotifications,
@@ -263,7 +263,7 @@ export function JanusIsland({
     activeSession && currentBlueprint?.id === activeSession.blueprintId
       ? currentBlueprint.nodes[activeSession.nodeId] ?? activeSession.nodeSnapshot
       : activeSession?.nodeSnapshot ?? null
-  const activeVisual = activeNode ? STATUS_VISUALS[activeNode.status] ?? STATUS_VISUALS['not-started'] : null
+  const activeVisual = activeNode ? getBlueprintStatusVisual(activeNode.status)  : null
   const maintenanceTask = useMemo(() => {
     const live = maintenanceTasks.filter((task) => !['completed', 'cancelled'].includes(task.status))
     return live.find((task) => task.status === 'failed' || task.status === 'stale')

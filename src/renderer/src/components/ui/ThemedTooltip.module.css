@@ -1,0 +1,49 @@
+/* 锚点不产生盒，不改变原布局；定位量第一个子元素。 */
+.anchor {
+  display: contents;
+}
+
+.tip {
+  position: fixed;
+  z-index: 13000;
+  transform: translateX(-50%);
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  color: var(--shell-text, #e8e8e8);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  animation: themed-tip-in 120ms ease-out;
+}
+
+@keyframes themed-tip-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip {
+    animation: none;
+  }
+}
+
+/* ── planche：提示纸面化（加法层，dark 原样不动）── */
+:global([data-theme='planche']) .tip {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}

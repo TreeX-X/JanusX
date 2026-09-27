@@ -35,10 +35,11 @@ import {
 import { createTerminalOutputScheduler } from '@/lib/terminal-output-scheduler'
 import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useThemeStore } from '@/stores/theme'
 import type { TerminalDataEvent, TerminalReplayResult } from '../../../shared/ipc/terminal'
 import {
+  getXtermPalette,
   isDefaultColorQuery,
-  TERMINAL_DEFAULT_COLORS,
 } from '../../../shared/terminalColorQuery'
 
 interface CLITerminalProps {
@@ -68,6 +69,7 @@ export function CLITerminal({
   const telemetryParserRef = useRef(createRuntimeTelemetryStreamParser())
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
+  const appTheme = useThemeStore((s) => s.theme)
 
   const applyTelemetryPatch = useCallback((telemetry: RuntimeTelemetrySnapshot) => {
     const store = useWorkspaceStore.getState()
@@ -149,6 +151,13 @@ export function CLITerminal({
     fitRef.current?.()
   }, [sidebarCollapsed, panelCollapsed])
 
+  // 主题切换：热更新 xterm palette，无需重启 PTY、不丢 replay。
+  // 已运行的 TUI 应用缓存了启动色，切换后需 pane 重绘/重启以纠正对比。
+  useEffect(() => {
+    const term = termRef.current
+    if (term) term.options.theme = { ...getXtermPalette(appTheme) }
+  }, [appTheme])
+
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -166,27 +175,8 @@ export function CLITerminal({
     const term = new Terminal({
       theme: {
         /*-- 与 --shell-canvas 对齐：终端画布与中部工作台同色，避免 pane 内出现色阶断层 --*/
-        background: TERMINAL_DEFAULT_COLORS.background,
-        foreground: TERMINAL_DEFAULT_COLORS.foreground,
-        cursor: '#ff7830',
-        cursorAccent: TERMINAL_DEFAULT_COLORS.background,
-        selectionBackground: 'rgba(255, 120, 48, 0.18)',
-        black: '#1f1f23',
-        red: '#e06c75',
-        green: '#4ec9b0',
-        yellow: '#e5c07b',
-        blue: '#58a6ff',
-        magenta: '#c586c0',
-        cyan: '#4ec9b0',
-        white: '#888888',
-        brightBlack: '#666666',
-        brightRed: '#ff8585',
-        brightGreen: '#00ff88',
-        brightYellow: '#f0d28a',
-        brightBlue: '#79b8ff',
-        brightMagenta: '#d7a8d9',
-        brightCyan: '#6ee7cf',
-        brightWhite: '#f2f2f3',
+        /*-- planche 下由 getXtermPalette 提供纸面 palette，切换时经下方 effect 热更新，无需重启 PTY --*/
+        ...getXtermPalette(useThemeStore.getState().theme),
       },
       fontFamily: '"SF Mono", "Cascadia Code", Consolas, monospace',
       fontSize: 14,

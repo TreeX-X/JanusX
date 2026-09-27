@@ -1,4 +1,6 @@
 import type { Terminal } from '@/types'
+import { useThemeStore } from '@/stores/theme'
+import { getThemeDefinition } from '../../../shared/theme/registry'
 
 export interface TerminalStatusVisual {
   label: string
@@ -9,17 +11,26 @@ export interface TerminalStatusVisual {
 
 // Note: internal status keeps six values for hook routing and sort order, but
 // approval and input share one attention visual — see .agents/notes/2026-09-12-terminal-status-display--27891818.md
-const STATUS_VISUALS: Record<Terminal['status'], TerminalStatusVisual> = {
-  running: { label: '运行中', labelKey: 'terminal:status.running', color: '#6bd89b', background: 'rgba(70, 190, 125, 0.1)' },
-  wait: { label: '空闲', labelKey: 'terminal:status.wait', color: '#8a8a93', background: 'rgba(255,255,255,0.05)' },
-  'needs-input': { label: '待处理', labelKey: 'terminal:status.needs-action', color: '#f0a35e', background: 'rgba(240, 163, 94, 0.12)' },
-  'needs-approval': { label: '待处理', labelKey: 'terminal:status.needs-action', color: '#f0a35e', background: 'rgba(240, 163, 94, 0.12)' },
-  degraded: { label: '受限', labelKey: 'terminal:status.degraded', color: '#c9a0ff', background: 'rgba(160, 110, 255, 0.1)' },
-  error: { label: '异常', labelKey: 'terminal:status.error', color: '#ff7474', background: 'rgba(255, 88, 88, 0.1)' },
-}
-
-export function getTerminalStatusVisual(status: Terminal['status']): TerminalStatusVisual {
-  return STATUS_VISUALS[status] ?? STATUS_VISUALS.wait
+// 色值唯一来源：theme definition status 槽（M1 统一结构），禁止各处自建。
+export function getTerminalStatusVisual(
+  status: Terminal['status'],
+  theme: unknown = useThemeStore.getState().theme,
+): TerminalStatusVisual {
+  const slots = getThemeDefinition(theme).status
+  switch (status) {
+    case 'running':
+      return { label: '运行中', labelKey: 'terminal:status.running', ...slots.running }
+    case 'needs-input':
+    case 'needs-approval':
+      return { label: '待处理', labelKey: 'terminal:status.needs-action', ...slots.attention }
+    case 'degraded':
+      return { label: '受限', labelKey: 'terminal:status.degraded', ...slots.degraded }
+    case 'error':
+      return { label: '异常', labelKey: 'terminal:status.error', ...slots.error }
+    case 'wait':
+    default:
+      return { label: '空闲', labelKey: 'terminal:status.wait', ...slots.wait }
+  }
 }
 
 export const TERMINAL_ATTENTION_ORDER: Record<Terminal['status'], number> = {

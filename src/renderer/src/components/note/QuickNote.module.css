@@ -479,6 +479,17 @@
   color: var(--shell-text);
 }
 
+/* ── planche：导出菜单纸面悬停（加法层，dark 原样不动） ── */
+:global([data-theme='planche']) .exportMenu {
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+  border-color: var(--line, #1C343B);
+}
+
+:global([data-theme='planche']) .exportMenu button:hover,
+:global([data-theme='planche']) .exportMenu button:focus-visible {
+  background: var(--paper-deep, #DCCFA8);
+}
+
 .error {
   position: absolute;
   right: 8px;

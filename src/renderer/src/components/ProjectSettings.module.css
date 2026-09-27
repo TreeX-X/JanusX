@@ -288,3 +288,53 @@
   .container { grid-template-columns: 148px minmax(360px, 1fr); }
   .assistant { display: none; }
 }
+
+/* ── planche：项目助手列纸面化（加法层，dark 原样不动）── */
+:global([data-theme='planche']) .sendButton:hover,
+:global([data-theme='planche']) .commandBar button:hover:not(:disabled),
+:global([data-theme='planche']) .approvalBar button:hover {
+  border-color: var(--planche-red, #D43D2A);
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .assistantMessage {
+  border-left: 1px solid var(--planche-red, #D43D2A);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .userMessage {
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .streamingMessage {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .promptBox {
+  border: 1px solid var(--line, #1C343B);
+  background: var(--paper, #EFE4C5);
+}
+
+:global([data-theme='planche']) .promptBox:focus-within {
+  border-color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .promptBox textarea {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .promptBox textarea::placeholder {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .loading {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .spinner {
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  border-top-color: var(--planche-red, #D43D2A);
+}

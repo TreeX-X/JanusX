@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { configService } from '../config/service'
 import { remoteNotificationDispatcher } from '../remote-notifications/dispatcher'
 import { redactErrorText } from '../remote-notifications/secret-redaction'
@@ -13,6 +13,7 @@ import {
 } from '../../shared/notifications'
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS } from '../../shared/ipc/settings'
 import { EXPERIMENTAL_CHANNELS, type ExperimentalFeatures } from '../../shared/ipc/experimental'
+import { THEME_CHANNELS, type AppTheme } from '../../shared/ipc/theme'
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle(AGENT_SETTINGS_CHANNELS.get, async () => ({
@@ -95,6 +96,18 @@ export function registerSettingsHandlers(): void {
       return configService.updateExperimentalFeatures(settings ?? {})
     },
   )
+
+  ipcMain.handle(THEME_CHANNELS.get, async () => {
+    return configService.getTheme()
+  })
+
+  ipcMain.handle(THEME_CHANNELS.update, async (_event, theme: AppTheme) => {
+    const normalized = await configService.updateTheme(theme)
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(THEME_CHANNELS.changed, normalized)
+    }
+    return normalized
+  })
 }
 
 function sanitizeSendResult(result: RemoteSendResult, secrets: string[]): RemoteSendResult {

@@ -166,7 +166,7 @@ describe('blueprint canvas layout', () => {
     expect(result.nodes.find((node) => node.id === 'root')?.position).toEqual({ x: 42, y: 24 })
     expect(result.nodes.find((node) => node.id === 'child')?.data.searchMatched).toBe(true)
     expect(result.edges).toEqual([expect.objectContaining({ source: 'root', target: 'child', type: 'blueprintHierarchy' })])
-    expect(result.edges[0].style).toMatchObject({ stroke: '#8a8a8a', strokeWidth: 1.6 })
+    expect(result.edges[0].style).toMatchObject({ stroke: 'var(--shell-muted)', strokeWidth: 1.6 })
     expect(result.edges[0].style).not.toHaveProperty('strokeDasharray')
   })
 
@@ -189,7 +189,7 @@ describe('blueprint canvas layout', () => {
 
     const rel = result.edges.find((edge) => edge.id === 'e-rel-a-depends-on-b')
     expect(rel).toMatchObject({ source: 'a', target: 'b' })
-    expect(rel?.style).toMatchObject({ stroke: 'rgba(255,255,255,.2)', strokeDasharray: '5 4' })
+    expect(rel?.style).toMatchObject({ stroke: 'var(--shell-muted)', strokeDasharray: '5 4' })
     // Mirrors the parent edge root->a: skipped to avoid double-drawing.
     expect(result.edges.some((edge) => edge.id === 'e-rel-a-related-to-root')).toBe(false)
     // Dangling targets never render.

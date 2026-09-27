@@ -172,6 +172,52 @@
   color: #fff;
 }
 
+/* ── planche：纸卡 + 墨线，悬浮只换底 + 朱红边 + 套印偏移影 ──
+   硬黑投影在纸面上发脏，改用风格文档的 misprint 偏移影 */
+:global([data-theme='planche']) .card {
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+:global([data-theme='planche']) .card:hover,
+:global([data-theme='planche']) .card:focus-visible {
+  border-color: #D43D2A;
+  background: #DCCFA8;
+  transform: none;
+  box-shadow: 3px 3px 0 #E8A08A;
+  outline: none;
+}
+
+:global([data-theme='planche']) .card:active {
+  transform: none;
+}
+
+:global([data-theme='planche']) .card:focus-visible {
+  outline: 2px solid #D43D2A;
+  outline-offset: 2px;
+}
+
+:global([data-theme='planche']) .card:hover .iconWrap,
+:global([data-theme='planche']) .card:focus-visible .iconWrap {
+  transform: none;
+}
+
+:global([data-theme='planche']) .label {
+  color: #1C343B;
+}
+
+:global([data-theme='planche']) .card:hover .label,
+:global([data-theme='planche']) .card:focus-visible .label {
+  color: #1C343B;
+}
+
+:global([data-theme='planche']) .cardBusy:hover,
+:global([data-theme='planche']) .cardBusy:focus-visible {
+  transform: none;
+  box-shadow: none;
+  background: var(--shell-card);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card,
   .iconWrap {

@@ -104,8 +104,8 @@ export function TerminalSelector() {
       }}
     >
       <div className="flex flex-col items-center gap-2 text-center">
-        <div className="text-sm text-[#8a8a8a] font-medium">{t('terminal:selector.title')}</div>
-        <div className="text-[11px] text-[#5f5f5f] max-w-[520px] leading-relaxed">
+        <div className="text-sm font-medium" style={{ color: 'var(--shell-muted)' }}>{t('terminal:selector.title')}</div>
+        <div className="text-[11px] max-w-[520px] leading-relaxed" style={{ color: 'var(--shell-dim)' }}>
           {t('terminal:selector.hint')}
         </div>
       </div>

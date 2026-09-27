@@ -364,7 +364,8 @@ export function deriveBlueprintFlow(
       data: { kind: 'hierarchy' },
       interactionWidth: 24,
       style: {
-        stroke: '#8a8a8a',
+        // 主题令牌：dark 墨灰可读，planche 纸上自动转为墨线（硬编码白在纸上隐形）。
+        stroke: 'var(--shell-muted)',
         strokeWidth: 1.6
       },
     }))
@@ -390,7 +391,9 @@ export function deriveBlueprintFlow(
       data: { kind: 'relation' },
       interactionWidth: 16,
       style: {
-        stroke: 'rgba(255,255,255,.2)',
+        // 主题令牌：关系虚线吃 muted， faint 由 .bp-flow-edge--relation 的
+        // stroke-opacity 0.55 表达（明暗主题自动适配）。
+        stroke: 'var(--shell-muted)',
         strokeWidth: 1.5,
         strokeDasharray: relationDash(rel.type)
       },

@@ -19,7 +19,7 @@ import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
 import { Select } from '../ui/Select'
-import { STATUS_ORDER, STATUS_VISUALS, NOTE_KINDS, NOTE_KIND_LABEL_KEY, type NoteKindFilter } from './blueprintStatus'
+import { STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, type NoteKindFilter, getBlueprintStatusVisual } from './blueprintStatus'
 
 // Note: two chrome rows and recoverable local layout — see .agents/notes/2026-09-25-blueprint-note-workbench-repair--62e857d3.md
 
@@ -159,7 +159,7 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
   const statusFilterOptions = useMemo(
     () => [
       { value: 'all', label: t('blueprint:search.statusAll') },
-      ...STATUS_ORDER.map((status) => ({ value: status, label: t(STATUS_VISUALS[status].labelKey) })),
+      ...STATUS_ORDER.map((status) => ({ value: status, label: t(getBlueprintStatusVisual(status).labelKey) })),
     ],
     [t],
   )

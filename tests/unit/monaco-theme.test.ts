@@ -3,8 +3,12 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   defineJanusxDarkTheme,
+  defineJanusxThemes,
+  getMonacoThemeName,
   JANUSX_DARK_THEME,
   JANUSX_DARK_THEME_NAME,
+  JANUSX_PLANCHE_THEME,
+  JANUSX_PLANCHE_THEME_NAME,
 } from '../../src/renderer/src/lib/monaco-theme'
 
 const readSource = (relativePath: string) =>
@@ -16,6 +20,30 @@ describe('monaco theme', () => {
     defineJanusxDarkTheme({ editor: { defineTheme } })
 
     expect(defineTheme).toHaveBeenCalledWith(JANUSX_DARK_THEME_NAME, JANUSX_DARK_THEME)
+  })
+
+  it('registers both dark and planche themes together', () => {
+    const defineTheme = vi.fn()
+    defineJanusxThemes({ editor: { defineTheme } })
+
+    expect(defineTheme).toHaveBeenCalledWith(JANUSX_DARK_THEME_NAME, JANUSX_DARK_THEME)
+    expect(defineTheme).toHaveBeenCalledWith(JANUSX_PLANCHE_THEME_NAME, JANUSX_PLANCHE_THEME)
+  })
+
+  it('routes planche to the light theme and everything else to dark', () => {
+    expect(getMonacoThemeName('planche')).toBe(JANUSX_PLANCHE_THEME_NAME)
+    expect(getMonacoThemeName('dark')).toBe(JANUSX_DARK_THEME_NAME)
+    expect(getMonacoThemeName('light')).toBe(JANUSX_DARK_THEME_NAME)
+    expect(getMonacoThemeName(undefined)).toBe(JANUSX_DARK_THEME_NAME)
+  })
+
+  it('planche uses hex colors only and paper background', () => {
+    for (const [key, value] of Object.entries(JANUSX_PLANCHE_THEME.colors)) {
+      expect(value, key).toMatch(/^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i)
+    }
+    const colors = JANUSX_PLANCHE_THEME.colors as Record<string, string>
+    expect(colors['editor.background']).toBe('#EFE4C5')
+    expect(colors['editorCursor.foreground']).toBe('#D43D2A')
   })
 
   it('uses hex colors only — Monaco silently drops rgba() strings', () => {
@@ -47,9 +75,9 @@ describe('monaco theme', () => {
 
   it('is defined in exactly one viewer and reused by markdown and html', () => {
     const monacoViewer = readSource('components/viewers/MonacoViewer.tsx')
-    expect(monacoViewer).toContain('defineJanusxDarkTheme(monaco)')
+    expect(monacoViewer).toContain('defineJanusxThemes(monaco)')
     expect(monacoViewer).not.toContain('monaco.editor.defineTheme(')
-    expect(monacoViewer).toContain('theme={JANUSX_DARK_THEME_NAME}')
+    expect(monacoViewer).toContain('getMonacoThemeName(appTheme)')
 
     for (const viewer of ['components/viewers/MarkdownViewer.tsx', 'components/viewers/HtmlViewer.tsx']) {
       const source = readSource(viewer)

@@ -1793,6 +1793,7 @@
 }
 
 /* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/2026-09-21-workbench-close-hit-slop--8688b5ab.md */
+/* 交互约定（与 modal-close-light 统一）：红灯本身即关闭，悬浮不冒叉，直接点即可。 */
 .blueprint-workbench-close {
   position: relative;
   justify-self: end;
@@ -1810,7 +1811,6 @@
   justify-content: center;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.26),
     0 0 0 1px rgba(0, 0, 0, 0.22);
-  transition: filter 0.2s ease;
 }
 
 .blueprint-workbench-close::before {
@@ -1820,17 +1820,13 @@
   background: transparent;
 }
 
-.blueprint-workbench-close::after {
+.blueprint-workbench-close::after,
+.blueprint-workbench-close:hover::after {
   content: '\2715';
   font-size: 8px;
   line-height: 1;
   font-weight: bold;
   color: transparent;
-  transition: color 0.15s ease;
-}
-
-.blueprint-workbench-close:hover::after {
-  color: rgba(0, 0, 0, 0.55);
 }
 
 .blueprint-workbench-close:focus-visible {
@@ -2073,10 +2069,6 @@
 
 @keyframes blueprint-janus-pulse {
   50% { box-shadow: 0 0 0 4px rgba(255, 138, 72, 0.12); }
-}
-
-.blueprint-workbench-close:hover {
-  filter: brightness(1.1);
 }
 
 .blueprint-workbench-close:active {
@@ -3558,4 +3550,1340 @@
   border-radius: 6px;
   padding: 2px 8px;
   cursor: pointer;
+}
+
+/* ════════════════════════════════════════════════════════════
+   Planche 纸面覆盖（加法层，dark 原样不动）
+   画布底 + 节点卡 + 选中态 + 工具栏标题收敛到语义令牌；
+   边 geometry 与布局不动。纸面语言： flat 纸底 + 墨线 + 朱红点睛，
+   无渐变、无毛玻璃、无黑 blur 影。色值优先吃 var(--paper/ink/…)，
+   回落 hex 与 definition.ts 纸墨朱红同源。
+   ════════════════════════════════════════════════════════════ */
+
+[data-theme='planche'] .blueprint-view {
+  background: #EFE4C5;
+  color: var(--shell-text);
+}
+
+[data-theme='planche'] .blueprint-view--workbench,
+[data-theme='planche'] .blueprint-view--workbench.blueprint-view--empty {
+  background: var(--shell-canvas);
+}
+
+[data-theme='planche'] .blueprint-toolbar {
+  background: var(--shell-chrome);
+  border-bottom: 1px solid var(--shell-border);
+  color: var(--shell-text);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-theme='planche'] .blueprint-toolbar__title {
+  color: var(--shell-muted);
+}
+
+[data-theme='planche'] .bp-node-card {
+  background: #EFE4C5;
+  border: 1px solid #1C343B;
+  border-radius: 6px;
+  color: #1C343B;
+  box-shadow: none;
+}
+
+[data-theme='planche'] .bp-node-card--selected {
+  border-color: #D43D2A;
+  box-shadow: 0 0 0 1px rgba(212, 61, 42, 0.6);
+}
+
+[data-theme='planche'] .bp-node-card--matched {
+  border-color: rgba(212, 61, 42, 0.82);
+  box-shadow: 0 0 0 1px rgba(212, 61, 42, 0.5);
+}
+
+[data-theme='planche'] .bp-node-card__kindtag {
+  color: rgba(28, 52, 59, 0.62);
+  border-color: rgba(28, 52, 59, 0.35);
+}
+
+[data-theme='planche'] .bp-node-card__type {
+  color: rgba(28, 52, 59, 0.62);
+}
+
+[data-theme='planche'] .bp-node-card__title {
+  color: #1C343B;
+}
+
+[data-theme='planche'] .bp-node-card__collapse {
+  color: rgba(28, 52, 59, 0.62);
+  background: transparent;
+  border-color: rgba(28, 52, 59, 0.35);
+}
+
+[data-theme='planche'] .bp-node-card__collapse:hover {
+  color: #1C343B;
+  background: #DCCFA8;
+  border-color: #D43D2A;
+}
+
+[data-theme='planche'] .bp-node-card__progress {
+  background: rgba(28, 52, 59, 0.14);
+}
+
+[data-theme='planche'] .bp-node-card__progress-bar {
+  background: rgba(28, 52, 59, 0.62);
+}
+
+[data-theme='planche'] .bp-node-card__dot {
+  box-shadow: none;
+}
+
+/* ── 工具栏控件：纸底墨字，hover 纸深 + 朱红边 ── */
+[data-theme='planche'] .blueprint-toolbar select,
+[data-theme='planche'] .blueprint-toolbar input {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-toolbar select:focus,
+[data-theme='planche'] .blueprint-toolbar input:focus {
+  border-color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-btn {
+  background: transparent;
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-btn:hover:not(:disabled) {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-btn--primary {
+  background: var(--shell-accent-soft);
+  border-color: var(--shell-accent-border);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-btn--primary-ghost {
+  background: transparent;
+  border-color: var(--shell-accent-border);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-btn--primary-ghost:hover:not(:disabled) {
+  background: var(--shell-accent-soft);
+  border-color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-btn--danger {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-btn--danger:hover {
+  background: var(--shell-accent-soft);
+  border-color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-toolbar__group--node {
+  background: transparent;
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .blueprint-toolbar__panel {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .blueprint-toolbar__zone-title {
+  color: var(--shell-muted);
+}
+
+[data-theme='planche'] .blueprint-toolbar__hint {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--shell-muted);
+}
+
+[data-theme='planche'] .blueprint-toolbar__match-count {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .blueprint-toolbar__commit-limit {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--shell-muted);
+}
+
+[data-theme='planche'] .blueprint-toolbar__toggle--active {
+  border-color: var(--shell-accent-border);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-toolbar__error {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-toolbar__loading,
+[data-theme='planche'] .blueprint-toolbar__save-status--saved {
+  color: var(--shell-muted);
+}
+
+[data-theme='planche'] .blueprint-toolbar__save-status--saving,
+[data-theme='planche'] .blueprint-toolbar__save-status--pending {
+  color: #A86F0B;
+}
+
+[data-theme='planche'] .blueprint-toolbar__save-status--failed {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-toolbar__zone--danger {
+  background: var(--shell-accent-soft);
+  border: 1px solid var(--shell-accent-border);
+}
+
+/* ── 候选箱 / 候选卡：纸深底 + 纸卡 ── */
+[data-theme='planche'] .bp-candidate-inbox,
+[data-theme='planche'] .blueprint-view--workbench .bp-candidate-inbox {
+  background: var(--paper-deep, #DCCFA8);
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-candidate-inbox__toggle strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-candidate-inbox__count {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-candidate-inbox__chevron {
+  border-top-color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-candidate-inbox__toggle[data-attention='true'] .bp-candidate-inbox__chevron {
+  border-top-color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-candidate-inbox__dot {
+  background: var(--planche-red, #D43D2A);
+  box-shadow: none;
+}
+
+[data-theme='planche'] .bp-candidate-inbox__empty {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-candidate-inbox__error {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-candidate-card {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  box-shadow: none;
+}
+
+[data-theme='planche'] .bp-candidate-card__meta span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-candidate-card__input,
+[data-theme='planche'] .bp-candidate-card__textarea {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-candidate-card__input:focus,
+[data-theme='planche'] .bp-candidate-card__textarea:focus {
+  border-color: var(--planche-red, #D43D2A);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+
+[data-theme='planche'] .bp-candidate-card__title {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-candidate-card p {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-candidate-card__decision {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+/* ── 节点卡补充：脚注 / 工作区 / 终端 / 信号（已有底座不动，只收文字色） ── */
+[data-theme='planche'] .bp-node-card__footer {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-node-card__workspace {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-node-card__workspace--empty {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+  background: transparent;
+}
+
+[data-theme='planche'] .bp-node-card__terminal {
+  background: rgba(46, 107, 94, 0.12);
+  color: var(--planche-green-deep, #2E6B5E);
+}
+
+[data-theme='planche'] .bp-node-card__signals {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-node-card__signals span {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] .bp-node-card__signal--risk { color: #A86F0B; }
+[data-theme='planche'] .bp-node-card__signal--blocked { color: var(--planche-red, #D43D2A); }
+[data-theme='planche'] .bp-node-card__signal--analysis { color: #2F5D8A; }
+[data-theme='planche'] .bp-node-card__signal--collapsed { color: #6E5A9E; }
+
+[data-theme='planche'] .bp-node-card__title--empty,
+[data-theme='planche'] .bp-node-detail__title--empty {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+/* ── 画布容器 / 加载态 / 图例：去黑底黑影 ── */
+[data-theme='planche'] .blueprint-canvas-main {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  box-shadow: none;
+}
+
+[data-theme='planche'] .blueprint-canvas-loading {
+  background: var(--paper-deep, #DCCFA8);
+  animation: none;
+}
+
+[data-theme='planche'] .blueprint-view__loading-state {
+  background: var(--paper, #EFE4C5);
+  background-color: var(--paper, #EFE4C5);
+  color: var(--shell-muted);
+}
+
+[data-theme='planche'] .bp-canvas-legend span {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .blueprint-canvas-error {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+/* React Flow 浮层控件：纸面化（画布本身 transparent 不动） */
+[data-theme='planche'] .react-flow__controls,
+[data-theme='planche'] .react-flow__minimap {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: none;
+}
+
+[data-theme='planche'] .react-flow__controls-button {
+  background: var(--paper, #EFE4C5);
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  fill: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .react-flow__controls-button:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] .react-flow__attribution {
+  background: transparent;
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+/* 边线主路由在 canvas-layout.ts 吃 var(--shell-muted)，此处无需覆盖 */
+
+/* ── 节点详情面板：纸面全收敛 ── */
+[data-theme='planche'] .bp-node-detail {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: none;
+}
+
+[data-theme='planche'] .bp-node-detail__header,
+[data-theme='planche'] .bp-node-detail__terminal-footer {
+  background: var(--paper, #EFE4C5);
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-node-detail__eyebrow {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-node-detail__title {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-node-detail__summary span {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-panel-close {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-panel-close:hover {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-node-detail__section {
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-node-detail__section--content::before {
+  background: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-node-detail__label {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-node-detail__text,
+[data-theme='planche'] .bp-item-card__text,
+[data-theme='planche'] .bp-feature-card__desc {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-feature-card {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-feature-card__title,
+[data-theme='planche'] .bp-history-card__title {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-feature-card__readonly {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-feature-card__readonly span {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-feature-card__readonly strong {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-feature-card__notes {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-feature-card__notes span {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] .bp-feature-empty,
+[data-theme='planche'] .bp-node-detail__hint,
+[data-theme='planche'] .bp-node-detail__empty,
+[data-theme='planche'] .bp-node-detail__count {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-node-detail__meta {
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-node-detail__meta div {
+  border-right: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-node-detail__meta span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-node-detail__meta strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-node-detail__terminal-meta {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-node-detail__terminal-dot {
+  background: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-node-detail__terminal-dot--busy {
+  background: var(--planche-red, #D43D2A);
+  box-shadow: none;
+}
+
+[data-theme='planche'] .bp-node-detail__terminal-dot--bound {
+  background: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-node-detail__warning {
+  color: #A86F0B;
+}
+
+[data-theme='planche'] .bp-history-card__meta,
+[data-theme='planche'] .bp-history-card__list {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-history-card__list--warn {
+  color: #A86F0B;
+}
+
+[data-theme='planche'] .bp-analysis-history {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-analysis-history__item {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-analysis-history__item:hover,
+[data-theme='planche'] .bp-analysis-history__item--active {
+  border-color: var(--planche-red, #D43D2A);
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] .bp-analysis-history__item span {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-analysis-history__item strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-analysis-history__item em {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-analysis-detail__head strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-analysis-detail__head span,
+[data-theme='planche'] .bp-analysis-detail__grid span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-analysis-detail__grid div {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] .bp-analysis-detail__grid strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-analysis-detail__error {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-analysis-detail__section label {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-analysis-detail__section pre {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-analysis-detail__section ul {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-analysis-detail__section--warn ul {
+  color: #A86F0B;
+}
+
+[data-theme='planche'] .bp-activity-item {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-activity-item span {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-activity-item strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-activity-item em {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-feature-hint {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-feature-card__readonly span,
+[data-theme='planche'] .bp-analysis-detail__grid div {
+  border-radius: 5px;
+}
+
+/* ── Janus 通知浮层：纸面化 ── */
+[data-theme='planche'] .bp-janus-notice {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+}
+
+[data-theme='planche'] .bp-janus-notice__title {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-janus-notice__body {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-janus-notice__close,
+[data-theme='planche'] .bp-janus-requirement__actions button {
+  background: transparent;
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-janus-notice__close:hover,
+[data-theme='planche'] .bp-janus-requirement__actions button:hover {
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-janus-requirement {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-janus-requirement strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-janus-requirement span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-janus-notice__error {
+  color: var(--planche-red, #D43D2A);
+}
+
+/* ── 工作台：纸面三件套（顶栏 / 统一栏 / 卡片），去毛玻璃黑影 ── */
+[data-theme='planche'] .blueprint-workbench-backdrop {
+  background: rgba(28, 52, 59, 0.18);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-theme='planche'] .blueprint-workbench-topbar,
+[data-theme='planche'] .blueprint-workbench-toolbar,
+[data-theme='planche'] .blueprint-workbench-card {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-workbench-tab {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-workbench-switch__select {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-workbench-switch__select:hover:not(:disabled) {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .blueprint-toolbar__scope {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .blueprint-toolbar__lock {
+  color: var(--planche-red, #D43D2A);
+  border: 1px solid var(--shell-accent-border);
+}
+
+/* 工作台 Janus 胶囊：纸面 + 墨线，去霓虹 */
+[data-theme='planche'] .blueprint-janus-capsule {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+
+[data-theme='planche'] .blueprint-janus-capsule:hover {
+  border-color: var(--planche-red, #D43D2A);
+  background: var(--paper-deep, #DCCFA8);
+  box-shadow: none;
+}
+
+[data-theme='planche'] .blueprint-janus-capsule__name {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-janus-capsule__status {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .blueprint-janus-capsule[data-state='working'] .blueprint-janus-capsule__status {
+  color: var(--planche-green-deep, #2E6B5E);
+  background: rgba(46, 107, 94, 0.12);
+}
+
+[data-theme='planche'] .blueprint-janus-capsule[data-state='attention'] .blueprint-janus-capsule__status {
+  color: var(--planche-red, #D43D2A);
+  background: var(--shell-accent-soft);
+}
+
+[data-theme='planche'] .blueprint-janus-capsule[data-state='error'] .blueprint-janus-capsule__status {
+  color: var(--planche-red, #D43D2A);
+  background: var(--shell-accent-soft);
+}
+
+[data-theme='planche'] .blueprint-janus-capsule__chevron {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .blueprint-janus-capsule .blueprint-janus-capsule__identity .janus-identity-eye {
+  box-shadow: none;
+}
+
+/* ── 右键菜单 / 对话框：纸面弹窗 + 硬偏移影 ── */
+[data-theme='planche'] .bp-context-menu {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-theme='planche'] .bp-context-menu__item {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-context-menu__item:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] .bp-context-menu__item--danger:hover {
+  background: var(--shell-accent-soft);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-context-menu__sep {
+  background: var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-context-menu__label {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-context-menu__status {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-context-menu__status:hover {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .prompt-dialog__overlay {
+  background: rgba(28, 52, 59, 0.18);
+}
+
+[data-theme='planche'] .prompt-dialog {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-theme='planche'] .prompt-dialog__title {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .prompt-dialog__label,
+[data-theme='planche'] .prompt-dialog__description {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .prompt-dialog__emphasis {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .prompt-dialog__input {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .prompt-dialog__input:focus {
+  border-color: var(--planche-red, #D43D2A);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+
+[data-theme='planche'] .prompt-dialog__error {
+  color: var(--planche-red, #D43D2A);
+}
+
+/* ── 范围条 / 任务契约 / 运行面板：纸面表单 ── */
+[data-theme='planche'] .harness-scope-bar {
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .harness-scope-bar__action {
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink, #1C343B);
+  background: transparent;
+}
+
+[data-theme='planche'] .harness-scope-bar__conflict {
+  color: #A86F0B;
+}
+
+[data-theme='planche'] .harness-scope-bar__conflict button {
+  border: 1px solid #A86F0B;
+  color: #A86F0B;
+  background: transparent;
+}
+
+[data-theme='planche'] .task-contract input,
+[data-theme='planche'] .task-contract textarea,
+[data-theme='planche'] .bp-maintenance-task > label select,
+[data-theme='planche'] .harness-run-panel__row input,
+[data-theme='planche'] .harness-run-panel__row select {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+/* ── 维护面板（右列对话 + 控件）：纸面全收敛 ── */
+[data-theme='planche'] .bp-maintenance-controls {
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-controls small,
+[data-theme='planche'] .bp-maintenance-context > span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-context strong,
+[data-theme='planche'] .bp-maintenance-controls summary {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-settings select,
+[data-theme='planche'] .bp-maintenance-settings textarea,
+[data-theme='planche'] .bp-maintenance-start select,
+[data-theme='planche'] .bp-maintenance-start textarea,
+[data-theme='planche'] .bp-maintenance-compose textarea {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-workspace-picker > summary,
+[data-theme='planche'] .bp-maintenance-workspace-picker > div {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-workspace-picker > div > button {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-workspace-picker > div > button:hover {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-workspace-picker > div > button.is-selected {
+  background: var(--shell-accent-soft);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-workspace-picker button small {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-maintenance-controls button,
+[data-theme='planche'] .bp-maintenance-compose button {
+  background: transparent;
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-controls button:hover:not(:disabled) {
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-compose .bp-maintenance-compose__proposal {
+  border-color: var(--shell-accent-border);
+  background: var(--shell-accent-soft);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-controls [role='alert'],
+[data-theme='planche'] .bp-maintenance-error {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-approval {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-approval-group,
+[data-theme='planche'] .bp-maintenance-audits article {
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-delete-confirm {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-panel__header {
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-janus-head {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-janus-dot {
+  background: var(--planche-red, #D43D2A);
+  box-shadow: none;
+}
+
+[data-theme='planche'] .bp-maintenance-clear {
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  background: transparent;
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-clear:hover {
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-machine {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-machine > summary {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-machine > summary:hover {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-panel__identity span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-panel__identity strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-panel__tabs {
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  background: transparent;
+}
+
+[data-theme='planche'] .bp-maintenance-panel__tabs button {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-maintenance-panel__tabs button:hover {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-panel__tabs button.is-active {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-panel__tabs button span {
+  background: var(--shell-accent-soft);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-start label {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-start select:focus {
+  border-color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-start p {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-task-overview {
+  background: var(--shell-accent-soft);
+  border: 1px solid var(--shell-accent-border);
+}
+
+[data-theme='planche'] .bp-maintenance-status strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-status span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-status em {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-progress {
+  background: var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-progress span {
+  background: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-scroll-bottom {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+[data-theme='planche'] .bp-maintenance-scroll-bottom:hover {
+  border-color: var(--planche-red, #D43D2A);
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-messages span {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-maintenance-messages > div[data-role='assistant'] > span,
+[data-theme='planche'] .bp-maintenance-thinking > span {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-messages p {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-messages > div[data-role='assistant'] > p {
+  background: transparent;
+  border: 0;
+  border-left: 2px solid var(--planche-red, #D43D2A);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-message-details summary {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-message-details summary:hover {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-message-details > div {
+  border-left: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-thinking > div {
+  border-left: 2px solid var(--shell-accent-border);
+}
+
+[data-theme='planche'] .bp-maintenance-thinking i {
+  background: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-thinking em {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-proposal {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-proposal > header span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-operation {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-operation strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-operation p,
+[data-theme='planche'] .bp-maintenance-operation span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-group__title {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-group__hint {
+  color: #A86F0B;
+}
+
+[data-theme='planche'] .bp-maintenance-group--delete {
+  background: var(--shell-accent-soft);
+  border: 1px solid var(--shell-accent-border);
+}
+
+[data-theme='planche'] .bp-maintenance-operation--delete {
+  border-color: var(--shell-accent-border);
+}
+
+[data-theme='planche'] .bp-maintenance-operation__confirm {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-proposal--undo {
+  background: var(--shell-accent-soft);
+  border: 1px solid var(--shell-accent-border);
+}
+
+[data-theme='planche'] .bp-maintenance-undo__conflicts {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-history__badge {
+  border: 1px solid var(--shell-accent-border);
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-history {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-history > header {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-history > header span,
+[data-theme='planche'] .bp-maintenance-history > p {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-history__item {
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-history__item > summary time {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-maintenance-history__item > summary strong {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-history__item > summary span {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .bp-maintenance-history__operation > header strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .bp-maintenance-history__operation > header span,
+[data-theme='planche'] .bp-maintenance-history__diff > span,
+[data-theme='planche'] .bp-maintenance-history__change strong,
+[data-theme='planche'] .bp-maintenance-history__evidence,
+[data-theme='planche'] .bp-maintenance-history__evidence strong {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-history__change code {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-history__change code:last-child {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .bp-maintenance-connecting {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .bp-maintenance-switch-notice {
+  background: var(--shell-accent-soft);
+  border: 1px solid var(--shell-accent-border);
+  color: var(--planche-red, #D43D2A);
+}
+
+/* ── 极简 composer（右列输入条）：纸面化 ── */
+[data-theme='planche'] .janus-chat[data-minimal-composer] .janus-chat-input-wrapper {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: none;
+}
+
+[data-theme='planche'] .janus-chat[data-minimal-composer] .janus-chat-input-wrapper:focus-within {
+  border-color: var(--planche-red, #D43D2A);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+
+[data-theme='planche'] .janus-chat-prompt-prefix {
+  border-right: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .janus-chat[data-minimal-composer] .janus-chat-input {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .janus-chat[data-minimal-composer] .janus-chat-input::placeholder {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .janus-chat[data-minimal-composer] .janus-chat-send {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .janus-chat[data-minimal-composer] .janus-chat-send:not(:disabled) {
+  background: var(--planche-red, #D43D2A);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--paper, #EFE4C5);
+}
+
+[data-theme='planche'] .janus-chat[data-minimal-composer] .janus-chat-send:hover:not(:disabled) {
+  background: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .janus-chat[data-minimal-composer] .janus-chat-send:disabled {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-message-content {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-input-wrapper {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+}
+
+/* ── 聚焦视图（空态 /  hero / 面板）：纸面化 ── */
+[data-theme='planche'] .blueprint-focus-view {
+  background: var(--paper, #EFE4C5);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-focus-hero,
+[data-theme='planche'] .blueprint-focus-panel,
+[data-theme='planche'] .blueprint-focus-empty-panel {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+[data-theme='planche'] .blueprint-focus-view--empty {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] .blueprint-focus-kicker {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-focus-view--empty .blueprint-focus-kicker {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .blueprint-focus-hero h2,
+[data-theme='planche'] .blueprint-focus-empty-panel h2,
+[data-theme='planche'] .blueprint-focus-progress-ring span,
+[data-theme='planche'] .blueprint-focus-stat-row strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-focus-hero p,
+[data-theme='planche'] .blueprint-focus-empty-panel p {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .blueprint-focus-panel-head span,
+[data-theme='planche'] .blueprint-focus-section label,
+[data-theme='planche'] .blueprint-focus-stat-row span,
+[data-theme='planche'] .blueprint-focus-progress-copy span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .blueprint-focus-panel-head strong,
+[data-theme='planche'] .blueprint-focus-progress-copy strong,
+[data-theme='planche'] .blueprint-focus-list-item strong,
+[data-theme='planche'] .blueprint-focus-analysis strong {
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .blueprint-focus-stat-row div {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .blueprint-focus-list-item,
+[data-theme='planche'] .blueprint-focus-analysis,
+[data-theme='planche'] .blueprint-focus-empty-line {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .blueprint-focus-list-item span,
+[data-theme='planche'] .blueprint-focus-analysis span,
+[data-theme='planche'] .blueprint-focus-empty-line {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .blueprint-focus-progress {
+  --focus-color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .blueprint-focus-progress-ring {
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
 }

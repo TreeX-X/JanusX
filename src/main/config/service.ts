@@ -26,6 +26,7 @@ import {
   type ExperimentalFeatures,
 } from '../../shared/ipc/experimental'
 import { normalizeAgentApprovalMode, type AgentApprovalMode } from '../../shared/ipc/agent-runtime'
+import { normalizeAppTheme, type AppTheme } from '../../shared/ipc/theme'
 
 /** P6：janus-chat 循环步数默认 40（P6 前为硬编码 20），钳制 1~100。 */
 export const DEFAULT_AGENT_MAX_STEPS = 40
@@ -71,12 +72,16 @@ const DEFAULT_CONFIG: GlobalConfig = {
 }
 
 export class ConfigService {
-  private configPath: string
+  private configPathValue: string | null = null
   private config: GlobalConfig | null = null
   private writeQueue = new SerialQueue()
 
-  constructor() {
-    this.configPath = join(app.getPath('userData'), 'janusx', 'config.json')
+  private get configPath(): string {
+    // 延迟解析 userData，避免模块导入期（单测 mock electron 前）即触碰 app。
+    if (!this.configPathValue) {
+      this.configPathValue = join(app.getPath('userData'), 'janusx', 'config.json')
+    }
+    return this.configPathValue
   }
 
   async load(): Promise<GlobalConfig> {
@@ -86,6 +91,7 @@ export class ConfigService {
       this.config = {
         ...DEFAULT_CONFIG,
         ...parsed,
+        theme: normalizeAppTheme(parsed.theme),
         notificationSettings: normalizeAgentNotificationSettings(parsed.notificationSettings),
         knowledgeSettings: normalizeKnowledgeSettings(parsed.knowledgeSettings),
         updaterSettings: normalizeUpdaterSettings(parsed.updaterSettings),
@@ -134,6 +140,9 @@ export class ConfigService {
     return this.writeQueue.run(async () => {
       const current = await this.get()
       this.config = { ...current, ...partial }
+      if (partial.theme !== undefined) {
+        this.config.theme = normalizeAppTheme(partial.theme)
+      }
       if (partial.notificationSettings) {
         this.config.notificationSettings = normalizeAgentNotificationSettings({
           ...current.notificationSettings,
@@ -292,6 +301,21 @@ export class ConfigService {
 
   getRegisteredCLIs(): GlobalConfig['registeredCLIs'] {
     return this.config?.registeredCLIs ?? DEFAULT_CONFIG.registeredCLIs
+  }
+
+  /** 同步读缓存主题（PTY OSC 探针热路径用，不做 IO；未加载时回落 dark）。 */
+  getCachedTheme(): AppTheme {
+    return normalizeAppTheme(this.config?.theme)
+  }
+
+  async getTheme(): Promise<AppTheme> {
+    return normalizeAppTheme((await this.get()).theme)
+  }
+
+  async updateTheme(theme: unknown): Promise<AppTheme> {
+    const normalized = normalizeAppTheme(theme)
+    await this.update({ theme: normalized })
+    return normalized
   }
 
   async getLanguage(): Promise<string | null> {

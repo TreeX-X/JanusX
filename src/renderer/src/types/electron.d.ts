@@ -20,6 +20,7 @@ import type { JanusChatAPI } from '../../../shared/ipc/janus-chat'
 import type { RoundtableAPI } from '../../../shared/ipc/roundtable'
 import type { AgentSettingsAPI, NotificationSettingsAPI } from '../../../shared/ipc/settings'
 import type { ExperimentalAPI } from '../../../shared/ipc/experimental'
+import type { ThemeAPI } from '../../../shared/ipc/theme'
 import type { DesktopToastAPI, DialogAPI, SystemAPI, WindowAPI } from '../../../shared/ipc/system'
 import type { TeamAPI } from '../../../shared/ipc/team'
 import type { UpdaterAPI } from '../../../shared/ipc/updater'
@@ -54,6 +55,7 @@ interface ElectronAPI {
   notificationSettings: NotificationSettingsAPI
   agentSettings: AgentSettingsAPI
   experimental: ExperimentalAPI
+  theme: ThemeAPI
   updater: UpdaterAPI
   subAgentRun: SubAgentRunAPI
   team: TeamAPI

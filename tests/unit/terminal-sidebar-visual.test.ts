@@ -46,4 +46,21 @@ describe('terminal sidebar visuals', () => {
       getTerminalStatusVisual(status as Terminal['status']).color
     )).size).toBe(5)
   })
+
+  it('reads status colors from the theme definition (M1 unified structure)', () => {
+    // dark 保持历史值
+    expect(getTerminalStatusVisual('running', 'dark').color).toBe('#6bd89b')
+    expect(getTerminalStatusVisual('error', 'dark').color).toBe('#ff7474')
+    // planche 走纸面映射，无霓虹
+    expect(getTerminalStatusVisual('running', 'planche').color).toBe('#2E6B5E')
+    expect(getTerminalStatusVisual('needs-input', 'planche').color).toBe('#D43D2A')
+    expect(getTerminalStatusVisual('error', 'planche').color).toBe('#D43D2A')
+    // 未知主题回落 dark
+    expect(getTerminalStatusVisual('running', 'nope').color).toBe('#6bd89b')
+    // planche 五槽互异（attention/error 同为朱红是刻意：单点睛）
+    const planche = ['running', 'wait', 'needs-input', 'degraded', 'error'].map((status) =>
+      getTerminalStatusVisual(status as Terminal['status'], 'planche').color
+    )
+    expect(new Set(planche).size).toBe(4)
+  })
 })

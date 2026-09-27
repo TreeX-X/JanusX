@@ -447,6 +447,7 @@
 }
 
 /* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/2026-09-21-workbench-close-hit-slop--8688b5ab.md */
+/* 交互约定（与 modal-close-light 统一）：红灯本身即关闭，悬浮不冒叉，直接点即可。 */
 .closeButton {
   position: relative;
   width: 14px;
@@ -462,7 +463,6 @@
   justify-content: center;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.26),
     0 0 0 1px rgba(0, 0, 0, 0.22);
-  transition: filter 0.2s ease;
 }
 
 .closeButton::before {
@@ -472,21 +472,13 @@
   background: transparent;
 }
 
-.closeButton::after {
+.closeButton::after,
+.closeButton:hover::after {
   content: '\2715';
   font-size: 7px;
   line-height: 1;
   color: transparent;
   font-weight: bold;
-  transition: color 0.15s ease;
-}
-
-.closeButton:hover {
-  filter: brightness(1.1);
-}
-
-.closeButton:hover::after {
-  color: rgba(0, 0, 0, 0.55);
 }
 
 .closeButton:active {
@@ -1342,4 +1334,431 @@
   .stage {
     min-height: 60vh;
   }
+}
+
+/* ── planche：知识库纸面化（加法层，dark 原样不动）
+   色值只吃语义令牌（一键配置：definition.ts → themes.generated.css）。
+   知识库蓝是独立功能色，纸上映射为墨蓝 #2F5D8A / 朱红点睛，
+   与蓝图信号色同源；动效与布局不动。 */
+:global([data-theme='planche']) .backdrop {
+  background: rgba(28, 52, 59, 0.18);
+  backdrop-filter: none;
+}
+
+:global([data-theme='planche']) .shell {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .header,
+:global([data-theme='planche']) .statusCard,
+:global([data-theme='planche']) .leftPane,
+:global([data-theme='planche']) .rightPane,
+:global([data-theme='planche']) .stage {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .stage {
+  background-color: var(--paper, #EFE4C5);
+  background-image: radial-gradient(rgba(28, 52, 59, 0.12) 1px, transparent 0);
+}
+
+:global([data-theme='planche']) .bcParent {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .bcSep {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .bcCurrent {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .badge {
+  border: 1px solid var(--shell-accent-border);
+  background: var(--shell-accent-soft);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .statusBar {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .statusDot {
+  background: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .statusDot[data-tone="working"] { background: #2F5D8A; }
+:global([data-theme='planche']) .statusDot[data-tone="attention"] { background: var(--planche-red, #D43D2A); }
+:global([data-theme='planche']) .statusDot[data-tone="idle"] { background: var(--planche-green-deep, #2E6B5E); }
+
+:global([data-theme='planche']) .statusWarn {
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .statusDim,
+:global([data-theme='planche']) .graphCount,
+:global([data-theme='planche']) .graphHint,
+:global([data-theme='planche']) .graphLegend {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .statusButton {
+  border: 1px solid var(--shell-accent-border);
+  background: transparent;
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .statusButton:hover:not(:disabled) {
+  background: var(--shell-accent-soft);
+}
+
+/* 图谱工具条 / 搜索 / 过滤 / 按钮 */
+:global([data-theme='planche']) .graphToolbar {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .graphSearch,
+:global([data-theme='planche']) .graphFilter select,
+:global([data-theme='planche']) .searchInput,
+:global([data-theme='planche']) .largeInput {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .graphSearch:focus,
+:global([data-theme='planche']) .searchInput:focus,
+:global([data-theme='planche']) .largeInput:focus {
+  border-color: var(--planche-red, #D43D2A);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+
+:global([data-theme='planche']) .graphButton {
+  background: transparent;
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .graphButton:hover {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .graphNotice {
+  border: 1px dashed var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .graphNoticeFloat {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:global([data-theme='planche']) .graphCanvas {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+:global([data-theme='planche']) .graphCanvas :global(.react-flow__controls) {
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: none;
+}
+
+:global([data-theme='planche']) .graphCanvas :global(.react-flow__controls-button) {
+  background: var(--paper, #EFE4C5);
+  border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+:global([data-theme='planche']) .graphCanvas :global(.react-flow__controls-button svg) {
+  fill: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .graphCanvas :global(.react-flow__controls-button:hover) {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .graphCanvas :global(.react-flow__minimap) {
+  border: 1px solid var(--line, #1C343B);
+}
+
+:global([data-theme='planche']) .graphLines path {
+  stroke: rgba(28, 52, 59, 0.18);
+}
+
+/* 图谱节点卡与 Obsidian 圆点：纸面 + 品类墨色，去辉光 */
+:global([data-theme='planche']) .graphNode {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+  box-shadow: none;
+}
+
+:global([data-theme='planche']) .graphNode small {
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .graphNodeActive,
+:global([data-theme='planche']) .graphNode:hover {
+  border-color: var(--planche-red, #D43D2A);
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .dot {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .dot:hover .dotCaption {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .dotKindFact { border-color: #2F5D8A; box-shadow: none; }
+:global([data-theme='planche']) .dotKindProposal { border-color: var(--planche-red, #D43D2A); box-shadow: none; }
+:global([data-theme='planche']) .dotKindWiki { border-color: var(--planche-green-deep, #2E6B5E); box-shadow: none; }
+:global([data-theme='planche']) .dotKindEntity { border-color: #6E5A9E; box-shadow: none; }
+:global([data-theme='planche']) .dotKindObservation { border-color: var(--ink-faint, rgba(28, 52, 59, 0.38)); box-shadow: none; }
+
+:global([data-theme='planche']) .dotKindFact:hover,
+:global([data-theme='planche']) .dotKindProposal:hover,
+:global([data-theme='planche']) .dotKindWiki:hover,
+:global([data-theme='planche']) .dotKindEntity:hover,
+:global([data-theme='planche']) .dotKindObservation:hover {
+  box-shadow: none;
+}
+
+:global([data-theme='planche']) .dotSelected {
+  border-color: var(--planche-red, #D43D2A);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+
+:global([data-theme='planche']) .dotCaption {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+/* 左轨导航 / 详情头 */
+:global([data-theme='planche']) .navLabel,
+:global([data-theme='planche']) .paneTitle {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .navButton {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .navButton:hover {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .navActive {
+  border-color: var(--shell-accent-border);
+  background: var(--shell-accent-soft);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .detailClose {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .detailClose:hover {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .paneCount {
+  border: 1px solid var(--shell-accent-border);
+  background: var(--shell-accent-soft);
+  color: var(--planche-red, #D43D2A);
+}
+
+/* 列表行 / 候选卡 / 标签 */
+:global([data-theme='planche']) .wikiPageButton,
+:global([data-theme='planche']) .resultRow,
+:global([data-theme='planche']) .auditEvent {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .wikiPageButton:hover,
+:global([data-theme='planche']) .resultRow:hover,
+:global([data-theme='planche']) .auditEvent:hover {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .cardFoot,
+:global([data-theme='planche']) .wikiPageButton small,
+:global([data-theme='planche']) .resultRow small,
+:global([data-theme='planche']) .auditEvent small {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .metric {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+:global([data-theme='planche']) .metric strong {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .metric span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .reviewCard {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .reviewCard:hover {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--line, #1C343B);
+  transform: none;
+}
+
+:global([data-theme='planche']) .reviewCardActive {
+  border-color: var(--planche-red, #D43D2A);
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .reviewCard strong {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .reviewCard p {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .cardTopline {
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .tags span,
+:global([data-theme='planche']) .filterRow span {
+  background: var(--paper-deep, #DCCFA8);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+/* wiki / 搜索 / 时间线 / 审查器 */
+:global([data-theme='planche']) .wikiList,
+:global([data-theme='planche']) .markdownPreview,
+:global([data-theme='planche']) .searchPanel {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+:global([data-theme='planche']) .markdownPreview h2 {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .markdownPreview pre {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .resultRow {
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+  background: var(--paper, #EFE4C5);
+}
+
+:global([data-theme='planche']) .resultRow span {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .auditEvent {
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+  background: var(--paper, #EFE4C5);
+}
+
+:global([data-theme='planche']) .auditDot {
+  background: var(--planche-red, #D43D2A);
+  box-shadow: none;
+}
+
+:global([data-theme='planche']) .auditEvent strong {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .auditEvent time {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .inspectorTitle {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .inspector p {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .keyValue {
+  border-top: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+:global([data-theme='planche']) .keyValue span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .keyValue strong {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .actionRow button {
+  background: transparent;
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .actionRow button:not(:disabled) {
+  border-color: var(--planche-red, #D43D2A);
+  background: transparent;
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .actionRow button:not(:disabled):hover {
+  border-color: var(--planche-red, #D43D2A);
+  background: var(--shell-accent-soft);
+}
+
+:global([data-theme='planche']) .navButton:focus-visible,
+:global([data-theme='planche']) .detailClose:focus-visible,
+:global([data-theme='planche']) .reviewCard:focus-visible,
+:global([data-theme='planche']) .auditEvent:focus-visible,
+:global([data-theme='planche']) .graphNode:focus-visible,
+:global([data-theme='planche']) .actionRow button:focus-visible,
+:global([data-theme='planche']) .closeButton:focus-visible {
+  outline: 2px solid var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .demoNotice {
+  background: var(--shell-accent-soft);
+  border: 1px solid var(--shell-accent-border);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .stateBlock {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .stateBlock strong {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .stateBlock span {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .grid .rightPane {
+  box-shadow: none;
 }

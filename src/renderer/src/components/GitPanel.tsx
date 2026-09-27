@@ -156,7 +156,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
 
   if (!cwd) {
     return (
-      <div className="flex-1 flex items-center justify-center text-xs text-[#555]">
+      <div className="flex-1 flex items-center justify-center text-xs text-[var(--shell-dim)]">
         {t('git:noWorkspace')}
       </div>
     )
@@ -192,22 +192,22 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             className="w-2 h-2 rounded-full shrink-0"
             style={{ border: '1.5px solid #ff7830' }}
           />
-          <span className="text-[#d4d4d4] font-medium truncate">
+          <span className="text-[var(--shell-text)] font-medium truncate">
             {status?.branch.name ?? '...'}
           </span>
           {status?.branch.upstream && (
-            <span className="text-[#555] truncate">
+            <span className="text-[var(--shell-dim)] truncate">
               {status.branch.upstream}
             </span>
           )}
         </div>
         {(status?.branch.ahead ?? 0) > 0 && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(78, 201, 176, 0.15)', color: '#4ec9b0' }}>
+          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(78, 201, 176, 0.15)', color: 'var(--shell-diff-add)' }}>
             ↑{status?.branch.ahead}
           </span>
         )}
         {(status?.branch.behind ?? 0) > 0 && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(224, 108, 117, 0.15)', color: '#e06c75' }}>
+          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(224, 108, 117, 0.15)', color: 'var(--shell-diff-del)' }}>
             ↓{status?.branch.behind}
           </span>
         )}
@@ -217,22 +217,22 @@ export function GitPanel({ active = true }: { active?: boolean }) {
       <div className="flex gap-3 px-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#e5c07b' }} />
-          <span className="text-[#888]">{t('git:statusSummary.modified', { count: modifiedCount })}</span>
+          <span className="text-[var(--shell-muted)]">{t('git:statusSummary.modified', { count: modifiedCount })}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ec9b0' }} />
-          <span className="text-[#888]">{t('git:statusSummary.added', { count: addedCount })}</span>
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--shell-diff-add)' }} />
+          <span className="text-[var(--shell-muted)]">{t('git:statusSummary.added', { count: addedCount })}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#e06c75' }} />
-          <span className="text-[#888]">{t('git:statusSummary.deleted', { count: deletedCount })}</span>
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--shell-diff-del)' }} />
+          <span className="text-[var(--shell-muted)]">{t('git:statusSummary.deleted', { count: deletedCount })}</span>
         </div>
       </div>
 
       {/* Changed files */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="git-scroll-region">
         {error && (
-          <div className="px-3 py-2 text-[10px]" style={{ color: '#e06c75' }}>
+          <div className="px-3 py-2 text-[10px]" style={{ color: 'var(--shell-diff-del)' }}>
             {error}
           </div>
         )}
@@ -242,13 +242,13 @@ export function GitPanel({ active = true }: { active?: boolean }) {
           <div>
             <div
               className="px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase flex justify-between items-center"
-              style={{ color: '#555', background: 'rgba(255, 255, 255, 0.02)' }}
+              style={{ color: 'var(--shell-dim)', background: 'rgba(255, 255, 255, 0.02)' }}
             >
               <span>{t('git:staged.title')}</span>
               <button
                 onClick={handleUnstageAll}
-                className="text-[10px] normal-case tracking-normal font-normal transition-colors hover:text-[#ff7830]"
-                style={{ color: '#666' }}
+                className="text-[10px] normal-case tracking-normal font-normal transition-colors hover:text-[var(--shell-accent)]"
+                style={{ color: 'var(--shell-dim)' }}
               >
                 {t('git:staged.unstageAll')}
               </button>
@@ -264,13 +264,13 @@ export function GitPanel({ active = true }: { active?: boolean }) {
           <div>
             <div
               className="px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase flex justify-between items-center"
-              style={{ color: '#555', background: 'rgba(255, 255, 255, 0.02)' }}
+              style={{ color: 'var(--shell-dim)', background: 'rgba(255, 255, 255, 0.02)' }}
             >
               <span>{t('git:changes.title')}</span>
               <button
                 onClick={handleStageAll}
-                className="text-[10px] normal-case tracking-normal font-normal transition-colors hover:text-[#ff7830]"
-                style={{ color: '#666' }}
+                className="text-[10px] normal-case tracking-normal font-normal transition-colors hover:text-[var(--shell-accent)]"
+                style={{ color: 'var(--shell-dim)' }}
               >
                 {t('git:changes.stageAll')}
               </button>
@@ -282,8 +282,8 @@ export function GitPanel({ active = true }: { active?: boolean }) {
         )}
 
         {status?.clean && (
-          <div className="flex flex-col items-center justify-center py-8 gap-2 text-[#555]">
-            <div className="w-5 h-5 rounded-full border border-[#333] flex items-center justify-center text-[10px]">✓</div>
+          <div className="flex flex-col items-center justify-center py-8 gap-2 text-[var(--shell-dim)]">
+            <div className="w-5 h-5 rounded-full border border-[var(--shell-border)] flex items-center justify-center text-[10px]">✓</div>
             <span>{t('git:clean')}</span>
           </div>
         )}
@@ -293,7 +293,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
           <div>
             <div
               className="px-3 py-1.5 text-[10px] font-semibold tracking-wider uppercase"
-              style={{ color: '#555', background: 'rgba(255, 255, 255, 0.02)' }}
+              style={{ color: 'var(--shell-dim)', background: 'rgba(255, 255, 255, 0.02)' }}
             >
               {t('git:history.title')}
             </div>
@@ -310,11 +310,11 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               >
                 <div
                   className="absolute left-3 top-3 w-1.5 h-1.5 rounded-full"
-                  style={{ background: '#ff7830' }}
+                  style={{ background: 'var(--shell-accent)' }}
                 />
                 <div className="min-w-0 pl-4">
-                  <div className="text-[#d4d4d4] truncate">{commit.message}</div>
-                  <div className="flex gap-2 mt-0.5 text-[10px] text-[#555]">
+                  <div className="text-[var(--shell-text)] truncate">{commit.message}</div>
+                  <div className="flex gap-2 mt-0.5 text-[10px] text-[var(--shell-dim)]">
                     <span>{commit.shortHash}</span>
                     <span>{commit.author}</span>
                     <span>{formatDate(commit.date, t)}</span>
@@ -322,11 +322,11 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                 </div>
                 {expandedCommit === commit.hash && (
                   <div className="mt-2 border-t border-[rgba(255,255,255,0.06)] pt-1.5 pl-4">
-                    {commitFilesLoading === commit.hash ? <div className="py-2 text-[10px] text-[#666]">{t('git:history.loadingChanges')}</div> : (commitFiles[commit.hash] ?? []).map((file) => (
+                    {commitFilesLoading === commit.hash ? <div className="py-2 text-[10px] text-[var(--shell-dim)]">{t('git:history.loadingChanges')}</div> : (commitFiles[commit.hash] ?? []).map((file) => (
                       <div key={file.path} className="flex items-center gap-1.5 py-1 text-[10px]">
-                        <span className="min-w-0 flex-1 truncate text-[#999]">{file.path}</span>
-                        {file.additions !== null && <span className="text-[#4ec9b0]">+{file.additions}</span>}
-                        {file.deletions !== null && <span className="text-[#e06c75]">-{file.deletions}</span>}
+                        <span className="min-w-0 flex-1 truncate text-[var(--shell-muted)]">{file.path}</span>
+                        {file.additions !== null && <span className="text-[var(--shell-diff-add)]">+{file.additions}</span>}
+                        {file.deletions !== null && <span className="text-[var(--shell-diff-del)]">-{file.deletions}</span>}
                       </div>
                     ))}
                   </div>
@@ -352,30 +352,30 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             border: '1px solid rgba(255,120,48,0.28)',
           }}
         >
-          <div className="font-medium leading-4 text-[#f0f0f0] break-words">{hoveredCommit.commit.message}</div>
-          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-[#888]">
+          <div className="font-medium leading-4 text-[var(--shell-text)] break-words">{hoveredCommit.commit.message}</div>
+          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] text-[var(--shell-muted)]">
             <span>{hoveredCommit.commit.shortHash}</span>
             <span>{hoveredCommit.commit.author}</span>
             <span>{new Date(hoveredCommit.commit.date).toLocaleString()}</span>
           </div>
-          {commitFilesLoading === hoveredCommit.commit.hash && <div className="mt-2 text-[10px] text-[#777]">{t('git:history.loadingChanges')}</div>}
+          {commitFilesLoading === hoveredCommit.commit.hash && <div className="mt-2 text-[10px] text-[var(--shell-dim)]">{t('git:history.loadingChanges')}</div>}
           {commitFilesLoading !== hoveredCommit.commit.hash && commitFiles[hoveredCommit.commit.hash] && (() => {
             const files = commitFiles[hoveredCommit.commit.hash]
             const additions = files.reduce((sum, file) => sum + (file.additions ?? 0), 0)
             const deletions = files.reduce((sum, file) => sum + (file.deletions ?? 0), 0)
             return <>
               <div className="mt-2 flex items-center gap-2 border-t border-[rgba(255,255,255,0.08)] pt-2 text-[10px]">
-                <span className="text-[#aaa]">{t('git:history.filesCount', { count: files.length })}</span>
-                <span className="text-[#4ec9b0]">+{additions}</span>
-                <span className="text-[#e06c75]">-{deletions}</span>
+                <span className="text-[var(--shell-muted)]">{t('git:history.filesCount', { count: files.length })}</span>
+                <span className="text-[var(--shell-diff-add)]">+{additions}</span>
+                <span className="text-[var(--shell-diff-del)]">-{deletions}</span>
               </div>
               <div className="mt-1.5 space-y-0.5">
-                {files.slice(0, 5).map((file) => <div key={file.path} className="truncate text-[10px] text-[#888]">{file.path}</div>)}
-                {files.length > 5 && <div className="text-[10px] text-[#666]">{t('git:history.moreFiles', { count: files.length - 5 })}</div>}
+                {files.slice(0, 5).map((file) => <div key={file.path} className="truncate text-[10px] text-[var(--shell-muted)]">{file.path}</div>)}
+                {files.length > 5 && <div className="text-[10px] text-[var(--shell-dim)]">{t('git:history.moreFiles', { count: files.length - 5 })}</div>}
               </div>
             </>
           })()}
-          {!commitFiles[hoveredCommit.commit.hash] && commitFilesLoading !== hoveredCommit.commit.hash && <div className="mt-2 text-[10px] text-[#777]">{t('git:history.previewHint')}</div>}
+          {!commitFiles[hoveredCommit.commit.hash] && commitFilesLoading !== hoveredCommit.commit.hash && <div className="mt-2 text-[10px] text-[var(--shell-dim)]">{t('git:history.previewHint')}</div>}
         </div>,
         document.body,
       )}
@@ -396,7 +396,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             style={{
               background: 'rgba(255, 255, 255, 0.04)',
               border: '1px solid rgba(255, 255, 255, 0.08)',
-              color: '#d4d4d4',
+              color: 'var(--shell-text)',
             }}
           />
           <button
@@ -406,7 +406,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             style={{
               background: 'rgba(255, 120, 48, 0.08)',
               border: '1px solid rgba(255, 120, 48, 0.2)',
-              color: '#ff7830',
+              color: 'var(--shell-accent)',
             }}
           >
             {t('git:commit.button')}
@@ -417,7 +417,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             type="button"
             onClick={handlePush}
             disabled={loading}
-            className="flex-1 h-7 rounded border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[10px] font-medium text-[#888] cursor-pointer transition-[background,border-color,color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(255,120,48,0.26)] hover:bg-[rgba(255,120,48,0.08)] hover:text-[#ffb27d] hover:shadow-[0_0_0_1px_rgba(255,120,48,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:border-[rgba(255,255,255,0.06)] disabled:hover:bg-[rgba(255,255,255,0.03)] disabled:hover:text-[#888] disabled:hover:shadow-none"
+            className="flex-1 h-7 rounded border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[10px] font-medium text-[var(--shell-muted)] cursor-pointer transition-[background,border-color,color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(255,120,48,0.26)] hover:bg-[rgba(255,120,48,0.08)] hover:text-[var(--shell-accent)] hover:shadow-[0_0_0_1px_rgba(255,120,48,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:border-[rgba(255,255,255,0.06)] disabled:hover:bg-[rgba(255,255,255,0.03)] disabled:hover:text-[var(--shell-muted)] disabled:hover:shadow-none"
           >
             {t('git:remote.pushButton')}
           </button>
@@ -425,7 +425,7 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             type="button"
             onClick={handlePull}
             disabled={loading}
-            className="flex-1 h-7 rounded border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[10px] font-medium text-[#888] cursor-pointer transition-[background,border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(255,120,48,0.26)] hover:bg-[rgba(255,120,48,0.08)] hover:text-[#ffb27d] hover:shadow-[0_0_0_1px_rgba(255,120,48,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:border-[rgba(255,255,255,0.06)] disabled:hover:bg-[rgba(255,255,255,0.03)] disabled:hover:text-[#888] disabled:hover:shadow-none"
+            className="flex-1 h-7 rounded border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)] text-[10px] font-medium text-[var(--shell-muted)] cursor-pointer transition-[background,border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:border-[rgba(255,120,48,0.26)] hover:bg-[rgba(255,120,48,0.08)] hover:text-[var(--shell-accent)] hover:shadow-[0_0_0_1px_rgba(255,120,48,0.08)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:border-[rgba(255,255,255,0.06)] disabled:hover:bg-[rgba(255,255,255,0.03)] disabled:hover:text-[var(--shell-muted)] disabled:hover:shadow-none"
           >
             {t('git:remote.pullButton')}
           </button>
@@ -472,16 +472,16 @@ export function GitPanel({ active = true }: { active?: boolean }) {
           >
             <div
               className="font-semibold flex items-center"
-              style={{ fontSize: 13, color: '#fff', gap: 6 }}
+              style={{ fontSize: 13, color: 'var(--shell-text)', gap: 6 }}
             >
-              <span style={{ color: '#ff7830' }}>{confirmAction === 'push' ? '↑' : '↓'}</span>
+              <span style={{ color: 'var(--shell-accent)' }}>{confirmAction === 'push' ? '↑' : '↓'}</span>
               {remoteMeta.title}
             </div>
             <ModalCloseButton onClose={() => setConfirmAction(null)} />
           </div>
 
           <div style={{ padding: '16px 16px 18px' }}>
-            <div style={{ fontSize: 12, color: '#999', lineHeight: 1.6 }}>
+            <div style={{ fontSize: 12, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
               {remoteMeta.description}
             </div>
             <div
@@ -492,15 +492,15 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                 border: '1px solid rgba(255,255,255,0.05)',
                 borderRadius: 5,
                 fontSize: 11,
-                color: '#777',
+                color: 'var(--shell-dim)',
                 lineHeight: 1.6,
               }}
             >
               <div>
-                <span>{t('git:remote.branchLabel')} </span><strong style={{ color: '#d4d4d4', fontWeight: 600 }}>{branchName}</strong>
+                <span>{t('git:remote.branchLabel')} </span><strong style={{ color: 'var(--shell-text)', fontWeight: 600 }}>{branchName}</strong>
               </div>
               <div>
-                <span>{t('git:remote.remoteLabel')} </span><strong style={{ color: '#d4d4d4', fontWeight: 600 }}>{upstreamName}</strong>
+                <span>{t('git:remote.remoteLabel')} </span><strong style={{ color: 'var(--shell-text)', fontWeight: 600 }}>{upstreamName}</strong>
               </div>
             </div>
             <div
@@ -530,22 +530,14 @@ export function GitPanel({ active = true }: { active?: boolean }) {
             <button
               type="button"
               onClick={() => setConfirmAction(null)}
-              className="rounded cursor-pointer transition-colors"
+              className="rounded cursor-pointer transition-colors tbtn-ghost"
               style={{
                 height: 28,
                 padding: '0 14px',
                 fontSize: 11,
                 background: 'rgba(255,255,255,0.04)',
                 border: '1px solid rgba(255,255,255,0.08)',
-                color: '#999',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
-                e.currentTarget.style.color = '#ccc'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-                e.currentTarget.style.color = '#999'
+                color: 'var(--shell-muted)',
               }}
             >
               {t('common:action.cancel')}
@@ -554,23 +546,14 @@ export function GitPanel({ active = true }: { active?: boolean }) {
               type="button"
               onClick={handleConfirmRemoteAction}
               disabled={loading}
-              className="rounded cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-45 tbtn-accent"
               style={{
                 height: 28,
                 padding: '0 16px',
                 fontSize: 11,
                 background: 'rgba(255,120,48,0.12)',
                 border: '1px solid rgba(255,120,48,0.3)',
-                color: '#ff7830',
-              }}
-              onMouseEnter={(e) => {
-                if (loading) return
-                e.currentTarget.style.background = 'rgba(255,120,48,0.2)'
-                e.currentTarget.style.borderColor = 'rgba(255,120,48,0.5)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,120,48,0.12)'
-                e.currentTarget.style.borderColor = 'rgba(255,120,48,0.3)'
+                color: 'var(--shell-accent)',
               }}
             >
               {loading ? t('git:remote.executing') : remoteMeta.actionLabel}
@@ -606,21 +589,21 @@ function GitFileItem({ file, onToggle, onOpen, onDiscard }: { file: GitFileChang
       >
         {file.status === '??' ? '?' : file.status}
       </span>
-      <button type="button" onClick={() => onOpen(file)} className="flex-1 min-w-0 truncate text-left text-[#999] hover:text-[#d4d4d4]" title={file.path}>{file.path}</button>
+      <button type="button" onClick={() => onOpen(file)} className="flex-1 min-w-0 truncate text-left text-[var(--shell-muted)] hover:text-[var(--shell-text)]" title={file.path}>{file.path}</button>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <FileActionButton label={t('git:changes.open')} icon={<Eye size={13} />} onClick={() => onOpen(file)} />
         <FileActionButton label={file.staged ? t('git:changes.unstage') : t('git:changes.stage')} icon={file.staged ? <Minus size={13} /> : <Plus size={13} />} onClick={() => onToggle(file)} />
         <FileActionButton label={t('git:changes.discard')} icon={<RotateCcw size={13} />} onClick={() => onDiscard(file)} danger />
       </div>
       {file.staged && (
-        <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#4ec9b0' }} />
+        <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--shell-diff-add)' }} />
       )}
     </div>
   )
 }
 
 function FileActionButton({ label, icon, onClick, danger = false }: { label: string; icon: ReactNode; onClick: () => void; danger?: boolean }) {
-  return <button type="button" aria-label={label} title={label} onClick={onClick} className={`flex h-5 w-5 items-center justify-center rounded text-[#777] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#ddd] ${danger ? 'hover:text-[#e06c75]' : ''}`}>{icon}</button>
+  return <button type="button" aria-label={label} title={label} onClick={onClick} className={`flex h-5 w-5 items-center justify-center rounded text-[var(--shell-dim)] hover:bg-[rgba(255,255,255,0.08)] hover:text-[var(--shell-text)] ${danger ? 'hover:text-[var(--shell-diff-del)]' : ''}`}>{icon}</button>
 }
 
 function formatDate(dateStr: string, t: TFunction): string {

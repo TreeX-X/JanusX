@@ -670,3 +670,80 @@
   align-items: center;
   gap: 8px;
 }
+
+/* ── planche：设置中心纸面化（加法层，dark 原样不动）
+   一键机制：输入/强调/标尺全部走 --so-* 变量，纸面只翻变量值，
+   下游面板（Llm/ModelCatalog/Notification/ProjectSettings）自动跟随；
+   白字标签与关键悬停逐条点名。 */
+:global([data-theme='planche']) .panel {
+  --so-field: var(--paper, #EFE4C5);
+  --so-accent: var(--planche-red, #D43D2A);
+  --so-accent-ink: var(--planche-red, #D43D2A);
+  --so-accent-hover: var(--planche-red, #D43D2A);
+  --so-accent-rgb: 212, 61, 42;
+  --janus-order: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .backdrop {
+  background: rgba(28, 52, 59, 0.18);
+  backdrop-filter: none;
+}
+
+:global([data-theme='planche']) .panel {
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+}
+
+:global([data-theme='planche']) .tabButton:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .tabButtonActive,
+:global([data-theme='planche']) .tabButtonActive:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .tabButtonActive::before {
+  background: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .body::-webkit-scrollbar-thumb {
+  background: var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+:global([data-theme='planche']) .body::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .generalSelect {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .generalSelect:hover {
+  border-color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .generalSelect:focus-visible {
+  outline: 1px solid var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .lsStateIdle {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .lsCardHint {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .lsButtonPrimary:hover:not(:disabled),
+:global([data-theme='planche']) .lsButtonGhost:hover:not(:disabled) {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .lsSpinner {
+  border: 2px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  border-top-color: var(--ink, #1C343B);
+}

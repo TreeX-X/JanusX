@@ -153,3 +153,61 @@
   color: #666;
   text-align: center;
 }
+
+/* ── planche：纸面下拉（加法层，dark 原样不动）
+   色值只吃语义令牌（一键配置：definition.ts → themes.generated.css），
+   本文件不新增 hex。浮层挂 body  portal，但 data-theme 落在 <html>，
+   故 :global 祖先选择器依然命中。 */
+:global([data-theme='planche']) .trigger {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .trigger:hover:not(:disabled),
+:global([data-theme='planche']) .triggerOpen,
+:global([data-theme='planche']) .trigger:focus-visible {
+  border-color: var(--planche-red, #D43D2A);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+
+:global([data-theme='planche']) .placeholder {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .arrow {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .dropdown {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:global([data-theme='planche']) .option {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .option:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .optionSelected {
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .optionSelected::before {
+  background: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .optionDisabled {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .empty {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}

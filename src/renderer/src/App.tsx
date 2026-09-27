@@ -88,6 +88,10 @@ export default function App() {
   useWorkspaceBootstrap()
   // ToB M2：启动即恢复团队会话（refresh 静默续期），失败即 guest 由挡板接管。
   useEffect(() => { void useTeamStore.getState().bootstrap() }, [])
+  // planche 主题：首屏加载持久化值并挂载 [data-theme]，默认 dark 不挂载零回归。
+  useEffect(() => {
+    void import('@/stores/theme').then(({ useThemeStore }) => useThemeStore.getState().load())
+  }, [])
   // P5: 细粒度 selector——App 是整树根组件，任意 store 字段变化都不应带动整树
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)

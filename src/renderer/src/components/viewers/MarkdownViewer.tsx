@@ -63,16 +63,16 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
   const isSplit = previewMode === 'split'
 
   return (
-    <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden" style={{ background: '#0a0a0a', height: '100%' }}>
+    <div ref={containerRef} className="flex flex-1 flex-col overflow-hidden" style={{ background: 'var(--shell-void)', height: '100%' }}>
       <div
         className="shrink-0 flex items-center justify-between select-none"
         style={{
           padding: '6px 10px',
-          background: 'rgba(6, 6, 6, 0.95)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          background: 'var(--shell-chrome)',
+          borderBottom: '1px solid var(--shell-border)',
         }}
       >
-        <span className="uppercase tracking-wider" style={{ fontSize: 10, color: '#555' }}>
+        <span className="uppercase tracking-wider" style={{ fontSize: 10, color: 'var(--shell-dim)' }}>
           MARKDOWN
         </span>
         <PreviewModeToggle value={previewMode} onChange={setPreviewMode} />
@@ -86,9 +86,9 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
           style={{
             padding: '6px 12px',
             fontSize: 10,
-            color: '#555',
-            background: 'rgba(6, 6, 6, 0.95)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            color: 'var(--shell-dim)',
+            background: 'var(--shell-chrome)',
+            borderBottom: '1px solid var(--shell-border)',
           }}
         >
           EDITOR
@@ -109,21 +109,13 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
       {/* Divider */}
       {isSplit && (
       <div
-        className="shrink-0 h-full transition-colors"
+        className="viewer-divider shrink-0 h-full transition-colors"
         style={{
           width: 3,
           cursor: 'col-resize',
           background: 'rgba(255, 255, 255, 0.06)',
         }}
         onMouseDown={handleDividerMouseDown}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#ff7830'
-        }}
-        onMouseLeave={(e) => {
-          if (!isDragging.current) {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'
-          }
-        }}
       />
       )}
 
@@ -135,9 +127,9 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
           style={{
             padding: '6px 12px',
             fontSize: 10,
-            color: '#555',
-            background: 'rgba(6, 6, 6, 0.95)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            color: 'var(--shell-dim)',
+            background: 'var(--shell-chrome)',
+            borderBottom: '1px solid var(--shell-border)',
           }}
         >
           PREVIEW
@@ -147,8 +139,8 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
           className="flex-1"
           style={{
             padding: 16,
-            background: '#0a0a0a',
-            color: '#d4d4d4',
+            background: 'var(--shell-void)',
+            color: 'var(--shell-text)',
             height: '100%',
           }}
         >

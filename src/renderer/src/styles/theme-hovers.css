@@ -1,0 +1,19 @@
+/* ── M2c：JS hover 改色迁移区 ──────────────────────────────────────────
+   悬浮态一律走 CSS 类，主题分支用 [data-theme]；禁止 onMouseEnter 改 style。
+   命名：tbtn-*（28px 小按钮：ghost/accent/danger）+ terminal-*（终端区）。 */
+.tbtn-ghost:hover { background: rgba(255,255,255,0.08); color: #ccc; }
+[data-theme='planche'] .tbtn-ghost:hover { background: var(--shell-hover); color: var(--shell-text); }
+.tbtn-accent:not(:disabled):hover { background: rgba(255,120,48,0.2); border-color: rgba(255,120,48,0.5); }
+[data-theme='planche'] .tbtn-accent:not(:disabled):hover { background: var(--shell-accent-mid); border-color: var(--shell-accent-border); }
+.tbtn-danger:hover { background: rgba(255,88,88,0.22); border-color: rgba(255,88,88,0.5); }
+[data-theme='planche'] .tbtn-danger:hover { background: rgba(212,61,42,0.16); border-color: #D43D2A; }
+.terminal-preset-item:hover { border-color: rgba(255,120,48,0.46); background: rgb(36, 27, 21); }
+[data-theme='planche'] .terminal-preset-item:hover { border-color: rgba(212,61,42,0.5); background: var(--shell-hover); }
+.terminal-empty-new:hover { background: rgba(255,120,48,0.08); }
+[data-theme='planche'] .terminal-empty-new:hover { background: var(--shell-hover); }
+/* 预览器分栏条：悬浮点睛（拖拽中保持由 JS 的 isDragging 语义退化为纯 CSS，接受拖拽中也高亮） */
+.viewer-divider:hover { background: #ff7830; }
+[data-theme='planche'] .viewer-divider:hover { background: #D43D2A; }
+/* 文件 tab 关闭钮：平时只显形，悬浮转删除色 */
+.filetab-close { color: var(--shell-muted); }
+.filetab-close:hover { color: var(--shell-diff-del); opacity: 1 !important; }

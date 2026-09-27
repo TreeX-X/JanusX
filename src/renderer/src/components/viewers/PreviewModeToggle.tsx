@@ -18,8 +18,8 @@ export function PreviewModeToggle({ value, onChange }: PreviewModeToggleProps) {
     <div
       className="flex shrink-0 overflow-hidden rounded"
       style={{
-        background: 'rgba(255, 255, 255, 0.035)',
-        border: '1px solid rgba(255, 255, 255, 0.06)',
+        background: 'transparent',
+        border: '1px solid var(--control-border)',
       }}
     >
       {modes.map((mode) => {
@@ -31,9 +31,9 @@ export function PreviewModeToggle({ value, onChange }: PreviewModeToggleProps) {
             onClick={() => onChange(mode.value)}
             className="h-6 px-2.5 text-[10px] transition-colors"
             style={{
-              background: active ? 'rgba(255, 120, 48, 0.16)' : 'transparent',
-              color: active ? '#ffb084' : '#777',
-              borderRight: mode.value === 'preview' ? 'none' : '1px solid rgba(255, 255, 255, 0.05)',
+              background: active ? 'var(--shell-accent-mid)' : 'transparent',
+              color: active ? 'var(--shell-accent-strong)' : 'var(--shell-dim)',
+              borderRight: mode.value === 'preview' ? 'none' : '1px solid var(--shell-border-soft)',
             }}
           >
             {mode.label}

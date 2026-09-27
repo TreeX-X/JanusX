@@ -314,3 +314,40 @@
     flex-direction: column;
   }
 }
+
+/* ── planche：通知设置纸面化（加法层，dark 原样不动）── */
+:global([data-theme='planche']) .labelText {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .switch input:checked + .switchTrack {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+:global([data-theme='planche']) .switch input:checked + .switchTrack::after {
+  background: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .input,
+:global([data-theme='planche']) .select {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .input:focus,
+:global([data-theme='planche']) .select:focus {
+  background: var(--paper, #EFE4C5);
+  border-color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .select option {
+  background: var(--paper, #EFE4C5);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .ghostButton:hover:not(:disabled),
+:global([data-theme='planche']) .primaryButton:hover:not(:disabled) {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}

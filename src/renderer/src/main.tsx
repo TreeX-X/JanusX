@@ -4,6 +4,8 @@ import { installElectronApiFallback } from './lib/electron-api-fallback'
 import { initBrowserEventSubscriptions } from './stores/browser'
 import { initI18n } from './i18n'
 import './styles/globals.css'
+import './styles/themes.generated.css'
+import './styles/theme-hovers.css'
 import './components/viewers/markdown-preview.css'
 import './components/janus/janus-island.css'
 

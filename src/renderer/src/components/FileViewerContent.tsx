@@ -23,14 +23,14 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
     return (
       <div
         className="flex items-center justify-center flex-1"
-        style={{ background: '#151517', minHeight: 0 }}
+        style={{ background: 'var(--shell-canvas)', minHeight: 0 }}
       >
         <div className="flex items-center gap-2">
-          <span style={{ color: '#555', fontSize: 12 }}>Loading</span>
+          <span style={{ color: 'var(--shell-dim)', fontSize: 12 }}>Loading</span>
           <span
             className="inline-block w-1.5 h-1.5 rounded-full"
             style={{
-              background: '#ff7830',
+              background: 'var(--shell-accent)',
               animation: 'pulse-dot 1.2s ease-in-out infinite',
             }}
           />
@@ -43,11 +43,11 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
     return (
       <div
         className="flex flex-col items-center justify-center flex-1 gap-2"
-        style={{ background: '#151517', minHeight: 0 }}
+        style={{ background: 'var(--shell-canvas)', minHeight: 0 }}
       >
-        <span style={{ color: '#ff5858', fontSize: 13 }}>Error</span>
-        <span style={{ color: '#666', fontSize: 11 }}>{file.error}</span>
-        <span style={{ color: '#444', fontSize: 10 }}>Try closing and reopening the file</span>
+        <span style={{ color: 'var(--shell-diff-del)', fontSize: 13 }}>Error</span>
+        <span style={{ color: 'var(--shell-dim)', fontSize: 11 }}>{file.error}</span>
+        <span style={{ color: 'var(--shell-dim)', fontSize: 10 }}>Try closing and reopening the file</span>
       </div>
     )
   }

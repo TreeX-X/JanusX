@@ -39,6 +39,7 @@ import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } fro
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS, type AgentSettingsAPI, type NotificationSettingsAPI } from '../shared/ipc/settings'
 import { EXPERIMENTAL_CHANNELS, type ExperimentalAPI } from '../shared/ipc/experimental'
+import { THEME_CHANNELS, type AppTheme, type ThemeAPI } from '../shared/ipc/theme'
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 import { TEAM_CHANNELS, type TeamAPI } from '../shared/ipc/team'
 import { UPDATER_CHANNELS, UPDATER_EVENT_CHANNELS, type UpdaterAPI } from '../shared/ipc/updater'
@@ -420,6 +421,12 @@ const experimentalAPI: ExperimentalAPI = {
   update: (settings) => ipcRenderer.invoke(EXPERIMENTAL_CHANNELS.update, settings),
 }
 
+const themeAPI: ThemeAPI = {
+  get: () => ipcRenderer.invoke(THEME_CHANNELS.get),
+  update: (theme: AppTheme) => ipcRenderer.invoke(THEME_CHANNELS.update, theme),
+  onChanged: (callback) => subscribeIpcEvent<AppTheme>(THEME_CHANNELS.changed, callback),
+}
+
 const updaterAPI: UpdaterAPI = {
   getState: () => ipcRenderer.invoke(UPDATER_CHANNELS.getState),
   check: () => ipcRenderer.invoke(UPDATER_CHANNELS.check),
@@ -608,6 +615,7 @@ contextBridge.exposeInMainWorld('electron', {
   notificationSettings: notificationSettingsAPI,
   agentSettings: agentSettingsAPI,
   experimental: experimentalAPI,
+  theme: themeAPI,
   updater: updaterAPI,
   subAgentRun: subAgentRunAPI,
   team: teamAPI,

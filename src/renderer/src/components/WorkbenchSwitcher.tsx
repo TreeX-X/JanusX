@@ -3,6 +3,7 @@ import { useAppStore, type ActiveWorkbench } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useExperimentalStore } from '@/stores/experimental'
 import { WorkbenchIcon } from '@/components/ui/WorkbenchIcon'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './WorkbenchSwitcher.module.css'
 
@@ -61,21 +62,21 @@ export function WorkbenchSwitcher() {
         const badge = item.id === 'blueprint' ? pendingCandidateCount : 0
         const title = getButtonTitle(item.id, item.labelKey, isActive)
         return (
+          <ThemedTooltip key={item.id} label={title}>
           <button
-            key={item.id}
             type="button"
             className={styles.button}
             data-id={item.id}
             data-status={status}
             aria-pressed={isActive}
             aria-label={title}
-            title={title}
             onClick={() => toggleWorkbench(item.id)}
           >
             <WorkbenchIcon id={item.id} className={styles.icon} />
             <span className={styles.led} aria-hidden="true" />
-            {badge > 0 ? <span className={styles.badge} title={t('common:workbench.badgeTitle', { count: badge })}>{badge > 9 ? '9+' : badge}</span> : null}
+            {badge > 0 ? <span className={styles.badge}>{badge > 9 ? '9+' : badge}</span> : null}
           </button>
+          </ThemedTooltip>
         )
       })}
     </div>

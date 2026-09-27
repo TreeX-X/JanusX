@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Check, LogIn, Settings2, UserRound } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useTeamStore } from '@/stores/team'
 import styles from './TeamFooter.module.css'
@@ -54,10 +55,10 @@ export function TeamFooter() {
   if (status === 'local') {
     return (
       <div className={styles.footer}>
+        <ThemedTooltip label={t('team:footer.login')}>
         <button
           type="button"
           onClick={() => requestLogin()}
-          title={t('team:footer.login')}
           className={styles.row}
         >
           <span aria-hidden="true" className={styles.avatarGhost}>
@@ -71,6 +72,7 @@ export function TeamFooter() {
             <LogIn size={13} strokeWidth={1.7} />
           </span>
         </button>
+        </ThemedTooltip>
       </div>
     )
   }
@@ -98,8 +100,8 @@ export function TeamFooter() {
             {tenants.map((item) => {
               const isActive = item.id === activeTenantId
               return (
+                <ThemedTooltip key={item.id} label={item.name}>
                 <button
-                  key={item.id}
                   type="button"
                   role="menuitemradio"
                   aria-checked={isActive}
@@ -110,7 +112,6 @@ export function TeamFooter() {
                     setOpen(false)
                   }}
                   className={styles.popItem}
-                  title={item.name}
                 >
                   <span aria-hidden="true" className={styles.popAvatar}>
                     {item.name.trim().slice(0, 1).toUpperCase()}
@@ -123,6 +124,7 @@ export function TeamFooter() {
                     </span>
                   )}
                 </button>
+                </ThemedTooltip>
               )
             })}
           </div>
@@ -140,10 +142,10 @@ export function TeamFooter() {
           </button>
         </div>
       )}
+      <ThemedTooltip label={`${name} · ${active?.name ?? t('team:footer.noOrg')}`}>
       <button
         type="button"
         onClick={() => openTeamSettings()}
-        title={`${name} · ${active?.name ?? t('team:footer.noOrg')}`}
         className={styles.row}
       >
         <span aria-hidden="true" className={styles.avatar}>
@@ -156,7 +158,6 @@ export function TeamFooter() {
         {tenants.length > 1 && (
           <span
             className={styles.orgBadge}
-            title={t('team:footer.switchOrgLabel', { count: tenants.length })}
             aria-hidden="true"
           >
             ×{tenants.length}
@@ -166,6 +167,7 @@ export function TeamFooter() {
           <Settings2 size={13} strokeWidth={1.7} />
         </span>
       </button>
+      </ThemedTooltip>
     </div>
   )
 }
@@ -187,15 +189,16 @@ export function TeamFooterCollapsed() {
   if (status === 'local') {
     return (
       <div className={styles.collapsedWrap}>
+        <ThemedTooltip label={t('team:footer.login')}>
         <button
           type="button"
           onClick={() => requestLogin()}
-          title={t('team:footer.login')}
           className={styles.collapsedButton}
           data-ghost="true"
         >
           <UserRound size={15} strokeWidth={1.6} aria-hidden="true" />
         </button>
+        </ThemedTooltip>
       </div>
     )
   }
@@ -204,17 +207,18 @@ export function TeamFooterCollapsed() {
 
   return (
     <div className={styles.collapsedWrap}>
+      <ThemedTooltip label={`${name} · ${active?.name ?? t('team:footer.noOrg')}`}>
       <button
         type="button"
         onClick={() => openTeamSettings()}
-        title={`${name} · ${active?.name ?? t('team:footer.noOrg')}`}
         className={styles.collapsedButton}
       >
         {initials(name)}
-        <span title={active?.name ?? ''} aria-hidden="true" className={styles.collapsedBadge}>
+        <span aria-hidden="true" className={styles.collapsedBadge}>
           {(active?.name ?? '?').trim().slice(0, 1).toUpperCase()}
         </span>
       </button>
+      </ThemedTooltip>
     </div>
   )
 }

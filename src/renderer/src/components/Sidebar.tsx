@@ -5,10 +5,12 @@ import { ChevronRight, Ellipsis, Folder, GitBranch, PanelLeftClose, PanelLeftOpe
 import { useWorkspaceStore } from '@/stores/workspace'
 import { EMPTY_PENDING_LIST, EMPTY_STRING_LIST, EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
+import { useThemeStore } from '@/stores/theme'
 import { useI18n } from '@/i18n/useI18n'
 import { ProjectLauncher } from './ProjectLauncher'
 import { WorktreeComposer, WorktreeDeleteDialog, WorktreeShipDialog } from './WorktreeDialogs'
 import { ModalCloseButton } from './ModalCloseButton'
+import { ThemedTooltip } from './ui/ThemedTooltip'
 import { TeamFooter, TeamFooterCollapsed } from './team/TeamFooter'
 import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
 import type { WorktreeInfo } from '../../../shared/ipc/worktree'
@@ -81,6 +83,8 @@ function WorkspaceContextMenu({
   const { t } = useI18n('common')
   const menuRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ x: menu.x, y: menu.y })
+  // 一键主题：底座走语义令牌，纸面点睛（硬偏移影/去毛玻璃）走分支，与终端菜单同构
+  const plancheMenu = useThemeStore((s) => s.theme) === 'planche'
 
   useLayoutEffect(() => {
     const element = menuRef.current
@@ -92,7 +96,8 @@ function WorkspaceContextMenu({
     })
   }, [menu.x, menu.y])
 
-  const itemClassName = 'block w-full border-0 bg-transparent px-3 py-1.5 text-left text-[12px] text-[#c4c4c4] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-white'
+  const itemClassName = `block w-full border-0 bg-transparent px-3 py-1.5 text-left text-[12px] text-[var(--shell-text)] transition-colors hover:text-[var(--shell-text)] ${plancheMenu ? 'hover:bg-[#DCCFA8]' : 'hover:bg-[rgba(255,255,255,0.06)]'}`
+  const separatorClassName = 'my-1 h-px bg-[var(--shell-border)]'
   const target = menu.target
 
   return createPortal(
@@ -104,10 +109,12 @@ function WorkspaceContextMenu({
         top: position.y,
         width: MENU_WIDTH,
         zIndex: 1200,
-        background: 'rgba(25,25,25,0.98)',
-        border: '1px solid rgba(255,255,255,0.09)',
-        boxShadow: '0 14px 36px rgba(0,0,0,0.55)',
-        backdropFilter: 'blur(16px)',
+        background: 'var(--shell-chrome-raised)',
+        border: '1px solid var(--control-border)',
+        boxShadow: plancheMenu
+          ? '3px 3px 0 #E8A08A'
+          : '0 14px 36px rgba(0,0,0,0.55)',
+        backdropFilter: plancheMenu ? 'none' : 'blur(16px)',
       }}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
@@ -126,7 +133,7 @@ function WorkspaceContextMenu({
           </button>
           {target.workspace.sidebarGroup && (
             <>
-              <div className="my-1 h-px bg-[rgba(255,255,255,0.07)]" />
+              <div className={separatorClassName} />
               <button type="button" className={itemClassName} onClick={() => onRenameGroup(target.workspace.sidebarGroup!)}>
                 {t('common:workspace.renameGroup')}
               </button>
@@ -135,10 +142,10 @@ function WorkspaceContextMenu({
               </button>
             </>
           )}
-          <div className="my-1 h-px bg-[rgba(255,255,255,0.07)]" />
+          <div className={separatorClassName} />
           <button
             type="button"
-            className={`${itemClassName} !text-[#ff7777] hover:!bg-[rgba(255,88,88,0.1)]`}
+            className={`${itemClassName} !text-[var(--shell-diff-del)] ${plancheMenu ? 'hover:!bg-[var(--shell-accent-soft)]' : 'hover:!bg-[rgba(255,88,88,0.1)]'}`}
             onClick={() => onDelete(target.workspace)}
           >
             {t('common:workspace.deleteWorkspace')}
@@ -205,17 +212,18 @@ function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
     : 'term-status-ring--idle'
 
   return (
-    <span
-      role="img"
-      aria-label={title}
-      title={title}
-      className="flex h-5 w-5 shrink-0 items-center justify-center"
-      style={{ color: visual.color }}
-    >
-      <span className={`term-status-ring ${ringClass}`} aria-hidden="true">
-        {status === 'running' && <span className="term-status-orbit" />}
+    <ThemedTooltip label={title}>
+      <span
+        role="img"
+        aria-label={title}
+        className="flex h-5 w-5 shrink-0 items-center justify-center"
+        style={{ color: visual.color }}
+      >
+        <span className={`term-status-ring ${ringClass}`} aria-hidden="true">
+          {status === 'running' && <span className="term-status-orbit" />}
+        </span>
       </span>
-    </span>
+    </ThemedTooltip>
   )
 }
 
@@ -331,6 +339,7 @@ function TerminalRow({
   const displayName = terminal.name || presetLabel
   const suffix = shortCwd(terminal.cwd)
   return (
+    <ThemedTooltip label={`${presetLabel} · ${terminal.cwd}`}>
     <div
       draggable
       onPointerDown={(event) => event.stopPropagation()}
@@ -343,13 +352,11 @@ function TerminalRow({
       className="group/terminal mb-0.5 grid w-full cursor-grab grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)] active:cursor-grabbing"
       style={{
         background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
-        color: focused ? '#d8d8d8' : '#8a8a8a',
+        color: focused ? 'var(--shell-text)' : 'var(--shell-muted)',
       }}
-      title={`${presetLabel} · ${terminal.cwd}`}
     >
       <span
         className="flex h-[18px] w-[18px] items-center justify-center"
-        title={presetLabel}
       >
         <img
           src={TERMINAL_PRESET_ICONS[terminal.preset]}
@@ -361,12 +368,13 @@ function TerminalRow({
         <span className="block truncate font-mono text-[11px]">
           {displayName}
         </span>
-        <span className="block truncate text-[9px] text-[#55555b]">
+        <span className="block truncate text-[9px] text-[var(--shell-dim)]">
           {suffix ? `${presetLabel} · ${suffix}` : presetLabel}
         </span>
       </span>
       <TerminalStatusIndicator status={terminal.status} />
     </div>
+    </ThemedTooltip>
   )
 }
 
@@ -376,10 +384,8 @@ function WorktreeTerminalBadge({ terminals }: { terminals: Terminal[] }) {
   if (terminals.length === 0) return null
   const activity = summarizeTerminalActivity(terminals)
   return (
-    <span
-      className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] tabular-nums"
-      style={{ color: '#777', background: 'rgba(255,255,255,0.035)' }}
-      title={t('common:workspace.terminalCountTitle', {
+    <ThemedTooltip
+      label={t('common:workspace.terminalCountTitle', {
         total: activity.total,
         running: activity.running,
         attention: activity.needsAction > 0
@@ -389,6 +395,10 @@ function WorktreeTerminalBadge({ terminals }: { terminals: Terminal[] }) {
           ? t('common:workspace.terminalCountErrorsSuffix', { count: activity.errors })
           : '',
       })}
+    >
+    <span
+      className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] tabular-nums"
+      style={{ color: 'var(--shell-dim)', background: 'rgba(255,255,255,0.035)' }}
     >
       <TerminalGlyph size={12} strokeWidth={1.6} className="opacity-70" aria-hidden="true" />
       <span>{activity.total}</span>
@@ -410,6 +420,7 @@ function WorktreeTerminalBadge({ terminals }: { terminals: Terminal[] }) {
         )}
       </span>
     </span>
+    </ThemedTooltip>
   )
 }
 
@@ -476,7 +487,7 @@ function WorktreeSubList({
   if (worktrees.length === 0 && pendingCreations.length === 0 && preservedBranches.length === 0) {
     return (
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.055)', paddingBottom: 4, marginBottom: 4 }}>
-        <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
+        <div className="px-3 py-2 font-mono text-[11px] text-[var(--shell-dim)]">{t('common:workspace.terminal.empty')}</div>
       </div>
     )
   }
@@ -507,14 +518,14 @@ function WorktreeSubList({
         <div
           key={pending.id}
           className="mb-0.5 grid w-full grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5"
-          style={{ color: '#8a8a8a' }}
+          style={{ color: 'var(--shell-muted)' }}
         >
           <span className="flex h-[18px] w-[18px] items-center justify-center">
             <GitBranch size={14} strokeWidth={1.6} aria-hidden="true" />
           </span>
           <span className="min-w-0">
             <span className="block truncate font-mono text-[11px]">{pending.name}</span>
-            <span className="block truncate text-[9px]" style={{ color: pending.error ? '#e06c75' : '#55555b' }}>
+            <span className="block truncate text-[9px]" style={{ color: pending.error ? 'var(--shell-diff-del)' : 'var(--shell-dim)' }}>
               {pending.error ?? t('terminal:worktree.creating')}
             </span>
           </span>
@@ -532,24 +543,25 @@ function WorktreeSubList({
                 })()
               }}
               className="cursor-pointer"
-              style={{ fontSize: 10, color: '#aaa', background: 'none', border: 'none', padding: 0 }}
+              style={{ fontSize: 10, color: 'var(--shell-muted)', background: 'none', border: 'none', padding: 0 }}
             >
               {t('terminal:worktree.retry')}
             </button>
           ) : (
+            <ThemedTooltip label={t('terminal:worktree.cancel')}>
             <button
               type="button"
               aria-label={t('terminal:worktree.cancel')}
-              title={t('terminal:worktree.cancel')}
               onClick={(event) => {
                 event.stopPropagation()
                 void cancelCreation(workspaceId, workspacePath, pending.id)
               }}
               className="cursor-pointer"
-              style={{ fontSize: 12, color: '#626268', background: 'none', border: 'none', padding: '0 2px' }}
+              style={{ fontSize: 12, color: 'var(--shell-dim)', background: 'none', border: 'none', padding: '0 2px' }}
             >
               ×
             </button>
+            </ThemedTooltip>
           )}
         </div>
       ))}
@@ -558,11 +570,11 @@ function WorktreeSubList({
         const focused = activePath === worktree.path
         return (
           <div key={worktree.id}>
+            <ThemedTooltip label={worktree.path}>
             <div
               role="button"
               tabIndex={0}
               aria-label={worktree.path}
-              title={worktree.path}
               onClick={(event) => {
                 event.stopPropagation()
                 // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/2026-09-22-worktree-file-tree-scope--c58ff1db.md
@@ -577,7 +589,7 @@ function WorktreeSubList({
               className="group/wt mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
               style={{
                 background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
-                color: focused ? '#d8d8d8' : '#8a8a8a',
+                color: focused ? 'var(--shell-text)' : 'var(--shell-muted)',
               }}
             >
               <span className="flex h-[18px] w-[18px] items-center justify-center">
@@ -587,7 +599,7 @@ function WorktreeSubList({
                 <span className="block truncate font-mono text-[11px]">
                   {worktreeDisplayName(worktree.path, worktree.branch)}
                 </span>
-                <span className="block truncate text-[9px] text-[#55555b]">
+                <span className="block truncate text-[9px] text-[var(--shell-dim)]">
                   {worktree.path}
                 </span>
               </span>
@@ -601,35 +613,37 @@ function WorktreeSubList({
                     onShipRequest(worktree)
                   }}
                   onKeyDown={(event) => event.stopPropagation()}
-                  className="shrink-0 cursor-pointer rounded-[3px] border-0 opacity-0 transition-opacity duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:opacity-100 group-hover/wt:opacity-100"
-                  style={{ color: '#626268', background: 'transparent', fontSize: 10, padding: '2px 6px' }}
+                  className="shrink-0 cursor-pointer rounded-[3px] border-0 opacity-0 transition-opacity duration-150 hover:bg-[var(--shell-hover)] hover:text-[var(--shell-muted)] focus-visible:opacity-100 group-hover/wt:opacity-100"
+                  style={{ color: 'var(--shell-dim)', background: 'transparent', fontSize: 10, padding: '2px 6px' }}
                 >
                   {t('terminal:worktree.shipAction')}
                 </button>
               )}
               {!worktree.isMain && (
+                <ThemedTooltip label={t('terminal:worktree.deleteTitle')}>
                 <button
                   type="button"
                   aria-label={t('terminal:worktree.deleteTitle')}
-                  title={t('terminal:worktree.deleteTitle')}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={(event) => {
                     event.stopPropagation()
                     onDeleteRequest(worktree)
                   }}
                   onKeyDown={(event) => event.stopPropagation()}
-                  className="grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 transition-[width,opacity] duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:w-5 focus-visible:opacity-100 group-hover/wt:w-5 group-hover/wt:opacity-100"
-                  style={{ color: '#626268', background: 'transparent' }}
+                  className="grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 transition-[width,opacity] duration-150 hover:bg-[var(--shell-hover)] hover:text-[var(--shell-muted)] focus-visible:w-5 focus-visible:opacity-100 group-hover/wt:w-5 group-hover/wt:opacity-100"
+                  style={{ color: 'var(--shell-dim)', background: 'transparent' }}
                 >
                   <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
                 </button>
+                </ThemedTooltip>
               )}
             </div>
+            </ThemedTooltip>
             {groupTerminals.length > 0 && (
               <div style={{ margin: '0 4px 2px 26px', padding: '4px 0', borderLeft: '1px solid rgba(255,255,255,0.055)' }}>
                 {worktree.branch && (
-                  <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#555', padding: '6px 12px 4px' }}>
-                    {t('terminal:worktree.branchLabel')} <b style={{ color: '#888', fontWeight: 400 }}>{worktree.branch}</b>
+                  <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-dim)', padding: '6px 12px 4px' }}>
+                    {t('terminal:worktree.branchLabel')} <b style={{ color: 'var(--shell-muted)', fontWeight: 400 }}>{worktree.branch}</b>
                     {worktree.startFrom ? ` → ${displayBaseRef(worktree.startFrom)}` : ''}
                   </div>
                 )}
@@ -647,23 +661,23 @@ function WorktreeSubList({
         )
       })}
       {terminals.length === 0 && (
-        <div className="px-3 py-2 font-mono text-[11px] text-[#4f4f4f]">{t('common:workspace.terminal.empty')}</div>
+        <div className="px-3 py-2 font-mono text-[11px] text-[var(--shell-dim)]">{t('common:workspace.terminal.empty')}</div>
       )}
       {lastKeptBranch && (
-        <div style={{ fontSize: 10, color: '#8a8a8a', padding: '4px 8px', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 10, color: 'var(--shell-muted)', padding: '4px 8px', lineHeight: 1.6 }}>
           {t('terminal:worktree.branchKept', { branch: lastKeptBranch })}
         </div>
       )}
       {preservedBranches.length > 0 && (
         <div style={{ padding: '2px 8px 4px' }}>
-          <div style={{ fontSize: 9.5, color: '#555', marginBottom: 3 }}>
+          <div style={{ fontSize: 9.5, color: 'var(--shell-dim)', marginBottom: 3 }}>
             {t('terminal:worktree.preservedTitle')}
           </div>
           {preservedBranches.map((branch) => (
             <div key={branch} className="flex items-center" style={{ gap: 6, padding: '2px 0' }}>
               <span
                 className="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-                style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#777' }}
+                style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-dim)' }}
               >
                 {branch}
               </span>
@@ -674,14 +688,14 @@ function WorktreeSubList({
                   void handleDeleteBranch(branch)
                 }}
                 className="cursor-pointer"
-                style={{ fontSize: 10, color: armingBranch === branch ? '#e06c75' : '#666', background: 'none', border: 'none', padding: 0 }}
+                style={{ fontSize: 10, color: armingBranch === branch ? 'var(--shell-diff-del)' : 'var(--shell-dim)', background: 'none', border: 'none', padding: 0 }}
               >
                 {t('terminal:worktree.deleteBranch')}
               </button>
             </div>
           ))}
           {branchError && (
-            <div style={{ fontSize: 10, color: '#e06c75', lineHeight: 1.6 }}>{branchError}</div>
+            <div style={{ fontSize: 10, color: 'var(--shell-diff-del)', lineHeight: 1.6 }}>{branchError}</div>
           )}
         </div>
       )}
@@ -1183,34 +1197,36 @@ export function Sidebar() {
           >
             <span>{t('common:workspace.label')}</span>
             <div className="flex items-center gap-0.5">
+              <ThemedTooltip label={t('common:workspace.add')}>
               <button
                 onClick={handleAddWorkspace}
-                className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+                className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--shell-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{
                   color: 'var(--shell-dim)',
                 }}
-                title={t('common:workspace.add')}
                 aria-label={t('common:workspace.add')}
               >
                 <Plus size={15} strokeWidth={1.6} aria-hidden="true" />
               </button>
+              </ThemedTooltip>
+              <ThemedTooltip label={t('common:workspace.collapse')}>
               <button
                 onClick={toggleSidebar}
-                title={t('common:workspace.collapse')}
                 aria-expanded={!sidebarCollapsed}
                 aria-controls="workspace-sidebar-content"
-                className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+                className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--shell-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{ color: 'var(--shell-dim)' }}
                 aria-label={t('common:workspace.collapseAria')}
               >
                 <PanelLeftClose size={15} strokeWidth={1.6} aria-hidden="true" />
               </button>
+              </ThemedTooltip>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto px-1.5 py-1" onDragOverCapture={handleWorkspaceListDragOver}>
             {orderedWorkspaces.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-4 opacity-30">
-                <div className="text-xs text-[#666]">{t('common:workspace.empty')}</div>
+                <div className="text-xs text-[var(--shell-dim)]">{t('common:workspace.empty')}</div>
               </div>
             ) : (
               <>
@@ -1266,7 +1282,7 @@ export function Sidebar() {
                             onClick={() => setCollapsedGroupIds((current) => current.includes(group.id)
                               ? current.filter((id) => id !== group.id)
                               : [...current, group.id])}
-                            className="flex h-5 w-4 shrink-0 items-center justify-center border-0 bg-transparent text-[#666] transition-colors hover:text-[#aaa]"
+                            className="flex h-5 w-4 shrink-0 items-center justify-center border-0 bg-transparent text-[var(--shell-dim)] transition-colors hover:text-[var(--shell-muted)]"
                           >
                             <span
                               className="h-1.5 w-1.5 border-b border-r border-current transition-transform"
@@ -1282,10 +1298,11 @@ export function Sidebar() {
                               onKeyDown={handleGroupNameKeyDown}
                               onBlur={() => commitGroupRename(group.id)}
                               onClick={(event) => event.stopPropagation()}
-                              className="min-w-0 flex-1 rounded-sm border border-[rgba(255,120,48,0.35)] bg-[rgba(0,0,0,0.28)] px-1.5 py-0.5 text-[11px] text-[#ddd] outline-none"
+                              className="min-w-0 flex-1 rounded-sm border border-[rgba(255,120,48,0.35)] bg-[rgba(0,0,0,0.28)] px-1.5 py-0.5 text-[11px] text-[var(--shell-text)] outline-none"
                               aria-label={t('common:workspace.groupNameAria')}
                             />
                           ) : (
+                            <ThemedTooltip label={t('common:workspace.groupCountTitle', { name: group.name, count: groupMembers.length })}>
                             <button
                               type="button"
                               draggable={false}
@@ -1294,15 +1311,15 @@ export function Sidebar() {
                                 ? current.filter((id) => id !== group.id)
                                 : [...current, group.id])}
                               className="min-w-0 flex-1 truncate border-0 bg-transparent text-left"
-                              title={t('common:workspace.groupCountTitle', { name: group.name, count: groupMembers.length })}
                             >
                               {group.name}
                             </button>
+                            </ThemedTooltip>
                           )}
                           {isGroupCollapsed && hasActiveGroupMember && (
                             <span className="h-1.5 w-1.5 rounded-full bg-[#ff7830] shadow-[0_0_5px_rgba(255,120,48,0.65)]" />
                           )}
-                          <span className="font-mono text-[9px] text-[#555]">{groupMembers.length}</span>
+                          <span className="font-mono text-[9px] text-[var(--shell-dim)]">{groupMembers.length}</span>
                         </div>
                       )}
 
@@ -1311,13 +1328,13 @@ export function Sidebar() {
                           {group && (
                             <div className="pointer-events-none absolute bottom-0 left-0 top-0 w-px bg-[rgba(255,255,255,0.075)]" />
                           )}
+                          <ThemedTooltip label={t('common:workspace.wsTitle', { prefix: group ? `${group.name} · ` : '', name: ws.name })}>
                           <div
                             draggable
                             tabIndex={0}
                             role="button"
                             aria-current={isActive ? 'true' : undefined}
                             aria-label={t('common:workspace.wsAriaLabel', { name: ws.name })}
-                            title={t('common:workspace.wsTitle', { prefix: group ? `${group.name} · ` : '', name: ws.name })}
                             onClick={() => handleSelect(ws.id)}
                             onKeyDown={(event) => handleWorkspaceKeyDown(ws, event)}
                             onDragStart={(event) => handleWorkspaceDragStart(ws, event)}
@@ -1352,11 +1369,11 @@ export function Sidebar() {
                               className="pointer-events-none absolute bottom-1 left-0 top-1 w-0.5 rounded-r-sm transition-colors"
                               style={{ background: isActive ? 'var(--shell-accent)' : 'transparent' }}
                             />
+                      <ThemedTooltip label={isExpanded ? t('common:workspace.terminalListCollapseShort', { count: terminalCount }) : t('common:workspace.terminalListExpandShort', { count: terminalCount })}>
                       <button
                         type="button"
                         draggable={false}
                         aria-label={isExpanded ? t('common:workspace.terminalListCollapse', { name: ws.name, count: terminalCount }) : t('common:workspace.terminalListExpand', { name: ws.name, count: terminalCount })}
-                        title={isExpanded ? t('common:workspace.terminalListCollapseShort', { count: terminalCount }) : t('common:workspace.terminalListExpandShort', { count: terminalCount })}
                         onPointerDown={(event) => event.stopPropagation()}
                         onDragStart={(event) => {
                           event.preventDefault()
@@ -1366,7 +1383,7 @@ export function Sidebar() {
                           event.stopPropagation()
                           handleToggleWorkspaceExpand(ws.id, event)
                         }}
-                        className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[3px] border-0 bg-transparent text-[#626268] transition-colors duration-150 hover:bg-white/[0.05] hover:text-[#aaa] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)]"
+                        className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-[3px] border-0 bg-transparent text-[var(--shell-dim)] transition-colors duration-150 hover:bg-[var(--shell-hover)] hover:text-[var(--shell-muted)] focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)]"
                       >
                         <ChevronRight
                           size={12}
@@ -1376,31 +1393,34 @@ export function Sidebar() {
                           aria-hidden="true"
                         />
                       </button>
+                      </ThemedTooltip>
                       <RepoRowIcon workspacePath={ws.path} />
                       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium">
                         {ws.name}
                       </span>
+                      <ThemedTooltip label={t('common:workspace.moreActions')}>
                       <button
                         type="button"
                         draggable={false}
                         aria-label={t('common:workspace.moreActions')}
                         aria-expanded={isMenuOpen}
-                        title={t('common:workspace.moreActions')}
                         onPointerDown={(event) => event.stopPropagation()}
                         onDragStart={(event) => {
                           event.preventDefault()
                           event.stopPropagation()
                         }}
                         onClick={(event) => handleWorkspaceMenuButtonClick(ws, event)}
-                        className={`grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 pointer-events-none transition-[width,margin,opacity,color,background-color] duration-200 ease-out motion-reduce:transition-none group-hover/ws:mr-0 group-hover/ws:w-5 group-hover/ws:opacity-100 group-hover/ws:pointer-events-auto hover:bg-white/[0.05] hover:text-[#aaa] focus-visible:mr-0 focus-visible:w-5 focus-visible:opacity-100 focus-visible:pointer-events-auto focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)] ${
+                        className={`grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 pointer-events-none transition-[width,margin,opacity,color,background-color] duration-200 ease-out motion-reduce:transition-none group-hover/ws:mr-0 group-hover/ws:w-5 group-hover/ws:opacity-100 group-hover/ws:pointer-events-auto hover:bg-[var(--shell-hover)] hover:text-[var(--shell-muted)] focus-visible:mr-0 focus-visible:w-5 focus-visible:opacity-100 focus-visible:pointer-events-auto focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)] ${
                           isMenuOpen
-                            ? 'mr-0 w-5 bg-white/[0.06] text-[#ddd] opacity-100 pointer-events-auto'
-                            : '-mr-2 bg-transparent text-[#626268]'
+                            ? 'mr-0 w-5 bg-[var(--shell-hover)] text-[var(--shell-text)] opacity-100 pointer-events-auto'
+                            : '-mr-2 bg-transparent text-[var(--shell-dim)]'
                         }`}
                       >
                         <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
                       </button>
+                      </ThemedTooltip>
                     </div>
+                    </ThemedTooltip>
                     <div
                       className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${
                         isExpanded ? 'grid-rows-[1fr] opacity-100' : 'pointer-events-none grid-rows-[0fr] opacity-0'
@@ -1449,10 +1469,10 @@ export function Sidebar() {
 
       {/* 收起态 */}
       <div className="workspace-sidebar__collapsed flex flex-1 flex-col items-center gap-1 overflow-hidden py-1.5" aria-hidden={!sidebarCollapsed} {...(!sidebarCollapsed ? { inert: '' } : {})}>
+          <ThemedTooltip label={t('common:workspace.expand')}>
           <button
             onClick={toggleSidebar}
-            title={t('common:workspace.expand')}
-            className="mb-1 flex h-9 w-9 items-center justify-center rounded-[4px] transition-colors hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
+            className="mb-1 flex h-9 w-9 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--shell-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
             style={{ color: 'var(--shell-dim)' }}
             aria-label={t('common:workspace.expandAria')}
             aria-expanded={false}
@@ -1460,6 +1480,7 @@ export function Sidebar() {
           >
             <PanelLeftOpen size={15} strokeWidth={1.6} aria-hidden="true" />
           </button>
+          </ThemedTooltip>
           <div
             className="w-5 h-px my-1"
             style={{ background: 'rgba(255, 255, 255, 0.06)' }}
@@ -1483,8 +1504,11 @@ export function Sidebar() {
               : null
 
             return (
-              <div
+              <ThemedTooltip
                 key={ws.id}
+                label={t('common:workspace.wsTitle', { prefix: ws.sidebarGroup ? `${ws.sidebarGroup.name} · ` : '', name: ws.name })}
+              >
+              <div
                 draggable
                 tabIndex={0}
                 role="button"
@@ -1496,7 +1520,6 @@ export function Sidebar() {
                 onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
                 onDrop={(event) => handleWorkspaceDrop(ws, event)}
                 onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
-                title={t('common:workspace.wsTitle', { prefix: ws.sidebarGroup ? `${ws.sidebarGroup.name} · ` : '', name: ws.name })}
                 className="ws relative flex h-9 w-9 cursor-grab items-center justify-center rounded-[4px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
                 style={{
                   marginTop: isGroupStart && workspaceIndex > 0 ? 5 : 0,
@@ -1538,6 +1561,7 @@ export function Sidebar() {
                   />
                 )}
               </div>
+              </ThemedTooltip>
             )
           })}
           {/* ToB M2 收起态：组织首字母 + 本人头像 */}
@@ -1612,9 +1636,9 @@ export function Sidebar() {
             >
               <div
                 className="font-semibold flex items-center"
-                style={{ fontSize: 13, color: '#fff', gap: 6 }}
+                style={{ fontSize: 13, color: 'var(--shell-text)', gap: 6 }}
               >
-                <span style={{ color: '#ff5858' }}>&#9888;</span>
+                <span style={{ color: 'var(--shell-diff-del)' }}>&#9888;</span>
                 {t('common:workspace.delete.title')}
               </div>
               <ModalCloseButton onClose={() => setDeleteTarget(null)} />
@@ -1622,7 +1646,7 @@ export function Sidebar() {
 
             {/* Body */}
             <div style={{ padding: '16px 16px 20px' }}>
-              <div style={{ fontSize: 12, color: '#999', marginBottom: 14, lineHeight: 1.6 }}>
+              <div style={{ fontSize: 12, color: 'var(--shell-muted)', marginBottom: 14, lineHeight: 1.6 }}>
                 {t('common:workspace.delete.confirm', { name: deleteTarget.name })}
               </div>
 
@@ -1637,7 +1661,7 @@ export function Sidebar() {
                   lineHeight: 1.5,
                 }}
               >
-                <span style={{ color: '#ff5858', marginRight: 4 }}>&#8226;</span>
+                <span style={{ color: 'var(--shell-diff-del)', marginRight: 4 }}>&#8226;</span>
                 {t('common:workspace.delete.checkpointWarning')}
               </div>
             </div>
@@ -1653,44 +1677,28 @@ export function Sidebar() {
             >
               <button
                 onClick={() => setDeleteTarget(null)}
-                className="rounded cursor-pointer transition-colors"
+                className="rounded cursor-pointer transition-colors tbtn-ghost"
                 style={{
                   height: 28,
                   padding: '0 14px',
                   fontSize: 11,
                   background: 'rgba(255,255,255,0.04)',
                   border: '1px solid rgba(255,255,255,0.08)',
-                  color: '#999',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
-                  e.currentTarget.style.color = '#ccc'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-                  e.currentTarget.style.color = '#999'
+                  color: 'var(--shell-muted)',
                 }}
               >
                 {t('common:action.cancel')}
               </button>
               <button
                 onClick={confirmDelete}
-                className="rounded cursor-pointer transition-colors"
+                className="rounded cursor-pointer transition-colors tbtn-danger"
                 style={{
                   height: 28,
                   padding: '0 14px',
                   fontSize: 11,
                   background: 'rgba(255,88,88,0.12)',
                   border: '1px solid rgba(255,88,88,0.3)',
-                  color: '#ff5858',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,88,88,0.22)'
-                  e.currentTarget.style.borderColor = 'rgba(255,88,88,0.5)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,88,88,0.12)'
-                  e.currentTarget.style.borderColor = 'rgba(255,88,88,0.3)'
+                  color: 'var(--shell-diff-del)',
                 }}
               >
                 {t('common:action.delete')}
@@ -1721,9 +1729,9 @@ export function Sidebar() {
             >
               <div
                 className="font-semibold flex items-center"
-                style={{ fontSize: 13, color: '#fff', gap: 8 }}
+                style={{ fontSize: 13, color: 'var(--shell-text)', gap: 8 }}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#d4d4d4" strokeWidth="2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" strokeWidth="2" style={{ stroke: 'var(--shell-text)' }}>
                   <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
                 </svg>
                 <span>{t('common:workspace.launcherTitle')}</span>

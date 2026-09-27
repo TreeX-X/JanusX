@@ -3,6 +3,7 @@ import type { KnowledgeSettings } from '../../shared/knowledge-settings'
 import type { UpdaterSettings } from '../../shared/ipc/updater'
 import type { AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 import type { ExperimentalFeatures } from '../../shared/ipc/experimental'
+import type { AppTheme } from '../../shared/ipc/theme'
 
 export interface Workspace {
   id: string
@@ -50,7 +51,7 @@ export interface UpdateWorkspaceDto {
 }
 
 export interface GlobalConfig {
-  theme: 'dark' | 'light'
+  theme: AppTheme
   language?: string
   defaultTerminalPreset: string
   defaultShell: string

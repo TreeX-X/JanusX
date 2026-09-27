@@ -6,7 +6,7 @@
 import { createContext, memo, useContext } from 'react'
 import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/react'
 import type { BlueprintNodeStatus, BlueprintNodeType } from '@/services/blueprint'
-import { STATUS_VISUALS, NODE_TYPE_LABEL, NOTE_KIND_LABEL_KEY, noteKindOf } from './blueprintStatus'
+import { NODE_TYPE_LABEL, NOTE_KIND_LABEL_KEY, noteKindOf, getBlueprintStatusVisual } from './blueprintStatus'
 import { useI18n } from '@/i18n/useI18n'
 
 /** 低于该缩放阈值时卡片进入极简渲染（只保留状态点 + 标题 + 折叠入口） */
@@ -46,7 +46,7 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
   const d = data
   const actions = useContext(BlueprintCardActionsContext)
   const minimal = useStore((s) => s.transform[2] < SEMANTIC_ZOOM_THRESHOLD)
-  const visual = STATUS_VISUALS[d.status] ?? STATUS_VISUALS['not-started']
+  const visual = getBlueprintStatusVisual(d.status) 
   const progress = Math.max(0, Math.min(100, d.progress ?? 0))
   const childCount = d.childCount ?? 0
   const collapsed = d.collapsed ?? false

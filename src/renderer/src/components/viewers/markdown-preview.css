@@ -11,7 +11,7 @@
 .markdown-preview .md-tr:hover td,
 .janus-chat-message-content tbody tr:hover td,
 .janus-chat-message-content .md-tr:hover td {
-  background: rgba(255, 120, 48, 0.07);
+  background: var(--shell-accent-soft);
 }
 
 .markdown-preview a:hover,
@@ -26,7 +26,7 @@
 
 .markdown-preview .md-table-wrap::-webkit-scrollbar-thumb,
 .janus-chat-message-content .md-table-wrap::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--shell-border);
   border-radius: 4px;
 }
 
@@ -41,6 +41,6 @@
 }
 
 .md-codeblock-copy:focus-visible {
-  outline: 1px solid #ff7830;
+  outline: 1px solid var(--shell-accent);
   outline-offset: 1px;
 }

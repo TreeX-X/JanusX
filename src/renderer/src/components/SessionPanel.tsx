@@ -5,6 +5,7 @@ import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary, typ
 import { useWorkspaceStore } from '@/stores/workspace'
 import { EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { buildProviderResumeCommand, type TranscriptDetail } from '../../../shared/ipc/session'
 import terminalIcon from '@/assets/icons/terminal.svg'
 import claudeIcon from '@/assets/icons/claude.svg'
@@ -85,7 +86,7 @@ function CopyButton({ text, label, grow }: { text: string; label?: string; grow?
         })
       }}
       className="rounded cursor-pointer"
-      style={{ height: grow ? 24 : 20, padding: '0 8px', fontSize: grow ? 10.5 : 10, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: '#8a8a8e', fontFamily: "'SF Mono', monospace", flexShrink: 0, flex: grow ? 1 : undefined }}
+      style={{ height: grow ? 24 : 20, padding: '0 8px', fontSize: grow ? 10.5 : 10, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--shell-muted)', fontFamily: "'SF Mono', monospace", flexShrink: 0, flex: grow ? 1 : undefined }}
     >
       {copied ? t('terminal:agentSession.copied') : (label ?? t('terminal:agentSession.copy'))}
     </button>
@@ -206,7 +207,7 @@ export function SessionPanel() {
         className="px-3 pt-3 shrink-0"
         style={{ borderBottom: '1px solid var(--border)' }}
       >
-        <div style={{ fontSize: 13, fontWeight: 650, color: '#eee' }}>
+        <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--shell-text)' }}>
           {t('terminal:agentSession.title')}
         </div>
         <div style={{ marginTop: 8 }}>
@@ -216,7 +217,7 @@ export function SessionPanel() {
             placeholder={t('terminal:agentSession.searchPlaceholder')}
             aria-label={t('terminal:agentSession.searchPlaceholder')}
             style={{
-              width: '100%', height: 26, fontSize: 11.5, color: '#d4d4d4',
+              width: '100%', height: 26, fontSize: 11.5, color: 'var(--shell-text)',
               background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: 6, padding: '0 9px', outline: 'none', fontFamily: 'inherit',
             }}
@@ -229,10 +230,10 @@ export function SessionPanel() {
               onClick={() => setScope(key)}
               style={{
                 fontSize: 11.5,
-                color: scope === key ? '#ddd' : '#777',
+                color: scope === key ? 'var(--shell-text)' : 'var(--shell-dim)',
                 background: 'none',
                 border: 'none',
-                borderBottom: scope === key ? '1px solid #888' : '1px solid transparent',
+                borderBottom: scope === key ? '1px solid var(--shell-dim)' : '1px solid transparent',
                 marginBottom: -1,
                 padding: '7px 2px',
                 cursor: 'pointer',
@@ -248,7 +249,7 @@ export function SessionPanel() {
                 marginBottom: 6,
                 fontFamily: "'SF Mono', monospace",
                 fontSize: 10,
-                color: '#777',
+                color: 'var(--shell-dim)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 borderRadius: 4,
                 padding: '2px 8px',
@@ -266,13 +267,13 @@ export function SessionPanel() {
             keep stale cards (stale-while-revalidate), so a banner above the
             list would shift every card per session:event. */}
         {loading && sessions.length === 0 && (
-          <div className="text-xs" style={{ color: '#555' }}>{t('terminal:agentSession.loading')}</div>
+          <div className="text-xs" style={{ color: 'var(--shell-dim)' }}>{t('terminal:agentSession.loading')}</div>
         )}
         {error && (
-          <div className="text-xs" style={{ color: '#e06c75' }}>{error}</div>
+          <div className="text-xs" style={{ color: 'var(--shell-diff-del)' }}>{error}</div>
         )}
         {!loading && visible.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-xs" style={{ color: '#555', gap: 6 }}>
+          <div className="flex flex-col items-center justify-center h-full text-xs" style={{ color: 'var(--shell-dim)', gap: 6 }}>
             <span>{t('terminal:agentSession.empty')}</span>
             {allCounts && (allCounts.all > 0 || allCounts.archived > 0) && (
               <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10 }}>
@@ -331,10 +332,10 @@ export function SessionPanel() {
               }}
             >
               <TrafficBar
-                title={t('terminal:agentSession.continueTitle')}
+                heading={t('terminal:agentSession.continueTitle')}
                 onClose={() => setContinueTarget(null)}
               />
-            <div style={{ padding: 16, fontSize: 12, color: '#999', lineHeight: 1.6 }}>
+            <div style={{ padding: 16, fontSize: 12, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
               {t('terminal:agentSession.continueBody')}
               <div
                 style={{
@@ -343,7 +344,7 @@ export function SessionPanel() {
                   background: 'rgba(255,255,255,0.025)',
                   border: '1px solid rgba(255,255,255,0.06)',
                   borderRadius: 6,
-                  color: '#d4d4d4',
+                  color: 'var(--shell-text)',
                   whiteSpace: 'pre-wrap',
                 }}
               >
@@ -357,7 +358,7 @@ export function SessionPanel() {
               <button
                 onClick={() => setContinueTarget(null)}
                 className="rounded cursor-pointer"
-                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: '#888' }}
+                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)' }}
               >
                 {t('common:action.cancel')}
               </button>
@@ -413,7 +414,7 @@ function baseNameOf(path: string): string {
  * Only the red light acts (close); yellow/green hold the layout so the
  * title stays centered like a real window.
  */
-function TrafficBar({ title, onClose }: { title: ReactNode; onClose: () => void }) {
+function TrafficBar({ heading, onClose }: { heading: ReactNode; onClose: () => void }) {
   const { t } = useI18n('common')
   const light = (background: string): CSSProperties => ({
     width: 12,
@@ -438,34 +439,37 @@ function TrafficBar({ title, onClose }: { title: ReactNode; onClose: () => void 
       }}
     >
       <div className="flex" style={{ gap: 8, flexShrink: 0 }}>
+        <ThemedTooltip label={t('common:trafficLight.close')}>
         <button
           type="button"
           aria-label={t('common:trafficLight.close')}
-          title={t('common:trafficLight.close')}
           onClick={onClose}
           className="cursor-pointer"
           style={light('#ff5f57')}
         />
+        </ThemedTooltip>
+        <ThemedTooltip label={t('common:trafficLight.minimize')}>
         <button
           type="button"
           aria-label={t('common:trafficLight.minimize')}
-          title={t('common:trafficLight.minimize')}
           disabled
           style={{ ...light('#ffbd2e'), opacity: 0.5, cursor: 'default' }}
         />
+        </ThemedTooltip>
+        <ThemedTooltip label={t('common:trafficLight.maximize')}>
         <button
           type="button"
           aria-label={t('common:trafficLight.maximize')}
-          title={t('common:trafficLight.maximize')}
           disabled
           style={{ ...light('#28c840'), opacity: 0.5, cursor: 'default' }}
         />
+        </ThemedTooltip>
       </div>
       <div
         className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap"
-        style={{ fontFamily: "'SF Mono', monospace", fontSize: 12, color: '#999', textAlign: 'center' }}
+        style={{ fontFamily: "'SF Mono', monospace", fontSize: 12, color: 'var(--shell-muted)', textAlign: 'center' }}
       >
-        {title}
+        {heading}
       </div>
       <div style={{ width: 52, flexShrink: 0 }} />
     </div>
@@ -523,46 +527,47 @@ function CheckpointStrip({
         padding: '8px 10px',
       }}
     >
+      <ThemedTooltip label={filesOpen ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}>
       <div
         className="flex items-center"
-        style={{ gap: 7, fontSize: 11, color: '#c9c9c9', cursor: 'pointer', userSelect: 'none' }}
-        title={filesOpen ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}
+        style={{ gap: 7, fontSize: 11, color: 'var(--shell-text)', cursor: 'pointer', userSelect: 'none' }}
         onClick={onToggleFiles}
       >
         <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8ab4ff' }}>
           #{cp.conversationIndex}
         </span>
-        <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8a8a8e', whiteSpace: 'nowrap' }}>
+        <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', whiteSpace: 'nowrap' }}>
           {cp.changedFileCount} files
           {(addTotal > 0 || delTotal > 0) && (
             <>
               {' · '}
-              {addTotal > 0 && <span style={{ color: '#4ec9b0' }}>+{addTotal}</span>}
+              {addTotal > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{addTotal}</span>}
               {addTotal > 0 && delTotal > 0 && ' '}
-              {delTotal > 0 && <span style={{ color: '#e06c75' }}>−{delTotal}</span>}
+              {delTotal > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{delTotal}</span>}
             </>
           )}
           {' '}{filesOpen ? '▴' : '▾'}
         </span>
         {turnKind && (
-          <span style={{ fontSize: 9.5, color: turnKind === 'done' ? '#999' : '#e06c75', border: turnKind === 'done' ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(224,108,117,0.25)', borderRadius: 3, padding: '0 5px' }}>
+          <span style={{ fontSize: 9.5, color: turnKind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: turnKind === 'done' ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(224,108,117,0.25)', borderRadius: 3, padding: '0 5px' }}>
             {turnKindLabel(turnKind, t)}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#555' }}>
+        <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)' }}>
           {formatDate(cp.createdAt, t)}
         </span>
       </div>
+      </ThemedTooltip>
       {filesOpen && (
-        <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#777', marginTop: 6, lineHeight: 1.8, maxHeight: 132, overflowY: 'auto' }}>
-          {recordsLoading && <div style={{ color: '#555' }}>…</div>}
+        <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-dim)', marginTop: 6, lineHeight: 1.8, maxHeight: 132, overflowY: 'auto' }}>
+          {recordsLoading && <div style={{ color: 'var(--shell-dim)' }}>…</div>}
           {!recordsLoading && visibleRecs.map((record) => (
             <div key={record.path}>
               {record.path} <FileCounts record={record} />
             </div>
           ))}
           {!recordsLoading && hiddenCount > 0 && (
-            <div style={{ fontSize: 9.5, color: '#5a5a60' }}>
+            <div style={{ fontSize: 9.5, color: 'var(--shell-dim)' }}>
               {t('terminal:checkpoint.remainingFiles', { count: hiddenCount })}
             </div>
           )}
@@ -599,11 +604,11 @@ function CheckpointStrip({
       {reviewOpen && (
         <div style={{ marginTop: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
           {pruneCount > 0 ? (
-            <div style={{ padding: '8px 10px', background: 'rgba(255,120,48,0.03)', border: '1px solid rgba(255,120,48,0.18)', borderRadius: 6, fontSize: 11, color: '#999', marginBottom: 8, lineHeight: 1.6 }}>
+            <div style={{ padding: '8px 10px', background: 'rgba(255,120,48,0.03)', border: '1px solid rgba(255,120,48,0.18)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', marginBottom: 8, lineHeight: 1.6 }}>
               {t('terminal:checkpoint.pruneWarn', { count: pruneCount })}
             </div>
           ) : (
-            <div style={{ fontSize: 11, color: '#6bd89b', marginBottom: 8, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 11, color: 'var(--shell-diff-add)', marginBottom: 8, lineHeight: 1.6 }}>
               {t('terminal:checkpoint.pruneOk')}
             </div>
           )}
@@ -626,14 +631,14 @@ function CheckpointStrip({
         </div>
       )}
       {showRestoreDone && (
-        <div style={{ marginTop: 8, fontSize: 11, color: '#6bd89b', lineHeight: 1.6 }}>
+        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--shell-diff-add)', lineHeight: 1.6 }}>
           {restoreDonePruned
             ? t('terminal:checkpoint.restoreDonePruned', { index: cp.conversationIndex, pruned: restoreDonePruned })
             : t('terminal:checkpoint.restoreDone', { index: cp.conversationIndex })}
         </div>
       )}
       {conflicts && conflicts.length > 0 && (
-        <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(224,108,117,0.02)', border: '1px solid rgba(224,108,117,0.3)', borderRadius: 6, fontSize: 11, color: '#999', lineHeight: 1.6 }}>
+        <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(224,108,117,0.02)', border: '1px solid rgba(224,108,117,0.3)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
           <div>{t('terminal:checkpoint.conflictFiles', { count: conflicts.length })} · {t('terminal:checkpoint.conflictBadge')}</div>
           {conflicts.map((conflict) => (
             <div key={conflict.filePath} style={{ fontFamily: "'SF Mono', monospace", marginTop: 4 }}>
@@ -693,7 +698,7 @@ function DiffSidePanel({
   const shown = activePath ? (fileDiffs[activePath] ?? null) : fullDiff
   const renderLines = (text: string) =>
     text.split('\n').map((line, i) => (
-      <div key={i} style={{ color: line.startsWith('-') ? '#e06c75' : line.startsWith('+') ? '#4ec9b0' : '#888' }}>
+      <div key={i} style={{ color: line.startsWith('-') ? 'var(--shell-diff-del)' : line.startsWith('+') ? 'var(--shell-diff-add)' : 'var(--shell-dim)' }}>
         {line}
       </div>
     ))
@@ -706,42 +711,41 @@ function DiffSidePanel({
     >
       <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
         <div className="flex items-center" style={{ gap: 8 }}>
-          <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: '#ddd' }}>
+          <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: 'var(--shell-text)' }}>
             #{cp.conversationIndex} · {t('terminal:checkpoint.diffPreview')}
           </span>
           <button
             onClick={onClose}
             className="rounded cursor-pointer"
-            style={{ marginLeft: 'auto', height: 22, padding: '0 10px', fontSize: 10, fontFamily: "'SF Mono', monospace", border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: '#8a8a8e', flexShrink: 0 }}
+            style={{ marginLeft: 'auto', height: 22, padding: '0 10px', fontSize: 10, fontFamily: "'SF Mono', monospace", border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: 'var(--shell-muted)', flexShrink: 0 }}
           >
             {t('terminal:agentSession.diffCollapse')} ⟶
           </button>
         </div>
-        <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#666', marginTop: 3 }}>
+        <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginTop: 3 }}>
           …/{baseNameOf(cwd)} · {formatDate(cp.createdAt, t)}
         </div>
       </div>
       <div style={{ maxHeight: 150, overflowY: 'auto', padding: 6, borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
         {recs.length === 0 && (
-          <div style={{ fontSize: 11, color: '#555', padding: '7px 9px' }}>{t('terminal:checkpoint.diffEmpty')}</div>
+          <div style={{ fontSize: 11, color: 'var(--shell-dim)', padding: '7px 9px' }}>{t('terminal:checkpoint.diffEmpty')}</div>
         )}
         {recs.map((record) => {
           const isText = record.status !== 'binary' && record.status !== 'oversized'
           const active = activePath === record.path
           return (
+            <ThemedTooltip key={record.path} label={isText ? record.path : t('terminal:checkpoint.binaryNoDiff')}>
             <div
-              key={record.path}
               onClick={() => {
                 if (isText) openFile(record.path)
               }}
-              title={isText ? undefined : t('terminal:checkpoint.binaryNoDiff')}
               style={{
                 padding: '7px 9px',
                 borderRadius: 4,
                 cursor: isText ? 'pointer' : 'default',
                 opacity: isText ? 1 : 0.55,
                 background: active ? 'rgba(138,180,255,0.08)' : 'transparent',
-                color: active ? '#d4d4d4' : '#9d9da3',
+                color: active ? 'var(--shell-text)' : 'var(--shell-muted)',
                 fontFamily: "'SF Mono', monospace",
                 fontSize: 10.5,
                 lineHeight: 1.5,
@@ -751,27 +755,28 @@ function DiffSidePanel({
               }}
             >
               {record.path}
-              <div style={{ fontSize: 9.5, color: '#666' }}>
+              <div style={{ fontSize: 9.5, color: 'var(--shell-dim)' }}>
                 <FileCounts record={record} />
                 {!isText && ` · ${t('terminal:checkpoint.binaryNoDiff')}`}
               </div>
             </div>
+            </ThemedTooltip>
           )
         })}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.65, background: 'rgba(0,0,0,0.35)' }}>
         {activePath && (
-          <div style={{ position: 'sticky', top: -10, background: '#1a1a1d', color: '#888', padding: '6px 8px', margin: '0 -12px 6px', paddingLeft: 12, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ position: 'sticky', top: -10, background: 'var(--shell-card)', color: 'var(--shell-muted)', padding: '6px 8px', margin: '0 -12px 6px', paddingLeft: 12, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
             {activePath}
           </div>
         )}
-        {fileError && <div style={{ color: '#e06c75' }}>{fileError}</div>}
+        {fileError && <div style={{ color: 'var(--shell-diff-del)' }}>{fileError}</div>}
         {!fileError && shown !== undefined && shown !== null && shown !== '' && renderLines(shown)}
         {!fileError && (shown === undefined || shown === null) && (
-          <div style={{ color: '#555' }}>{t('terminal:checkpoint.diffLoading')}</div>
+          <div style={{ color: 'var(--shell-dim)' }}>{t('terminal:checkpoint.diffLoading')}</div>
         )}
         {!fileError && shown === '' && (
-          <div style={{ color: '#555' }}>{t('terminal:checkpoint.diffEmpty')}</div>
+          <div style={{ color: 'var(--shell-dim)' }}>{t('terminal:checkpoint.diffEmpty')}</div>
         )}
       </div>
       <div
@@ -866,13 +871,13 @@ function SessionCard({
         opacity: session.archived ? 0.62 : 1,
       }}
     >
+      <ThemedTooltip label={t('terminal:checkpoint.expand')}>
       <div
         className="flex items-center"
         style={{ gap: 7, cursor: 'pointer' }}
-        title={t('terminal:checkpoint.expand')}
         onClick={onToggle}
       >
-        <img src={icon} alt={session.engine} title={session.engine} style={{ width: 14, height: 14, objectFit: 'contain' }} />
+        <img src={icon} alt={session.engine} style={{ width: 14, height: 14, objectFit: 'contain' }} />
         {session.external === true && (
           <span
             style={{
@@ -889,14 +894,14 @@ function SessionCard({
         )}
         <span
           className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap"
-          style={{ fontSize: 12, color: '#d4d4d4', fontWeight: 500 }}
+          style={{ fontSize: 12, color: 'var(--shell-text)', fontWeight: 500 }}
         >
           {session.firstPrompt || session.engine}
         </span>
         <span
           style={{
             display: 'flex',
-            color: '#888',
+            color: 'var(--shell-muted)',
             transform: expanded ? 'rotate(90deg)' : 'none',
             transition: 'transform 0.15s ease',
             flexShrink: 0,
@@ -907,15 +912,16 @@ function SessionCard({
           </svg>
         </span>
       </div>
+      </ThemedTooltip>
 
       {expanded && (
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8f8f96', lineHeight: 1.8 }}>
+          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', lineHeight: 1.8 }}>
             <div>
               {session.engine} · {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)} ·{' '}
               {t('terminal:agentSession.turns', { count: session.turnCount })} ·{' '}
               {session.external === true
-                ? <span style={{ color: '#5a5a60' }}>{t('terminal:agentSession.noCheckpointExternal')}</span>
+                ? <span style={{ color: 'var(--shell-dim)' }}>{t('terminal:agentSession.noCheckpointExternal')}</span>
                 : t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}{' '}
               · {formatDate(session.updatedAt, t)}
             </div>
@@ -923,43 +929,43 @@ function SessionCard({
           </div>
           {session.firstPrompt && (
             <div style={{ marginTop: 8, background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '9px 10px' }}>
-              <div className="flex items-center" style={{ gap: 8, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 6 }}>
+              <div className="flex items-center" style={{ gap: 8, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginBottom: 6 }}>
                 <span>{t('terminal:agentSession.firstPrompt')}</span>
                 <span style={{ marginLeft: 'auto' }}>
                   <CopyButton text={session.firstPrompt} />
                 </span>
               </div>
-              <div style={{ fontSize: 12, lineHeight: 1.6, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+              <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--shell-text)', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
                 {session.firstPrompt}
               </div>
             </div>
           )}
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.30)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 10px' }}>
-            <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', padding: '8px 0 0' }}>
+            <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', padding: '8px 0 0' }}>
               {t('terminal:agentSession.recentTurns')}
             </div>
             {!detail ? (
-              <div style={{ fontSize: 11, color: '#555', padding: '6px 0' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
+              <div style={{ fontSize: 11, color: 'var(--shell-dim)', padding: '6px 0' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
             ) : recentTurns.length === 0 ? (
-              <div style={{ fontSize: 11, color: '#555', padding: '6px 0' }}>{t('terminal:agentSession.empty')}</div>
+              <div style={{ fontSize: 11, color: 'var(--shell-dim)', padding: '6px 0' }}>{t('terminal:agentSession.empty')}</div>
             ) : (
               recentTurns.map((turn) => {
                 const question = turn.prompt
                 return (
                   <div key={turn.id} style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div className="flex items-center" style={{ gap: 6, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 4 }}>
+                    <div className="flex items-center" style={{ gap: 6, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginBottom: 4 }}>
                       <span>turn · {formatDate(turn.startedAt, t)}</span>
-                      <span style={{ color: turn.kind === 'done' ? '#999' : '#e06c75', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, padding: '0 5px' }}>
+                      <span style={{ color: turn.kind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, padding: '0 5px' }}>
                         {turnKindLabel(turn.kind, t)}
                       </span>
                     </div>
                     {question && (
-                      <div style={{ fontSize: 11.5, lineHeight: 1.6, color: '#c9c9c9', wordBreak: 'break-all', whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      <div style={{ fontSize: 11.5, lineHeight: 1.6, color: 'var(--shell-text)', wordBreak: 'break-all', whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {question}
                       </div>
                     )}
                     {turn.excerpt && (
-                      <div style={{ marginTop: 4, fontSize: 11.5, lineHeight: 1.6, color: '#9d9da3', wordBreak: 'break-all', whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      <div style={{ marginTop: 4, fontSize: 11.5, lineHeight: 1.6, color: 'var(--shell-muted)', wordBreak: 'break-all', whiteSpace: 'pre-wrap', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                         {turn.excerpt}
                       </div>
                     )}
@@ -972,7 +978,7 @@ function SessionCard({
             <button
               onClick={onDetail}
               className="flex-1 rounded cursor-pointer"
-              style={{ height: 24, fontSize: 10.5, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: '#e8e8e8' }}
+              style={{ height: 24, fontSize: 10.5, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: 'var(--shell-text)' }}
             >
               {t('terminal:agentSession.viewDetail')}
             </button>
@@ -986,19 +992,20 @@ function SessionCard({
                   }}
                   disabled={resuming}
                   className="flex-1 rounded cursor-pointer"
-                  style={{ height: 24, fontSize: 10.5, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: '#e8e8e8', opacity: resuming ? 0.6 : 1 }}
+                  style={{ height: 24, fontSize: 10.5, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1 }}
                 >
                   {t('terminal:agentSession.resume')}
                 </button>
               ) : (
+                <ThemedTooltip label={t('terminal:agentSession.resumeUnavailable')}>
                 <button
                   disabled
-                  title={t('terminal:agentSession.resumeUnavailable')}
                   className="flex-1 rounded"
                   style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
                 >
                   {t('terminal:agentSession.resumeCopy')}
                 </button>
+                </ThemedTooltip>
               )
             ) : (
               <button
@@ -1010,13 +1017,13 @@ function SessionCard({
               </button>
             )}
           </div>
-          <div style={{ fontSize: 10, color: '#5a5a60', marginTop: 7, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 10, color: 'var(--shell-dim)', marginTop: 7, lineHeight: 1.6 }}>
             {t('terminal:agentSession.detailHint', { count: session.turnCount })}
           </div>
           {session.archived && (
             <div
               style={{
-                fontSize: 10.5, color: '#666', marginTop: 8, padding: '7px 9px',
+                fontSize: 10.5, color: 'var(--shell-dim)', marginTop: 8, padding: '7px 9px',
                 border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 4, lineHeight: 1.6,
               }}
             >
@@ -1024,7 +1031,7 @@ function SessionCard({
             </div>
           )}
           {session.external === true && !session.archived && (
-            <div style={{ fontSize: 10, color: '#555', marginTop: 6, lineHeight: 1.6 }}>
+            <div style={{ fontSize: 10, color: 'var(--shell-dim)', marginTop: 6, lineHeight: 1.6 }}>
               {t('terminal:agentSession.externalHint')}
             </div>
           )}
@@ -1344,7 +1351,7 @@ function SessionDetailWindow({
         }}
       >
         <TrafficBar
-          title={
+          heading={
             <>
               <img src={icon} alt={session.engine} style={{ width: 12, height: 12, objectFit: 'contain', display: 'inline-block', verticalAlign: -1, marginRight: 6 }} />
               {session.firstPrompt || session.engine}
@@ -1353,7 +1360,7 @@ function SessionDetailWindow({
           onClose={onClose}
         />
         <div style={{ padding: '9px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
-          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: '#8f8f96', lineHeight: 1.7 }}>
+          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: 'var(--shell-muted)', lineHeight: 1.7 }}>
             …/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''} · {session.engine} ·{' '}
             {t('terminal:agentSession.turns', { count: session.turnCount })}
             {session.external !== true && !session.archived && (
@@ -1379,73 +1386,73 @@ function SessionDetailWindow({
           </div>
         )}
         {session.archived && (
-          <div style={{ margin: '10px 16px 0', padding: '8px 11px', border: '1px dashed rgba(255,255,255,0.14)', borderRadius: 6, fontSize: 11, color: '#8b8b91', lineHeight: 1.6, flexShrink: 0 }}>
+          <div style={{ margin: '10px 16px 0', padding: '8px 11px', border: '1px dashed rgba(255,255,255,0.14)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', lineHeight: 1.6, flexShrink: 0 }}>
             {t('terminal:agentSession.archivedHint')}
           </div>
         )}
         <div className="flex" style={{ flex: 1, minHeight: 0 }}>
           <div ref={navPaneRef} style={{ width: 168, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)', overflowY: 'auto', padding: '10px 8px', background: 'rgba(0,0,0,0.18)' }}>
-            <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#5a5a60', padding: '0 6px 6px' }}>
+            <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', padding: '0 6px 6px' }}>
               {t('terminal:agentSession.turns', { count: displayTurns.length })}
             </div>
             {displayTurns.map((turn, index) => {
               const label = (turn.prompt ?? turn.excerpt ?? '').replace(/\s+/g, ' ').trim().slice(0, 20) || `turn ${index + 1}`
               const active = activeTurnId === turn.id
               return (
+                <ThemedTooltip key={turn.id} label={turn.prompt ?? turn.excerpt ?? `turn ${index + 1}`}>
                 <button
-                  key={turn.id}
                   data-nav={turn.id}
                   onClick={() => jumpToTurn(turn.id)}
-                  title={turn.prompt ?? turn.excerpt ?? `turn ${index + 1}`}
                   className="cursor-pointer"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, width: '100%',
                     padding: '5px 6px', borderRadius: 4, border: 0, cursor: 'pointer',
                     background: active ? 'rgba(138,180,255,0.10)' : 'transparent',
-                    color: active ? '#d4d4d4' : '#9d9da3',
+                    color: active ? 'var(--shell-text)' : 'var(--shell-muted)',
                     fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.5, textAlign: 'left',
                   }}
                 >
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: turn.kind === 'done' ? 'transparent' : turn.kind === 'failed' ? '#e06c75' : '#f0a35e' }} />
-                  <span style={{ color: '#666', flexShrink: 0 }}>{index + 1}</span>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: turn.kind === 'done' ? 'transparent' : turn.kind === 'failed' ? 'var(--shell-diff-del)' : '#f0a35e' }} />
+                  <span style={{ color: 'var(--shell-dim)', flexShrink: 0 }}>{index + 1}</span>
                   <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">{label}</span>
                 </button>
+                </ThemedTooltip>
               )
             })}
             {orphans.length > 0 && (
-              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#5a5a60', padding: '8px 6px 6px' }}>
+              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', padding: '8px 6px 6px' }}>
                 #
               </div>
             )}
             {orphans.map((cp) => {
               const active = activeTurnId === `orphan-${cp.id}`
               return (
+                <ThemedTooltip key={cp.id} label={cp.prompt ?? `#${cp.conversationIndex}`}>
                 <button
-                  key={cp.id}
                   data-nav={`orphan-${cp.id}`}
                   onClick={() => jumpToTurn(`orphan-${cp.id}`)}
-                  title={cp.prompt ?? `#${cp.conversationIndex}`}
                   className="cursor-pointer"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, width: '100%',
                     padding: '5px 6px', borderRadius: 4, border: 0, cursor: 'pointer',
                     background: active ? 'rgba(138,180,255,0.10)' : 'transparent',
-                    color: active ? '#d4d4d4' : '#8ab4ff',
+                    color: active ? 'var(--shell-text)' : '#8ab4ff',
                     fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.5, textAlign: 'left',
                   }}
                 >
                   <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">#{cp.conversationIndex}</span>
                 </button>
+                </ThemedTooltip>
               )
             })}
           </div>
           <div ref={turnsPaneRef} style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 16px' }}>
             {!detail ? (
-              <div style={{ fontSize: 11, color: '#555' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
+              <div style={{ fontSize: 11, color: 'var(--shell-dim)' }}>{detailLoading ? t('terminal:agentSession.loading') : t('terminal:agentSession.empty')}</div>
             ) : (
               <>
                 {transcript?.truncated && (
-                  <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#5a5a60', padding: '2px 0 8px' }}>
+                  <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-dim)', padding: '2px 0 8px' }}>
                     {t('terminal:agentSession.transcriptTruncated', { total: transcript.totalTurns, shown: transcript.turns.length })}
                   </div>
                 )}
@@ -1465,33 +1472,33 @@ function SessionDetailWindow({
                     >
                       {question && (
                         <div style={{ marginBottom: 9 }}>
-                          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777', marginBottom: 5 }}>
+                          <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginBottom: 5 }}>
                             turn {index + 1} · {formatDate(turn.startedAt, t)}
                           </div>
-                          <div style={{ fontSize: 12.5, lineHeight: 1.65, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                          <div style={{ fontSize: 12.5, lineHeight: 1.65, color: 'var(--shell-text)', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
                             {question}
                           </div>
                         </div>
                       )}
-                      <div className="flex items-center" style={{ gap: 6, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#777' }}>
+                      <div className="flex items-center" style={{ gap: 6, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)' }}>
                         <span>{session.engine}</span>
-                        <span style={{ color: turn.kind === 'done' ? '#999' : '#e06c75', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, padding: '0 5px' }}>
+                        <span style={{ color: turn.kind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, padding: '0 5px' }}>
                           {turnKindLabel(turn.kind, t)}
                         </span>
                         {linked && <span style={{ color: '#8ab4ff' }}>#{linked.conversationIndex}</span>}
                         {!question && <span>turn {index + 1} · {formatDate(turn.startedAt, t)}</span>}
                       </div>
                       {turn.excerpt && (
-                        <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.65, color: '#c4c4c5', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                        <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.65, color: 'var(--shell-text)', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
                           {turn.excerpt}
                         </div>
                       )}
                       {linked && renderStrip(linked)}
                       {!readableOnly && !linked && !turn.checkpointId && cpLoaded && (
                         <div style={{ marginTop: 8, border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 6, padding: '8px 10px', opacity: 0.75 }}>
-                          <div className="flex items-center" style={{ gap: 7, fontSize: 11, color: '#c9c9c9' }}>
+                          <div className="flex items-center" style={{ gap: 7, fontSize: 11, color: 'var(--shell-text)' }}>
                             <span>{t('terminal:checkpoint.noCheckpoint')}</span>
-                            <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: '#7a7a80' }}>
+                            <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-muted)' }}>
                               {t('terminal:checkpoint.readOnlyHint')}
                             </span>
                           </div>
@@ -1501,10 +1508,10 @@ function SessionDetailWindow({
                   )
                 })}
                 {displayTurns.length === 0 && orphans.length === 0 && (
-                  <div style={{ fontSize: 11, color: '#555', padding: '6px 0' }}>{t('terminal:agentSession.empty')}</div>
+                  <div style={{ fontSize: 11, color: 'var(--shell-dim)', padding: '6px 0' }}>{t('terminal:agentSession.empty')}</div>
                 )}
                 {cpError && checkpoints.length === 0 && (
-                  <div style={{ fontSize: 11, color: '#e06c75', padding: '6px 0' }}>{cpError}</div>
+                  <div style={{ fontSize: 11, color: 'var(--shell-diff-del)', padding: '6px 0' }}>{cpError}</div>
                 )}
                 {orphans.map((cp) => (
                   <div
@@ -1517,7 +1524,7 @@ function SessionDetailWindow({
                     }}
                   >
                     {cp.prompt && (
-                      <div style={{ fontSize: 12.5, lineHeight: 1.65, color: '#d4d4d4', wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 4 }}>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.65, color: 'var(--shell-text)', wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 4 }}>
                         {cp.prompt}
                       </div>
                     )}
@@ -1550,7 +1557,7 @@ function SessionDetailWindow({
           className="flex items-center"
           style={{ gap: 8, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}
         >
-          <span style={{ fontSize: 11, color: '#999', flex: 1 }}>
+          <span style={{ fontSize: 11, color: 'var(--shell-muted)', flex: 1 }}>
             {readableOnly
               ? t('terminal:agentSession.externalHint')
               : t('terminal:checkpoint.pruneOk')}
@@ -1558,7 +1565,7 @@ function SessionDetailWindow({
           <button
             onClick={onClose}
             className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: '#888', flexShrink: 0 }}
+            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)', flexShrink: 0 }}
           >
             {t('common:action.close')}
           </button>
@@ -1567,19 +1574,20 @@ function SessionDetailWindow({
               <button
                 onClick={onContinue}
                 className="rounded cursor-pointer"
-                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: '#e8e8e8', flexShrink: 0 }}
+                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: 'var(--shell-text)', flexShrink: 0 }}
               >
                 {t('terminal:agentSession.resume')}
               </button>
             ) : (
+              <ThemedTooltip label={t('terminal:agentSession.resumeUnavailable')}>
               <button
                 disabled
-                title={t('terminal:agentSession.resumeUnavailable')}
                 className="rounded"
                 style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, flexShrink: 0 }}
               >
                 {t('terminal:agentSession.resumeCopy')}
               </button>
+              </ThemedTooltip>
             )
           ) : (
             <button
@@ -1602,8 +1610,8 @@ function FileCounts({ record }: { record: ChangedFileRecord }) {
   }
   return (
     <span>
-      {(record.additions ?? 0) > 0 && <span style={{ color: '#4ec9b0' }}>+{record.additions} </span>}
-      {(record.deletions ?? 0) > 0 && <span style={{ color: '#e06c75' }}>−{record.deletions}</span>}
+      {(record.additions ?? 0) > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{record.additions} </span>}
+      {(record.deletions ?? 0) > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{record.deletions}</span>}
     </span>
   )
 }

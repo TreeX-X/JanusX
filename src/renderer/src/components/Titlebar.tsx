@@ -276,14 +276,14 @@ export function Titlebar() {
           <div
             className="llm-trigger-line-2 absolute w-3.5 h-[1.5px] top-1/2 left-1/2 rounded-[1px] transition-all duration-[400ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
             style={{
-              background: '#ff7830',
+              background: 'var(--shell-accent)',
               transform: 'translate(-50%, -50%) rotate(-45deg)',
             }}
           />
         </div>
 
         {/* 文字 */}
-        <span className="text-[13px] font-medium tracking-[0.5px] transition-all duration-[400ms] group-hover:text-white group-hover:drop-shadow-[0_0_10px_rgba(255,120,48,0.4)]" style={{ color: 'var(--shell-muted)' }}>
+        <span className="text-[13px] font-medium tracking-[0.5px] transition-all duration-[400ms] group-hover:text-[var(--shell-text)] group-hover:drop-shadow-[0_0_10px_rgba(255,120,48,0.4)]" style={{ color: 'var(--shell-muted)' }}>
           JanusX
         </span>
 
@@ -292,7 +292,7 @@ export function Titlebar() {
 
         {/* 隐藏的后缀代码（悬浮时滑出�?*/}
         <span
-          className="llm-trigger-reveal font-mono text-[9px] font-semibold text-[#ff7830] tracking-[1px] opacity-0 transition-all duration-[400ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
+          className="llm-trigger-reveal font-mono text-[9px] font-semibold text-[var(--shell-accent)] tracking-[1px] opacity-0 transition-all duration-[400ms] ease-[cubic-bezier(0.175,0.885,0.32,1.275)]"
           style={{
             transform: 'translateX(-8px) scale(0.9)',
           }}

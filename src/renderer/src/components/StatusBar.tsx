@@ -71,7 +71,7 @@ export function StatusBar() {
         <div
           className="h-[5px] w-[5px] rounded-full animate-pulse"
           style={{
-            background: '#ff7830',
+            background: 'var(--shell-accent)',
             boxShadow: '0 0 6px rgba(255, 120, 48, 0.6)',
           }}
         />
@@ -84,7 +84,7 @@ export function StatusBar() {
           onClick={() => setRemoteOpen(true)}
           title={t('team:remote.title')}
           aria-label={t('team:remote.title')}
-          className="flex h-6 items-center gap-1.5 rounded-[4px] border border-transparent px-2 transition-colors hover:bg-white/[0.06]"
+          className="flex h-6 items-center gap-1.5 rounded-[4px] border border-transparent px-2 transition-colors hover:bg-[var(--shell-hover)]"
           style={{ color: 'var(--shell-dim)' }}
           onMouseEnter={(e) => {
             e.currentTarget.style.borderColor = 'rgba(255,120,48,0.28)'

@@ -269,3 +269,35 @@
   .summary { flex-direction: column; gap: 3px; }
   .details { grid-template-columns: 1fr; }
 }
+
+/* ── planche：模型目录纸面化（加法层，dark 原样不动）── */
+:global([data-theme='planche']) .vendorHeader,
+:global([data-theme='planche']) .metadata strong,
+:global([data-theme='planche']) .empty strong {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .searchInput {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .searchInput:focus {
+  background: var(--paper, #EFE4C5);
+  border-color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .searchInput::placeholder {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .refreshButton:hover:not(:disabled),
+:global([data-theme='planche']) .inlineButton:hover:not(:disabled) {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .vendorHeader:hover,
+:global([data-theme='planche']) .modelSummary:hover {
+  background: var(--paper-deep, #DCCFA8);
+}

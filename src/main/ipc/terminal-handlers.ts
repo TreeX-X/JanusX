@@ -51,6 +51,7 @@ import { companionSessionState } from '../companion/session-state'
 import { rollbackTerminalCreation } from '../companion/terminal-creation-rollback'
 import { terminalContextCoordinator } from '../runtime-telemetry/coordinator'
 import { createTerminalColorQueryResponder } from '../../shared/terminalColorQuery'
+import { configService } from '../config/service'
 import {
   createTerminalServiceErrorDetector,
   isTerminalInterrupt,
@@ -964,7 +965,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     // matches the current instance for this id.
     const registeredPid = instance.pty.pid
     const colorQueryResponder = engine === 'codex'
-      ? createTerminalColorQueryResponder()
+      ? createTerminalColorQueryResponder(() => configService.getCachedTheme())
       : null
 
     // PTY output: keep a bounded replay buffer so remounted terminals can recover

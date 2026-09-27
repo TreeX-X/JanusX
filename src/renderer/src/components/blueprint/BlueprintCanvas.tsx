@@ -38,7 +38,8 @@ import {
 import { BlueprintNodeCard, BlueprintCardActionsContext, type BlueprintNodeData } from './BlueprintNodeCard'
 import { BlueprintAdaptiveEdge } from './BlueprintAdaptiveEdge'
 import { BlueprintHierarchyEdge } from './BlueprintHierarchyEdge'
-import { STATUS_VISUALS, STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, noteKindOf } from './blueprintStatus'
+import { STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, noteKindOf, getBlueprintStatusVisual } from './blueprintStatus'
+import { useThemeStore } from '@/stores/theme'
 import { useOptionalBlueprintToolbar, type ToolbarKindFilter, type ToolbarStatusFilter, useHideIsolatedState } from './BlueprintToolbar'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
@@ -155,7 +156,7 @@ function buildNodeSearchText(node: BlueprintNode): string {
     node.lifecycle,
     node.type,
     node.status,
-    STATUS_VISUALS[node.status]?.label,
+    getBlueprintStatusVisual(node.status)?.label,
     node.positioning,
     node.techSolution,
     node.description,
@@ -231,6 +232,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
   const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
   const setLoadState = useAppStore((s) => s.setLoadState)
+  const plancheCanvas = useThemeStore((s) => s.theme) === 'planche'
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
   const requestMaintenanceOpen = useBlueprintMaintenanceStore((s) => s.requestOpen)
 
@@ -746,7 +748,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const statusFilterOptions = useMemo(
     () => [
       { value: 'all', label: t('blueprint:search.statusAll') },
-      ...STATUS_ORDER.map((status) => ({ value: status, label: t(STATUS_VISUALS[status].labelKey) }))
+      ...STATUS_ORDER.map((status) => ({ value: status, label: t(getBlueprintStatusVisual(status).labelKey) }))
     ],
     [t]
   )
@@ -974,21 +976,21 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         }}
         onlyRenderVisibleElements
         proOptions={{ hideAttribution: true }}
-        colorMode="dark"
+        colorMode={plancheCanvas ? 'light' : 'dark'}
         minZoom={0.05}
         maxZoom={4}
         style={{ background: 'transparent' }}
       >
-        <Background color="rgba(255,255,255,0.05)" gap={24} />
+        <Background color={plancheCanvas ? 'rgba(28,52,59,0.16)' : 'rgba(255,255,255,0.05)'} gap={24} />
         {rfNodes.length <= 250 ? (
           <MiniMap
             pannable
             zoomable
             nodeColor={(n) => {
               const d = n.data as BlueprintNodeData | undefined
-              return d ? STATUS_VISUALS[d.status].color : '#555'
+              return d ? getBlueprintStatusVisual(d.status).color : plancheCanvas ? 'rgba(28,52,59,0.45)' : '#555'
             }}
-            style={{ background: 'rgba(12,12,12,0.9)' }}
+            style={{ background: plancheCanvas ? '#DCCFA8' : 'rgba(12,12,12,0.9)' }}
           />
         ) : null}
       </ReactFlow>
@@ -996,22 +998,22 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       <div className="bp-canvas-legend" aria-hidden="true">
         {(['planning', 'in-progress', 'done', 'archived'] as const).map((status) => (
           <span key={status}>
-            <i className="ld" style={{ background: STATUS_VISUALS[status].color }} />
-            {t(STATUS_VISUALS[status].labelKey)}
+            <i className="ld" style={{ background: getBlueprintStatusVisual(status).color }} />
+            {t(getBlueprintStatusVisual(status).labelKey)}
           </span>
         ))}
-        <span><i style={{ color: '#8a8a8a' }}>━</i> {t('blueprint:legend.parent')}</span>
+        <span><i style={{ color: 'var(--shell-muted)' }}>━</i> {t('blueprint:legend.parent')}</span>
         {([
           { type: 'depends-on', dash: '5 4', labelKey: 'blueprint:maintenance.relationType.dependsOn' },
           { type: 'implements', dash: '2 3', labelKey: 'blueprint:maintenance.relationType.implements' },
           { type: 'related-to', dash: '5 5', labelKey: 'blueprint:maintenance.relationType.relatedTo' },
         ] as const).map((entry) => (
-          <span key={entry.type}>
-            <svg width="18" height="6" aria-hidden="true">
-              <line x1="0" y1="3" x2="18" y2="3" stroke="#8a8a8a" strokeWidth="1.5" strokeDasharray={entry.dash} />
-            </svg>
-            {t(entry.labelKey)}
-          </span>
+              <span key={entry.type}>
+                <svg width="18" height="6" aria-hidden="true">
+                  <line x1="0" y1="3" x2="18" y2="3" strokeWidth="1.5" strokeDasharray={entry.dash} style={{ stroke: 'var(--shell-muted)' }} />
+                </svg>
+                {t(entry.labelKey)}
+              </span>
         ))}
       </div>
       </BlueprintCardActionsContext.Provider>
@@ -1062,11 +1064,11 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         >
           <div className="bp-node-detail__header">
             <div>
-              <div className="bp-node-detail__eyebrow">{detailKind} · {detailNode.lifecycle ?? t(STATUS_VISUALS[detailNode.status]?.labelKey ?? `blueprint:status.${detailNode.status}`)}</div>
+              <div className="bp-node-detail__eyebrow">{detailKind} · {detailNode.lifecycle ?? t(getBlueprintStatusVisual(detailNode.status)?.labelKey ?? `blueprint:status.${detailNode.status}`)}</div>
               <div className="bp-node-detail__title">{detailNode.title || <span className="bp-node-detail__title--empty">{t('blueprint:detailPanel.untitled')}</span>}</div>
               <div className="bp-node-detail__summary">
                 <span>{detailKind && NOTE_KIND_LABEL_KEY[detailKind] ? t(NOTE_KIND_LABEL_KEY[detailKind]) : detailKind}</span>
-                <span>{detailNode.lifecycle ?? t(STATUS_VISUALS[detailNode.status]?.labelKey ?? `blueprint:status.${detailNode.status}`)}</span>
+                <span>{detailNode.lifecycle ?? t(getBlueprintStatusVisual(detailNode.status)?.labelKey ?? `blueprint:status.${detailNode.status}`)}</span>
                 {(detailNode.tags ?? []).map((tag) => <span key={tag}>#{tag}</span>)}
               </div>
             </div>
@@ -1232,7 +1234,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           <div className="bp-node-detail__meta">
             <div>
               <span>{t('blueprint:detailPanel.status')}</span>
-              <strong>{t(STATUS_VISUALS[detailNode.status]?.labelKey ?? `blueprint:status.${detailNode.status}`)}</strong>
+              <strong>{t(getBlueprintStatusVisual(detailNode.status)?.labelKey ?? `blueprint:status.${detailNode.status}`)}</strong>
             </div>
             <div>
               <span>{t('blueprint:detailPanel.source')}</span>
@@ -1310,7 +1312,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
                       <span>{new Date(analysis.createdAt).toLocaleString()}</span>
                       <strong>{analysis.result.summary || analysis.error || t('blueprint:detailPanel.noSummary')}</strong>
                       <em>
-                        {t(TRIGGER_LABEL_KEY[analysis.trigger] ?? `blueprint:trigger.${analysis.trigger}`)} · {t(STATUS_VISUALS[analysis.result.status]?.labelKey ?? `blueprint:status.${analysis.result.status}`)} · {analysis.result.progress}%
+                        {t(TRIGGER_LABEL_KEY[analysis.trigger] ?? `blueprint:trigger.${analysis.trigger}`)} · {t(getBlueprintStatusVisual(analysis.result.status)?.labelKey ?? `blueprint:status.${analysis.result.status}`)} · {analysis.result.progress}%
                       </em>
                     </button>
                   ))}
@@ -1335,7 +1337,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
                     </div>
 
                     <div className="bp-analysis-detail__grid">
-                      <div><span>{t('blueprint:detailPanel.status')}</span><strong>{t(STATUS_VISUALS[selectedAnalysis.result.status]?.labelKey ?? `blueprint:status.${selectedAnalysis.result.status}`)}</strong></div>
+                      <div><span>{t('blueprint:detailPanel.status')}</span><strong>{t(getBlueprintStatusVisual(selectedAnalysis.result.status)?.labelKey ?? `blueprint:status.${selectedAnalysis.result.status}`)}</strong></div>
                       <div><span>{t('blueprint:detailPanel.progress')}</span><strong>{selectedAnalysis.result.progress}%</strong></div>
                       <div><span>{t('blueprint:detailPanel.trigger')}</span><strong>{t(TRIGGER_LABEL_KEY[selectedAnalysis.trigger] ?? `blueprint:trigger.${selectedAnalysis.trigger}`)}</strong></div>
                       <div><span>{t('blueprint:detailPanel.time')}</span><strong>{new Date(selectedAnalysis.createdAt).toLocaleString()}</strong></div>

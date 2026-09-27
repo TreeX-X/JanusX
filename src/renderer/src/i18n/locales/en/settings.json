@@ -50,6 +50,13 @@
       "label": "Interface language",
       "help": "Takes effect immediately, persists across restarts",
       "followSystem": "Follow system"
+    },
+    "theme": {
+      "label": "Appearance theme",
+      "help": "Dark is the default with zero changes. Planche is an opt-in print-style light theme; already-running TUI apps need a pane redraw or restart after switching.",
+      "dark": "Dark (default)",
+      "planche": "Planche · lithograph light",
+      "saveError": "Failed to save theme"
     }
   },
   "experimental": {

@@ -717,7 +717,9 @@ function ensureXterm() {
   return loadScript('/__janusx/xterm.js').then(function () { return loadScript('/__janusx/addon-fit.js'); }).then(function () {
     /* 先显示容器再 open：display:none 时 open 会量出 0 尺寸，fit 算出极小行列，终端只占左上角 */
     syncTermView();
-    var term = new Terminal({ fontFamily: "'Cascadia Mono', Consolas, monospace", fontSize: 12, theme: { background: '#0e0f12', foreground: '#d4d4d4' } });
+    var planche = false;
+    try { planche = document.documentElement.dataset.theme === 'planche'; } catch (e) {}
+    var term = new Terminal({ fontFamily: "'Cascadia Mono', Consolas, monospace", fontSize: 12, theme: planche ? { background: '#EFE4C5', foreground: '#1C343B', cursor: '#D43D2A', selectionBackground: 'rgba(212, 61, 42, 0.18)' } : { background: '#0e0f12', foreground: '#d4d4d4' } });
     var fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open($('xtermWrap'));

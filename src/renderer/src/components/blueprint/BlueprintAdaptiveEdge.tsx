@@ -55,8 +55,8 @@ function BlueprintAdaptiveEdgeImpl({
       label={label}
       labelX={labelX}
       labelY={labelY}
-      labelStyle={{ fill: '#e78b63', fontSize: 11 }}
-      labelBgStyle={{ fill: '#19191d' }}
+      labelStyle={{ fill: 'var(--shell-accent-strong)', fontSize: 11 }}
+      labelBgStyle={{ fill: 'var(--shell-card)' }}
       markerStart={markerStart}
       markerEnd={markerEnd}
       style={style}

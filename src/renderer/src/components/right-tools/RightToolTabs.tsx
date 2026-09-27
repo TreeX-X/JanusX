@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
 import { useI18n } from '@/i18n/useI18n'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import styles from './RightDock.module.css'
 
 interface RightToolTabsProps {
@@ -104,16 +105,17 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
             onKeyDown={(event) => handleKeyDown(event, tool.id)}
           >
             <span className={styles.tabLabel}>{t(tool.shortTitleKey)}</span>
+            <ThemedTooltip label={t('common:rightTool.closeTitle', { title: t(tool.titleKey) })}>
             <button
               type="button"
               className={styles.tabClose}
               aria-label={t('common:rightTool.closeAria', { title: t(tool.titleKey) })}
-              title={t('common:rightTool.closeTitle', { title: t(tool.titleKey) })}
               onClick={(event) => {
                 event.stopPropagation()
                 onClose(tool.id)
               }}
             />
+            </ThemedTooltip>
           </div>
         )
       })}

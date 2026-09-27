@@ -558,3 +558,65 @@
     align-items: stretch;
   }
 }
+
+/* ── planche：LLM 配置纸面化（加法层，dark 原样不动）
+   独立弹窗与设置内嵌共用 --so-*，此处翻变量值即全跟随；
+   白字标签与输入聚焦逐条点名。 */
+:global([data-theme='planche']) .modalBackdrop {
+  --so-field: var(--paper, #EFE4C5);
+  --so-accent: var(--planche-red, #D43D2A);
+  --so-accent-ink: var(--planche-red, #D43D2A);
+  --so-accent-hover: var(--planche-red, #D43D2A);
+  --so-accent-rgb: 212, 61, 42;
+  --janus-order: var(--planche-red, #D43D2A);
+  background: rgba(28, 52, 59, 0.18);
+  backdrop-filter: none;
+}
+
+:global([data-theme='planche']) .llmConfigPanel {
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+}
+
+:global([data-theme='planche']) .runtimeStatus strong,
+:global([data-theme='planche']) .formGroup label,
+:global([data-theme='planche']) .providerName {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .runtimeStatus button {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .runtimeStatus button:hover:not(:disabled) {
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .configInput {
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .configInput:focus {
+  background: var(--paper, #EFE4C5);
+  border-color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .configInput::placeholder {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .providerItem:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .providerItemActive {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .providerItemActive::before {
+  background: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .terminalFile {
+  background: var(--paper-deep, #DCCFA8);
+}

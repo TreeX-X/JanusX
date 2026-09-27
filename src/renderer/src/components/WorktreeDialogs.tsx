@@ -23,10 +23,10 @@ function slugify(name: string): string {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  background: 'rgba(0,0,0,0.28)',
-  border: '1px solid rgba(255,255,255,0.1)',
+  background: 'var(--shell-canvas)',
+  border: '1px solid var(--control-border)',
   borderRadius: 5,
-  color: '#ddd',
+  color: 'var(--shell-text)',
   fontSize: 12,
   padding: '7px 9px',
   outline: 'none',
@@ -36,7 +36,7 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 11,
-  color: '#888',
+  color: 'var(--shell-muted)',
   marginBottom: 5,
 }
 
@@ -105,13 +105,13 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
     >
       <div
         className="overflow-hidden"
-        style={{ width: 420, background: 'rgba(22,22,22,0.98)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 8 }}
+        style={{ width: 420, background: 'var(--shell-chrome)', border: '1px solid var(--shell-border)', borderRadius: 8 }}
       >
         <div
           className="flex justify-between items-center"
-          style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ padding: '12px 16px', borderBottom: '1px solid var(--control-border)' }}
         >
-          <div className="font-semibold" style={{ fontSize: 13, color: '#fff' }}>
+          <div className="font-semibold" style={{ fontSize: 13, color: 'var(--shell-text)' }}>
             {t('terminal:worktree.composerTitle')}
           </div>
           <ModalCloseButton onClose={onClose} />
@@ -168,7 +168,7 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
                 if (next && issues.length === 0 && !issuesBusy) void searchIssues()
               }}
               className="cursor-pointer"
-              style={{ fontSize: 11, color: '#888', background: 'none', border: 'none', padding: 0 }}
+              style={{ fontSize: 11, color: 'var(--shell-muted)', background: 'none', border: 'none', padding: 0 }}
             >
               {t('terminal:worktree.issueSection')}{linkedIssue ? ` · ${linkedIssue}` : ''} {showIssues ? '▴' : '▾'}
             </button>
@@ -177,7 +177,7 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
                 type="button"
                 onClick={() => setLinkedIssue(null)}
                 className="cursor-pointer"
-                style={{ fontSize: 10, color: '#666', background: 'none', border: 'none', padding: 0, marginLeft: 8 }}
+                style={{ fontSize: 10, color: 'var(--shell-dim)', background: 'none', border: 'none', padding: 0, marginLeft: 8 }}
               >
                 ✕
               </button>
@@ -206,17 +206,17 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
                 </div>
                 {issues.map((issue) => (
                   <div key={issue.number} className="flex items-center" style={{ gap: 8, fontSize: 11 }}>
-                    <span style={{ fontFamily: "'SF Mono', monospace", color: '#666', flexShrink: 0 }}>
+                    <span style={{ fontFamily: "'SF Mono', monospace", color: 'var(--shell-dim)', flexShrink: 0 }}>
                       #{issue.number}
                     </span>
-                    <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: '#bbb' }}>
+                    <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: 'var(--shell-text)' }}>
                       {issue.title}
                     </span>
                     <button
                       type="button"
                       onClick={() => applyIssue(issue)}
                       className="cursor-pointer"
-                      style={{ fontSize: 10, color: '#aaa', background: 'none', border: 'none', padding: 0, flexShrink: 0 }}
+                      style={{ fontSize: 10, color: 'var(--shell-muted)', background: 'none', border: 'none', padding: 0, flexShrink: 0 }}
                     >
                       {t('terminal:worktree.issueUse')}
                     </button>
@@ -228,12 +228,12 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
         </div>
         <div
           className="flex justify-end"
-          style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', gap: 8 }}
+          style={{ padding: '12px 16px', borderTop: '1px solid var(--control-border)', gap: 8 }}
         >
           <button
             onClick={onClose}
             className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: '#888' }}
+            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)' }}
           >
             {t('terminal:worktree.cancel')}
           </button>
@@ -308,39 +308,39 @@ export function WorktreeDeleteDialog({  workspaceId,
     >
       <div
         className="overflow-hidden"
-        style={{ width: 420, background: 'rgba(22,22,22,0.98)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 8 }}
+        style={{ width: 420, background: 'var(--shell-chrome)', border: '1px solid var(--shell-border)', borderRadius: 8 }}
       >
         <div
           className="flex justify-between items-center"
-          style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ padding: '12px 16px', borderBottom: '1px solid var(--control-border)' }}
         >
-          <div className="font-semibold" style={{ fontSize: 13, color: '#fff' }}>
+          <div className="font-semibold" style={{ fontSize: 13, color: 'var(--shell-text)' }}>
             {t('terminal:worktree.deleteTitle')}
           </div>
           <ModalCloseButton onClose={() => { if (!busy) onClose() }} />
         </div>
-        <div style={{ padding: 16, fontSize: 12, color: '#999', lineHeight: 1.6 }}>
+        <div style={{ padding: 16, fontSize: 12, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
           {t('terminal:worktree.deleteBody')}
-          <div style={{ marginTop: 8, fontFamily: "'SF Mono', monospace", fontSize: 11, color: '#888' }}>
+          <div style={{ marginTop: 8, fontFamily: "'SF Mono', monospace", fontSize: 11, color: 'var(--shell-muted)' }}>
             {worktree.path}
             {status?.branch ? ` · ${status.branch}` : ''}
           </div>
           {status?.dirty && (
-            <div style={{ marginTop: 8, fontSize: 11, color: '#f0a35e', lineHeight: 1.6 }}>
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--shell-accent)', lineHeight: 1.6 }}>
               {t('terminal:worktree.dirtyWarn')}
             </div>
           )}
-          {error && <div style={{ marginTop: 8, fontSize: 11, color: '#e06c75', lineHeight: 1.6 }}>{error}</div>}
+          {error && <div style={{ marginTop: 8, fontSize: 11, color: 'var(--shell-diff-del)', lineHeight: 1.6 }}>{error}</div>}
         </div>
         <div
           className="flex justify-end"
-          style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', gap: 8 }}
+          style={{ padding: '12px 16px', borderTop: '1px solid var(--control-border)', gap: 8 }}
         >
           <button
             onClick={() => onClose()}
             disabled={busy}
             className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: '#888' }}
+            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)' }}
           >
             {t('terminal:worktree.cancel')}
           </button>
@@ -349,7 +349,7 @@ export function WorktreeDeleteDialog({  workspaceId,
               onClick={() => void runDelete(true)}
               disabled={busy}
               className="rounded cursor-pointer"
-              style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(224,108,117,0.35)', background: 'transparent', color: '#e06c75' }}
+              style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(224,108,117,0.35)', background: 'transparent', color: 'var(--shell-diff-del)' }}
             >
               {t('terminal:worktree.forceDelete')}
             </button>
@@ -517,20 +517,20 @@ export function WorktreeShipDialog({
     >
       <div
         className="overflow-hidden"
-        style={{ width: 480, background: 'rgba(22,22,22,0.98)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 8 }}
+        style={{ width: 480, background: 'var(--shell-chrome)', border: '1px solid var(--shell-border)', borderRadius: 8 }}
       >
         <div
           className="flex justify-between items-center"
-          style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          style={{ padding: '12px 16px', borderBottom: '1px solid var(--control-border)' }}
         >
-          <div className="font-semibold" style={{ fontSize: 13, color: '#fff' }}>
+          <div className="font-semibold" style={{ fontSize: 13, color: 'var(--shell-text)' }}>
             {t('terminal:worktree.shipTitle')}
           </div>
           <ModalCloseButton onClose={() => { if (!busy) onClose() }} />
         </div>
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 460, overflowY: 'auto' }}>
           <div className="flex items-center" style={{ gap: 8 }}>
-            <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: '#888' }}>
+            <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: 'var(--shell-muted)' }}>
               {branch} →
             </span>
             <input
@@ -542,25 +542,25 @@ export function WorktreeShipDialog({
           </div>
 
           {phase === 'loading' && (
-            <div style={{ fontSize: 12, color: '#666' }}>{t('terminal:agentSession.loading')}</div>
+            <div style={{ fontSize: 12, color: 'var(--shell-dim)' }}>{t('terminal:agentSession.loading')}</div>
           )}
 
           {diff && diff.files.length === 0 && phase !== 'loading' && (
-            <div style={{ fontSize: 12, color: '#888' }}>{t('terminal:worktree.shipDiffEmpty', { base })}</div>
+            <div style={{ fontSize: 12, color: 'var(--shell-muted)' }}>{t('terminal:worktree.shipDiffEmpty', { base })}</div>
           )}
 
           {diff && diff.files.length > 0 && (
             <div>
-              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: '#aaa', marginBottom: 6 }}>
-                {diff.files.length} files · <span style={{ color: '#4ec9b0' }}>+{diff.additions}</span>{' '}
-                <span style={{ color: '#e06c75' }}>−{diff.deletions}</span>
+              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: 'var(--shell-muted)', marginBottom: 6 }}>
+                {diff.files.length} files · <span style={{ color: 'var(--shell-diff-add)' }}>+{diff.additions}</span>{' '}
+                <span style={{ color: 'var(--shell-diff-del)' }}>−{diff.deletions}</span>
               </div>
-              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: '#777', lineHeight: 1.8 }}>
+              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: 'var(--shell-dim)', lineHeight: 1.8 }}>
                 {diff.files.map((file) => (
                   <div key={file.path}>
                     {file.path}{' '}
-                    {(file.additions ?? 0) > 0 && <span style={{ color: '#4ec9b0' }}>+{file.additions} </span>}
-                    {(file.deletions ?? 0) > 0 && <span style={{ color: '#e06c75' }}>−{file.deletions}</span>}
+                    {(file.additions ?? 0) > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{file.additions} </span>}
+                    {(file.deletions ?? 0) > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{file.deletions}</span>}
                   </div>
                 ))}
               </div>
@@ -568,17 +568,17 @@ export function WorktreeShipDialog({
           )}
 
           {mainDirty && phase !== 'done' && (
-            <div style={{ fontSize: 11, color: '#f0a35e', lineHeight: 1.6 }}>
+            <div style={{ fontSize: 11, color: 'var(--shell-accent)', lineHeight: 1.6 }}>
               {t('terminal:worktree.mainDirtyBlock')}
             </div>
           )}
 
           {worktreeDirty && phase !== 'done' && (
             <div>
-              <div style={{ fontSize: 11, color: '#f0a35e', lineHeight: 1.6, marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: 'var(--shell-accent)', lineHeight: 1.6, marginBottom: 6 }}>
                 {t('terminal:worktree.worktreeDirtyNote')}
               </div>
-              <label style={{ display: 'block', fontSize: 11, color: '#888', marginBottom: 5 }}>
+              <label style={{ display: 'block', fontSize: 11, color: 'var(--shell-muted)', marginBottom: 5 }}>
                 {t('terminal:worktree.commitMessage')}
               </label>
               <div className="flex" style={{ gap: 6 }}>
@@ -601,10 +601,10 @@ export function WorktreeShipDialog({
 
           {phase === 'conflict' && (
             <div>
-              <div style={{ fontSize: 11, color: '#e06c75', lineHeight: 1.6, marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: 'var(--shell-diff-del)', lineHeight: 1.6, marginBottom: 6 }}>
                 {t('terminal:worktree.conflictsNote')}
               </div>
-              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: '#999', lineHeight: 1.8 }}>
+              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: 'var(--shell-muted)', lineHeight: 1.8 }}>
                 {conflicts.map((file) => (
                   <div key={file}>{file}</div>
                 ))}
@@ -613,20 +613,20 @@ export function WorktreeShipDialog({
           )}
 
           {phase === 'done' && (
-            <div style={{ fontSize: 12, color: '#6bd89b', lineHeight: 1.6 }}>
+            <div style={{ fontSize: 12, color: 'var(--shell-diff-add)', lineHeight: 1.6 }}>
               {upToDate ? t('terminal:worktree.upToDateNote') : t('terminal:worktree.mergedOk')}
             </div>
           )}
 
           {pushError && (
-            <div style={{ fontSize: 11, color: '#e06c75', lineHeight: 1.6 }}>{pushError}</div>
+            <div style={{ fontSize: 11, color: 'var(--shell-diff-del)', lineHeight: 1.6 }}>{pushError}</div>
           )}
           {error && (
-            <div style={{ fontSize: 11, color: '#e06c75', lineHeight: 1.6 }}>{error}</div>
+            <div style={{ fontSize: 11, color: 'var(--shell-diff-del)', lineHeight: 1.6 }}>{error}</div>
           )}
 
           {phase !== 'done' && phase !== 'conflict' && (
-            <label className="flex items-center" style={{ gap: 7, fontSize: 11, color: '#888', cursor: 'pointer' }}>
+            <label className="flex items-center" style={{ gap: 7, fontSize: 11, color: 'var(--shell-muted)', cursor: 'pointer' }}>
               <input type="checkbox" checked={pushBase} onChange={(event) => setPushBase(event.target.checked)} />
               {t('terminal:worktree.pushBase')}
             </label>
@@ -641,13 +641,13 @@ export function WorktreeShipDialog({
         </div>
         <div
           className="flex justify-end"
-          style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', gap: 8 }}
+          style={{ padding: '12px 16px', borderTop: '1px solid var(--control-border)', gap: 8 }}
         >
           <button
             onClick={onClose}
             disabled={busy}
             className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: '#888' }}
+            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)' }}
           >
             {t('terminal:worktree.cancel')}
           </button>
@@ -701,9 +701,9 @@ function checkStateLabel(state: HostedCheck['state'], t: (k: string) => string):
 }
 
 function checkStateColor(state: HostedCheck['state']): string {
-  if (state === 'pass') return '#4ec9b0'
-  if (state === 'fail') return '#e06c75'
-  return '#777'
+  if (state === 'pass') return 'var(--shell-diff-add)'
+  if (state === 'fail') return 'var(--shell-diff-del)'
+  return 'var(--shell-dim)'
 }
 
 function buildFixPrompt(kind: 'PR' | 'MR', review: HostedReview, logs: FailedCheckLog[]): string {
@@ -907,15 +907,15 @@ function HostedReviewSection({
   }
 
   return (
-    <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 10 }}>
+    <div style={{ borderTop: '1px solid var(--control-border)', paddingTop: 10 }}>
       <div className="flex items-center" style={{ gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, color: '#aaa' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--shell-muted)' }}>
           {t('terminal:worktree.prSection')}
         </span>
         <button
           onClick={() => void reload()}
           className="cursor-pointer"
-          style={{ marginLeft: 'auto', fontSize: 10, color: '#777', background: 'none', border: 'none', padding: 0 }}
+          style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--shell-dim)', background: 'none', border: 'none', padding: 0 }}
         >
           {t('terminal:worktree.checksRefresh')}
         </button>
@@ -949,7 +949,7 @@ function HostedReviewSection({
             style={{ ...inputStyle, fontSize: 11 }}
           />
           <div className="flex items-center" style={{ gap: 8 }}>
-            <label className="flex items-center" style={{ gap: 6, fontSize: 11, color: '#888', cursor: 'pointer' }}>
+            <label className="flex items-center" style={{ gap: 6, fontSize: 11, color: 'var(--shell-muted)', cursor: 'pointer' }}>
               <input type="checkbox" checked={draft} onChange={(event) => setDraft(event.target.checked)} />
               {t('terminal:worktree.draftPr')}
             </label>
@@ -967,20 +967,20 @@ function HostedReviewSection({
 
       {open && (
         <div className="flex flex-col" style={{ gap: 8 }}>
-          <div className="flex items-center" style={{ gap: 7, fontSize: 11.5, color: '#d4d4d4' }}>
+          <div className="flex items-center" style={{ gap: 7, fontSize: 11.5, color: 'var(--shell-text)' }}>
             <span style={{ color: '#8ab4ff' }}>#{open.number}</span>
             <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">{open.title}</span>
-            <span style={{ fontSize: 10, color: '#777' }}>{reviewStateLabel(open.state, t)}</span>
+            <span style={{ fontSize: 10, color: 'var(--shell-dim)' }}>{reviewStateLabel(open.state, t)}</span>
           </div>
           <div>
-            <div style={{ fontSize: 10.5, color: '#666', marginBottom: 4 }}>
+            <div style={{ fontSize: 10.5, color: 'var(--shell-dim)', marginBottom: 4 }}>
               {t('terminal:worktree.checksTitle')}
             </div>
             {checks.length === 0 && (
-              <div style={{ fontSize: 10.5, color: '#555' }}>{t('terminal:worktree.checksEmpty')}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--shell-dim)' }}>{t('terminal:worktree.checksEmpty')}</div>
             )}
             {checks.map((check) => (
-              <div key={check.name} className="flex items-center" style={{ gap: 7, fontSize: 10.5, color: '#888', lineHeight: 1.9 }}>
+              <div key={check.name} className="flex items-center" style={{ gap: 7, fontSize: 10.5, color: 'var(--shell-muted)', lineHeight: 1.9 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: checkStateColor(check.state), flexShrink: 0 }} />
                 <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">{check.name}</span>
                 <span style={{ color: checkStateColor(check.state) }}>{checkStateLabel(check.state, t)}</span>
@@ -992,7 +992,7 @@ function HostedReviewSection({
               type="button"
               onClick={() => void runLoadComments()}
               className="cursor-pointer"
-              style={{ fontSize: 10.5, color: '#777', background: 'none', border: 'none', padding: 0, marginBottom: comments ? 6 : 0 }}
+              style={{ fontSize: 10.5, color: 'var(--shell-dim)', background: 'none', border: 'none', padding: 0, marginBottom: comments ? 6 : 0 }}
             >
               {t('terminal:worktree.commentsTitle')}{comments ? ` · ${comments.length}` : ''}
             </button>
@@ -1000,13 +1000,13 @@ function HostedReviewSection({
               <div className="flex flex-col" style={{ gap: 6, marginBottom: 6 }}>
                 {comments.map((comment) => (
                   <div key={comment.id} style={{ fontSize: 10.5, lineHeight: 1.6 }}>
-                    <span style={{ color: '#999' }}>{comment.author || '?'}</span>
+                    <span style={{ color: 'var(--shell-muted)' }}>{comment.author || '?'}</span>
                     {comment.path && (
-                      <span style={{ fontFamily: "'SF Mono', monospace", color: '#555' }}>
+                      <span style={{ fontFamily: "'SF Mono', monospace", color: 'var(--shell-dim)' }}>
                         {' '}· {comment.path}{typeof comment.line === 'number' ? `:${comment.line}` : ''}
                       </span>
                     )}
-                    <div style={{ color: '#bbb', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{comment.body}</div>
+                    <div style={{ color: 'var(--shell-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{comment.body}</div>
                   </div>
                 ))}
                 <div className="flex" style={{ gap: 6 }}>
@@ -1038,17 +1038,17 @@ function HostedReviewSection({
               onClick={() => void runAutoMerge()}
               disabled={busy}
               className="cursor-pointer"
-              style={{ fontSize: 10.5, color: autoMerge ? '#4ec9b0' : '#777', background: 'none', border: 'none', padding: 0 }}
+              style={{ fontSize: 10.5, color: autoMerge ? 'var(--shell-diff-add)' : 'var(--shell-dim)', background: 'none', border: 'none', padding: 0 }}
             >
               {autoMerge ? t('terminal:worktree.autoMergeOff') : t('terminal:worktree.autoMergeOn')}
             </button>
           </div>
           {logs && logs.map((entry) => (
-            <div key={entry.name} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 5, padding: '7px 9px' }}>
-              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#999', marginBottom: 4 }}>
+            <div key={entry.name} style={{ background: 'var(--shell-canvas)', border: '1px solid var(--control-border)', borderRadius: 5, padding: '7px 9px' }}>
+              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', marginBottom: 4 }}>
                 {entry.name}{entry.truncated ? ' · truncated' : ''}
               </div>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#777', maxHeight: 140, overflowY: 'auto' }}>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-dim)', maxHeight: 140, overflowY: 'auto' }}>
                 {entry.log}
               </pre>
             </div>
@@ -1088,7 +1088,7 @@ function HostedReviewSection({
         </div>
       )}
 
-      {error && <div style={{ fontSize: 11, color: '#e06c75', lineHeight: 1.6 }}>{error}</div>}
+      {error && <div style={{ fontSize: 11, color: 'var(--shell-diff-del)', lineHeight: 1.6 }}>{error}</div>}
     </div>
   )
 }

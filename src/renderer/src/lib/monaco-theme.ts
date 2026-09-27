@@ -1,57 +1,22 @@
 /**
- * Single definition of the `janusx-dark` Monaco theme.
+ * JanusX Monaco themes: values live in the theme definition (M1 统一结构）,
+ * this module keeps viewer-facing names + registration helpers.
  *
- * All three viewers (code / markdown / html) register a theme under this one name, so whichever
+ * All three viewers (code / markdown / html) register themes under shared names, so whichever
  * mounted last used to win — and they had drifted apart on selection colors. Keeping the colors
  * here means the editor chrome, and in particular the find widget, looks the same whichever
  * viewer opened the file.
- *
- * Colors track the Orca-inspired shell tokens in `globals.css`: widget chrome on
- * `--shell-pane-chrome`, inputs on `--shell-canvas`, and JanusX amber for cursor, focus, active
- * options and match highlights.
  */
+import { getThemeDefinition, listThemeDefinitions } from '../../../shared/theme/registry'
+
 export const JANUSX_DARK_THEME_NAME = 'janusx-dark'
+export const JANUSX_PLANCHE_THEME_NAME = 'janusx-planche'
 
 /** Monaco wants `#RRGGBB` / `#RRGGBBAA` — `rgba()` strings are ignored. */
-export const JANUSX_DARK_THEME = {
-  base: 'vs-dark',
-  inherit: true,
-  rules: [],
-  colors: {
-    'editor.background': '#151517',
-    'editor.foreground': '#d4d4d4',
-    'editor.lineHighlightBackground': '#1c1c1e',
-    'editorCursor.foreground': '#ff7830',
-    'editor.selectionBackground': '#264f7859',
-    'editor.inactiveSelectionBackground': '#264f782e',
-    'editorLineNumber.foreground': '#444444',
-    'editorLineNumber.activeForeground': '#888888',
+export const JANUSX_DARK_THEME = getThemeDefinition('dark').monaco
 
-    /*-- Find widget / inputs: neutral shell chrome, amber for state --*/
-    'editorWidget.background': '#1e1e1f',
-    'editorWidget.foreground': '#e0e0e0',
-    'editorWidget.border': '#2b2b2e',
-    'input.background': '#151517',
-    'input.foreground': '#e0e0e0',
-    'input.border': '#2b2b2e',
-    'focusBorder': '#f47d43',
-    'inputOption.activeBackground': '#f47d431f',
-    'inputOption.activeBorder': '#f47d436b',
-    'inputOption.activeForeground': '#ff9159',
-    'toolbar.hoverBackground': '#2b2b2e',
-    'editor.findMatchBackground': '#ff783059',
-    'editor.findMatchBorder': '#ff7830',
-    'editor.findMatchHighlightBackground': '#ff78302e',
-
-    /*-- Diff: quiet full-line tint, clearer changed text and gutter markers --*/
-    'diffEditor.insertedLineBackground': '#37633f2e',
-    'diffEditor.removedLineBackground': '#713a3a2e',
-    'diffEditor.insertedTextBackground': '#4d8a5855',
-    'diffEditor.removedTextBackground': '#9a4d4d55',
-    'diffEditorGutter.insertedLineBackground': '#5a9d6433',
-    'diffEditorGutter.removedLineBackground': '#bd626233',
-  },
-} as const
+/** Monaco wants `#RRGGBB` / `#RRGGBBAA` — `rgba()` strings are ignored. */
+export const JANUSX_PLANCHE_THEME = getThemeDefinition('planche').monaco
 
 interface MonacoThemeApi {
   editor: {
@@ -61,4 +26,18 @@ interface MonacoThemeApi {
 
 export function defineJanusxDarkTheme(monaco: MonacoThemeApi): void {
   monaco.editor.defineTheme(JANUSX_DARK_THEME_NAME, JANUSX_DARK_THEME)
+}
+
+export function defineJanusxPlancheTheme(monaco: MonacoThemeApi): void {
+  monaco.editor.defineTheme(JANUSX_PLANCHE_THEME_NAME, JANUSX_PLANCHE_THEME)
+}
+
+export function defineJanusxThemes(monaco: MonacoThemeApi): void {
+  for (const definition of listThemeDefinitions()) {
+    monaco.editor.defineTheme(definition.monacoName, definition.monaco)
+  }
+}
+
+export function getMonacoThemeName(theme: string | unknown): string {
+  return getThemeDefinition(theme).monacoName
 }

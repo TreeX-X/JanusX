@@ -30,6 +30,8 @@ import {
   type KnowledgeGraphNode,
 } from './knowledgeGraph'
 import type { InspectorRecord } from './KnowledgeWorkbench'
+import { useThemeStore } from '@/stores/theme'
+import { getThemeBase } from '../../../../shared/theme/registry'
 import styles from './KnowledgeWorkbench.module.css'
 
 interface Props {
@@ -45,13 +47,31 @@ interface Props {
 
 const KIND_FILTERS = ['fact', 'proposal', 'wiki', 'entity', 'observation'] as const
 
-/** Obsidian dot palette (shared with the MiniMap). */
+/** Obsidian dot palette (shared with the MiniMap). Dark snapshot; paper mapping below. */
 const KIND_DOT_COLORS: Record<KnowledgeGraphNode['kind'], string> = {
   fact: '#6ba6ff',
   proposal: '#ff995f',
   wiki: '#4ade80',
   entity: '#c084fc',
   observation: '#71717a',
+}
+
+/** planche 纸面映射：墨蓝/朱红/深绿/黛紫 + 墨灰（纸上可读，色相与 dark 一一对应）。 */
+const PLANCHE_KIND_DOT_COLORS: Record<KnowledgeGraphNode['kind'], string> = {
+  fact: '#2F5D8A',
+  proposal: '#D43D2A',
+  wiki: '#2E6B5E',
+  entity: '#6E5A9E',
+  observation: 'rgba(28, 52, 59, 0.45)',
+}
+
+/** 主题感知读取：浅色基底走纸面映射（仿 getBlueprintStatusVisual，调用方零改动跟随）。 */
+export function getKnowledgeKindColor(
+  kind: KnowledgeGraphNode['kind'],
+  theme: unknown = useThemeStore.getState().theme,
+): string {
+  if (getThemeBase(theme) === 'light') return PLANCHE_KIND_DOT_COLORS[kind] ?? PLANCHE_KIND_DOT_COLORS.observation
+  return KIND_DOT_COLORS[kind] ?? KIND_DOT_COLORS.observation
 }
 
 interface KgDotData extends Record<string, unknown> {
@@ -87,9 +107,10 @@ function KgDotNode({ data, selected }: NodeProps<Node<KgDotData, 'kgDot'>>) {
 }
 
 function edgeStyle(edge: KnowledgeGraphEdge): Edge['style'] {
+  // 冲突红两边可读，沿用；中性/派生线吃令牌（明暗自动适配，虚实区分两者）。
   if (edge.type === 'conflicts_with') return { stroke: '#ff6b6b', strokeWidth: 1.6, strokeDasharray: '6 4' }
-  if (edge.synthetic) return { stroke: '#71717a', strokeWidth: 1, strokeDasharray: '4 4' }
-  return { stroke: '#8b8b93', strokeWidth: 1.1 }
+  if (edge.synthetic) return { stroke: 'var(--shell-muted)', strokeWidth: 1, strokeDasharray: '4 4' }
+  return { stroke: 'var(--shell-muted)', strokeWidth: 1.1 }
 }
 
 /**
@@ -100,6 +121,7 @@ function edgeStyle(edge: KnowledgeGraphEdge): Edge['style'] {
 export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSelect }: Props) {
   const { t } = useI18n('knowledge')
   const reducedMotion = useReducedMotion()
+  const plancheCanvas = useThemeStore((s) => s.theme) === 'planche'
   const instanceRef = useRef<ReactFlowInstance | null>(null)
   const [expandedIds, setExpandedIds] = useState<string[]>([])
   const [focusId, setFocusId] = useState<string | null>(null)
@@ -171,7 +193,7 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
   }, [view])
 
   const nodeColor = useCallback(
-    (node: Node) => KIND_DOT_COLORS[(node.data as Partial<KgDotData>)?.kind ?? 'observation'] ?? '#71717a',
+    (node: Node) => getKnowledgeKindColor((node.data as Partial<KgDotData>)?.kind ?? 'observation'),
     [],
   )
 
@@ -426,6 +448,7 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
           fitView
           fitViewOptions={{ duration: reducedMotion ? 0 : 220, maxZoom: 1, padding: 0.3 }}
           minZoom={0.1}
+          colorMode={plancheCanvas ? 'light' : 'dark'}
           proOptions={{ hideAttribution: true }}
         >
           <Controls showInteractive={false} />
@@ -433,15 +456,15 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
             pannable
             zoomable
             nodeColor={nodeColor}
-            maskColor="rgba(5, 5, 7, 0.72)"
-            bgColor="rgba(10, 10, 13, 0.92)"
+            maskColor={plancheCanvas ? 'rgba(220, 207, 168, 0.72)' : 'rgba(5, 5, 7, 0.72)'}
+            bgColor={plancheCanvas ? '#DCCFA8' : 'rgba(10, 10, 13, 0.92)'}
           />
         </ReactFlow>
       </div>
       <div className={styles.graphHint}>{t('knowledge:graph.canvas.hint')}</div>
       <div className={styles.graphLegend} aria-hidden="true">
-        <span><i style={{ borderTop: '2px solid #8b8b93' }} />{t('knowledge:graph.canvas.legend.stored')}</span>
-        <span><i style={{ borderTop: '2px dashed #71717a' }} />{t('knowledge:graph.canvas.legend.derived')}</span>
+        <span><i style={{ borderTop: '2px solid var(--shell-muted)' }} />{t('knowledge:graph.canvas.legend.stored')}</span>
+        <span><i style={{ borderTop: '2px dashed var(--shell-muted)' }} />{t('knowledge:graph.canvas.legend.derived')}</span>
         <span><i style={{ borderTop: '2px dashed #ff6b6b' }} />{t('knowledge:graph.canvas.legend.conflict')}</span>
       </div>
     </div>

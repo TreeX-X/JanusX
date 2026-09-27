@@ -4,7 +4,8 @@ import type { Monaco } from '@monaco-editor/react'
 import type { editor as MonacoEditor, IDisposable } from 'monaco-editor'
 import { Uri } from 'monaco-editor/esm/vs/editor/editor.main'
 import type { FindableEditor } from '@/lib/editor-find'
-import { defineJanusxDarkTheme, JANUSX_DARK_THEME_NAME } from '@/lib/monaco-theme'
+import { defineJanusxThemes, getMonacoThemeName } from '@/lib/monaco-theme'
+import { useThemeStore } from '@/stores/theme'
 import { configureMonacoRuntime } from '@/lib/monaco-runtime'
 import { registerDefinitionNavigation, type DefinitionTarget } from '@/lib/monaco-definition'
 import type { EditorNavigationTarget } from '@/stores/editor'
@@ -64,7 +65,14 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
   )
 
   const handleBeforeMount = useCallback((monaco: any) => {
-    defineJanusxDarkTheme(monaco)
+    defineJanusxThemes(monaco)
+  }, [])
+
+  const appTheme = useThemeStore((s) => s.theme)
+  const monacoThemeName = getMonacoThemeName(appTheme)
+
+  useEffect(() => {
+    void useThemeStore.getState().load()
   }, [])
 
   const revealNavigationTarget = useCallback((editor: MonacoEditor.IStandaloneCodeEditor, target: EditorNavigationTarget | null | undefined) => {
@@ -196,7 +204,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           modified={content}
           originalModelPath={modelPath ? `${monacoFileUri(modelPath)}?janusx-original=git` : undefined}
           modifiedModelPath={modelPath ? monacoFileUri(modelPath) : undefined}
-          theme={JANUSX_DARK_THEME_NAME}
+          theme={monacoThemeName}
           loading={<LoadingIndicator />}
           options={{ ...diffOptions, readOnly, originalEditable: false, domReadOnly: readOnly }}
           beforeMount={handleBeforeMount}
@@ -209,7 +217,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           value={content}
           path={modelPath ? monacoFileUri(modelPath) : undefined}
           onChange={handleChange}
-          theme={JANUSX_DARK_THEME_NAME}
+          theme={monacoThemeName}
           loading={<LoadingIndicator />}
           options={{ ...commonOptions, readOnly, domReadOnly: readOnly }}
           beforeMount={handleBeforeMount}

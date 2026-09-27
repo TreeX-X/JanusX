@@ -108,3 +108,47 @@
   font-weight: 800;
   box-shadow: 0 0 8px rgba(255, 120, 48, 0.5);
 }
+
+/* ── planche：纸面标题栏上的墨线图标，单朱红点睛 ──
+   idle 灰墨 / hover 墨 + 纸深底；激活与注意态统一朱红（knowledge 不再用蓝）；
+   LED 只留形状不发光；角标朱红底纸字。 */
+:global([data-theme='planche']) .button {
+  color: rgba(28, 52, 59, 0.45);
+}
+
+:global([data-theme='planche']) .button:hover {
+  color: #1C343B;
+  background: #DCCFA8;
+}
+
+:global([data-theme='planche']) .button:focus-visible {
+  outline: 2px solid #D43D2A;
+}
+
+:global([data-theme='planche']) .button:active {
+  transform: none;
+}
+
+:global([data-theme='planche']) .button[data-id='blueprint'][aria-pressed='true'],
+:global([data-theme='planche']) .button[data-status='attention'] {
+  color: #D43D2A;
+}
+
+:global([data-theme='planche']) .button[data-id='blueprint'][aria-pressed='true'] {
+  background: rgba(212, 61, 42, 0.1);
+}
+
+:global([data-theme='planche']) .button[data-id='knowledge'][aria-pressed='true'] {
+  color: #D43D2A;
+  background: rgba(212, 61, 42, 0.1);
+}
+
+:global([data-theme='planche']) .button[data-status='attention'] .led {
+  box-shadow: none;
+}
+
+:global([data-theme='planche']) .badge {
+  background: #D43D2A;
+  color: #EFE4C5;
+  box-shadow: none;
+}

@@ -8,6 +8,8 @@
 import { useCallback } from 'react'
 import Editor from '@monaco-editor/react'
 import { configureMonacoRuntime } from '@/lib/monaco-runtime'
+import { defineJanusxThemes, getMonacoThemeName } from '@/lib/monaco-theme'
+import { useThemeStore } from '@/stores/theme'
 import { useI18n } from '@/i18n/useI18n'
 
 configureMonacoRuntime()
@@ -19,23 +21,9 @@ interface JsonEditorProps {
   readOnly?: boolean
 }
 
-/*-- janusx-dark 主题定义，与 MonacoViewer 保持一致 --*/
+/*-- janusx 主题定义（dark + planche），与 MonacoViewer 保持一致 --*/
 const handleBeforeMount = (monaco: any) => {
-  monaco.editor.defineTheme('janusx-dark', {
-    base: 'vs-dark',
-    inherit: true,
-    rules: [],
-    colors: {
-      'editor.background': '#151517',
-      'editor.foreground': '#d4d4d4',
-      'editor.lineHighlightBackground': '#1a1a1a',
-      'editorCursor.foreground': '#ff7830',
-      'editor.selectionBackground': '#264f78',
-      'editorLineNumber.foreground': '#444444',
-      'editorLineNumber.activeForeground': '#888888',
-      'editor.inactiveSelectionBackground': '#1e3a56',
-    },
-  })
+  defineJanusxThemes(monaco)
 }
 
 function LoadingIndicator() {
@@ -56,6 +44,7 @@ function LoadingIndicator() {
  */
 export function JsonEditor({ value, onChange, readOnly = false }: JsonEditorProps) {
   const { t } = useI18n('editor')
+  const appTheme = useThemeStore((s) => s.theme)
   const handleChange = useCallback(
     (val: string | undefined) => {
       onChange(val || '')
@@ -71,7 +60,7 @@ export function JsonEditor({ value, onChange, readOnly = false }: JsonEditorProp
           language="json"
           value={value}
           onChange={handleChange}
-          theme="janusx-dark"
+          theme={getMonacoThemeName(appTheme)}
           loading={<LoadingIndicator />}
           options={{
             fontSize: 13,

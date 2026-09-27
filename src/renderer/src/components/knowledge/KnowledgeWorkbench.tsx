@@ -550,7 +550,7 @@ function KnowledgeCardTile({ card, active, onSelect }: { card: KnowledgeCard; ac
     <button type="button" className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`} onClick={onSelect}>
       <div className={styles.cardTopline}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <QuantumTopologyPreview seed={card.id} name={card.title} size="icon" />
+          <QuantumTopologyPreview kind={card.kind} name={card.title} size="icon" />
           <span>{card.kind.toUpperCase()}</span>
         </div>
         <span>{formatConfidence(card.score)}</span>

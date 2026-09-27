@@ -10,7 +10,7 @@ export function ImageViewer({ base64, mimeType, fileName }: ImageViewerProps) {
   return (
     <div
       className="flex flex-col items-center justify-center flex-1 overflow-auto"
-      style={{ background: '#0a0a0a', minHeight: 0 }}
+      style={{ background: 'var(--shell-void)', minHeight: 0 }}
     >
       <div className="flex items-center justify-center flex-1 p-4 w-full">
         <img
@@ -24,9 +24,9 @@ export function ImageViewer({ base64, mimeType, fileName }: ImageViewerProps) {
         className="shrink-0 flex items-center justify-center gap-2"
         style={{ padding: '10px 16px' }}
       >
-        <span style={{ color: '#555', fontSize: 11 }}>{fileName}</span>
-        <span style={{ color: '#444', fontSize: 11 }}>/</span>
-        <span style={{ color: '#555', fontSize: 11 }}>{mimeType}</span>
+        <span style={{ color: 'var(--shell-dim)', fontSize: 11 }}>{fileName}</span>
+        <span style={{ color: 'var(--shell-dim)', fontSize: 11 }}>/</span>
+        <span style={{ color: 'var(--shell-dim)', fontSize: 11 }}>{mimeType}</span>
       </div>
     </div>
   )

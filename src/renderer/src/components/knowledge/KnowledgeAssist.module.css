@@ -38,3 +38,50 @@
 .copyError { color: #a97366; }
 .copyButton { min-height: 25px; padding: 0 8px; }
 @media (prefers-reduced-motion: reduce) { .resultRow,.searchInput { transition: none; } }
+
+/* ── planche：知识助手纸面化（加法层，dark 原样不动）── */
+:global([data-theme='planche']) .searchInput {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+}
+
+:global([data-theme='planche']) .searchInput:focus {
+  border-color: var(--planche-red, #D43D2A);
+  background: var(--paper, #EFE4C5);
+}
+
+:global([data-theme='planche']) .searchButton,
+:global([data-theme='planche']) .copyButton {
+  border: 1px solid var(--planche-red, #D43D2A);
+  background: transparent;
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .workbenchLink {
+  background: transparent;
+  border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .workbenchLink:hover {
+  color: var(--planche-red, #D43D2A);
+  border-color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .body {
+  scrollbar-color: var(--line-soft, rgba(28, 52, 59, 0.22)) transparent;
+}
+
+:global([data-theme='planche']) .resultRow:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .resultRowSelected {
+  background: var(--shell-accent-soft);
+}
+
+:global([data-theme='planche']) .rowTitle,
+:global([data-theme='planche']) .detail > strong {
+  color: var(--ink, #1C343B);
+}

@@ -44,10 +44,10 @@ function CopyButton({ text }: { text: string }) {
           .catch(() => {})
       }}
       style={{
-        background: copied ? 'rgba(255, 120, 48, 0.18)' : 'rgba(255, 255, 255, 0.07)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
+        background: copied ? 'var(--shell-accent-mid)' : 'var(--shell-hover)',
+        border: '1px solid var(--control-border)',
         borderRadius: 4,
-        color: copied ? '#ffb37a' : '#aaa',
+        color: copied ? 'var(--shell-accent-strong)' : 'var(--shell-muted)',
         fontSize: 10,
         lineHeight: 1,
         padding: '4px 8px',
@@ -70,8 +70,8 @@ function CodeBlockFrame({ children }: { children: ReactNode }) {
     <div
       className="md-codeblock"
       style={{
-        background: '#101013',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
+        background: 'var(--shell-drawer)',
+        border: '1px solid var(--control-border)',
         borderRadius: 8,
         marginBottom: 12,
         overflow: 'hidden',
@@ -84,11 +84,11 @@ function CodeBlockFrame({ children }: { children: ReactNode }) {
           justifyContent: 'space-between',
           gap: 8,
           padding: '6px 10px',
-          background: 'rgba(255, 255, 255, 0.04)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.09)',
+          background: 'transparent',
+          borderBottom: '1px solid var(--shell-border)',
         }}
       >
-        <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#888', fontFamily: CODE_FONT }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--shell-muted)', fontFamily: CODE_FONT }}>
           {language || 'code'}
         </span>
         <CopyButton text={text} />
@@ -109,19 +109,19 @@ function CodeBlockFrame({ children }: { children: ReactNode }) {
 }
 
 const thStyle: CSSProperties = {
-  border: '1px solid rgba(255, 255, 255, 0.14)',
+  border: '1px solid var(--control-border)',
   padding: '8px 12px',
-  background: 'rgba(255, 255, 255, 0.06)',
-  color: '#fff',
+  background: 'var(--shell-hover)',
+  color: 'var(--shell-text)',
   fontWeight: 700,
   textAlign: 'left',
   whiteSpace: 'nowrap',
 }
 
 const tdStyle: CSSProperties = {
-  border: '1px solid rgba(255, 255, 255, 0.11)',
+  border: '1px solid var(--control-border)',
   padding: '8px 12px',
-  color: '#d4d4d4',
+  color: 'var(--shell-text)',
   lineHeight: 1.6,
   verticalAlign: 'top',
 }
@@ -144,9 +144,9 @@ function ResolvedMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
         height: 'auto',
         display: 'block',
         borderRadius: 8,
-        border: '1px solid rgba(255, 255, 255, 0.12)',
+        border: '1px solid var(--control-border)',
         margin: '10px 0',
-        background: '#000',
+        background: 'var(--shell-canvas)',
       }}
     />
   )
@@ -155,53 +155,53 @@ function ResolvedMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
 // Note: emphasis renders as orange type with no fill blocks — see .agents/notes/2026-09-27-markdown-emphasis-orange-text--0d703ca1.md
 export const MARKDOWN_COMPONENTS: Components = {
   h1: ({ children }) => (
-    <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 700, marginBottom: 12, marginTop: 20, lineHeight: 1.3, paddingBottom: 8, borderBottom: '1px solid rgba(255, 255, 255, 0.12)' }}>
+    <h1 style={{ color: 'var(--shell-text)', fontSize: 22, fontWeight: 700, marginBottom: 12, marginTop: 20, lineHeight: 1.3, paddingBottom: 8, borderBottom: '1px solid var(--control-border)' }}>
       {children}
     </h1>
   ),
   h2: ({ children }) => (
-    <h2 style={{ color: '#f0f0f0', fontSize: 18, fontWeight: 700, marginBottom: 10, marginTop: 18, lineHeight: 1.35, paddingBottom: 6, borderBottom: '1px solid rgba(255, 255, 255, 0.09)' }}>
+    <h2 style={{ color: 'var(--shell-text)', fontSize: 18, fontWeight: 700, marginBottom: 10, marginTop: 18, lineHeight: 1.35, paddingBottom: 6, borderBottom: '1px solid var(--shell-border)' }}>
       {children}
     </h2>
   ),
   h3: ({ children }) => (
-    <h3 style={{ color: '#e8e8e8', fontSize: 15, fontWeight: 700, marginBottom: 8, marginTop: 16, lineHeight: 1.35 }}>
+    <h3 style={{ color: 'var(--shell-text)', fontSize: 15, fontWeight: 700, marginBottom: 8, marginTop: 16, lineHeight: 1.35 }}>
       {children}
     </h3>
   ),
   h4: ({ children }) => (
-    <h4 style={{ color: '#e0e0e0', fontSize: 13, fontWeight: 700, marginBottom: 6, marginTop: 14, lineHeight: 1.4 }}>
+    <h4 style={{ color: 'var(--shell-text)', fontSize: 13, fontWeight: 700, marginBottom: 6, marginTop: 14, lineHeight: 1.4 }}>
       {children}
     </h4>
   ),
   h5: ({ children }) => (
-    <h5 style={{ color: '#d4d4d4', fontSize: 12, fontWeight: 700, marginBottom: 6, marginTop: 12, lineHeight: 1.4 }}>
+    <h5 style={{ color: 'var(--shell-text)', fontSize: 12, fontWeight: 700, marginBottom: 6, marginTop: 12, lineHeight: 1.4 }}>
       {children}
     </h5>
   ),
   h6: ({ children }) => (
-    <h6 style={{ color: '#aaa', fontSize: 12, fontWeight: 600, marginBottom: 6, marginTop: 12, lineHeight: 1.4 }}>
+    <h6 style={{ color: 'var(--shell-muted)', fontSize: 12, fontWeight: 600, marginBottom: 6, marginTop: 12, lineHeight: 1.4 }}>
       {children}
     </h6>
   ),
   p: ({ children }) => (
-    <p style={{ color: '#d4d4d4', fontSize: 13, lineHeight: 1.75, marginBottom: 10, fontFamily: PROSE_FONT, overflowWrap: 'break-word' }}>
+    <p style={{ color: 'var(--shell-text)', fontSize: 13, lineHeight: 1.75, marginBottom: 10, fontFamily: PROSE_FONT, overflowWrap: 'break-word' }}>
       {children}
     </p>
   ),
   a: ({ href, children }) => (
-    <a href={href} style={{ color: '#ff9159', textDecoration: 'none', overflowWrap: 'break-word' }}>
+    <a href={href} style={{ color: 'var(--shell-accent-strong)', textDecoration: 'none', overflowWrap: 'break-word' }}>
       {children}
     </a>
   ),
   strong: ({ children }) => (
-    <strong style={{ color: '#ff9159', fontWeight: 700 }}>{children}</strong>
+    <strong style={{ color: 'var(--shell-accent-strong)', fontWeight: 700 }}>{children}</strong>
   ),
   em: ({ children }) => (
-    <em style={{ color: '#ff9159', fontStyle: 'italic' }}>{children}</em>
+    <em style={{ color: 'var(--shell-accent-strong)', fontStyle: 'italic' }}>{children}</em>
   ),
   del: ({ children }) => (
-    <del style={{ color: '#888' }}>{children}</del>
+    <del style={{ color: 'var(--shell-muted)' }}>{children}</del>
   ),
   img: ({ src, alt }) => <ResolvedMarkdownImage src={src} alt={alt ?? ''} />,
   input: ({ checked }) => (
@@ -209,7 +209,7 @@ export const MARKDOWN_COMPONENTS: Components = {
       type="checkbox"
       checked={Boolean(checked)}
       readOnly
-      style={{ accentColor: '#ff7830', width: 13, height: 13, marginRight: 6, verticalAlign: -2 }}
+      style={{ accentColor: 'var(--shell-accent)', width: 13, height: 13, marginRight: 6, verticalAlign: -2 }}
     />
   ),
   code: ({ className, children }) => {
@@ -223,7 +223,7 @@ export const MARKDOWN_COMPONENTS: Components = {
             borderRadius: 0,
             padding: 0,
             fontSize: 12,
-            color: '#ff9159',
+            color: 'var(--shell-accent-strong)',
             fontFamily: CODE_FONT,
             overflowWrap: 'break-word',
           }}
@@ -239,7 +239,7 @@ export const MARKDOWN_COMPONENTS: Components = {
           fontFamily: CODE_FONT,
           fontSize: 12,
           lineHeight: 1.7,
-          color: '#e6e6e6',
+          color: 'var(--shell-text)',
           whiteSpace: 'pre',
         }}
       >
@@ -251,11 +251,11 @@ export const MARKDOWN_COMPONENTS: Components = {
   blockquote: ({ children }) => (
     <blockquote
       style={{
-        borderLeft: '3px solid #ff7830',
+        borderLeft: '3px solid var(--shell-accent)',
         background: 'transparent',
         borderRadius: 0,
         padding: '2px 0 2px 12px',
-        color: '#b5b5b5',
+        color: 'var(--shell-muted)',
         margin: '0 0 12px',
         fontFamily: PROSE_FONT,
         fontSize: 13,
@@ -266,15 +266,15 @@ export const MARKDOWN_COMPONENTS: Components = {
     </blockquote>
   ),
   mark: ({ children }) => (
-    <mark style={{ background: 'transparent', color: '#ff9159', padding: 0 }}>{children}</mark>
+    <mark style={{ background: 'transparent', color: 'var(--shell-accent-strong)', padding: 0 }}>{children}</mark>
   ),
   ul: ({ children }) => (
-    <ul style={{ color: '#d4d4d4', fontSize: 13, lineHeight: 1.7, marginBottom: 10, paddingLeft: 20, fontFamily: PROSE_FONT }}>
+    <ul style={{ color: 'var(--shell-text)', fontSize: 13, lineHeight: 1.7, marginBottom: 10, paddingLeft: 20, fontFamily: PROSE_FONT }}>
       {children}
     </ul>
   ),
   ol: ({ children }) => (
-    <ol style={{ color: '#d4d4d4', fontSize: 13, lineHeight: 1.7, marginBottom: 10, paddingLeft: 20, fontFamily: PROSE_FONT }}>
+    <ol style={{ color: 'var(--shell-text)', fontSize: 13, lineHeight: 1.7, marginBottom: 10, paddingLeft: 20, fontFamily: PROSE_FONT }}>
       {children}
     </ol>
   ),
@@ -285,7 +285,7 @@ export const MARKDOWN_COMPONENTS: Components = {
     <hr
       style={{
         border: 'none',
-        borderTop: '1px solid rgba(255, 255, 255, 0.14)',
+        borderTop: '1px solid var(--shell-border)',
         margin: '18px 0',
       }}
     />
@@ -296,9 +296,9 @@ export const MARKDOWN_COMPONENTS: Components = {
       style={{
         overflowX: 'auto',
         marginBottom: 14,
-        border: '1px solid rgba(255, 255, 255, 0.15)',
+        border: '1px solid var(--control-border)',
         borderRadius: 8,
-        background: 'rgba(255, 255, 255, 0.015)',
+        background: 'transparent',
       }}
     >
       <table
@@ -315,7 +315,7 @@ export const MARKDOWN_COMPONENTS: Components = {
     </div>
   ),
   thead: ({ children }) => (
-    <thead style={{ background: 'rgba(255, 255, 255, 0.04)' }}>{children}</thead>
+    <thead style={{ background: 'transparent' }}>{children}</thead>
   ),
   tbody: ({ children }) => <tbody>{children}</tbody>,
   tr: ({ children }) => <tr className="md-tr">{children}</tr>,

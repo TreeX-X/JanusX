@@ -5,6 +5,7 @@ import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { getUserMemoryOverview } from '@/services/knowledge'
 import styles from './RightDock.module.css'
 
@@ -39,11 +40,11 @@ export function RightToolRail({
     <div className={styles.rail} role="toolbar" aria-label={t('common:rightTool.railAria')}>
       <div className={styles.railTools}>
         {hasOpenTools && panelToggle && (
+          <ThemedTooltip label={panelToggleLabel}>
           <button
             type="button"
             className={styles.railButton}
             aria-label={panelToggleLabel}
-            title={panelToggleLabel}
             aria-expanded={!collapsed}
             aria-controls="right-tool-panel"
             disabled={forcedCollapsed}
@@ -53,6 +54,7 @@ export function RightToolRail({
               ? <PanelRightOpen size={16} strokeWidth={1.6} aria-hidden="true" />
               : <PanelRightClose size={16} strokeWidth={1.6} aria-hidden="true" />}
           </button>
+          </ThemedTooltip>
         )}
         {visibleTools.map((tool) => {
           const state = activeToolId === tool.id ? 'active' : openToolIds.includes(tool.id) ? 'open' : 'closed'
@@ -62,20 +64,20 @@ export function RightToolRail({
               ? t('common:rightTool.railStateOpen')
               : t('common:rightTool.railStateClosed')
           return (
+            <ThemedTooltip key={tool.id} label={t(tool.titleKey)}>
             <button
-              key={tool.id}
               type="button"
               className={styles.railButton}
               data-state={state}
               aria-label={t('common:rightTool.railButtonAria', { label: t(tool.ariaLabelKey), state: stateLabel })}
               aria-pressed={state === 'active'}
-              title={t(tool.titleKey)}
               onClick={() => onToggleTool(tool.id)}
             >
               <ToolIcon toolId={tool.id} />
               {tool.id === 'persona' && <PersonaPendingDot />}
               <span className={styles.railState} aria-hidden="true" />
             </button>
+            </ThemedTooltip>
           )
         })}
       </div>

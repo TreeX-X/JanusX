@@ -33,6 +33,7 @@
     "models:update:openrouter": "node scripts/update-openrouter-model-registry.mjs",
     "i18n:extract": "i18next --config i18next-parser.config.ts",
     "i18n:types": "node scripts/i18n-generate-types.mjs",
+    "theme:css": "node scripts/generate-theme-css.mjs",
     "i18n:check": "node scripts/i18n-check.mjs",
     "i18n": "npm run i18n:extract && npm run i18n:types && npm run i18n:check",
     "typecheck": "tsc --noEmit",

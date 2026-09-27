@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTurnChangesStore, type TerminalTurnChangesEvent } from '@/stores/turn-changes'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useEditorStore } from '@/stores/editor'
+import { useThemeStore } from '@/stores/theme'
 import { useI18n } from '@/i18n/useI18n'
 
 const COLLAPSE_TTL_MS = 6000
@@ -38,6 +39,8 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
     return null
   })
   const openFile = useEditorStore((s) => s.openFile)
+  // 浮岛壳在 planche 下走纸面墨线（vars 覆盖文字，边框/阴影需显式分支）
+  const planche = useThemeStore((s) => s.theme) === 'planche'
   const [expanded, setExpanded] = useState(false)
   const [view, setView] = useState<IslandView>('latest')
   const [pinned, setPinned] = useState(false)
@@ -210,11 +213,11 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        background: '#000',
-        border: '1px solid rgba(255,255,255,0.12)',
+        background: 'var(--shell-drawer)',
+        border: planche ? '1px solid #1C343B' : '1px solid rgba(255,255,255,0.12)',
         borderRight: 'none',
         borderRadius: '12px 0 0 12px',
-        boxShadow: '-8px 0 24px rgba(0,0,0,0.5)',
+        boxShadow: planche ? 'none' : '-8px 0 24px rgba(0,0,0,0.5)',
       }}
     >
       {!expanded ? (
@@ -241,15 +244,15 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               lineHeight: 1.2,
             }}
           >
-            <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>{change!.fileCount}</span>
+            <span style={{ color: 'var(--shell-text)', fontSize: 12, fontWeight: 700 }}>{change!.fileCount}</span>
             {(change!.additions > 0 || change!.deletions > 0) && (
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, fontSize: 9 }}>
-                {change!.additions > 0 && <span style={{ color: '#4ec9b0' }}>+{change!.additions}</span>}
-                {change!.deletions > 0 && <span style={{ color: '#e06c75' }}>−{change!.deletions}</span>}
+                {change!.additions > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{change!.additions}</span>}
+                {change!.deletions > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{change!.deletions}</span>}
               </span>
             )}
             {history.length > 1 && (
-              <span style={{ color: '#737373', fontSize: 9 }}>×{history.length}</span>
+              <span style={{ color: 'var(--shell-dim)', fontSize: 9 }}>×{history.length}</span>
             )}
           </button>
         ) : (
@@ -266,7 +269,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               justifyContent: 'center',
             }}
           >
-            <span style={{ color: '#555', fontSize: 10, fontFamily: "'SF Mono', monospace" }}>0</span>
+            <span style={{ color: 'var(--shell-dim)', fontSize: 10, fontFamily: "'SF Mono', monospace" }}>0</span>
           </div>
         )
       ) : (
@@ -283,7 +286,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
                 padding: 0,
                 fontFamily: "'SF Mono', monospace",
                 fontSize: 10.5,
-                color: view === 'latest' ? '#d4d4d4' : '#666',
+                color: view === 'latest' ? 'var(--shell-text)' : 'var(--shell-dim)',
               }}
             >
               {t('terminal:turnChanges.latest')}
@@ -299,7 +302,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
                 padding: 0,
                 fontFamily: "'SF Mono', monospace",
                 fontSize: 10.5,
-                color: view === 'history' ? '#d4d4d4' : '#666',
+                color: view === 'history' ? 'var(--shell-text)' : 'var(--shell-dim)',
               }}
             >
               {t('terminal:turnChanges.history', { count: history.length })}
@@ -307,7 +310,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
           </div>
           {view === 'latest' ? (
             <div style={{ overflowY: 'auto', padding: '0 10px 8px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.9 }}>
-              <div style={{ color: '#d4d4d4', marginBottom: 2 }}>{summary}</div>
+              <div style={{ color: 'var(--shell-text)', marginBottom: 2 }}>{summary}</div>
               {visibleFiles.map((file) => (
                 <FileRow
                   key={file.path}
@@ -322,12 +325,12 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
                 />
               ))}
               {hiddenCount > 0 && (
-                <div style={{ color: '#555', fontSize: 10 }}>
+                <div style={{ color: 'var(--shell-dim)', fontSize: 10 }}>
                   {t('terminal:turnChanges.more', { count: hiddenCount })}
                 </div>
               )}
               {visibleFiles.length === 0 && (
-                <div style={{ color: '#555', fontSize: 10 }}>{t('terminal:turnChanges.empty')}</div>
+                <div style={{ color: 'var(--shell-dim)', fontSize: 10 }}>{t('terminal:turnChanges.empty')}</div>
               )}
             </div>
           ) : (
@@ -344,7 +347,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
                 />
               ))}
               {history.length === 0 && (
-                <div style={{ color: '#555', fontSize: 10 }}>{t('terminal:turnChanges.empty')}</div>
+                <div style={{ color: 'var(--shell-dim)', fontSize: 10 }}>{t('terminal:turnChanges.empty')}</div>
               )}
             </div>
           )}
@@ -391,7 +394,7 @@ function FileRow({
         opacity: disabled ? 0.55 : 1,
       }}
     >
-      <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: '#999' }}>
+      <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: 'var(--shell-muted)' }}>
         {path}
       </span>
       <FileCounts
@@ -424,19 +427,19 @@ function HistoryTurn({
   return (
     <div
       style={{
-        background: '#141417',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'var(--shell-card)',
+        border: '1px solid var(--shell-border-soft)',
         borderRadius: 8,
         padding: '7px 9px 6px',
         marginBottom: 8,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
-        <span style={{ fontWeight: 700, fontSize: 10.5, color: '#a1a1a1' }}>#{index}</span>
-        <span style={{ fontSize: 10.5, color: '#737373' }}>{turn.kind}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 10, color: '#737373', whiteSpace: 'nowrap' }}>
-          {turn.fileCount} · <span style={{ color: '#4ec9b0' }}>+{turn.additions}</span>{' '}
-          <span style={{ color: '#e06c75' }}>−{turn.deletions}</span>
+        <span style={{ fontWeight: 700, fontSize: 10.5, color: 'var(--shell-muted)' }}>#{index}</span>
+        <span style={{ fontSize: 10.5, color: 'var(--shell-dim)' }}>{turn.kind}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--shell-dim)', whiteSpace: 'nowrap' }}>
+          {turn.fileCount} · <span style={{ color: 'var(--shell-diff-add)' }}>+{turn.additions}</span>{' '}
+          <span style={{ color: 'var(--shell-diff-del)' }}>−{turn.deletions}</span>
         </span>
       </div>
       {visible.map((file) => (
@@ -452,8 +455,8 @@ function HistoryTurn({
           onOpen={() => onOpen(file.path, file.status)}
         />
       ))}
-      {hidden > 0 && <div style={{ color: '#555', fontSize: 10 }}>+{hidden}</div>}
-      {visible.length === 0 && <div style={{ color: '#555', fontSize: 10 }}>—</div>}
+      {hidden > 0 && <div style={{ color: 'var(--shell-dim)', fontSize: 10 }}>+{hidden}</div>}
+      {visible.length === 0 && <div style={{ color: 'var(--shell-dim)', fontSize: 10 }}>—</div>}
     </div>
   )
 }
@@ -472,15 +475,15 @@ function FileCounts({
   if (status === 'binary' || status === 'oversized') {
     const kb = size < 1024 ? `${size}B` : `${Math.round(size / 1024)}KB`
     return (
-      <span style={{ color: '#8ab4ff', flexShrink: 0 }}>
+      <span style={{ color: 'var(--shell-muted)', flexShrink: 0 }}>
         {status} · {kb}
       </span>
     )
   }
   return (
     <span style={{ flexShrink: 0 }}>
-      {(additions ?? 0) > 0 && <span style={{ color: '#4ec9b0' }}>+{additions} </span>}
-      {(deletions ?? 0) > 0 && <span style={{ color: '#e06c75' }}>−{deletions}</span>}
+      {(additions ?? 0) > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{additions} </span>}
+      {(deletions ?? 0) > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{deletions}</span>}
     </span>
   )
 }

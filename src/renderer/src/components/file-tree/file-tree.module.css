@@ -7,46 +7,46 @@
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
-  color: #999;
+  color: var(--shell-muted);
   user-select: none;
   transition: background 120ms ease, color 120ms ease;
 }
 
 .row:hover {
-  background: rgba(255, 255, 255, 0.03);
-  color: #ccc;
+  background: var(--shell-hover);
+  color: var(--shell-text);
 }
 
 .row[data-selected='true'] {
-  color: #ff7830;
-  background: rgba(255, 120, 48, 0.1);
+  color: var(--shell-accent);
+  background: var(--shell-accent-soft);
 }
 
 .row[data-git-ignored='true'] {
-  color: #737373;
+  color: var(--shell-dim);
   opacity: 0.68;
 }
 
 .row[data-git-ignored='true']:hover {
-  color: #969696;
+  color: var(--shell-muted);
 }
 
 .row[data-selected='true'][data-git-ignored='true'] {
-  color: #ff7830;
+  color: var(--shell-accent);
   opacity: 1;
 }
 
 .chevron {
   width: 6px;
   height: 6px;
-  border-right: 1.5px solid #666;
-  border-bottom: 1.5px solid #666;
+  border-right: 1.5px solid var(--shell-dim);
+  border-bottom: 1.5px solid var(--shell-dim);
   transform: rotate(-45deg);
   transition: transform 120ms ease;
 }
 
 .row[data-selected='true'] .chevron {
-  border-color: #ff7830;
+  border-color: var(--shell-accent);
 }
 
 .chevron[data-expanded='true'] {
@@ -63,7 +63,7 @@
   width: 12px;
   height: 12px;
   flex-shrink: 0;
-  color: #777;
+  color: var(--shell-dim);
   animation: directory-spinner 700ms linear infinite;
 }
 
@@ -113,11 +113,11 @@
 }
 
 .gitAddition {
-  color: #78b982;
+  color: var(--shell-diff-add);
 }
 
 .gitDeletion {
-  color: #d27168;
+  color: var(--shell-diff-del);
 }
 
 .gitAddition,
@@ -146,17 +146,17 @@
 }
 
 .gitAggregateAddition {
-  background: #78b982;
+  background: var(--shell-diff-add);
 }
 
 .gitAggregateDeletion {
-  background: #d27168;
+  background: var(--shell-diff-del);
 }
 
 .row[data-drop-target='true'] {
-  color: #ffc29f;
-  background: rgba(255, 120, 48, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(255, 120, 48, 0.42);
+  color: var(--shell-accent);
+  background: var(--shell-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--shell-accent-border);
 }
 
 .treeViewport {
@@ -172,7 +172,7 @@
   min-height: 120px;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--shell-dim);
   font-size: 11px;
 }
 
@@ -191,7 +191,7 @@
 .scanMask {
   position: absolute;
   inset: 0;
-  background: rgba(12, 12, 12, 0.96);
+  background: var(--shell-canvas);
   animation: scan-mask-reveal var(--scan-duration, 1100ms) linear both;
 }
 
@@ -226,12 +226,12 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #999;
+  color: var(--shell-muted);
   font-size: 12px;
 }
 
 .loadError button {
-  color: #ff7830;
+  color: var(--shell-accent);
   font-size: 12px;
 }
 
@@ -264,8 +264,8 @@
   padding: 4px;
   border-radius: 8px;
   font-size: 12px;
-  background: rgba(20, 20, 20, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--shell-chrome);
+  border: 1px solid var(--control-border);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
   backdrop-filter: blur(18px);
 }
@@ -276,7 +276,7 @@
   padding: 6px 10px;
   border-radius: 4px;
   text-align: left;
-  color: #d4d4d4;
+  color: var(--shell-text);
 }
 
 .menuItem:hover {
@@ -284,7 +284,7 @@
 }
 
 .menuItemDanger {
-  color: #ff8a85;
+  color: var(--shell-diff-del);
 }
 
 .menuItemDanger:hover {
@@ -294,5 +294,15 @@
 .menuSeparator {
   height: 1px;
   margin: 4px 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--shell-border);
+}
+
+/* ── planche：浮层菜单去黑影，纸面配墨线 ── */
+:global([data-theme='planche']) .menu {
+  box-shadow: 3px 3px 0 #E8A08A;
+  backdrop-filter: none;
+}
+
+:global([data-theme='planche']) .menuItem:hover {
+  background: #DCCFA8;
 }

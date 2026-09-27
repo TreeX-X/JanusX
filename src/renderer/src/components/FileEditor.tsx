@@ -58,8 +58,8 @@ function TabItem({
     <div
       className="h-[30px] px-3 text-xs cursor-pointer flex items-center gap-1.5 font-mono relative transition-colors select-none rounded-t-[6px]"
       style={{
-        color: isActive ? '#d4d4d4' : hovered ? '#999' : '#666',
-        background: isActive ? 'rgba(10, 10, 10, 0.98)' : 'transparent',
+        color: isActive ? 'var(--shell-text)' : hovered ? 'var(--shell-muted)' : 'var(--shell-dim)',
+        background: isActive ? 'var(--shell-drawer)' : 'transparent',
       }}
       onClick={onSelect}
       onMouseDown={(e) => e.stopPropagation()}
@@ -69,7 +69,7 @@ function TabItem({
       {file.isDirty && (
         <span
           className="w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ background: '#ff7830' }}
+          style={{ background: 'var(--shell-accent)' }}
         />
       )}
       {file.externalChanged && (
@@ -95,14 +95,13 @@ function TabItem({
       {isActive && (
         <div
           className="absolute bottom-0 left-2.5 right-2.5 h-px"
-          style={{ background: '#ff7830' }}
+          style={{ background: 'var(--shell-accent)' }}
         />
       )}
       <button
-        className="shrink-0"
+        className="filetab-close shrink-0"
         style={{
           opacity: hovered ? 0.4 : 0,
-          color: '#888',
           background: 'none',
           border: 'none',
           cursor: 'pointer',
@@ -113,8 +112,6 @@ function TabItem({
           transition: 'opacity 0.15s',
         }}
         onClick={onClose}
-        onMouseEnter={(e) => { e.currentTarget.style.color = '#ff5858'; e.currentTarget.style.opacity = '1' }}
-        onMouseLeave={(e) => { e.currentTarget.style.color = '#888'; e.currentTarget.style.opacity = hovered ? '0.4' : '0' }}
       >
         ×
       </button>
@@ -271,7 +268,7 @@ export function FileEditor() {
               aria-label={t('editor:fileEditor.find')}
               title={t('editor:fileEditor.findTitle')}
               onClick={() => void openEditorFind(findEditorRef.current)}
-              className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#888] transition-colors hover:border-white/[0.14] hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-white/[0.04] text-[var(--shell-muted)] transition-colors hover:border-[var(--shell-accent-border)] hover:text-[var(--shell-text)]"
             >
               <Search size={14} strokeWidth={1.8} />
             </button>
@@ -282,7 +279,7 @@ export function FileEditor() {
               aria-label={t('editor:fileEditor.embedToWorkspace')}
               title={t('editor:fileEditor.embedToWorkspace')}
               onClick={() => setEmbedded(true)}
-              className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-white/[0.04] text-[var(--shell-muted)] transition-colors hover:border-[var(--shell-accent-border)] hover:text-[var(--shell-text)]"
             >
               <PanelRightOpen size={14} strokeWidth={1.8} />
             </button>
@@ -293,7 +290,7 @@ export function FileEditor() {
               aria-label={t('editor:fileEditor.detachToFloat')}
               title={t('editor:fileEditor.detachToFloat')}
               onClick={() => void detachEditor()}
-              className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-white/[0.04] text-[var(--shell-muted)] transition-colors hover:border-[var(--shell-accent-border)] hover:text-[var(--shell-text)]"
             >
               <PanelRightClose size={14} strokeWidth={1.8} />
             </button>
@@ -306,9 +303,9 @@ export function FileEditor() {
               onClick={() => activeFileId && void saveFile(activeFileId)}
               className="flex h-7 w-7 items-center justify-center rounded transition-colors"
               style={{
-                background: activeFile?.isDirty ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
-                border: activeFile?.isDirty ? '1px solid rgba(255, 120, 48, 0.24)' : '1px solid rgba(255, 255, 255, 0.08)',
-                color: activeFile?.isDirty ? '#ffb084' : '#777',
+                background: activeFile?.isDirty ? 'var(--shell-accent-mid)' : 'rgba(255, 255, 255, 0.04)',
+                border: activeFile?.isDirty ? '1px solid var(--shell-accent-border)' : '1px solid rgba(255, 255, 255, 0.08)',
+                color: activeFile?.isDirty ? 'var(--shell-accent-strong)' : 'var(--shell-dim)',
               }}
             >
               <Save size={14} strokeWidth={1.8} />
@@ -318,7 +315,7 @@ export function FileEditor() {
       }
     >
       {/* Viewer area */}
-      <div className="flex-1 overflow-hidden" style={{ background: '#151517', height: '100%', position: 'relative' }}>
+      <div className="flex-1 overflow-hidden" style={{ background: 'var(--shell-canvas)', height: '100%', position: 'relative' }}>
         {activeFile && <ViewerContent key={`${activeFile.id}:${activeFile.absolutePath}`} file={activeFile} workspacePath={activeWorkspacePath} onEditorMount={handleEditorMount} />}
       </div>
     </FloatingPanel>

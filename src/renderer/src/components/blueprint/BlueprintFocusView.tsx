@@ -4,7 +4,7 @@ import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { BlueprintNode } from '@/services/blueprint'
 import { HarnessRunPanel } from '@/components/janus/HarnessRunPanel'
-import { STATUS_VISUALS } from './blueprintStatus'
+import { getBlueprintStatusVisual } from './blueprintStatus'
 import './blueprint.css'
 
 function clampProgress(value: number): number {
@@ -30,7 +30,7 @@ export function BlueprintFocusView() {
     activeSession && currentBlueprint?.id === activeSession.blueprintId
       ? currentBlueprint.nodes[activeSession.nodeId] ?? activeSession.nodeSnapshot
       : activeSession?.nodeSnapshot ?? null
-  const visual = activeNode ? STATUS_VISUALS[activeNode.status] ?? STATUS_VISUALS['not-started'] : null
+  const visual = activeNode ? getBlueprintStatusVisual(activeNode.status)  : null
   const progress = activeNode ? clampProgress(activeNode.progress) : 0
   const latestAnalysis = activeNode ? getLatestAnalysis(activeNode) : null
   const workspace = activeNode?.workspaceId ? workspaces.find((item) => item.id === activeNode.workspaceId) : null

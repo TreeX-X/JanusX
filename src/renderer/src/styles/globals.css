@@ -2,77 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* ── Surface ramp ───────────────────────────────────────────────────────
-     One neutral family, eight steps, no pure black anywhere the user can see.
-     Earlier revisions parked the canvas at #0a0a0a while the chrome sat at
-     #171717; that 13-point jump is what made the center workbench read as a
-     hole punched between the rails rather than a recessed surface. The ramp
-     below keeps the same *ordering* (canvas below chrome, so panes still look
-     sunk into the shell) but compresses the gap to ~9 points, which reads as
-     depth instead of separation.
-
-       void   #101012  app root, behind the grid
-       canvas #151517  center workbench bed + terminal canvas
-       pane   #191919  pane body
-       chrome #1e1e20  left rail, right dock, titlebar, settings rail
-       drawer #0c0c0e  expanded bottom drawer tray — the one user-visible
-                       black, chosen by the user; panels on it stay transparent
-
-     Anything that used to be `#000` / `rgba(0,0,0,…)` as a *surface* should
-     pull from this ramp. Pure black stays reserved for shadows and scrims. */
-  --shell-void: #101012;
-  --shell-canvas: #151517;
-  --shell-pane: #191919;
-  --shell-pane-chrome: #1e1e1f;
-  --shell-chrome: #1e1e20;
-  --shell-chrome-raised: #252527;
-  /* 卡片底：在 canvas(#151517) 与 chrome(#1e1e20) 之间取一档偏黑的灰，
-     代替纯 chrome-raised，让卡片“黑里透灰”而不是“灰块”。 */
-  --shell-card: #1c1c1f;
-  /* 底部抽屉展开面：用户要求展开页是黑色托盘，比 void 再低一档、比终端画布(#151517)更沉，
-     是 ramp 之外唯一允许用户看见的黑面；抽屉里的面板一律透明 + 发丝边，不再各自刷底。 */
-  --shell-drawer: #0c0c0e;
-  /* 单行控件统一高度：两边窗口的所有输入框、下拉触发器、页签按钮都吃这一档，
-     以后想整体调高矮只改这里。紧凑型小按钮（删除/行内操作）各留本地值。 */
-  --control-h: 30px;
-  /* 单行控件统一边框：输入框与下拉触发器共用，主壳分隔统一白 7%，hover/聚焦态统一用白 16%。 */
-  --control-border: rgba(255, 255, 255, 0.07);
-  --shell-hover: #2b2b2e;
-  --shell-active: #333336;
-  --shell-border: rgb(255 255 255 / 0.07);
-  --shell-border-soft: rgb(255 255 255 / 0.045);
-  --shell-text: #fafafa;
-  --shell-muted: #a1a1a1;
-  --shell-dim: #737373;
-
-  /* Amber is the only accent hue in the shell. It earns 1px borders, 2px
-     selection bars and text — not filled blocks. See the settings modal. */
-  --shell-accent: #f47d43;
-  --shell-accent-strong: #ff9159;
-  --shell-accent-soft: rgb(244 125 67 / 0.08);
-  --shell-accent-border: rgb(244 125 67 / 0.42);
-
-  --primary: #ff7830;
-  --bg-app: var(--shell-void);
-  --bg-deep: var(--shell-canvas);
-  --bg-dark: var(--shell-pane);
-  --bg-darker: var(--shell-void);
-  /* Shared workbench canvas baseline. Module accents remain local. */
-  --workbench-canvas: #131315;
-  --workbench-grid: #101012;
-  --surface: rgba(30, 30, 32, 0.75);
-  --surface-elevated: rgba(30, 30, 32, 0.9);
-  --chrome-bg: rgba(30, 30, 32, 0.9);
-  --text: #e0e0e0;
-  --text-secondary: #888;
-  --text-dim: #555;
-  --border: rgba(255, 255, 255, 0.055);
-  --border-soft: rgba(255, 255, 255, 0.04);
-  --accent-soft: rgba(255, 120, 48, 0.1);
-  --accent-mid: rgba(255, 120, 48, 0.18);
-  --accent-glow: rgba(255, 120, 48, 0.3);
-}
+/* ── 主题令牌已迁移：唯一事实源 src/shared/theme/definition.ts，
+      由 npm run theme:css 生成 themes.generated.css（main.tsx 中在本文件之后引入）。
+   Surface ramp 设计意图（void #101012 / canvas #151517 / pane #191919 /
+   chrome #1e1e20 / drawer #0c0c0e）：canvas 低于 chrome 约 9pt，pane 呈嵌入感
+   而非打孔感；纯黑只留给阴影与 scrim。详见 definition.ts 注释。 */
 
 * {
   margin: 0;
@@ -95,10 +29,7 @@ body.desktop-toast-body {
   background: transparent;
 }
 
-/* 文本选中颜色 */
-::selection {
-  background: rgba(38, 79, 120, 0.35);
-}
+/* 文本选中颜色走主题 definition（::selection，见 themes.generated.css） */
 
 /* Monaco 编辑器选中颜色 — CSS 层面兜底 */
 .monaco-editor .selected-text,
@@ -744,7 +675,8 @@ body.desktop-toast-body {
 }
 
 /* ================= 弹窗红灯关闭按钮（macOS 红绿灯风格） ================= */
-/* 所有弹出小窗口统一使用：点击红灯关闭，点击遮罩/其他区域不会关闭 */
+/* 所有弹出小窗口统一使用：点击红灯关闭，点击遮罩/其他区域不会关闭。
+   交互约定：红灯本身即关闭 affordance，悬浮不冒叉、不变色，直接点即可。 */
 .modal-close-light {
   width: 12px;
   height: 12px;
@@ -758,28 +690,19 @@ body.desktop-toast-body {
   justify-content: center;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
-  transition: filter 0.15s ease;
-}
-
-.modal-close-light:hover {
-  filter: brightness(1.12);
 }
 
 .modal-close-light:active {
   filter: brightness(0.9);
 }
 
-.modal-close-light::after {
+.modal-close-light::after,
+.modal-close-light:hover::after {
   content: '\2715';
   font-size: 7px;
   line-height: 1;
   color: transparent;
   font-weight: bold;
-  transition: color 0.15s ease;
-}
-
-.modal-close-light:hover::after {
-  color: rgba(0, 0, 0, 0.55);
 }
 
 /* ================= LLM 配置触发器神性动画 ================= */

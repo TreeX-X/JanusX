@@ -4,6 +4,8 @@
  */
 
 import type { BlueprintNodeStatus } from '@/services/blueprint'
+import { useThemeStore } from '@/stores/theme'
+import { getThemeBase } from '../../../../shared/theme/registry'
 
 export interface StatusVisual {
   /** 圆点颜色 */
@@ -19,6 +21,9 @@ export interface StatusVisual {
  * V2 设计语言：黑灰为主、橙为辅 —— 灰阶明暗表达状态，在途（in-progress）是全画布
  * 唯一的语义色（见 design/blueprint-note-graph.html）。blocked 的红色告警含义
  * 被有意收敛，与归档态以明暗区分。
+ *
+ * M1 之后：色值唯一来源扩展为主题感知函数 getBlueprintStatusVisual()，
+ * STATUS_VISUALS 保留为 dark 快照（菜单顺序/测试/外部工具兼容）。
  */
 export const STATUS_VISUALS: Record<BlueprintNodeStatus, StatusVisual> = {
   'not-started': { color: '#3a3a3e', label: '未开始', labelKey: 'blueprint:status.notStarted' },
@@ -30,6 +35,28 @@ export const STATUS_VISUALS: Record<BlueprintNodeStatus, StatusVisual> = {
   paused: { color: '#6b6b72', label: '已暂停', labelKey: 'blueprint:status.paused' },
   done: { color: '#d7d7db', label: '已完成', labelKey: 'blueprint:status.done' },
   archived: { color: '#4a4a4e', label: '已归档', labelKey: 'blueprint:status.archived' }
+}
+
+/** planche 纸面映射：墨阶明暗 + 朱红在途 + 深绿完成 + 赭黄修Bug/阻塞。 */
+const PLANCHE_STATUS_VISUALS: Record<BlueprintNodeStatus, StatusVisual> = {
+  'not-started': { color: 'rgba(28, 52, 59, 0.38)', label: '未开始', labelKey: 'blueprint:status.notStarted' },
+  planning: { color: 'rgba(28, 52, 59, 0.62)', label: '规划中', labelKey: 'blueprint:status.planning' },
+  'in-progress': { color: '#D43D2A', label: '进行中', labelKey: 'blueprint:status.inProgress' },
+  testing: { color: 'rgba(28, 52, 59, 0.62)', label: '测试中', labelKey: 'blueprint:status.testing' },
+  'bug-fixing': { color: '#A86F0B', label: '修Bug', labelKey: 'blueprint:status.bugFixing' },
+  blocked: { color: '#1C343B', label: '阻塞', labelKey: 'blueprint:status.blocked' },
+  paused: { color: 'rgba(28, 52, 59, 0.38)', label: '已暂停', labelKey: 'blueprint:status.paused' },
+  done: { color: '#2E6B5E', label: '已完成', labelKey: 'blueprint:status.done' },
+  archived: { color: 'rgba(28, 52, 59, 0.38)', label: '已归档', labelKey: 'blueprint:status.archived' }
+}
+
+/** 主题感知读取：浅色基底统一走纸面映射，调用方零改动自动跟随。 */
+export function getBlueprintStatusVisual(
+  status: BlueprintNodeStatus,
+  theme: unknown = useThemeStore.getState().theme,
+): StatusVisual {
+  if (getThemeBase(theme) === 'light') return PLANCHE_STATUS_VISUALS[status] ?? PLANCHE_STATUS_VISUALS['not-started']
+  return STATUS_VISUALS[status] ?? STATUS_VISUALS['not-started']
 }
 
 /** 菜单展示顺序 */

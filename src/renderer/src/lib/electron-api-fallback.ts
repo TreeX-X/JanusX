@@ -1,5 +1,6 @@
 import { UPDATER_RELEASES_URL } from '../../../shared/ipc/updater'
 import { EXPERIMENTAL_ENABLED_ALL } from '../../../shared/ipc/experimental'
+import { DEFAULT_APP_THEME } from '../../../shared/ipc/theme'
 import type { ExternalCliToolId } from '../../../shared/ipc/external-cli'
 
 export function installElectronApiFallback(): void {
@@ -324,6 +325,11 @@ export function installElectronApiFallback(): void {
     experimental: {
       get: () => Promise.resolve({ ...EXPERIMENTAL_ENABLED_ALL }),
       update: (settings) => Promise.resolve({ ...EXPERIMENTAL_ENABLED_ALL, ...settings }),
+    },
+    theme: {
+      get: () => Promise.resolve(DEFAULT_APP_THEME),
+      update: (theme) => Promise.resolve(theme),
+      onChanged: () => () => {},
     },
     updater: {
       getState: () => Promise.resolve({

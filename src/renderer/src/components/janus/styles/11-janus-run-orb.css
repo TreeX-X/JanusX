@@ -290,9 +290,10 @@
   cursor: pointer;
 }
 
+/* 交互约定（与红灯关闭统一）：× 常显即关闭 affordance，悬浮不变色不变形，直接点即可。 */
 .janus-run-orb-popover-close:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.28);
+  color: #999;
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .janus-run-orb-popover-error {
