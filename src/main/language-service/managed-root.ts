@@ -1,4 +1,4 @@
-import { isAbsolute, join, resolve } from 'path'
+import { isAbsolute, join, resolve } from 'node:path'
 
 const JANUSX_WINDOWS_USER_DATA_NAME = 'JanusX'
 const LANGUAGE_SERVICE_MANAGED_ROOT_SEGMENTS = ['janusx', 'language-services'] as const

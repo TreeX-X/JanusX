@@ -1,7 +1,7 @@
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 import { app, type BrowserWindow } from 'electron'
-import { join } from 'path'
-import { randomUUID } from 'crypto'
+import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import type {
   FeishuControlStatus,
   FeishuRemoteProviderConfig,

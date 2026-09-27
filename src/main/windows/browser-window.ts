@@ -1,5 +1,5 @@
 import { BrowserWindow, shell } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import { loadRendererWindow } from './renderer-loader'
 
 /**

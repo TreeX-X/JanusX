@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import { readdir, realpath, stat } from 'fs/promises'
-import { extname, join, resolve, sep } from 'path'
+import { readdir, realpath, stat } from 'node:fs/promises'
+import { extname, join, resolve, sep } from 'node:path'
 import { FILE_CHANNELS } from '../../shared/ipc/workspace'
 import type { WorkspaceSourceFile, WorkspaceSourceFilesResult } from '../../shared/ipc/workspace'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/shell-runtime'

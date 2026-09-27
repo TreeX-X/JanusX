@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/2026-09-18-officecli-bundled--02b7c101.md
-import { spawn, type ChildProcess } from 'child_process'
-import { join } from 'path'
-import { readFile, realpath, stat } from 'fs/promises'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { join } from 'node:path'
+import { readFile, realpath, stat } from 'node:fs/promises'
 import { OFFICECLI_BUNDLED_VERSION, resolveBundledOfficecliBinary } from './office-bundled-path'
 import { buildOfficeAgentSession } from './office-agent-policy'
 import {

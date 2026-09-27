@@ -1,6 +1,6 @@
 import { type BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import { join } from 'path'
+import { join } from 'node:path'
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))

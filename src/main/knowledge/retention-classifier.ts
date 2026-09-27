@@ -1,4 +1,4 @@
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 import type { KnowledgeSource, Observation, ObservationType, RetentionClass } from '../../shared/knowledge'
 
 export interface RetentionClassification {

@@ -1,6 +1,6 @@
-import { readdir, open, readFile, stat } from 'fs/promises'
-import { isAbsolute, join } from 'path'
-import os from 'os'
+import { readdir, open, readFile, stat } from 'node:fs/promises'
+import { isAbsolute, join } from 'node:path'
+import os from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
 

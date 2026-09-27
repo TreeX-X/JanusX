@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { readFile } from 'fs/promises'
-import { delimiter, join, resolve } from 'path'
+import { readFile } from 'node:fs/promises'
+import { delimiter, join, resolve } from 'node:path'
 import type { ExternalCliToolDescriptor } from './tool-registry'
 import { claudeKnownBinDirs, findExecutableOnPath, quotePowerShellPath, readPathValue } from './cli-detector'
 

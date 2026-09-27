@@ -15,9 +15,9 @@
  *  - 无默认 LLM 时安全降级（返回空候选数组 + 原因，不抛错），对齐 analyzer.ts:552-562。
  *    模型失败/超时/非法输出同样降级返回，由 llm-stage 转为队列 `llm` 阶段失败账本。
  */
-import { randomUUID } from 'crypto'
-import { appendFile, mkdir, readFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import type {
   CandidateFact,

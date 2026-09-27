@@ -5,8 +5,8 @@
  * versions. Private by default; no team/roundtable/remote/MCP surfacing.
  * Writes serialize through a SerialQueue and audit `user_profile_updated`.
  */
-import { mkdir, readFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { mkdir, readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import type { UserProfile } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'

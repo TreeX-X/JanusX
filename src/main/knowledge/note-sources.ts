@@ -1,5 +1,5 @@
 // Note: host reads own wiki provenance — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
-import { createHash, randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { harnessNoteService } from '../harness/service'
 import { resolveWorkspaceIdentity, workspacePathKey } from './workspace-identity'
 import { knowledgeTruthService } from './truth-service'
@@ -71,7 +71,10 @@ export async function wikiWorkspace(rootPath: string) {
   return { ...identity, workspaceId: identity.fallback ? `checkout-${createHash('sha256').update(workspacePathKey(rootPath)).digest('hex')}` : identity.workspaceId }
 }
 
-export async function noteWikiPages(rootPath: string, uri: string): Promise<NoteWikiPage[]> {
+// Note: `_rootPath` is reserved for future workspace scoping and keeps the
+// IPC input shape stable; reverse-link lookup stays global so one Note URI
+// resolves every citing page across workspaces (see the same-slug test).
+export async function noteWikiPages(_rootPath: string, uri: string): Promise<NoteWikiPage[]> {
   if (!URI.test(uri)) throw new Error('A full Note URI is required')
   const { wikiPages } = await knowledgeTruthService.list()
   return Promise.all(wikiPages.filter(p => p.sourceNoteRefs?.some(ref => ref.uri === uri)).map(async page => ({

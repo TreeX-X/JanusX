@@ -1,5 +1,5 @@
 import { BrowserWindow, nativeImage } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import { installProductionCsp } from '../bootstrap/session'
 import { loadRendererWindow } from './renderer-loader'
 

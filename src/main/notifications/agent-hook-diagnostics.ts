@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { appendFile, mkdir, rename, rm, stat, truncate, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { appendFile, mkdir, rename, rm, stat, truncate, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import type { AgentHookCoordinatorEvent, AgentHookPayload } from './agent-hook-types'
 
 const MAX_LOG_BYTES = 5 * 1024 * 1024

@@ -1,8 +1,8 @@
 import { app, type Session } from 'electron'
-import { mkdirSync, unlinkSync, writeFileSync } from 'fs'
-import { readdir, rm, stat } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { readdir, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { synchronizeInstalledLlmConfig } from '../llm/development-config-sync'
 
 const OFFICE_FRAME_CSP = "frame-src 'self' http://127.0.0.1:*; object-src 'none'; base-uri 'self'"

@@ -1,5 +1,5 @@
 // Note: session supervision through one gateway, never the machine — see .agents/notes/2026-09-04-remote-control--8ac68f05.md
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 import type { CompanionActionTokens } from './action-token'
 import type { CompanionAuditStore } from './audit-store'
 import type { CompanionBinding, CompanionBindingStore } from './binding-store'

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import os from 'os'
+import os from 'node:os'
 import { JANUS_PERSONA } from '../shared/janus/persona'
 import { OFFICE_EVENT_CHANNELS, OFFICE_INVOKE_CHANNELS, type OfficeAPI } from '../shared/office'
 import {

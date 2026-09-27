@@ -1,6 +1,6 @@
-import { createHash, randomUUID } from 'crypto'
-import { mkdir, open, readFile, realpath, rename, rm, stat, writeFile } from 'fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path'
+import { createHash, randomUUID } from 'node:crypto'
+import { mkdir, open, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type {
   LanguageServiceDescriptor,
   LanguageServiceInstallerProgressEvent,

@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { appendFileSync, mkdirSync, renameSync, rmSync, statSync, truncateSync } from 'fs'
-import { join } from 'path'
+import { appendFileSync, mkdirSync, renameSync, rmSync, statSync, truncateSync } from 'node:fs'
+import { join } from 'node:path'
 
 const MAX_LOG_BYTES = 5 * 1024 * 1024
 

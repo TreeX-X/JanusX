@@ -5,9 +5,9 @@
  * before storage; harvest marks expiry and audits `user_episode_harvested`.
  * Private by default; shared surfaces require explicit publish (M3).
  */
-import { randomUUID } from 'crypto'
-import { mkdir, readFile, readdir } from 'fs/promises'
-import { join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile, readdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { UserEpisode } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'

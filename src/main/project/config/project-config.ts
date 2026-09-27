@@ -3,9 +3,9 @@
  * 项目配置读写和管理的核心实现
  */
 
-import { readFile, writeFile, mkdir } from 'fs/promises'
-import { join, resolve } from 'path'
-import { existsSync } from 'fs'
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
 import type { LaunchConfig, LaunchConfiguration, ValidationResult } from '../types'
 import { ProjectType } from '../types'
 

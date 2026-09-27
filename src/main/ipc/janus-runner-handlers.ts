@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { agentStreamManager } from '../janus-runner/stream-manager'
 import { notifyAgentEvent } from '../notifications/agent-notifier'
 import { configService } from '../config/service'

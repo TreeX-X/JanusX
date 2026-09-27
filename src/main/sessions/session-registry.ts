@@ -3,9 +3,9 @@
 // .agents/notes/2026-09-21-workspace-sessions-v1--b3704d91.md
 // Note: external provider sessions import by transcript backfill — see
 // .agents/notes/2026-09-22-external-session-backfill--18fffeff.md
-import { randomUUID } from 'crypto'
-import { copyFile, readFile, rm } from 'fs/promises'
-import { join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { copyFile, readFile, rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import { app } from 'electron'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type {

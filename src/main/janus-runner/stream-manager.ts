@@ -1,5 +1,5 @@
-import { spawn } from 'child_process'
-import { randomUUID } from 'crypto'
+import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import type { AgentEngine, AgentEvent, AgentSpawnOptions, StreamSession } from './types'
 import { normalizeAgentApprovalMode } from '../../shared/ipc/agent-runtime'
 import { resolveCLIPath } from './cli-resolver'

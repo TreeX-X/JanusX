@@ -4,8 +4,8 @@
  * @module @janusx/llm-core/proxy
  */
 
-import http from 'http'
-import https from 'https'
+import http from 'node:http'
+import https from 'node:https'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici'
 

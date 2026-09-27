@@ -1,10 +1,10 @@
 // Note: GitLab self-hosted provider over instance v4 API — see
 // .agents/notes/2026-09-21-gitlab-provider-reviews--640a69dd.md
-import { execFile } from 'child_process'
-import { request as httpRequest } from 'http'
-import { request as httpsRequest } from 'https'
-import { URL } from 'url'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
+import { URL } from 'node:url'
+import { promisify } from 'node:util'
 import type {
   FailedCheckLog,
   HostedCheck,

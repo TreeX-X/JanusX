@@ -34,6 +34,10 @@ extensions:
 
 Twenty-four proposal notes sit outside the blueprint graph in the old note shape: twelve feature proposals, nine architecture directions, two research surveys, and one process boundary, plus three unification designs and two already-landed twins. The graph cannot show, filter, or edit what it cannot parse, so upcoming features stay invisible in the very view built to organize them. Bulk-converting everything would also drag landed history, superseded directions, and raw research into the active graph with fabricated acceptance.
 
+## Proposal
+
+Convert the thirteen current proposals into `requirement` drafts in place: same paths so relative links keep working, new UUID identities, first-proposed dates kept, folder-mapped classes, and the `Status:` line removed because the frontmatter lifecycle supersedes it. Keep body prose byte-identical and claim no acceptance. Exclude with recorded reasons: unification designs stay `proposed` until the S9 cutover, landed twins keep their implemented records, surveys stay working notes, stale/landed ToB and CLI notes stay out, and no relations ship (the graph starts flat; wiring happens in the editor).
+
 ## Decision
 
 Thirteen current proposals become `requirement` drafts in place: same paths so relative links keep working, new UUID identities, first-proposed dates kept, folder-mapped classes, and the `Status:` line removed because the frontmatter lifecycle supersedes it. Body prose stays byte-identical; draft needs only a non-empty `Problem`, so no acceptance is invented and none is claimed. All thirteen validate clean under the shared parser. Excluded with reasons: the three unification designs stay `proposed` until the S9 cutover passes, the two landed twins already have implemented records, the two surveys stay working notes because research is not a requirement, the two ToB notes and the CLI scope note stay out as stale or landed. No relations ship with the batch: semantic edges are never derived from prose, so the graph starts flat and wiring happens in the blueprint editor. Git history is the archive; nothing was deleted or moved.
@@ -45,6 +49,12 @@ Thirteen current proposals become `requirement` drafts in place: same paths so r
 - Move files into lifecycle-free note directories: matches the future layout, but breaks every relative link the graph and agents already use; paths stay until a cutover renames them with link repair.
 - Derive `governed-by` and `depends-on` edges from prose links: richest first graph, but reading links are not semantic edges and the contract forbids inferring them; explicit wiring only.
 - Do nothing / reuse — leave proposals outside the graph; rejected because the user confirmed this batch for review and upcoming features belong in the organizing view.
+
+## Risks
+
+- Drafts carry no acceptance and no relations, so progress and dependency views show unstarted nodes until proposals mature and someone wires them by hand.
+- Promotion to `proposed` requires the harness sections written by hand per note; a bulk pass would fabricate the standard.
+- Staying flat at import means the graph understates real dependencies until editors wire them; reviewers must not mistake flat for independent.
 
 ## Consequences
 

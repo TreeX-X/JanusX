@@ -1,6 +1,6 @@
-import { watch, type FSWatcher } from 'fs'
-import { open, stat } from 'fs/promises'
-import { basename, dirname } from 'path'
+import { watch, type FSWatcher } from 'node:fs'
+import { open, stat } from 'node:fs/promises'
+import { basename, dirname } from 'node:path'
 import type { AgentEngine } from '../janus-runner/types'
 
 /**

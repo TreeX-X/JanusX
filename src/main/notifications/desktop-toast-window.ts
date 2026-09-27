@@ -1,7 +1,7 @@
 // Note: local reminders leave system notifications — see .agents/notes/2026-07-05-desktop-toast--671574ba.md
 // Note: transparent toast needs pre-paint transparent page, solid card, shadowless window — see .agents/notes/2026-07-05-desktop-toast--671574ba.md
 import { BrowserWindow, app, ipcMain, screen, type IpcMainEvent } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 import { loadRendererWindow } from '../windows/renderer-loader'
 

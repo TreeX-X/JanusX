@@ -1,7 +1,7 @@
 import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { join, sep } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HarnessNoteService, assertNoLocalLeak } from '../../src/main/harness/service'
 import { resolveProjectCheckout } from '../../src/main/harness/maintenance-apply'
@@ -238,9 +238,15 @@ describe('S9 acceptance, JanusX slice', () => {
     await fs.writeFile(join(rootB, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'S9-twin', profile: SUPPORTED_HARNESS_PROFILE }))
     await fs.writeFile(join(rootB, '.agents', 'notes', `2026-09-18-race--${REQ_ID.slice(0, 8)}.md`), REQUIREMENT)
     const blueprintId = (await svc.projectView(rootA)).blueprint.id
-    expect((await svc.projectView(rootB)).blueprint.id).toBe(blueprintId)
-    await expect(resolveProjectCheckout(svc, blueprintId, undefined, async () => [rootA, rootB])).rejects.toThrow(
-      /多个本机 checkout/,
-    )
+    // E0-1: graph ids are checkout-scoped rootKey hashes, so twin checkouts
+    // of one repo project to different ids; cross-checkout ambiguity is
+    // impossible by id scan. The multiple-checkout guard stays as
+    // defense-in-depth for one checkout listed twice under different path
+    // spellings, and a wrong explicit binding still refuses to fall through.
+    expect((await svc.projectView(rootB)).blueprint.id).not.toBe(blueprintId)
+    await expect(
+      resolveProjectCheckout(svc, blueprintId, undefined, async () => [rootA, rootA + sep]),
+    ).rejects.toThrow(/多个本机 checkout/)
+    await expect(resolveProjectCheckout(svc, blueprintId, rootB)).rejects.toThrow(/绑定目录不可用或不匹配/)
   })
 })

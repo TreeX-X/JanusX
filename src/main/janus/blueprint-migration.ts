@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { Blueprint, BlueprintFeatureItem, BlueprintNode } from './types'
 import { sanitizeRelations } from '../../shared/janus/relations'
 

@@ -9,9 +9,9 @@
  * observation, or episode source, secrets are redacted before storage, and
  * every mutation audits.
  */
-import { randomUUID } from 'crypto'
-import { appendFile, mkdir } from 'fs/promises'
-import { dirname, join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { appendFile, mkdir } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { redactHighConfidenceSecrets, type RegisteredTool, type ToolRegistry } from '@janus-agent/agent-core'
 import type { CandidateFact, MemoryFact } from '../../../../shared/knowledge'
 import { knowledgeRootPath } from '../../../knowledge/constants'

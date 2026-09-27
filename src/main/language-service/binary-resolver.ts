@@ -1,5 +1,5 @@
-import { delimiter, isAbsolute, resolve } from 'path'
-import { stat } from 'fs/promises'
+import { delimiter, isAbsolute, resolve } from 'node:path'
+import { stat } from 'node:fs/promises'
 import type { LanguageServiceDescriptor } from '../../shared/ipc/language-service'
 
 interface BinaryResolverDependencies {

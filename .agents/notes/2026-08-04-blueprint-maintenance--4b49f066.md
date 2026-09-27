@@ -34,6 +34,10 @@ extensions:
 
 A model with direct blueprint write access mutates shared planning truth without review. Conversation-derived requirements, node moves, relation edits, and deletions need a path from discussion to durable state that no silent write can bypass.
 
+## Proposal
+
+Keep proposal and execution separate: the agent emits immutable changesets and never writes the formal blueprint mid-analysis. Users preview, select, and approve each changeset; the main side validates and applies atomically with audit and reverse operations for undo. Bind work to explicitly authorized workspace evidence, project background task status through the island, and run maintenance sessions under the same bounded runtime shape as chat (bounded steps, steering, tool traces, knowledge recall).
+
 ## Decision
 
 Proposal and execution stay separate. The agent emits immutable changesets and never writes the formal blueprint mid-analysis. Users preview, select, and approve; the main side validates and applies atomically. Work binds to explicitly authorized workspace evidence, background analysis projects task status through the island, and every formal change carries audit with reverse operations for undo. Maintenance sessions run under the same runtime shape as chat: bounded steps, steering, tool traces, and knowledge recall.
@@ -43,6 +47,12 @@ Proposal and execution stay separate. The agent emits immutable changesets and n
 - Direct model writes with audit after the fact — strongest case removes approval friction. The driver that rules it out is unreviewed mutation of shared truth; logs cannot unwrite a bad merge.
 - Chat-only suggestions without changesets — strongest case needs no machinery. The driver that rules it out is the missing tail: no atomic apply, no undo, no audit trail.
 - Do nothing / reuse manual node editing — staying put keeps the blueprint hand-tended. The cost is drift between workspace evidence and planning state.
+
+## Risks
+
+- Approval friction: every formal change waits on explicit user approval, so long maintenances stall when the user is away.
+- Session budgets and trace caps can be exhausted by extended maintenance runs.
+- Task state lives in memory plus audit files with no database behind it; a crash loses in-flight session state.
 
 ## Consequences
 

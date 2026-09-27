@@ -92,8 +92,9 @@ describe('R3 host Note provenance', () => {
   it('reports unbound, ambiguous bindings, duplicate identities, and unknown provenance distinctly', async () => {
     expect((await readWikiNote(root, uri(a, other))).status).toBe('unbound')
     const cross = await checkout(other)
+    const crossTwin = await checkout(other)
     await harnessNoteService.setBinding(root, { repoId: other, checkoutId: 'one', path: cross, selected: false })
-    await harnessNoteService.setBinding(root, { repoId: other, checkoutId: 'two', path: root, selected: false })
+    await harnessNoteService.setBinding(root, { repoId: other, checkoutId: 'two', path: crossTwin, selected: false })
     expect((await readWikiNote(root, uri(a, other))).status).toBe('ambiguous')
     await writeFile(join(root, '.agents', 'notes', 'duplicate.md'), note())
     expect((await readWikiNote(root, uri())).status).toBe('ambiguous')

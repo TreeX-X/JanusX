@@ -1,5 +1,5 @@
-import { homedir } from 'os'
-import { join } from 'path'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 export const KNOWLEDGE_SCHEMA_VERSION = 1 as const
 export const KNOWLEDGE_ROOT_DIR = 'knowledge'

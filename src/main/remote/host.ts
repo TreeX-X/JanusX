@@ -7,10 +7,10 @@
  */
 
 // Note: same-account gate with LAN pairing codes — see .agents/notes/2026-08-20-tob-lan-remote--97efe07c.md
-import { randomBytes, randomUUID } from 'crypto'
-import { createHash } from 'crypto'
-import { readFile, writeFile, mkdir } from 'fs/promises'
-import { dirname, join } from 'path'
+import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type {
   CompanionCommand,

@@ -1,4 +1,4 @@
-import { createHash } from 'crypto'
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { CompanionCommand } from '../../companion/contracts'
 import type { FeishuInboundCardAction, FeishuInboundMessage } from './types'

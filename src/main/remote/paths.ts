@@ -4,7 +4,7 @@
  *              数据根支持注入，测试可覆盖（同 team paths 模式）。
  */
 
-import { join } from 'path'
+import { join } from 'node:path'
 import { app } from 'electron'
 
 let dataRootOverride: string | null = null

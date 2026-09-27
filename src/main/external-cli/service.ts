@@ -1,6 +1,6 @@
-import { stat } from 'fs/promises'
-import { homedir } from 'os'
-import { delimiter } from 'path'
+import { stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { delimiter } from 'node:path'
 import { execa } from 'execa'
 import type {
   ExternalCliApplyResult,

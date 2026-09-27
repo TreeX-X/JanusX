@@ -13,7 +13,7 @@ import { RemotePeerServer, type PeerServerInfo } from './peer-server'
 import { createLocalViewPorts, type LocalViewPorts } from './view-ports'
 import { terminalManager } from '../terminal/manager'
 import { app } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 
 let server: RemotePeerServer | null = null
 let serverDeviceId: string | null = null

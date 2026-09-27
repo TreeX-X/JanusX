@@ -1,8 +1,8 @@
-import { createHash, randomUUID } from 'crypto'
-import { gzip, gunzip } from 'zlib'
-import { promisify } from 'util'
-import { appendFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'fs/promises'
-import { basename, join, resolve } from 'path'
+import { createHash, randomUUID } from 'node:crypto'
+import { gzip, gunzip } from 'node:zlib'
+import { promisify } from 'node:util'
+import { appendFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises'
+import { basename, join, resolve } from 'node:path'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type {
   AuditAction,

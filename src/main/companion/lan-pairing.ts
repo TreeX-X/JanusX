@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto'
+import { randomBytes } from 'node:crypto'
 
 /**
  * @file LAN pairing codes (M3 remote-control prerequisite)

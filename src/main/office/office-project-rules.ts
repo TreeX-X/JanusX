@@ -1,5 +1,5 @@
-import { mkdir, readFile, realpath, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 
 export const OFFICE_RULE_START = '<!-- JANUSX:OFFICECLI:START -->'
 export const OFFICE_RULE_END = '<!-- JANUSX:OFFICECLI:END -->'

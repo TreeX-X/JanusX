@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import { readFileSync, renameSync, writeFileSync } from 'fs'
-import { dirname, join } from 'path'
-import { mkdirSync } from 'fs'
+import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { mkdirSync } from 'node:fs'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
 import { getRuntimeTelemetrySnapshot } from './history'
 

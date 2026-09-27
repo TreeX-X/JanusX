@@ -7,9 +7,9 @@
  *  - 候选 JSONL 小体量：整文件读 → 改 status → 原子 rewrite。
  *  - 不触碰 extract 提示词、search 算法、vector/MCP。
  */
-import { rename, writeFile, mkdir, readFile, unlink } from 'fs/promises'
-import { dirname, join } from 'path'
-import { createHash } from 'crypto'
+import { rename, writeFile, mkdir, readFile, unlink } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { createHash } from 'node:crypto'
 import type {
   AuditEvent,
   CandidateFact,

@@ -1,5 +1,5 @@
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import type { KnowledgeContractsSnapshot } from '../../shared/knowledge'
 import type { KnowledgeBootstrapResult } from '../../shared/ipc/knowledge'
 export type { KnowledgeBootstrapResult } from '../../shared/ipc/knowledge'

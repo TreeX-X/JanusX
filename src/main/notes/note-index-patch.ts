@@ -11,7 +11,7 @@
  *  mutations, so sibling-side algorithm changes surface as test failures.
  *  See .agents/notes/2026-09-26-note-graph-r7-perf--58f0e24f.md
  */
-import { join, resolve } from 'path'
+import { join, resolve } from 'node:path'
 import {
   checkAcyclic,
   parseNote,
@@ -86,7 +86,7 @@ export async function probeChangedPaths(root: string, index: NoteIndex): Promise
   return { changed, removed, scanDiagnostics: diagnostics, complete }
 }
 
-function classifyRead(absPath: string, relPath: string, text: string, sha256: string): IndexEntry {
+function classifyRead(relPath: string, text: string, sha256: string): IndexEntry {
   if (!claimsHarnessSchema(text)) {
     const view = readMarkdownView(text)
     const classification = view.headings.find((heading) => heading.depth === 1)?.text.startsWith('Agent Note:') ? 'legacy' : 'foreign'
@@ -137,7 +137,7 @@ export async function patchNoteIndex(
     let entry: IndexEntry
     try {
       const read = await readNoteFile(absPath)
-      entry = classifyRead(absPath, relPath, read.text, read.sha256)
+      entry = classifyRead(relPath, read.text, read.sha256)
     } catch {
       entry = { relPath, sha256: '', sourceHash: null, classification: 'unreadable', diagnostics: [diag('IO_ERROR', `unreadable: ${relPath}`, relPath)] }
     }

@@ -166,7 +166,11 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.setViewportSize({ width: 1200, height: 800 })
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await page.getByRole('button', { name: '稍后再说，先用本地功能' }).click()
+    // 团队登录挡板仅在 teamCollab 实验开关开启时自动弹出（默认关闭）；
+    // 开关关闭时工作区行直接可见，无需跳过。
+    const skipGate = page.getByRole('button', { name: '稍后再说，先用本地功能' })
+    await skipGate.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => undefined)
+    if (await skipGate.count()) await skipGate.click()
 
     const workspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace' }).first()
     await expect(workspaceRow).toBeVisible()

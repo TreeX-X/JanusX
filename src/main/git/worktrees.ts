@@ -4,12 +4,12 @@
 // .agents/notes/2026-09-21-worktree-create-delete--636764b9.md
 // Note: creation metadata plus local Ship diff/merge/abort — see
 // .agents/notes/2026-09-21-worktree-ship-merge--7822452e.md
-import { execFile, spawn, type ChildProcess } from 'child_process'
-import { createHash } from 'crypto'
-import { realpathSync } from 'fs'
-import { access, copyFile, lstat, mkdir, readFile, rm, stat, symlink, writeFile } from 'fs/promises'
-import { basename, dirname, join, resolve } from 'path'
-import { promisify } from 'util'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { realpathSync } from 'node:fs'
+import { access, copyFile, lstat, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, resolve } from 'node:path'
+import { promisify } from 'node:util'
 import type { RepoIdentity, WorktreeInfo } from '../../shared/ipc/worktree'
 import { worktreeMetaStore } from './worktree-meta'
 

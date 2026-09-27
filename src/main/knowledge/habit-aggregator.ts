@@ -6,7 +6,7 @@
  * scope=user. Ebbinghaus decay with retrieval reheat keeps stale habits from
  * guiding silently; evidence merging keeps provenance.
  */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { CandidateFact, MemoryFact, Observation } from '../../shared/knowledge'
 import { knowledgeAuditService } from './audit-service'
 

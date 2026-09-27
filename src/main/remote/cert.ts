@@ -5,9 +5,9 @@
  *              同账号身份鉴权仍走团队会话 JWT，本证书只解决信道加密。
  */
 
-import { createHash } from 'crypto'
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import { dirname } from 'path'
+import { createHash } from 'node:crypto'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import selfsigned from 'selfsigned'
 import { remotePeerCertFile, remotePeerKeyFile } from './paths'
 

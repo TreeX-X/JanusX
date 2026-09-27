@@ -1,6 +1,6 @@
-import { createHash, randomUUID } from 'crypto'
-import { appendFile, mkdir, readFile, rename, writeFile } from 'fs/promises'
-import { dirname } from 'path'
+import { createHash, randomUUID } from 'node:crypto'
+import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type { CompanionCommand, CompanionRequestContext, CompanionResult } from './contracts'
 
 export interface CompanionAuditRecord {

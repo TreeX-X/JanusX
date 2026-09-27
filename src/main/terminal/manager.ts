@@ -1,9 +1,9 @@
 // Note: console configuration matching the reference terminal — see .agents/notes/2026-06-22-ime-candidate-drift--d50b6b23.md
 import { spawn, type IPty } from 'node-pty'
-import { spawn as spawnProcess } from 'child_process'
-import { existsSync, readdirSync } from 'fs'
-import { createRequire } from 'module'
-import { delimiter, dirname, join } from 'path'
+import { spawn as spawnProcess } from 'node:child_process'
+import { existsSync, readdirSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { delimiter, dirname, join } from 'node:path'
 import type { TerminalConfig, TerminalInstance } from './types'
 import { logTerminalDiagnostic } from './diagnostics'
 

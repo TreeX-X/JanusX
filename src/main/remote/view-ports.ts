@@ -6,9 +6,9 @@
  *              被控 peer HTTPS 与本地 Web 网关共用同一实现，保证两端同形。
  */
 
-import { readdir, readFile } from 'fs/promises'
-import { join } from 'path'
-import { spawn } from 'child_process'
+import { readdir, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { spawn } from 'node:child_process'
 import type {
   RemoteFileNode,
   RemoteTerminalView,

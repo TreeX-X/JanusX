@@ -7,12 +7,12 @@
  *              Electron 依赖全部经端口注入，本模块可单测。
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http'
-import { request as httpRequest } from 'http'
-import { readFile } from 'fs/promises'
-import { createRequire } from 'module'
-import { dirname, join } from 'path'
-import { URL } from 'url'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { request as httpRequest } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { URL } from 'node:url'
 import type { CompanionCommand } from '../companion/contracts'
 import type { TeamRole } from '../../shared/team/types'
 import type { LocalViewPorts } from '../remote/view-ports'

@@ -8,10 +8,10 @@
  *              模式与 companion/binding-store.ts、knowledge/audit-service.ts 一致。
  */
 
-import { randomUUID } from 'crypto'
-import { AsyncLocalStorage } from 'async_hooks'
-import { mkdir, rename, writeFile } from 'fs/promises'
-import { dirname } from 'path'
+import { randomUUID } from 'node:crypto'
+import { AsyncLocalStorage } from 'node:async_hooks'
+import { mkdir, rename, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 export async function writeFileAtomic(filePath: string, data: string | Buffer): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })

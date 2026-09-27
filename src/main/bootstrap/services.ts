@@ -1,5 +1,5 @@
 import { app, type BrowserWindow } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import { subscribeWorkspaceWatcher } from '../ipc/handlers'
 import { OfficeArtifactIndex } from '../office/office-artifact-index'
 import { OfficeWatchPool } from '../office/office-watch-pool'

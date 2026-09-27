@@ -1,5 +1,5 @@
-import { extname, isAbsolute, join } from 'path'
-import { lstat, readdir } from 'fs/promises'
+import { extname, isAbsolute, join } from 'node:path'
+import { lstat, readdir } from 'node:fs/promises'
 import {
   OFFICE_EXTENSIONS,
   type OfficeFileEntry,

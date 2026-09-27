@@ -39,6 +39,10 @@ before migration strands unmigrated tasks with no path forward. Migration
 must be per-blueprint, reviewable before writing, and archival instead of
 deletion.
 
+## Proposal
+
+Convert one legacy blueprint at a time into draft Notes in the bound project: epics and features become requirements, tasks and open issues become task drafts, technical choices become governed-by decisions, pending candidates become ideas, and multiple roots aggregate under a fresh initiative. Re-anchor relations to the new identities, fold resolved issues into evidence, and keep a migration report with legacy statuses, audit history, and skipped content. Preview never writes; apply validates every note fail-closed, writes once through the managed transaction, then archives the JSON source. Expose `migratePreview`/`migrateApply` over IPC with checkout resolution and offer preview plus confirm in the legacy panel branch.
+
 ## Decision
 
 `src/main/janus/blueprint-migrate.ts` converts one legacy blueprint into
@@ -70,6 +74,12 @@ the legacy panel branch offers preview plus confirm.
   fabricated scope and checks poison future baselines.
 - Do nothing / reuse: keep retyping or keep the loop forever; rejected
   because the loop exit is authorized and waiting on exactly this entry.
+
+## Risks
+
+- Archived tasks cannot carry fabricated execution contracts, so resolved-issue evidence may read thinner than the original loop showed.
+- A failed apply mid-transaction must leave no half-written notes; the fail-closed validation plus single managed write is the only guard.
+- Deleting the old loop before migration strands unmigrated tasks; removal must wait for the migration report to confirm completion.
 
 ## Consequences
 

@@ -12,7 +12,7 @@
  *  No Electron here: checkout roots arrive from callers, workspace scanning
  *  arrives as an injected lister. No model calls, no discussion loop.
  */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { Blueprint } from '../../shared/janus/types'
 import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
 import { translateMaintenanceOpsToHarness } from './maintenance-bridge'

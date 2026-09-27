@@ -1,5 +1,5 @@
-import { randomBytes } from 'crypto'
-import http, { type IncomingMessage, type ServerResponse } from 'http'
+import { randomBytes } from 'node:crypto'
+import http, { type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AgentHookPayload } from './agent-hook-types'
 
 const MAX_BODY_BYTES = 1024 * 1024

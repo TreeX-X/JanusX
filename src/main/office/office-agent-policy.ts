@@ -1,4 +1,4 @@
-import { delimiter } from 'path'
+import { delimiter } from 'node:path'
 import type { AgentEngine } from '../janus-runner/types'
 import { OFFICE_PROJECT_POLICY } from './office-project-rules'
 

@@ -1,7 +1,7 @@
 import { app, ipcMain, type BrowserWindow } from 'electron'
-import { watch, type FSWatcher } from 'fs'
-import { access } from 'fs/promises'
-import { join } from 'path'
+import { watch, type FSWatcher } from 'node:fs'
+import { access } from 'node:fs/promises'
+import { join } from 'node:path'
 import { WORKTREE_CHANNELS, type WorktreeCreateInput, type WorktreeDeleteInput } from '../../shared/ipc/worktree'
 import {
   abortMerge,

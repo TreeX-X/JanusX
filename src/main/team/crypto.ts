@@ -4,8 +4,8 @@
  *              不引入 bcrypt / jsonwebtoken 等 native 或第三方依赖。
  */
 
-import { createHmac, randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual } from 'crypto'
-import { promisify } from 'util'
+import { createHmac, randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual } from 'node:crypto'
+import { promisify } from 'node:util'
 
 const scrypt = promisify(scryptCb)
 const SCRYPT_KEYLEN = 64

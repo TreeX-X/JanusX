@@ -5,9 +5,9 @@
  *              `RemoteConnector` 接口，`RemoteClient`/单测回环逻辑原样复用。
  */
 
-import { request as httpsRequest } from 'https'
-import type { TLSSocket } from 'tls'
-import { randomUUID } from 'crypto'
+import { request as httpsRequest } from 'node:https'
+import type { TLSSocket } from 'node:tls'
+import { randomUUID } from 'node:crypto'
 import type { CompanionCommand, CompanionResult } from '../companion/contracts'
 import { TeamError } from '../team/service'
 import { derFingerprint } from './cert'

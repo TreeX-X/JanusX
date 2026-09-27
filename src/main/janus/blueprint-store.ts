@@ -17,9 +17,9 @@
  *              本文件只保留编排、缓存与图操作。
  */
 
-import { promises as fs } from 'fs'
-import { join, resolve } from 'path'
-import { randomUUID } from 'crypto'
+import { promises as fs } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { ReentrantAsyncLock } from '../lib/atomic-file'
 import {
   GLOBAL_BLUEPRINT_SCOPE,

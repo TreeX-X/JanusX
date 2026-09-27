@@ -1,7 +1,7 @@
 // Note: proposal and execution stay separate — see .agents/notes/2026-08-04-blueprint-maintenance--4b49f066.md
-import { randomUUID } from 'crypto'
-import { promises as fs } from 'fs'
-import { join, resolve } from 'path'
+import { randomUUID } from 'node:crypto'
+import { promises as fs } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { app, type BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { generateObject } from '../../llm/ai-runtime'

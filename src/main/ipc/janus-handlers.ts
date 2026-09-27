@@ -10,7 +10,7 @@
  */
 
 import { ipcMain } from 'electron'
-import { resolve } from 'path'
+import { resolve } from 'node:path'
 import { harnessNoteService } from '../harness/service'
 import { blueprintStore } from '../janus/blueprint-store'
 import { analyzer } from '../janus/analyzer'

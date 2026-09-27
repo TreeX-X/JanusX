@@ -8,8 +8,8 @@
  * 3. 返回检测结果和推荐配置
  */
 
-import { readdirSync, existsSync, readFileSync } from 'fs'
-import { join, resolve } from 'path'
+import { readdirSync, existsSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import type { DetectResult, LaunchConfiguration } from '../types'
 import { ProjectType } from '../types'
 import { detectByFeatures, getProjectSchema } from '../config/project-schemas'

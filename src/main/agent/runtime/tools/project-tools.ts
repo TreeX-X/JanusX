@@ -1,5 +1,5 @@
-import { readdir } from 'fs/promises'
-import { basename, isAbsolute, join, relative, resolve, sep } from 'path'
+import { readdir } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { ProjectConfig, ProjectDetector, ProjectType, detectByFeatures, getProjectSchema } from '../../../project'
 import type { LaunchConfig } from '../../../../shared/ipc/project'
 import { getProjectRunner } from '../../../project/runner/service'

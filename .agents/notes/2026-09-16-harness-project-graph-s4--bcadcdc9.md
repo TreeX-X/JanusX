@@ -34,6 +34,10 @@ extensions:
 
 Canvas edits, terminal edits, and future execution hosts reach the same project notes through separate write paths. Each path invents its own locking and conflict story, so concurrent saves lose bytes and crashed writes leave half-applied graphs. The canvas model also has no notion of file identity, expected hashes, or share-safe exports.
 
+## Proposal
+
+Establish HarnessNoteService (`src/main/harness/service.ts`) as the single managed gateway for project notes: checkout resolution, cached index with rescan, file watcher with change broadcast, transacted apply with idempotent operation records, local-only checkout bindings, and a whitelist share export that refuses machine paths, local state, and credentials. Project notes onto the Blueprint view model (`source: 'harness'`, per-node file identity plus last-seen digest) so canvas, detail, and list UI render unchanged; branch content operations by graph id in BlueprintStore; keep full read and write behavior for legacy JSON blueprints.
+
 ## Decision
 
 HarnessNoteService (`src/main/harness/service.ts`) is the single managed gateway: checkout resolve, cached index with rescan, file watcher with change broadcast, transacted apply with idempotent operation records, local-only checkout bindings, and whitelist share export that refuses machine paths, local state, and credentials. Notes project onto the Blueprint view model (`source: 'harness'`, per-node file identity plus last-seen digest) so the existing canvas, detail, and list UI render them unchanged. BlueprintStore branches content operations by graph id: project creates/updates/archive flow through the service transaction with optimistic file hashes, canvas layout persists to local-only UI state, and acceptance/feature arrays plus maintenance operations report HARNESS_MANAGED for their owning flows. Legacy JSON blueprints keep full read and write behavior for old data. The workbench gains a scope strip (repo identity, binding count, share export, conflict notice with reload); stale canvas saves surface HARNESS_CONFLICT instead of overwriting.
@@ -43,6 +47,12 @@ HarnessNoteService (`src/main/harness/service.ts`) is the single managed gateway
 - Rewrite the store around notes in one pass — strongest case is zero legacy lanes, but analyzer sessions, maintenance loops, candidate flows, and team policies all ride the current model mid-flight, and a flag-day rewrite strands them.
 - Keep a second JSON index beside the notes — strongest case is fast canvas reads with no model mapping, but two writable truths reintroduce the exact dual-edit drift this lane removes.
 - Do nothing / reuse — keep ad-hoc writes per surface; rejected because half-applied graphs already block unified acceptance.
+
+## Risks
+
+- Analyzer, maintenance, candidate, and team write paths stay on the legacy lane until their owning segments unify; two lanes coexist in the interim.
+- Checkouts without `harness.json` read fine but cannot mint note URIs, limiting cross-checkout references.
+- Canvas deletes archive instead of removing; project metadata stays read-only until the owning segments land.
 
 ## Consequences
 

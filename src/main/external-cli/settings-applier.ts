@@ -1,6 +1,6 @@
-import { homedir } from 'os'
-import { copyFile, mkdir, readdir, readFile, rm } from 'fs/promises'
-import { basename, dirname, join } from 'path'
+import { homedir } from 'node:os'
+import { copyFile, mkdir, readdir, readFile, rm } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 import type { ExternalCliApplyInput } from '../../shared/ipc/external-cli'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 

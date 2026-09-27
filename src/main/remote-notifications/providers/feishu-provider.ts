@@ -3,7 +3,7 @@ import type {
 } from '../../../shared/notifications'
 import type { CompanionCommand, CompanionRequestContext } from '../../companion/contracts'
 import type { CompanionTerminalMetadata } from '../../companion/session-state'
-import { basename } from 'path'
+import { basename } from 'node:path'
 import type {
   RemoteNotificationEvent,
   RemoteNotificationProvider,

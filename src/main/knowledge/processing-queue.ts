@@ -19,8 +19,8 @@
  *              internal `*Locked` helpers must only be called with the lock held.
  */
 
-import { mkdir, readFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { mkdir, readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import type { Observation } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'

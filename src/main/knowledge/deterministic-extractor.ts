@@ -13,9 +13,9 @@
  *              auto-accept policy applies at the end of the stage when enabled.
  */
 
-import { randomUUID } from 'crypto'
-import { mkdir, readFile, appendFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile, appendFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import type {
   CandidateFact,
   CandidateGraphEdge,

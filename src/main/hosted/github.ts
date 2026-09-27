@@ -1,7 +1,7 @@
 // Note: hosted platform abstraction with GitHub over gh CLI — see
 // .agents/notes/2026-09-21-hosted-github-reviews--97a21dee.md
-import { execFile } from 'child_process'
-import { promisify } from 'util'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import type {
   FailedCheckLog,
   HostedCapability,

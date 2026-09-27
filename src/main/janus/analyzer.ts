@@ -12,7 +12,7 @@
  *  - 并发：内置按 nodeId 的 in-flight 锁 + 轻量队列，队列期间累计的触发合并进下一次。
  */
 
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { llmService } from '../llm/LlmService'

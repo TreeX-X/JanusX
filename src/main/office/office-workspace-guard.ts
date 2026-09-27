@@ -1,5 +1,5 @@
-import { readFile, realpath, stat } from 'fs/promises'
-import { extname, isAbsolute, join, relative, resolve, sep } from 'path'
+import { readFile, realpath, stat } from 'node:fs/promises'
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { OFFICE_EXTENSIONS, type OfficeFileRequest, type OfficeWatchErrorCode } from '../../shared/office'
 
 export type ResolveWorkspaceRoot = (workspaceId: string) => Promise<string | undefined>

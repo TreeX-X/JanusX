@@ -1,6 +1,6 @@
 // Note: snapshots observe and never mutate — see .agents/notes/2026-06-27-checkpoint-safety--94f306fb.md
 import { ipcMain } from 'electron'
-import { access } from 'fs/promises'
+import { access } from 'node:fs/promises'
 import { checkpointManager } from '@janus-agent/agent-core'
 import type { CheckpointEngine, RestoreScope } from '@janus-agent/agent-core'
 import { agentSessionRegistry } from '../sessions/session-registry'

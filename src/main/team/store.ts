@@ -4,8 +4,8 @@
  *              机密（密码哈希）在内存与落盘均只存 salt+hash，不存明文。
  */
 
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
-import { dirname } from 'path'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type { Device, Invite, Membership, Project, Tenant, User } from '../../shared/team/types'
 import { teamStoreFile } from './paths'
 

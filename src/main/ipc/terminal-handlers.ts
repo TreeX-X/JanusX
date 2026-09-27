@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { terminalManager } from '../terminal/manager'
 import { checkpointManager } from '@janus-agent/agent-core'
 import type { CheckpointEngine } from '@janus-agent/agent-core'
@@ -31,8 +31,8 @@ import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
 import { readAssistantExcerpt } from '../sessions/transcript-excerpt'
 import { appShutdown } from '../shutdown/AppShutdown'
 import { officecliManager } from '../office/officecli-manager'
-import { existsSync } from 'fs'
-import { extname, resolve } from 'path'
+import { existsSync } from 'node:fs'
+import { extname, resolve } from 'node:path'
 import { buildOfficeAgentSession, mergeOfficeAgentEnv } from '../office/office-agent-policy'
 import {
   TERMINAL_EVENT_CHANNELS,

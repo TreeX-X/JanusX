@@ -6,7 +6,7 @@
  *              main 侧的传输无关门面（单测用回环模拟两端，验收同账号配对）。
  */
 
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type { CompanionCommand, CompanionResult } from '../companion/contracts'
 import type { RemoteHost } from './host'
 import type { PeerViewConnector } from './peer-client'

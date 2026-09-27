@@ -1,10 +1,10 @@
 // Note: self-hosted GitLab instance config with keychain PAT — see
 // .agents/notes/2026-09-21-gitlab-instance-config--9ed7f1d7.md
-import { readFile, rm, stat } from 'fs/promises'
-import { join } from 'path'
-import { request as httpRequest } from 'http'
-import { request as httpsRequest } from 'https'
-import { URL } from 'url'
+import { readFile, rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
+import { URL } from 'node:url'
 import { app, safeStorage } from 'electron'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 

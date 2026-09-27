@@ -7,8 +7,8 @@
  *              matches, and marks that fallback explicitly.
  */
 
-import { readdir, readFile } from 'fs/promises'
-import { basename, join, resolve } from 'path'
+import { readdir, readFile } from 'node:fs/promises'
+import { basename, join, resolve } from 'node:path'
 import { app } from 'electron'
 import type { CaptureObservationInput, Observation, StructuredCloneValue } from '../../shared/knowledge'
 import { knowledgeObservationService } from './observation-service'

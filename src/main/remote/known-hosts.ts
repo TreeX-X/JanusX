@@ -5,8 +5,8 @@
  *              文件损坏时 fail-closed：拒绝连接而不是跳过校验。
  */
 
-import { mkdir, readFile, writeFile } from 'fs/promises'
-import { dirname } from 'path'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { TeamError } from '../team/service'
 import { remotePeerKnownHostsFile } from './paths'
 

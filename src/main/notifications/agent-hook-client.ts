@@ -1,5 +1,5 @@
-import http from 'http'
-import { stdin } from 'process'
+import http from 'node:http'
+import { stdin } from 'node:process'
 import { JANUSX_HOOK_MATCHER_FLAG, type AgentHookPayload, type AgentHookSource } from './agent-hook-types'
 
 const MAX_STDIN_BYTES = 1024 * 1024

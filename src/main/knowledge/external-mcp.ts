@@ -10,9 +10,9 @@
  */
 
 import { app } from 'electron'
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
-import { homedir } from 'os'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
 
 export const EXTERNAL_MCP_SERVER_KEY = 'janusx-knowledge'
 

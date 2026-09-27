@@ -1,9 +1,9 @@
-import { randomUUID } from 'crypto'
-import { spawn } from 'child_process'
+import { randomUUID } from 'node:crypto'
+import { spawn } from 'node:child_process'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
-import { watch, type FSWatcher } from 'fs'
-import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'fs/promises'
-import { basename, join, relative, resolve } from 'path'
+import { watch, type FSWatcher } from 'node:fs'
+import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'node:fs/promises'
+import { basename, join, relative, resolve } from 'node:path'
 import {
   FILE_TREE_CHANNELS,
   WORKSPACE_CHANNELS,
@@ -121,8 +121,8 @@ async function getGitIgnoredPaths(rootPath: string, paths: string[]): Promise<Se
 async function inspectGitEntries(
   rootPath: string,
   targetDir: string,
-  entries: import('fs').Dirent[],
-): Promise<Array<{ entry: import('fs').Dirent; isGitIgnored: boolean }>> {
+  entries: import('node:fs').Dirent[],
+): Promise<Array<{ entry: import('node:fs').Dirent; isGitIgnored: boolean }>> {
   const candidates = entries.map((entry) => {
     const relativePath = normalizeRelativePath(rootPath, join(targetDir, entry.name))
     // Keep directory candidates slashless. Git treats a trailing slash as a

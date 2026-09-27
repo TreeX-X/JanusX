@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import {
   getAiModelRegistryMetadata,
   getAllAiModels,

@@ -9,7 +9,7 @@ export interface StreamParser {
 export interface StreamSession {
   id: string
   engine: AgentEngine
-  process: import('child_process').ChildProcess
+  process: import('node:child_process').ChildProcess
   parser: StreamParser
   abortController: AbortController
   timeout: ReturnType<typeof setTimeout> | null

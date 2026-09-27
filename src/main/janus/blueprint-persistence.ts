@@ -4,7 +4,7 @@
  *              （audit A1 自 blueprint-store 拆出；原子写来自 audit C2）。
  */
 
-import { promises as fs } from 'fs'
+import { promises as fs } from 'node:fs'
 import { writeFileAtomic } from '../lib/atomic-file'
 
 export async function readJson<T>(file: string): Promise<T | null> {

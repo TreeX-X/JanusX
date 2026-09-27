@@ -1,5 +1,5 @@
 // Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/2026-09-18-officecli-bundled--02b7c101.md
-import { isAbsolute, join } from 'path'
+import { isAbsolute, join } from 'node:path'
 
 export const OFFICECLI_BUNDLED_VERSION = '1.0.135'
 

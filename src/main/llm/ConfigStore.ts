@@ -4,8 +4,8 @@
  */
 
 import { app } from 'electron'
-import { join } from 'path'
-import { readFile, rename } from 'fs/promises'
+import { join } from 'node:path'
+import { readFile, rename } from 'node:fs/promises'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type { ProviderSettings } from '@janusx/llm-core'
 import {

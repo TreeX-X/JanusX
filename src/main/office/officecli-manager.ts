@@ -1,6 +1,6 @@
 // Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/2026-09-18-officecli-bundled--02b7c101.md
-import { stat } from 'fs/promises'
-import { dirname, isAbsolute, resolve } from 'path'
+import { stat } from 'node:fs/promises'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { execa } from 'execa'
 import type { OfficecliInfo } from '../../shared/office'
 import { OFFICECLI_BUNDLED_VERSION } from './office-bundled-path'

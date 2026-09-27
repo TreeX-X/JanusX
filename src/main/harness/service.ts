@@ -8,12 +8,12 @@
  *  callers, change events leave through subscribed listeners (tests subscribe).
  *  See .agents/notes/2026-09-16-harness-project-graph-s4--bcadcdc9.md
  */
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { watch as watchDirectory, type FSWatcher } from 'fs'
-import { mkdir, readdir, readFile, stat, writeFile } from 'fs/promises'
-import { dirname, join, resolve } from 'path'
+import { watch as watchDirectory, type FSWatcher } from 'node:fs'
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { dirname, join, resolve } from 'node:path'
 import {
   parseNote,
   validateReceiptShape,
@@ -158,10 +158,19 @@ export class HarnessNoteService {
     return { ok: false, diagnostics: [diag('NOT_FOUND', `no .agents here: ${root}`, root)] }
   }
 
+  /**
+   * Explicit full rebuild. Always mints a fresh revision — even when the
+   * rebuilt snapshot hashes equal — because callers (F10, the rescan IPC,
+   * managed writes, watcher fallbacks) treat a rescan as a rebuild event,
+   * not as a cache validation. Content-driven stability stays on the read
+   * path: `refreshIndex` keeps the rev when the hash-only probe finds no
+   * changed bytes.
+   */
   async rescan(root: string): Promise<{ rev: number; ms: number }> {
     const start = Date.now()
     const index = await withAssetLock(root, () => buildNoteIndex(root))
-    const rev = this.acceptIndex(root, index)
+    const rev = (this.indexes.get(root)?.rev ?? 0) + 1
+    this.indexes.set(root, { rev, index })
     return { rev, ms: Date.now() - start }
   }
 
@@ -195,7 +204,7 @@ export class HarnessNoteService {
   }
 
   async readSnapshot(root: string): Promise<NoteReadSnapshot> {
-    const { index } = await this.cachedIndex(root)
+    const { index } = await this.refreshIndex(root)
     return toReadSnapshot(index)
   }
 
@@ -204,6 +213,34 @@ export class HarnessNoteService {
     if (hit) return hit
     await this.rescan(root)
     return this.indexes.get(root) as { rev: number; index: NoteIndex }
+  }
+
+  /**
+   * Read-path cache refresh (blueprint R7 perf follow-up).
+   * `singleProjectView` and `readSnapshot` used to ride the cached index
+   * without ever probing the filesystem, so direct file writes were invisible
+   * until a watcher event or explicit rescan: checkout revisions never moved
+   * and composition overlays went stale. The probe is hash-only (no YAML/mdast
+   * parse); unchanged bytes return the cached entry with a stable rev, and only
+   * genuinely changed files pay for re-parse via `patchNoteIndex`. A non-clean
+   * probe falls back to a full `buildNoteIndex` rescan.
+   * Note: v0.8.8 verify/release repair — see .agents/notes/2026-09-27-release-verify-repair--dda0c41e.md
+   */
+  private async refreshIndex(root: string): Promise<{ rev: number; index: NoteIndex }> {
+    const hit = this.indexes.get(root)
+    if (!hit) {
+      await this.rescan(root)
+      return this.indexes.get(root) as { rev: number; index: NoteIndex }
+    }
+    const probe = await probeChangedPaths(root, hit.index)
+    if (probe.complete && probe.changed.length === 0 && probe.removed.length === 0 && probe.scanDiagnostics.length === 0) {
+      return hit
+    }
+    const index = probe.complete
+      ? (await patchNoteIndex(root, hit.index, probe.changed, probe.removed, probe.scanDiagnostics)).index
+      : await withAssetLock(root, () => buildNoteIndex(root))
+    const rev = this.acceptIndex(root, index)
+    return { rev, index }
   }
 
   async repoName(root: string): Promise<string> {
@@ -249,10 +286,10 @@ export class HarnessNoteService {
 
   private async singleProjectView(root: string): Promise<ProjectView> {
     const started = Date.now()
-    // Note: reads ride the cached index; only the watcher path (probe/patch/
-    // rescan) and explicit rescan rebuild it. A full YAML/mdast parse per load
-    // cost ~1.4s for 200 notes; the cache makes repeat loads allocation-only.
-    const { index } = await this.cachedIndex(root)
+    // Note: reads refresh through the hash-only probe; unchanged bytes ride
+    // the cached index allocation-only, changed files patch incrementally.
+    // Only the watcher path and explicit rescan skip the probe.
+    const { index } = await this.refreshIndex(root)
     const afterCache = Date.now()
     const { entries, invalid } = indexEntries(index)
     const rev = this.acceptIndex(root, index)

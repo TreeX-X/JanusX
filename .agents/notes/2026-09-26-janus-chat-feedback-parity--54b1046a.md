@@ -8,7 +8,7 @@ parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e7
 class: feature
 tags: [janus-chat, agentX-parity, streaming-feedback, thinking]
 relations:
-  - type: follows
+  - type: related-to
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/6813a52b-249b-556e-a0eb-55acc6930922
 ---
 

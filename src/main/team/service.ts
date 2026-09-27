@@ -6,9 +6,9 @@
  *              （membership 状态 / mu 版本）均即时生效。
  */
 
-import { readFile, writeFile } from 'fs/promises'
-import { mkdir } from 'fs/promises'
-import { dirname } from 'path'
+import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import type {
   AuthBundle,
   IdentityAdapter,

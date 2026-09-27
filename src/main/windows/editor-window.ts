@@ -1,5 +1,5 @@
 import { BrowserWindow, shell, type WebContents } from 'electron'
-import { join, normalize } from 'path'
+import { join, normalize } from 'node:path'
 import { loadRendererWindow } from './renderer-loader'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 

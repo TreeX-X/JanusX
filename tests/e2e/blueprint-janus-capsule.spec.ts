@@ -1,11 +1,17 @@
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
-import { access, mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
+import type { ExperimentalAPI } from '../../src/shared/ipc/experimental'
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
 import { createDesktopTestEnv } from './desktop-test-env'
 
-type TestWindow = Window & { electron: { workspace: WorkspaceAPI; system: { setLanguage(language: string): Promise<void> } } }
+type TestWindow = Window & { electron: { workspace: WorkspaceAPI; experimental: ExperimentalAPI; system: { setLanguage(language: string): Promise<void> } } }
+
+// V2 只读工作台呈现工作区的 note 投影（不读 legacy 蓝图）：种子 note 即种子画布。
+const CAPSULE_REPO = 'c0ffee00-0000-4000-8000-000000000001'
+const CAPSULE_NOTE = 'c0ffee00-0000-4000-8000-000000000002'
 
 test('JanusX capsule keeps detail, canvas, and conversation as independent cards', async () => {
   const entry = resolve('out/main/index.js')
@@ -35,6 +41,21 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       (path) => (window as TestWindow).electron.workspace.create({ name: 'Blueprint UI fixture', path }),
       workspacePath,
     )
+    // V2 只读：工作台内新建/删除入口已移除（变更走对话），且工作台不读 legacy
+    // 蓝图；用例直接在工作区落一个合法 harness note（即画布初始节点）。
+    // 注意：必须在 reload 之前落盘——工作台挂载时一次性拉取投影摘要，
+    // reload 之后再写会与加载竞态导致空画布。
+    await mkdir(join(workspacePath, '.agents', 'notes'), { recursive: true })
+    await writeFile(
+      join(workspacePath, '.agents', 'harness.json'),
+      JSON.stringify({ schemaVersion: 1, repoId: CAPSULE_REPO, name: 'Blueprint UI fixture', profile: SUPPORTED_HARNESS_PROFILE }),
+    )
+    await writeFile(join(workspacePath, '.agents', 'notes', 'capsule.md'), [
+      '---', 'schema: harness-note/1', `id: ${CAPSULE_NOTE}`, 'kind: initiative', 'lifecycle: accepted',
+      'created: 2026-09-27', 'class: architecture', `repositories: {primary: ${CAPSULE_REPO}, related: []}`,
+      '---', '', '# JanusX Capsule Fixture', '', '## Goal', '', 'Capsule fixture.', '', '## Scope', '',
+      'One checkout.', '', '## Acceptance criteria', '', '- [ ] AC-1: Renders.', '',
+    ].join('\n'))
     await page.reload()
     await expect(page.getByRole('button', { name: /打开蓝图工作台|Open Blueprint Workbench/ })).toBeVisible()
     await page.getByRole('button', { name: /打开蓝图工作台|Open Blueprint Workbench/ }).click()
@@ -45,12 +66,6 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     expect(workbenchShellBox!.height).toBeGreaterThan(900)
 
     await page.setViewportSize({ width: 1280, height: 820 })
-    await expect(page.getByRole('button', { name: /新建/ })).toBeVisible()
-
-    await page.getByRole('button', { name: /新建/ }).click()
-    const createDialog = page.getByRole('dialog', { name: '新建蓝图' })
-    await createDialog.locator('input').fill('JanusX Capsule Fixture')
-    await createDialog.locator('input').press('Enter')
 
     const canvasCard = page.locator('.blueprint-workbench-card--canvas')
     const viewport = canvasCard.locator('.react-flow__pane')
@@ -71,22 +86,25 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await expect(capsule).toContainText('JANUS // COPILOT')
     await expect(capsule).toContainText('IDLE')
     await expect(capsule.locator('.janus-identity-eye')).toHaveCount(2)
-    const canvasWidthBefore = (await page.locator('.blueprint-view--workbench').boundingBox())?.width
+    await settleWorkbench()
+    const canvasWidthBefore = (await canvasCard.boundingBox())?.width
 
     if (await capsule.getAttribute('aria-expanded') === 'false') await capsule.click()
     await expect(capsule).toHaveAttribute('aria-expanded', 'true')
     const conversation = page.getByRole('complementary', { name: 'Janus Copilot 控制台' })
     await expect(conversation).toBeVisible()
-    await expect(page.getByText(/^(COPILOT CONTROL|COPILOT 控制台)$/)).toBeVisible()
+    // 单会话工作区对话：面板头为 Janus 标识（旧 COPILOT CONTROL 标题已随 chrome 精简移除）。
+    await expect(conversation.getByText('Janus', { exact: true })).toBeVisible()
     const conversationBoxBeforeDetail = await conversation.boundingBox()
 
     await page.locator('.react-flow__node').first().dblclick()
     const nodeDetail = page.locator('.blueprint-workbench-detail-slot > .bp-node-detail')
     await expect(nodeDetail).toBeVisible()
     await settleWorkbench()
-    const canvasWidthAfter = (await page.locator('.blueprint-view--workbench').boundingBox())?.width
+    const canvasWidthAfter = (await canvasCard.boundingBox())?.width
     expect(canvasWidthBefore).toBeDefined()
-    expect(canvasWidthAfter).toBeLessThan(canvasWidthBefore!)
+    // V2 预留 detail 列：详情填入预留列，画布尺寸保持稳定（旧收缩断言对应已移除的动态列）。
+    expect(Math.abs((canvasWidthAfter ?? 0) - (canvasWidthBefore ?? 0))).toBeLessThanOrEqual(1)
     expect(conversationBoxBeforeDetail).not.toBeNull()
     // Visibility precedes the grid-track transition; check the settled layout.
     await expect(async () => {
@@ -146,9 +164,9 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       }
     }
 
-    // 统一栏三按钮：适应画布 / 重放加载 / 在对话中变更，不溢出 shell。
+    // 统一栏五按钮：适应画布 / 隐藏未关联 / 节点详情 / 恢复默认布局 / 在对话中变更，不溢出 shell。
     const toolbarActions = workbenchToolbar.locator('.blueprint-btn')
-    await expect(toolbarActions).toHaveCount(3)
+    await expect(toolbarActions).toHaveCount(5)
     const toolbarActionBoxes = await toolbarActions.evaluateAll((elements) =>
       elements.map((element) => {
         const { bottom, left, right, top } = element.getBoundingClientRect()
@@ -203,6 +221,9 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await expect(page.locator('.blueprint-workbench-shell')).toHaveCount(0)
 
     await page.setViewportSize({ width: 1920, height: 1080 })
+    // 知识库工作台入口受 knowledge 实验开关门控（默认关闭）；用例显式开启后再打开。
+    await page.evaluate(() => (window as TestWindow).electron.experimental.update({ knowledge: true }))
+    await page.reload()
     await page.getByRole('button', { name: /打开知识库工作台|Open Knowledge Workbench/ }).click()
     const knowledgeShell = page.getByRole('region', { name: /知识引擎|Knowledge Engine/ })
     await expect(knowledgeShell).toBeVisible()

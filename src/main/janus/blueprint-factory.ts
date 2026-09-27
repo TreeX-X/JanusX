@@ -3,7 +3,7 @@
  * @description 纯函数，无 IO、无 electron 依赖（audit A1 自 blueprint-store 拆出）。
  */
 
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import type {
   BlueprintFeatureItem,
   BlueprintFeatureStatus,

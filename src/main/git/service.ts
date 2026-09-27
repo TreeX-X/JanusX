@@ -1,7 +1,7 @@
-import { execFile, spawn } from 'child_process'
+import { execFile, spawn } from 'node:child_process'
 import { lstat, readFile, rm } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import { promisify } from 'util'
+import { promisify } from 'node:util'
 import type { GitFileChange } from '../../shared/ipc/git'
 
 const execFileAsync = promisify(execFile)

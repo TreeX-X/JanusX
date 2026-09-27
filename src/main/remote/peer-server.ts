@@ -6,9 +6,9 @@
  *              默认关闭，由用户显式开启；公网 Relay（M5）只换传输，不动路由语义。
  */
 
-import { createServer, type Server } from 'https'
-import type { IncomingMessage, ServerResponse } from 'http'
-import { networkInterfaces } from 'os'
+import { createServer, type Server } from 'node:https'
+import type { IncomingMessage, ServerResponse } from 'node:http'
+import { networkInterfaces } from 'node:os'
 import { Bonjour, type Service } from 'bonjour-service'
 import type { CompanionCommand } from '../companion/contracts'
 import { TeamError } from '../team/service'

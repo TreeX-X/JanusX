@@ -9,11 +9,11 @@
  * 4. 流式输出日志，提取关键信息（端口号等）
  */
 
-import { spawn, spawnSync, ChildProcess } from 'child_process'
-import { EventEmitter } from 'events'
+import { spawn, spawnSync, ChildProcess } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
-import { extname, isAbsolute, join, resolve } from 'path'
+import { extname, isAbsolute, join, resolve } from 'node:path'
 import { ProjectType, type LaunchConfiguration, type ProcessHandle } from '../types'
 import ProjectConfig from '../config/project-config'
 import CommandBuilder from './command-builder'

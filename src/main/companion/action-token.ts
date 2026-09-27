@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import type { CompanionCommand, CompanionProvider } from './contracts'
 import type { TeamRole } from '../../shared/team/types'
 

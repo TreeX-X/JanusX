@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { readFile, rename } from 'fs/promises'
-import { join } from 'path'
+import { readFile, rename } from 'node:fs/promises'
+import { join } from 'node:path'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 
 const STORE_VERSION = '1.0.0'

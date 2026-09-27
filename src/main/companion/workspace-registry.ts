@@ -1,5 +1,5 @@
-import { readFile, realpath, readdir, stat } from 'fs/promises'
-import { join } from 'path'
+import { readFile, realpath, readdir, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 
 export interface RegisteredWorkspace { id: string; name: string; path: string }
 const VALID_ID = /^[a-zA-Z0-9_-]{1,128}$/

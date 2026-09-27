@@ -1,6 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
-import { randomUUID } from 'crypto'
-import { dirname } from 'path'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { dirname } from 'node:path'
 import type { CompanionCommand, CompanionRequestContext, CompanionResult } from './contracts'
 
 export interface CompanionEventIdentity {

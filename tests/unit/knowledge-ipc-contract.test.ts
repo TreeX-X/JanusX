@@ -85,7 +85,8 @@ describe('Knowledge IPC contract', () => {
     // Phase 5: `knowledge:extract` direct IPC removed (queue-owned LLM stage).
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
-    expect(channels).toHaveLength(30)
+    // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
+    expect(channels).toHaveLength(34)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -111,6 +112,10 @@ describe('Knowledge IPC contract', () => {
       outcome: 'success' as const,
     }
 
+    await knowledgeApi.noteWikiPages({ rootPath: 'C:\\work', uri: 'note://repo/a' })
+    await knowledgeApi.prepareNoteWiki({ rootPath: 'C:\\work', uris: ['note://repo/a'], pageSlug: 'a', reviewMode: 'incremental', expectedVersion: 1 })
+    await knowledgeApi.proposeNoteWiki({ draftId: 'draft-1', title: 't', markdown: 'm', rationale: 'r' })
+    await knowledgeApi.noteWikiStatuses({ workspaceId: 'workspace-1' })
     await knowledgeApi.contracts()
     await knowledgeApi.bootstrap('C:\\work')
     await knowledgeApi.observe(captureInput)
@@ -143,6 +148,10 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.updateSettings({ enabled: false })
 
     expect(mocks.invoke.mock.calls).toEqual([
+      [KNOWLEDGE_CHANNELS.noteWikiPages, { rootPath: 'C:\\work', uri: 'note://repo/a' }],
+      [KNOWLEDGE_CHANNELS.prepareNoteWiki, { rootPath: 'C:\\work', uris: ['note://repo/a'], pageSlug: 'a', reviewMode: 'incremental', expectedVersion: 1 }],
+      [KNOWLEDGE_CHANNELS.proposeNoteWiki, { draftId: 'draft-1', title: 't', markdown: 'm', rationale: 'r' }],
+      [KNOWLEDGE_CHANNELS.noteWikiStatuses, { workspaceId: 'workspace-1' }],
       [KNOWLEDGE_CHANNELS.contracts],
       [KNOWLEDGE_CHANNELS.bootstrap, 'C:\\work'],
       [KNOWLEDGE_CHANNELS.observe, captureInput],
@@ -279,6 +288,10 @@ describe('Knowledge IPC contract', () => {
     }
     const api = window.electron.knowledge
     const calls: Array<() => Promise<unknown>> = [
+      () => api.noteWikiPages({ rootPath: 'C:\\work', uri: 'note://repo/a' }),
+      () => api.prepareNoteWiki({ rootPath: 'C:\\work', uris: ['note://repo/a'], pageSlug: 'a', reviewMode: 'incremental', expectedVersion: 1 }),
+      () => api.proposeNoteWiki({ draftId: 'draft-1', title: 't', markdown: 'm', rationale: 'r' }),
+      () => api.noteWikiStatuses({ workspaceId: 'workspace' }),
       () => api.contracts(),
       () => api.bootstrap('C:\\work'),
       () => api.observe({ workspacePath: 'C:\\work', source: 'manual', type: 'user-note', content: 'content' }),
@@ -311,8 +324,8 @@ describe('Knowledge IPC contract', () => {
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(30)
-    expect(calls).toHaveLength(30)
+    expect(Object.keys(api)).toHaveLength(34)
+    expect(calls).toHaveLength(34)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

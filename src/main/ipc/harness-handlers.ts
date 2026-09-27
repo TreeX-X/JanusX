@@ -4,10 +4,10 @@
  *  single HarnessNoteService. Failures cross IPC as plain HarnessFailure
  *  data; the renderer matches `code`, never Error identity.
  */
-import { randomUUID } from 'crypto'
-import { readFile } from 'fs/promises'
+import { randomUUID } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { join } from 'path'
+import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { ParsedNote } from '@janus-agent/harness-core'
 import { readMarkdownView } from '@janus-agent/harness-core'

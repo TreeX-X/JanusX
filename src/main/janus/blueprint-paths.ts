@@ -4,7 +4,7 @@
  *              数据根目录支持注入（组合根/测试可覆盖），默认取 electron userData。
  */
 
-import { join } from 'path'
+import { join } from 'node:path'
 import { app } from 'electron'
 
 const BLUEPRINTS_DIR = ['blueprints'] // 相对 .janusX
