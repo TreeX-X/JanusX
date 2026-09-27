@@ -26,7 +26,7 @@ import {
   type ExperimentalFeatures,
 } from '../../shared/ipc/experimental'
 import { normalizeAgentApprovalMode, type AgentApprovalMode } from '../../shared/ipc/agent-runtime'
-import { normalizeAppTheme, type AppTheme } from '../../shared/ipc/theme'
+import { DEFAULT_APP_THEME, normalizeAppTheme, type AppTheme } from '../../shared/ipc/theme'
 
 /** P6：janus-chat 循环步数默认 40（P6 前为硬编码 20），钳制 1~100。 */
 export const DEFAULT_AGENT_MAX_STEPS = 40
@@ -46,7 +46,7 @@ export function normalizeSafeCompileAutoAllow(value: unknown): boolean {
 }
 
 const DEFAULT_CONFIG: GlobalConfig = {
-  theme: 'dark',
+  theme: DEFAULT_APP_THEME,
   defaultTerminalPreset: 'shell',
   defaultShell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
   registeredCLIs: [
@@ -85,13 +85,18 @@ export class ConfigService {
   }
 
   async load(): Promise<GlobalConfig> {
+    let migratedToSlate = false
     try {
       const data = await readFile(this.configPath, 'utf-8')
       const parsed = JSON.parse(data) as Partial<GlobalConfig>
+      // 石板色扶正一次性迁移：老配置里显式存的 'dark' 改写为默认；标记落盘后，
+      // 用户再手动选回经典黑不会被二次回迁。
+      migratedToSlate = parsed.theme === 'dark' && parsed.themeMigratedToSlate !== true
       this.config = {
         ...DEFAULT_CONFIG,
         ...parsed,
-        theme: normalizeAppTheme(parsed.theme),
+        theme: migratedToSlate ? DEFAULT_APP_THEME : normalizeAppTheme(parsed.theme),
+        themeMigratedToSlate: migratedToSlate ? true : parsed.themeMigratedToSlate,
         notificationSettings: normalizeAgentNotificationSettings(parsed.notificationSettings),
         knowledgeSettings: normalizeKnowledgeSettings(parsed.knowledgeSettings),
         updaterSettings: normalizeUpdaterSettings(parsed.updaterSettings),
@@ -107,6 +112,14 @@ export class ConfigService {
       }
       this.config = { ...DEFAULT_CONFIG }
       await this.persist()
+    }
+    if (migratedToSlate) {
+      // 迁移结果写回磁盘；失败不阻塞启动，下次启动会再迁一次（结果一致，幂等）。
+      try {
+        await this.persist()
+      } catch {
+        /* 迁移写回失败不阻塞启动 */
+      }
     }
     return this.config!
   }
@@ -303,7 +316,7 @@ export class ConfigService {
     return this.config?.registeredCLIs ?? DEFAULT_CONFIG.registeredCLIs
   }
 
-  /** 同步读缓存主题（PTY OSC 探针热路径用，不做 IO；未加载时回落 dark）。 */
+  /** 同步读缓存主题（PTY OSC 探针热路径用，不做 IO；未加载时回落默认）。 */
   getCachedTheme(): AppTheme {
     return normalizeAppTheme(this.config?.theme)
   }

@@ -587,6 +587,9 @@ body.desktop-toast-body {
   [data-turn-island] { transition: none !important; }
   [data-turn-island] .turn-island-content { animation: none !important; }
   [data-turn-island] .turn-island-dock { transition: none !important; }
+  [data-turn-island] .turn-island-viewtab { transition: none !important; }
+  [data-turn-island] .turn-island-file { transition: none !important; }
+  [data-turn-island] .turn-island-dismiss { transition: none !important; }
 }
 
 /* ── Turn-change island morph：灵动岛式弹性形变 ──
@@ -614,6 +617,11 @@ body.desktop-toast-body {
   box-shadow: -10px 0 28px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 255, 255, 0.06);
 }
 
+[data-turn-island][data-stage="expanded"]:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: -10px 0 32px rgba(0, 0, 0, 0.65), 0 0 16px rgba(255, 255, 255, 0.05);
+}
+
 .turn-island-dock {
   transition: transform 0.18s ease, background 0.2s ease, filter 0.2s ease;
   transform-origin: center;
@@ -638,11 +646,79 @@ body.desktop-toast-body {
 }
 
 [data-turn-island] .turn-island-viewtab {
+  color: var(--shell-dim);
   transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+[data-turn-island] .turn-island-viewtab[data-active="true"] {
+  color: var(--shell-text);
+}
+
+[data-turn-island] .turn-island-viewtab:hover {
+  color: var(--shell-text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-turn-island] .turn-island-viewtab:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 1px;
+  color: var(--shell-text);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 [data-turn-island] .turn-island-viewtab:active {
   transform: scale(0.94);
+}
+
+[data-turn-island] .turn-island-dismiss {
+  margin-left: auto;
+  font-family: 'SF Mono', monospace;
+  font-size: 9.5px;
+  color: var(--shell-dim);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+  pointer-events: none;
+}
+
+[data-turn-island]:hover .turn-island-dismiss,
+[data-turn-island]:focus-within .turn-island-dismiss {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+[data-turn-island] .turn-island-file {
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+[data-turn-island] .turn-island-file-path {
+  color: var(--shell-muted);
+  transition: color 0.16s ease;
+}
+
+[data-turn-island] .turn-island-file:not([data-disabled="true"]):hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+[data-turn-island] .turn-island-file:not([data-disabled="true"]):hover .turn-island-file-path {
+  color: var(--shell-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-turn-island] .turn-island-file:not([data-disabled="true"]):active {
+  transform: scale(0.985);
+}
+
+[data-turn-island] .turn-island-file:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 1px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+[data-turn-island] .turn-island-file:focus-visible .turn-island-file-path {
+  color: var(--shell-text);
 }
 
 /*-- 长按工作区视觉反馈：径向渐变波纹从中心扩散 --*/

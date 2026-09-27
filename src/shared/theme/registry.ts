@@ -1,14 +1,15 @@
 /**
  * 主题注册表：扩展新主题的唯一入口。
- * 内置 dark + planche；第三方调用 defineTheme() 即可出现在设置下拉（读 listThemeDefinitions）。
- * 未知 id 一律回落默认 dark，保证旧配置与坏数据永不白屏。
+ * 内置 planche（石板色，默认主打）+ dark（经典黑，第二位）；Map 插入顺序即设置下拉顺序。
+ * 第三方调用 defineTheme() 即可出现在设置下拉（读 listThemeDefinitions）。
+ * 未知 id 一律回落默认，保证旧配置与坏数据永不白屏。
  */
 import { DEFAULT_APP_THEME } from '../ipc/theme'
 import { DARK_THEME_DEFINITION, PLANCHE_THEME_DEFINITION, type ThemeDefinition } from './definition'
 
 const registry = new Map<string, ThemeDefinition>([
-  [DARK_THEME_DEFINITION.id, DARK_THEME_DEFINITION],
   [PLANCHE_THEME_DEFINITION.id, PLANCHE_THEME_DEFINITION],
+  [DARK_THEME_DEFINITION.id, DARK_THEME_DEFINITION],
 ])
 
 export function defineTheme(definition: ThemeDefinition): void {

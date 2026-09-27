@@ -30,11 +30,11 @@ describe('monaco theme', () => {
     expect(defineTheme).toHaveBeenCalledWith(JANUSX_PLANCHE_THEME_NAME, JANUSX_PLANCHE_THEME)
   })
 
-  it('routes planche to the light theme and everything else to dark', () => {
+  it('routes planche to the light theme and everything else to the slate default', () => {
     expect(getMonacoThemeName('planche')).toBe(JANUSX_PLANCHE_THEME_NAME)
     expect(getMonacoThemeName('dark')).toBe(JANUSX_DARK_THEME_NAME)
-    expect(getMonacoThemeName('light')).toBe(JANUSX_DARK_THEME_NAME)
-    expect(getMonacoThemeName(undefined)).toBe(JANUSX_DARK_THEME_NAME)
+    expect(getMonacoThemeName('light')).toBe(JANUSX_PLANCHE_THEME_NAME)
+    expect(getMonacoThemeName(undefined)).toBe(JANUSX_PLANCHE_THEME_NAME)
   })
 
   it('planche uses hex colors only and paper background', () => {

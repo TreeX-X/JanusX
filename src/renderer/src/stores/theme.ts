@@ -54,7 +54,7 @@ export const useThemeStore = create<ThemeStore>()((set, get) => ({
 }))
 
 export function useThemeInit(): void {
-  // 供 App 根调用：首屏即加载持久化主题，避免 dark 闪烁后再切 planche。
+  // 供 App 根调用：首屏即加载持久化主题，避免默认闪烁后再切实际主题。
   if (typeof window !== 'undefined') {
     void useThemeStore.getState().load()
   }

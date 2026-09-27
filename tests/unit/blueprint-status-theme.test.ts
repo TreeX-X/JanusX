@@ -15,6 +15,7 @@ describe('blueprint status visuals (theme-aware)', () => {
     expect(getBlueprintStatusVisual('blocked', 'planche').color).toBe('#1C343B')
     // labels stay identical across themes (only color adapts)
     expect(getBlueprintStatusVisual('done', 'planche').labelKey).toBe(STATUS_VISUALS.done.labelKey)
-    expect(getBlueprintStatusVisual('nope' as never, 'unknown').color).toBe(STATUS_VISUALS['not-started'].color)
+    // 未知主题回落默认（石板色浅底），取纸面 not-started
+    expect(getBlueprintStatusVisual('nope' as never, 'unknown').color).toBe('rgba(28, 52, 59, 0.38)')
   })
 })

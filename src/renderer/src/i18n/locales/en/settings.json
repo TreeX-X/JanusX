@@ -53,9 +53,9 @@
     },
     "theme": {
       "label": "Appearance theme",
-      "help": "Dark is the default with zero changes. Planche is an opt-in print-style light theme; already-running TUI apps need a pane redraw or restart after switching.",
-      "dark": "Dark (default)",
-      "planche": "Planche · lithograph light",
+      "help": "Slate is the default flagship with Classic Black second; already-running TUI apps need a pane redraw or restart after switching.",
+      "dark": "Classic Black",
+      "planche": "Slate (default)",
       "saveError": "Failed to save theme"
     }
   },

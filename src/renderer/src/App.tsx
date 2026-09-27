@@ -88,7 +88,7 @@ export default function App() {
   useWorkspaceBootstrap()
   // ToB M2：启动即恢复团队会话（refresh 静默续期），失败即 guest 由挡板接管。
   useEffect(() => { void useTeamStore.getState().bootstrap() }, [])
-  // planche 主题：首屏加载持久化值并挂载 [data-theme]，默认 dark 不挂载零回归。
+  // 主题：首屏加载持久化值并挂载 [data-theme]（石板色默认、经典黑第二，两边都显式挂载）。
   useEffect(() => {
     void import('@/stores/theme').then(({ useThemeStore }) => useThemeStore.getState().load())
   }, [])

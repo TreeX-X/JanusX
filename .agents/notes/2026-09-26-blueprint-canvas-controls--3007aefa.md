@@ -4,6 +4,7 @@ id: 3007aefa-b643-4f1c-9fcb-4a65b3f7894f
 kind: decision
 lifecycle: implemented
 created: 2026-09-26
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/77fa3727-6536-47d7-8bfd-613db717e4ac
 class: bug-fix
 tags: [blueprint, canvas, chrome]
 ---

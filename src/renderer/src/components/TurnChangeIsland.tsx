@@ -274,19 +274,22 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
         )
       ) : (
         <div key={view} className="turn-island-content" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div className="flex items-center" style={{ gap: 8, padding: '8px 10px 6px' }}>
+          <div className="flex items-center turn-island-header" style={{ gap: 4, padding: '8px 10px 6px' }}>
             <button
               type="button"
               onClick={() => setView('latest')}
               onMouseDown={(event) => event.stopPropagation()}
               className="cursor-pointer turn-island-viewtab"
+              data-active={view === 'latest'}
+              aria-pressed={view === 'latest'}
+              title={t('terminal:turnChanges.latestHint')}
               style={{
                 background: 'none',
                 border: 'none',
-                padding: 0,
+                padding: '2px 6px',
+                borderRadius: 6,
                 fontFamily: "'SF Mono', monospace",
                 fontSize: 10.5,
-                color: view === 'latest' ? 'var(--shell-text)' : 'var(--shell-dim)',
               }}
             >
               {t('terminal:turnChanges.latest')}
@@ -296,17 +299,23 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               onClick={() => setView('history')}
               onMouseDown={(event) => event.stopPropagation()}
               className="cursor-pointer turn-island-viewtab"
+              data-active={view === 'history'}
+              aria-pressed={view === 'history'}
+              title={t('terminal:turnChanges.historyHint')}
               style={{
                 background: 'none',
                 border: 'none',
-                padding: 0,
+                padding: '2px 6px',
+                borderRadius: 6,
                 fontFamily: "'SF Mono', monospace",
                 fontSize: 10.5,
-                color: view === 'history' ? 'var(--shell-text)' : 'var(--shell-dim)',
               }}
             >
               {t('terminal:turnChanges.history', { count: history.length })}
             </button>
+            <span className="turn-island-dismiss" aria-hidden="true">
+              {t('terminal:turnChanges.dismiss')}
+            </span>
           </div>
           {view === 'latest' ? (
             <div style={{ overflowY: 'auto', padding: '0 10px 8px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.9 }}>
@@ -384,17 +393,20 @@ function FileRow({
       onClick={onOpen}
       onDoubleClick={(event) => event.stopPropagation()}
       onMouseDown={(event) => event.stopPropagation()}
-      className="flex w-full text-left"
+      className="flex w-full text-left turn-island-file"
+      data-disabled={disabled ? 'true' : undefined}
       style={{
         gap: 8,
         background: 'none',
         border: 'none',
-        padding: '1px 0',
+        padding: '1px 4px',
+        margin: '0 -4px',
+        borderRadius: 6,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.55 : 1,
       }}
     >
-      <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: 'var(--shell-muted)' }}>
+      <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap turn-island-file-path">
         {path}
       </span>
       <FileCounts

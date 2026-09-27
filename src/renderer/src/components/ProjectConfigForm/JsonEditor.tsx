@@ -21,7 +21,7 @@ interface JsonEditorProps {
   readOnly?: boolean
 }
 
-/*-- janusx 主题定义（dark + planche），与 MonacoViewer 保持一致 --*/
+/*-- janusx 主题定义（planche + dark，注册表顺序），与 MonacoViewer 保持一致 --*/
 const handleBeforeMount = (monaco: any) => {
   defineJanusxThemes(monaco)
 }

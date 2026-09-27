@@ -12,11 +12,11 @@ tags: [agent, harness, parent, governance]
 
 ## Goal
 
-Agent 循环、圆桌、turn 守卫、S6 维护面与 S7–S9 主线同属执行闭环却互无父子。本域收拢二十七篇，执行语义只看本域树，不再全文搜索。
+Agent 循环、圆桌、turn 守卫、S6 维护面与 S7–S9 主线同属执行闭环却互无父子。本域收拢二十九篇，执行语义只看本域树，不再全文搜索。
 
 ## Scope
 
-循环主干：[loop-refactor](./2026-08-08-agent-loop-refactor--33f0f481.md)、[chat-alignment](./2026-09-12-janus-agent-chat-alignment--6813a52b.md)、[roundtable-loop](./2026-09-16-roundtable-chat-harness-loop--f8f6586b.md)、[turn-guard](./2026-09-17-chat-turn-guard-domain-s6--fd109997.md)；切除对[removal-plan](./2026-09-18-legacy-loop-removal--cddc53a5.md)与[removal-执行](./2026-09-18-legacy-loop-removal--b766003d.md)成对保留，前者为后者的 cut-list 依据。
+循环主干：[loop-refactor](./2026-08-08-agent-loop-refactor--33f0f481.md)、[chat-alignment](./2026-09-12-janus-agent-chat-alignment--6813a52b.md)、[roundtable-loop](./2026-09-16-roundtable-chat-harness-loop--f8f6586b.md)、[turn-guard](./2026-09-17-chat-turn-guard-domain-s6--fd109997.md)、[loop-sanitize](./2026-09-26-chat-system-mid-conversation--e373dd26.md)、[feedback-parity](./2026-09-26-janus-chat-feedback-parity--54b1046a.md)；切除对[removal-plan](./2026-09-18-legacy-loop-removal--cddc53a5.md)与[removal-执行](./2026-09-18-legacy-loop-removal--b766003d.md)成对保留，前者为后者的 cut-list 依据。
 
 产物与契约：[artifact-bundle](./2026-09-16-roundtable-artifact-bundle-s5--46d65946.md)、[artifact-card](./2026-09-16-roundtable-artifact-card-s5--6471d8f2.md)、[artifact-preview](./2026-09-09-artifact-preview--e74d8e85.md)、[task-contract](./2026-09-18-task-contract-adoption--6b7c688e.md)。
 
@@ -28,6 +28,6 @@ PI 运行时三篇为反转续接非重复：[context-recognition](./2026-09-11-
 
 ## Acceptance criteria
 
-- [x] AC-1: 本域 27 篇直接子全部携带有效 parent，执行闭环检索收敛。
+- [x] AC-1: 本域 29 篇直接子全部携带有效 parent，执行闭环检索收敛。
 - [ ] AC-2: legacy 双件保持计划与执行先后关系，不二合一。
 - [ ] AC-3: PI 两篇反转关系保留，不判重复。

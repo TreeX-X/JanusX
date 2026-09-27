@@ -14,22 +14,24 @@ import { renderThemeCss } from '../../src/shared/theme/css-codegen'
 import type { ThemeDefinition } from '../../src/shared/theme/definition'
 
 describe('theme registry (M1 unified structure)', () => {
-  it('ships dark + planche builtins with dark as default', () => {
+  it('ships planche + dark builtins with planche (slate) as default', () => {
     const ids = listThemeDefinitions().map((d) => d.id)
-    expect(ids).toContain('dark')
     expect(ids).toContain('planche')
-    expect(getThemeDefinition(undefined).id).toBe('dark')
+    expect(ids).toContain('dark')
+    // 下拉顺序：石板色主打第一，经典黑第二
+    expect(ids).toEqual(['planche', 'dark'])
+    expect(getThemeDefinition(undefined).id).toBe('planche')
     expect(getThemeDefinition('dark').base).toBe('dark')
     expect(getThemeDefinition('planche').base).toBe('light')
   })
 
   it('falls back to default for unknown ids (never blank)', () => {
-    expect(getThemeDefinition('no-such-theme').id).toBe('dark')
-    expect(getThemeDefinition('light').id).toBe('dark')
+    expect(getThemeDefinition('no-such-theme').id).toBe('planche')
+    expect(getThemeDefinition('light').id).toBe('planche')
     expect(isKnownTheme('planche')).toBe(true)
     expect(isKnownTheme('nope')).toBe(false)
     expect(getThemeBase('planche')).toBe('light')
-    expect(getThemeBase('whatever')).toBe('dark')
+    expect(getThemeBase('whatever')).toBe('light')
   })
 
   it('lets third parties register without touching components', () => {
@@ -47,7 +49,7 @@ describe('theme registry (M1 unified structure)', () => {
       expect(getThemeDefinition('theme-test-sepia').tokens['shell-canvas']).toBe('#f4ecd8')
       expect(listThemeDefinitions().some((d) => d.id === 'theme-test-sepia')).toBe(true)
       // 未注册回落不受已注册的自定义主题影响
-      expect(getThemeDefinition('nope').id).toBe('dark')
+      expect(getThemeDefinition('nope').id).toBe('planche')
     } finally {
       removeTheme('theme-test-sepia')
       expect(isKnownTheme('theme-test-sepia')).toBe(false)
@@ -78,7 +80,7 @@ describe('theme registry (M1 unified structure)', () => {
   it('exposes tokens per theme for JS-driven surfaces', () => {
     expect(getThemeTokens('dark')['shell-canvas']).toBe('#151517')
     expect(getThemeTokens('planche')['shell-canvas']).toBe('#EFE4C5')
-    expect(getThemeTokens('unknown')['shell-canvas']).toBe('#151517')
+    expect(getThemeTokens('unknown')['shell-canvas']).toBe('#EFE4C5')
   })
 
   it('generates the checked-in CSS byte-identically (run npm run theme:css after editing definitions)', () => {

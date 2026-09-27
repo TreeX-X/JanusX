@@ -53,9 +53,9 @@
     },
     "theme": {
       "label": "外观主题",
-      "help": "深色为默认零改动。Planche 为 opt-in 石版浅色；切换后已运行的 TUI 应用需重绘或重启 pane 生效。",
-      "dark": "深色（默认）",
-      "planche": "Planche · 石版浅色",
+      "help": "石板色为默认主打，经典黑排第二；切换后已运行的 TUI 应用需重绘或重启 pane 生效。",
+      "dark": "经典黑",
+      "planche": "石板色（默认）",
       "saveError": "主题保存失败"
     }
   },

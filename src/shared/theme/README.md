@@ -11,7 +11,7 @@
 3. 跑 `npm run theme:css`，提交生成的 `themes.generated.css`。
 
 完成后面板自动出现：设置通用页下拉读 `listThemeDefinitions()`，
-未知 id 经 `getThemeDefinition()` 回落 dark，永不白屏。
+未知 id 经 `getThemeDefinition()` 回落默认（石板色），永不白屏。
 
 ## 约定
 

@@ -12,7 +12,7 @@ tags: [product, surface, parent, governance]
 
 ## Goal
 
-Island、右 Dock、产物工作区与 Note 工具链共三十篇，演进链完整但无父。本域按槽位演进、产物语义、工具链三组收拢，右列改动先定位本域。
+Island、右 Dock、产物工作区与 Note 工具链共三十一篇，演进链完整但无父。本域按槽位演进、产物语义、工具链三组收拢，右列改动先定位本域。
 
 ## Scope
 
@@ -22,10 +22,12 @@ Island、右 Dock、产物工作区与 Note 工具链共三十篇，演进链完
 
 Note 工具链三件各司其职：[drawer-toolbar](./2026-09-19-note-drawer-markdown-toolbar--b327657e.md)、[mechanical-gates](./2026-09-19-note-mechanical-checks--3b7d1e9b.md)、[rename-draftcard](./2026-09-22-notecard-rename-draft-card--387ee6c3.md)；工作便签归属：[own-namespace implemented](./2026-09-18-own-notes-namespace--5559a0b8.md)与[own-namespace proposed](./2026-09-18-own-notes-namespace--134ce6f7.md)为生命周期对，成对保留。
 
-配套：[github-maintenance](./2026-09-17-github-maintenance--a568cc88.md)、[markdown-assets](./2026-09-18-markdown-preview-local-assets--64286344.md)、[file-glyph](./2026-09-21-drawer-markdown-file-glyph--77c7030e.md)、[reveal-race](./2026-09-21-file-tree-reveal-race--80f207b2.md)、[share-import](./2026-09-19-share-import--eece2e89.md)、[plugin-forms](./2026-09-09-plugin-architecture-forms--96a2f5cd.md)、[plugin-debug](./2026-09-09-plugin-import-debug--80e8b427.md)、[entry-nav](./2026-09-19-entry-switch-navigation--2a6cd90c.md)、[f12-nav](./2026-08-14-f12-navigation--8e32dd4e.md)、[pelican](./2026-09-19-pelican-bicycle--5996294e.md)（合法独立交付，非残留）。
+配套：[github-maintenance](./2026-09-17-github-maintenance--a568cc88.md)、[markdown-assets](./2026-09-18-markdown-preview-local-assets--64286344.md)、[file-glyph](./2026-09-21-drawer-markdown-file-glyph--77c7030e.md)、[reveal-race](./2026-09-21-file-tree-reveal-race--80f207b2.md)、[share-import](./2026-09-19-share-import--eece2e89.md)、[plugin-forms](./2026-09-09-plugin-architecture-forms--96a2f5cd.md)、[plugin-debug](./2026-09-09-plugin-import-debug--80e8b427.md)、[entry-nav](./2026-09-19-entry-switch-navigation--2a6cd90c.md)、[f12-nav](./2026-08-14-f12-navigation--8e32dd4e.md)。
+
+渲染与编辑器：[emphasis](./2026-09-27-markdown-emphasis-orange-text--0d703ca1.md)（强调色去填充块）、[standalone-refresh](./2026-09-27-standalone-editor-auto-refresh--fe22dc2d.md)（独立编辑器外部变更自刷新）。
 
 ## Acceptance criteria
 
-- [x] AC-1: 本域 30 篇直接子全部携带有效 parent。
+- [x] AC-1: 本域 31 篇直接子全部携带有效 parent。
 - [ ] AC-2: own-namespace 生命周期对保留两篇，不判重复删除。
-- [ ] AC-3: pelican 与 migrated 样例区分，前者为功能保留，后者维持历史隔离。
+- [ ] AC-3: 历史迁移样例已清理（2026-09-27 随鹈鹕骑行 Note 一并移除），不再保留隔离样例。

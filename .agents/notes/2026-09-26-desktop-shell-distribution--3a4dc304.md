@@ -18,7 +18,7 @@ tags: [desktop, distribution, parent, governance]
 
 桌面执行史：[implementation-history](./2026-09-19-desktop-implementation-history--854981c7.md)、[delegated-modes](./2026-09-19-desktop-delegated-modes--fbac0251.md)、[task-implementation](./2026-09-19-desktop-task-implementation--958007ff.md)、[ade-survey](./2026-09-18-desktop-ade-mit-survey--c32cd9ef.md)。
 
-打包与发布：[hoisted-deps](./2026-09-20-packaged-hoisted-deps--39f58575.md)、[runtime-size](./2026-09-20-packaged-runtime-size--210d9ec3.md)、[cli-publish](./2026-09-20-janus-cli-npm-publish--ad7e45c2.md)、[officecli](./2026-09-18-officecli-bundled--02b7c101.md)、[runner-backflow](./2026-09-18-external-runner-backflow--5352fb79.md)、[ci-order](./2026-09-19-ci-sibling-build-order--bfb406a2.md)。
+打包与发布：[hoisted-deps](./2026-09-20-packaged-hoisted-deps--39f58575.md)、[runtime-size](./2026-09-20-packaged-runtime-size--210d9ec3.md)、[cli-publish](./2026-09-20-janus-cli-npm-publish--ad7e45c2.md)、[officecli](./2026-09-18-officecli-bundled--02b7c101.md)、[runner-backflow](./2026-09-18-external-runner-backflow--5352fb79.md)、[ci-order](./2026-09-19-ci-sibling-build-order--bfb406a2.md)、[verify-repair](./2026-09-27-release-verify-repair--dda0c41e.md)（v0.8.8 双管线修复）。
 
 流程治理：[development-branch](./2026-09-20-development-branch--a91d7003.md)、[reproducible-verification](./2026-09-20-reproducible-verification--914a7e92.md)（两篇已补 `--uuid` 后缀正名）、[github-maintenance](./2026-09-17-github-maintenance--a568cc88.md)归属产品面而不属本域。
 
@@ -26,6 +26,6 @@ tags: [desktop, distribution, parent, governance]
 
 ## Acceptance criteria
 
-- [x] AC-1: 本域 20 篇直接子全部携带有效 parent。
+- [x] AC-1: 本域 21 篇直接子全部携带有效 parent。
 - [ ] AC-2: 两篇正名文件后缀与 id 一致，无 flat-layout 违规残留。
 - [ ] AC-3: github-maintenance 归属产品面，本域不重复收纳。

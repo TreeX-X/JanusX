@@ -58,12 +58,7 @@ function parseSections(text) {
 }
 
 // Fixed pre-organization defects, pinned to Note identity and exact target.
-export const PREEXISTING_LINKS = new Map([
-  [
-    "5996294e-e9e3-5408-8239-b1a8bb24b616:pelican-bicycle.html",
-    "Unresolved at baseline d59d9a8; retained as an explicit diagnostic, no target invented."
-  ]
-])
+export const PREEXISTING_LINKS = new Map([])
 function checkLinks(root, relPath, body, id, errors, diagnostics) {
   for (const link of markdownDestinations(body)) {
     let target

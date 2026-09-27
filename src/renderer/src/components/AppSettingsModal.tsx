@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
+import { Sparkles } from 'lucide-react'
 import { ModalCloseButton } from './ModalCloseButton'
 import { useWorkbenchPhase } from '@/components/shared/CardFrame'
 import { GeneralSettingsPanel } from './GeneralSettingsPanel'
@@ -150,10 +151,17 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
             <button
               key={tab}
               type="button"
-              className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''}`}
+              data-tab={tab}
+              className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''} ${tab === 'experimental' ? styles.tabButtonExperimental : ''}`}
               onClick={() => setActiveTab(tab)}
             >
-              <span className={styles.tabLabel}>{tabNav(tab)}</span>
+              <span className={styles.tabLabel}>
+                {tab === 'experimental' ? (
+                  <Sparkles size={12} strokeWidth={2} aria-hidden="true" className={styles.tabSpark} />
+                ) : null}
+                <span>{tabNav(tab)}</span>
+                {tab === 'experimental' ? <span className={styles.tabBadge}>NEW</span> : null}
+              </span>
               <span className={styles.tabMeta}>{tabNavMeta(tab)}</span>
             </button>
           ))}

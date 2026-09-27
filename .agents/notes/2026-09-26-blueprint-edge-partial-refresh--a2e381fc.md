@@ -4,6 +4,7 @@ id: a2e381fc-328e-4ea9-a64a-258076439418
 kind: decision
 lifecycle: implemented
 created: 2026-09-26
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/77fa3727-6536-47d7-8bfd-613db717e4ac
 class: architecture
 tags: [blueprint, canvas, edge-routing, partial-refresh]
 ---

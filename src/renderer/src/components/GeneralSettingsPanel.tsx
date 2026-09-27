@@ -8,6 +8,7 @@ import { ExternalCliManager } from './ExternalCliManager'
 import { UpdaterSettings } from './UpdaterSettings'
 import { useThemeStore } from '@/stores/theme'
 import { listThemeDefinitions } from '../../../shared/theme/registry'
+import { DEFAULT_APP_THEME } from '../../../shared/ipc/theme'
 import type { AppTheme } from '../../../shared/ipc/theme'
 import styles from './AppSettingsModal.module.css'
 
@@ -52,7 +53,7 @@ export function GeneralSettingsPanel() {
         </div>
         <div className={styles.generalControlCol}>
           <Select
-            value={themeLoaded ? theme : 'dark'}
+            value={themeLoaded ? theme : DEFAULT_APP_THEME}
             onChange={handleThemeChange}
             options={themeOptions}
             className={styles.generalSelect}

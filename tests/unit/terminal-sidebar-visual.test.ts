@@ -42,21 +42,27 @@ describe('terminal sidebar visuals', () => {
     expect(getTerminalStatusVisual('degraded').label).toBe('受限')
     expect(getTerminalStatusVisual('error').label).toBe('异常')
     expect(getTerminalStatusVisual('needs-input').color).toBe(getTerminalStatusVisual('needs-approval').color)
-    expect(new Set(['running', 'wait', 'needs-input', 'needs-approval', 'degraded', 'error'].map((status) =>
-      getTerminalStatusVisual(status as Terminal['status']).color
-    )).size).toBe(5)
+    // 经典黑六态五色；石板色 attention/error 同为朱红（刻意单点睛），六态四色
+    const dark = ['running', 'wait', 'needs-input', 'needs-approval', 'degraded', 'error'].map((status) =>
+      getTerminalStatusVisual(status as Terminal['status'], 'dark').color
+    )
+    expect(new Set(dark).size).toBe(5)
+    const planche = ['running', 'wait', 'needs-input', 'needs-approval', 'degraded', 'error'].map((status) =>
+      getTerminalStatusVisual(status as Terminal['status'], 'planche').color
+    )
+    expect(new Set(planche).size).toBe(4)
   })
 
   it('reads status colors from the theme definition (M1 unified structure)', () => {
-    // dark 保持历史值
+    // 经典黑保持历史值
     expect(getTerminalStatusVisual('running', 'dark').color).toBe('#6bd89b')
     expect(getTerminalStatusVisual('error', 'dark').color).toBe('#ff7474')
     // planche 走纸面映射，无霓虹
     expect(getTerminalStatusVisual('running', 'planche').color).toBe('#2E6B5E')
     expect(getTerminalStatusVisual('needs-input', 'planche').color).toBe('#D43D2A')
     expect(getTerminalStatusVisual('error', 'planche').color).toBe('#D43D2A')
-    // 未知主题回落 dark
-    expect(getTerminalStatusVisual('running', 'nope').color).toBe('#6bd89b')
+    // 未知主题回落默认（石板色）
+    expect(getTerminalStatusVisual('running', 'nope').color).toBe('#2E6B5E')
     // planche 五槽互异（attention/error 同为朱红是刻意：单点睛）
     const planche = ['running', 'wait', 'needs-input', 'degraded', 'error'].map((status) =>
       getTerminalStatusVisual(status as Terminal['status'], 'planche').color

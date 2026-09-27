@@ -21,16 +21,16 @@ import {
 import { getThemeDefinition } from '../../src/shared/theme/registry'
 
 describe('planche theme contract', () => {
-  it('keeps dark as default and passes open theme ids through (read-side fallback)', () => {
-    expect(DEFAULT_APP_THEME).toBe('dark')
+  it('keeps planche (slate) as default and passes open theme ids through (read-side fallback)', () => {
+    expect(DEFAULT_APP_THEME).toBe('planche')
     expect(normalizeAppTheme('planche')).toBe('planche')
     expect(normalizeAppTheme('dark')).toBe('dark')
-    expect(normalizeAppTheme(undefined)).toBe('dark')
+    expect(normalizeAppTheme(undefined)).toBe('planche')
     // 未知 id 原样持久化，读取时由 registry 回落默认（历史 'light' 同理）
     expect(normalizeAppTheme('light')).toBe('light')
     expect(normalizeAppTheme('nope')).toBe('nope')
-    expect(getThemeDefinition('nope').id).toBe('dark')
-    expect(getThemeDefinition('light').id).toBe('dark')
+    expect(getThemeDefinition('nope').id).toBe('planche')
+    expect(getThemeDefinition('light').id).toBe('planche')
   })
 
   it('exposes get/update/changed channels', () => {

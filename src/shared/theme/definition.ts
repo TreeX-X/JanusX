@@ -55,7 +55,7 @@ export interface ThemeDefinition {
   ctxScale: ContextScaleDefinition
 }
 
-/* ── dark（默认）：值与历史 :root 逐字一致 ─────────────────────────── */
+/* ── dark（经典黑，第二位）：值与历史 :root 逐字一致 ─────────────────────────── */
 
 const DARK_TOKENS = {
   'shell-void': '#101012',
@@ -163,7 +163,7 @@ const DARK_MONACO: MonacoThemeDefinition = {
 
 export const DARK_THEME_DEFINITION: ThemeDefinition = {
   id: 'dark',
-  label: 'Dark',
+  label: 'Classic Black',
   base: 'dark',
   notes: 'Default. Surface ramp keeps canvas below chrome (~9pt gap) so panes read sunk, not punched.',
   tokens: { ...DARK_TOKENS },
@@ -184,7 +184,7 @@ export const DARK_THEME_DEFINITION: ThemeDefinition = {
   },
 }
 
-/* ── planche（石版浅色 opt-in）：值与历史 [data-theme='planche'] 逐字一致 ──
+/* ── planche（石板色，默认主打）：值与历史 [data-theme='planche'] 逐字一致 ──
    来源 design/pelican-lithograph-style.md：纸 #EFE4C5 / 墨 #1C343B / 朱红 #D43D2A。 */
 
 const PLANCHE_TOKENS = {
@@ -305,7 +305,7 @@ const PLANCHE_MONACO: MonacoThemeDefinition = {
 
 export const PLANCHE_THEME_DEFINITION: ThemeDefinition = {
   id: 'planche',
-  label: 'Planche · lithograph light',
+  label: 'Slate',
   base: 'light',
   notes: 'Print-style light: paper/ink single-vermilion accent, flat fills, no gradients.',
   tokens: { ...PLANCHE_TOKENS },
