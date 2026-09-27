@@ -92,6 +92,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   applicationIpcRegistered = true
 
   registerWorkspaceHandlers(getCurrentMainWindow, {
+    getAllowedWindows: options.getAllowedWindows,
     beforeWorkspaceDelete: async (workspaceId) => {
       // 删除工作区前先回收其全部终端，避免 pty 子进程变孤儿；onExit 负责状态清理。
       terminalManager.killByWorkspace(workspaceId)

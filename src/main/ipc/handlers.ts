@@ -37,7 +37,10 @@ export type WorkspaceWatcherSubscriber = (
 export interface WorkspaceHandlerOptions {
   beforeWorkspaceDelete?: (workspaceId: string) => Promise<void> | void
   authorizeRendererAction?: RendererActionAuthorizer
+  getAllowedWindows?: () => readonly BrowserWindow[]
 }
+
+let getWorkspaceAllowedWindows: () => readonly BrowserWindow[] = () => []
 
 type SaveFileExtension = 'md' | 'txt' | 'html'
 
@@ -207,7 +210,7 @@ function emitWorkspaceFsChange(
   }
 
   const windows = watcherWindows.get(workspacePath)
-  if (!windows?.size) return
+  if (!windows?.size && getWorkspaceAllowedWindows().length === 0) return
   const existingTimer = watcherTimers.get(workspacePath)
   if (existingTimer) clearTimeout(existingTimer)
 
@@ -216,8 +219,20 @@ function emitWorkspaceFsChange(
     setTimeout(() => {
       watcherTimers.delete(workspacePath)
       const changedFilePath = filename ? join(workspacePath, filename.toString()) : null
-      for (const window of windows) {
+      // Note: standalone editor windows share the file-tree change channel so double-click editors auto-refresh — see .agents/notes/2026-09-27-standalone-editor-auto-refresh--fe22dc2d.md
+      const targets = new Set<BrowserWindow>()
+      for (const window of watcherWindows.get(workspacePath) ?? []) targets.add(window)
+      for (const window of getWorkspaceAllowedWindows()) {
+        if (!window.isDestroyed() && !window.webContents.isDestroyed()) targets.add(window)
+      }
+      for (const window of targets) {
         sendToRenderer(window, FILE_TREE_CHANNELS.changed, { workspacePath, changedFilePath })
+      }
+      const registered = watcherWindows.get(workspacePath)
+      if (registered) {
+        for (const window of [...registered]) {
+          if (window.isDestroyed()) registered.delete(window)
+        }
       }
     }, 150),
   )
@@ -348,6 +363,7 @@ export function registerWorkspaceHandlers(
   options: WorkspaceHandlerOptions = {},
 ): void {
   const authorize = options.authorizeRendererAction ?? authorizeRendererAction
+  getWorkspaceAllowedWindows = options.getAllowedWindows ?? (() => [])
   // 窗口 closed 时的 disposeWorkspaceWatchers 由 register.ts 统一挂载（audit M1）
 
   ipcMain.handle(WORKSPACE_CHANNELS.initialize, async () => {
