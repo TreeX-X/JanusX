@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { FileViewerContent } from '@/components/FileViewerContent'
-import { useEditorStore } from '@/stores/editor'
+import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { Maximize2, PanelRightOpen, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
 import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
@@ -103,6 +103,17 @@ export function StandaloneFileEditor() {
     window.electron.window.editorReady()
     return unsubscribe
   }, [editorParams, openFile])
+
+  // Note: standalone editors auto-refresh clean tabs on external disk changes — see .agents/notes/2026-09-27-standalone-editor-auto-refresh--fe22dc2d.md
+  useEffect(() => {
+    if (!editorParams) return
+    const workspacePath = editorParams.workspacePath
+    return window.electron.fileTree.onChanged((payload) => {
+      if (payload.workspacePath !== workspacePath) return
+      invalidateEditorFileCache(workspacePath)
+      void useEditorStore.getState().reloadOpenFiles(workspacePath, payload.changedFilePath ?? null)
+    })
+  }, [editorParams])
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
