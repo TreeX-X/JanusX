@@ -171,7 +171,7 @@ describe('KnowledgeReviewService', () => {
     expect(facts[0]?.status).toBe('active')
   })
 
-  it('honors an explicit actor override in review audits (auto-policy)', async () => {
+  it('honors an explicit human actor override in review audits', async () => {
     const candidate = makeFactCandidate()
     await seedJsonl('facts/candidates.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
@@ -179,13 +179,13 @@ describe('KnowledgeReviewService', () => {
     const result = await knowledgeReviewService.applyCandidate({
       type: 'fact',
       id: candidate.id,
-      actor: 'auto-policy',
+      actor: 'human-review',
     })
 
     expect(result.candidate.status).toBe('applied')
     expect(result.auditEvents).toHaveLength(2)
     for (const event of result.auditEvents) {
-      expect(event.provenance.actor).toBe('auto-policy')
+      expect(event.provenance.actor).toBe('human-review')
     }
   })
 

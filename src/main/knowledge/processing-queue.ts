@@ -26,6 +26,7 @@ import { knowledgeRootPath } from './constants'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeAuditService, type AuditEventInput } from './audit-service'
+import { isActiveObservation } from './memory-evidence'
 
 const CURSOR_FILE = join('processing', 'cursor.json')
 const FAILURES_FILE = join('processing', 'failures.jsonl')
@@ -147,7 +148,7 @@ export interface LlmStageBatch {
 
 export interface LlmStageStatus {
   skipped: boolean
-  skippedReason?: 'deterministic-only' | 'no-default-llm'
+  skippedReason?: 'deterministic-only' | 'no-default-llm' | 'no-evidence'
   processed: number
   proposed: number
   merged: number
@@ -184,7 +185,7 @@ function defaultDeps(): ProcessingQueueDeps {
 }
 
 function isEvidence(observation: Observation): boolean {
-  return (observation.retentionClass ?? 'evidence') === 'evidence'
+  return (observation.retentionClass ?? 'evidence') === 'evidence' && isActiveObservation(observation)
 }
 
 function compareObservations(left: Observation, right: Observation): number {

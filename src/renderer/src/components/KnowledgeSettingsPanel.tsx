@@ -76,14 +76,6 @@ export function KnowledgeSettingsPanel() {
     }
   }
 
-  const updateAutoAcceptDraft = (autoAcceptDeterministicFacts: boolean) => {
-    setDraft((current) => ({ ...current, autoAcceptDeterministicFacts }))
-    if (status === 'saved' || status === 'error') {
-      setStatus('idle')
-      setError('')
-    }
-  }
-
   const handleReset = () => {
     setDraft(settings)
     setStatus('idle')
@@ -191,13 +183,6 @@ export function KnowledgeSettingsPanel() {
             ariaLabel={t('settings:knowledge.row.mode.label')}
           />
         </div>
-        <SettingSwitch
-          label={t('settings:knowledge.toggle.autoAccept.label')}
-          hint={t('settings:knowledge.toggle.autoAccept.hint')}
-          checked={draft.autoAcceptDeterministicFacts}
-          disabled={isBusy}
-          onChange={updateAutoAcceptDraft}
-        />
       </section>
 
       <section className={styles.section}>

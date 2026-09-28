@@ -215,7 +215,7 @@ describe('Janus Chat knowledge recall', () => {
     }))
     expect(capture).toHaveBeenCalledTimes(2)
     expect(capturePersonEpisode).toHaveBeenCalledTimes(1)
-    expect(capturePersonEpisode).toHaveBeenCalledWith({ userText: 'latest workspace question' })
+    expect(capturePersonEpisode).toHaveBeenCalledWith({ userText: 'latest workspace question', sessionId: 'stream-1', correlationId: 'stream-1' })
     expect(capturePersonTurn).not.toHaveBeenCalled()
   })
 

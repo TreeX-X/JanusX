@@ -573,6 +573,39 @@ describe('KnowledgeExtractService', () => {
       expect(stored[0]?.mergedFrom).toContain('det-1')
     })
 
+    it.each(['apply', 'reject'] as const)('preserves a concurrent %s review when LLM merging finishes', async (action) => {
+      const content = 'commit abc: add user index'
+      await seedJsonl('facts/candidates.jsonl', [seedDeterministicCandidate('det-race', content, 0.9)])
+      setupLlm({
+        facts: [{ content, concepts: [], files: ['src/db.ts'], tags: [], confidence: 0.95, kind: 'fact' }],
+        wikiPatches: [], graphEdges: [],
+      })
+      const { knowledgeExtractService } = await loadService()
+      const { knowledgeReviewService } = await import('../../../src/main/knowledge/review-service')
+      const listCandidates = knowledgeExtractService.listFactCandidates.bind(knowledgeExtractService)
+      const read = vi.spyOn(knowledgeExtractService, 'listFactCandidates').mockImplementationOnce(async () => {
+        const stale = await listCandidates()
+        // Finish a real review after extraction read its proposed candidate.
+        if (action === 'apply') await knowledgeReviewService.applyCandidate({ type: 'fact', id: 'det-race' })
+        else await knowledgeReviewService.rejectCandidate({ type: 'fact', id: 'det-race' })
+        return stale
+      })
+      try {
+        const result = await knowledgeExtractService.extract(
+          { observations: [makeObservation({ id: 'o1', content })] },
+          { mode: 'auto', sleepMs: async () => {} },
+        )
+        expect(result.mergedFactCandidateIds).toEqual([])
+        expect(result.facts).toEqual([])
+        expect(await listCandidates()).toEqual([expect.objectContaining({
+          status: action === 'apply' ? 'applied' : 'rejected', derivation: 'deterministic',
+          fact: expect.objectContaining({ confidence: 0.9 }),
+        })])
+      } finally {
+        read.mockRestore()
+      }
+    })
+
     it('merge tie-break follows mode on equal confidence', async () => {
       const detContent = 'Project persistence layer uses Postgres for durability.'
       const llmContent = 'Project persistence layer uses Postgres for durability and backups.'

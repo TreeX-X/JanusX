@@ -7,7 +7,7 @@
  *  - 候选 JSONL 小体量：整文件读 → 改 status → 原子 rewrite。
  *  - 不触碰 extract 提示词、search 算法、vector/MCP。
  */
-import { rename, writeFile, mkdir, readFile, unlink } from 'node:fs/promises'
+import { appendFile, rename, writeFile, mkdir, readFile, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type {
@@ -153,6 +153,31 @@ async function withMutationLock<T>(key: string, operation: () => Promise<T>): Pr
  */
 export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<T> {
   return withMutationLock(FACT_CANDIDATES_FILE, operation)
+}
+
+/** Single fact admission path: producers propose, explicit review applies. */
+export async function proposeFactCandidates(candidates: CandidateFact[]): Promise<CandidateFact[]> {
+  if (candidates.length === 0) return []
+  return withFactCandidatesLock(async () => {
+    const file = absolute(FACT_CANDIDATES_FILE)
+    await ensureParent(file)
+    let content = ''
+    try { content = await readFile(file, 'utf8') } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    const ids = new Set(content.split('\n').filter((line) => line.trim()).map((line) => (JSON.parse(line) as CandidateFact).id))
+    const fresh = candidates.filter((candidate) => {
+      if (candidate.status !== 'proposed' || candidate.fact.status !== 'proposed') throw new Error('Candidates require review before applying')
+      if (ids.has(candidate.id)) return false
+      ids.add(candidate.id)
+      return true
+    })
+    if (fresh.length) {
+      const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : ''
+      await appendFile(file, separator + fresh.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n', 'utf8')
+    }
+    return fresh
+  })
 }
 
 export function withWikiCandidatesLock<T>(operation: () => Promise<T>): Promise<T> {
@@ -353,6 +378,8 @@ export class KnowledgeReviewService {
   }
 
   async applyCandidate(input: ReviewCandidateInput): Promise<ReviewResult> {
+    // Note: offline candidates always require explicit review — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+    if (input.actor === 'auto-policy') throw new Error('Automatic acceptance is unavailable; explicit review is required')
     return withMutationLock(candidateRelativePath(input.type), () => this.applyLocked(input))
   }
 

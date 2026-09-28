@@ -228,8 +228,9 @@ export function recallFilterKey(request: KnowledgeRecallRequest): string {
   return JSON.stringify([request.layer, request.scope ?? '', request.allowGlobal === true, request.workspaceId?.trim() ?? '', request.workspaceName?.trim() ?? '', request.workspacePath?.trim().toLowerCase() ?? '', request.source ?? '', types, tags, files, request.agentId?.trim() ?? '', request.sessionId?.trim() ?? '', request.since?.trim() ?? '', request.until?.trim() ?? ''])
 }
 
-function matchesFilters(document: KnowledgeRecallDocument, request: KnowledgeRecallRequest): boolean {
+function matchesFilters(document: KnowledgeRecallDocument, request: KnowledgeRecallRequest, nowMs: number): boolean {
   const { hit } = document
+  if (hit.status === 'expired' || (hit.expiresAt && Date.parse(hit.expiresAt) <= nowMs)) return false
   // User memory M2: person-scoped documents stay private by default; only an
   // explicit user-scope request observes them, on any shared-surface path.
   if (request.scope !== 'user' && (hit.scope === 'user' || hit.workspaceId === 'user')) return false
@@ -279,6 +280,7 @@ function observationDocument(
   const fileRefs = derived ? Array.from(new Set([...observation.fileRefs, ...derived.fileRefs])) : observation.fileRefs
   const hit: KnowledgeSearchHit = {
     id: observation.id,
+    expiresAt: observation.expiresAt,
     type: 'observation',
     title: observation.summary ?? content.split('\n')[0] ?? observation.id,
     content: derived && derived.summary ? `${derived.summary}\n${content}` : content,
@@ -292,7 +294,7 @@ function observationDocument(
     fileRefs,
     sourceObservationIds: [observation.id],
     createdAt: observation.createdAt,
-    status: 'active',
+    status: observation.episodeStatus ?? 'active',
     ...(observation.agentId ? { agentId: observation.agentId } : {}),
     ...(observation.sessionId ? { sessionId: observation.sessionId } : {}),
   }
@@ -653,7 +655,7 @@ export class KnowledgeRecallService {
     }
 
     const { fingerprint, documents: allDocuments } = await this.cachedDocumentsWithFingerprint(request.layer)
-    const documents = allDocuments.filter((document) => matchesFilters(document, request))
+    const documents = allDocuments.filter((document) => matchesFilters(document, request, this.nowMs()))
     const filterKey = recallFilterKey(request)
     const index = this.cachedIndex(filterKey, fingerprint, () => new Bm25Index(documents.map((document) => ({
       id: document.key,

@@ -13,9 +13,9 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 ## Problem
 
-JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线，个人 Habit 也已部分接入同一队列和事实库。重复与旁路主要集中在 Episode 独立落盘、Profile 独立写入、个人工具直接追加候选，以及独立构建的个人召回索引；不能把现状描述成两套完整的 MemoryFact、supersedes 与 audit 实现。个人画像缺少统一的证据可信分级、可重建快照和完整生命周期闭环。
+JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。前两片已将个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，补充宿主来源契约，并移除确定性提取器内部的自动接受。剩余旁路集中在 Profile 独立写入及个人召回索引；旧 Episode 仍通过兼容读取提供服务。个人画像尚缺稳定证据账本、可重建快照和完整生命周期闭环。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)在提取内部调用 autoAcceptEligible，后插入的 scorer 无法阻止已经入库的事实。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)直接追加候选文件，[Episode](../../src/main/knowledge/user-episode-service.ts)与 [Profile](../../src/main/knowledge/user-profile-service.ts)各有写入口。[LLM 阶段](../../src/main/knowledge/llm-stage.ts)已经把无模型视为正常 skip，本次要改变的是默认调用策略和决策归属。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)现在只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)仍待改为事实派生视图。[LLM 阶段](../../src/main/knowledge/llm-stage.ts)在缺省设置下关闭，无模型及无合格证据都是正常 skip；scorer 驱动的精修 Gate 尚未实现。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
 
 需求边界（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。
 
@@ -107,25 +107,33 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 ### 实施顺序与范围
 
 1. 固定归属与证据契约：在 shared/knowledge、contracts、capture、提取与审核入口贯通 project/user/global、宿主来源记录与事件身份；覆盖工程用户陈述可派生个人开发习惯、未归因工程内容不能派生个人习惯、重放去重及旧数据兼容。候选决策注解随 scorer 实施，Episode TTL 的统一随写链收拢实施。
-2. 收拢写链并完成离线基线：改造 deterministic-extractor、processing-queue、review-service、user-turn-capture 和 user-memory-tools；自动审核移到统一策略层，个人保存与 Episode 进入统一管线，默认规则候选全量人工审核。
+2. 收拢写链并完成离线基线：改造 deterministic-extractor、processing-queue、review-service、user-turn-capture 和 user-memory-tools；移除提取器自动接受，个人保存与 Episode 进入统一管线，规则候选全量人工审核。新 Episode 切换写入时提供旧文件兼容读取与生命周期处理；未来自动审核由统一策略层另行实现。
 3. 接入 scorer 与精修 Gate：实现 NoopScorer、sidecar 状态、固定多语适配、输出校验、校准记录和独立精修任务；无模型也能通过完整端到端测试，随后再评估真实 Laya。
 4. 完成 Profile 与 Lifecycle：改造 user-profile-service、user-overview-service、habit-aggregator、recall-service 和 user-recall-service；接入稳定账本、override、指纹失效、双预算及有界访问增强。
-5. 在切换旧写入口前落实迁移，再切换 UI：以稳定 legacyId/事件身份建立幂等迁移映射，保留原 ID、来源、审核状态、版本链和 TTL；无法证明人工来源的旧 Profile 文本进入待核验材料，不批量升格可信。迁移可断点续跑、有备份和回退读取方案；不靠长期双写维持一致性。
+5. 在停用旧数据读取及切换 Profile 写入口前落实迁移，再切换 UI：以稳定 legacyId/事件身份建立幂等迁移映射，保留原 ID、来源、审核状态、版本链和 TTL；无法证明人工来源的旧 Profile 文本进入待核验材料，不批量升格可信。迁移可断点续跑、有备份和回退读取方案；不靠长期双写维持一致性。
 6. 接入设置、工程/个人 Inbox、画像和诊断信息，完成跨域、失败恢复、Wiki 来源与打包回归。扩展到已发布向量后端、个性化微调、团队 publish、新数据库和独立记忆服务器均需后续范围，不在本次默认依赖内。
 
 源码审阅期间实际运行 Laya 的 `python tests/test_lang_guess.py`（93 passed）和 `python tests/test_blank_lang_routing.py`（24 passed），均未加载权重。MaiBot 的 person_fact_verification、fact_ledger、person_profile_service、memory_lifecycle_policy 等测试，以及 A_memorix 的访问边界测试只作源码阅读；未宣称通过整套上游测试或真实模型评测。后续实现验证采用临时 JANUSX_KNOWLEDGE_ROOT，禁止触碰真实个人知识数据。
 
-### 当前实施边界：归属与证据契约
+### 当前实施边界：归属证据、统一写入与离线基线
 
 [memory-evidence](../../src/main/knowledge/memory-evidence.ts)提供统一的 scope 解析、证据字段校验和用户陈述资格判断。Observation 保存原工作区、scope、通道、发言者、会话、事件 ID、时间、原文片段与来源级别；确定性与 LLM 候选携带这些宿主证据，审核后的 MemoryFact 在 provenance 中保留证据链。来源级别区分 user-stated、model-generated、tool-observed、unverified，不代表真实性或审核通过。LLM 输出的 scope/provenance 不参与赋权；IPC payload 的同名字段也不参与来源核验。global 仅由主进程上下文显式指定，查询范围的 global 与内容归属无关。
 
 Janus 聊天适配器按实际消息角色和请求 ID 记录来源，同一会话的 loop capture 与结束 capture 使用相同会话身份。不同真实轮次的相同内容保留独立事件，同事件重试、重启或月份切换不重复追加观察。同一轮关联多个项目仍只贡献一次习惯频次。Habit 读取当前 batch 和最近 200 条观察中的可核验用户表达，跨批次、跨项目形成 user 候选，保留工程观察与工程候选的 project 归属；近期窗口以外的历史不参与这次自动归纳。
 
-确定性事实与 Habit 的候选身份稳定，追加与已有审核共用锁；相同证据重放不复活已拒绝或已应用的候选，证据集合无新增时不增强频次或强度。旧 Observation/MemoryFact 缺少新增字段仍可读取，旧 user 哨兵仍按个人记忆过滤，其余缺省按 project；旧 actor/source 标签不自动升格为已核验用户来源。user-memory.save 继续生成候选，来源记为 tool 且不伪装为人工陈述，明确保存不要求三次重复。
+确定性事实与 Habit 的候选身份稳定，追加与已有审核共用锁；相同证据重放不复活已拒绝或已应用的候选，证据集合无新增时不增强频次或强度。旧 Observation/MemoryFact 缺少新增字段仍可读取，旧 user 哨兵仍按个人记忆过滤，其余缺省按 project；旧 actor/source 标签不自动升格为已核验用户来源。
 
-本片仅落实上述契约与回归，不表示 AC-1、AC-3、AC-10 全部完成。完整 Profile 从工程事实读取与派生、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、个人保存与 Episode 的统一写入、LLM 阶段任务幂等、相似习惯候选的持续合并、撤回后阻止历史证据再提升、Laya 和生命周期仍按后续步骤实施。新来源可进入已确认画像仍须 Inbox 审核。
+第二片中，`user-memory.save` 先落带 `memoryIntent: remember` 的 user Observation，返回 `status: queued` 和 observation 引用，再由已有队列生成稳定 ID 的候选。一次明确保存即足够，不要求关键词或三次重复；返回 queued 不表示审核通过或已经进入长期事实。工具文本来源为 tool、发言者为 assistant、级别为 model-generated，不能伪装成用户原话。意图和来源只由宿主上下文赋予，payload/metadata 同名字段不参与赋权；工具运行上下文目前没有会话或调用事件 ID，因此该入口采用内容去重，不宣称能区分每次同文确认。
 
-机器验证（2026-09-28）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 46 个文件、358 项测试；其中 [memory-evidence.test.ts](../../tests/unit/knowledge/memory-evidence.test.ts)的 13 项测试覆盖来源伪造、global 赋权、事件重试、跨月恢复、跨项目开发习惯、多项目转发、证据合并、审批后私有召回、拒绝后重放、非法字段、混域拒绝和旧数据读取。`npm run typecheck`、`npm run typecheck:strict-unused`、本片 12 个生产文件的定向 `npx eslint`、`npm run check:package-boundary` 和本片文件的 `git diff --check` 均通过。未运行桌面打包/E2E 或真实 Laya 权重测试。
+新 Episode 是带 `expiresAt`、`episodeStatus` 的 user Observation：个人聊天的用户原文与近期记录共用一份观察，助手回复另存且不作为该 Episode 的本人证据；带工程工作区的聊天也按 session/request 身份保存个人近期记录。原文经脱敏后完整保存，近期展示投影最多 4000 字符。旧 `episodes/*.jsonl` 保留原 ID、状态与 TTL 并继续读取，新内容不再双写旧目录；这属于兼容切换，尚未完成旧文件物理迁移。
+
+Episode 的新存储过期与遗忘复用 Observation 写锁，覆盖活动分片及 gzip 归档，兼容层继续处理旧 Episode。召回按查询时钟过滤 TTL，即使 BM25 缓存未重建也不交付到期事件；队列、规则提取、Habit 和 LLM 输入排除已失效观察。带原事件身份的重试不会复活已遗忘 Episode。候选写入统一经 `proposeFactCandidates`，与审核共享锁；已写候选但游标未推进时可重试且不重复提案，损坏的候选文件报错保留原文。LLM 合并在锁内重读候选，不能覆盖期间已完成的批准或拒绝。
+
+确定性提取器不再应用 truth，旧 `autoAcceptDeterministicFacts` 即使为 true 也归一为 false，旧 auto-policy 调用被拒绝，设置面板移除失效开关。缺省处理模式改为 deterministic-only；已有显式 auto/llm-preferred 配置仍可运行可选 LLM。显式记忆已由规则保留全文，不再送入 LLM；无合格证据返回正常 skip。scorer、校准后的自动审核和按需精修任务留到下一片。
+
+AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-10 尚未全部完成。完整 Profile 从工程事实读取与派生、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、LLM 阶段任务幂等、相似习惯候选持续合并、Laya 及完整生命周期仍按后续步骤实施。Episode 失效尚不级联撤销已生成候选或长期事实，也未实现对运行中任务及工程历史证据的统一遗忘屏障；这些属于后续账本撤回与 Profile 失效工作，不能将当前 Episode 遗忘描述为全链路删除。新来源进入已确认画像仍须 Inbox 审核。
+
+机器验证（2026-09-28，第二片）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 47 个文件、372 项测试。[memory-write-pipeline.test.ts](../../tests/unit/knowledge/memory-write-pipeline.test.ts)的 12 项测试覆盖一次显式保存到人工审核与召回、游标失败恢复、候选文件边界与损坏恢复、意图伪造、旧自动接受设置、聊天重试、旧 Episode 兼容、长原文保留、gzip 归档、TTL 与遗忘后重放；[extract-service.test.ts](../../tests/unit/knowledge/extract-service.test.ts)覆盖精修期间批准或拒绝不被覆盖。[memory-evidence.test.ts](../../tests/unit/knowledge/memory-evidence.test.ts)的 13 项归属与工程习惯测试继续通过。`npm run typecheck:strict-unused`、`npm run check:package-boundary` 和本片文件的 `git diff --check` 通过；18 个生产文件的定向 `npx eslint` 为零错误，KnowledgeWorkbench 原有 useEffect/refresh 依赖告警仍存在。未运行桌面打包/E2E 或真实 Laya 权重测试。
 
 Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；通过临时 Node loader 解析到已安装的 `../janus-agentX/node_modules/yaml` 后执行原检查器，检查 207 篇 Harness Note，本篇零错误，但既有 `2026-09-28-debug-mode-plan--1645e12c.md` 缺少 Proposal、Risks 两节。没有修改该无关草稿，也没有将全库失败记为通过。测试均使用临时知识根目录，未改写真实知识数据。
 
@@ -144,7 +152,7 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 - [ ] AC-2: 工程事实闭环 — agent/checkpoint/git/tool/blueprint 来源可追溯；重复只合证据，相似度不直接替代，显式 supersedes 检查归属与当前版本；测试覆盖版本晋升、冲突、索引失效和退出默认召回，强度变弱不删除有效 truth。
 - [ ] AC-3: 画像证据闭环 — 个人画像服务 Janus，可读取工程知识并归纳有本人证据的开发习惯；明确保存意图不受重复频次门槛限制。人工 override 与可信账本优先，模型推测进入 uncertain 且默认不注入稳定画像；来源可核验、同证据不增快照版本、撤回立即失效、私有数据不进入工程与 MCP 等共享面。
 - [ ] AC-4: Laya 为主决策分流 — ready 时输出 retention/kind/support/duplicate/supersede/conflict 注解，answer_confidence 与 noul 方向校验驱动快道或待精修；关闭、缺席、失联、超时、无效输出时用 NoopScorer 保留规则候选且不抛到聊天主链。兼容既有数据，不要求延续旧自动审核/自动 LLM 行为。
-- [ ] AC-5: 无 Laya 基线完整 — 无 key、无 sidecar 时规则加 BM25 仍能完成 capture→candidate→人工 review→truth→recall；全部新候选人工审核，原 autoAccept 设置不得绕过；没有默认 LLM 是正常状态。
+- [x] AC-5: 无 Laya 基线完整 — 无 key、无 sidecar 时规则加 BM25 仍能完成 capture→candidate→人工 review→truth→recall；全部新候选人工审核，原 autoAccept 设置不得绕过；没有默认 LLM 是正常状态。
 - [ ] AC-6: LLM 可选精修 — off 默认不自动调用；on-demand 仅在 Laya 标记、配置允许和预算充足时运行，人工触发也归 queue；超时、重试、字符预算及失败保留候选的语义可测试，精修结果重新核验。
 - [ ] AC-7: Laya 资源受控 — 安装包不包含权重与 Python/torch；模型按需下载、revision/hash 固定、只加载指定多语 checkpoint；预热推理未通过不能 ready，idle 卸载与缺席回退可观察；单纯 health=ok 不算就绪。
 - [ ] AC-8: 决策质量可追溯 — 校准集与留出集按来源隔离，记录模型、题型、语言与模板版本的准确率、Brier、ECE、覆盖率和错误接受率；熵型 confidence、分类概率、act_probability、跨窗最大概率都不能冒充事实支持度。未达到已记录的审核策略质量门槛时自动接受保持关闭。
@@ -164,3 +172,5 @@ Laya 多语模型的任务质量和校准仍需本地样本证明；温度拟合
 画像必须能在来源失效时及时重建，同时保留 override。缓存指纹遗漏依赖会保留过期偏好，加入访问分数又会引发无意义重建；以来源内容版本、生成规则和人工变更为依据，并用撤回、遗忘、同 ID 内容变化和仅排名变化的反例验收。
 
 统一写链最易在迁移期间因重放、旧工具直写或习惯跨批次聚合重复积累。上线切换必须有明确的写入所有者、幂等映射和恢复点；模型不可用不能阻塞规则结算，模型恢复也不能把旧候选自动重放成已接受事实。
+
+Episode 兼容期的新观察分片与旧文件分别持锁，不构成跨文件事务；部分失败需重试完成剩余过期处理。当前测试证明普通重试不会恢复同一原事件，但不覆盖已派生候选、长期事实或运行中精修的级联撤回。缺少调用事件 ID 的显式保存只能按内容去重，恢复真实事件身份前不能将同文工具调用当成多次独立本人确认。

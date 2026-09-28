@@ -4,11 +4,7 @@ export type KnowledgeProcessingMode = 'auto' | 'deterministic-only' | 'llm-prefe
 export interface KnowledgeSettings {
   enabled: boolean
   mode: KnowledgeProcessingMode
-  /**
-   * Phase 1 convergence (§4.6): auto-apply deterministic high-confidence facts
-   * (derivation='deterministic', confidence>=0.9, kind='fact', source tool/checkpoint).
-   * Off by default; audit actor is 'auto-policy'.
-   */
+  /** Legacy setting, normalized to false; candidates require explicit review. */
   autoAcceptDeterministicFacts: boolean
 }
 
@@ -20,7 +16,7 @@ const PROCESSING_MODES: ReadonlySet<KnowledgeProcessingMode> = new Set([
 
 export const DEFAULT_KNOWLEDGE_SETTINGS: KnowledgeSettings = {
   enabled: true,
-  mode: 'auto',
+  mode: 'deterministic-only',
   autoAcceptDeterministicFacts: false,
 }
 
@@ -37,9 +33,6 @@ export function normalizeKnowledgeSettings(
       typeof source.mode === 'string' && PROCESSING_MODES.has(source.mode as KnowledgeProcessingMode)
         ? (source.mode as KnowledgeProcessingMode)
         : DEFAULT_KNOWLEDGE_SETTINGS.mode,
-    autoAcceptDeterministicFacts:
-      typeof source.autoAcceptDeterministicFacts === 'boolean'
-        ? source.autoAcceptDeterministicFacts
-        : DEFAULT_KNOWLEDGE_SETTINGS.autoAcceptDeterministicFacts,
+    autoAcceptDeterministicFacts: false,
   }
 }

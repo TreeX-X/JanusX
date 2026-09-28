@@ -510,7 +510,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         ?.content.trim() ?? ''
       const hadWorkspace = Boolean(workspaceId || workspacePath || (workspaceResources?.length ?? 0) > 0)
       if (hadWorkspace) {
-        await capturePersonEpisodeFromTurn({ userText: lastUserText })
+        await capturePersonEpisodeFromTurn({ userText: lastUserText, sessionId: conversationId ?? requestId, correlationId: requestId })
       } else {
         await capturePersonChatTurn({
           userText: lastUserText,

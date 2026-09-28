@@ -2,8 +2,8 @@
 /**
  * @file Person turn capture (user memory MVP closeout).
  * @description Writes one workspace-free janus-chat turn into person scope:
- * user plus assistant observations under the `user` sentinel plus one dated
- * episode from the user text, then schedules the `user` queue cursor. The
+ * user plus assistant observations under the `user` sentinel; the user
+ * observation is also the dated episode. Schedules the `user` queue cursor. The
  * episode TTL sits mid-range (60 days) so a monthly "what did I do" still
  * answers while harvest plus the rolling working set bound growth. Every
  * path fails open: capture must never break chat completion.
@@ -32,25 +32,17 @@ export async function capturePersonChatTurn(input: PersonTurnCaptureInput): Prom
   const assistantText = input.assistantText?.trim() ?? ''
   if (!userText && !assistantText) return
   try {
-    const observationIds: string[] = []
     if (userText) {
-      const observation = await knowledgeObservationService.capture({
-        workspaceId: USER_MEMORY_WORKSPACE_ID,
-        workspaceName: USER_MEMORY_WORKSPACE_ID,
-        workspacePath: USER_MEMORY_WORKSPACE_PATH,
-        source: 'janus-chat',
-        type: 'conversation-turn',
+      await userEpisodeService.capture({
         content: userText,
-        summary: 'Janus Chat user message (no workspace)',
+        ttlDays: PERSON_TURN_EPISODE_TTL_DAYS,
         tags: ['janus-chat', 'user'],
-        actor: 'user',
-        correlationId: input.correlationId,
+        sourceEventId: input.correlationId,
         sessionId: input.sessionId,
-      }, { speaker: 'user', sourceEventId: input.correlationId })
-      if (typeof observation?.id === 'string') observationIds.push(observation.id)
+      }, { speaker: 'user' })
     }
     if (assistantText) {
-      const observation = await knowledgeObservationService.capture({
+      await knowledgeObservationService.capture({
         workspaceId: USER_MEMORY_WORKSPACE_ID,
         workspaceName: USER_MEMORY_WORKSPACE_ID,
         workspacePath: USER_MEMORY_WORKSPACE_PATH,
@@ -67,15 +59,6 @@ export async function capturePersonChatTurn(input: PersonTurnCaptureInput): Prom
           ...(input.modelId ? { modelId: input.modelId } : {}),
         },
       }, { speaker: 'assistant', sourceEventId: input.correlationId })
-      if (typeof observation?.id === 'string') observationIds.push(observation.id)
-    }
-    if (userText) {
-      await userEpisodeService.capture({
-        content: userText,
-        ttlDays: PERSON_TURN_EPISODE_TTL_DAYS,
-        tags: ['janus-chat'],
-        sourceObservationIds: observationIds,
-      })
     }
     knowledgeProcessingQueue.scheduleImmediate(USER_MEMORY_WORKSPACE_ID)
   } catch (error) {
@@ -84,7 +67,7 @@ export async function capturePersonChatTurn(input: PersonTurnCaptureInput): Prom
 }
 
 /** Capture one dated episode from a workspace-attached janus-chat turn; never throws. */
-export async function capturePersonEpisodeFromTurn(input: Pick<PersonTurnCaptureInput, 'userText'>): Promise<void> {
+export async function capturePersonEpisodeFromTurn(input: Pick<PersonTurnCaptureInput, 'userText' | 'sessionId' | 'correlationId'>): Promise<void> {
   const userText = input.userText?.trim() ?? ''
   if (!userText) return
   try {
@@ -92,7 +75,10 @@ export async function capturePersonEpisodeFromTurn(input: Pick<PersonTurnCapture
       content: userText,
       ttlDays: PERSON_TURN_EPISODE_TTL_DAYS,
       tags: ['janus-chat'],
-    })
+      sessionId: input.sessionId,
+      sourceEventId: input.correlationId,
+    }, { speaker: 'user' })
+    knowledgeProcessingQueue.scheduleImmediate(USER_MEMORY_WORKSPACE_ID)
   } catch (error) {
     logKnowledgeCaptureFailure(error)
   }

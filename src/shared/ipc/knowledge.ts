@@ -121,7 +121,7 @@ export interface ReviewCandidateInput {
   type: ReviewCandidateType
   id: string
   reviewNotes?: string
-  /** Phase 1 convergence: audit actor override (auto-policy for §4.6 auto-accept). Defaults to 'knowledge-review'. */
+  /** Audit actor override for explicit review. Legacy auto-policy is rejected. Defaults to 'knowledge-review'. */
   actor?: string
 }
 

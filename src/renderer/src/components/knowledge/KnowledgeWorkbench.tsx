@@ -71,7 +71,7 @@ export interface InspectorRecord {
   sourceIds: string[]
   fileRefs: string[]
   createdAt?: string
-  status?: CandidateStatus | 'active' | 'archived'
+  status?: CandidateStatus | 'active' | 'archived' | 'expired'
   reviewType?: KnowledgeReviewCandidateType
   kind?: KnowledgeCard['kind']
   workspaceId?: string

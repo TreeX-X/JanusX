@@ -9,22 +9,17 @@
  * observation, or episode source, secrets are redacted before storage, and
  * every mutation audits.
  */
-import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
 import { redactHighConfidenceSecrets, type RegisteredTool, type ToolRegistry } from '@janus-agent/agent-core'
-import type { CandidateFact, MemoryFact } from '../../../../shared/knowledge'
-import { knowledgeRootPath } from '../../../knowledge/constants'
-import { knowledgeAuditService } from '../../../knowledge/audit-service'
 import { knowledgeOperationsService } from '../../../knowledge/operations-service'
 import { knowledgeTruthService } from '../../../knowledge/truth-service'
+import { knowledgeObservationService } from '../../../knowledge/observation-service'
+import { knowledgeProcessingQueue } from '../../../knowledge/processing-queue'
 import { userEpisodeService } from '../../../knowledge/user-episode-service'
 import { searchUserMemoryDefault } from '../../../knowledge/user-recall-service'
 import { Bm25Index } from '../../../knowledge/search/bm25'
 import { isForgettableQuery, matchesForgettingQuery } from '../../../knowledge/search/tokenizer'
 
 const registeredRegistries = new WeakSet<ToolRegistry>()
-const FACT_CANDIDATES_FILE = join('facts', 'candidates.jsonl')
 const MAX_QUERY_CHARS = 500
 const MAX_SAVE_CHARS = 2000
 const MAX_TAGS = 20
@@ -78,7 +73,7 @@ export const userMemorySearchTool: RegisteredTool = {
 
 export const userMemorySaveTool: RegisteredTool = {
   name: 'user-memory.save',
-  description: 'Propose a durable user memory (preference or habit) for Inbox review. Candidate-only: never writes truth directly; a human approves it in the Inbox. Secrets are redacted before storage.',
+  description: 'Queue a durable user memory for Inbox review. Returns queued with a source observation citation; a human approves the resulting candidate in the Inbox. Secrets are redacted before storage.',
   actionRisk: 'write',
   inputSchema: {
     type: 'object',
@@ -92,55 +87,17 @@ export const userMemorySaveTool: RegisteredTool = {
     const { text, redacted } = redactHighConfidenceSecrets(raw)
     const content = text.trim().slice(0, MAX_SAVE_CHARS)
     if (!content) throw new Error('user-memory.save content is empty after normalization')
-    const nowIso = new Date().toISOString()
-    const fact: MemoryFact = {
-      id: randomUUID(),
-      content,
-      concepts: [],
-      files: [],
-      tags: [...new Set(['user-memory', ...tags])],
-      confidence: 0.6,
-      version: 1,
-      status: 'proposed',
-      kind: 'preference',
-      scope: 'user',
-      provenance: {
-        workspaceId: 'user',
-        workspaceName: 'user',
-        workspacePath: '',
-        source: 'tool',
-        sourceObservationIds: [],
-        sourceEvidence: [],
-        fileRefs: [],
-        actor: 'user-memory-save',
-        createdAt: nowIso,
-      },
-    }
-    const candidate: CandidateFact = {
-      id: randomUUID(),
-      type: 'fact',
-      status: 'proposed',
-      fact,
-      derivation: 'deterministic',
-      evidence: { observationIds: [], snippets: [content.slice(0, 280)] },
-    }
-    const file = join(knowledgeRootPath(), FACT_CANDIDATES_FILE)
-    await mkdir(dirname(file), { recursive: true })
-    await appendFile(file, `${JSON.stringify(candidate)}\n`, 'utf8')
-    await knowledgeAuditService.record({
-      action: 'candidate_proposed',
-      targetType: 'fact',
-      targetId: candidate.id,
-      before: null,
-      after: { factId: fact.id, scope: 'user', derivation: 'deterministic' },
-      provenance: { ...fact.provenance, actor: 'user-memory-save' },
-    })
+    const observation = await knowledgeObservationService.capture({
+      workspaceId: 'user', workspaceName: 'user', workspacePath: 'user',
+      source: 'tool', type: 'user-note', actor: 'user-memory-save', content,
+      tags: [...new Set(['user-memory', ...tags])], visibility: 'restricted',
+    }, { speaker: 'assistant', memoryIntent: 'remember' })
+    knowledgeProcessingQueue.scheduleImmediate('user')
     return {
-      candidateId: candidate.id,
-      factId: fact.id,
-      status: 'proposed' as const,
+      observationId: observation.id,
+      status: 'queued' as const,
       redacted,
-      citations: { candidateId: candidate.id, factId: fact.id },
+      citations: { observationIds: [observation.id] },
     }
   },
 }

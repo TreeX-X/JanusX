@@ -141,7 +141,6 @@ describe('deterministic extractor (Phase 1-2)', () => {
     ]
     const result = await runDeterministicStage(
       { workspaceId: 'ws-1', observations },
-      { getAutoAccept: async () => false },
     )
     // Exact dupe shares the derived write: 2 derived artifacts, 1 proposal.
     expect(result).toEqual({ derived: 2, proposals: 1, autoAccepted: 0 })
@@ -163,28 +162,15 @@ describe('deterministic extractor (Phase 1-2)', () => {
     expect(candidate.conflicts).toBeUndefined()
   })
 
-  it('auto-accepts only deterministic high-confidence tool/checkpoint facts (§4.6)', async () => {
-    const applied: Array<{ type: string; id: string; actor?: string }> = []
-    const observations = [
+  it('keeps high-confidence tool facts pending explicit review', async () => {
+    const result = await runDeterministicStage({ workspaceId: 'ws-1', observations: [
       obs({ id: 'g', type: 'git-event', content: 'commit abc: ship it', fileRefs: ['src/a.ts'] }),
-      obs({ id: 'd', type: 'user-note', content: '决定：采用软删除方案' }),
-      obs({ id: 'c', type: 'user-note', source: 'janus-chat', content: 'commit xyz: stray note' }),
-    ]
-    // 'c' is a user-note (no pattern) so it yields no proposal; add a checkpoint
-    // fact from a non-tool source instead via a second run below.
-    const result = await runDeterministicStage(
-      { workspaceId: 'ws-1', observations },
-      { getAutoAccept: async () => true, applyCandidate: async (input) => { applied.push(input); return null } },
-    )
+      obs({ id: 'd', type: 'user-note', content: 'we decided to keep review explicit' }),
+    ] })
     expect(result.proposals).toBe(2)
-    expect(result.autoAccepted).toBe(1)
-    // Only the git fact (confidence 0.9, source tool) is accepted with the auto-policy actor.
-    expect(applied).toHaveLength(1)
-    expect(applied[0]?.type).toBe('fact')
-    expect(applied[0]?.actor).toBe('auto-policy')
+    expect(result.autoAccepted).toBe(0)
     const candidates = await knowledgeExtractService.listFactCandidates()
-    const git = candidates.find((c) => c.evidence.observationIds.includes('g'))!
-    expect(applied[0]?.id).toBe(git.id)
+    expect(candidates.every((candidate) => candidate.status === 'proposed')).toBe(true)
   })
 
   it('keeps repeated engineering preferences in project scope', async () => {
@@ -195,7 +181,6 @@ describe('deterministic extractor (Phase 1-2)', () => {
     ]
     const result = await runDeterministicStage(
       { workspaceId: 'ws-1', observations },
-      { getAutoAccept: async () => false },
     )
     expect(result.proposals).toBe(1)
     const candidates = await knowledgeExtractService.listFactCandidates()

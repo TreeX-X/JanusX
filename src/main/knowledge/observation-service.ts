@@ -22,6 +22,7 @@ import { knowledgeContractService } from './contract-service'
 import { classifyRetention, isAutoPrunable } from './retention-classifier'
 import { knowledgeAuditService } from './audit-service'
 import { isMemoryScope, isSourceEvidence } from './memory-evidence'
+import { matchesForgettingQuery } from './search/tokenizer'
 
 const gzipAsync = promisify(gzip)
 const gunzipAsync = promisify(gunzip)
@@ -95,10 +96,12 @@ export function observationDedupeKey(input: {
   speaker?: string
   sessionId?: string
   sourceEventId?: string
+  memoryIntent?: Observation['memoryIntent']
 }): string {
   if (input.source !== undefined || input.sourceEventId !== undefined) {
     return createHash('sha256').update(JSON.stringify([
       input.scope, input.workspaceId, input.type, input.source, input.speaker, input.sessionId,
+      ...(input.memoryIntent ? [input.memoryIntent] : []),
       input.sourceEventId ? ['event', input.sourceEventId] : ['content', input.contentHash ?? input.content],
     ])).digest('hex')
   }
@@ -187,6 +190,12 @@ function describeObservationViolation(value: unknown): string | null {
   if (value.scope !== undefined && !isMemoryScope(value.scope)) return 'invalid-scope'
   if (value.sourceEvidence !== undefined && (!isSourceEvidence(value.sourceEvidence)
     || value.sourceEvidence.observationId !== value.id)) return 'invalid-source-evidence'
+  if (value.memoryIntent !== undefined && value.memoryIntent !== 'remember' && value.memoryIntent !== 'episode') return 'invalid-memory-intent'
+  if (value.memoryIntent !== undefined && value.scope !== 'user') return 'invalid-intent-scope'
+  if (value.memoryIntent === 'episode' && (typeof value.expiresAt !== 'string'
+    || !Number.isFinite(Date.parse(value.expiresAt))
+    || (value.episodeStatus !== 'active' && value.episodeStatus !== 'expired'))) return 'invalid-episode'
+  if (value.relatedObservationIds !== undefined && !isStringArray(value.relatedObservationIds)) return 'invalid-related-observations'
   return null
 }
 
@@ -432,6 +441,10 @@ export interface ObservationCaptureContext {
   speaker: MemorySpeaker
   sourceEventId?: string
   scope?: MemoryScope
+  memoryIntent?: Observation['memoryIntent']
+  episodeTtlDays?: number
+  createdAt?: string
+  relatedObservationIds?: string[]
 }
 
 export class KnowledgeObservationService {
@@ -455,12 +468,14 @@ export class KnowledgeObservationService {
       tags: input.tags,
     })
 
-    const createdAt = new Date().toISOString()
+    const createdAt = context?.createdAt ?? new Date().toISOString()
+    if (!Number.isFinite(Date.parse(createdAt))) throw new Error('Invalid observation timestamp')
     const workspaceId = normalizeWorkspaceId(workspacePath, input.workspaceId)
     const scope: MemoryScope = context?.scope ?? (workspaceId === 'user' ? 'user' : 'project')
     if (!isMemoryScope(scope) || ((workspaceId === 'user') !== (scope === 'user'))) {
       throw new Error('Memory scope must match the host workspace identity')
     }
+    if (context?.memoryIntent && scope !== 'user') throw new Error('Personal write intent requires user scope')
     const id = randomUUID()
     const speaker = context?.speaker ?? 'unknown'
     const sourceEventId = normalizeOptionalText(context?.sourceEventId)
@@ -475,6 +490,7 @@ export class KnowledgeObservationService {
       speaker: context?.speaker ?? input.actor ?? 'unknown',
       sessionId,
       sourceEventId,
+      memoryIntent: context?.memoryIntent,
     })
     const cacheKey = `${knowledgeRootPath()}\0${dedupeKey}`
     const cached = dedupeCache.get(cacheKey)
@@ -482,6 +498,12 @@ export class KnowledgeObservationService {
     const baseObservation: Observation = {
       id,
       scope,
+      ...(context?.memoryIntent ? { memoryIntent: context.memoryIntent } : {}),
+      ...(context?.memoryIntent === 'episode' ? {
+        expiresAt: new Date(Date.parse(createdAt) + Math.max(30, Math.min(90, context.episodeTtlDays ?? 60)) * 86400000).toISOString(),
+        episodeStatus: 'active' as const,
+        relatedObservationIds: context.relatedObservationIds ?? [],
+      } : {}),
       sourceEvidence: {
         observationId: id,
         workspaceId,
@@ -544,6 +566,21 @@ export class KnowledgeObservationService {
     }
     rememberDedupe(cacheKey, observation)
 
+    if (observation.memoryIntent) {
+      await knowledgeAuditService.record({
+        action: observation.memoryIntent === 'episode' ? 'user_episode_captured' : 'capture',
+        targetType: 'observation', targetId: observation.id, before: null,
+        after: { memoryIntent: observation.memoryIntent, expiresAt: observation.expiresAt ?? null },
+        provenance: {
+          workspaceId, workspaceName: observation.workspaceName, workspacePath, source: observation.source,
+          sourceObservationIds: [observation.id], sourceEvidence: [observation.sourceEvidence!], fileRefs: [],
+          actor: observation.actor, createdAt,
+        },
+      }).catch((error: unknown) => {
+        console.error(`[knowledge] capture audit failed: ${error instanceof Error ? error.message : String(error)}`)
+      })
+    }
+
     // Phase 1: notify the processing queue (debounced, never blocks capture).
     // Dynamic import: processing-queue statically depends on this service.
     void import('./processing-queue').then(({ knowledgeProcessingQueue }) => {
@@ -590,6 +627,53 @@ export class KnowledgeObservationService {
     const compressed = await readFile(absolutePath)
     const decompressed = await gunzipAsync(compressed)
     return decompressed.toString('utf8')
+  }
+
+  /** Episode lifecycle uses the same ledger lock as capture and retention. */
+  async expireEpisodes(options: { nowMs: number; confirm: boolean; query?: string }): Promise<{ expiredIds: string[]; kept: number }> {
+    return this.writeQueue.run(async () => {
+      const expiredIds: string[] = []
+      let kept = 0
+      for (const shard of await listObservationShardFiles()) {
+        const changed: Observation[] = []
+        const lines: string[] = []
+        for (const entry of parseShardLines(shard)) {
+          const observation = entry.observation
+          if (!observation || observation.memoryIntent !== 'episode' || observation.scope !== 'user') {
+            lines.push(entry.line)
+            continue
+          }
+          const matches = options.query
+            ? matchesForgettingQuery(options.query, `${await this.resolveContent(observation)}\n${observation.tags.join(' ')}`)
+            : Date.parse(observation.expiresAt!) <= options.nowMs
+          if (observation.episodeStatus !== 'active' || !matches) {
+            kept++
+            lines.push(entry.line)
+            continue
+          }
+          expiredIds.push(observation.id)
+          changed.push(observation)
+          lines.push(JSON.stringify({ ...observation, episodeStatus: 'expired' }))
+        }
+        if (!options.confirm || changed.length === 0) continue
+        const content = lines.length ? `${lines.join('\n')}\n` : ''
+        const path = join(knowledgeRootPath(), shard.relativePath)
+        await writeFileAtomic(path, shard.relativePath.endsWith('.gz') ? await gzipAsync(Buffer.from(content)) : content)
+        dedupeCache.clear()
+        for (const observation of changed) {
+          await knowledgeAuditService.record({
+            action: 'user_episode_harvested', targetType: 'observation', targetId: observation.id,
+            before: { status: 'active' }, after: { status: 'expired', reason: options.query ? 'forget' : 'ttl' },
+            provenance: {
+              workspaceId: 'user', workspaceName: 'user', workspacePath: 'user', source: 'system',
+              sourceObservationIds: [observation.id], fileRefs: [], actor: 'user-memory-harvest',
+              createdAt: new Date(options.nowMs).toISOString(),
+            },
+          })
+        }
+      }
+      return { expiredIds, kept }
+    })
   }
 
   async list(query: ObservationQuery): Promise<Observation[]> {

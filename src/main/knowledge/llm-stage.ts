@@ -19,6 +19,7 @@ import type { LlmStageBatch, LlmStageStatus } from './processing-queue'
 import { knowledgeExtractService } from './extract-service'
 import { configService } from '../config/service'
 import { llmService } from '../llm/LlmService'
+import { isActiveObservation, isUserStatement, observationScope } from './memory-evidence'
 
 /** §5: the queue delivers batches of at most this many observations per LLM call. */
 export const LLM_STAGE_BATCH_LIMIT = 50
@@ -61,6 +62,10 @@ export async function runLlmStage(
 ): Promise<LlmStageStatus> {
   const deps: LlmStageDeps = { ...defaultDeps(), ...overrides }
   const skipped = { skipped: true as const, processed: 0, proposed: 0, merged: 0 }
+  const eligible = batch.observations.filter((observation) => isActiveObservation(observation)
+    && observation.memoryIntent !== 'remember'
+    && (observationScope(observation) !== 'user' || isUserStatement(observation)))
+  if (!eligible.length) return { ...skipped, skippedReason: 'no-evidence' }
 
   if ((await deps.getMode()) === 'deterministic-only') {
     return { ...skipped, skippedReason: 'deterministic-only' }
@@ -71,11 +76,11 @@ export async function runLlmStage(
 
   let proposed = 0
   let merged = 0
-  for (let offset = 0; offset < batch.observations.length; offset += LLM_STAGE_BATCH_LIMIT) {
-    const chunk = batch.observations.slice(offset, offset + LLM_STAGE_BATCH_LIMIT)
+  for (let offset = 0; offset < eligible.length; offset += LLM_STAGE_BATCH_LIMIT) {
+    const chunk = eligible.slice(offset, offset + LLM_STAGE_BATCH_LIMIT)
     const outcome = await deps.extractChunk(chunk)
     proposed += outcome.proposed
     merged += outcome.merged
   }
-  return { skipped: false, processed: batch.observations.length, proposed, merged }
+  return { skipped: false, processed: eligible.length, proposed, merged }
 }

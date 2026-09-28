@@ -35,6 +35,7 @@ export function observationEventKey(observation: Observation): string {
 }
 
 export function isUserStatement(observation: Observation): boolean {
+  if (!isActiveObservation(observation)) return false
   const evidence = observation.sourceEvidence
   if (!isSourceEvidence(evidence) || evidence.observationId !== observation.id
     || evidence.workspaceId !== observation.workspaceId || evidence.scope !== observationScope(observation)
@@ -42,6 +43,11 @@ export function isUserStatement(observation: Observation): boolean {
   return (observation.type === 'conversation-turn' || observation.type === 'user-note')
     && (observation.source === 'janus-chat' || observation.source === 'manual')
     && evidence.speaker === 'user' && evidence.authority === 'user-stated'
+}
+
+export function isActiveObservation(observation: Pick<Observation, 'episodeStatus' | 'expiresAt'>, nowMs = Date.now()): boolean {
+  return observation.episodeStatus !== 'expired'
+    && (!observation.expiresAt || Date.parse(observation.expiresAt) > nowMs)
 }
 
 export function isMemoryScope(value: unknown): value is MemoryScope {

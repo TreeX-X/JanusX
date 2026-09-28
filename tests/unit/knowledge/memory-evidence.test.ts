@@ -59,7 +59,7 @@ describe('host memory evidence boundary', () => {
     const globalInput = { ...input, workspaceId: 'global', workspacePath: 'global', content: 'we decided to share a convention' }
     expect((await knowledgeObservationService.capture(globalInput)).scope).toBe('project')
     const observation = await knowledgeObservationService.capture(globalInput, { scope: 'global', speaker: 'user', sourceEventId: 'global-note' })
-    await runDeterministicStage({ workspaceId: 'global', observations: [observation] }, { getAutoAccept: async () => false })
+    await runDeterministicStage({ workspaceId: 'global', observations: [observation] })
     const [candidate] = await knowledgeExtractService.listFactCandidates()
     expect(candidate.fact.scope).toBe('global')
     const result = await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
@@ -111,7 +111,7 @@ describe('host memory evidence boundary', () => {
     for (const [index, workspaceId] of ['project-a', 'project-b', 'project-a'].entries()) {
       const observation = await knowledgeObservationService.capture({ ...input, workspaceId, workspacePath: `C:/${workspaceId}` },
         { speaker: 'user', sourceEventId: `engineering-turn-${index}` })
-      await runDeterministicStage({ workspaceId, observations: [observation] }, { getAutoAccept: async () => false })
+      await runDeterministicStage({ workspaceId, observations: [observation] })
     }
     const candidates = await knowledgeExtractService.listFactCandidates()
     const habits = candidates.filter((candidate) => candidate.fact.tags.includes('habit'))
@@ -150,7 +150,7 @@ describe('host memory evidence boundary', () => {
     let last!: Observation
     for (let turn = 1; turn <= 3; turn++) {
       last = await knowledgeObservationService.capture(input, { speaker: 'user', sourceEventId: `turn-${turn}` })
-      await runDeterministicStage({ workspaceId: 'user', observations: [last] }, { getAutoAccept: async () => false })
+      await runDeterministicStage({ workspaceId: 'user', observations: [last] })
     }
     const before = await knowledgeExtractService.listFactCandidates()
     const habits = before.filter((candidate) => candidate.fact.tags.includes('habit'))
@@ -159,7 +159,7 @@ describe('host memory evidence boundary', () => {
     expect(habits[0].evidence.sources?.every((evidence) => evidence.sessionId === 'chat-session' && evidence.excerpt === preference)).toBe(true)
     const approved = await knowledgeReviewService.applyCandidate({ type: 'fact', id: habits[0].id })
     expect(approved.applied?.fact?.provenance.sourceEvidence).toEqual(habits[0].evidence.sources)
-    const replay = await runDeterministicStage({ workspaceId: 'user', observations: [last] }, { getAutoAccept: async () => false })
+    const replay = await runDeterministicStage({ workspaceId: 'user', observations: [last] })
     expect(replay.proposals).toBe(0)
     expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(before.length)
     expect((await searchUserMemoryDefault('pnpm')).items.map((item) => item.id)).toContain(habits[0].fact.id)
@@ -170,10 +170,10 @@ describe('host memory evidence boundary', () => {
   it('does not recreate a rejected deterministic candidate on replay', async () => {
     const observation = await knowledgeObservationService.capture({ ...input, workspaceId: 'project-a', workspacePath: 'C:/project-a' })
     const batch = { workspaceId: 'project-a', observations: [observation] }
-    await runDeterministicStage(batch, { getAutoAccept: async () => false })
+    await runDeterministicStage(batch)
     const [candidate] = await knowledgeExtractService.listFactCandidates()
     await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
-    expect((await runDeterministicStage(batch, { getAutoAccept: async () => false })).proposals).toBe(0)
+    expect((await runDeterministicStage(batch)).proposals).toBe(0)
     expect((await knowledgeExtractService.listFactCandidates())[0].status).toBe('rejected')
   })
 

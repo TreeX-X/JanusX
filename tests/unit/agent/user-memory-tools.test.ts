@@ -1,12 +1,17 @@
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkspaceAgentRuntime } from '@janus-agent/agent-core'
 import { registerUserMemoryTools } from '../../../src/main/agent/runtime/tools/user-memory-tools'
 import { userEpisodeService } from '../../../src/main/knowledge/user-episode-service'
 import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
 import type { MemoryFact } from '../../../src/shared/knowledge'
+import { KnowledgeProcessingQueue } from '../../../src/main/knowledge/processing-queue'
+import { knowledgeObservationService } from '../../../src/main/knowledge/observation-service'
+import { runDeterministicStage } from '../../../src/main/knowledge/deterministic-extractor'
+
+vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
 const temporaryDirectories: string[] = []
 const previousKnowledgeRoot = process.env.JANUSX_KNOWLEDGE_ROOT
@@ -149,9 +154,19 @@ describe('user memory agent tools (M3)', () => {
       },
     })
     expect(result.status).toBe('completed')
-    const output = result.output as { candidateId: string; status: string; redacted: boolean }
-    expect(output.status).toBe('proposed')
+    const output = result.output as { observationId: string; status: string; redacted: boolean }
+    expect(output.status).toBe('queued')
     expect(output.redacted).toBe(true)
+    expect((await readJsonlLines(join('facts', 'candidates.jsonl')))).toHaveLength(0)
+    const observations = await knowledgeObservationService.listAll()
+    expect(observations[0]).toMatchObject({ id: output.observationId, memoryIntent: 'remember', scope: 'user' })
+    const queue = new KnowledgeProcessingQueue()
+    queue.configureDeterministicHandler(async (batch) => { await runDeterministicStage(batch) })
+    try {
+      expect((await queue.processNow()).failed).toBe(0)
+    } finally {
+      queue.dispose()
+    }
 
     const truth = await readJsonlLines(join('facts', 'facts.jsonl'))
     expect(truth).toHaveLength(1)
@@ -160,11 +175,12 @@ describe('user memory agent tools (M3)', () => {
     expect(candidates[0]!.status).toBe('proposed')
     expect(candidates[0]!.fact.scope).toBe('user')
     expect(candidates[0]!.fact.provenance.source).toBe('tool')
-    expect(candidates[0]!.fact.provenance.sourceEvidence).toEqual([])
+    expect(candidates[0]!.fact.provenance.sourceEvidence?.[0]).toMatchObject({ observationId: output.observationId, authority: 'model-generated' })
     expect(candidates[0]!.fact.content).toContain('[REDACTED]')
     expect(candidates[0]!.fact.content).not.toContain('sk-abcdefghijklmnopqrstuvwx')
     const audits = await readJsonlLines(join('audit', 'audit.jsonl')) as Array<{ action: string; targetId: string }>
-    expect(audits.some((event) => event.action === 'candidate_proposed' && event.targetId === output.candidateId)).toBe(true)
+    expect(audits.some((event) => event.action === 'capture' && event.targetId === output.observationId)).toBe(true)
+    expect(audits.some((event) => event.action === 'candidate_proposed')).toBe(true)
   })
 
   it('forgets user memory with audit while project knowledge survives', async () => {

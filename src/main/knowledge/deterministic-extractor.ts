@@ -9,8 +9,8 @@
  *              Deliberately free of LLM dependencies: producers that need the
  *              new Candidate fields write them here with derivation
  *              'deterministic'. Exact-dedupe keys (§3.1/§4.2) are shared with
- *              capture-time dedupe via `observation-service`; the §4.6
- *              auto-accept policy applies at the end of the stage when enabled.
+ *              capture-time dedupe via `observation-service`. Fact admission
+ *              uses review-service; this stage never applies truth.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
@@ -26,7 +26,6 @@ import type {
   MemoryFact,
   Observation,
 } from '../../shared/knowledge'
-import type { ReviewCandidateInput } from '../../shared/ipc/knowledge'
 import type { DeterministicBatch } from './processing-queue'
 import { CONTENT_PREVIEW_CHARS, knowledgeRootPath } from './constants'
 import { writeFileAtomic } from '../lib/atomic-file'
@@ -35,12 +34,10 @@ export { observationDedupeKey } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { deriveHabitPromotions, habitPromotionToCandidate } from './habit-aggregator'
 import { knowledgeTruthService } from './truth-service'
-import { knowledgeReviewService, withFactCandidatesLock } from './review-service'
-import { isUserStatement, observationEventKey, observationScope, sourceEvidence } from './memory-evidence'
-import { configService } from '../config/service'
+import { proposeFactCandidates } from './review-service'
+import { isActiveObservation, isUserStatement, observationEventKey, observationScope, sourceEvidence } from './memory-evidence'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 
-const FACT_CANDIDATES_FILE = join('facts', 'candidates.jsonl')
 const GRAPH_CANDIDATES_FILE = join('graph', 'candidates.jsonl')
 const DERIVED_DIR = join('processing', 'derived')
 
@@ -91,10 +88,6 @@ export interface DeterministicStageDeps {
   listTruthEdges: () => Promise<GraphEdge[]>
   listHabitObservations: () => Promise<Observation[]>
   nowIso: () => string
-  /** Phase 1 convergence (§4.6): reads the auto-accept switch; test-injectable. */
-  getAutoAccept: () => Promise<boolean>
-  /** Phase 1 convergence (§4.6): applies a matching candidate; test-injectable. */
-  applyCandidate: (input: ReviewCandidateInput) => Promise<unknown>
 }
 
 function defaultDeps(): DeterministicStageDeps {
@@ -104,8 +97,6 @@ function defaultDeps(): DeterministicStageDeps {
     listTruthFacts: async () => (await knowledgeTruthService.list()).facts,
     listTruthEdges: async () => (await knowledgeTruthService.list()).graphEdges,
     nowIso: () => new Date().toISOString(),
-    getAutoAccept: async () => (await configService.getKnowledgeSettings()).autoAcceptDeterministicFacts,
-    applyCandidate: (input) => knowledgeReviewService.applyCandidate(input),
   }
 }
 
@@ -328,26 +319,6 @@ async function writeDerived(derived: DerivedObservation): Promise<void> {
   await writeFileAtomic(file, `${JSON.stringify(derived)}\n`)
 }
 
-async function appendCandidateFacts(candidates: CandidateFact[]): Promise<CandidateFact[]> {
-  if (candidates.length === 0) return []
-  return withFactCandidatesLock(async () => {
-    const file = join(knowledgeRootPath(), FACT_CANDIDATES_FILE)
-    await mkdir(dirname(file), { recursive: true })
-    let content = ''
-    try { content = await readFile(file, 'utf8') } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-    }
-    const ids = new Set(content.split('\n').filter(Boolean).map((line) => (JSON.parse(line) as CandidateFact).id))
-    const fresh = candidates.filter((candidate) => {
-      if (ids.has(candidate.id)) return false
-      ids.add(candidate.id)
-      return true
-    })
-    if (fresh.length) await appendFile(file, fresh.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n', 'utf8')
-    return fresh
-  })
-}
-
 async function appendCandidateGraphEdges(candidates: CandidateGraphEdge[]): Promise<void> {
   if (candidates.length === 0) return
   const file = join(knowledgeRootPath(), GRAPH_CANDIDATES_FILE)
@@ -452,6 +423,7 @@ export async function runDeterministicStage(
   const prepared: PreparedObservation[] = []
   const seenEvents = new Set<string>()
   for (const observation of batch.observations) {
+    if (!isActiveObservation(observation)) continue
     const eventKey = observationEventKey(observation)
     if (seenEvents.has(eventKey)) continue
     seenEvents.add(eventKey)
@@ -529,7 +501,7 @@ export async function runDeterministicStage(
   }
 
   const groups = clusterNearDuplicates(
-    unique.filter((item) => observationScope(item.observation) !== 'user' || isUserStatement(item.observation)).sort((a, b) =>
+    unique.filter((item) => item.observation.memoryIntent !== 'remember' && (observationScope(item.observation) !== 'user' || isUserStatement(item.observation))).sort((a, b) =>
       a.observation.createdAt.localeCompare(b.observation.createdAt)
       || a.observation.id.localeCompare(b.observation.id),
     ),
@@ -619,7 +591,27 @@ export async function runDeterministicStage(
     })
   }
 
-  candidates = await appendCandidateFacts(candidates)
+  // Explicit save is one candidate per request, independent of recurrence and
+  // the pattern classifier. Tool-authored text retains its original authority.
+  for (const item of prepared) {
+    const observation = item.observation
+    if (observation.memoryIntent !== 'remember' || observationScope(observation) !== 'user') continue
+    const evidence = sourceEvidence(observation)
+    candidates.push({
+      id: `remember-candidate:${observation.id}`, type: 'fact', status: 'proposed', derivation: 'deterministic',
+      evidence: { observationIds: [observation.id], snippets: [item.text.slice(0, 280)], sources: [evidence] },
+      fact: {
+        id: `remember-fact:${observation.id}`, content: item.text, kind: classifyDeterministic(observation.type, item.text, 1)?.kind ?? 'fact',
+        scope: 'user', confidence: 0.6, version: 1, status: 'proposed', concepts: [], files: [], tags: observation.tags,
+        provenance: {
+          workspaceId: 'user', workspaceName: 'user', workspacePath: 'user', source: observation.source,
+          sourceObservationIds: [observation.id], sourceEvidence: [evidence], fileRefs: [],
+          actor: 'knowledge-deterministic', createdAt: nowIso,
+        },
+      },
+    })
+  }
+  candidates = await proposeFactCandidates(candidates)
   // Note: habit promotion shares the queue and Inbox review — see .agents/notes/2026-09-15-user-memory-m1--fd02d3bc.md
   // User memory closeout: repeated preference/habit observations promote to
   // scope=user candidates on the same queue with no new cursors. The frequency
@@ -644,7 +636,7 @@ export async function runDeterministicStage(
     habitInputs,
     nowIso,
   )
-  const habitCandidates = await appendCandidateFacts(habitPromotions.map((promotion) => habitPromotionToCandidate(promotion, nowIso)))
+  const habitCandidates = await proposeFactCandidates(habitPromotions.map((promotion) => habitPromotionToCandidate(promotion, nowIso)))
   // Truth–truth mentions discovered from shared file refs. Human-gated
   // through the normal graph-candidate flow; an empty truth set yields none.
   const mentionEdges = synthesizeMentionEdges(
@@ -679,46 +671,5 @@ export async function runDeterministicStage(
     })
   }
 
-  return { derived: unique.length, proposals: candidates.length + habitCandidates.length + mentionEdges.length, autoAccepted: await autoAcceptEligible(candidates, deps) }
-}
-
-/**
- * §4.6 auto-accept (opt-in via settings, default off): deterministic
- * high-confidence facts from tool-driven sources (git / checkpoint captures)
- * skip the Inbox and apply immediately with audit actor 'auto-policy'.
- * Note: checkpoint captures carry source 'checkpoint', so both sources count
- * as the "git/checkpoint class" the plan refers to. Failures never fail the
- * stage; the candidate simply stays proposed for manual review.
- */
-const AUTO_ACCEPT_SOURCES: ReadonlySet<KnowledgeSource> = new Set(['tool', 'checkpoint'])
-const AUTO_ACCEPT_MIN_CONFIDENCE = 0.9
-
-async function autoAcceptEligible(
-  candidates: CandidateFact[],
-  deps: DeterministicStageDeps,
-): Promise<number> {
-  let enabled = false
-  try {
-    enabled = await deps.getAutoAccept()
-  } catch (error) {
-    console.error(`[knowledge] auto-accept settings read failed: ${error instanceof Error ? error.message : String(error)}`)
-    return 0
-  }
-  if (!enabled) return 0
-  let accepted = 0
-  for (const candidate of candidates) {
-    if (
-      candidate.derivation !== 'deterministic'
-      || candidate.fact.kind !== 'fact'
-      || candidate.fact.confidence < AUTO_ACCEPT_MIN_CONFIDENCE
-      || !AUTO_ACCEPT_SOURCES.has(candidate.fact.provenance.source)
-    ) continue
-    try {
-      await deps.applyCandidate({ type: 'fact', id: candidate.id, actor: 'auto-policy' })
-      accepted += 1
-    } catch (error) {
-      console.error(`[knowledge] auto-accept failed for ${candidate.id}: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-  return accepted
+  return { derived: unique.length, proposals: candidates.length + habitCandidates.length + mentionEdges.length, autoAccepted: 0 }
 }

@@ -35,8 +35,8 @@ import { knowledgeRootPath } from './constants'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { knowledgeTruthService } from './truth-service'
-import { withFactCandidatesLock } from './review-service'
-import { factScope, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
+import { proposeFactCandidates, withFactCandidatesLock } from './review-service'
+import { factScope, isActiveObservation, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
 import { findConflicts, toConflictTargets, tokenJaccard } from './deterministic-extractor'
 import { configService } from '../config/service'
 import { llmService } from '../llm/LlmService'
@@ -533,7 +533,8 @@ export class KnowledgeExtractService {
 
     // An assistant's guess is not evidence of a personal preference.
     const evidence = filterEvidence(rawObservations).filter((observation) =>
-      observationScope(observation) !== 'user' || isUserStatement(observation))
+      isActiveObservation(observation) && observation.memoryIntent !== 'remember'
+      && (observationScope(observation) !== 'user' || isUserStatement(observation)))
     const empty: ExtractOutput = {
       facts: [],
       wikiPatches: [],
@@ -662,15 +663,24 @@ export class KnowledgeExtractService {
       }
     }
     if (rewritten.size > 0) {
-      const current = await this.listFactCandidates()
-      const next = current.map((candidate) => rewritten.get(candidate.id) ?? candidate)
-      await withFactCandidatesLock(() => rewriteFactCandidates(next))
+      await withFactCandidatesLock(async () => {
+        const current = await this.listFactCandidates()
+        const next = current.map((candidate) => {
+          if (candidate.status !== 'proposed') {
+            rewritten.delete(candidate.id)
+            return candidate
+          }
+          return rewritten.get(candidate.id) ?? candidate
+        })
+        await rewriteFactCandidates(next)
+      })
+      for (let index = mergedIds.length - 1; index >= 0; index--) {
+        if (!rewritten.has(mergedIds[index]!)) mergedIds.splice(index, 1)
+      }
     }
 
     // 10. 落盘候选
-    for (const candidate of appendedFacts) {
-      await appendJsonl(FACT_CANDIDATES_FILE, candidate)
-    }
+    await proposeFactCandidates(appendedFacts)
     for (const patch of wikiPatchCandidates) {
       await appendJsonl(WIKI_PATCHES_FILE, patch)
     }

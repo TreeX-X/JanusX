@@ -185,6 +185,11 @@ export interface KnowledgeProvenance {
 
 export interface Observation {
   id: string
+  /** Host-owned write intent. Payload fields cannot grant this intent. */
+  memoryIntent?: 'remember' | 'episode'
+  expiresAt?: string
+  episodeStatus?: 'active' | 'expired'
+  relatedObservationIds?: string[]
   /** Absent on legacy records; resolve user sentinel, otherwise project. */
   scope?: MemoryScope
   sourceEvidence?: MemorySourceEvidence
@@ -625,6 +630,7 @@ export interface KnowledgeScoreExplanation {
 }
 
 export interface KnowledgeSearchHit {
+  expiresAt?: string
   id: string
   type: KnowledgeSearchDocumentType
   title: string
@@ -641,7 +647,7 @@ export interface KnowledgeSearchHit {
   sourceObservationIds: string[]
   createdAt: string
   confidence?: number
-  status?: CandidateStatus | 'active' | 'archived'
+  status?: CandidateStatus | 'active' | 'archived' | 'expired'
   derivation?: Derivation
   agentId?: string
   sessionId?: string
@@ -685,7 +691,7 @@ export interface KnowledgeCard {
   workspacePath?: string
   sourceRefs: KnowledgeCardSourceRefs
   createdAt?: string
-  status?: CandidateStatus | 'active' | 'archived'
+  status?: CandidateStatus | 'active' | 'archived' | 'expired'
   /** Original search document type before kind mapping. */
   rawType?: KnowledgeSearchDocumentType
   /** Why the document matched (search-result cards only). */

@@ -57,7 +57,7 @@ describe('deterministic pipeline (Phase 1-2, no LLM)', () => {
     await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'tool-result', content: `${errorContent} (retry 2)`, actor: 'engine' })
 
     const queue = new KnowledgeProcessingQueue()
-    queue.configureDeterministicHandler((batch) => runDeterministicStage(batch, { getAutoAccept: async () => false }).then(() => undefined))
+    queue.configureDeterministicHandler((batch) => runDeterministicStage(batch).then(() => undefined))
     try {
       const first = await queue.processNow()
       expect(first.handlerMissing).toBe(false)
@@ -109,12 +109,12 @@ describe('deterministic pipeline (Phase 1-2, no LLM)', () => {
     expect(truth.facts.map((f) => f.kind)).toEqual(['fact'])
   })
 
-  it('auto-accepts deterministic tool facts end to end when enabled (§4.6)', async () => {
+  it('keeps queued tool facts pending until explicit review', async () => {
     await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'git-event', content: 'commit auto: enable auto accept', fileRefs: ['src/auto.ts'], actor: 'user' })
     await capture({ workspacePath: 'C:\\pipe', source: 'manual', type: 'user-note', content: '今天天气不错', actor: 'user' })
 
     const queue = new KnowledgeProcessingQueue()
-    queue.configureDeterministicHandler((batch) => runDeterministicStage(batch, { getAutoAccept: async () => true }).then(() => undefined))
+    queue.configureDeterministicHandler((batch) => runDeterministicStage(batch).then(() => undefined))
     try {
       const result = await queue.processNow()
       expect(result.handlerMissing).toBe(false)
@@ -123,17 +123,14 @@ describe('deterministic pipeline (Phase 1-2, no LLM)', () => {
       const candidates = await knowledgeExtractService.listFactCandidates()
       expect(candidates).toHaveLength(1)
       expect(candidates[0]?.derivation).toBe('deterministic')
-      expect(candidates[0]?.status).toBe('applied')
+      expect(candidates[0]?.status).toBe('proposed')
 
       const truth = await knowledgeTruthService.list()
-      expect(truth.facts).toHaveLength(1)
-      expect(truth.facts[0]?.kind).toBe('fact')
-      expect(truth.facts[0]?.status).toBe('active')
+      expect(truth.facts).toHaveLength(0)
 
       const { knowledgeAuditService } = await import('../../../src/main/knowledge/audit-service')
       const approvals = (await knowledgeAuditService.list({ limit: 200 })).filter((event) => event.action === 'candidate_approved')
-      expect(approvals).toHaveLength(1)
-      expect(approvals[0]?.provenance.actor).toBe('auto-policy')
+      expect(approvals).toHaveLength(0)
     } finally {
       queue.dispose()
     }

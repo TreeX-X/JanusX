@@ -76,7 +76,7 @@ describe('knowledge pipeline e2e (Phase 5, no LLM)', () => {
     // 2. 处理：无模型全量确定性沉淀。
     const queue = new KnowledgeProcessingQueue()
     queue.configureDeterministicHandler((batch) =>
-      runDeterministicStage(batch, { getAutoAccept: async () => false }).then(() => undefined),
+      runDeterministicStage(batch).then(() => undefined),
     )
     // 生产装配同款维护 handler（register.ts）：低峰任务真实可跑。
     queue.configureMaintenanceHandler(async () => {

@@ -1,20 +1,20 @@
 /**
  * @file User episode service (M1).
- * @description Owns `episodes/YYYY-MM.jsonl`: auto-written dated events with
+ * @description Projects user observations and reads legacy episode files with
  * 30–90 day TTL harvest and a rolling working set. Capture redacts secrets
  * before storage; harvest marks expiry and audits `user_episode_harvested`.
  * Private by default; shared surfaces require explicit publish (M3).
  */
-import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, readdir } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { UserEpisode } from '../../shared/knowledge'
+import type { Observation, UserEpisode } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeAuditService } from './audit-service'
 import { knowledgeContractService } from './contract-service'
 import { matchesForgettingQuery } from './search/tokenizer'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
+import { knowledgeObservationService, type ObservationCaptureContext } from './observation-service'
 
 const EPISODES_DIR = join('episodes')
 export const EPISODE_TTL_MIN_DAYS = 30
@@ -26,12 +26,13 @@ function clampTtlDays(value?: number): number {
   return Math.max(EPISODE_TTL_MIN_DAYS, Math.min(EPISODE_TTL_MAX_DAYS, Math.trunc(value as number)))
 }
 
-function shardFor(createdAtIso: string): string {
-  const instant = Date.parse(createdAtIso)
-  const date = Number.isFinite(instant) ? new Date(instant) : new Date()
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
-  return join(EPISODES_DIR, `${year}-${month}.jsonl`)
+function episodeFromObservation(observation: Observation, content: string): UserEpisode {
+  return {
+    id: observation.id, content: content.slice(0, 4000), createdAt: observation.createdAt, expiresAt: observation.expiresAt!,
+    ttlDays: Math.round((Date.parse(observation.expiresAt!) - Date.parse(observation.createdAt)) / 86400000),
+    tags: observation.tags, status: observation.episodeStatus ?? 'active',
+    sourceObservationIds: [...new Set([observation.id, ...(observation.relatedObservationIds ?? [])])],
+  }
 }
 
 function isEpisode(value: unknown): value is UserEpisode {
@@ -51,54 +52,22 @@ export interface EpisodeHarvestResult {
 export class UserEpisodeService {
   private readonly writeQueue = new SerialQueue()
 
-  async capture(input: { content: string; ttlDays?: number; tags?: string[]; sourceObservationIds?: string[]; createdAt?: string }): Promise<UserEpisode> {
+  // Note: new episodes are observations; legacy files remain readable — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+  async capture(input: { content: string; ttlDays?: number; tags?: string[]; sourceObservationIds?: string[]; createdAt?: string; sessionId?: string; sourceEventId?: string }, context?: Pick<ObservationCaptureContext, 'speaker'>): Promise<UserEpisode> {
     const trimmed = input.content.trim()
     if (!trimmed) throw new Error('Episode content is required')
     const { text: redacted } = redactHighConfidenceSecrets(trimmed)
-    const createdAt = input.createdAt ?? new Date().toISOString()
-    const ttlDays = clampTtlDays(input.ttlDays)
-    const episode: UserEpisode = {
-      id: randomUUID(),
-      content: redacted.slice(0, 4000),
-      createdAt,
-      expiresAt: new Date(Date.parse(createdAt) + ttlDays * 24 * 60 * 60 * 1000).toISOString(),
-      ttlDays,
-      tags: [...new Set((input.tags ?? []).map((tag) => tag.trim()).filter(Boolean))].slice(0, 20),
-      sourceObservationIds: [...new Set(input.sourceObservationIds ?? [])].slice(0, 50),
-      status: 'active',
-    }
-    await knowledgeContractService.bootstrapWorkspace(undefined)
-    const relativePath = shardFor(createdAt)
-    const absolutePath = join(knowledgeRootPath(), relativePath)
-    await this.writeQueue.run(async () => {
-      await mkdir(join(absolutePath, '..'), { recursive: true })
-      let previous = ''
-      try {
-        previous = await readFile(absolutePath, 'utf8')
-      } catch {
-        previous = ''
-      }
-      const next = previous.length > 0 && !previous.endsWith('\n') ? `${previous}\n` : previous
-      await writeFileAtomic(absolutePath, `${next}${JSON.stringify(episode)}\n`)
+    const observation = await knowledgeObservationService.capture({
+      workspaceId: 'user', workspaceName: 'user', workspacePath: 'user',
+      source: context?.speaker === 'user' ? 'janus-chat' : 'system', type: 'conversation-turn',
+      content: redacted, tags: input.tags, actor: context?.speaker ?? 'system',
+      sessionId: input.sessionId, correlationId: input.sourceEventId, visibility: 'restricted',
+    }, {
+      speaker: context?.speaker ?? 'unknown', memoryIntent: 'episode', episodeTtlDays: clampTtlDays(input.ttlDays),
+      createdAt: input.createdAt, sourceEventId: input.sourceEventId,
+      relatedObservationIds: input.sourceObservationIds,
     })
-    await knowledgeAuditService.record({
-      action: 'user_episode_captured',
-      targetType: 'observation',
-      targetId: episode.id,
-      before: null,
-      after: { createdAt: episode.createdAt, expiresAt: episode.expiresAt },
-      provenance: {
-        workspaceId: 'user',
-        workspaceName: 'user',
-        workspacePath: '',
-        source: 'system',
-        sourceObservationIds: episode.sourceObservationIds,
-        fileRefs: [],
-        actor: 'user-memory',
-        createdAt,
-      },
-    })
-    return episode
+    return episodeFromObservation(observation, await knowledgeObservationService.resolveContent(observation))
   }
 
   async listActive(nowMs: number = Date.now(), limit: number = EPISODE_WORKING_SET_LIMIT): Promise<UserEpisode[]> {
@@ -111,10 +80,11 @@ export class UserEpisodeService {
 
   async harvest(nowMs: number = Date.now(), confirm = true): Promise<EpisodeHarvestResult> {
     await knowledgeContractService.bootstrapWorkspace(undefined)
+    const observations = await knowledgeObservationService.expireEpisodes({ nowMs, confirm })
     return this.writeQueue.run(async () => {
       const shards = await this.listShardFiles()
-      let expired = 0
-      let kept = 0
+      let expired = observations.expiredIds.length
+      let kept = observations.kept
       for (const relativePath of shards) {
         const absolutePath = join(knowledgeRootPath(), relativePath)
         let content = ''
@@ -184,9 +154,10 @@ export class UserEpisodeService {
   async expireMatching(query: string, nowMs: number = Date.now()): Promise<{ expiredIds: string[]; kept: number }> {
     if (!query.trim()) return { expiredIds: [], kept: 0 }
     await knowledgeContractService.bootstrapWorkspace(undefined)
+    const observations = await knowledgeObservationService.expireEpisodes({ nowMs, confirm: true, query })
     return this.writeQueue.run(async () => {
-      const expiredIds: string[] = []
-      let kept = 0
+      const expiredIds: string[] = [...observations.expiredIds]
+      let kept = observations.kept
       for (const relativePath of await this.listShardFiles()) {
         const absolutePath = join(knowledgeRootPath(), relativePath)
         let content = ''
@@ -259,6 +230,10 @@ export class UserEpisodeService {
 
   private async readAll(): Promise<UserEpisode[]> {
     const out: UserEpisode[] = []
+    for (const observation of await knowledgeObservationService.listAll()) {
+      if (observation.scope !== 'user' || observation.memoryIntent !== 'episode') continue
+      out.push(episodeFromObservation(observation, await knowledgeObservationService.resolveContent(observation)))
+    }
     for (const relativePath of await this.listShardFiles()) {
       let content = ''
       try {

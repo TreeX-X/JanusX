@@ -46,15 +46,17 @@ describe('Person turn capture (user memory closeout)', () => {
     const episodes = await userEpisodeService.listActive(Date.now())
     expect(episodes).toHaveLength(1)
     expect(episodes[0]!.content).toBe('我习惯用 pnpm 而不用 npm')
-    expect(episodes[0]!.sourceObservationIds).toHaveLength(2)
+    expect(episodes[0]!.sourceObservationIds).toEqual([observations.find((observation) => observation.actor === 'user')!.id])
   })
 
-  it('writes an episode without observations for workspace-attached turns', async () => {
+  it('writes a user observation as the episode for workspace-attached turns', async () => {
     await capturePersonEpisodeFromTurn({ userText: '昨天用 pnpm 发布了新版本' })
     const observations = await knowledgeObservationService.listAll()
-    expect(observations).toHaveLength(0)
+    expect(observations).toHaveLength(1)
+    expect(observations[0]).toMatchObject({ scope: 'user', memoryIntent: 'episode' })
     const episodes = await userEpisodeService.listActive(Date.now())
     expect(episodes).toHaveLength(1)
+    expect(episodes[0]!.id).toBe(observations[0]!.id)
     expect(episodes[0]!.tags).toContain('janus-chat')
   })
 
