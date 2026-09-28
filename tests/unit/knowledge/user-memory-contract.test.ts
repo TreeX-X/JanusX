@@ -14,6 +14,7 @@ import { userEpisodeService } from '../../../src/main/knowledge/user-episode-ser
 import { knowledgeOperationsService } from '../../../src/main/knowledge/operations-service'
 import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
 import type { AuditEvent, CandidateFact, MemoryFact } from '../../../src/shared/knowledge'
+import { personalObservation } from './memory-observation.fixture'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
@@ -90,15 +91,15 @@ describe('user memory MVP contract', () => {
   it('promotes repeated observations through Inbox review into cited recall', async () => {
     const now = '2026-09-15T00:00:00.000Z'
     const thin = await deriveHabitPromotions([
-      { id: 'o1', content: '我习惯用 pnpm 而不用 npm', type: 'user-note', createdAt: now },
-      { id: 'o2', content: 'other topic entirely', type: 'user-note', createdAt: now },
+      personalObservation({ id: 'o1', content: '我习惯用 pnpm 而不用 npm', createdAt: now }),
+      personalObservation({ id: 'o2', content: 'other topic entirely', createdAt: now }),
     ], now)
     expect(thin).toHaveLength(0)
 
     const promotions = await deriveHabitPromotions([
-      { id: 'o1', content: '我习惯用 pnpm 而不用 npm', type: 'user-note', createdAt: now },
-      { id: 'o2', content: '我习惯用 pnpm 而不用 npm', type: 'user-note', createdAt: now },
-      { id: 'o3', content: '我习惯用 pnpm 而不用 npm', type: 'user-note', createdAt: now },
+      personalObservation({ id: 'o1', content: '我习惯用 pnpm 而不用 npm', createdAt: now }),
+      personalObservation({ id: 'o2', content: '我习惯用 pnpm 而不用 npm', createdAt: now }),
+      personalObservation({ id: 'o3', content: '我习惯用 pnpm 而不用 npm', createdAt: now }),
     ], now)
     expect(promotions).toHaveLength(1)
     expect(promotions[0]!.frequency).toBe(3)

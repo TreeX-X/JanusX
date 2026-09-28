@@ -114,6 +114,8 @@ describe('KnowledgeExtractService', () => {
       facts: [
         {
           content: 'Project persistence layer uses Postgres.',
+          scope: 'user',
+          provenance: { sourceEvidence: [{ authority: 'user-stated', speaker: 'user' }] },
           concepts: ['persistence', 'postgres'],
           files: ['src/db.ts'],
           tags: ['design'],
@@ -151,6 +153,9 @@ describe('KnowledgeExtractService', () => {
     expect(fact.type).toBe('fact')
     expect(fact.status).toBe('proposed')
     expect(fact.fact.content).toBe('Project persistence layer uses Postgres.')
+    expect(fact.fact.scope).toBe('project')
+    expect(fact.evidence.sources?.map((source) => source.authority)).toEqual(['unverified', 'unverified'])
+    expect(fact.fact.provenance.sourceEvidence).toEqual(fact.evidence.sources)
     expect(fact.fact.confidence).toBeCloseTo(0.9)
     expect(fact.fact.version).toBe(1)
     expect(fact.fact.status).toBe('proposed')

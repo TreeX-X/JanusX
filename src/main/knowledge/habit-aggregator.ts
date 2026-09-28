@@ -6,9 +6,10 @@
  * scope=user. Ebbinghaus decay with retrieval reheat keeps stale habits from
  * guiding silently; evidence merging keeps provenance.
  */
-import { randomUUID } from 'node:crypto'
-import type { CandidateFact, MemoryFact, Observation } from '../../shared/knowledge'
+import { createHash } from 'node:crypto'
+import type { CandidateFact, MemoryFact, MemorySourceEvidence, Observation } from '../../shared/knowledge'
 import { knowledgeAuditService } from './audit-service'
+import { isUserStatement, sourceEvidence } from './memory-evidence'
 
 export const HABIT_PROMOTION_THRESHOLD = 3
 export const HABIT_DECAY_HALF_LIFE_DAYS = 30
@@ -37,6 +38,8 @@ export interface HabitObservationInput {
   id: string
   content: string
   createdAt: string
+  eventKey?: string
+  evidence?: MemorySourceEvidence
 }
 
 export interface HabitPromotion {
@@ -46,6 +49,8 @@ export interface HabitPromotion {
   evidenceObservationIds: string[]
   strength: number
   lastSeenAt: string
+  sources?: MemorySourceEvidence[]
+  evidenceEventKeys?: string[]
 }
 
 /** Group near-duplicate preference/habit observations; promote groups at frequency >= 3. */
@@ -54,8 +59,12 @@ export function proposeHabitCandidates(
   _nowIso: string = new Date().toISOString(),
 ): HabitPromotion[] {
   const groups: Array<{ members: HabitObservationInput[]; latestText: string }> = []
-  const sorted = [...observations].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+  const sorted = [...observations].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
+  const seen = new Set<string>()
   for (const item of sorted) {
+    const identity = item.eventKey ?? item.id
+    if (seen.has(identity)) continue
+    seen.add(identity)
     const text = item.content.trim()
     if (!text) continue
     const target = groups.find((group) => habitJaccard(text, group.latestText) >= HABIT_SIMILARITY_THRESHOLD)
@@ -76,6 +85,8 @@ export function proposeHabitCandidates(
         content: last.content.trim().slice(0, 1000),
         frequency: members.length,
         evidenceObservationIds: members.map((member) => member.id),
+        evidenceEventKeys: members.map((member) => member.eventKey ?? member.id),
+        sources: members.flatMap((member) => member.evidence ? [member.evidence] : []),
         strength: initialHabitStrength(members.length),
         lastSeenAt: last.createdAt,
       }
@@ -101,14 +112,29 @@ function initialHabitStrength(frequency: number): number {
   return Math.min(1, 0.4 + 0.15 * (frequency - HABIT_PROMOTION_THRESHOLD + 1))
 }
 
-/** Evidence merging: union observation ids, keep newest content, bump strength. */
+/** New source events reinforce a habit; replay is a strict no-op. */
 export function mergeHabitEvidence(existing: HabitPromotion, incoming: HabitPromotion): HabitPromotion {
-  const evidence = [...new Set([...existing.evidenceObservationIds, ...incoming.evidenceObservationIds])]
+  const events = new Map<string, string>()
+  const add = (promotion: HabitPromotion) => {
+    promotion.evidenceObservationIds.forEach((id, index) => {
+      const event = promotion.evidenceEventKeys?.[index] ?? id
+      if (!events.has(event)) events.set(event, id)
+    })
+  }
+  add(existing)
+  const previousCount = events.size
+  add(incoming)
+  if (events.size === previousCount) return existing
+  const evidence = [...events.values()]
   return {
     key: existing.key,
     content: incoming.lastSeenAt >= existing.lastSeenAt ? incoming.content : existing.content,
-    frequency: existing.frequency + incoming.frequency,
-    evidenceObservationIds: evidence.slice(-50),
+    frequency: evidence.length,
+    evidenceObservationIds: evidence,
+    evidenceEventKeys: [...events.keys()],
+    sources: [...new Map([...(existing.sources ?? []), ...(incoming.sources ?? [])]
+      .filter((source) => evidence.includes(source.observationId))
+      .map((source) => [source.observationId, source])).values()],
     strength: Math.min(1, Math.max(existing.strength, incoming.strength) + 0.05),
     lastSeenAt: incoming.lastSeenAt >= existing.lastSeenAt ? incoming.lastSeenAt : existing.lastSeenAt,
   }
@@ -116,8 +142,9 @@ export function mergeHabitEvidence(existing: HabitPromotion, incoming: HabitProm
 
 /** Build an Inbox candidate-only fact for a promotion; caller submits via review queue. */
 export function habitPromotionToCandidate(promotion: HabitPromotion, nowIso: string = new Date().toISOString()): CandidateFact {
+  const identity = createHash('sha256').update(JSON.stringify([...(promotion.evidenceEventKeys ?? promotion.evidenceObservationIds)].sort())).digest('hex')
   const fact: MemoryFact = {
-    id: randomUUID(),
+    id: `habit-fact:${identity}`,
     content: promotion.content,
     concepts: [],
     files: [],
@@ -135,29 +162,40 @@ export function habitPromotionToCandidate(promotion: HabitPromotion, nowIso: str
       workspacePath: '',
       source: 'system',
       sourceObservationIds: promotion.evidenceObservationIds,
+      sourceEvidence: promotion.sources ?? [],
       fileRefs: [],
       actor: 'habit-aggregator',
       createdAt: nowIso,
     },
   }
   return {
-    id: randomUUID(),
+    id: `habit-candidate:${identity}`,
     type: 'fact',
     status: 'proposed',
     fact,
     derivation: 'deterministic',
-    evidence: { observationIds: promotion.evidenceObservationIds, snippets: [promotion.content.slice(0, 280)] },
+    evidence: { observationIds: promotion.evidenceObservationIds, snippets: [promotion.content.slice(0, 280)], sources: promotion.sources ?? [] },
   }
 }
 
 /** Skeleton queue entry: derive promotions from a deterministic batch without owning cursors. */
 export async function deriveHabitPromotions(
-  batch: Array<Pick<Observation, 'id' | 'content' | 'createdAt' | 'type'>>,
+  batch: Observation[],
   nowIso: string = new Date().toISOString(),
 ): Promise<HabitPromotion[]> {
   const inputs = batch
-    .filter((item) => item.type === 'conversation-turn' || item.type === 'user-note')
-    .map((item): HabitObservationInput => ({ id: item.id, content: item.content, createdAt: item.createdAt }))
+    .filter(isUserStatement)
+    .map((item): HabitObservationInput => {
+      const evidence = sourceEvidence(item)
+      return {
+        id: item.id, content: item.content, createdAt: item.createdAt,
+        // A single user turn can fan out to several attached workspaces.
+        eventKey: evidence.sourceEventId
+          ? JSON.stringify([evidence.source, evidence.sessionId, evidence.speaker, evidence.sourceEventId])
+          : item.id,
+        evidence,
+      }
+    })
   const promotions = proposeHabitCandidates(inputs, nowIso)
   if (promotions.length > 0) {
     await knowledgeAuditService.record({

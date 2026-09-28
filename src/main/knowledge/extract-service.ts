@@ -36,6 +36,7 @@ import { knowledgeObservationService } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { knowledgeTruthService } from './truth-service'
 import { withFactCandidatesLock } from './review-service'
+import { factScope, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
 import { findConflicts, toConflictTargets, tokenJaccard } from './deterministic-extractor'
 import { configService } from '../config/service'
 import { llmService } from '../llm/LlmService'
@@ -124,6 +125,11 @@ function deriveWorkspace(
   overrides: { workspaceId?: string; workspaceName?: string; workspacePath?: string },
 ): { workspaceId: string; workspaceName: string; workspacePath: string } {
   const first = observations[0]
+  if (first && (observations.some((observation) => observation.workspaceId !== first.workspaceId
+    || observationScope(observation) !== observationScope(first))
+    || (overrides.workspaceId && overrides.workspaceId !== first.workspaceId))) {
+    throw new Error('Extraction must share a workspace and memory scope')
+  }
   return {
     workspaceId:
       overrides.workspaceId?.trim() ||
@@ -207,6 +213,7 @@ function mapFactCandidate(
   provenance: KnowledgeProvenance,
   knownTruthIds: ReadonlySet<string>,
   truthTargets: ReturnType<typeof toConflictTargets>,
+  scope: NonNullable<MemoryFact['scope']>,
 ): CandidateFact {
   const factId = randomUUID()
   const candidateId = randomUUID()
@@ -225,6 +232,7 @@ function mapFactCandidate(
     version: 1,
     status: 'proposed',
     kind: raw.kind,
+    scope,
     ...(supersedes ? { supersedes } : {}),
     provenance,
   }
@@ -244,7 +252,7 @@ function mapFactCandidate(
     status: 'proposed',
     fact,
     derivation: 'llm',
-    evidence: { observationIds: provenance.sourceObservationIds },
+    evidence: { observationIds: provenance.sourceObservationIds, sources: provenance.sourceEvidence },
     ...(conflicts.length > 0 ? { conflicts } : {}),
   }
 }
@@ -410,6 +418,10 @@ export function mergeLlmFactCandidate(
   mode: KnowledgeProcessingMode,
   truthTargets: ReturnType<typeof toConflictTargets>,
 ): CandidateFact {
+  if (factScope(llm.fact) !== factScope(deterministic.fact)
+    || llm.fact.provenance.workspaceId !== deterministic.fact.provenance.workspaceId) {
+    throw new Error('Cannot merge candidates from different memory scopes or workspaces')
+  }
   const llmWins =
     llm.fact.confidence > deterministic.fact.confidence
     || (llm.fact.confidence === deterministic.fact.confidence && mode === 'llm-preferred')
@@ -419,6 +431,8 @@ export function mergeLlmFactCandidate(
     ...deterministic.evidence.observationIds,
     ...llm.evidence.observationIds,
   ]))
+  const sources = [...new Map([...(deterministic.evidence.sources ?? []), ...(llm.evidence.sources ?? [])]
+    .map((source) => [source.observationId, source])).values()]
   const merged: CandidateFact = {
     ...deterministic,
     derivation: 'merged',
@@ -432,9 +446,12 @@ export function mergeLlmFactCandidate(
       kind: winner.kind,
       // winner 优先，fallback loser：任何一方指出的替代关系都不应静默丢失。
       supersedes: winner.supersedes ?? loser.supersedes,
+      scope: factScope(deterministic.fact),
+      provenance: { ...deterministic.fact.provenance, sourceObservationIds: evidenceIds, sourceEvidence: sources },
     },
     evidence: {
       observationIds: evidenceIds,
+      sources,
       snippets: [...(deterministic.evidence.snippets ?? []), ...(llm.evidence.snippets ?? [])].slice(0, 5),
     },
     // 同一确定性候选被多条 LLM 事实命中时，来源链不断累积，不丢历史。
@@ -514,7 +531,9 @@ export class KnowledgeExtractService {
       rawObservations = await knowledgeObservationService.list(query)
     }
 
-    const evidence = filterEvidence(rawObservations)
+    // An assistant's guess is not evidence of a personal preference.
+    const evidence = filterEvidence(rawObservations).filter((observation) =>
+      observationScope(observation) !== 'user' || isUserStatement(observation))
     const empty: ExtractOutput = {
       facts: [],
       wikiPatches: [],
@@ -559,6 +578,7 @@ export class KnowledgeExtractService {
       workspacePath: workspace.workspacePath,
       source: input.source ?? 'system',
       sourceObservationIds,
+      sourceEvidence: budgeted.observations.map(sourceEvidence),
       fileRefs,
       actor: input.actor?.trim() || 'knowledge-extract',
       createdAt,
@@ -607,7 +627,7 @@ export class KnowledgeExtractService {
 
     // 9. 映射候选；fact 候选先与同批确定性候选合并（命中则原位升级，不另行 append）。
     const llmFacts = result.facts.map((raw) =>
-      mapFactCandidate(raw, provenance, knownTruthIds, truthTargets),
+      mapFactCandidate(raw, provenance, knownTruthIds, truthTargets, observationScope(budgeted.observations[0]!)),
     )
     const wikiPatchCandidates = result.wikiPatches.map((raw) => mapWikiPatchCandidate(raw, provenance, knownTruthIds))
     const graphEdgeCandidates = result.graphEdges.map((raw) => mapGraphEdgeCandidate(raw, provenance))
@@ -616,6 +636,8 @@ export class KnowledgeExtractService {
     const mergeable = (await this.listFactCandidates()).filter((candidate) =>
       candidate.status === 'proposed'
       && candidate.derivation === 'deterministic'
+      && factScope(candidate.fact) === observationScope(budgeted.observations[0]!)
+      && candidate.fact.provenance.workspaceId === workspace.workspaceId
       && (candidate.evidence?.observationIds ?? []).some((id) => batchIds.has(id)),
     )
     const appendedFacts: CandidateFact[] = []

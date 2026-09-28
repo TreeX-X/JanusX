@@ -224,6 +224,30 @@ describe('chat turn guard (S6-a)', () => {
     expect(capturePersonEpisode).not.toHaveBeenCalled()
   })
 
+  it('binds engineering and personal captures to host speaker, event, and conversation', async () => {
+    immediateStream('personal answer')
+    await handleChatStream({ reply: vi.fn() } as never, {
+      requestId: 'evidence-turn', conversationId: 'evidence-conversation',
+      workspaceId: 'evidence-project', workspacePath: 'C:/evidence-project',
+      messages: userMessages, providerId: 'provider-a', sourceTag: 'janus-chat', domain: 'personal',
+    } as never)
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: 'user', sessionId: 'evidence-conversation' }),
+      { speaker: 'user', sourceEventId: 'evidence-turn' },
+    )
+    expect(capture).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: 'assistant', sessionId: 'evidence-conversation' }),
+      { speaker: 'assistant', sourceEventId: 'evidence-turn' },
+    )
+    await handleChatStream({ reply: vi.fn() } as never, {
+      requestId: 'personal-evidence-turn', conversationId: 'personal-evidence-conversation',
+      messages: userMessages, providerId: 'provider-a', sourceTag: 'janus-chat', domain: 'personal',
+    } as never)
+    expect(capturePersonTurn).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'personal-evidence-conversation', correlationId: 'personal-evidence-turn',
+    }))
+  })
+
   it('skips personal recall injection for project domain when a user search exists', async () => {
     const projectSearch = vi.fn(async () => emptyResult)
     const userSearch = vi.fn(async () => ({ compactContext: '[user] private', items: [] }) as never)

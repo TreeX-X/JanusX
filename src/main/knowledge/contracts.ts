@@ -99,6 +99,8 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
     observation: [
       'id',
       'workspaceId',
+      'scope',
+      'sourceEvidence',
       'workspaceName',
       'workspacePath',
       'source',

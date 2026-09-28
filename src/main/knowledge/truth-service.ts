@@ -10,6 +10,7 @@ import type {
 } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
+import { isMemoryScope, isSourceEvidence } from './memory-evidence'
 
 interface WikiPageIndexEntry {
   slug: string
@@ -107,6 +108,9 @@ function isMemoryFact(value: unknown): value is MemoryFact {
   if (!isRecord(value) || !isRecord(value.provenance)) return false
   const provenance = value.provenance
   return hasString(value, 'id')
+    && (value.scope === undefined || isMemoryScope(value.scope))
+    && (provenance.sourceEvidence === undefined || (Array.isArray(provenance.sourceEvidence)
+      && provenance.sourceEvidence.every(isSourceEvidence)))
     && hasString(value, 'content')
     && isStringArray(value.concepts)
     && isStringArray(value.files)

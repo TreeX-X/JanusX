@@ -7,6 +7,8 @@ import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type {
   AuditAction,
   CaptureObservationInput,
+  MemoryScope,
+  MemorySpeaker,
   Observation,
   ObservationArchiveResult,
   ObservationCompactResult,
@@ -19,6 +21,7 @@ import { BLOB_CONTENT_THRESHOLD, CONTENT_PREVIEW_CHARS, knowledgeRootPath } from
 import { knowledgeContractService } from './contract-service'
 import { classifyRetention, isAutoPrunable } from './retention-classifier'
 import { knowledgeAuditService } from './audit-service'
+import { isMemoryScope, isSourceEvidence } from './memory-evidence'
 
 const gzipAsync = promisify(gzip)
 const gunzipAsync = promisify(gunzip)
@@ -87,7 +90,18 @@ export function observationDedupeKey(input: {
   type: string
   contentHash?: string
   content?: string
+  scope?: MemoryScope
+  source?: string
+  speaker?: string
+  sessionId?: string
+  sourceEventId?: string
 }): string {
+  if (input.source !== undefined || input.sourceEventId !== undefined) {
+    return createHash('sha256').update(JSON.stringify([
+      input.scope, input.workspaceId, input.type, input.source, input.speaker, input.sessionId,
+      input.sourceEventId ? ['event', input.sourceEventId] : ['content', input.contentHash ?? input.content],
+    ])).digest('hex')
+  }
   const contentHash = input.contentHash
     ?? createHash('sha256').update(input.content ?? '', 'utf8').digest('hex')
   return createHash('sha256')
@@ -170,6 +184,9 @@ function describeObservationViolation(value: unknown): string | null {
   }
   if (!isStringArray(value.fileRefs)) return 'invalid-file-refs'
   if (!isStringArray(value.tags)) return 'invalid-tags'
+  if (value.scope !== undefined && !isMemoryScope(value.scope)) return 'invalid-scope'
+  if (value.sourceEvidence !== undefined && (!isSourceEvidence(value.sourceEvidence)
+    || value.sourceEvidence.observationId !== value.id)) return 'invalid-source-evidence'
   return null
 }
 
@@ -410,11 +427,18 @@ async function blobExists(relativePath: string): Promise<boolean> {
   }
 }
 
+/** Main-process context; never accept this object from IPC or model payloads. */
+export interface ObservationCaptureContext {
+  speaker: MemorySpeaker
+  sourceEventId?: string
+  scope?: MemoryScope
+}
+
 export class KnowledgeObservationService {
   /** 串行化 shard 追加与重写：防止 prune/archive 整文件重写吞掉并发 capture 的追加 */
   private readonly writeQueue = new SerialQueue()
 
-  async capture(input: CaptureObservationInput): Promise<Observation> {
+  async capture(input: CaptureObservationInput, context?: ObservationCaptureContext): Promise<Observation> {
     const workspacePath = input.workspacePath.trim()
     if (!workspacePath) {
       throw new Error('Workspace path is required as observation provenance')
@@ -433,17 +457,44 @@ export class KnowledgeObservationService {
 
     const createdAt = new Date().toISOString()
     const workspaceId = normalizeWorkspaceId(workspacePath, input.workspaceId)
-    // §3.1: exact-dedupe key is fixed before the write; a repeat capture of the
-    // same workspace + type + content returns the existing record without append.
+    const scope: MemoryScope = context?.scope ?? (workspaceId === 'user' ? 'user' : 'project')
+    if (!isMemoryScope(scope) || ((workspaceId === 'user') !== (scope === 'user'))) {
+      throw new Error('Memory scope must match the host workspace identity')
+    }
+    const id = randomUUID()
+    const speaker = context?.speaker ?? 'unknown'
+    const sourceEventId = normalizeOptionalText(context?.sourceEventId)
+    const sessionId = normalizeOptionalText(input.sessionId)
+    // Content is not occurrence identity: separate turns can repeat a preference.
     const dedupeKey = observationDedupeKey({
       workspaceId,
       type: input.type,
       contentHash: classification.contentHash,
+      scope,
+      source: input.source,
+      speaker: context?.speaker ?? input.actor ?? 'unknown',
+      sessionId,
+      sourceEventId,
     })
-    const cached = dedupeCache.get(dedupeKey)
+    const cacheKey = `${knowledgeRootPath()}\0${dedupeKey}`
+    const cached = dedupeCache.get(cacheKey)
     if (cached) return cached
     const baseObservation: Observation = {
-      id: randomUUID(),
+      id,
+      scope,
+      sourceEvidence: {
+        observationId: id,
+        workspaceId,
+        scope,
+        source: input.source,
+        createdAt,
+        sourceEventId,
+        sessionId,
+        speaker,
+        authority: speaker === 'user' ? 'user-stated' : speaker === 'assistant' ? 'model-generated'
+          : speaker === 'tool' ? 'tool-observed' : 'unverified',
+        excerpt: fullContent.slice(0, 280),
+      },
       workspaceId,
       workspaceName: normalizeWorkspaceName(workspacePath, input.workspaceName),
       workspacePath,
@@ -477,17 +528,21 @@ export class KnowledgeObservationService {
     // Dedupe check and append share the write queue: concurrent captures of the
     // same content cannot both pass the check before either appends.
     const duplicate = await this.writeQueue.run(async () => {
-      const existing = await findObservationByDedupeKey(shardPath, dedupeKey)
+      // An event retry may arrive after restart or a monthly shard rollover.
+      const existing = sourceEventId
+        ? (await listObservationShardFiles()).flatMap((shard) => parseShardLines(shard))
+          .find((entry) => entry.observation?.dedupeKey === dedupeKey)?.observation
+        : await findObservationByDedupeKey(shardPath, dedupeKey)
       if (existing) return existing
       await mkdir(join(filePath, '..'), { recursive: true })
       await appendFile(filePath, `${JSON.stringify(observation)}\n`, 'utf8')
       return null
     })
     if (duplicate) {
-      rememberDedupe(dedupeKey, duplicate)
+      rememberDedupe(cacheKey, duplicate)
       return duplicate
     }
-    rememberDedupe(dedupeKey, observation)
+    rememberDedupe(cacheKey, observation)
 
     // Phase 1: notify the processing queue (debounced, never blocks capture).
     // Dynamic import: processing-queue statically depends on this service.

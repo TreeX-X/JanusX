@@ -46,7 +46,7 @@ export async function capturePersonChatTurn(input: PersonTurnCaptureInput): Prom
         actor: 'user',
         correlationId: input.correlationId,
         sessionId: input.sessionId,
-      })
+      }, { speaker: 'user', sourceEventId: input.correlationId })
       if (typeof observation?.id === 'string') observationIds.push(observation.id)
     }
     if (assistantText) {
@@ -66,7 +66,7 @@ export async function capturePersonChatTurn(input: PersonTurnCaptureInput): Prom
           ...(input.providerId ? { providerId: input.providerId } : {}),
           ...(input.modelId ? { modelId: input.modelId } : {}),
         },
-      })
+      }, { speaker: 'assistant', sourceEventId: input.correlationId })
       if (typeof observation?.id === 'string') observationIds.push(observation.id)
     }
     if (userText) {

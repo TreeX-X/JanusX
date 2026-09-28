@@ -35,6 +35,7 @@ export type FactKind = 'fact' | 'preference' | 'decision' | 'procedure'
 export interface CandidateEvidence {
   observationIds: string[]
   snippets?: string[]
+  sources?: MemorySourceEvidence[]
 }
 
 export type RetentionClass = 'noise' | 'operational' | 'evidence' | 'derived'
@@ -97,6 +98,23 @@ export type AuditAction =
 /** Independent knowledge MVP: project memory stays workspace-scoped, user memory is person-scoped. */
 export type UserMemoryScope = 'project' | 'user'
 
+export type MemoryScope = UserMemoryScope | 'global'
+export type MemorySpeaker = 'user' | 'assistant' | 'tool' | 'system' | 'unknown'
+/** Origin is not truth: even a user statement still needs candidate review. */
+export type MemorySourceAuthority = 'user-stated' | 'model-generated' | 'tool-observed' | 'unverified'
+export interface MemorySourceEvidence {
+  observationId: string
+  workspaceId: string
+  scope: MemoryScope
+  source: KnowledgeSource
+  createdAt: string
+  sourceEventId?: string
+  sessionId?: string
+  speaker: MemorySpeaker
+  authority: MemorySourceAuthority
+  excerpt: string
+}
+
 /** Durable user snapshot rendered after JANUS_PERSONA with its own recall budget. */
 export interface UserProfile {
   version: number
@@ -157,6 +175,7 @@ export interface KnowledgeProvenance {
   fileRefs: string[]
   actor: string
   createdAt: string
+  sourceEvidence?: MemorySourceEvidence[]
   promptHash?: string
   model?: string
   /** ToB M1/P3 预留：执行人用户 ID 与所属组织，全可选。 */
@@ -166,6 +185,9 @@ export interface KnowledgeProvenance {
 
 export interface Observation {
   id: string
+  /** Absent on legacy records; resolve user sentinel, otherwise project. */
+  scope?: MemoryScope
+  sourceEvidence?: MemorySourceEvidence
   workspaceId: string
   workspaceName: string
   workspacePath: string
@@ -189,7 +211,7 @@ export interface Observation {
   retentionReason?: string
   // Phase 4: content addressing + blob compression.
   contentHash: string
-  // Phase 1 convergence: exact-dedupe key sha256(workspaceId + type + contentHash), always written by capture.
+  // Event identity when supplied by the host; otherwise conservative content dedupe.
   dedupeKey: string
   contentLength: number
   contentPreview?: string
@@ -277,8 +299,8 @@ export interface MemoryFact {
   provenance: KnowledgeProvenance
   /** Phase 1: deterministic/LLM classification of what the fact states. */
   kind: FactKind
-  /** User memory M1: person scope beside project memory; missing means project. */
-  scope?: UserMemoryScope
+  /** Missing on legacy records: user sentinel means user, otherwise project. */
+  scope?: MemoryScope
   /** User memory M1: Ebbinghaus strength with retrieval reheat, habit facts only. */
   habitStrength?: number
   /** User memory M1: last retrieval or confirmation instant (ISO). */
@@ -623,8 +645,8 @@ export interface KnowledgeSearchHit {
   derivation?: Derivation
   agentId?: string
   sessionId?: string
-  /** User memory M2: person-scoped facts stay out of project recall. */
-  scope?: UserMemoryScope
+  /** Person-scoped facts stay out of project/global recall. */
+  scope?: MemoryScope
 }
 
 export interface KnowledgeSearchIndexStats {

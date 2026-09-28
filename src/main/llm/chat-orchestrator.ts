@@ -285,7 +285,7 @@ function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['
 }
 
 /** 壳默认 ports：生产单例装配（可注入版本见 janus-agent-ports）。 */
-function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'personal' | 'project'): ChatTurnPorts {
+function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'personal' | 'project', conversationId?: string): ChatTurnPorts {
   return buildJanusChatTurnPorts({
     callerId,
     getProviderSettings: (providerId) => llmService.getProviderSettings('janus', providerId),
@@ -336,9 +336,9 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
       tags: input.tags,
       actor: input.actor,
       correlationId: input.correlationId,
-      sessionId: input.sessionId,
+      sessionId: conversationId ?? input.sessionId,
       ...(input.metadata ? { metadata: input.metadata } : {}),
-    }),
+    }, { speaker: input.actor === 'user' ? 'user' : input.actor === 'assistant' ? 'assistant' : 'unknown', sourceEventId: input.correlationId }),
     scheduleSettled: (workspaceId) => {
       knowledgeProcessingQueue.scheduleImmediate(workspaceId)
     },
@@ -414,7 +414,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
   try {
     const callerId = `renderer:${event.sender?.id ?? 'unknown'}`
-    const ports = defaultChatTurnPorts(callerId, requestId, domain)
+    const ports = defaultChatTurnPorts(callerId, requestId, domain, conversationId)
     const chatSession = getChatSession(conversationId ?? requestId)
 
     let projectContext: string | undefined

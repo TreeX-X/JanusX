@@ -16,6 +16,7 @@ import {
 import { userEpisodeService } from '../../../src/main/knowledge/user-episode-service'
 import { userProfileService } from '../../../src/main/knowledge/user-profile-service'
 import { knowledgeContractService } from '../../../src/main/knowledge/contract-service'
+import { personalObservation } from './memory-observation.fixture'
 
 describe('User memory M1', () => {
   const previousRoot = process.env.JANUSX_KNOWLEDGE_ROOT
@@ -62,8 +63,8 @@ describe('User memory M1', () => {
     expect(strong).toBeLessThan(0.2)
     expect(reheatHabitStrength(0.5)).toBeCloseTo(0.65, 5)
     const merged = mergeHabitEvidence(
-      { key: 'h', content: 'old', frequency: 3, evidenceObservationIds: ['a'], strength: 0.5, lastSeenAt: '2026-09-01T00:00:00.000Z' },
-      { key: 'h', content: 'new', frequency: 3, evidenceObservationIds: ['b'], strength: 0.6, lastSeenAt: '2026-09-15T00:00:00.000Z' },
+      { key: 'h', content: 'old', frequency: 3, evidenceObservationIds: ['a1', 'a2', 'a3'], strength: 0.5, lastSeenAt: '2026-09-01T00:00:00.000Z' },
+      { key: 'h', content: 'new', frequency: 3, evidenceObservationIds: ['b1', 'b2', 'b3'], strength: 0.6, lastSeenAt: '2026-09-15T00:00:00.000Z' },
     )
     expect(merged.frequency).toBe(6)
     expect(merged.content).toBe('new')
@@ -83,9 +84,9 @@ describe('User memory M1', () => {
   it('derives promotions from queue batches without owning cursors', async () => {
     const now = '2026-09-15T00:00:00.000Z'
     const promotions = await deriveHabitPromotions([
-      { id: 'b1', content: '请用中文回复', type: 'user-note', createdAt: now },
-      { id: 'b2', content: '请用中文回复', type: 'user-note', createdAt: now },
-      { id: 'b3', content: '请用中文回复', type: 'user-note', createdAt: now },
+      personalObservation({ id: 'b1', content: '请用中文回复', createdAt: now }),
+      personalObservation({ id: 'b2', content: '请用中文回复', createdAt: now }),
+      personalObservation({ id: 'b3', content: '请用中文回复', createdAt: now }),
     ], now)
     expect(promotions).toHaveLength(1)
   })

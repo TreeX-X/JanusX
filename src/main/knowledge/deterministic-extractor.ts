@@ -13,7 +13,7 @@
  *              auto-accept policy applies at the end of the stage when enabled.
  */
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, appendFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
@@ -35,7 +35,8 @@ export { observationDedupeKey } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { deriveHabitPromotions, habitPromotionToCandidate } from './habit-aggregator'
 import { knowledgeTruthService } from './truth-service'
-import { knowledgeReviewService } from './review-service'
+import { knowledgeReviewService, withFactCandidatesLock } from './review-service'
+import { isUserStatement, observationEventKey, observationScope, sourceEvidence } from './memory-evidence'
 import { configService } from '../config/service'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 
@@ -88,6 +89,7 @@ export interface DeterministicStageDeps {
   listTruthFacts: () => Promise<MemoryFact[]>
   /** Accepted graph edges, used to skip already-linked truth pairs. */
   listTruthEdges: () => Promise<GraphEdge[]>
+  listHabitObservations: () => Promise<Observation[]>
   nowIso: () => string
   /** Phase 1 convergence (§4.6): reads the auto-accept switch; test-injectable. */
   getAutoAccept: () => Promise<boolean>
@@ -97,6 +99,7 @@ export interface DeterministicStageDeps {
 
 function defaultDeps(): DeterministicStageDeps {
   return {
+    listHabitObservations: () => knowledgeObservationService.list({ limit: 200 }),
     resolveContent: (observation) => knowledgeObservationService.resolveContent(observation),
     listTruthFacts: async () => (await knowledgeTruthService.list()).facts,
     listTruthEdges: async () => (await knowledgeTruthService.list()).graphEdges,
@@ -325,11 +328,24 @@ async function writeDerived(derived: DerivedObservation): Promise<void> {
   await writeFileAtomic(file, `${JSON.stringify(derived)}\n`)
 }
 
-async function appendCandidateFacts(candidates: CandidateFact[]): Promise<void> {
-  if (candidates.length === 0) return
-  const file = join(knowledgeRootPath(), FACT_CANDIDATES_FILE)
-  await mkdir(dirname(file), { recursive: true })
-  await appendFile(file, candidates.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n', 'utf8')
+async function appendCandidateFacts(candidates: CandidateFact[]): Promise<CandidateFact[]> {
+  if (candidates.length === 0) return []
+  return withFactCandidatesLock(async () => {
+    const file = join(knowledgeRootPath(), FACT_CANDIDATES_FILE)
+    await mkdir(dirname(file), { recursive: true })
+    let content = ''
+    try { content = await readFile(file, 'utf8') } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    const ids = new Set(content.split('\n').filter(Boolean).map((line) => (JSON.parse(line) as CandidateFact).id))
+    const fresh = candidates.filter((candidate) => {
+      if (ids.has(candidate.id)) return false
+      ids.add(candidate.id)
+      return true
+    })
+    if (fresh.length) await appendFile(file, fresh.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n', 'utf8')
+    return fresh
+  })
 }
 
 async function appendCandidateGraphEdges(candidates: CandidateGraphEdge[]): Promise<void> {
@@ -429,8 +445,16 @@ export async function runDeterministicStage(
   overrides: Partial<DeterministicStageDeps> = {},
 ): Promise<DeterministicStageResult> {
   const deps: DeterministicStageDeps = { ...defaultDeps(), ...overrides }
+  if (batch.observations.some((observation) => observation.workspaceId !== batch.workspaceId
+    || observationScope(observation) !== observationScope(batch.observations[0]!))) {
+    throw new Error('Deterministic batch must share a workspace and memory scope')
+  }
   const prepared: PreparedObservation[] = []
+  const seenEvents = new Set<string>()
   for (const observation of batch.observations) {
+    const eventKey = observationEventKey(observation)
+    if (seenEvents.has(eventKey)) continue
+    seenEvents.add(eventKey)
     let raw: string
     if (observation.blobRef) {
       try {
@@ -455,6 +479,9 @@ export async function runDeterministicStage(
       type: item.observation.type,
       contentHash: item.observation.contentHash,
       content: item.observation.content,
+      scope: observationScope(item.observation),
+      source: item.observation.source,
+      speaker: sourceEvidence(item.observation).speaker,
     })
     const first = byKey.get(key)
     if (first) {
@@ -468,11 +495,13 @@ export async function runDeterministicStage(
   // Repeat counts (§4.4 procedure) observe every occurrence, duplicates included.
   const signalCounts = new Map<string, number>()
   for (const item of prepared) {
+    if (observationScope(item.observation) === 'user' && !isUserStatement(item.observation)) continue
     const signal = firstLine(item.text)
     if (signal) signalCounts.set(signal, (signalCounts.get(signal) ?? 0) + 1)
   }
   const signalMembers = new Map<string, string[]>()
   for (const item of prepared) {
+    if (observationScope(item.observation) === 'user' && !isUserStatement(item.observation)) continue
     const signal = firstLine(item.text)
     if (!signal) continue
     const list = signalMembers.get(signal) ?? []
@@ -500,7 +529,7 @@ export async function runDeterministicStage(
   }
 
   const groups = clusterNearDuplicates(
-    [...unique].sort((a, b) =>
+    unique.filter((item) => observationScope(item.observation) !== 'user' || isUserStatement(item.observation)).sort((a, b) =>
       a.observation.createdAt.localeCompare(b.observation.createdAt)
       || a.observation.id.localeCompare(b.observation.id),
     ),
@@ -508,7 +537,7 @@ export async function runDeterministicStage(
   )
   const truthFacts = await deps.listTruthFacts()
 
-  const candidates: CandidateFact[] = []
+  let candidates: CandidateFact[] = []
   for (const group of groups) {
     const primary = group.primary
     const signal = firstLine(primary.text)
@@ -532,6 +561,7 @@ export async function runDeterministicStage(
       for (const id of signalMembers.get(signal) ?? []) evidenceIds.add(id)
     }
     const evidenceObservations = prepared.filter((item) => evidenceIds.has(item.observation.id))
+    const sources = evidenceObservations.map((item) => sourceEvidence(item.observation))
 
     const files = unionLists(
       ...evidenceObservations.map((item) => item.observation.fileRefs),
@@ -543,6 +573,7 @@ export async function runDeterministicStage(
       workspacePath: primary.observation.workspacePath,
       source: mostFrequentSource(evidenceObservations.map((item) => item.observation)),
       sourceObservationIds: [...evidenceIds],
+      sourceEvidence: sources,
       fileRefs: files,
       actor: 'knowledge-deterministic',
       createdAt: nowIso,
@@ -552,8 +583,12 @@ export async function runDeterministicStage(
       : match.kind === 'procedure'
         ? signal
         : matchedLine(primary.text, match.kind === 'decision' ? DECISION_RE : PREFERENCE_RE)
+    const scope = observationScope(primary.observation)
+    const identity = createHash('sha256').update(JSON.stringify([
+      scope, batch.workspaceId, match.kind, content, [...evidenceIds].sort(),
+    ])).digest('hex')
     const fact: MemoryFact = {
-      id: randomUUID(),
+      id: `deterministic-fact:${identity}`,
       content,
       concepts: extractFileConcepts(files),
       files,
@@ -562,6 +597,7 @@ export async function runDeterministicStage(
       version: 1,
       status: 'proposed',
       kind: match.kind,
+      scope,
       provenance,
     }
     const conflicts = findConflicts(
@@ -569,7 +605,7 @@ export async function runDeterministicStage(
       toConflictTargets(truthFacts),
     )
     candidates.push({
-      id: randomUUID(),
+      id: `deterministic-candidate:${identity}`,
       type: 'fact',
       status: 'proposed',
       fact,
@@ -577,27 +613,38 @@ export async function runDeterministicStage(
       evidence: {
         observationIds: [...evidenceIds],
         snippets: [firstLine(primary.text)],
+        sources,
       },
       ...(conflicts.length > 0 ? { conflicts } : {}),
     })
   }
 
-  await appendCandidateFacts(candidates)
+  candidates = await appendCandidateFacts(candidates)
   // Note: habit promotion shares the queue and Inbox review — see .agents/notes/2026-09-15-user-memory-m1--fd02d3bc.md
   // User memory closeout: repeated preference/habit observations promote to
   // scope=user candidates on the same queue with no new cursors. The frequency
   // threshold plus Inbox review keeps the promotion noise out of truth.
+  const habitInputs = prepared.map((item) => ({
+    ...item.observation,
+    content: item.text,
+  }))
+  // Separate turns normally settle in separate batches. Reuse bounded ledger
+  // history, with no additional cursor or persistent aggregation store.
+  if (habitInputs.some(isUserStatement)) {
+    for (const observation of await deps.listHabitObservations()) {
+      if (!isUserStatement(observation)) continue
+      if (seenEvents.has(observationEventKey(observation))) continue
+      const raw = observation.blobRef
+        ? await deps.resolveContent(observation).catch(() => observation.contentPreview ?? observation.content)
+        : observation.content
+      habitInputs.push({ ...observation, content: normalizeObservationText(raw).text })
+    }
+  }
   const habitPromotions = await deriveHabitPromotions(
-    prepared.map((item) => ({
-      id: item.observation.id,
-      content: item.text,
-      createdAt: item.observation.createdAt,
-      type: item.observation.type,
-    })),
+    habitInputs,
     nowIso,
   )
-  const habitCandidates = habitPromotions.map((promotion) => habitPromotionToCandidate(promotion, nowIso))
-  await appendCandidateFacts(habitCandidates)
+  const habitCandidates = await appendCandidateFacts(habitPromotions.map((promotion) => habitPromotionToCandidate(promotion, nowIso)))
   // Truth–truth mentions discovered from shared file refs. Human-gated
   // through the normal graph-candidate flow; an empty truth set yields none.
   const mentionEdges = synthesizeMentionEdges(

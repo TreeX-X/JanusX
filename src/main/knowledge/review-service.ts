@@ -24,6 +24,7 @@ import type {
 } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
+import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
 import type {
   ReviewCandidateInput,
   ReviewCandidateType,
@@ -473,6 +474,14 @@ export class KnowledgeReviewService {
     rollback: () => Promise<void>
     superseded?: { id: string; version: number }
   }> {
+    if (candidate.fact.scope !== undefined && !isMemoryScope(candidate.fact.scope)) {
+      throw new Error('Invalid fact memory scope')
+    }
+    if (candidate.fact.provenance.sourceEvidence !== undefined
+      && (!Array.isArray(candidate.fact.provenance.sourceEvidence)
+        || !candidate.fact.provenance.sourceEvidence.every(isSourceEvidence))) {
+      throw new Error('Invalid fact source evidence')
+    }
     const previous = await readJsonl<MemoryFact>(FACTS_FILE)
     // Phase 2 supersede: a candidate carrying `supersedes` archives the old
     // active fact and continues its version chain instead of forking a new one.
@@ -488,6 +497,9 @@ export class KnowledgeReviewService {
       if (target.provenance.workspaceId !== candidate.fact.provenance.workspaceId) {
         throw new Error(`Cannot supersede ${targetId}: workspace mismatch`)
       }
+      if (factScope(target) !== factScope(candidate.fact)) {
+        throw new Error(`Cannot supersede ${targetId}: memory scope mismatch`)
+      }
       base = previous.map((item) =>
         item.id === targetId ? { ...item, status: 'archived' as const } : item,
       )
@@ -496,6 +508,7 @@ export class KnowledgeReviewService {
     }
     const fact: MemoryFact = {
       ...candidate.fact,
+      scope: factScope(candidate.fact),
       status: 'active',
       version,
     }

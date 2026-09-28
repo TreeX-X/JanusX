@@ -159,6 +159,8 @@ describe('user memory agent tools (M3)', () => {
     expect(candidates).toHaveLength(1)
     expect(candidates[0]!.status).toBe('proposed')
     expect(candidates[0]!.fact.scope).toBe('user')
+    expect(candidates[0]!.fact.provenance.source).toBe('tool')
+    expect(candidates[0]!.fact.provenance.sourceEvidence).toEqual([])
     expect(candidates[0]!.fact.content).toContain('[REDACTED]')
     expect(candidates[0]!.fact.content).not.toContain('sk-abcdefghijklmnopqrstuvwx')
     const audits = await readJsonlLines(join('audit', 'audit.jsonl')) as Array<{ action: string; targetId: string }>
