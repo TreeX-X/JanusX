@@ -10,10 +10,12 @@ export function UserPersonaCards({
   overview,
   onOpenInbox,
   onCorrect,
+  onForget,
   onRefresh,
 }: {
   overview: UserMemoryOverview
   onOpenInbox: () => void
+  onForget?: (memory: UserMemoryOverviewHabit) => void
   onCorrect?: (memory: UserMemoryOverviewHabit) => void
   onRefresh?: () => void
 }) {
@@ -57,6 +59,7 @@ export function UserPersonaCards({
             </span>
             <span className={styles.rowContent}>{habit.content}</span>
             {habit.confirmed === false && <span className={styles.rowSource}>{t('knowledge:persona.unconfirmed')}</span>}
+            {onForget && <button type="button" className={styles.copyButton} disabled={!habit.contentHash} onClick={() => onForget(habit)}>{t('knowledge:persona.forgetMemory')}</button>}
             {onCorrect && <button type="button" className={styles.copyButton} disabled={!habit.contentHash} onClick={() => onCorrect(habit)}>{t('knowledge:persona.correctMemory')}</button>}
             <span className={styles.rowSource}>
               {`fact:${habit.id}${habit.observationIds.length > 0 ? ` · observation:${habit.observationIds.join(',observation:')}` : ''}${habit.succession ? ` · ${habit.succession}` : ''}`}

@@ -1,3 +1,4 @@
+import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 /**
  * @file User episode service (M1).
  * @description Projects user observations and reads legacy episode files with
@@ -72,8 +73,9 @@ export class UserEpisodeService {
 
   async listActive(nowMs: number = Date.now(), limit: number = EPISODE_WORKING_SET_LIMIT): Promise<UserEpisode[]> {
     const all = await this.readAll()
+    const barrier = await readPersonalForgettingBarrier()
     return all
-      .filter((episode) => episode.status === 'active' && Date.parse(episode.expiresAt) > nowMs)
+      .filter((episode) => !barrier.blocksEpisode(episode) && episode.status === 'active' && Date.parse(episode.expiresAt) > nowMs)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, Math.max(1, Math.min(EPISODE_WORKING_SET_LIMIT, Math.trunc(limit))))
   }

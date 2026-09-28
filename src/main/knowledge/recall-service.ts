@@ -1,5 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { memoryKey, readPersonalForgettingBarrier } from './personal-forgetting-barrier'
+import { profileContentHash } from './profile-projection'
 import type {
   CandidateFact,
   CandidateGraphEdge,
@@ -280,6 +282,7 @@ function observationDocument(
   const fileRefs = derived ? Array.from(new Set([...observation.fileRefs, ...derived.fileRefs])) : observation.fileRefs
   const hit: KnowledgeSearchHit = {
     id: observation.id,
+    ...(observation.scope ? { scope: observation.scope } : {}),
     expiresAt: observation.expiresAt,
     type: 'observation',
     title: observation.summary ?? content.split('\n')[0] ?? observation.id,
@@ -655,8 +658,15 @@ export class KnowledgeRecallService {
     }
 
     const { fingerprint, documents: allDocuments } = await this.cachedDocumentsWithFingerprint(request.layer)
-    const documents = allDocuments.filter((document) => matchesFilters(document, request, this.nowMs()))
-    const filterKey = recallFilterKey(request)
+    const barrier = await readPersonalForgettingBarrier()
+    const documents = allDocuments.filter((document) => {
+      const hit = document.hit
+      if ((hit.scope === 'user' || hit.workspaceId === 'user')
+        && (barrier.facts.has(memoryKey(hit.id)) || barrier.candidates.has(memoryKey(hit.id))
+          || barrier.blocksObservations(hit.sourceObservationIds) || barrier.blocksContent(hit.title) || barrier.blocksContent(hit.content))) return false
+      return matchesFilters(document, request, this.nowMs())
+    })
+    const filterKey = recallFilterKey(request) + profileContentHash(barrier.records)
     const index = this.cachedIndex(filterKey, fingerprint, () => new Bm25Index(documents.map((document) => ({
       id: document.key,
       text: searchText(document.hit),

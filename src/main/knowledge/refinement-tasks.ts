@@ -1,3 +1,4 @@
+import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 // Note: durable refinement survives observation cursors and rechecks snapshots — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -79,11 +80,17 @@ export class RefinementTaskService {
     if (new Set(tasks.map((task) => task.id)).size !== tasks.length || tasks.some((task) => task.id !== taskId(task))) {
       throw new Error('Invalid refinement task identities')
     }
-    return tasks
+    return this.applyForgetting(tasks)
+  }
+
+  private async applyForgetting(tasks: RefinementTask[]): Promise<RefinementTask[]> {
+    const barrier = await readPersonalForgettingBarrier()
+    return tasks.map(task => barrier.blocksTask(task)
+      ? { ...task, status: 'cancelled', reason: 'personal-memory-forgotten' } : task)
   }
 
   private async write(tasks: RefinementTask[]): Promise<void> {
-    await writeFileAtomic(join(knowledgeRootPath(), 'processing/refinement-tasks.json'), JSON.stringify({ version: 1, tasks }))
+    await writeFileAtomic(join(knowledgeRootPath(), 'processing/refinement-tasks.json'), JSON.stringify({ version: 1, tasks: await this.applyForgetting(tasks) }))
   }
 
   /** Atomic snapshots keep diagnostics responsive while a model call is in flight. */
@@ -187,9 +194,12 @@ export class RefinementTaskService {
         await this.write(tasks)
         budget -= cost; calls++
         try {
+          if ((await readPersonalForgettingBarrier()).blocksTask(task)) { await cancel('personal-memory-forgotten'); continue }
           await this.deps.extract(observations, { [task.candidateId]: task.candidateHash })
+          if ((await readPersonalForgettingBarrier()).blocksTask(task)) { await cancel('personal-memory-forgotten'); continue }
           task.status = 'succeeded'; result.processed++
         } catch {
+          if ((await readPersonalForgettingBarrier()).blocksTask(task)) { await cancel('personal-memory-forgotten'); continue }
           task.status = task.attempts >= MAX_ATTEMPTS ? 'failed' : 'pending'
           task.reason = 'model-call-failed'
           task.nextRetryAt = this.deps.nowMs() + 60000 * 2 ** (task.attempts - 1)

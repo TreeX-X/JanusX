@@ -1,3 +1,4 @@
+import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 import type { CandidateFact, MemoryFact } from '../../shared/knowledge'
 import { SerialQueue } from '../lib/atomic-file'
 import { knowledgeTruthService } from './truth-service'
@@ -15,9 +16,10 @@ export function importLegacyPersonalMemory(): Promise<{ created: number; remaini
     const [truth, profile, existing] = await Promise.all([
       knowledgeTruthService.list(), legacyProfileSources(), readLegacyJsonl<CandidateFact>('facts/candidates.jsonl'),
     ])
+    const barrier = await readPersonalForgettingBarrier()
     const ids = new Set(existing.map(candidate => candidate.id))
     const candidates = [...truth.facts.map(legacyFactSource).filter(source => source !== undefined), ...profile]
-      .map(legacySourceCandidate).filter(candidate => !ids.has(candidate.id))
+      .map(legacySourceCandidate).filter(candidate => !ids.has(candidate.id) && !barrier.blocksCandidate(candidate))
     const added = await proposeFactCandidates(candidates.slice(0, MIGRATION_BATCH_SIZE))
     return { created: added.length, remaining: Math.max(0, candidates.length - MIGRATION_BATCH_SIZE) }
   })

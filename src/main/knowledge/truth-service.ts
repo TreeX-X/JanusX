@@ -1,3 +1,4 @@
+import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -225,8 +226,9 @@ export class KnowledgeTruthService {
       readJsonl(join('graph', 'edges.jsonl'), isGraphEdge, 'graph'),
     ])
 
+    const barrier = await readPersonalForgettingBarrier()
     return {
-      facts,
+      facts: facts.filter(fact => !barrier.blocksFact(fact)),
       wikiPages,
       graphEdges,
     }

@@ -21,6 +21,7 @@ import type {
 import { Bm25Index } from './search/bm25'
 import { knowledgeTruthService } from './truth-service'
 import { userEpisodeService } from './user-episode-service'
+import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 import { userProfileService } from './user-profile-service'
 
 /** Independent user budget: never eats the project recall allowance. */
@@ -277,8 +278,9 @@ export async function searchUserMemory(
 }
 
 /** Production wiring over the M1 singleton stores. */
-export function searchUserMemoryDefault(query: string): Promise<UserRecallResult> {
-  return searchUserMemory(query, {
+export async function searchUserMemoryDefault(query: string): Promise<UserRecallResult> {
+  const before = await readPersonalForgettingBarrier()
+  const result = await searchUserMemory(query, {
     listUserFacts: async () => {
       const snapshot = await knowledgeTruthService.list()
       return snapshot.facts.filter(
@@ -288,6 +290,9 @@ export function searchUserMemoryDefault(query: string): Promise<UserRecallResult
     loadProfile: () => userProfileService.load(),
     listActiveEpisodes: () => userEpisodeService.listActive(Date.now()),
   })
+  const after = await readPersonalForgettingBarrier()
+  if (JSON.stringify(before.records) !== JSON.stringify(after.records)) return { ...result, items: [], compactContext: '', eligibleCount: 0, truncated: false }
+  return result
 }
 
 /** Insert the user section after project knowledge, falling back to after the persona block. */

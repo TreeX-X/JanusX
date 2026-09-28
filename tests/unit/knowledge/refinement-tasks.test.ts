@@ -9,6 +9,9 @@ import { refinementContextHash, refinementEvidenceHash, refinementHash } from '.
 import { RefinementTaskService, type RefinementTaskDeps } from '../../../src/main/knowledge/refinement-tasks'
 import { KnowledgeProcessingQueue } from '../../../src/main/knowledge/processing-queue'
 import { runLlmStage } from '../../../src/main/knowledge/llm-stage'
+import { sourceEvidence } from '../../../src/main/knowledge/memory-evidence'
+import { writeFileAtomic } from '../../../src/main/lib/atomic-file'
+import { forgettingPath, memoryKey } from '../../../src/main/knowledge/personal-forgetting-barrier'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
@@ -244,5 +247,31 @@ describe('durable refinement tasks', () => {
     release()
     await running
     expect(await service.stats()).toMatchObject({ running: 0, succeeded: 1 })
+  })
+
+  it('cancels a running personal refinement durably without waiting for its model response', async () => {
+    const observation = observations[0]!
+    observation.scope = 'user'
+    observation.sourceEvidence = { ...sourceEvidence(observation), scope: 'user', speaker: 'user', authority: 'user-stated' }
+    const candidate = candidates[0]!
+    candidate.fact.scope = 'user'
+    candidate.decision!.candidateHash = candidateDecisionHash(candidate)
+    candidate.decision!.evidenceHashes = { [observation.id]: refinementEvidenceHash(observation, observation.content) }
+    candidate.decision!.contextHash = refinementContextHash([], 'user', 'project', now)
+    const service = new RefinementTaskService(deps)
+    await service.enqueue(plan())
+    let release!: () => void
+    extract.mockImplementation(() => new Promise<void>(resolve => { release = resolve }))
+    const running = service.runDue()
+    await vi.waitFor(() => expect(extract).toHaveBeenCalledOnce())
+    await writeFileAtomic(forgettingPath(), JSON.stringify({ version: 1, records: [{ target: memoryKey('target'), targetHash: memoryKey('content'),
+      createdAt: new Date(now).toISOString(), facts: [], candidates: [memoryKey(candidate.id)], observations: [memoryKey(observation.id)], contents: [] }] }))
+    expect(await service.stats()).toMatchObject({ cancelled: 1, running: 0 })
+    release()
+    expect(await running).toMatchObject({ cancelled: 1, processed: 0 })
+    expect(JSON.parse(await readFile(journal(), 'utf8')).tasks[0].status).toBe('cancelled')
+    const restarted = new RefinementTaskService(deps)
+    await restarted.runDue()
+    expect(extract).toHaveBeenCalledOnce()
   })
 })

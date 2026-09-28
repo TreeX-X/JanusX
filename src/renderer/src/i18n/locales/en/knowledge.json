@@ -56,6 +56,10 @@
     "bounded": "Bounded result"
   },
   "persona": {
+    "forgetMemory": "Forget this memory",
+    "forgetConfirm": "Confirm forgetting",
+    "forgetDetail": "Stop using this memory, its versions and personal memories derived from the same sources. Related pending reviews and refinement tasks will be invalidated. Engineering sources and original conversation files remain. Exact matching content stays blocked from personal memory; this action has no restore button.",
+    "forgetFailed": "Could not confirm forgetting. Retry, or close and refresh if the source changed.",
     "correctMemory": "Correct this memory",
     "correctionOriginal": "Original record",
     "correctionNew": "Corrected content",

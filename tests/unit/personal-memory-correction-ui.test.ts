@@ -17,7 +17,8 @@ beforeAll(async () => {
       window.calls=[];window.opens=[];window.reads=0;window.mode='proposed'
       window.memory={id:'old',content:'Use pnpm',contentHash:'a'.repeat(64),confirmed:true,observationIds:[]}
       window.electron={knowledge:{
-        userMemoryOverview:async()=>{window.reads++;return {profile:{version:1,updatedAt:'2026-09-28'},habits:[window.memory],recent:[],pendingHabitCount:0}},
+        userMemoryOverview:async()=>{window.reads++;return {profile:{version:1,updatedAt:'2026-09-28'},habits:window.forgotten?[]:[window.memory],recent:[],pendingHabitCount:0}},
+        forgetPersonalMemory:async input=>{window.calls.push(input);if(window.mode==='stale')throw Error('stale');if(window.defer)await new Promise(resolve=>window.finish=resolve);window.forgotten=true},
         proposePersonalMemoryCorrection:async input=>{window.calls.push(input);if(window.mode==='stale')throw Error('Personal correction target changed');if(window.defer)await new Promise(resolve=>window.finish=resolve);return {candidateId:'correction',status:window.mode}}
       }}
       const root=createRoot(document.getElementById('root'))
@@ -37,6 +38,27 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close() })
 
 describe('personal memory correction UI', () => {
+  it('requires explicit forgetting confirmation, retains failure, and refreshes after retry', async () => {
+    const page = await browser.newPage()
+    try {
+      await page.setContent('<div id="root"></div>')
+      await page.addScriptTag({ content: script })
+      await page.getByRole('button', { name: 'Forget this memory', exact: true }).click()
+      expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+      await page.evaluate(() => { (window as any).mode = 'stale' })
+      await page.getByRole('button', { name: 'Confirm forgetting', exact: true }).click()
+      await page.getByRole('alert').waitFor()
+      await page.evaluate(() => { (window as any).mode = 'proposed'; (window as any).defer = true })
+      await page.getByRole('button', { name: 'Confirm forgetting', exact: true }).click()
+      expect(await page.getByRole('button', { name: 'Confirm forgetting', exact: true }).isDisabled()).toBe(true)
+      await page.evaluate(() => (window as any).finish())
+      await page.getByRole('button', { name: 'Refresh Knowledge Engine', exact: true }).waitFor()
+      expect(await page.getByRole('button', { name: 'Forget this memory', exact: true }).count()).toBe(0)
+      expect(await page.evaluate(() => (window as any).calls)).toEqual([
+        { targetId: 'old', targetHash: 'a'.repeat(64) }, { targetId: 'old', targetHash: 'a'.repeat(64) },
+      ])
+    } finally { await page.close() }
+  })
   it('does not reopen review after the user closes the tool during submission', async () => {
     const page = await browser.newPage()
     try {

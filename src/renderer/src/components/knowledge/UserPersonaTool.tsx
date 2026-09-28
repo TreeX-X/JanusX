@@ -5,6 +5,7 @@ import { useRightToolStore } from '../../stores/right-tools'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './KnowledgeAssist.module.css'
 import { UserPersonaCards } from './UserPersonaCards'
+import { PersonalMemoryForgetForm } from './PersonalMemoryForgetForm'
 import { PersonalMemoryCorrectionForm } from './PersonalMemoryCorrectionForm'
 
 type LoadState = 'loading' | 'ready' | 'error'
@@ -20,6 +21,7 @@ export function UserPersonaTool({ active = true }: { active?: boolean }) {
   const [overview, setOverview] = useState<UserMemoryOverview | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const generation = useRef(0)
+  const [forgetting, setForgetting] = useState<UserMemoryOverviewHabit | null>(null)
   const [correcting, setCorrecting] = useState<UserMemoryOverviewHabit | null>(null)
 
   const refresh = useCallback(async () => {
@@ -50,22 +52,25 @@ export function UserPersonaTool({ active = true }: { active?: boolean }) {
 
   return (
     <section className={styles.root} aria-label={t('knowledge:persona.toolAria')}>
-      {loadState === 'loading' && !correcting && (
+      {loadState === 'loading' && !correcting && !forgetting && (
         <div className={styles.state}>
           <strong>{t('knowledge:state.loading.title')}</strong>
           <span>{t('knowledge:state.loading.detail')}</span>
         </div>
       )}
-      {loadState === 'error' && !correcting && (
+      {loadState === 'error' && !correcting && !forgetting && (
         <div className={styles.state}>
           <strong>{t('knowledge:persona.unavailable.title')}</strong>
           <span>{t('knowledge:persona.unavailable.detail')}</span>
           <button type="button" onClick={() => void refresh()}>{t('knowledge:action.refresh')}</button>
         </div>
       )}
-      {loadState === 'ready' && overview && !correcting && (
-        <UserPersonaCards overview={overview} onOpenInbox={openInbox} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
+      {loadState === 'ready' && overview && !correcting && !forgetting && (
+        <UserPersonaCards overview={overview} onOpenInbox={openInbox} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
       )}
+      {forgetting && <PersonalMemoryForgetForm memory={forgetting}
+        onClose={() => { setForgetting(null); void refresh() }}
+        onForgotten={() => { setForgetting(null); void refresh() }} />}
       {correcting && <PersonalMemoryCorrectionForm memory={correcting}
         onClose={() => { setCorrecting(null); void refresh() }}
         onSubmitted={status => { setCorrecting(null); void refresh(); if (status === 'proposed') openInbox() }} />}

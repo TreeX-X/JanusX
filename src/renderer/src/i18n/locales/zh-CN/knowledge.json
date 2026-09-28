@@ -56,6 +56,10 @@
     "bounded": "结果已截断"
   },
   "persona": {
+    "forgetMemory": "遗忘这条记忆",
+    "forgetConfirm": "确认遗忘",
+    "forgetDetail": "停止使用这条记忆、历史版本及由相同来源派生的个人记忆，相关待审内容和精修任务也会失效。工程来源和原始会话文件保留。相同正文将持续禁止进入个人记忆，此操作暂不提供恢复入口。",
+    "forgetFailed": "未能确认遗忘结果，请重试；如果来源已变化，请关闭后刷新。",
     "correctMemory": "纠正这条记忆",
     "correctionOriginal": "原记录",
     "correctionNew": "修改后的内容",

@@ -1,3 +1,4 @@
+import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 /**
  * @file KnowledgeReviewService —— 候选审核 / 应用闭环（MVP）
  * @description
@@ -171,7 +172,9 @@ export async function proposeFactCandidates(candidates: CandidateFact[]): Promis
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
     const ids = new Set(content.split('\n').filter((line) => line.trim()).map((line) => (JSON.parse(line) as CandidateFact).id))
+    const barrier = await readPersonalForgettingBarrier()
     const fresh = candidates.filter((candidate) => {
+      if (barrier.blocksCandidate(candidate)) return false
       if (candidate.status !== 'proposed' || candidate.fact.status !== 'proposed') throw new Error('Candidates require review before applying')
       if (ids.has(candidate.id)) return false
       ids.add(candidate.id)
@@ -199,8 +202,10 @@ export async function annotateFactDecisions(updates: Map<string, MemoryDecisionA
       throw error
     }
     const records = content.split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line) as CandidateFact)
+    const barrier = await readPersonalForgettingBarrier()
     const attached: string[] = []
     for (const candidate of records) {
+      if (barrier.blocksCandidate(candidate)) continue
       const decision = updates.get(candidate.id)
       if (!decision || candidate.status !== 'proposed' || candidateDecisionHash(candidate) !== decision.candidateHash) continue
       candidate.decision = decision
@@ -218,7 +223,8 @@ export async function annotateFactDecisions(updates: Map<string, MemoryDecisionA
  */
 export async function listProposedUserFactCandidates(): Promise<CandidateFact[]> {
   const records = await readJsonl<CandidateFact>(FACT_CANDIDATES_FILE)
-  return records.filter((candidate) =>
+  const barrier = await readPersonalForgettingBarrier()
+  return records.map(candidate => barrier.candidate(candidate)).filter((candidate) =>
     candidate?.type === 'fact'
     && candidate.status === 'proposed'
     && (candidate.fact.scope === 'user' || candidate.fact.provenance.workspaceId === 'user'),
@@ -422,6 +428,9 @@ export class KnowledgeReviewService {
     }
 
     const current = records[index]!
+    if (type === 'fact' && (await readPersonalForgettingBarrier()).blocksCandidate(current as CandidateFact)) {
+      throw new Error('Personal memory has been forgotten')
+    }
     if (current.status === 'applied') {
       return { candidate: current, auditEvents: [] }
     }

@@ -1,3 +1,4 @@
+import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 /**
  * @file KnowledgeExtractService —— Phase 6 候选知识提炼，Phase 2 LLM 增强
  * @description
@@ -740,7 +741,9 @@ export class KnowledgeExtractService {
 
   /** 读取 facts/candidates.jsonl（追加写）。 */
   async listFactCandidates(): Promise<CandidateFact[]> {
-    return this.readJsonl<CandidateFact>(FACT_CANDIDATES_FILE)
+    const records = await this.readJsonl<CandidateFact>(FACT_CANDIDATES_FILE)
+    const barrier = await readPersonalForgettingBarrier()
+    return records.map(candidate => barrier.candidate(candidate))
   }
 
   /** 读取 graph/candidates.jsonl（追加写）。 */
