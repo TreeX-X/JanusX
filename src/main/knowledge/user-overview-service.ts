@@ -12,6 +12,7 @@ import { knowledgeTruthService } from './truth-service'
 import { listProposedUserFactCandidates } from './review-service'
 import { userEpisodeService } from './user-episode-service'
 import { userProfileService } from './user-profile-service'
+import { episodeContentHash } from './personal-forgetting-barrier'
 import { reviewedFactHash } from './profile-projection'
 
 export const OVERVIEW_HABIT_LIMIT = 20
@@ -53,6 +54,7 @@ export async function getUserMemoryOverview(nowMs: number = Date.now()): Promise
     profile,
     habits,
     recent: episodes.map((episode) => ({
+      contentHash: episodeContentHash(episode),
       id: episode.id,
       content: episode.content,
       createdAt: episode.createdAt,

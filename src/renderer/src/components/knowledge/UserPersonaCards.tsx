@@ -1,4 +1,4 @@
-import type { UserMemoryOverview, UserMemoryOverviewHabit } from '../../../../shared/knowledge'
+import type { UserMemoryOverview, UserMemoryOverviewHabit, UserMemoryOverviewEpisode } from '../../../../shared/knowledge'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './KnowledgeAssist.module.css'
 
@@ -11,10 +11,12 @@ export function UserPersonaCards({
   onOpenInbox,
   onCorrect,
   onForget,
+  onForgetEpisode,
   onRefresh,
 }: {
   overview: UserMemoryOverview
   onOpenInbox: () => void
+  onForgetEpisode?: (episode: UserMemoryOverviewEpisode) => void
   onForget?: (memory: UserMemoryOverviewHabit) => void
   onCorrect?: (memory: UserMemoryOverviewHabit) => void
   onRefresh?: () => void
@@ -75,6 +77,7 @@ export function UserPersonaCards({
         {overview.recent.map((episode) => (
           <div key={episode.id} className={styles.resultRow}>
             <span className={styles.rowContent}>{episode.content}</span>
+            {onForgetEpisode && <button type="button" className={styles.copyButton} disabled={!episode.contentHash} onClick={() => onForgetEpisode(episode)}>{t('knowledge:persona.forgetMemory')}</button>}
             <span className={styles.rowSource}>
               {`episode:${episode.id} · ${t('knowledge:persona.expires', { date: episode.expiresAt.slice(0, 10) })}`}
             </span>

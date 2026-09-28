@@ -220,27 +220,32 @@ export class UserEpisodeService {
     })
   }
 
-  private async listShardFiles(): Promise<string[]> {
+  private async listShardFiles(strict = false): Promise<string[]> {
     let entries: string[] = []
     try {
       entries = await readdir(join(knowledgeRootPath(), EPISODES_DIR))
-    } catch {
+    } catch (error) {
+      if (strict && (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       return []
     }
     return entries.filter((name) => name.endsWith('.jsonl')).map((name) => join(EPISODES_DIR, name)).sort()
   }
 
-  private async readAll(): Promise<UserEpisode[]> {
+  /** Unbounded source view for explicit forgetting; bypasses recall suppression and its 200-item cap. */
+  async listForForgetting(): Promise<UserEpisode[]> { return this.readAll(true) }
+
+  private async readAll(strict = false): Promise<UserEpisode[]> {
     const out: UserEpisode[] = []
-    for (const observation of await knowledgeObservationService.listAll()) {
+    for (const observation of await knowledgeObservationService.listAll(strict)) {
       if (observation.scope !== 'user' || observation.memoryIntent !== 'episode') continue
       out.push(episodeFromObservation(observation, await knowledgeObservationService.resolveContent(observation)))
     }
-    for (const relativePath of await this.listShardFiles()) {
+    for (const relativePath of await this.listShardFiles(strict)) {
       let content = ''
       try {
         content = await readFile(join(knowledgeRootPath(), relativePath), 'utf8')
-      } catch {
+      } catch (error) {
+        if (strict) throw error
         continue
       }
       for (const line of content.split('\n')) {
@@ -249,7 +254,9 @@ export class UserEpisodeService {
         try {
           const parsed = JSON.parse(trimmed) as unknown
           if (isEpisode(parsed)) out.push(parsed)
-        } catch {
+          else if (strict) throw new Error('Invalid legacy episode')
+        } catch (error) {
+          if (strict) throw error
           continue
         }
       }

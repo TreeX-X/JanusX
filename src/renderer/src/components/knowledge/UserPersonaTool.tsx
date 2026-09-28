@@ -21,7 +21,7 @@ export function UserPersonaTool({ active = true }: { active?: boolean }) {
   const [overview, setOverview] = useState<UserMemoryOverview | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const generation = useRef(0)
-  const [forgetting, setForgetting] = useState<UserMemoryOverviewHabit | null>(null)
+  const [forgetting, setForgetting] = useState<(Pick<UserMemoryOverviewHabit, 'id' | 'content' | 'contentHash'> & { kind?: 'episode' }) | null>(null)
   const [correcting, setCorrecting] = useState<UserMemoryOverviewHabit | null>(null)
 
   const refresh = useCallback(async () => {
@@ -66,7 +66,7 @@ export function UserPersonaTool({ active = true }: { active?: boolean }) {
         </div>
       )}
       {loadState === 'ready' && overview && !correcting && !forgetting && (
-        <UserPersonaCards overview={overview} onOpenInbox={openInbox} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
+        <UserPersonaCards overview={overview} onOpenInbox={openInbox} onForgetEpisode={episode => setForgetting({ ...episode, kind: 'episode' })} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
       )}
       {forgetting && <PersonalMemoryForgetForm memory={forgetting}
         onClose={() => { setForgetting(null); void refresh() }}

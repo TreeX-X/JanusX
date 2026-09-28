@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { CandidateFact, MemoryFact } from '../../../src/shared/knowledge'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
-import { forgetPersonalMemory } from '../../../src/main/knowledge/personal-memory-forgetting'
-import { PersonalForgettingBarrier, readPersonalForgettingBarrier } from '../../../src/main/knowledge/personal-forgetting-barrier'
+import { forgetPersonalMemory, forgetPersonalMemoryQuery } from '../../../src/main/knowledge/personal-memory-forgetting'
+import { episodeContentHash, PersonalForgettingBarrier, readPersonalForgettingBarrier } from '../../../src/main/knowledge/personal-forgetting-barrier'
 import { proposePersonalMemoryCorrection } from '../../../src/main/knowledge/personal-memory-correction'
 import { knowledgeReviewService, proposeFactCandidates, listProposedUserFactCandidates } from '../../../src/main/knowledge/review-service'
 import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service'
@@ -155,5 +155,62 @@ describe('durable selected personal memory forgetting', () => {
     expect((await knowledgeTruthService.list()).facts).toEqual([])
     await forgetPersonalMemory(input())
     expect((await readPersonalForgettingBarrier()).records).toHaveLength(1)
+  })
+
+  it('forgets an independent episode and rejects its evidence replay without changing engineering sources', async () => {
+    const episode = await userEpisodeService.capture({ content: 'Prefer isolated event', sourceObservationIds: ['independent-source'] })
+    const selected = { kind: 'episode', targetId: episode.id, targetHash: episodeContentHash(episode) }
+    await expect(forgetPersonalMemory({ ...selected, targetHash: 'a'.repeat(64) })).rejects.toThrow('episode changed')
+    await forgetPersonalMemory(selected)
+    await forgetPersonalMemory(selected)
+    expect(await userEpisodeService.listActive()).toEqual([])
+    expect((await readPersonalForgettingBarrier()).blocksObservations(['independent-source'])).toBe(true)
+    expect((await knowledgeTruthService.list()).facts).toHaveLength(1)
+    expect((await readPersonalForgettingBarrier()).records).toHaveLength(1)
+  })
+
+  it('atomically forgets chat-query facts and events and repeats after acknowledgement loss', async () => {
+    await userEpisodeService.capture({ content: 'pnpm recent event' })
+    const request = { query: 'pnpm', confirm: true }
+    const write = vi.spyOn(atomic, 'writeFileAtomic').mockRejectedValueOnce(new Error('disk unavailable'))
+    await expect(forgetPersonalMemoryQuery(request)).rejects.toThrow('disk unavailable')
+    write.mockRestore()
+    expect((await knowledgeTruthService.list()).facts).toHaveLength(1)
+    expect(await userEpisodeService.listActive()).toHaveLength(1)
+    const result = await forgetPersonalMemoryQuery(request)
+    expect(result).toMatchObject({ archivedFactIds: [target.id], mode: 'logical', silent: true })
+    expect(result.expiredEpisodeIds).toHaveLength(1)
+    expect(await forgetPersonalMemoryQuery(request)).toEqual(result)
+    expect((await readPersonalForgettingBarrier()).records).toHaveLength(1)
+    expect((await searchUserMemoryDefault('pnpm')).items).toEqual([])
+  })
+
+  it('covers legacy episodes beyond the recall cap and preserves malformed source files', async () => {
+    const episodes = Array.from({ length: 205 }, (_, i) => ({ id: `legacy-${i}`, content: 'pnpm event', tags: [], status: 'active',
+      sourceObservationIds: [], createdAt: '2026-09-28T00:00:00.000Z', expiresAt: '2099-01-01T00:00:00.000Z', ttlDays: 30 }))
+    await writeRecords('episodes/legacy.jsonl', episodes)
+    expect((await forgetPersonalMemoryQuery({ query: 'pnpm', confirm: true })).expiredEpisodeIds).toHaveLength(205)
+    expect(await userEpisodeService.listActive()).toEqual([])
+    await writeFile(join(root, 'episodes/legacy.jsonl'), '{broken')
+    await expect(forgetPersonalMemoryQuery({ query: 'pnpm', confirm: true })).rejects.toThrow()
+    expect(await readFile(join(root, 'episodes/legacy.jsonl'), 'utf8')).toBe('{broken')
+    expect((await readPersonalForgettingBarrier()).records).toHaveLength(1)
+  })
+
+  it('requires explicit query confirmation and ignores invalid or unmatched requests', async () => {
+    await expect(forgetPersonalMemoryQuery({ query: 'pnpm', confirm: false })).rejects.toThrow()
+    await expect(forgetPersonalMemoryQuery({ query: 'pnpm', confirm: true, scope: 'project' })).rejects.toThrow()
+    await expect(forgetPersonalMemoryQuery({ query: 'a', confirm: true })).rejects.toThrow('too broad')
+    await expect(forgetPersonalMemoryQuery({ query: 'nonexistent-zebra', confirm: true })).rejects.toThrow('no user memory')
+    expect((await readPersonalForgettingBarrier()).records).toEqual([])
+  })
+
+  it('aborts the complete query when an observation shard is malformed', async () => {
+    await userEpisodeService.capture({ content: 'pnpm event' })
+    const path = join(root, 'observations/active/broken.jsonl')
+    await writeFile(path, '{broken')
+    await expect(forgetPersonalMemoryQuery({ query: 'pnpm', confirm: true })).rejects.toThrow('Invalid observation source journal')
+    expect((await readPersonalForgettingBarrier()).records).toEqual([])
+    expect(await readFile(path, 'utf8')).toBe('{broken')
   })
 })

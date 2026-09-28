@@ -291,7 +291,7 @@ export interface KnowledgeAPI {
   registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
   userMemoryOverview: () => Promise<UserMemoryOverview>
   importLegacyPersonalMemory: () => Promise<{ created: number; remaining: number }>
-  forgetPersonalMemory: (input: { targetId: string; targetHash: string }) => Promise<void>
+  forgetPersonalMemory: (input: { targetId: string; targetHash: string; kind?: 'fact' | 'episode' }) => Promise<void>
   proposePersonalMemoryCorrection: (input: { targetId: string; targetHash: string; content: string }) => Promise<{ candidateId: string; status: CandidateFact['status'] }>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>

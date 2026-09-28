@@ -4,7 +4,7 @@ import { useI18n } from '@/i18n/useI18n'
 import styles from './MemoryReviewTool.module.css'
 
 export function PersonalMemoryForgetForm({ memory, onClose, onForgotten }: {
-  memory: UserMemoryOverviewHabit; onClose: () => void; onForgotten: () => void
+  memory: Pick<UserMemoryOverviewHabit, 'id' | 'content' | 'contentHash'> & { kind?: 'episode' }; onClose: () => void; onForgotten: () => void
 }) {
   const { t } = useI18n('knowledge')
   const [busy, setBusy] = useState(false)
@@ -16,7 +16,7 @@ export function PersonalMemoryForgetForm({ memory, onClose, onForgotten }: {
     if (pending.current || !memory.contentHash) return
     pending.current = true; setBusy(true); setError(false)
     try {
-      await window.electron.knowledge.forgetPersonalMemory({ targetId: memory.id, targetHash: memory.contentHash })
+      await window.electron.knowledge.forgetPersonalMemory({ targetId: memory.id, targetHash: memory.contentHash, ...(memory.kind ? { kind: memory.kind } : {}) })
       if (mounted.current) onForgotten()
     } catch { if (mounted.current) setError(true) }
     finally { pending.current = false; if (mounted.current) setBusy(false) }

@@ -320,24 +320,26 @@ interface ShardFile {
   lines: string[]
 }
 
-async function readShardFile(relativePath: string): Promise<ShardFile | null> {
+async function readShardFile(relativePath: string, strict = false): Promise<ShardFile | null> {
   const absolutePath = join(knowledgeRootPath(), relativePath)
   let content: string
   try {
     content = await readFile(absolutePath, 'utf8')
-  } catch {
+  } catch (error) {
+    if (strict) throw error
     return null
   }
   const lines = content.split('\n').filter((line) => line.trim())
   return { relativePath, lines }
 }
 
-async function readArchiveShardFile(relativePath: string): Promise<ShardFile | null> {
+async function readArchiveShardFile(relativePath: string, strict = false): Promise<ShardFile | null> {
   const absolutePath = join(knowledgeRootPath(), relativePath)
   let compressed: Buffer
   try {
     compressed = await readFile(absolutePath)
-  } catch {
+  } catch (error) {
+    if (strict) throw error
     return null
   }
   const decompressed = await gunzipAsync(compressed)
@@ -346,13 +348,14 @@ async function readArchiveShardFile(relativePath: string): Promise<ShardFile | n
   return { relativePath, lines }
 }
 
-async function listObservationShardFiles(): Promise<ShardFile[]> {
+async function listObservationShardFiles(strict = false): Promise<ShardFile[]> {
   const root = knowledgeRootPath()
   const activeDir = join(root, ACTIVE_OBSERVATIONS_DIR)
   let activeEntries: string[] = []
   try {
     activeEntries = await readdir(activeDir)
-  } catch {
+  } catch (error) {
+    if (strict && (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     activeEntries = []
   }
   const shardPaths = activeEntries
@@ -361,7 +364,7 @@ async function listObservationShardFiles(): Promise<ShardFile[]> {
 
   const shards: ShardFile[] = []
   for (const relativePath of shardPaths) {
-    const shard = await readShardFile(relativePath)
+    const shard = await readShardFile(relativePath, strict)
     if (shard && shard.lines.length > 0) shards.push(shard)
   }
 
@@ -370,13 +373,14 @@ async function listObservationShardFiles(): Promise<ShardFile[]> {
   let archiveEntries: string[] = []
   try {
     archiveEntries = await readdir(archiveDir)
-  } catch {
+  } catch (error) {
+    if (strict && (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     archiveEntries = []
   }
   for (const name of archiveEntries) {
     if (!name.endsWith('.jsonl.gz')) continue
     const relativePath = `${ARCHIVE_OBSERVATIONS_DIR}/${name}`
-    const shard = await readArchiveShardFile(relativePath)
+    const shard = await readArchiveShardFile(relativePath, strict)
     if (shard && shard.lines.length > 0) shards.push(shard)
   }
 
@@ -698,8 +702,8 @@ export class KnowledgeObservationService {
   }
 
   /** Phase 0 diagnostics: every parseable observation across all shards, unsorted and uncapped. */
-  async listAll(): Promise<Observation[]> {
-    const shards = await listObservationShardFiles()
+  async listAll(strict = false): Promise<Observation[]> {
+    const shards = await listObservationShardFiles(strict)
     const observations: Observation[] = []
     const violations: ObservationViolation[] = []
     for (const shard of shards) {
@@ -708,6 +712,7 @@ export class KnowledgeObservationService {
         if (entry.observation) observations.push(entry.observation)
       }
     }
+    if (strict && violations.length) throw new Error('Invalid observation source journal')
     reportObservationSchemaViolations(violations)
     return observations
   }

@@ -16,6 +16,10 @@ export type ForgettingRecord = z.infer<typeof forgettingRecordSchema>
 const ledgerSchema = z.object({ version: z.literal(1), records: z.array(forgettingRecordSchema) }).strict()
 export const forgettingPath = () => join(knowledgeRootPath(), 'profile', 'forgotten.json')
 export const memoryKey = (value: string) => profileContentHash(value)
+export const episodeContentHash = (episode: UserEpisode) => profileContentHash({
+  id: episode.id, content: episode.content, sourceObservationIds: episode.sourceObservationIds,
+  createdAt: episode.createdAt, expiresAt: episode.expiresAt, status: episode.status, tags: episode.tags,
+})
 export function contentKeys(content: string): string[] {
   const keys = [memoryKey(content.trim())]
   // Imported profile values carry a host field prefix. Block the original value too.

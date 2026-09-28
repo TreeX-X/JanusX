@@ -154,6 +154,7 @@ export interface UserMemoryOverviewHabit {
 }
 
 export interface UserMemoryOverviewEpisode {
+  contentHash?: string
   id: string
   content: string
   createdAt: string

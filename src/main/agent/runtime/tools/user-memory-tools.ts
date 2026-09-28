@@ -10,14 +10,10 @@
  * every mutation audits.
  */
 import { redactHighConfidenceSecrets, type RegisteredTool, type ToolRegistry } from '@janus-agent/agent-core'
-import { knowledgeOperationsService } from '../../../knowledge/operations-service'
-import { knowledgeTruthService } from '../../../knowledge/truth-service'
 import { knowledgeObservationService } from '../../../knowledge/observation-service'
 import { knowledgeProcessingQueue } from '../../../knowledge/processing-queue'
-import { userEpisodeService } from '../../../knowledge/user-episode-service'
 import { searchUserMemoryDefault } from '../../../knowledge/user-recall-service'
-import { Bm25Index } from '../../../knowledge/search/bm25'
-import { isForgettableQuery, matchesForgettingQuery } from '../../../knowledge/search/tokenizer'
+import { forgetPersonalMemoryQuery } from '../../../knowledge/personal-memory-forgetting'
 
 const registeredRegistries = new WeakSet<ToolRegistry>()
 const MAX_QUERY_CHARS = 500
@@ -104,7 +100,7 @@ export const userMemorySaveTool: RegisteredTool = {
 
 export const userMemoryForgetTool: RegisteredTool = {
   name: 'user-memory.forget',
-  description: 'Forget matching durable user memory: archives user facts, expires user events, and writes audit so recall stays silent afterwards. Person scope only; project knowledge is never touched. Requires confirm:true.',
+  description: 'Forget matching durable user memory: records durable logical forgetting for matched facts, events and their personal derivatives. Original files remain; exact content and source replay stay blocked. Person scope only; project knowledge is never touched. Requires confirm:true.',
   actionRisk: 'delete',
   inputSchema: {
     type: 'object',
@@ -113,29 +109,7 @@ export const userMemoryForgetTool: RegisteredTool = {
     additionalProperties: false,
   },
   execute: async (input) => {
-    if (input.confirm !== true) throw new Error('user-memory.forget requires confirm:true')
-    const query = boundedText(input.query, 'user-memory.forget query', MAX_QUERY_CHARS)
-    if (!isForgettableQuery(query)) throw new Error('user-memory.forget query is too broad to forget safely')
-    const snapshot = await knowledgeTruthService.list()
-    const userFacts = snapshot.facts.filter(
-      (fact) => fact.scope === 'user' || fact.provenance.workspaceId === 'user',
-    )
-    const index = new Bm25Index(userFacts.map((fact) => ({ id: fact.id, text: `${fact.content}\n${fact.concepts.join(' ')}` })))
-    const matchedIds = new Set(index.search(query).map((hit) => hit.id))
-    // Destructive ops need substantive overlap: one shared multi-character
-    // term or at least two shared CJK characters, never a lone particle.
-    const matched = userFacts.filter((fact) => matchedIds.has(fact.id)
-      && matchesForgettingQuery(query, `${fact.content}\n${fact.concepts.join(' ')}`))
-    const archivedFactIds: string[] = []
-    for (const fact of matched) {
-      await knowledgeOperationsService.revoke({ kind: 'fact', id: fact.id, workspaceId: fact.provenance.workspaceId })
-      archivedFactIds.push(fact.id)
-    }
-    const { expiredIds } = await userEpisodeService.expireMatching(query, Date.now())
-    if (archivedFactIds.length === 0 && expiredIds.length === 0) {
-      throw new Error('user-memory.forget matched no user memory')
-    }
-    return { archivedFactIds, expiredEpisodeIds: expiredIds, silent: true as const }
+    return forgetPersonalMemoryQuery(input)
   },
 }
 

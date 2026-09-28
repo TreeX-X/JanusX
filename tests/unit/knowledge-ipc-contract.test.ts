@@ -145,7 +145,7 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.registerExternalMcp('cursor')
     await knowledgeApi.userMemoryOverview()
     await knowledgeApi.importLegacyPersonalMemory()
-    await knowledgeApi.forgetPersonalMemory({ targetId: 'old', targetHash: 'hash' })
+    await knowledgeApi.forgetPersonalMemory({ targetId: 'old', targetHash: 'hash', kind: 'episode' })
     await knowledgeApi.proposePersonalMemoryCorrection({ targetId: 'old', targetHash: 'hash', content: 'new' })
     await knowledgeApi.getSettings()
     await knowledgeApi.updateSettings({ enabled: false })
@@ -184,7 +184,7 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.registerExternalMcp, 'cursor'],
       [KNOWLEDGE_CHANNELS.userMemoryOverview],
       [KNOWLEDGE_CHANNELS.importLegacyPersonalMemory],
-      [KNOWLEDGE_CHANNELS.forgetPersonalMemory, { targetId: 'old', targetHash: 'hash' }],
+      [KNOWLEDGE_CHANNELS.forgetPersonalMemory, { targetId: 'old', targetHash: 'hash', kind: 'episode' }],
       [KNOWLEDGE_CHANNELS.proposePersonalMemoryCorrection, { targetId: 'old', targetHash: 'hash', content: 'new' }],
       [KNOWLEDGE_CHANNELS.getSettings],
       [KNOWLEDGE_CHANNELS.updateSettings, { enabled: false }],
@@ -327,7 +327,7 @@ describe('Knowledge IPC contract', () => {
       () => api.registerExternalMcp('cursor'),
       () => api.userMemoryOverview(),
       () => api.importLegacyPersonalMemory(),
-      () => api.forgetPersonalMemory({ targetId: 'old', targetHash: 'hash' }),
+      () => api.forgetPersonalMemory({ targetId: 'old', targetHash: 'hash', kind: 'episode' }),
       () => api.proposePersonalMemoryCorrection({ targetId: 'old', targetHash: 'hash', content: 'new' }),
       () => api.getSettings(),
       () => api.updateSettings({ enabled: false }),

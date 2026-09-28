@@ -17,8 +17,8 @@ beforeAll(async () => {
       window.calls=[];window.opens=[];window.reads=0;window.mode='proposed'
       window.memory={id:'old',content:'Use pnpm',contentHash:'a'.repeat(64),confirmed:true,observationIds:[]}
       window.electron={knowledge:{
-        userMemoryOverview:async()=>{window.reads++;return {profile:{version:1,updatedAt:'2026-09-28'},habits:window.forgotten?[]:[window.memory],recent:[],pendingHabitCount:0}},
-        forgetPersonalMemory:async input=>{window.calls.push(input);if(window.mode==='stale')throw Error('stale');if(window.defer)await new Promise(resolve=>window.finish=resolve);window.forgotten=true},
+        userMemoryOverview:async()=>{window.reads++;return {profile:{version:1,updatedAt:'2026-09-28'},habits:window.forgotten?[]:[window.memory],recent:window.events??[],pendingHabitCount:0}},
+        forgetPersonalMemory:async input=>{window.calls.push(input);if(window.mode==='stale')throw Error('stale');if(window.defer)await new Promise(resolve=>window.finish=resolve);if(input.kind==='episode')window.events=[];else window.forgotten=true},
         proposePersonalMemoryCorrection:async input=>{window.calls.push(input);if(window.mode==='stale')throw Error('Personal correction target changed');if(window.defer)await new Promise(resolve=>window.finish=resolve);return {candidateId:'correction',status:window.mode}}
       }}
       const root=createRoot(document.getElementById('root'))
@@ -38,6 +38,22 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close() })
 
 describe('personal memory correction UI', () => {
+  it('forgets a selected recent episode with its displayed source hash', async () => {
+    const page = await browser.newPage()
+    try {
+      await page.setContent('<div id="root"></div>')
+      await page.addScriptTag({ content: script })
+      await page.getByRole('button', { name: 'Correct this memory', exact: true }).waitFor()
+      await page.evaluate(() => { (window as any).events=[{id:'recent',content:'Recent event',contentHash:'b'.repeat(64),createdAt:'2026-09-29',expiresAt:'2099-01-01',tags:[]}];(window as any).renderActive(false) })
+      await page.evaluate(() => (window as any).renderActive(true))
+      await page.getByText('Recent event', {exact:true}).waitFor()
+      await page.getByRole('button', { name: 'Forget this memory', exact: true }).last().click()
+      await page.getByRole('button', { name: 'Confirm forgetting', exact: true }).click()
+      await page.getByRole('button', { name: 'Correct this memory', exact: true }).waitFor()
+      expect(await page.evaluate(() => (window as any).calls)).toEqual([{targetId:'recent',targetHash:'b'.repeat(64),kind:'episode'}])
+      expect(await page.getByText('Recent event',{exact:true}).count()).toBe(0)
+    } finally { await page.close() }
+  })
   it('requires explicit forgetting confirmation, retains failure, and refreshes after retry', async () => {
     const page = await browser.newPage()
     try {

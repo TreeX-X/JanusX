@@ -201,7 +201,7 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 
 机器验证（2026-09-28，个人记忆显式纠正）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 56 个文件、465 项测试。其中 [personal-memory-correction.test.ts](../../tests/unit/knowledge/personal-memory-correction.test.ts)的 8 项测试覆盖幂等提案、来源变化、版本替代、竞争纠正、候选篡改、损坏文件保留及审计失败回滚；[personal-memory-correction-ui.test.ts](../../tests/unit/personal-memory-correction-ui.test.ts)的 3 项真实无头 Chromium 测试覆盖草稿、刷新、重复提交与关闭后的异步响应。既有 user-memory-contract 测试在临时目录清理期间输出一次 schema_violation 审计 EPERM，测试仍通过。`npm run typecheck:strict-unused` 通过；17 个生产 TypeScript 文件定向 ESLint 零错误，保留 KnowledgeWorkbench 原有 refresh 依赖警告；`npm run i18n:check` 与 `npm run check:package-boundary` 通过。未运行完整 Electron E2E、桌面打包、真实个人数据操作或 Laya 权重验证。
 
-### 已选个人事实的持久遗忘
+### 个人记忆的持久遗忘
 
 [个人事实遗忘](../../src/main/knowledge/personal-memory-forgetting.ts)由画像卡片的“遗忘这条记忆”进入确认页，通过专用 IPC 提交事实 ID 与显示内容 hash。宿主要求唯一、active、未到期的 user 事实，并重新核对 hash；工程事实和调用方附加的归属字段不能进入该操作。确认页说明历史版本、相同来源的个人派生记忆及相关候选会一并停止使用，提交期间禁用重复操作，失败后保留重试入口，成功后刷新画像。
 
@@ -211,9 +211,17 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 
 truth 读取、Profile 投影、近期记忆、治理检索和个人召回都核对遗忘记录。正文完全相同的人工 override 在投影时抑制，原 override 文件保留；旧 profile 导入也不能重新生成同值候选。候选读取将关联 proposed 条目视为 rejected，候选新增、评分注解和人工批准受同一约束；精修合并在原审核锁中重读有效候选，不能由模型迟到响应恢复。任务读取和统计立即呈现 cancelled，后续任务写入持久化取消状态；运行中的模型请求可继续返回，但不能恢复候选资格。治理检索将遗忘记录纳入索引键并在使用缓存后再次过滤，个人召回若跨越遗忘提交则丢弃本次上下文。已经交付给模型或显示在会话历史中的内容不会被追回。
 
-只归档原事实的实现简单，但无法阻止候选、旧 profile 和旧证据重放；逐个物理删除来源可以减少磁盘残留，但会破坏共享工程证据且需要跨存储恢复协议。因此采用持久生命周期记录与读写约束。此次是逻辑遗忘，原事实、原始会话、候选历史及旧审计文件仍保留。相同正文将持续被禁止进入个人记忆，没有恢复或重新授权入口；不同措辞、全新无关联来源的语义同义内容不在精确识别保证内。当前画像最多展示既有 overview 限额内的事实，未增加全库分页。独立 Episode、旧 `user-memory.forget` 查询式工具的创建遗忘记录路径、物理清除、人工字段独立遗忘和语义级恢复仍待收拢，AC-3、AC-9、AC-10 不据此勾选完成。
+只归档原事实的实现简单，但无法阻止候选、旧 profile 和旧证据重放；逐个物理删除来源可以减少磁盘残留，但会破坏共享工程证据且需要跨存储恢复协议。因此采用持久生命周期记录与读写约束。此次是逻辑遗忘，原事实、原始会话、候选历史及旧审计文件仍保留。相同正文将持续被禁止进入个人记忆，没有恢复或重新授权入口；不同措辞、全新无关联来源的语义同义内容不在精确识别保证内。当前画像最多展示既有 overview 限额内的事实，未增加全库分页。独立 Episode 和 `user-memory.forget` 查询式工具已共用该记录；物理清除、人工字段独立遗忘和语义级恢复仍待收拢，AC-3、AC-9、AC-10 不据此勾选完成。
 
 机器验证（2026-09-29，已选个人事实遗忘）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 57 个文件、476 项测试。[personal-memory-forgetting.test.ts](../../tests/unit/knowledge/personal-memory-forgetting.test.ts)的 9 项测试覆盖域隔离、版本与证据追溯、候选重放、旧资料导入、重复请求、写入失败、提交后响应丢失、损坏文件保留、热索引与召回并发；[refinement-tasks.test.ts](../../tests/unit/knowledge/refinement-tasks.test.ts)增加运行中遗忘和新服务实例恢复测试；[界面测试](../../tests/unit/personal-memory-correction-ui.test.ts)的 4 项真实无头 Chromium 测试包含遗忘确认、失败重试、提交禁用和刷新。首轮回归发现空遗忘记录影响旧精简候选统计，修复后全量复跑通过。最终回归中既有 user-memory-tools 测试输出一次临时审计目录 EPERM，未导致测试失败。`npm run typecheck:strict-unused`、18 个生产 TypeScript 文件定向 ESLint、`npm run i18n:check` 与 `npm run check:package-boundary` 通过。未运行完整 Electron E2E、桌面打包、真实个人数据遗忘、断电或 Laya 权重验证。
+
+近期事件的画像卡片提供独立遗忘入口，沿用同一确认页和 IPC，以 `kind: episode` 区分事实。宿主根据正文、来源引用、创建时间、到期时间、状态及标签计算 hash；来源变化、到期、缺失或同 ID 多条记录时拒绝操作。遗忘 episode 的 ID 与来源也进入同一约束，已从它派生的个人事实、候选和任务不能继续使用；读取工程来源不因此受到删除。
+
+[聊天遗忘工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)继续要求 delete 审批和 `confirm:true`，由宿主统一校验查询长度、实质词语匹配及过宽请求。它直接扫描当前有效个人事实与全部有效近期事件，在同一事实审核锁内生成一次遗忘记录；无需依赖 BM25 排名或近期召回的 200 条上限。读取事实或事件来源失败时整次失败，不逐条提交部分结果。重复查询按实际匹配的 ID 与内容 hash 去重，源集合变化则成为新的显式请求；不把查询字符串保存成禁止未来新内容的语义规则。返回的 archivedFactIds、expiredEpisodeIds 保留旧调用字段兼容，`mode: logical` 表示实际动作是持久停止使用，原始文件状态并未被物理归档或删除。
+
+[事件源读取](../../src/main/knowledge/user-episode-service.ts)为遗忘提供不限召回数量的视图；[观察读取器](../../src/main/knowledge/observation-service.ts)增加显式严格读取选项。遗忘读取 active 分片、压缩归档和旧 episode 文件时，JSON、schema、解压或 I/O 错误都不能被解释为空记录；其他已有读取者保持兼容模式。该扫描仍是全量，包含工程 observation 的损坏分片也可能阻止本次个人遗忘；这是防止漏读来源的保守代价。query 仅选择有效事实与近期事件，不单独选择只有候选或只有人工 override 的内容；显式重新授权、已到期事件的独立管理和全库分页仍需后续界面。
+
+机器验证（2026-09-29，聊天与近期事件统一遗忘）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 57 个文件、481 项测试；补充损坏 observation 分片反例后，`npx vitest run tests/unit/knowledge/personal-memory-forgetting.test.ts` 的 14 项全部通过。新增覆盖独立 episode 指纹、原子查询提交与重试、205 条历史事件、宽泛查询拒绝、损坏来源保留，以及真实无头 Chromium 中 episode 类型和 hash 的传递。11 个生产 TypeScript 文件定向 ESLint、`npm run i18n:check`、`npm run check:package-boundary` 通过。`npm run typecheck:strict-unused` 未通过，唯一报告为工作区无关的 `src/main/notifications/agent-hook-config.ts:183`、`:184` 两个未使用常量；未修改该文件，也不把严格检查记为通过。未运行完整 Electron E2E、桌面打包或真实个人数据遗忘。
 
 ## Alternatives considered
 

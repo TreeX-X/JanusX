@@ -1,3 +1,4 @@
+import { readPersonalForgettingBarrier } from '../../../src/main/knowledge/personal-forgetting-barrier'
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -204,12 +205,12 @@ describe('user memory agent tools (M3)', () => {
     expect(output.silent).toBe(true)
 
     const truth = await readJsonlLines(join('facts', 'facts.jsonl')) as MemoryFact[]
-    expect(truth.find((fact) => fact.id === 'fact-u1')!.status).toBe('archived')
+    expect(truth.find((fact) => fact.id === 'fact-u1')!.status).toBe('active')
+    expect((await readPersonalForgettingBarrier()).blocksFact(truth.find(fact => fact.id === 'fact-u1')!)).toBe(true)
     expect(truth.find((fact) => fact.id === 'fact-p1')!.status).toBe('active')
     const silent = await searchUserMemoryDefault('pnpm')
     expect(silent.items).toEqual([])
-    const audits = await readJsonlLines(join('audit', 'audit.jsonl')) as Array<{ action: string; targetId: string }>
-    expect(audits.some((event) => event.action === 'truth_revoked' && event.targetId === 'fact-u1')).toBe(true)
+    expect((await readPersonalForgettingBarrier()).records).toHaveLength(1)
   })
 
   it('refuses forget without confirm, with broad queries, and with no match', async () => {
