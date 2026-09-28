@@ -5,6 +5,8 @@ vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 import { LLM_STAGE_BATCH_LIMIT, runLlmStage } from '../../../src/main/knowledge/llm-stage'
 import type { Observation } from '../../../src/shared/knowledge'
 
+const selectRefinement = async (batch: { observations: Observation[] }) => ({ observations: batch.observations, candidateHashes: {} })
+
 function observation(id: string): Observation {
   return {
     id,
@@ -24,11 +26,22 @@ function observation(id: string): Observation {
 }
 
 describe('runLlmStage (Phase 2)', () => {
+  it('does not call the model when no candidate qualifies for refinement', async () => {
+    const hasDefaultModel = vi.fn(async () => true)
+    const extractChunk = vi.fn()
+    const status = await runLlmStage({ workspaceId: 'ws-1', observations: [observation('o1')] }, {
+      selectRefinement: async () => ({ observations: [], candidateHashes: {} }), getMode: async () => 'llm-preferred', hasDefaultModel, extractChunk,
+    })
+    expect(status).toMatchObject({ skippedReason: 'no-refinement' })
+    expect(hasDefaultModel).not.toHaveBeenCalled()
+    expect(extractChunk).not.toHaveBeenCalled()
+  })
+
   it('skips without touching the model when mode is deterministic-only', async () => {
     const extractChunk = vi.fn()
     const status = await runLlmStage(
       { workspaceId: 'ws-1', observations: [observation('o1')] },
-      { getMode: async () => 'deterministic-only', hasDefaultModel: async () => true, extractChunk },
+      { selectRefinement, getMode: async () => 'deterministic-only', hasDefaultModel: async () => true, extractChunk },
     )
 
     expect(status).toMatchObject({ skipped: true, skippedReason: 'deterministic-only', processed: 0 })
@@ -39,7 +52,7 @@ describe('runLlmStage (Phase 2)', () => {
     const extractChunk = vi.fn()
     const status = await runLlmStage(
       { workspaceId: 'ws-1', observations: [observation('o1')] },
-      { getMode: async () => 'auto', hasDefaultModel: async () => false, extractChunk },
+      { selectRefinement, getMode: async () => 'auto', hasDefaultModel: async () => false, extractChunk },
     )
 
     expect(status).toMatchObject({ skipped: true, skippedReason: 'no-default-llm', processed: 0 })
@@ -54,6 +67,7 @@ describe('runLlmStage (Phase 2)', () => {
     const status = await runLlmStage(
       { workspaceId: 'ws-1', observations },
       {
+        selectRefinement,
         getMode: async () => 'auto',
         hasDefaultModel: async () => true,
         extractChunk: async (chunk) => {
@@ -77,6 +91,7 @@ describe('runLlmStage (Phase 2)', () => {
       runLlmStage(
         { workspaceId: 'ws-1', observations: [observation('o1')] },
         {
+          selectRefinement,
           getMode: async () => 'auto',
           hasDefaultModel: async () => true,
           extractChunk: async () => {

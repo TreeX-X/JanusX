@@ -309,10 +309,10 @@
       },
       "mode": {
         "label": "Processing mode",
-        "hint": "Deterministic settling always runs. llm-preferred additionally prioritizes LLM candidates in merge and Inbox ordering.",
-        "auto": "Auto (deterministic first, LLM boost)",
+        "hint": "Rules always produce review candidates. Refinement runs only when an available decision model requests it; otherwise candidates stay in the Inbox for review.",
+        "auto": "On-demand refinement",
         "deterministicOnly": "Deterministic only",
-        "llmPreferred": "LLM preferred"
+        "llmPreferred": "On-demand refinement (prefer refined results)"
       }
     },
     "mcp": {

@@ -148,7 +148,7 @@ export interface LlmStageBatch {
 
 export interface LlmStageStatus {
   skipped: boolean
-  skippedReason?: 'deterministic-only' | 'no-default-llm' | 'no-evidence'
+  skippedReason?: 'deterministic-only' | 'no-default-llm' | 'no-evidence' | 'no-refinement'
   processed: number
   proposed: number
   merged: number

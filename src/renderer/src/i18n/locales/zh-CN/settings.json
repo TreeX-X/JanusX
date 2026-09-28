@@ -309,10 +309,10 @@
       },
       "mode": {
         "label": "处理模式",
-        "hint": "确定性沉淀永远运行。llm-preferred 会在合并与 Inbox 排序中优先 LLM 候选。",
-        "auto": "自动（确定性优先，LLM 增强）",
+        "hint": "规则始终生成待审核候选。仅在可用的决策模型建议精修时调用 LLM；否则候选留在审核列表中。",
+        "auto": "按需精修",
         "deterministicOnly": "仅确定性",
-        "llmPreferred": "LLM 优先"
+        "llmPreferred": "按需精修（优先采用精修结果）"
       }
     },
     "mcp": {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
+import { candidateDecisionHash } from '../../../src/main/knowledge/decision-scorer'
 import type {
   CandidateFact,
   CandidateGraphEdge,
@@ -604,6 +605,45 @@ describe('KnowledgeExtractService', () => {
       } finally {
         read.mockRestore()
       }
+    })
+
+    it.each(['apply', 'reject'] as const)('does not revive a selected candidate after %s during the model call', async (action) => {
+      const content = 'commit abc: add user index'
+      const candidate = seedDeterministicCandidate('selected', content, 0.9) as CandidateFact
+      await seedJsonl('facts/candidates.jsonl', [candidate])
+      setupLlm({ facts: [], wikiPatches: [], graphEdges: [] })
+      const { knowledgeExtractService } = await loadService()
+      const { knowledgeReviewService } = await import('../../../src/main/knowledge/review-service')
+      const result = await knowledgeExtractService.extract({ observations: [makeObservation({ id: 'o1', content })] }, {
+        mode: 'auto', refinementCandidates: { [candidate.id]: candidateDecisionHash(candidate) },
+        callModel: async () => {
+          if (action === 'apply') await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+          else await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
+          return { object: { facts: [{ content, concepts: [], files: ['src/db.ts'], tags: [], confidence: 0.95, kind: 'fact' }], wikiPatches: [], graphEdges: [] } }
+        },
+      })
+      expect(result.facts).toEqual([])
+      expect(result.mergedFactCandidateIds).toEqual([])
+      expect(await knowledgeExtractService.listFactCandidates()).toEqual([expect.objectContaining({
+        id: candidate.id, status: action === 'apply' ? 'applied' : 'rejected',
+      })])
+    })
+
+    it('refines only the selected snapshot and skips its replay after successful merging', async () => {
+      const content = 'commit abc: add user index'
+      const candidate = seedDeterministicCandidate('selected', content, 0.9) as CandidateFact
+      await seedJsonl('facts/candidates.jsonl', [candidate])
+      setupLlm({ facts: [
+        { content, concepts: [], files: ['src/db.ts'], tags: [], confidence: 0.95, kind: 'fact' },
+        { content: 'Unrelated model speculation.', concepts: [], files: [], tags: [], confidence: 0.7, kind: 'fact' },
+      ], wikiPatches: [], graphEdges: [] })
+      const { knowledgeExtractService } = await loadService()
+      const input = { observations: [makeObservation({ id: 'o1', content })] }
+      const options = { mode: 'auto' as const, refinementCandidates: { [candidate.id]: candidateDecisionHash(candidate) } }
+      expect(await knowledgeExtractService.extract(input, options)).toMatchObject({ facts: [], mergedFactCandidateIds: ['selected'] })
+      expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(1)
+      expect(await knowledgeExtractService.extract(input, options)).toMatchObject({ degraded: { reason: 'no-evidence' } })
+      expect(mocks.generateObject).toHaveBeenCalledOnce()
     })
 
     it('merge tie-break follows mode on equal confidence', async () => {

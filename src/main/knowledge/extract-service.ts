@@ -37,6 +37,7 @@ import { knowledgeAuditService } from './audit-service'
 import { knowledgeTruthService } from './truth-service'
 import { proposeFactCandidates, withFactCandidatesLock } from './review-service'
 import { factScope, isActiveObservation, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
+import { candidateDecisionHash } from './decision-scorer'
 import { findConflicts, toConflictTargets, tokenJaccard } from './deterministic-extractor'
 import { configService } from '../config/service'
 import { llmService } from '../llm/LlmService'
@@ -325,6 +326,8 @@ function filterEvidence(observations: Observation[]): Observation[] {
 }
 
 export interface ExtractCallOptions {
+  /** Host-selected snapshots: refine these proposals only, never append unrelated output. */
+  refinementCandidates?: Record<string, string>
   /** 合并平局时的内容取舍（默认 deterministic）；测试可直接注入。 */
   mode?: KnowledgeProcessingMode
   /** 单次模型调用超时（默认 60s）；测试可调小。 */
@@ -469,6 +472,8 @@ export function mergeLlmFactCandidate(
   )
   if (conflicts.length > 0) merged.conflicts = conflicts
   else delete merged.conflicts
+  // Changed content must not retain the pre-refinement decision fingerprint.
+  delete merged.decision
   return merged
 }
 
@@ -568,6 +573,16 @@ export class KnowledgeExtractService {
 
     // 4. 构造共享 provenance
     const workspace = deriveWorkspace(budgeted.observations, input)
+    const refinementCandidates = options.refinementCandidates
+    const eligibleForRefinement = (candidate: CandidateFact) => candidate.status === 'proposed'
+      && candidate.derivation === 'deterministic'
+      && candidate.fact.provenance.workspaceId === workspace.workspaceId
+      && factScope(candidate.fact) === observationScope(budgeted.observations[0]!)
+      && candidate.evidence.observationIds.some((id) => budgeted.observations.some((observation) => observation.id === id))
+      && (!refinementCandidates || refinementCandidates[candidate.id] === candidateDecisionHash(candidate))
+    if (refinementCandidates && !(await this.listFactCandidates()).some(eligibleForRefinement)) {
+      return { ...empty, degraded: { reason: 'no-evidence' } }
+    }
     const createdAt = new Date().toISOString()
     const sourceObservationIds = budgeted.observations.map((observation) => observation.id)
     const fileRefs = Array.from(
@@ -630,12 +645,13 @@ export class KnowledgeExtractService {
     const llmFacts = result.facts.map((raw) =>
       mapFactCandidate(raw, provenance, knownTruthIds, truthTargets, observationScope(budgeted.observations[0]!)),
     )
-    const wikiPatchCandidates = result.wikiPatches.map((raw) => mapWikiPatchCandidate(raw, provenance, knownTruthIds))
-    const graphEdgeCandidates = result.graphEdges.map((raw) => mapGraphEdgeCandidate(raw, provenance))
+    const wikiPatchCandidates = refinementCandidates ? [] : result.wikiPatches.map((raw) => mapWikiPatchCandidate(raw, provenance, knownTruthIds))
+    const graphEdgeCandidates = refinementCandidates ? [] : result.graphEdges.map((raw) => mapGraphEdgeCandidate(raw, provenance))
 
     const batchIds = new Set(budgeted.observations.map((observation) => observation.id))
     const mergeable = (await this.listFactCandidates()).filter((candidate) =>
       candidate.status === 'proposed'
+      && (!refinementCandidates || eligibleForRefinement(candidate))
       && candidate.derivation === 'deterministic'
       && factScope(candidate.fact) === observationScope(budgeted.observations[0]!)
       && candidate.fact.provenance.workspaceId === workspace.workspaceId
@@ -658,7 +674,7 @@ export class KnowledgeExtractService {
       if (best) {
         rewritten.set(best.id, mergeLlmFactCandidate(llm, best, mode, truthTargets))
         mergedIds.push(best.id)
-      } else {
+      } else if (!refinementCandidates) {
         appendedFacts.push(llm)
       }
     }
@@ -666,7 +682,7 @@ export class KnowledgeExtractService {
       await withFactCandidatesLock(async () => {
         const current = await this.listFactCandidates()
         const next = current.map((candidate) => {
-          if (candidate.status !== 'proposed') {
+          if (candidate.status !== 'proposed' || (refinementCandidates && !eligibleForRefinement(candidate))) {
             rewritten.delete(candidate.id)
             return candidate
           }

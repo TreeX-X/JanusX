@@ -25,6 +25,8 @@ import type {
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
 import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
+import { candidateDecisionHash } from './decision-scorer'
+import type { MemoryDecisionAnnotation } from '../../shared/memory-decision'
 import type {
   ReviewCandidateInput,
   ReviewCandidateType,
@@ -182,6 +184,28 @@ export async function proposeFactCandidates(candidates: CandidateFact[]): Promis
 
 export function withWikiCandidatesLock<T>(operation: () => Promise<T>): Promise<T> {
   return withMutationLock(WIKI_PATCHES_FILE, operation)
+}
+
+/** Attach advice only if the candidate still matches the scored snapshot. */
+export async function annotateFactDecisions(updates: Map<string, MemoryDecisionAnnotation>): Promise<string[]> {
+  if (!updates.size) return []
+  return withFactCandidatesLock(async () => {
+    let content: string
+    try { content = await readFile(absolute(FACT_CANDIDATES_FILE), 'utf8') } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw error
+    }
+    const records = content.split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line) as CandidateFact)
+    const attached: string[] = []
+    for (const candidate of records) {
+      const decision = updates.get(candidate.id)
+      if (!decision || candidate.status !== 'proposed' || candidateDecisionHash(candidate) !== decision.candidateHash) continue
+      candidate.decision = decision
+      attached.push(candidate.id)
+    }
+    if (attached.length) await writeJsonlAtomic(FACT_CANDIDATES_FILE, records)
+    return attached
+  })
 }
 
 /**

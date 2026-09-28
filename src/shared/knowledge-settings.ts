@@ -1,4 +1,4 @@
-/** Phase 1: deterministic pipeline always runs; this only tunes the LLM boost. */
+/** Rules always run. Legacy auto/llm-preferred enable scorer-gated refinement only. */
 export type KnowledgeProcessingMode = 'auto' | 'deterministic-only' | 'llm-preferred'
 
 export interface KnowledgeSettings {

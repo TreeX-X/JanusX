@@ -501,6 +501,8 @@ export interface CandidateFact {
   conflicts?: string[]
   /** Phase 2: source candidate ids when derivation === 'merged'. */
   mergedFrom?: string[]
+  /** Host-validated advice; never grants source authority or approves truth. */
+  decision?: import('./memory-decision').MemoryDecisionAnnotation
 }
 
 export interface CandidateWikiPatch {
