@@ -49,7 +49,11 @@ JanusX 已有 queue-owned 的 observation → candidate → review → truth →
 
 “个人画像审核”改称“个人记忆审核”：审核对象是独立事实、偏好或习惯，画像由已确认记忆派生。知识库负责工程阅读、管理及 MCP 接出；个人画像负责查看 Janus 已了解的用户、纠正和遗忘；统一审核栏负责待确认内容。从工程会话归纳的个人开发习惯显示工程出处，批准后仍属 Janus 私有记忆，不进入工程 MCP 输出。
 
-先统一审核入口和交互，再随 Profile 派生机制调整画像页面。保留两个独立审核面可突出领域区别，但会重复卡片和操作；将知识阅读、画像展示与审核全部合并则混淆已确认内容与候选。采用统一审核、分域筛选，继续保留知识库与画像两个阅读视图。本节记录已确认的 UI 方向，界面合并尚待后续实现。
+先统一审核入口和交互，再随 Profile 派生机制调整画像页面。保留两个独立审核面可突出领域区别，但会重复卡片和操作；将知识阅读、画像展示与审核全部合并则混淆已确认内容与候选。采用统一审核、分域筛选，继续保留知识库与画像两个阅读视图。[右侧审核栏](../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)提供全部、工程知识、个人记忆筛选与独立计数；画像卡片的审核按钮打开同一栏目，画像工具图标不再承担待审提醒。知识库工作台的候选详情复用同一审核卡片及原有审核服务。
+
+审核栏打开或重新激活时读取三个候选集合，只展示 proposed；批准、拒绝后重新读取，另提供手动刷新。任一集合读取失败都显示错误与未知计数，不将部分读取结果解释为零条待审，并禁用旧列表上的审核操作。提交期间所有审核按钮禁用，主进程继续拥有候选状态及落库校验；筛选和提交只传候选类型与 ID，不改变归属。当前没有后台推送或批量批准，长时间停留时通过刷新获得外部新增候选。
+
+审核卡片显示批准用途、正文、事实类型、证据引用数、来源项目、发言者和原文、文件引用、替代目标及已有冲突提示。确定性 remember/habit 候选按宿主生成的稳定 ID 标明明确保存或推断习惯；旧候选缺少这些标识时不猜测意图，缺少来源字段时也不伪造用户原话。Wiki 继续复用 Note 来源核对组件。工程来源的个人习惯按 user 归属留在个人筛选，批准后仍是 Janus 私有记忆。
 
 ### 候选、重复、冲突与版本
 
@@ -159,6 +163,8 @@ AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-4�
 
 机器验证（2026-09-28，持久化精炼任务与恢复）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 50 个文件、422 项测试。[refinement-tasks.test.ts](../../tests/unit/knowledge/refinement-tasks.test.ts)的 20 项测试覆盖并发去重、不复制原文、重启恢复与退避、执行条件不足时延后、候选及来源变更取消、候选提交后崩溃恢复、预算溢出续跑、最多三次尝试、损坏账本保留、持久化失败后的游标重试及执行中状态读取；[processing-queue.test.ts](../../tests/unit/knowledge/processing-queue.test.ts)的 17 项测试包含规划持久化失败不推进游标、定时器合并与销毁。评分门控、精修期间人工审核保护、证据归属、统一写入及 MCP 回归继续通过。`npm run typecheck:strict-unused`、9 个生产 TypeScript 文件的定向 `npx eslint`、`npm run check:package-boundary` 与本片文件的 `git diff --check` 通过。未运行桌面打包/E2E 或真实 Laya 权重测试。
 
+机器验证（2026-09-28，统一审核界面）：`npx vitest run tests/unit/knowledge tests/unit/right-tool-state.test.ts tests/unit/right-tool-dock.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/memory-review-ui.test.ts` 覆盖 51 个文件、436 项测试，435 项通过；truth-service 的一项测试在清理临时 audit 目录时遇到 ENOTEMPTY，随后单独运行该文件的 4 项测试全部通过，未修改其测试或生产代码。[memory-review-ui.test.ts](../../tests/unit/memory-review-ui.test.ts)用真实无头 Chromium 验证筛选、批准/拒绝、提交禁用、失败保留与刷新恢复；[memory-review-tool.test.ts](../../tests/unit/knowledge/memory-review-tool.test.ts)的 4 项测试验证来源项目、原文转义、私有归属、独立计数与读取失败。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary` 通过；8 个生产 TypeScript 文件的定向 ESLint 零错误，保留 KnowledgeWorkbench 原有 refresh 依赖警告。未运行完整 Electron 桌面 E2E、打包或真实 Laya 模型验证。
+
 Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；通过临时 Node loader 解析到已安装的 `../janus-agentX/node_modules/yaml` 后执行原检查器，检查 207 篇 Harness Note，本篇零错误，但既有 `2026-09-28-debug-mode-plan--1645e12c.md` 缺少 Proposal、Risks 两节。没有修改该无关草稿，也没有将全库失败记为通过。测试均使用临时知识根目录，未改写真实知识数据。
 
 ## Alternatives considered
@@ -182,7 +188,7 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 - [ ] AC-8: 决策质量可追溯 — 校准集与留出集按来源隔离，记录模型、题型、语言与模板版本的准确率、Brier、ECE、覆盖率和错误接受率；熵型 confidence、分类概率、act_probability、跨窗最大概率都不能冒充事实支持度。未达到已记录的审核策略质量门槛时自动接受保持关闭。
 - [ ] AC-9: 生命周期与召回确定 — 墙钟衰减重复计算和停机恢复等价；只增强最终交付且去重后的记忆，受冷却与上限约束；Episode 到期、遗忘与撤回同步影响索引、Profile 和任务重放，双域预算不互相挤占。
 - [ ] AC-10: 迁移与回归可复现 — 迁移可断点续跑、重复执行不重复数据、未知旧来源不升格；保持 Wiki sourceFactIds/sourceNoteRefs/hash/版本审核语义；相关 Vitest、typecheck、IPC/UI 与打包检查通过，真实 Laya 性能另有 Windows CPU 实测记录。
-- [ ] AC-11: 统一审核界面 — 右侧只有一个审核入口，支持全部、工程知识、个人记忆筛选及独立数量；复用候选详情与审核动作，清楚展示来源和批准用途；知识库与个人画像保留各自阅读视图，工程来源的个人习惯仍不进入 MCP 输出。
+- [x] AC-11: 统一审核界面 — 右侧只有一个审核入口，支持全部、工程知识、个人记忆筛选及独立数量；复用候选详情与审核动作，清楚展示来源和批准用途；知识库与个人画像保留各自阅读视图，工程来源的个人习惯仍不进入 MCP 输出。
 
 ## Risks
 

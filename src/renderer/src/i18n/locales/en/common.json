@@ -121,6 +121,7 @@
       "git": { "title": "Git", "shortTitle": "Git", "ariaLabel": "Open Git tool" },
       "assist": { "title": "Assist", "shortTitle": "Assist", "ariaLabel": "Open Assist tool" },
       "persona": { "title": "Persona", "shortTitle": "Persona", "ariaLabel": "Open persona tool" },
+      "review": { "title": "Review", "shortTitle": "Review", "ariaLabel": "Open memory review" },
       "sessions": { "title": "Sessions", "shortTitle": "Sessions", "ariaLabel": "Open Sessions tool" }
     }
   },

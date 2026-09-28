@@ -3,6 +3,7 @@ import { SessionPanel } from '@/components/SessionPanel'
 import { FileExplorerTool } from '@/components/FileExplorerTool'
 import { GitPanel } from '@/components/GitPanel'
 import { KnowledgeAssist } from '@/components/knowledge'
+import { MemoryReviewTool } from '@/components/knowledge/MemoryReviewTool'
 import { UserPersonaTool } from '@/components/knowledge'
 import type { RightToolId } from '@/right-tools/types'
 import { useI18n } from '@/i18n/useI18n'
@@ -69,6 +70,7 @@ function ToolContent({
   if (toolId === 'files') return <FileExplorerTool active={active} />
   if (toolId === 'git') return <GitPanel active={active} />
   if (toolId === 'sessions') return <SessionPanel />
+  if (toolId === 'review') return <MemoryReviewTool active={active} />
   if (toolId === 'persona') return <UserPersonaTool />
   return <KnowledgeAssist workspaceId={workspaceId} workspacePath={workspacePath} />
 }

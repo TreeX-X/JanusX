@@ -1,8 +1,8 @@
 import type { TypedI18nKey } from '@/i18n/types'
 
-export type RightToolId = 'files' | 'git' | 'assist' | 'persona' | 'sessions'
+export type RightToolId = 'files' | 'git' | 'assist' | 'persona' | 'review' | 'sessions'
 
-export type RightToolIconKind = 'files' | 'git' | 'assist' | 'persona' | 'sessions'
+export type RightToolIconKind = RightToolId
 
 export interface RightToolDefinition {
   id: RightToolId

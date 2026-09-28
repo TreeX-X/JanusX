@@ -14,6 +14,7 @@ import {
   type KnowledgeWorkbenchSnapshot,
 } from '../../services/knowledge'
 import type { KnowledgeProcessingStats } from '../../../../shared/ipc/knowledge'
+import { MemoryReviewCard } from './MemoryReviewTool'
 import { KnowledgeStatusBar } from './KnowledgeStatusBar'
 import { NoteWikiEditor, WikiPageDetail, WikiCandidateSources } from './NoteWikiLinks'
 import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas'
@@ -570,6 +571,13 @@ function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevok
   const wikiPage = record.kind === 'wiki' && !record.reviewType ? snapshot?.wikiPages?.find(page => page.workspaceId === record.workspaceId && (page.slug === record.pageSlug || page.slug === record.id || JSON.stringify([page.workspaceId, page.slug]) === record.id)) : undefined
   const canReview = Boolean(record.reviewType) && record.status === 'proposed' && !snapshot?.usingDemoData && !busy
   const conflicts = snapshot?.conflicts.filter((item) => item.candidateId === record.id || item.targetId === record.id) ?? []
+  const reviewCandidate = record.reviewType && snapshot ? [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates].find(candidate => candidate.id === record.id && candidate.type === record.reviewType) : undefined
+  if (reviewCandidate?.status === 'proposed') return <div className={styles.inspector}>
+    <button type="button" onClick={onCloseDetail}>{t('knowledge:inspector.closeDetail')}</button>
+    <MemoryReviewCard candidate={reviewCandidate} disabled={!canReview} onReview={approve => approve ? onApprove() : onReject()} />
+    {conflicts.length > 0 && <p>{t('knowledge:inspector.conflict', { detail: conflicts.map(item => item.reason).join(', ') })}</p>}
+    {error && <p role="alert">{error}</p>}
+  </div>
   const canRevoke = record.status === 'active' && record.kind !== 'observation' && Boolean(record.workspaceId) && !busy
   return <div className={styles.inspector}><div className={styles.detailBar}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><button type="button" className={styles.detailClose} onClick={onCloseDetail} aria-label={t('knowledge:inspector.closeDetail')} title={t('knowledge:inspector.closeDetail')}><X size={16} aria-hidden="true" /></button></div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{wikiCandidate && <WikiCandidateSources key={wikiCandidate.id} candidate={wikiCandidate} />}{wikiPage && <WikiPageDetail key={JSON.stringify([wikiPage.workspaceId, wikiPage.slug])} page={wikiPage} />}{record.confidence !== undefined && <Metric label={t('knowledge:inspector.confidence')} value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label={t('knowledge:inspector.status')} value={record.status} />}{record.derivation && <KeyValue label={t('knowledge:inspector.derivation')} value={record.derivation} />}{record.factKind && <KeyValue label={t('knowledge:inspector.factKind')} value={record.factKind} />}{record.scoreExplanation && <KeyValue label={t('knowledge:inspector.scoreExplanation')} value={formatScoreExplanation(record.scoreExplanation)} />}<TagRow tags={record.tags} /><KeyValue label={t('knowledge:inspector.created')} value={formatDate(record.createdAt, t('knowledge:time.unknown'))} /><KeyValue label={t('knowledge:inspector.sourceRefs')} value={record.sourceIds.join(', ') || t('knowledge:inspector.none')} /><KeyValue label={t('knowledge:inspector.files')} value={record.fileRefs.join(', ') || t('knowledge:inspector.none')} />{conflicts.length > 0 && <div className={styles.demoNotice}>{t('knowledge:inspector.conflict', { detail: conflicts.map((item) => `${item.reason} with ${item.targetId}`).join(', ') })}</div>}<div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={onApprove}>{busy ? t('knowledge:action.working') : t('knowledge:action.approve')}</button><button type="button" disabled={!canReview} onClick={onReject}>{t('knowledge:action.reject')}</button><button type="button" disabled={!canRevoke} onClick={onRevoke}>{t('knowledge:action.archive')}</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>{t('knowledge:inspector.demoNotice')}</div>}</div>
 }

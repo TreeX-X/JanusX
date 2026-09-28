@@ -4,7 +4,7 @@ import styles from './KnowledgeAssist.module.css'
 
 /**
  * Glance cards for durable user memory (M4). Read-only rows with source
- * citations; the only action navigates to the Workbench Inbox via
+ * citations; the only action navigates to the shared review tool via
  * `onOpenInbox`. No workspace is required.
  */
 export function UserPersonaCards({

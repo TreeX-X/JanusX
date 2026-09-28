@@ -74,7 +74,7 @@
     },
     "strength": "strength {{value}}",
     "expires": "expires {{date}}",
-    "openInbox": "Open Inbox",
+    "openInbox": "Open memory review",
     "unavailable": {
       "title": "Persona unavailable",
       "detail": "The user memory service is unreachable."
@@ -128,6 +128,15 @@
     "loadingRecords": "Loading knowledge records",
     "workbenchUnavailable": "Workbench unavailable"
   },
+  "review": {
+    "title": "Review",
+    "explicitMemory": "Explicit save request",
+    "inferredHabit": "Inferred habit: confirm whether it applies to you",
+    "personalUse": "Approval stores private Janus memory, excluded from engineering MCP.",
+    "engineeringUse": "Approval makes this available for engineering reading and MCP recall.",
+    "failed": "Review did not complete. Refresh and try again.",
+    "supersedes": "Replaces fact: {{id}}"
+  },
   "inbox": {
     "empty": {
       "title": "No proposed candidates",
@@ -136,8 +145,8 @@
     "scope": {
       "label": "Review scope",
       "all": "All",
-      "personal": "Personal",
-      "engineering": "Engineering"
+      "personal": "Personal memory",
+      "engineering": "Engineering knowledge"
     }
   },
   "library": {

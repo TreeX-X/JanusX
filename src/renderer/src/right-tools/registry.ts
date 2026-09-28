@@ -43,6 +43,16 @@ export const RIGHT_TOOL_REGISTRY = [
     mountPolicy: 'while-open',
   },
   {
+    id: 'review',
+    titleKey: 'common:rightTool.tool.review.title',
+    shortTitleKey: 'common:rightTool.tool.review.shortTitle',
+    ariaLabelKey: 'common:rightTool.tool.review.ariaLabel',
+    icon: 'review',
+    order: 5,
+    instancePolicy: 'single',
+    mountPolicy: 'while-open',
+  },
+  {
     id: 'sessions',
     titleKey: 'common:rightTool.tool.sessions.title',
     shortTitleKey: 'common:rightTool.tool.sessions.shortTitle',

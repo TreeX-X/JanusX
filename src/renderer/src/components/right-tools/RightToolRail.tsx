@@ -1,12 +1,10 @@
 // Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/2026-09-16-right-dock-empty-collapse--9f855a20.md
-import { useEffect, useState } from 'react'
-import { Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
+import { ListChecks, Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
-import { getUserMemoryOverview } from '@/services/knowledge'
 import styles from './RightDock.module.css'
 
 interface RightToolRailProps {
@@ -74,7 +72,6 @@ export function RightToolRail({
               onClick={() => onToggleTool(tool.id)}
             >
               <ToolIcon toolId={tool.id} />
-              {tool.id === 'persona' && <PersonaPendingDot />}
               <span className={styles.railState} aria-hidden="true" />
             </button>
             </ThemedTooltip>
@@ -90,26 +87,11 @@ const TOOL_ICONS: Record<RightToolId, LucideIcon> = {
   git: GitBranch,
   assist: Sparkles,
   persona: UserRound,
+  review: ListChecks,
   sessions: MessagesSquare,
 }
 
 function ToolIcon({ toolId }: { toolId: RightToolId }) {
   const Icon = TOOL_ICONS[toolId]
   return <Icon className={styles.railIcon} size={16} strokeWidth={1.6} aria-hidden="true" />
-}
-
-/** Quiet count: pending habit candidates awaiting Inbox review. Plain number near the icon, no filled pill. */
-function PersonaPendingDot() {
-  const [pending, setPending] = useState(0)
-  useEffect(() => {
-    let alive = true
-    void getUserMemoryOverview().then((overview) => {
-      if (alive && overview && overview.pendingHabitCount > 0) setPending(overview.pendingHabitCount)
-    }).catch(() => undefined)
-    return () => {
-      alive = false
-    }
-  }, [])
-  if (pending === 0) return null
-  return <span className={styles.railBadge} data-count={pending > 9 ? '9+' : String(pending)} aria-hidden="true" />
 }

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UserMemoryOverview } from '../../../../shared/knowledge'
 import { getUserMemoryOverview } from '../../services/knowledge'
-import { useAppStore } from '../../stores/app'
-import { useExperimentalStore } from '../../stores/experimental'
+import { useRightToolStore } from '../../stores/right-tools'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './KnowledgeAssist.module.css'
 import { UserPersonaCards } from './UserPersonaCards'
@@ -12,11 +11,11 @@ type LoadState = 'loading' | 'ready' | 'error'
 /**
  * Persona RightDock tool (M4). Loads the workspace-free user overview on
  * mount; cards show state only, and the single action navigates to the
- * Workbench Inbox. Enabled with no workspace mounted.
+ * shared review tool. Enabled with no workspace mounted.
  */
 export function UserPersonaTool() {
   const { t } = useI18n('knowledge')
-  const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
+  const openTool = useRightToolStore((s) => s.openTool)
   const [overview, setOverview] = useState<UserMemoryOverview | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const mountedRef = useRef(true)
@@ -40,8 +39,8 @@ export function UserPersonaTool() {
   }, [])
 
   const openInbox = useCallback(() => {
-    if (useExperimentalStore.getState().knowledge) setActiveWorkbench('knowledge')
-  }, [setActiveWorkbench])
+    openTool('review')
+  }, [openTool])
 
   return (
     <section className={styles.root} aria-label={t('knowledge:persona.toolAria')}>

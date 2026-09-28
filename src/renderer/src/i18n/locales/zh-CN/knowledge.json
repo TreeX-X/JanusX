@@ -74,7 +74,7 @@
     },
     "strength": "强度 {{value}}",
     "expires": "过期 {{date}}",
-    "openInbox": "打开 Inbox 审核",
+    "openInbox": "打开记忆审核",
     "unavailable": {
       "title": "画像不可用",
       "detail": "用户记忆服务暂不可达。"
@@ -128,6 +128,15 @@
     "loadingRecords": "正在加载知识记录",
     "workbenchUnavailable": "工作台不可用"
   },
+  "review": {
+    "title": "审核",
+    "explicitMemory": "明确保存的记忆",
+    "inferredHabit": "推断习惯，请确认是否符合你",
+    "personalUse": "批准后作为 Janus 私有记忆，不进入工程 MCP。",
+    "engineeringUse": "批准后用于工程知识阅读与 MCP 召回。",
+    "failed": "审核未完成，请刷新后重试。",
+    "supersedes": "替代事实：{{id}}"
+  },
   "inbox": {
     "empty": {
       "title": "无待审候选",
@@ -136,8 +145,8 @@
     "scope": {
       "label": "审核范围",
       "all": "全部",
-      "personal": "个人",
-      "engineering": "工程"
+      "personal": "个人记忆",
+      "engineering": "工程知识"
     }
   },
   "library": {

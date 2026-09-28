@@ -1,0 +1,66 @@
+import i18n from 'i18next'
+import { initReactI18next } from 'react-i18next'
+import en from '../../../src/renderer/src/i18n/locales/en/knowledge.json'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { loadReviewCandidates, MemoryReviewCard } from '../../../src/renderer/src/components/knowledge/MemoryReviewTool'
+import type { CandidateFact } from '../../../src/shared/knowledge'
+import { countInboxScopes, filterInboxByScope } from '../../../src/renderer/src/components/knowledge/inboxScope'
+
+function fact(id: string, scope: 'user' | 'project'): CandidateFact {
+  return {
+    id, type: 'fact', status: 'proposed', derivation: 'deterministic',
+    evidence: { observationIds: ['obs-1'], sources: [{ observationId: 'obs-1', workspaceId: 'source-project', scope: 'project', source: 'manual', createdAt: '2026-09-28', speaker: 'user', authority: 'user-stated', excerpt: '<script>user original</script>' }] },
+    fact: { id: `fact-${id}`, scope, content: 'Prefer pnpm', kind: 'preference', confidence: 0.6, status: 'proposed', version: 1, concepts: [], files: [], tags: [], supersedes: 'old-fact', provenance: { workspaceId: 'user', workspaceName: 'user', workspacePath: '', source: 'manual', sourceObservationIds: ['obs-1'], fileRefs: [], actor: 'test', createdAt: '2026-09-28' } },
+    conflicts: ['conflicting-fact'],
+  }
+}
+
+beforeAll(async () => { await i18n.use(initReactI18next).init({ lng: 'en', resources: { en: { knowledge: en } }, interpolation: { escapeValue: false } }) })
+
+afterEach(() => vi.unstubAllGlobals())
+
+describe('unified memory review', () => {
+  it('keeps private engineering-derived memory in the personal filter and displays escaped original evidence', () => {
+    const candidate = fact('personal', 'user')
+    const markup = renderToStaticMarkup(createElement(MemoryReviewCard, { candidate, disabled: false, onReview: vi.fn() }))
+    expect(filterInboxByScope([candidate], 'engineering')).toEqual([])
+    expect(markup).toContain('source-project')
+    expect(markup).toContain('&lt;script&gt;user original&lt;/script&gt;')
+    expect(markup).not.toContain('<script>')
+    expect(markup).toContain('old-fact')
+    expect(markup).toContain('conflicting-fact')
+    expect(markup).toContain('Janus')
+    expect(markup).toContain('MCP')
+  })
+
+  it('disables both review actions while a mutation or load failure is unresolved', () => {
+    const markup = renderToStaticMarkup(createElement(MemoryReviewCard, { candidate: fact('a', 'user'), disabled: true, onReview: vi.fn() }))
+    expect(markup.match(/disabled=""/g)).toHaveLength(2)
+  })
+
+  it('loads both domains, excludes terminal candidates and computes independent counts', async () => {
+    const personal = fact('personal', 'user')
+    const engineering = fact('engineering', 'project')
+    engineering.fact.provenance.workspaceId = 'project-a'
+    const applied = { ...personal, id: 'done', status: 'applied' }
+    vi.stubGlobal('window', { electron: { knowledge: {
+      listCandidates: vi.fn().mockResolvedValue([personal, engineering, applied]),
+      listWikiPatchCandidates: vi.fn().mockResolvedValue([]),
+      listGraphCandidates: vi.fn().mockResolvedValue([]),
+    } } })
+    const result = await loadReviewCandidates()
+    expect(result.map(candidate => candidate.id)).toEqual(['personal', 'engineering'])
+    expect(countInboxScopes(result)).toEqual({ user: 1, engineering: 1 })
+  })
+
+  it('rejects partial reads instead of showing a misleading empty or incomplete queue', async () => {
+    vi.stubGlobal('window', { electron: { knowledge: {
+      listCandidates: vi.fn().mockResolvedValue([fact('personal', 'user')]),
+      listWikiPatchCandidates: vi.fn().mockRejectedValue(new Error('unavailable')),
+      listGraphCandidates: vi.fn().mockResolvedValue([]),
+    } } })
+    await expect(loadReviewCandidates()).rejects.toThrow('unavailable')
+  })
+})
