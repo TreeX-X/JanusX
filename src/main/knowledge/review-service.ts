@@ -26,6 +26,7 @@ import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
 import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
 import { candidateDecisionHash } from './decision-scorer'
+import { reviewedFactHash } from './profile-projection'
 import type { MemoryDecisionAnnotation } from '../../shared/memory-decision'
 import type {
   ReviewCandidateInput,
@@ -563,6 +564,7 @@ export class KnowledgeReviewService {
       status: 'active',
       version,
     }
+    fact.confirmation = { kind: 'human-review', contentHash: reviewedFactHash(fact), confirmedAt: new Date().toISOString() }
     const next = [...base.filter((item) => item.id !== fact.id), fact]
     await writeJsonlAtomic(FACTS_FILE, next)
     return {

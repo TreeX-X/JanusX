@@ -1,100 +1,102 @@
-// Note: durable user scope beside project memory — see .agents/notes/2026-09-15-user-memory-m1--fd02d3bc.md
-/**
- * @file User profile store (M1).
- * @description Owns `profile/profile.json`: identity, format/tool prefs, habit
- * versions. Private by default; no team/roundtable/remote/MCP surfacing.
- * Writes serialize through a SerialQueue and audit `user_profile_updated`.
- */
-import { mkdir, readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import type { UserProfile } from '../../shared/knowledge'
+// Note: profile snapshots derive from confirmed facts; manual overrides stay separate — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { z } from 'zod'
+import type { MemoryFact, UserProfile } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeAuditService } from './audit-service'
-import { knowledgeContractService } from './contract-service'
+import { knowledgeTruthService } from './truth-service'
+import { confirmedProfileFacts, profileContentHash, PROFILE_RULE_VERSION } from './profile-projection'
 
-const PROFILE_FILE = join('profile', 'profile.json')
+const profileQueue = new SerialQueue()
+const PROFILE_TTL_MS = 5 * 60_000
+const Overrides = z.object({
+  identity: z.string().trim().max(500).optional(),
+  formatPrefs: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
+  toolPrefs: z.array(z.string().trim().min(1).max(500)).max(50).optional(),
+}).strict()
+export type UserProfileOverrides = z.infer<typeof Overrides>
+const SnapshotMetadata = z.object({
+  version: z.number().int().positive(), updatedAt: z.string().datetime(),
+  derivation: z.object({ fingerprint: z.string().regex(/^[a-f0-9]{64}$/), ruleVersion: z.string(), expiresAt: z.string().datetime() }),
+})
 
-function defaultProfile(nowIso: string): UserProfile {
-  return { version: 1, updatedAt: nowIso }
+async function readOptional(path: string): Promise<unknown | undefined> {
+  try { return JSON.parse(await readFile(path, 'utf8')) as unknown }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
 }
 
-function normalizeProfile(value: unknown, nowIso: string): UserProfile {
-  if (!value || typeof value !== 'object') return defaultProfile(nowIso)
-  const record = value as Record<string, unknown>
-  const version = typeof record.version === 'number' && Number.isFinite(record.version)
-    ? Math.trunc(record.version)
-    : 1
-  const asStrings = (input: unknown): string[] | undefined => {
-    if (!Array.isArray(input)) return undefined
-    const out = input.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-      .map((item) => item.trim())
-    return out.length > 0 ? [...new Set(out)].slice(0, 50) : undefined
-  }
-  return {
-    version,
-    identity: typeof record.identity === 'string' && record.identity.trim() ? record.identity.trim().slice(0, 500) : undefined,
-    formatPrefs: asStrings(record.formatPrefs),
-    toolPrefs: asStrings(record.toolPrefs),
-    habitVersions: Array.isArray(record.habitVersions)
-      ? (record.habitVersions as unknown[]).filter((entry): entry is NonNullable<UserProfile['habitVersions']>[number] => {
-        if (!entry || typeof entry !== 'object') return false
-        const item = entry as Record<string, unknown>
-        return typeof item.habitId === 'string' && item.habitId.length > 0 && typeof item.version === 'number'
-      }).slice(0, 200)
-      : undefined,
-    updatedAt: typeof record.updatedAt === 'string' && record.updatedAt ? record.updatedAt : nowIso,
-  }
+interface ProfileDeps {
+  root: () => string
+  facts: () => Promise<MemoryFact[]>
+  now: () => number
 }
 
 export class UserProfileService {
-  private readonly writeQueue = new SerialQueue()
+  constructor(private readonly deps: ProfileDeps = {
+    root: knowledgeRootPath,
+    facts: async () => (await knowledgeTruthService.list()).facts,
+    now: Date.now,
+  }) {}
 
-  async load(): Promise<UserProfile> {
-    const nowIso = new Date().toISOString()
-    await knowledgeContractService.bootstrapWorkspace(undefined)
-    try {
-      const raw = await readFile(join(knowledgeRootPath(), PROFILE_FILE), 'utf8')
-      return normalizeProfile(JSON.parse(raw) as unknown, nowIso)
-    } catch {
-      return defaultProfile(nowIso)
+  load(): Promise<UserProfile> {
+    return profileQueue.run(() => this.project())
+  }
+
+  private async project(): Promise<UserProfile> {
+    const root = this.deps.root()
+    const nowMs = this.deps.now()
+    const nowIso = new Date(nowMs).toISOString()
+    const [rawOverrides, rawSnapshot, facts] = await Promise.all([
+      readOptional(join(root, 'profile', 'overrides.json')),
+      readOptional(join(root, 'profile', 'snapshot.json')),
+      this.deps.facts(),
+    ])
+    const overrides = Overrides.parse(rawOverrides ?? {})
+    const previous = rawSnapshot === undefined ? undefined : SnapshotMetadata.parse(rawSnapshot)
+    const confirmedFacts = confirmedProfileFacts(facts, nowMs)
+    const fingerprint = profileContentHash({ ruleVersion: PROFILE_RULE_VERSION, overrides, confirmedFacts })
+    const unchanged = previous?.derivation.fingerprint === fingerprint && previous.derivation.ruleVersion === PROFILE_RULE_VERSION
+    const profile: UserProfile = {
+      ...overrides, confirmedFacts,
+      habitVersions: confirmedFacts.map(fact => ({ habitId: fact.id, version: fact.version })),
+      version: unchanged ? previous.version : (previous?.version ?? 0) + 1,
+      updatedAt: unchanged ? previous.updatedAt : nowIso,
+      derivation: { fingerprint, ruleVersion: PROFILE_RULE_VERSION, expiresAt: new Date(nowMs + PROFILE_TTL_MS).toISOString() },
     }
+    // Re-read source content every time. TTL never masks revocation or same-id edits.
+    // Cache bodies are not trusted: only version metadata is reused.
+    if (unchanged && Date.parse(previous.derivation.expiresAt) > nowMs) profile.derivation!.expiresAt = previous.derivation.expiresAt
+    if (!unchanged || profileContentHash(rawSnapshot) !== profileContentHash(profile)) {
+      await writeFileAtomic(join(root, 'profile', 'snapshot.json'), JSON.stringify(profile, null, 2) + '\n')
+    }
+    return profile
   }
 
-  async save(patch: Partial<Omit<UserProfile, 'version' | 'updatedAt'>>): Promise<UserProfile> {
-    return this.writeQueue.run(async () => {
-      const nowIso = new Date().toISOString()
-      const current = await this.load()
-      const next: UserProfile = normalizeProfile({ ...current, ...patch, version: 1, updatedAt: nowIso }, nowIso)
-      const absolutePath = join(knowledgeRootPath(), PROFILE_FILE)
-      await mkdir(dirname(absolutePath), { recursive: true })
-      await writeFileAtomic(absolutePath, `${JSON.stringify(next, null, 2)}\n`)
-      await knowledgeAuditService.record({
-        action: 'user_profile_updated',
-        targetType: 'fact',
-        targetId: 'profile',
-        before: null,
-        after: { updatedAt: next.updatedAt },
-        provenance: {
-          workspaceId: 'user',
-          workspaceName: 'user',
-          workspacePath: '',
-          source: 'system',
-          sourceObservationIds: [],
-          fileRefs: [],
-          actor: 'user-memory',
-          createdAt: nowIso,
-        },
-      })
-      return next
+  /** Explicit host mutation only. Undefined removes an override; no generated fields accepted. */
+  save(patch: Partial<UserProfileOverrides>): Promise<UserProfile> {
+    return profileQueue.run(async () => {
+      const path = join(this.deps.root(), 'profile', 'overrides.json')
+      const current = Overrides.parse(await readOptional(path) ?? {})
+      const next = Overrides.parse({ ...current, ...Overrides.parse(patch) })
+      await writeFileAtomic(path, JSON.stringify(next, null, 2) + '\n')
+      try {
+        await knowledgeAuditService.record({
+          action: 'user_profile_updated', targetType: 'fact', targetId: 'profile-overrides', before: null,
+          after: { fields: Object.keys(patch) },
+          provenance: { workspaceId: 'user', workspaceName: 'user', workspacePath: '', source: 'manual',
+            sourceObservationIds: [], fileRefs: [], actor: 'user-memory', createdAt: new Date(this.deps.now()).toISOString() },
+        })
+      } catch (error) {
+        await writeFileAtomic(path, JSON.stringify(current, null, 2) + '\n')
+        throw error
+      }
+      return this.project()
     })
-  }
-
-  async recordHabitVersion(habitId: string, version: number, archived = false): Promise<UserProfile> {
-    const current = await this.load()
-    const kept = (current.habitVersions ?? []).filter((entry) => entry.habitId !== habitId)
-    kept.push({ habitId, version, archived })
-    return this.save({ habitVersions: kept.slice(-200) })
   }
 }
 

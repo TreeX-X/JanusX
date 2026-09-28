@@ -9,6 +9,7 @@ import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall
 import type { MemoryFact } from '../../../src/shared/knowledge'
 import { KnowledgeProcessingQueue } from '../../../src/main/knowledge/processing-queue'
 import { knowledgeObservationService } from '../../../src/main/knowledge/observation-service'
+import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection'
 import { runDeterministicStage } from '../../../src/main/knowledge/deterministic-extractor'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
@@ -129,7 +130,9 @@ describe('user memory agent tools (M3)', () => {
   })
 
   it('searches with cited matches and no approval roundtrip', async () => {
-    await seedFacts([userFact('fact-u1', '我习惯用 pnpm 而不用 npm')])
+    const reviewed = userFact('fact-u1', '我习惯用 pnpm 而不用 npm')
+    reviewed.confirmation = { kind: 'human-review', contentHash: reviewedFactHash(reviewed), confirmedAt: '2026-09-28T00:00:00.000Z' }
+    await seedFacts([reviewed])
     const { runtime, session } = await createRuntime(false)
     const result = await runtime.executeTool({
       sessionId: session.id,

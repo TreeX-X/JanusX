@@ -118,6 +118,8 @@ export interface MemorySourceEvidence {
 /** Durable user snapshot rendered after JANUS_PERSONA with its own recall budget. */
 export interface UserProfile {
   version: number
+  confirmedFacts?: Array<{ id: string; version: number; content: string; kind: FactKind; observationIds: string[]; sourceHash: string; supersedes?: string }>
+  derivation?: { fingerprint: string; ruleVersion: string; expiresAt: string }
   identity?: string
   formatPrefs?: string[]
   toolPrefs?: string[]
@@ -292,6 +294,8 @@ export interface RetentionStats {
 }
 
 export interface MemoryFact {
+  /** Host-written on explicit review; binds the reviewed content, never model authority. */
+  confirmation?: { kind: 'human-review'; contentHash: string; confirmedAt: string }
   id: string
   content: string
   concepts: string[]

@@ -26,6 +26,7 @@ import { userProfileService } from './user-profile-service'
 /** Independent user budget: never eats the project recall allowance. */
 export const USER_RECALL_MAX_ITEMS = 5
 export const USER_RECALL_MAX_CHARS = 2_000
+export const USER_PROFILE_STABLE_ITEMS = 3
 
 export const USER_MEMORY_SECTION_OPEN = '<janus-user-memory trust="untrusted" usage="reference-only">'
 export const USER_MEMORY_SECTION_CLOSE = '</janus-user-memory>'
@@ -141,6 +142,11 @@ function profileDocs(profile: UserProfile): UserDoc[] {
       },
     })
   }
+  for (const fact of profile.confirmedFacts ?? []) {
+    docs.push({ id: 'profile:fact:' + fact.id, text: fact.content,
+      item: { id: fact.id, kind: 'profile', title: fact.content.slice(0, 120), content: fact.content,
+        factIds: [fact.id], observationIds: fact.observationIds, episodeIds: [], ...(fact.supersedes ? { succession: 'supersedes ' + fact.supersedes } : {}) } })
+  }
   return docs
 }
 
@@ -150,7 +156,7 @@ function formatUserLine(item: UserRecallItem): string {
     return `[episode] ${item.content} (episode:${item.id}; expires:${expiry})`
   }
   if (item.kind === 'profile') {
-    return `[profile] ${item.content} (profile)`
+    return '[profile] ' + item.content + (item.factIds.length ? ' (fact:' + item.factIds.join(',fact:') + '; observation:' + item.observationIds.join(',observation:') + (item.succession ? '; ' + item.succession : '') + ')' : ' (profile) [manual override]')
   }
   const refs = [
     `fact:${item.id}`,
@@ -167,6 +173,7 @@ export function formatUserMemorySection(lines: string[]): string {
   return [
     USER_MEMORY_SECTION_OPEN,
     'Durable user memory (private). Cite fact, observation, or episode ids on every used claim.',
+    'Manual profile overrides take precedence over derived facts when they conflict.',
     ...lines,
     USER_MEMORY_SECTION_CLOSE,
   ].join('\n')
@@ -189,8 +196,11 @@ export async function searchUserMemory(
     deps.listActiveEpisodes(),
   ])
 
+  const stableDocs = profileDocs(profile)
+  const stableFactIds = new Set((profile.confirmedFacts ?? []).map(fact => fact.id))
   const docs: UserDoc[] = []
   for (const { fact, succession } of applyHabitSuccession(facts)) {
+    if (profile.derivation || stableFactIds.has(fact.id)) continue
     docs.push({
       id: `fact:${fact.id}`,
       text: `${fact.content}\n${fact.concepts.join(' ')}`,
@@ -224,8 +234,9 @@ export async function searchUserMemory(
       },
     })
   }
-  docs.push(...profileDocs(profile))
-  if (docs.length === 0) return empty
+  const stable = stableDocs.slice(0, USER_PROFILE_STABLE_ITEMS)
+  docs.push(...stableDocs.slice(USER_PROFILE_STABLE_ITEMS))
+  if (docs.length === 0 && stable.length === 0) return empty
 
   const index = new Bm25Index(docs.map((doc) => ({ id: doc.id, text: doc.text })))
   const byId = new Map(docs.map((doc) => [doc.id, doc]))
@@ -245,20 +256,21 @@ export async function searchUserMemory(
   }
   ranked.sort((left, right) => right.score - left.score || (left.id < right.id ? -1 : 1))
 
+  const ordered = [...stable.map(doc => ({ ...doc.item, score: 0, bm25Score: 0 })), ...ranked]
   const lines: string[] = []
   const items: UserRecallItem[] = []
-  for (const item of ranked) {
+  for (const item of ordered) {
     if (items.length >= maxItems) break
     const line = formatUserLine(item)
-    if ([...lines, line].join('\n').length > maxChars) break
+    if ([...lines, line].join('\n').length > maxChars) continue
     lines.push(line)
     items.push(item)
   }
   return {
     items,
     compactContext: formatUserMemorySection(lines),
-    truncated: items.length < ranked.length,
-    eligibleCount: ranked.length,
+    truncated: items.length < ordered.length,
+    eligibleCount: ordered.length,
     maxItems,
     maxChars,
   }

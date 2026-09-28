@@ -36,7 +36,9 @@ export const KNOWLEDGE_STORAGE_LAYOUT: KnowledgeStorageLayout = {
     { key: 'audit', relativePath: 'audit/audit.jsonl', format: 'jsonl', purpose: 'Append-only audit events for all changes.' },
     { key: 'bm25-index', relativePath: 'indexes/bm25.json', format: 'json', purpose: 'Rebuildable BM25 metadata and term dictionary.' },
     { key: 'graph-snapshot', relativePath: 'indexes/graph-snapshot.json', format: 'json', purpose: 'Graph side-index snapshot for fast loading.' },
-    { key: 'user-profile', relativePath: 'profile/profile.json', format: 'json', purpose: 'Durable UserProfile snapshot; private by default.' },
+    { key: 'user-profile', relativePath: 'profile/profile.json', format: 'json', purpose: 'Legacy profile retained without inferred source authority.' },
+    { key: 'user-profile-snapshot', relativePath: 'profile/snapshot.json', format: 'json', purpose: 'Derived private profile from confirmed personal facts and overrides.' },
+    { key: 'user-profile-overrides', relativePath: 'profile/overrides.json', format: 'json', purpose: 'Explicit manual profile overrides, separate from derived content.' },
     { key: 'refinement-tasks', relativePath: 'processing/refinement-tasks.json', format: 'json', purpose: 'Recoverable refinement task states and evidence hashes; no copied source text.' },
   ],
 }

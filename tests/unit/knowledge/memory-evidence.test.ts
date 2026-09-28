@@ -199,7 +199,7 @@ describe('host memory evidence boundary', () => {
     expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
   })
 
-  it('reads legacy observations conservatively and keeps legacy project/user facts recallable', async () => {
+  it('keeps legacy records readable without promoting unverified personal facts into stable recall', async () => {
     const observation = await knowledgeObservationService.capture(input)
     const shard = join(root, 'observations', 'active', `${observation.createdAt.slice(0, 7)}.jsonl`)
     const { scope: _scope, sourceEvidence: _evidence, ...legacy } = observation
@@ -216,7 +216,7 @@ describe('host memory evidence boundary', () => {
     await mkdir(join(root, 'facts'), { recursive: true })
     await writeFile(join(root, 'facts', 'facts.jsonl'), [fact('user'), fact('project-a')].map((value) => JSON.stringify(value)).join('\n') + '\n')
     expect((await knowledgeTruthService.list()).facts).toHaveLength(2)
-    expect((await searchUserMemoryDefault('pnpm')).items.map((item) => item.id)).toContain('legacy-user')
+    expect((await searchUserMemoryDefault('pnpm')).items.map((item) => item.id)).not.toContain('legacy-user')
     const shared = await knowledgeRecallService.recall({ query: 'pnpm', layer: 'truth', allowGlobal: true })
     expect(shared.documents.map((document) => document.hit.id)).toEqual(['legacy-project-a'])
     expect(await readFile(shard, 'utf8')).not.toContain('sourceEvidence')

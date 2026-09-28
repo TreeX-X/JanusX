@@ -13,9 +13,9 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 ## Problem
 
-JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。前两片已将个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，补充宿主来源契约，并移除确定性提取器内部的自动接受。剩余旁路集中在 Profile 独立写入及个人召回索引；旧 Episode 仍通过兼容读取提供服务。个人画像尚缺稳定证据账本、可重建快照和完整生命周期闭环。
+JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。前两片已将个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，补充宿主来源契约，并移除确定性提取器内部的自动接受。Profile 已由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像来源迁移、单值冲突和跨存储遗忘闭环仍未完成。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)现在只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)仍待改为事实派生视图。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产环境使用 NoopScorer，真实 Laya 适配及人工精修入口仍待实现。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)现在只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产环境使用 NoopScorer，真实 Laya 适配及人工精修入口仍待实现。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
 
 需求边界（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。
 
@@ -159,13 +159,25 @@ Episode 的新存储过期与遗忘复用 Observation 写锁，覆盖活动分�
 
 任务调用关闭提取器内部重试，由任务账本统一控制最多 3 次尝试，失败后分别等待 1、2 分钟；最终失败不会被同一计划重新入队而隐式复活。崩溃留下的 running 任务同样受总尝试上限约束。任务成功只表示本次精修已处理，不表示事实已获批准。已有 processingStats 返回按任务状态划分的 refinement 计数及下次重试时间；旧 llm 阶段计数保留为规划结果。任务文件结构错误会明确失败并保留原字节，不按空文件覆盖恢复。
 
-AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-4、AC-6、AC-10 尚未全部完成。完整 Profile 从工程事实读取与派生、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、人工精修/最终失败重试入口、相似习惯候选持续合并、真实 Laya 及完整生命周期仍按后续步骤实施。Episode 失效尚不级联撤销已生成候选或长期事实；任务执行前的失效检查也不构成覆盖整个模型调用期间的跨存储遗忘事务。统一遗忘屏障属于后续账本撤回与 Profile 失效工作，不能将当前 Episode 遗忘描述为全链路删除。新来源进入已确认画像仍须 Inbox 审核。
+AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-4、AC-6、AC-10 尚未全部完成。旧 Profile 与历史已审核事实的可信迁移、单值画像槽位、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、人工精修/最终失败重试入口、相似习惯候选持续合并、真实 Laya 及完整生命周期仍按后续步骤实施。Episode 失效尚不级联撤销已生成候选或长期事实；任务执行前的失效检查也不构成覆盖整个模型调用期间的跨存储遗忘事务。统一遗忘屏障属于后续账本撤回与 Profile 失效工作，不能将当前 Episode 遗忘描述为全链路删除。新来源进入已确认画像仍须 Inbox 审核。
 
 机器验证（2026-09-28，持久化精炼任务与恢复）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 50 个文件、422 项测试。[refinement-tasks.test.ts](../../tests/unit/knowledge/refinement-tasks.test.ts)的 20 项测试覆盖并发去重、不复制原文、重启恢复与退避、执行条件不足时延后、候选及来源变更取消、候选提交后崩溃恢复、预算溢出续跑、最多三次尝试、损坏账本保留、持久化失败后的游标重试及执行中状态读取；[processing-queue.test.ts](../../tests/unit/knowledge/processing-queue.test.ts)的 17 项测试包含规划持久化失败不推进游标、定时器合并与销毁。评分门控、精修期间人工审核保护、证据归属、统一写入及 MCP 回归继续通过。`npm run typecheck:strict-unused`、9 个生产 TypeScript 文件的定向 `npx eslint`、`npm run check:package-boundary` 与本片文件的 `git diff --check` 通过。未运行桌面打包/E2E 或真实 Laya 权重测试。
 
 机器验证（2026-09-28，统一审核界面）：`npx vitest run tests/unit/knowledge tests/unit/right-tool-state.test.ts tests/unit/right-tool-dock.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/memory-review-ui.test.ts` 覆盖 51 个文件、436 项测试，435 项通过；truth-service 的一项测试在清理临时 audit 目录时遇到 ENOTEMPTY，随后单独运行该文件的 4 项测试全部通过，未修改其测试或生产代码。[memory-review-ui.test.ts](../../tests/unit/memory-review-ui.test.ts)用真实无头 Chromium 验证筛选、批准/拒绝、提交禁用、失败保留与刷新恢复；[memory-review-tool.test.ts](../../tests/unit/knowledge/memory-review-tool.test.ts)的 4 项测试验证来源项目、原文转义、私有归属、独立计数与读取失败。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary` 通过；8 个生产 TypeScript 文件的定向 ESLint 零错误，保留 KnowledgeWorkbench 原有 refresh 依赖警告。未运行完整 Electron 桌面 E2E、打包或真实 Laya 模型验证。
 
 Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；通过临时 Node loader 解析到已安装的 `../janus-agentX/node_modules/yaml` 后执行原检查器，检查 207 篇 Harness Note，本篇零错误，但既有 `2026-09-28-debug-mode-plan--1645e12c.md` 缺少 Proposal、Risks 两节。没有修改该无关草稿，也没有将全库失败记为通过。测试均使用临时知识根目录，未改写真实知识数据。
+
+[Profile 投影](../../src/main/knowledge/profile-projection.ts)只使用 active、未到期且带有效人工确认记录的 user 事实。审核服务在事实落库时生成 human-review 确认记录，绑定正文、归属、事实版本、类型、替代目标、TTL 和来源证据；模型不能通过候选字段授予确认资格。正文或来源改动后必须重新确认，访问强度与 lastSeenAt 不改变确认 hash。工程会话产生的个人习惯经审核后参与投影，普通工程事实仍由 Janus 的工程上下文通道读取，不直接成为个人画像。
+
+`profile/snapshot.json` 是派生快照，包含已确认事实及来源 hash、人工字段、规则版本、内容指纹、版本与 5 分钟 TTL。每次读取都重新核对事实与 override，不等待 TTL 才发现撤回、到期或同 ID 内容变化。源内容不变时版本与 updatedAt 不变，TTL 到期只续期；快照正文不作为权威输入，内容偏差可从事实重建。结构损坏则报错保留文件，不用空画像覆盖。当前采用全事实扫描与整文件原子写，同进程共享队列；没有跨事实审核、遗忘、override、审计的统一事务，也没有跨进程锁。并发事实变更在后续读取中可见，不宣称已经撤销正在生成的聊天上下文。
+
+人工身份及格式/工具偏好通过已有宿主 save 方法写入独立的 `profile/overrides.json`，限制字段与长度并记录审计；审计失败时恢复原 override。后台投影不能覆盖该文件，移除 override 不删除底层事实。未使用的 recordHabitVersion 直接写入口移除，habitVersions 随确认事实派生。override 已持久化但快照写入失败时调用会报错，后续读取仍可据 override 重建；完整跨文件崩溃事务尚未实现。人工编辑 UI、按语义单值槽位消解 override 与自由文本事实冲突仍待实现，当前召回明确标注人工字段优先。
+
+旧 `profile/profile.json` 保留原字节，不自动当作人工 override；没有确认记录的旧个人 truth 保持可读，但不进入生产个人召回的稳定事实集。历史确认资格需要结合原候选与审核审计迁移，不能从旧 actor、active 状态或 model-generated 字段推断。旧画像及旧事实的迁移/重新确认界面仍待实现，现有 overview 仍可展示旧事实，尚未增加 uncertain 分栏。此兼容策略会减少旧资料的自动注入，代价是用户在可信迁移完成前可能需要重新确认原偏好；直接把旧 profile 当 override 可保留原体验，但无法证明其来源。
+
+个人召回按人工字段、已确认 preference、其他已确认事实的稳定次序预留最多 3 条，与 BM25 top-k 分离；其余画像材料及有效 Episode 继续按查询检索，共用既有个人条数/字符预算。已进入快照的事实不会再从旧事实检索路径重复注入；超长条目被跳过且标记截断，不阻断后续可容纳条目。事实行保留 fact/observation 引用及 supersedes，近期 Episode 不写入长期画像。工程召回与 MCP 权限过滤保持原路径。完整画像验收 AC-1、AC-3、AC-9、AC-10 仍未完成。
+
+机器验证（2026-09-28，Profile 派生快照）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 52 个文件、438 项测试。[profile-projection.test.ts](../../tests/unit/knowledge/profile-projection.test.ts)的 12 项测试覆盖人工确认与域过滤、同 ID 修改、来源变更、撤回、TTL、仅排名变化、重启、并发 override、审计失败回滚、旧文件保留、损坏文件保留、缓存正文重建及稳定条目/溢出召回预算。既有人工审核→个人召回、MCP 隔离与替代链回归通过。运行中既有 schema_violation 异步审计在临时目录清理时报告一次 EPERM，未导致测试失败；不据此声称跨存储审计事务已经完整。`npm run typecheck:strict-unused`、6 个生产 TypeScript 文件定向 ESLint、`npm run check:package-boundary` 通过；未运行 Electron 桌面 E2E、打包、真实 Laya 或旧数据迁移演练。
 
 ## Alternatives considered
 

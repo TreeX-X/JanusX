@@ -14,6 +14,7 @@ import { userEpisodeService } from '../../../src/main/knowledge/user-episode-ser
 import { knowledgeOperationsService } from '../../../src/main/knowledge/operations-service'
 import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
 import type { AuditEvent, CandidateFact, MemoryFact } from '../../../src/shared/knowledge'
+import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection'
 import { personalObservation } from './memory-observation.fixture'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
@@ -54,10 +55,10 @@ function userFact(id: string, content: string, extra: Partial<MemoryFact> = {}):
   }
 }
 
-async function seedFacts(facts: MemoryFact[]): Promise<void> {
+async function seedConfirmedFacts(facts: MemoryFact[]): Promise<void> {
   const file = join(knowledgeRoot, 'facts', 'facts.jsonl')
   await mkdir(dirname(file), { recursive: true })
-  await writeFile(file, facts.map((fact) => JSON.stringify(fact)).join('\n') + '\n', 'utf8')
+  await writeFile(file, facts.map((fact) => JSON.stringify({ ...fact, confirmation: { kind: 'human-review', contentHash: reviewedFactHash(fact), confirmedAt: '2026-09-28T00:00:00.000Z' } })).join('\n') + '\n', 'utf8')
 }
 
 async function appendCandidates(candidates: CandidateFact[]): Promise<void> {
@@ -123,7 +124,7 @@ describe('user memory MVP contract', () => {
   })
 
   it('labels succession without dual guidance', async () => {
-    await seedFacts([
+    await seedConfirmedFacts([
       userFact('habit-old', '请用中文回复，每段不超过三行'),
       userFact('habit-new', '请用中文回复，每段不超过五行', { supersedes: 'habit-old' }),
     ])
@@ -144,7 +145,7 @@ describe('user memory MVP contract', () => {
   })
 
   it('leaves no recall residue after forget, with audit to prove it', async () => {
-    await seedFacts([userFact('fact-u1', '我习惯用 pnpm 而不用 npm')])
+    await seedConfirmedFacts([userFact('fact-u1', '我习惯用 pnpm 而不用 npm')])
     await userEpisodeService.capture({ content: '昨天用 pnpm 发布了新版本', ttlDays: 90 })
     expect((await searchUserMemoryDefault('pnpm')).items).not.toHaveLength(0)
 
@@ -160,7 +161,7 @@ describe('user memory MVP contract', () => {
   })
 
   it('serves the glance overview with pending count, habits, and recent', async () => {
-    await seedFacts([userFact('fact-u1', '我习惯用 pnpm 而不用 npm')])
+    await seedConfirmedFacts([userFact('fact-u1', '我习惯用 pnpm 而不用 npm')])
     await userEpisodeService.capture({ content: '昨天用 pnpm 发布了新版本', ttlDays: 90 })
     const candidate = habitPromotionToCandidate({
       key: 'habit:x', content: '站会只说三件事', frequency: 3,
