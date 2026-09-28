@@ -56,6 +56,15 @@
     "bounded": "Bounded result"
   },
   "persona": {
+    "correctMemory": "Correct this memory",
+    "correctionOriginal": "Original record",
+    "correctionNew": "Corrected content",
+    "correctionPending": "Submission creates a review candidate. The original remains active until approval.",
+    "correctionSubmit": "Submit for review",
+    "correctionRejected": "This correction was already processed or rejected. Change the content before submitting again.",
+    "correctionStale": "The original changed, expired, or is unavailable. Close the editor, refresh the profile, and correct it again.",
+    "correctionFailed": "Submission failed. Your input is retained; please retry.",
+    "unconfirmed": "Unconfirmed; excluded from the stable profile",
     "toolAria": "Persona",
     "profile": {
       "title": "Profile",
@@ -129,6 +138,9 @@
     "workbenchUnavailable": "Workbench unavailable"
   },
   "review": {
+    "correctionTitle": "Personal memory correction: approval replaces the original",
+    "correctionCompeting": "{{count}} other corrections target this memory. After approving one, the others need review against the new record.",
+    "correctionStale": "The original changed or another correction was approved. Refresh, reject the old candidate, and correct the current memory from the profile.",
     "title": "Review",
     "legacyStale": "The old source changed or the candidate no longer matches. Refresh, reject the old candidate, then import the records again.",
     "importLegacy": "Import old personal records for review",

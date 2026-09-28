@@ -14,6 +14,7 @@ import { knowledgeContextService } from '../knowledge/context-service'
 import { knowledgeOperationsService } from '../knowledge/operations-service'
 import { getUserMemoryOverview } from '../knowledge/user-overview-service'
 import { importLegacyPersonalMemory } from '../knowledge/legacy-memory-migration'
+import { proposePersonalMemoryCorrection } from '../knowledge/personal-memory-correction'
 import { knowledgeDiagnosticsService } from '../knowledge/diagnostics-service'
 import { getExternalMcpStatus, registerExternalMcpClient } from '../knowledge/external-mcp'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
@@ -38,6 +39,7 @@ import type {
 
 export function registerKnowledgeHandlers(): void {
   ipcMain.handle(KNOWLEDGE_CHANNELS.importLegacyPersonalMemory, () => importLegacyPersonalMemory())
+  ipcMain.handle(KNOWLEDGE_CHANNELS.proposePersonalMemoryCorrection, (_event, input: unknown) => proposePersonalMemoryCorrection(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.noteWikiPages, async (_event, input: { rootPath: string; uri: string }) => noteWikiPages(input.rootPath, input.uri))
   ipcMain.handle(KNOWLEDGE_CHANNELS.prepareNoteWiki, async (_event, input: PrepareNoteWikiInput) => prepareNoteWiki(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.proposeNoteWiki, async (_event, input: { draftId: string; title: string; markdown: string; rationale: string }) => knowledgeReviewService.proposeNoteWiki(input))

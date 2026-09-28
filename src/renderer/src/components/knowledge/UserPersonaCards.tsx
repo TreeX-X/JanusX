@@ -1,18 +1,21 @@
-import type { UserMemoryOverview } from '../../../../shared/knowledge'
+import type { UserMemoryOverview, UserMemoryOverviewHabit } from '../../../../shared/knowledge'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './KnowledgeAssist.module.css'
 
 /**
- * Glance cards for durable user memory (M4). Read-only rows with source
- * citations; the only action navigates to the shared review tool via
- * `onOpenInbox`. No workspace is required.
+ * Glance cards with source citations and optional explicit correction actions.
+ * No workspace is required.
  */
 export function UserPersonaCards({
   overview,
   onOpenInbox,
+  onCorrect,
+  onRefresh,
 }: {
   overview: UserMemoryOverview
   onOpenInbox: () => void
+  onCorrect?: (memory: UserMemoryOverviewHabit) => void
+  onRefresh?: () => void
 }) {
   const { t } = useI18n('knowledge')
   const prefs = [...(overview.profile.formatPrefs ?? []), ...(overview.profile.toolPrefs ?? [])]
@@ -53,6 +56,8 @@ export function UserPersonaCards({
               )}
             </span>
             <span className={styles.rowContent}>{habit.content}</span>
+            {habit.confirmed === false && <span className={styles.rowSource}>{t('knowledge:persona.unconfirmed')}</span>}
+            {onCorrect && <button type="button" className={styles.copyButton} disabled={!habit.contentHash} onClick={() => onCorrect(habit)}>{t('knowledge:persona.correctMemory')}</button>}
             <span className={styles.rowSource}>
               {`fact:${habit.id}${habit.observationIds.length > 0 ? ` · observation:${habit.observationIds.join(',observation:')}` : ''}${habit.succession ? ` · ${habit.succession}` : ''}`}
             </span>
@@ -74,6 +79,7 @@ export function UserPersonaCards({
         ))}
       </section>
       <div className={styles.footer}>
+        {onRefresh && <button type="button" className={styles.copyButton} onClick={onRefresh}>{t('knowledge:action.refresh')}</button>}
         <button type="button" className={styles.copyButton} onClick={onOpenInbox}>
           {t('knowledge:persona.openInbox')}
         </button>

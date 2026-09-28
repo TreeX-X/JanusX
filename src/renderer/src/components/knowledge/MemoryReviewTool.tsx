@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import { applyKnowledgeCandidate, rejectKnowledgeCandidate } from '../../services/knowledge'
-import { countInboxScopes, filterInboxByScope, isUserScopeCandidate, type InboxCandidate, type InboxScopeFilter } from './inboxScope'
+import { competingCorrections, countInboxScopes, filterInboxByScope, isUserScopeCandidate, type InboxCandidate, type InboxScopeFilter } from './inboxScope'
 import { WikiCandidateSources } from './NoteWikiLinks'
 import styles from './MemoryReviewTool.module.css'
 
@@ -55,8 +55,9 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
       setCandidates(current => current.filter(item => item.type !== candidate.type || item.id !== candidate.id))
       await refresh()
     } catch (reason) {
-      setError(t(reason instanceof Error && reason.message.includes('Legacy ')
-        ? 'knowledge:review.legacyStale' : 'knowledge:review.failed'))
+      setError(t(reason instanceof Error && reason.message.includes('Personal correction')
+        ? 'knowledge:review.correctionStale'
+        : reason instanceof Error && reason.message.includes('Legacy ') ? 'knowledge:review.legacyStale' : 'knowledge:review.failed'))
     } finally {
       actionLock.current = false
       setBusy(false)
@@ -95,7 +96,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
       {notice && <p role="status">{notice}</p>}
       {loading && <p role="status">{t('knowledge:state.loading.title')}</p>}
       {!loading && !error && filterInboxByScope(candidates, scope).length === 0 && <p>{t('knowledge:inbox.empty.title')}</p>}
-      {!loading && filterInboxByScope(candidates, scope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} disabled={busy || Boolean(error)} onReview={approve => void review(candidate, approve)} />)}
+      {!loading && filterInboxByScope(candidates, scope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={approve => void review(candidate, approve)} />)}
     </div>
     <footer className={styles.filters}>
       <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t('knowledge:action.refresh')}</button>
@@ -104,7 +105,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
   </section>
 }
 
-export function MemoryReviewCard({ candidate, disabled, onReview }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean) => void }) {
+export function MemoryReviewCard({ candidate, disabled, onReview, competing = 0 }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean) => void; competing?: number }) {
   const { t } = useI18n('knowledge')
   const personal = isUserScopeCandidate(candidate)
   const provenance = candidate.type === 'fact' ? candidate.fact.provenance : candidate.type === 'wiki-patch' ? candidate.provenance : undefined
@@ -113,6 +114,11 @@ export function MemoryReviewCard({ candidate, disabled, onReview }: { candidate:
     <strong>{t(personal ? 'knowledge:inbox.scope.personal' : 'knowledge:inbox.scope.engineering')}</strong>
     <p>{t(personal ? 'knowledge:review.personalUse' : 'knowledge:review.engineeringUse')}</p>
     {candidate.type === 'fact' && candidate.legacySource && <p>{t('knowledge:review.legacySource')}</p>}
+    {candidate.type === 'fact' && candidate.personalCorrection && <>
+      <strong>{t('knowledge:review.correctionTitle')}</strong>
+      <p>{t('knowledge:persona.correctionOriginal')}: {candidate.personalCorrection.previousContent}</p>
+      {competing > 0 && <p>{t('knowledge:review.correctionCompeting', { count: competing })}</p>}
+    </>}
     {personal && candidate.id.startsWith('remember-candidate:') && <p>{t('knowledge:review.explicitMemory')}</p>}
     {personal && candidate.id.startsWith('habit-candidate:') && <p>{t('knowledge:review.inferredHabit')}</p>}
     <p>{content}</p>

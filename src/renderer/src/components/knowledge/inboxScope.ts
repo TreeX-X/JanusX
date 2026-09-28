@@ -41,3 +41,9 @@ export function countInboxScopes(candidates: InboxCandidate[]): { user: number; 
   }
   return { user, engineering: candidates.length - user }
 }
+
+export function competingCorrections(candidates: InboxCandidate[], candidate: InboxCandidate): number {
+  if (candidate.type !== 'fact' || !candidate.personalCorrection) return 0
+  return candidates.filter(other => other.type === 'fact' && other.id !== candidate.id && other.status === 'proposed'
+    && other.personalCorrection?.targetId === candidate.personalCorrection?.targetId).length
+}

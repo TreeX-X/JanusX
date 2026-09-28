@@ -10,3 +10,5 @@
 .card summary { cursor: pointer; color: var(--text-secondary); }
 .card blockquote { margin: 8px 0; padding-left: 10px; border-left: 2px solid var(--border); }
 .card small { color: var(--text-secondary); }
+.editor { display: block; width: 100%; min-height: 120px; box-sizing: border-box; margin-top: 8px; padding: 8px; color: var(--text); background: transparent; border: 1px solid var(--border); border-radius: 4px; resize: vertical; font: inherit; }
+.editor:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

@@ -71,7 +71,7 @@ function ToolContent({
   if (toolId === 'git') return <GitPanel active={active} />
   if (toolId === 'sessions') return <SessionPanel />
   if (toolId === 'review') return <MemoryReviewTool active={active} />
-  if (toolId === 'persona') return <UserPersonaTool />
+  if (toolId === 'persona') return <UserPersonaTool active={active} />
   return <KnowledgeAssist workspaceId={workspaceId} workspacePath={workspacePath} />
 }
 

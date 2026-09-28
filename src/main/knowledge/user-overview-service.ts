@@ -12,6 +12,7 @@ import { knowledgeTruthService } from './truth-service'
 import { listProposedUserFactCandidates } from './review-service'
 import { userEpisodeService } from './user-episode-service'
 import { userProfileService } from './user-profile-service'
+import { reviewedFactHash } from './profile-projection'
 
 export const OVERVIEW_HABIT_LIMIT = 20
 export const OVERVIEW_RECENT_LIMIT = 10
@@ -39,6 +40,9 @@ export async function getUserMemoryOverview(nowMs: number = Date.now()): Promise
     .slice(0, OVERVIEW_HABIT_LIMIT)
     .map((fact) => ({
       id: fact.id,
+      contentHash: reviewedFactHash(fact),
+      confirmed: fact.confirmation?.kind === 'human-review' && fact.confirmation.contentHash === reviewedFactHash(fact)
+        && (!fact.ttl || Date.parse(fact.ttl) > nowMs),
       content: fact.content,
       ...(fact.habitStrength !== undefined ? { habitStrength: fact.habitStrength } : {}),
       ...(fact.lastSeenAt ? { lastSeenAt: fact.lastSeenAt } : {}),

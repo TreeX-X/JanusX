@@ -143,6 +143,8 @@ export interface UserEpisode {
 
 /** User memory M4: one glance payload for the persona cards plus badge. */
 export interface UserMemoryOverviewHabit {
+  contentHash?: string
+  confirmed?: boolean
   id: string
   content: string
   habitStrength?: number
@@ -493,6 +495,8 @@ export interface AuditEvent {
 }
 
 export interface CandidateFact {
+  /** Host-bound explicit correction; old content is for review, not evidence for the new claim. */
+  personalCorrection?: { targetId: string; targetHash: string; previousContent: string }
   /** Host-owned legacy source binding; rechecked before explicit approval. */
   legacySource?: { kind: 'fact' | 'profile'; id: string; hash: string }
   id: string

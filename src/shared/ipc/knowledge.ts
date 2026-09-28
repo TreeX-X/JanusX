@@ -64,6 +64,7 @@ export const KNOWLEDGE_CHANNELS = {
   registerExternalMcp: 'knowledge:external-mcp:register',
   userMemoryOverview: 'knowledge:user-memory:overview',
   importLegacyPersonalMemory: 'knowledge:user-memory:import-legacy',
+  proposePersonalMemoryCorrection: 'knowledge:user-memory:correct',
   getSettings: 'settings:knowledge:get',
   updateSettings: 'settings:knowledge:update',
 } as const
@@ -289,6 +290,7 @@ export interface KnowledgeAPI {
   registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
   userMemoryOverview: () => Promise<UserMemoryOverview>
   importLegacyPersonalMemory: () => Promise<{ created: number; remaining: number }>
+  proposePersonalMemoryCorrection: (input: { targetId: string; targetHash: string; content: string }) => Promise<{ candidateId: string; status: CandidateFact['status'] }>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>
 }

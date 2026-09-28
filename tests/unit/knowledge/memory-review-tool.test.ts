@@ -22,6 +22,16 @@ beforeAll(async () => { await i18n.use(initReactI18next).init({ lng: 'en', resou
 afterEach(() => vi.unstubAllGlobals())
 
 describe('unified memory review', () => {
+  it('shows the previous and proposed values and competing correction warning', () => {
+    const candidate = fact('correction', 'user')
+    candidate.fact.content = 'Prefer npm'
+    candidate.personalCorrection = { targetId: 'original', targetHash: 'hash', previousContent: 'Prefer pnpm' }
+    const markup = renderToStaticMarkup(createElement(MemoryReviewCard, { candidate, competing: 1, disabled: false, onReview: vi.fn() }))
+    expect(markup).toContain('Prefer pnpm')
+    expect(markup).toContain('Prefer npm')
+    expect(markup).toContain('approval replaces the original')
+    expect(markup).toContain('1 other corrections')
+  })
   it('keeps private engineering-derived memory in the personal filter and displays escaped original evidence', () => {
     const candidate = fact('personal', 'user')
     const markup = renderToStaticMarkup(createElement(MemoryReviewCard, { candidate, disabled: false, onReview: vi.fn() }))

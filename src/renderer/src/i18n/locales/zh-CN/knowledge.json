@@ -56,6 +56,15 @@
     "bounded": "结果已截断"
   },
   "persona": {
+    "correctMemory": "纠正这条记忆",
+    "correctionOriginal": "原记录",
+    "correctionNew": "修改后的内容",
+    "correctionPending": "提交后进入审核；批准前原记录继续有效。",
+    "correctionSubmit": "提交到审核",
+    "correctionRejected": "这份修改已被处理或拒绝，请调整内容后重新提交。",
+    "correctionStale": "原记录已变化、到期或不再可用。请关闭编辑，刷新画像后重新纠正。",
+    "correctionFailed": "纠正提交失败，输入内容已保留，请重试。",
+    "unconfirmed": "尚未确认，不用于稳定画像",
     "toolAria": "个人画像",
     "profile": {
       "title": "画像",
@@ -129,6 +138,9 @@
     "workbenchUnavailable": "工作台不可用"
   },
   "review": {
+    "correctionTitle": "个人记忆纠正：批准后替代原记录",
+    "correctionCompeting": "另有 {{count}} 项纠正针对同一条记忆；批准其中一项后，其他项需要重新核对。",
+    "correctionStale": "原记录已变化或已有其他纠正获批。请刷新、拒绝旧候选，再从画像中重新纠正。",
     "title": "审核",
     "legacyStale": "旧来源已变化或候选不匹配。请刷新，拒绝旧候选后重新导入旧资料。",
     "importLegacy": "导入旧个人资料待确认",

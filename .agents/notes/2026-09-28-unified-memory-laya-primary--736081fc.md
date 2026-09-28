@@ -173,7 +173,7 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 
 人工身份及格式/工具偏好通过已有宿主 save 方法写入独立的 `profile/overrides.json`，限制字段与长度并记录审计；审计失败时恢复原 override。后台投影不能覆盖该文件，移除 override 不删除底层事实。未使用的 recordHabitVersion 直接写入口移除，habitVersions 随确认事实派生。override 已持久化但快照写入失败时调用会报错，后续读取仍可据 override 重建；完整跨文件崩溃事务尚未实现。人工编辑 UI、按语义单值槽位消解 override 与自由文本事实冲突仍待实现，当前召回明确标注人工字段优先。
 
-旧 `profile/profile.json` 保留原字节，不自动当作人工 override；没有确认记录的旧个人 truth 保持可读，但不进入生产个人召回的稳定事实集。历史 candidate_approved/candidate_applied 审计没有绑定被审核的正文 hash，旧 actor 或 active 状态也不能证明当前内容仍是当时确认的版本，因此选择人工重新确认，不自动恢复历史资格。直接把旧 profile 当 override 可以保留原体验，代价是无法证明其来源；按既有审计自动补确认记录可减少操作，但在缺少内容绑定时仍可能错误升格。现有 overview 仍可展示旧事实，尚未增加 uncertain 分栏。
+旧 `profile/profile.json` 保留原字节，不自动当作人工 override；没有确认记录的旧个人 truth 保持可读，但不进入生产个人召回的稳定事实集。历史 candidate_approved/candidate_applied 审计没有绑定被审核的正文 hash，旧 actor 或 active 状态也不能证明当前内容仍是当时确认的版本，因此选择人工重新确认，不自动恢复历史资格。直接把旧 profile 当 override 可以保留原体验，代价是无法证明其来源；按既有审计自动补确认记录可减少操作，但在缺少内容绑定时仍可能错误升格。现有 overview 仍可展示旧事实，并标明尚未确认、不用于稳定画像；尚未增加独立 uncertain 分栏。
 
 [旧资料导入](../../src/main/knowledge/legacy-memory-migration.ts)由右侧审核栏的“导入旧个人资料待确认”调用专用 IPC；不向工程 MCP 或 Agent 工具提供迁移写入口。支持现有 truth 读取器能识别的 active、未到期且未有效确认的个人事实，以及旧 profile 的 identity、formatPrefs、toolPrefs。导入只创建候选，每次最多 100 条新增候选，显示新增数量与剩余可导入数量；批次上限限制写入量，源扫描仍是全文件。旧 profile 字段按字段名与原值去重，未知字段不推断用途，不复制成画像偏好。
 
@@ -188,6 +188,18 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 机器验证（2026-09-28，Profile 派生快照）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 52 个文件、438 项测试。[profile-projection.test.ts](../../tests/unit/knowledge/profile-projection.test.ts)的 12 项测试覆盖人工确认与域过滤、同 ID 修改、来源变更、撤回、TTL、仅排名变化、重启、并发 override、审计失败回滚、旧文件保留、损坏文件保留、缓存正文重建及稳定条目/溢出召回预算。既有人工审核→个人召回、MCP 隔离与替代链回归通过。运行中既有 schema_violation 异步审计在临时目录清理时报告一次 EPERM，未导致测试失败；不据此声称跨存储审计事务已经完整。`npm run typecheck:strict-unused`、6 个生产 TypeScript 文件定向 ESLint、`npm run check:package-boundary` 通过；未运行 Electron 桌面 E2E、打包、真实 Laya 或旧数据迁移演练。
 
 机器验证（2026-09-28，旧个人资料重新确认迁移）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 54 个文件、453 项测试。[legacy-memory-migration.test.ts](../../tests/unit/knowledge/legacy-memory-migration.test.ts)的 12 项测试覆盖仅提案、私有归属、原文件保留、替代版本、并发导入去重、拒绝/遗忘不复活、源变更与撤回、分批续跑、损坏文件保留及审计失败回滚。失效来源提示调整后，IPC 与真实无头 Chromium 的审核交互测试 10 项复跑通过，验证导入不批准、领域筛选、显式批准及失败恢复提示。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary`、11 个生产 TypeScript 文件定向 ESLint 通过。未运行完整 Electron 桌面 E2E、打包或真实旧数据迁移。
+
+### 已选个人记忆的显式纠正
+
+[个人记忆纠正](../../src/main/knowledge/personal-memory-correction.ts)通过专用 IPC 接收选中事实的 ID、显示时的内容 hash 和新正文，限制正文长度并脱敏。来源必须是唯一、active、未到期的 user 事实；工程事实不能通过此入口改为个人偏好。提交只生成统一审核候选，不改变当前事实或派生画像；相同目标版本与正文生成同一候选 ID，已拒绝请求不会因重复提交恢复待审。该入口不向工程 MCP 或 Agent 写工具开放。
+
+[纠正来源约束](../../src/main/knowledge/personal-correction-source.ts)绑定目标内容、版本、归属与证据 hash，批准前在既有事实候选锁内重新核对。候选记录人工提交的新正文，不将旧 observation 或原文证据冒充新陈述的依据；人工批准生成确认记录，并经 supersedes 归档旧事实、延续版本链。目标发生同版本内容修改、撤回、到期或已被其他纠正替代时，旧候选不能获批。多个候选可同时保留，先批准的有效纠正使其余旧目标候选失效，失效项仍供用户查看和拒绝。
+
+[画像界面](../../src/renderer/src/components/knowledge/UserPersonaTool.tsx)提供逐条纠正入口，显示未确认旧事实的资格状态；激活或手动刷新时重读来源。编辑草稿在切换栏目和提交失败时保留，提交期间禁用重复操作，关闭工具后迟到的提交响应不重新打开审核。[统一审核卡片](../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)显示旧正文、新正文及同目标竞争纠正数，来源失效时提示刷新并针对当前版本重新纠正。
+
+直接修改事实可以减少一次操作，但会绕过确认记录与版本链；用相似度自动定位替代对象可以省去选择，却无法可靠区分反转、补充与不同语义槽位。因此此入口只纠正用户明确选中的事实。人工 overrides 编辑器、自由文本单值槽位推断、自动冲突消解及完整遗忘事务仍待实现；已有 truth、candidate、audit 普通失败回滚不等于跨文件崩溃事务。AC-1、AC-2、AC-3、AC-9、AC-10 保持未完成。
+
+机器验证（2026-09-28，个人记忆显式纠正）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 56 个文件、465 项测试。其中 [personal-memory-correction.test.ts](../../tests/unit/knowledge/personal-memory-correction.test.ts)的 8 项测试覆盖幂等提案、来源变化、版本替代、竞争纠正、候选篡改、损坏文件保留及审计失败回滚；[personal-memory-correction-ui.test.ts](../../tests/unit/personal-memory-correction-ui.test.ts)的 3 项真实无头 Chromium 测试覆盖草稿、刷新、重复提交与关闭后的异步响应。既有 user-memory-contract 测试在临时目录清理期间输出一次 schema_violation 审计 EPERM，测试仍通过。`npm run typecheck:strict-unused` 通过；17 个生产 TypeScript 文件定向 ESLint 零错误，保留 KnowledgeWorkbench 原有 refresh 依赖警告；`npm run i18n:check` 与 `npm run check:package-boundary` 通过。未运行完整 Electron E2E、桌面打包、真实个人数据操作或 Laya 权重验证。
 
 ## Alternatives considered
 

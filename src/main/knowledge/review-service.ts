@@ -28,6 +28,7 @@ import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
 import { candidateDecisionHash } from './decision-scorer'
 import { reviewedFactHash } from './profile-projection'
 import { readLegacyJsonl, validateLegacyCandidate } from './legacy-memory-source'
+import { validatePersonalCorrection } from './personal-correction-source'
 import type { MemoryDecisionAnnotation } from '../../shared/memory-decision'
 import type {
   ReviewCandidateInput,
@@ -536,8 +537,9 @@ export class KnowledgeReviewService {
       throw new Error('Invalid fact source evidence')
     }
     if (candidate.id.startsWith('legacy-memory:') && !candidate.legacySource) throw new Error('Legacy memory source binding is missing')
-    const previous = candidate.legacySource ? await readLegacyJsonl<MemoryFact>(FACTS_FILE) : await readJsonl<MemoryFact>(FACTS_FILE)
+    const previous = candidate.legacySource || candidate.personalCorrection ? await readLegacyJsonl<MemoryFact>(FACTS_FILE) : await readJsonl<MemoryFact>(FACTS_FILE)
     await validateLegacyCandidate(candidate, previous)
+    validatePersonalCorrection(candidate, previous)
     // Phase 2 supersede: a candidate carrying `supersedes` archives the old
     // active fact and continues its version chain instead of forking a new one.
     let base = previous

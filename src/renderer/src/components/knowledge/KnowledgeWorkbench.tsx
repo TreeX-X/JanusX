@@ -29,7 +29,7 @@ import type {
 } from '../../../../shared/knowledge'
 import { RefreshIconButton } from '../ui/RefreshIconButton'
 import { QuantumTopologyPreview } from '../ui/QuantumTopologyPreview'
-import { countInboxScopes, filterInboxByScope, type InboxScopeFilter } from './inboxScope'
+import { competingCorrections, countInboxScopes, filterInboxByScope, type InboxScopeFilter } from './inboxScope'
 import { CardSkeleton, useAnimatedOpen, useWorkbenchPhase } from '../shared/CardFrame'
 import { useI18n } from '@/i18n/useI18n'
 import '../shared/CardFrame.css'
@@ -574,7 +574,7 @@ function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevok
   const reviewCandidate = record.reviewType && snapshot ? [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates].find(candidate => candidate.id === record.id && candidate.type === record.reviewType) : undefined
   if (reviewCandidate?.status === 'proposed') return <div className={styles.inspector}>
     <button type="button" onClick={onCloseDetail}>{t('knowledge:inspector.closeDetail')}</button>
-    <MemoryReviewCard candidate={reviewCandidate} disabled={!canReview} onReview={approve => approve ? onApprove() : onReject()} />
+    <MemoryReviewCard candidate={reviewCandidate} competing={competingCorrections(snapshot?.factCandidates ?? [], reviewCandidate)} disabled={!canReview} onReview={approve => approve ? onApprove() : onReject()} />
     {conflicts.length > 0 && <p>{t('knowledge:inspector.conflict', { detail: conflicts.map(item => item.reason).join(', ') })}</p>}
     {error && <p role="alert">{error}</p>}
   </div>
