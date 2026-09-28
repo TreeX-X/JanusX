@@ -17,6 +17,15 @@ export interface MemoryScorerIdentity {
   calibrationId: string | null
 }
 
+export interface RefinementTaskStats {
+  pending: number
+  running: number
+  succeeded: number
+  cancelled: number
+  failed: number
+  nextRetryAt: number | null
+}
+
 export interface MemoryDecisionAnnotation {
   version: 1
   scorer: MemoryScorerIdentity
@@ -30,4 +39,7 @@ export interface MemoryDecisionAnnotation {
   evidenceRanges: Array<{ observationId: string; start: number; end: number }>
   relatedFactIds: string[]
   truncated: boolean
+  /** Optional on legacy advice; required before creating a durable refinement task. */
+  evidenceHashes?: Record<string, string>
+  contextHash?: string
 }

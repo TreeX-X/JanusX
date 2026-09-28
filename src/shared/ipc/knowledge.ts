@@ -209,6 +209,7 @@ export interface KnowledgeProcessingLastRun {
 
 /** Phase 1-1: queue metrics for the Workbench status bar. */
 export interface KnowledgeProcessingStats {  generatedAt: string
+  refinement?: import('../memory-decision').RefinementTaskStats
   pendingTotal: number
   workspaces: KnowledgeProcessingWorkspaceStats[]
   failures: number

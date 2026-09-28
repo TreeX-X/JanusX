@@ -9,6 +9,7 @@ import { knowledgeObservationService } from './observation-service'
 import { knowledgeTruthService } from './truth-service'
 import { annotateFactDecisions } from './review-service'
 import { Bm25Index } from './search/bm25'
+import { refinementContextHash, refinementEvidenceHash } from './refinement-snapshot'
 
 const MAX_CANDIDATES = 20
 const MAX_RELATED_CORPUS = 200
@@ -47,6 +48,8 @@ export class MemoryDecisionStage {
   /** Host composition only; model output and IPC input cannot select the scorer. */
   configureScorer(scorer: DecisionScorer | null): void { this.scorer = scorer ?? new NoopScorer() }
 
+  scorerIdentity() { return { ...this.scorer.identity } }
+
   async run(batch: DeterministicBatch): Promise<RefinementPlan> {
     const batchIds = new Set(batch.observations.map((observation) => observation.id))
     const candidates = (await this.deps.listCandidates()).filter((candidate) => candidate.status === 'proposed'
@@ -71,6 +74,7 @@ export class MemoryDecisionStage {
         truncated: candidate.fact.content.length > 6000 || evidenceIds.length > MAX_EVIDENCE_RECORDS,
       }
       let evidenceChars = 0
+      const evidenceHashes: Record<string, string> = {}
       const eligible: Observation[] = []
       let explicitRemember = false
       for (const id of evidenceIds.slice(0, MAX_EVIDENCE_RECORDS)) {
@@ -84,6 +88,7 @@ export class MemoryDecisionStage {
         explicitRemember ||= observation.memoryIntent === 'remember'
         let text: string
         try { text = await this.deps.resolveContent(observation) } catch { input.truncated = true; continue }
+        evidenceHashes[id] = refinementEvidenceHash(observation, text)
         const excerpt = text.slice(0, Math.min(REFINEMENT_OBSERVATION_CHARS, MAX_EVIDENCE_CHARS - evidenceChars))
         input.truncated ||= excerpt.length !== text.length
         evidenceChars += excerpt.length
@@ -93,7 +98,7 @@ export class MemoryDecisionStage {
       }
       const sameDomain = truths.filter((fact) => fact.status === 'active' && factScope(fact) === scope
         && fact.provenance.workspaceId === owner && (!fact.ttl || Date.parse(fact.ttl) > Date.now()))
-      domainSnapshots.set(candidate.id, JSON.stringify(sameDomain))
+      domainSnapshots.set(candidate.id, refinementContextHash(sameDomain, scope, owner))
       input.truncated ||= sameDomain.length > MAX_RELATED_CORPUS
       const corpus = sameDomain.slice(0, MAX_RELATED_CORPUS)
       const relatedIds = new Bm25Index(corpus.map((fact) => ({ id: fact.id, text: fact.content })))
@@ -103,6 +108,8 @@ export class MemoryDecisionStage {
         return { id: fact.id, version: fact.version, content: fact.content.slice(0, 2000) }
       })
       const annotation = await scoreMemoryDecision(input, scorer)
+      annotation.evidenceHashes = evidenceHashes
+      annotation.contextHash = domainSnapshots.get(candidate.id)!
       if (explicitRemember || eligible.length !== evidenceIds.length || owner !== batch.workspaceId) {
         annotation.route = 'review'
         annotation.reason = explicitRemember ? 'explicit-memory-review' : 'evidence-review'
@@ -128,7 +135,7 @@ export class MemoryDecisionStage {
       }
       const currentDomain = currentTruths.filter((fact) => fact.status === 'active' && factScope(fact) === input.scope
         && fact.provenance.workspaceId === input.workspaceId && (!fact.ttl || Date.parse(fact.ttl) > Date.now()))
-      changed ||= JSON.stringify(currentDomain) !== domainSnapshots.get(id)
+      changed ||= refinementContextHash(currentDomain, input.scope, input.workspaceId) !== domainSnapshots.get(id)
       if (changed) {
         annotation.status = 'unavailable'
         annotation.route = 'review'
@@ -139,15 +146,11 @@ export class MemoryDecisionStage {
     const attached = new Set(await this.deps.annotate(updates))
     const selected = new Map<string, Observation>()
     const candidateHashes: Record<string, string> = {}
-    let remaining = REFINEMENT_CHAR_BUDGET
     for (const [id, records] of refinementInputs) {
       if (!attached.has(id)) continue
       const fresh = records.filter((record) => !selected.has(record.id))
-      const cost = fresh.reduce((sum, record) => sum + record.content.length, 0)
-      if (cost > remaining) continue
       for (const record of fresh) selected.set(record.id, record)
       candidateHashes[id] = updates.get(id)!.candidateHash
-      remaining -= cost
     }
     return { observations: [...selected.values()], candidateHashes }
   }

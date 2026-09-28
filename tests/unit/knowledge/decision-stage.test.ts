@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CandidateFact, Observation } from '../../../src/shared/knowledge'
-import { MemoryDecisionStage, REFINEMENT_CHAR_BUDGET } from '../../../src/main/knowledge/decision-stage'
+import { MemoryDecisionStage } from '../../../src/main/knowledge/decision-stage'
 import { DECISION_TEMPLATE_VERSION, type DecisionScorer, type MemoryDecisionInput } from '../../../src/main/knowledge/decision-scorer'
 import { knowledgeObservationService, resetObservationServiceEphemeralState } from '../../../src/main/knowledge/observation-service'
 import { knowledgeProcessingQueue, KnowledgeProcessingQueue } from '../../../src/main/knowledge/processing-queue'
@@ -62,29 +62,29 @@ describe('queue-owned memory decision gate', () => {
   it('runs the real offline queue without automatic LLM even under legacy auto mode', async () => {
     await capture()
     const queue = new KnowledgeProcessingQueue()
-    const extractChunk = vi.fn()
+    const enqueue = vi.fn()
     queue.configureDeterministicHandler(async (batch) => { await runDeterministicStage(batch) })
-    queue.configureLlmHandler((batch) => runLlmStage(batch, { getMode: async () => 'auto', hasDefaultModel: async () => true, extractChunk }))
+    queue.configureLlmHandler((batch) => runLlmStage(batch, { enqueue }))
     try {
       expect((await queue.processNow()).processed).toBe(1)
       expect(await queue.listFailures()).toEqual([])
-      expect(extractChunk).not.toHaveBeenCalled()
+      expect(enqueue).not.toHaveBeenCalled()
       const [candidate] = await knowledgeExtractService.listFactCandidates()
       expect(candidate).toMatchObject({ status: 'proposed', decision: { scorer: { provider: 'noop' }, route: 'review' } })
       await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate!.id })
     } finally { queue.dispose() }
   })
 
-  it('only refines selected evidence when settings and the model permit it', async () => {
+  it('persists selected evidence as a task plan without calling the model inline', async () => {
     const { batch, candidate } = await seed()
     const stage = new MemoryDecisionStage()
     stage.configureScorer(model())
-    const extractChunk = vi.fn(async () => ({ proposed: 0, merged: 1 }))
-    const deps = { selectRefinement: (input: typeof batch) => stage.run(input), hasDefaultModel: async () => true, extractChunk }
-    expect(await runLlmStage(batch, { ...deps, getMode: async () => 'deterministic-only' })).toMatchObject({ skippedReason: 'deterministic-only' })
-    expect(extractChunk).not.toHaveBeenCalled()
-    expect(await runLlmStage(batch, { ...deps, getMode: async () => 'auto' })).toMatchObject({ processed: 1, merged: 1 })
-    expect(extractChunk.mock.calls[0]?.[0]).toEqual(batch.observations)
+    const enqueue = vi.fn(async () => 1)
+    expect(await runLlmStage(batch, { selectRefinement: (input) => stage.run(input), enqueue }))
+      .toMatchObject({ skippedReason: 'refinement-queued' })
+    expect(enqueue.mock.calls[0]?.[0]).toMatchObject({ observations: [expect.objectContaining({
+      id: batch.observations[0]!.id, content: batch.observations[0]!.content,
+    })] })
     const [stored] = await knowledgeExtractService.listFactCandidates()
     expect(stored?.fact).toEqual(candidate.fact)
     expect(stored?.decision).toMatchObject({ status: 'ready', route: 'refine' })
@@ -184,7 +184,7 @@ describe('queue-owned memory decision gate', () => {
     expect(await readFile(join(root, 'facts', 'candidates.jsonl'), 'utf8')).toBe('{broken')
   })
 
-  it('bounds total refinement characters and preserves whole evidence records', async () => {
+  it('keeps overflow evidence in the plan for durable scheduling', async () => {
     const { observation, candidate } = await seed()
     const observations = Array.from({ length: 15 }, (_, i) => ({ ...observation, id: `observation-${i}`, content: 'x'.repeat(5000) }))
     const candidates: CandidateFact[] = observations.map((record, i) => ({ ...candidate, id: `candidate-${i}`,
@@ -193,8 +193,8 @@ describe('queue-owned memory decision gate', () => {
       listTruth: async () => [], resolveContent: async (record) => record.content, annotate: async (updates) => [...updates.keys()] })
     stage.configureScorer(model())
     const { observations: selected } = await stage.run({ workspaceId: observation.workspaceId, observations })
-    expect(selected.reduce((sum, record) => sum + record.content.length, 0)).toBe(REFINEMENT_CHAR_BUDGET)
-    expect(selected).toHaveLength(12)
+    expect(selected.reduce((sum, record) => sum + record.content.length, 0)).toBe(75000)
+    expect(selected).toHaveLength(15)
     expect(selected.every((record) => record.content.length === 5000)).toBe(true)
   })
 })

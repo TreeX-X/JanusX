@@ -15,7 +15,7 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。前两片已将个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，补充宿主来源契约，并移除确定性提取器内部的自动接受。剩余旁路集中在 Profile 独立写入及个人召回索引；旧 Episode 仍通过兼容读取提供服务。个人画像尚缺稳定证据账本、可重建快照和完整生命周期闭环。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)现在只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)仍待改为事实派生视图。[LLM 阶段](../../src/main/knowledge/llm-stage.ts)在缺省设置下关闭，无模型、无合格证据及无精修资格都是正常 skip；scorer 接口与基础精修 Gate 已接入，生产环境使用 NoopScorer，真实 Laya 适配和独立精修任务仍待实现。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)现在只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)仍待改为事实派生视图。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产环境使用 NoopScorer，真实 Laya 适配及人工精修入口仍待实现。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
 
 需求边界（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。
 
@@ -145,11 +145,19 @@ Episode 的新存储过期与遗忘复用 Observation 写锁，覆盖活动分�
 
 完整且有效的评分中，各问题答案一致且所选概率至少为 0.9 时直接留待审核；不一致或不确定才建议精修。0.9 是跳过精修的初始策略阈值，不是校准结果或自动接受门槛；所有结果仍需人工审核。生产缺省 NoopScorer 不会触发 LLM；只有宿主配置有效 scorer、设置允许且存在默认 LLM 时才运行自动精修。测试中的 ready scorer 为替身，不能视作真实 Laya 已接通。
 
-评分落盘前重新核对证据有效性、同域事实集合和 scorer 身份；候选注解在审核锁内按候选 hash 写入，避免覆盖期间的批准、拒绝或内容修改。精修计划最多携带 60000 字符的完整证据记录，按域拆批，沿用每次最多 50 条观察的限制。计划同时绑定候选 hash；模型调用前、返回后及候选写锁内检查快照，只合并仍有效的目标候选，不追加模型顺带生成的其他事实、Wiki 或图谱。精修后删除旧评分注解；同一已完成快照重放不再次调用模型。该机制还不是持久任务账本：独立重试、人工精修入口、预算溢出后的排队及启动恢复留待后续。
+评分落盘前重新核对证据有效性、同域事实集合和 scorer 身份；候选注解在审核锁内按候选 hash 写入，避免覆盖期间的批准、拒绝或内容修改。注解额外记录证据正文/来源 hash 与同域事实内容指纹，访问次数、强度及 lastSeenAt 不参与内容指纹。已通过本批评分门控的候选全部进入精修规划，60000 字符预算移到任务执行时计算，超出预算的任务保留到下次执行；超过本批 20 个评分名额的候选仍留待人工审核。
 
-AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-4、AC-6、AC-10 尚未全部完成。完整 Profile 从工程事实读取与派生、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、独立精修任务恢复、相似习惯候选持续合并、真实 Laya 及完整生命周期仍按后续步骤实施。Episode 失效尚不级联撤销已生成候选或长期事实；评分后的失效检查也不构成覆盖整个模型调用期间的跨存储遗忘事务。统一遗忘屏障属于后续账本撤回与 Profile 失效工作，不能将当前 Episode 遗忘描述为全链路删除。新来源进入已确认画像仍须 Inbox 审核。
+[refinement-tasks](../../src/main/knowledge/refinement-tasks.ts)以版本化 `processing/refinement-tasks.json` 保存任务，只存候选及证据引用、hash、scorer 身份和运行状态，不复制原文或保存供应商异常正文。任务 ID 绑定 scope、owner、候选快照、评分输入和同域内容指纹，同一任务并发入队或进程重启不会重复创建。状态为 pending、running、succeeded、cancelled、failed；写入采用原子替换，同进程的写入与执行共用串行锁，诊断通过原子文件快照读取，不等待模型调用结束。
 
-机器验证（2026-09-28，评分与门控）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 49 个文件、401 项测试。[decision-scorer.test.ts](../../tests/unit/knowledge/decision-scorer.test.ts)的 13 项测试覆盖概率与 noul 方向、异常输出、超时、截断及版本指纹；[decision-stage.test.ts](../../tests/unit/knowledge/decision-stage.test.ts)的 12 项测试覆盖真实离线队列、按需门控、跨域过滤、评分期间审核与来源失效、模型切换、损坏文件保留及字符预算；[extract-service.test.ts](../../tests/unit/knowledge/extract-service.test.ts)验证精修期间批准/拒绝不被复活、只修改目标快照及成功后的重放跳过。既有证据归属、统一写入、MCP 与人工审核回归继续通过。`npm run typecheck:strict-unused`、9 个生产 TypeScript 文件的定向 `npx eslint`、`npm run check:package-boundary`、`npm run i18n:check` 与本片文件的 `git diff --check` 通过。一次中间全量运行遇到既有 truth-service 测试的临时 audit 目录清理 ENOTEMPTY；该文件单独复跑与最终完整回归均通过，未修改该测试或生产逻辑。未运行桌面打包/E2E 或真实 Laya 权重测试。
+队列先持久化任务再推进观察游标；规划或任务写入失败时保留游标，确定性产物仍在原处且可幂等重放。模型调用使用独立任务入口，在启动、已有 processNow 操作及每分钟恢复检查时执行，不依赖新的观察。恢复定时器不会在前一次检查仍等待时积累重复请求。每次恢复最多调用 20 个任务、交付 60000 字符，每个任务绑定单个候选和它的完整证据；关闭知识处理、关闭精修、缺少默认 LLM 或 scorer 暂不可用时保持等待，不增加尝试次数。
+
+执行前核对候选审核状态、正文版本、证据有效性、归属、同域事实内容及 scorer 版本；候选已修改、批准、拒绝，证据过期/遗忘/不可读，或有效 scorer 版本变化时取消旧任务。模型调用前、返回后及候选写锁内继续检查候选快照，只合并仍有效的目标，不追加模型顺带生成的其他事实、Wiki 或图谱。精修后删除旧评分注解；如果候选已提交而任务完成状态尚未写入，重启会识别失效快照并取消旧任务，不再调用模型。
+
+任务调用关闭提取器内部重试，由任务账本统一控制最多 3 次尝试，失败后分别等待 1、2 分钟；最终失败不会被同一计划重新入队而隐式复活。崩溃留下的 running 任务同样受总尝试上限约束。任务成功只表示本次精修已处理，不表示事实已获批准。已有 processingStats 返回按任务状态划分的 refinement 计数及下次重试时间；旧 llm 阶段计数保留为规划结果。任务文件结构错误会明确失败并保留原字节，不按空文件覆盖恢复。
+
+AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-4、AC-6、AC-10 尚未全部完成。完整 Profile 从工程事实读取与派生、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、人工精修/最终失败重试入口、相似习惯候选持续合并、真实 Laya 及完整生命周期仍按后续步骤实施。Episode 失效尚不级联撤销已生成候选或长期事实；任务执行前的失效检查也不构成覆盖整个模型调用期间的跨存储遗忘事务。统一遗忘屏障属于后续账本撤回与 Profile 失效工作，不能将当前 Episode 遗忘描述为全链路删除。新来源进入已确认画像仍须 Inbox 审核。
+
+机器验证（2026-09-28，持久化精炼任务与恢复）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 50 个文件、422 项测试。[refinement-tasks.test.ts](../../tests/unit/knowledge/refinement-tasks.test.ts)的 20 项测试覆盖并发去重、不复制原文、重启恢复与退避、执行条件不足时延后、候选及来源变更取消、候选提交后崩溃恢复、预算溢出续跑、最多三次尝试、损坏账本保留、持久化失败后的游标重试及执行中状态读取；[processing-queue.test.ts](../../tests/unit/knowledge/processing-queue.test.ts)的 17 项测试包含规划持久化失败不推进游标、定时器合并与销毁。评分门控、精修期间人工审核保护、证据归属、统一写入及 MCP 回归继续通过。`npm run typecheck:strict-unused`、9 个生产 TypeScript 文件的定向 `npx eslint`、`npm run check:package-boundary` 与本片文件的 `git diff --check` 通过。未运行桌面打包/E2E 或真实 Laya 权重测试。
 
 Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；通过临时 Node loader 解析到已安装的 `../janus-agentX/node_modules/yaml` 后执行原检查器，检查 207 篇 Harness Note，本篇零错误，但既有 `2026-09-28-debug-mode-plan--1645e12c.md` 缺少 Proposal、Risks 两节。没有修改该无关草稿，也没有将全库失败记为通过。测试均使用临时知识根目录，未改写真实知识数据。
 
@@ -191,3 +199,5 @@ Laya 多语模型的任务质量和校准仍需本地样本证明；温度拟合
 统一写链最易在迁移期间因重放、旧工具直写或习惯跨批次聚合重复积累。上线切换必须有明确的写入所有者、幂等映射和恢复点；模型不可用不能阻塞规则结算，模型恢复也不能把旧候选自动重放成已接受事实。
 
 Episode 兼容期的新观察分片与旧文件分别持锁，不构成跨文件事务；部分失败需重试完成剩余过期处理。当前测试证明普通重试不会恢复同一原事件，但不覆盖已派生候选、长期事实或运行中精修的级联撤回。缺少调用事件 ID 的显式保存只能按内容去重，恢复真实事件身份前不能将同文工具调用当成多次独立本人确认。
+
+任务账本采用整文件原子读写并保留终态历史，尚未实现任务归档或跨进程分布式锁；大历史量需要测量后再决定分片。外部模型已返回、候选尚未提交时的崩溃可能导致恢复后重新推理，因此只承诺已提交候选不被重复修改，不承诺供应商侧恰好调用一次。旧评分注解缺少新增证据/内容指纹时不会自动产生任务，需要重新评分；既有 llm 失败记录也不直接升级为有调用资格的精修任务。

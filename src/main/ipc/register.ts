@@ -37,6 +37,7 @@ import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import { runDeterministicStage } from '../knowledge/deterministic-extractor'
 import { runLlmStage } from '../knowledge/llm-stage'
+import { knowledgeRefinementTasks } from '../knowledge/refinement-tasks'
 import { terminalManager } from '../terminal/manager'
 import { analyzer } from '../janus/analyzer'
 import { blueprintMaintenanceService } from '../janus/maintenance/service'
@@ -132,11 +133,19 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerPeerHandlers()
   // Phase 1-2: plug the deterministic stage into the processing queue and
   // report unprocessed ranges from the persisted cursor on startup.
-  // Phase 2: the LLM stage runs after each deterministic batch (mode/model gated).
+  // Persist plans after deterministic batches; recover model tasks independently of cursors.
   knowledgeProcessingQueue.configureDeterministicHandler((batch) =>
     runDeterministicStage(batch).then(() => undefined),
   )
   knowledgeProcessingQueue.configureLlmHandler((batch) => runLlmStage(batch))
+  knowledgeProcessingQueue.configureRefinementHandler(
+    (workspaceId) => knowledgeRefinementTasks.runDue(workspaceId),
+    () => knowledgeRefinementTasks.stats(),
+  )
+  void knowledgeProcessingQueue.processRefinementsNow().catch((error: unknown) => {
+    console.error(`[knowledge] refinement startup recovery failed: ${error instanceof Error ? error.message : String(error)}`)
+  })
+  knowledgeProcessingQueue.startRefinementLoop()
   // Phase 5 (§6): retention maintenance joins the queue — daily low-peak
   // autoPrune + archive + compact with confirm:true. Best-effort: failures
   // audit processing_failed and retry on the next due-check.

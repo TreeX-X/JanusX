@@ -1,104 +1,49 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { Observation } from '../../../src/shared/knowledge'
+import { runLlmStage } from '../../../src/main/knowledge/llm-stage'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
-
-import { LLM_STAGE_BATCH_LIMIT, runLlmStage } from '../../../src/main/knowledge/llm-stage'
-import type { Observation } from '../../../src/shared/knowledge'
-
-const selectRefinement = async (batch: { observations: Observation[] }) => ({ observations: batch.observations, candidateHashes: {} })
-
-function observation(id: string): Observation {
-  return {
-    id,
-    workspaceId: 'ws-1',
-    workspaceName: 'Workspace 1',
-    workspacePath: 'C:\\work',
-    source: 'manual',
-    type: 'user-note',
-    content: `note ${id}`,
-    fileRefs: [],
-    tags: [],
-    visibility: 'workspace',
-    actor: 'tester',
-    createdAt: '2026-09-04T00:00:00.000Z',
-    retentionClass: 'evidence',
-  } as Observation
+const observation: Observation = {
+  id: 'o1', workspaceId: 'ws', workspaceName: 'ws', workspacePath: 'C:/work', source: 'manual',
+  type: 'user-note', content: 'Choose Postgres.', fileRefs: [], tags: [], visibility: 'workspace', actor: 'user',
+  createdAt: '2026-09-28T00:00:00Z', retentionClass: 'evidence',
 }
+const batch = { workspaceId: 'ws', observations: [observation] }
+const plan = { observations: [observation], candidateHashes: { candidate: 'hash' } }
 
-describe('runLlmStage (Phase 2)', () => {
-  it('does not call the model when no candidate qualifies for refinement', async () => {
-    const hasDefaultModel = vi.fn(async () => true)
-    const extractChunk = vi.fn()
-    const status = await runLlmStage({ workspaceId: 'ws-1', observations: [observation('o1')] }, {
-      selectRefinement: async () => ({ observations: [], candidateHashes: {} }), getMode: async () => 'llm-preferred', hasDefaultModel, extractChunk,
-    })
-    expect(status).toMatchObject({ skippedReason: 'no-refinement' })
-    expect(hasDefaultModel).not.toHaveBeenCalled()
-    expect(extractChunk).not.toHaveBeenCalled()
+describe('refinement planning stage', () => {
+  it('persists selected plans before reporting the batch settled', async () => {
+    const enqueue = vi.fn(async () => 1)
+    expect(await runLlmStage(batch, { selectRefinement: async () => plan, enqueue }))
+      .toMatchObject({ skipped: true, skippedReason: 'refinement-queued' })
+    expect(enqueue).toHaveBeenCalledWith(plan)
   })
 
-  it('skips without touching the model when mode is deterministic-only', async () => {
-    const extractChunk = vi.fn()
-    const status = await runLlmStage(
-      { workspaceId: 'ws-1', observations: [observation('o1')] },
-      { selectRefinement, getMode: async () => 'deterministic-only', hasDefaultModel: async () => true, extractChunk },
-    )
-
-    expect(status).toMatchObject({ skipped: true, skippedReason: 'deterministic-only', processed: 0 })
-    expect(extractChunk).not.toHaveBeenCalled()
+  it('accepts an already persisted plan without submitting duplicate work', async () => {
+    expect(await runLlmStage(batch, { selectRefinement: async () => plan, enqueue: async () => 0 }))
+      .toMatchObject({ skippedReason: 'refinement-queued' })
   })
 
-  it('skips without touching the model when no default model exists', async () => {
-    const extractChunk = vi.fn()
-    const status = await runLlmStage(
-      { workspaceId: 'ws-1', observations: [observation('o1')] },
-      { selectRefinement, getMode: async () => 'auto', hasDefaultModel: async () => false, extractChunk },
-    )
-
-    expect(status).toMatchObject({ skipped: true, skippedReason: 'no-default-llm', processed: 0 })
-    expect(extractChunk).not.toHaveBeenCalled()
+  it('propagates persistence failure so the queue retains its observation cursor', async () => {
+    await expect(runLlmStage(batch, { selectRefinement: async () => plan,
+      enqueue: async () => { throw new Error('disk failure') },
+    })).rejects.toThrow('disk failure')
   })
 
-  it('delivers large batches in chunks of at most 50 observations', async () => {
-    const seen: number[] = []
-    const observations = Array.from({ length: LLM_STAGE_BATCH_LIMIT + 11 }, (_, index) =>
-      observation(`o${index}`),
-    )
-    const status = await runLlmStage(
-      { workspaceId: 'ws-1', observations },
-      {
-        selectRefinement,
-        getMode: async () => 'auto',
-        hasDefaultModel: async () => true,
-        extractChunk: async (chunk) => {
-          seen.push(chunk.length)
-          return { proposed: 1, merged: 0 }
-        },
-      },
-    )
-
-    expect(seen).toEqual([LLM_STAGE_BATCH_LIMIT, 11])
-    expect(status).toMatchObject({
-      skipped: false,
-      processed: LLM_STAGE_BATCH_LIMIT + 11,
-      proposed: 2,
-      merged: 0,
-    })
+  it('does not persist a plan when no candidate requires refinement', async () => {
+    const enqueue = vi.fn()
+    expect(await runLlmStage(batch, { selectRefinement: async () => ({ observations: [], candidateHashes: {} }), enqueue }))
+      .toMatchObject({ skippedReason: 'no-refinement' })
+    expect(enqueue).not.toHaveBeenCalled()
   })
 
-  it('propagates degraded chunk results so the queue can ledger them', async () => {
-    await expect(
-      runLlmStage(
-        { workspaceId: 'ws-1', observations: [observation('o1')] },
-        {
-          selectRefinement,
-          getMode: async () => 'auto',
-          hasDefaultModel: async () => true,
-          extractChunk: async () => {
-            throw new Error('LLM stage degraded: generate-object-failed (boom)')
-          },
-        },
-      ),
-    ).rejects.toThrow(/degraded/)
+  it('does not score expired observations or explicit remember requests', async () => {
+    const selectRefinement = vi.fn()
+    const enqueue = vi.fn()
+    expect(await runLlmStage({ ...batch, observations: [{ ...observation, episodeStatus: 'expired' },
+      { ...observation, id: 'o2', memoryIntent: 'remember' }] }, { selectRefinement, enqueue }))
+      .toMatchObject({ skippedReason: 'no-evidence' })
+    expect(selectRefinement).not.toHaveBeenCalled()
+    expect(enqueue).not.toHaveBeenCalled()
   })
 })

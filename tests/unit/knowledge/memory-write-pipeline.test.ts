@@ -53,12 +53,12 @@ describe('unified personal memory writes', () => {
     const observation = await knowledgeObservationService.capture(remember, { speaker: 'assistant', memoryIntent: 'remember' })
     expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
     const instance = queue()
-    const extractChunk = vi.fn()
+    const enqueue = vi.fn()
     instance.configureLlmHandler((batch) => runLlmStage(batch, {
-      getMode: async () => 'auto', hasDefaultModel: async () => true, extractChunk,
+      enqueue,
     }))
     expect((await instance.processNow()).failed).toBe(0)
-    expect(extractChunk).not.toHaveBeenCalled()
+    expect(enqueue).not.toHaveBeenCalled()
     expect(await instance.listFailures()).toEqual([])
     const [candidate] = await knowledgeExtractService.listFactCandidates()
     expect(candidate).toMatchObject({ status: 'proposed', fact: { scope: 'user', kind: 'fact', content: remember.content } })

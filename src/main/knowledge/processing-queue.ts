@@ -27,6 +27,8 @@ import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeAuditService, type AuditEventInput } from './audit-service'
 import { isActiveObservation } from './memory-evidence'
+import type { RefinementRunResult } from './refinement-tasks'
+import type { RefinementTaskStats } from '../../shared/memory-decision'
 
 const CURSOR_FILE = join('processing', 'cursor.json')
 const FAILURES_FILE = join('processing', 'failures.jsonl')
@@ -112,6 +114,7 @@ export function countProposalsByDerivation(
 }
 
 export interface ProcessingStats {
+  refinement?: RefinementTaskStats
   generatedAt: string
   pendingTotal: number
   workspaces: WorkspacePending[]
@@ -148,7 +151,7 @@ export interface LlmStageBatch {
 
 export interface LlmStageStatus {
   skipped: boolean
-  skippedReason?: 'deterministic-only' | 'no-default-llm' | 'no-evidence' | 'no-refinement'
+  skippedReason?: 'deterministic-only' | 'no-default-llm' | 'no-evidence' | 'no-refinement' | 'refinement-queued'
   processed: number
   proposed: number
   merged: number
@@ -208,6 +211,10 @@ export class KnowledgeProcessingQueue {
   private readonly queue = new SerialQueue()
   private handler: DeterministicBatchHandler | null = null
   private llmHandler: LlmBatchHandler | null = null
+  private refinementHandler: ((workspaceId?: string) => Promise<RefinementRunResult>) | null = null
+  private refinementTimer: ReturnType<typeof setInterval> | null = null
+  private refinementTickPending = false
+  private refinementStats: (() => Promise<RefinementTaskStats>) | undefined
   private maintenanceHandler: MaintenanceHandler | null = null
   private threshold: number
   private debounceMs: number
@@ -239,13 +246,34 @@ export class KnowledgeProcessingQueue {
     return this.handler !== null
   }
 
-  /** Phase 2 plugs the LLM enhancement stage here; null detaches it. */
+  /** Persist scorer-selected refinement plans; model calls run through the task handler. */
   configureLlmHandler(handler: LlmBatchHandler | null): void {
     this.llmHandler = handler
   }
 
   isLlmConfigured(): boolean {
     return this.llmHandler !== null
+  }
+
+  configureRefinementHandler(handler: ((workspaceId?: string) => Promise<RefinementRunResult>) | null, stats?: () => Promise<RefinementTaskStats>): void {
+    this.refinementHandler = handler
+    this.refinementStats = stats
+  }
+
+  processRefinementsNow(workspaceId?: string): Promise<RefinementRunResult | null> {
+    return this.queue.run(async () => this.refinementHandler ? this.refinementHandler(workspaceId) : null)
+  }
+
+  startRefinementLoop(intervalMs = 60000): void {
+    if (this.refinementTimer) clearInterval(this.refinementTimer)
+    this.refinementTimer = setInterval(() => {
+      if (this.refinementTickPending) return
+      this.refinementTickPending = true
+      void this.processRefinementsNow().catch((error: unknown) => {
+        console.error(`[knowledge] refinement recovery failed: ${error instanceof Error ? error.message : String(error)}`)
+      }).finally(() => { this.refinementTickPending = false })
+    }, intervalMs)
+    this.refinementTimer.unref?.()
   }
 
   /** Phase 5 plugs the daily retention maintenance here; null detaches it. */
@@ -263,6 +291,8 @@ export class KnowledgeProcessingQueue {
     this.timers.clear()
     this.pendingCounts.clear()
     this.stopMaintenanceLoop()
+    if (this.refinementTimer) clearInterval(this.refinementTimer)
+    this.refinementTimer = null
   }
 
   /**
@@ -468,9 +498,8 @@ export class KnowledgeProcessingQueue {
         llmCursor: cursors.get(batch.workspaceId)?.llmCursor ?? null,
         updatedAt: new Date(this.deps.nowMs()).toISOString(),
       }
-      // Phase 2: the LLM stage runs only after the deterministic stage
-      // completed for this batch. Its failure is recorded in the `llm`
-      // failure ledger but never rolls back deterministic products.
+      // Planning must persist refinement tasks before either cursor advances.
+      // On failure, deterministic products remain and replay idempotently.
       if (this.llmHandler) {
         try {
           const status = await this.llmHandler({
@@ -484,6 +513,8 @@ export class KnowledgeProcessingQueue {
           const reason = error instanceof Error ? error.message : String(error)
           await this.recordBatchFailures(batch, 'llm', reason)
           this.llmFailed += 1
+          failed += batch.observations.length
+          continue
         }
       }
       cursors.set(batch.workspaceId, cursor)
@@ -491,6 +522,9 @@ export class KnowledgeProcessingQueue {
       processed += batch.observations.length
     }
     if (advancedWorkspaces.length > 0) await this.writeCursors(cursors)
+
+    // Independent task recovery must run even when all observation cursors are current.
+    if (this.refinementHandler) await this.refinementHandler(workspaceId)
 
     const at = new Date(this.deps.nowMs()).toISOString()
     this.lastRun = { at, processed, failed }
@@ -581,6 +615,7 @@ export class KnowledgeProcessingQueue {
   }
 
   private async buildStats(): Promise<ProcessingStats> {
+    const refinement = this.refinementStats ? await this.refinementStats() : undefined
     const all = (await this.deps.listAllObservations()).filter(isEvidence)
     const cursors = await this.readCursors()
     const byWorkspace = new Map<string, { pending: number; lastObservationAt?: string }>()
@@ -612,6 +647,7 @@ export class KnowledgeProcessingQueue {
       lastRun: this.lastRun,
       handlerConfigured: this.handler !== null,
       llmConfigured: this.llmHandler !== null,
+      ...(refinement ? { refinement } : {}),
       llmSucceeded: this.llmSucceeded,
       llmFailed: this.llmFailed,
       llmSkipped: this.llmSkipped,

@@ -187,6 +187,26 @@ describe('knowledge processing queue (Phase 1-1 skeleton)', () => {
     expect(failureBackoffMs(100)).toBe(3_600_000)
   })
 
+  it('does not accumulate recovery ticks while a task is running and stops ticking on disposal', async () => {
+    vi.useFakeTimers()
+    const outcome = { processed: 0, failed: 0, cancelled: 0, deferred: 0 }
+    let release: (() => void) | undefined
+    const run = vi.fn(() => new Promise<typeof outcome>((resolve) => { release = () => resolve(outcome) }))
+    queue.configureRefinementHandler(run)
+    try {
+      queue.startRefinementLoop(100)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(run).toHaveBeenCalledTimes(1)
+      release!()
+      await vi.advanceTimersByTimeAsync(100)
+      expect(run).toHaveBeenCalledTimes(2)
+      queue.dispose()
+      release!()
+      await vi.advanceTimersByTimeAsync(500)
+      expect(run).toHaveBeenCalledTimes(2)
+    } finally { vi.useRealTimers() }
+  })
+
   it('runs the LLM stage after deterministic success and advances llmCursor', async () => {
     observations = [
       observation({ id: 'o1', createdAt: '2026-09-04T00:01:00.000Z' }),
@@ -221,16 +241,16 @@ describe('knowledge processing queue (Phase 1-1 skeleton)', () => {
     expect(stats.pendingTotal).toBe(0)
   })
 
-  it('records llm-stage failures without rolling back deterministic products', async () => {
+  it('retains the observation cursor when refinement task persistence fails', async () => {
     observations = [observation({ id: 'o1' })]
     queue.configureDeterministicHandler(async () => {})
     queue.configureLlmHandler(async () => {
-      throw new Error('model melted')
+      throw new Error('task persistence failed')
     })
 
     const result = await queue.processNow()
-    expect(result.processed).toBe(1)
-    expect(result.failed).toBe(0)
+    expect(result.processed).toBe(0)
+    expect(result.failed).toBe(1)
 
     const failures = await queue.listFailures()
     expect(failures).toHaveLength(1)
@@ -238,14 +258,14 @@ describe('knowledge processing queue (Phase 1-1 skeleton)', () => {
       observationId: 'o1',
       workspaceId: 'ws-1',
       stage: 'llm',
-      reason: 'model melted',
+      reason: 'task persistence failed',
     })
     expect(audits).toHaveLength(1)
     expect(audits[0]).toMatchObject({ action: 'processing_failed', targetId: 'ws-1' })
 
-    // Deterministic cursor still advanced: nothing pending for retry.
+    // Deterministic products can be replayed; the unpersisted task must not be lost.
     const stats = await queue.processingStats()
-    expect(stats.pendingTotal).toBe(0)
+    expect(stats.pendingTotal).toBe(1)
     expect(stats.llmFailed).toBe(1)
     expect(stats.llmSucceeded).toBe(0)
   })

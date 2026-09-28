@@ -37,6 +37,7 @@ export const KNOWLEDGE_STORAGE_LAYOUT: KnowledgeStorageLayout = {
     { key: 'bm25-index', relativePath: 'indexes/bm25.json', format: 'json', purpose: 'Rebuildable BM25 metadata and term dictionary.' },
     { key: 'graph-snapshot', relativePath: 'indexes/graph-snapshot.json', format: 'json', purpose: 'Graph side-index snapshot for fast loading.' },
     { key: 'user-profile', relativePath: 'profile/profile.json', format: 'json', purpose: 'Durable UserProfile snapshot; private by default.' },
+    { key: 'refinement-tasks', relativePath: 'processing/refinement-tasks.json', format: 'json', purpose: 'Recoverable refinement task states and evidence hashes; no copied source text.' },
   ],
 }
 
