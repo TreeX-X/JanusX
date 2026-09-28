@@ -21,6 +21,7 @@ import { llmService } from '../llm/LlmService'
 const SHA = z.string().regex(/^[a-f0-9]{64}$/)
 const scorerSchema = z.object({ provider: z.string(), modelRevision: z.string(), templateVersion: z.string(), calibrationId: z.string().nullable() })
 const taskSchema = z.object({
+  trigger: z.literal('manual').optional(),
   id: SHA, candidateId: z.string().min(1), candidateHash: SHA, decisionHash: SHA, contextHash: SHA,
   scope: z.enum(['project', 'user', 'global']), workspaceId: z.string().min(1), scorer: scorerSchema,
   evidenceHashes: z.record(SHA).refine((value) => Object.keys(value).length > 0 && Object.keys(value).length <= 8),
@@ -42,7 +43,8 @@ export interface RefinementTaskDeps {
   settings(): Promise<KnowledgeSettings>
   hasModel(): Promise<boolean>
   scorerIdentity(): MemoryScorerIdentity
-  extract(observations: Observation[], candidateHashes: Record<string, string>): Promise<void>
+  scorerAvailable?(): boolean
+  extract(observations: Observation[], candidateHashes: Record<string, string>, validate?: () => Promise<boolean>): Promise<void>
   nowMs(): number
 }
 
@@ -55,16 +57,17 @@ function defaultDeps(): RefinementTaskDeps {
     settings: () => configService.getKnowledgeSettings(),
     hasModel: async () => !!(await llmService.getDefaultModel()),
     scorerIdentity: () => knowledgeDecisionStage.scorerIdentity(),
-    extract: async (observations, refinementCandidates) => {
-      const result = await knowledgeExtractService.extract({ observations }, { refinementCandidates, maxRetries: 0 })
+    scorerAvailable: () => knowledgeDecisionStage.scorerAvailable(),
+    extract: async (observations, refinementCandidates, validateRefinement) => {
+      const result = await knowledgeExtractService.extract({ observations }, { refinementCandidates, validateRefinement, maxRetries: 0 })
       if (result.degraded && result.degraded.reason !== 'no-evidence') throw new Error('refinement-unavailable')
     },
     nowMs: () => Date.now(),
   }
 }
 
-function taskId(task: Pick<RefinementTask, 'scope' | 'workspaceId' | 'candidateId' | 'candidateHash' | 'decisionHash' | 'contextHash'>): string {
-  return refinementHash([1, task.scope, task.workspaceId, task.candidateId, task.candidateHash, task.decisionHash, task.contextHash])
+function taskId(task: Pick<RefinementTask, 'trigger' | 'scope' | 'workspaceId' | 'candidateId' | 'candidateHash' | 'decisionHash' | 'contextHash'>): string {
+  return refinementHash([1, task.scope, task.workspaceId, task.candidateId, task.candidateHash, task.decisionHash, task.contextHash, ...(task.trigger ? [task.trigger] : [])])
 }
 
 export class RefinementTaskService {
@@ -95,6 +98,45 @@ export class RefinementTaskService {
 
   /** Atomic snapshots keep diagnostics responsive while a model call is in flight. */
   list(): Promise<RefinementTask[]> { return this.read() }
+
+  /** Explicit user intent is recorded separately from model advice. */
+  enqueueManual(candidateId: string, candidateHash: string): Promise<number> {
+    return taskLock.run(async () => {
+      const candidate = (await this.deps.listCandidates()).find(item => item.id === candidateId)
+      if (!candidate || candidate.status !== 'proposed' || candidate.derivation !== 'deterministic'
+        || candidate.legacySource || candidate.personalCorrection || candidateDecisionHash(candidate) !== candidateHash) throw new Error('candidate-changed')
+      const scope = factScope(candidate.fact)
+      const workspaceId = candidate.fact.provenance.workspaceId
+      const ids = [...new Set(candidate.evidence.observationIds)]
+      if (!ids.length || ids.length > 8) throw new Error('incomplete-evidence')
+      const byId = new Map((await this.deps.listObservations()).map(item => [item.id, item]))
+      const evidenceHashes: Record<string, string> = {}
+      for (const id of ids) {
+        const observation = byId.get(id)
+        if (!observation || !isActiveObservation(observation, this.deps.nowMs()) || observation.workspaceId !== workspaceId
+          || observationScope(observation) !== scope || observation.memoryIntent === 'remember'
+          || (scope === 'user' && !isUserStatement(observation))) throw new Error('invalid-evidence')
+        const content = await this.deps.resolveContent(observation)
+        if (!content.trim() || content.length > REFINEMENT_OBSERVATION_CHARS) throw new Error('incomplete-evidence')
+        evidenceHashes[id] = refinementEvidenceHash(observation, content)
+      }
+      const now = new Date(this.deps.nowMs()).toISOString()
+      const task: RefinementTask = {
+        id: '', trigger: 'manual', candidateId, candidateHash, scope, workspaceId, evidenceHashes,
+        decisionHash: refinementHash(['manual', evidenceHashes]),
+        contextHash: refinementContextHash(await this.deps.listTruth(), scope, workspaceId, this.deps.nowMs()),
+        scorer: { provider: 'manual', modelRevision: 'none', templateVersion: 'manual/1', calibrationId: null },
+        status: 'pending', attempts: 0, nextRetryAt: 0, createdAt: now, updatedAt: now,
+      }
+      task.id = taskId(task)
+      taskSchema.parse(task)
+      const tasks = await this.read()
+      if (tasks.some(item => item.id === task.id)) return 0
+      tasks.push(task)
+      await this.write(tasks)
+      return 1
+    })
+  }
 
   async stats(): Promise<RefinementTaskStats> {
     const result: RefinementTaskStats = { pending: 0, running: 0, succeeded: 0, cancelled: 0, failed: 0, nextRetryAt: null }
@@ -151,18 +193,20 @@ export class RefinementTaskService {
         if ((workspaceId && task.workspaceId !== workspaceId) || !['pending', 'running'].includes(task.status)) continue
         const candidate = (await this.deps.listCandidates()).find((item) => item.id === task.candidateId)
         const decision = candidate?.decision
+        const manual = task.trigger === 'manual'
         const obsolete = !candidate || candidate.status !== 'proposed' || candidateDecisionHash(candidate) !== task.candidateHash
           || factScope(candidate.fact) !== task.scope || candidate.fact.provenance.workspaceId !== task.workspaceId
-          || decision?.inputHash !== task.decisionHash || decision.status !== 'ready' || decision.route !== 'refine'
+          || candidate.derivation !== 'deterministic' || !!candidate.legacySource || !!candidate.personalCorrection
+          || (!manual && (decision?.inputHash !== task.decisionHash || decision.status !== 'ready' || decision.route !== 'refine'
           || decision.candidateHash !== task.candidateHash || refinementHash(decision.scorer) !== refinementHash(task.scorer)
-          || decision.contextHash !== task.contextHash || refinementHash(decision.evidenceHashes) !== refinementHash(task.evidenceHashes)
+          || decision.contextHash !== task.contextHash || refinementHash(decision.evidenceHashes) !== refinementHash(task.evidenceHashes)))
         const cancel = async (reason: string) => {
           task.status = 'cancelled'; task.reason = reason; task.updatedAt = new Date(this.deps.nowMs()).toISOString()
           await this.write(tasks); result.cancelled++
         }
         if (obsolete) { await cancel('candidate-changed'); continue }
         const scorer = this.deps.scorerIdentity()
-        if (scorer.provider !== 'noop' && refinementHash(scorer) !== refinementHash(task.scorer)) { await cancel('scorer-changed'); continue }
+        if (!manual && scorer.provider !== 'noop' && refinementHash(scorer) !== refinementHash(task.scorer)) { await cancel('scorer-changed'); continue }
         const byId = new Map((await this.deps.listObservations()).map((observation) => [observation.id, observation]))
         const observations: Observation[] = []
         let invalid = false
@@ -185,17 +229,34 @@ export class RefinementTaskService {
         }
         const settings = await this.deps.settings()
         const cost = observations.reduce((sum, observation) => sum + observation.content.length, 0)
-        if (task.nextRetryAt > this.deps.nowMs() || !settings.enabled || settings.mode === 'deterministic-only'
-          || scorer.provider === 'noop' || cost > budget || calls >= 20 || !(await this.deps.hasModel().catch(() => false))) {
+        if (task.nextRetryAt > this.deps.nowMs() || !settings.enabled
+          || (!manual && (settings.mode === 'deterministic-only' || scorer.provider === 'noop' || this.deps.scorerAvailable?.() === false || (scorer.provider === 'laya' && settings.laya?.enabled !== true)))
+          || cost > budget || calls >= 20 || !(await this.deps.hasModel().catch(() => false))) {
           result.deferred++; continue
         }
         task.status = 'running'; task.attempts++; task.updatedAt = new Date(this.deps.nowMs()).toISOString()
         delete task.reason
         await this.write(tasks)
         budget -= cost; calls++
+        const validate = async () => {
+          if ((await readPersonalForgettingBarrier()).blocksTask(task)) return false
+          const current = await this.deps.settings()
+          if (!current.enabled || (!manual && (current.mode === 'deterministic-only'
+            || this.deps.scorerAvailable?.() === false
+            || (task.scorer.provider === 'laya' && current.laya?.enabled !== true)
+            || refinementHash(this.deps.scorerIdentity()) !== refinementHash(task.scorer)))) return false
+          const sources = new Map((await this.deps.listObservations()).map(item => [item.id, item]))
+          for (const [id, hash] of Object.entries(task.evidenceHashes)) {
+            const source = sources.get(id)
+            if (!source || !isActiveObservation(source, this.deps.nowMs())
+              || refinementEvidenceHash(source, await this.deps.resolveContent(source)) !== hash) return false
+          }
+          return refinementContextHash(await this.deps.listTruth(), task.scope, task.workspaceId, this.deps.nowMs()) === task.contextHash
+        }
         try {
           if ((await readPersonalForgettingBarrier()).blocksTask(task)) { await cancel('personal-memory-forgotten'); continue }
-          await this.deps.extract(observations, { [task.candidateId]: task.candidateHash })
+          await this.deps.extract(observations, { [task.candidateId]: task.candidateHash }, validate)
+          if (!await validate()) { await cancel('evidence-or-context-changed'); continue }
           if ((await readPersonalForgettingBarrier()).blocksTask(task)) { await cancel('personal-memory-forgotten'); continue }
           task.status = 'succeeded'; result.processed++
         } catch {

@@ -1,6 +1,8 @@
 // Note: one review surface preserves engineering and private memory ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
+import type { CandidateFact } from '../../../../shared/knowledge'
+import { memoryCandidateSnapshot } from '../../../../shared/memory-candidate-snapshot'
 import { applyKnowledgeCandidate, rejectKnowledgeCandidate } from '../../services/knowledge'
 import { competingCorrections, countInboxScopes, filterInboxByScope, isUserScopeCandidate, type InboxCandidate, type InboxScopeFilter } from './inboxScope'
 import { WikiCandidateSources } from './NoteWikiLinks'
@@ -82,6 +84,19 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
     }
   }
   const counts = countInboxScopes(candidates)
+  const decide = async (candidate: CandidateFact, action: 'score' | 'refine') => {
+    if (actionLock.current) return
+    actionLock.current = true
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(memoryCandidateSnapshot(candidate)))
+      const candidateHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+      await window.electron.knowledge.candidateAction({ candidateId: candidate.id, candidateHash, action })
+      setNotice(t(action === 'refine' ? 'knowledge:review.refinementQueued' : 'knowledge:review.scoreUpdated'))
+      await refresh()
+    } catch { setError(t('knowledge:review.failed')) }
+    finally { actionLock.current = false; setBusy(false) }
+  }
   const filters = [
     { scope: 'all' as const, label: t('knowledge:inbox.scope.all'), count: candidates.length },
     { scope: 'engineering' as const, label: t('knowledge:inbox.scope.engineering'), count: counts.engineering },
@@ -96,7 +111,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
       {notice && <p role="status">{notice}</p>}
       {loading && <p role="status">{t('knowledge:state.loading.title')}</p>}
       {!loading && !error && filterInboxByScope(candidates, scope).length === 0 && <p>{t('knowledge:inbox.empty.title')}</p>}
-      {!loading && filterInboxByScope(candidates, scope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={approve => void review(candidate, approve)} />)}
+      {!loading && filterInboxByScope(candidates, scope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={approve => void review(candidate, approve)} onDecision={candidate.type === 'fact' ? action => void decide(candidate, action) : undefined} />)}
     </div>
     <footer className={styles.filters}>
       <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t('knowledge:action.refresh')}</button>
@@ -105,7 +120,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
   </section>
 }
 
-export function MemoryReviewCard({ candidate, disabled, onReview, competing = 0 }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean) => void; competing?: number }) {
+export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, competing = 0 }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean) => void; onDecision?: (action: 'score' | 'refine') => void; competing?: number }) {
   const { t } = useI18n('knowledge')
   const personal = isUserScopeCandidate(candidate)
   const provenance = candidate.type === 'fact' ? candidate.fact.provenance : candidate.type === 'wiki-patch' ? candidate.provenance : undefined
@@ -122,6 +137,12 @@ export function MemoryReviewCard({ candidate, disabled, onReview, competing = 0 
     {personal && candidate.id.startsWith('remember-candidate:') && <p>{t('knowledge:review.explicitMemory')}</p>}
     {personal && candidate.id.startsWith('habit-candidate:') && <p>{t('knowledge:review.inferredHabit')}</p>}
     <p>{content}</p>
+    {candidate.type === 'fact' && candidate.decision && <details>
+      <summary>{t('knowledge:review.scoring')}</summary>
+      <p>{candidate.decision.scorer.provider} · {candidate.decision.status} · {candidate.decision.reason}</p>
+      <p>{t('knowledge:review.scoreCaution')}</p>
+      <ul>{candidate.decision.answers.map(answer => <li key={answer.question}>{answer.question}: {String(answer.answer)} ({Math.round(answer.answer_confidence * 100)}%)</li>)}</ul>
+    </details>}
     <details>
       <summary>{t('knowledge:inspector.provenance')}</summary>
       <p>{candidate.type === 'fact' ? candidate.fact.kind : candidate.type} · {candidate.derivation}</p>
@@ -136,6 +157,10 @@ export function MemoryReviewCard({ candidate, disabled, onReview, competing = 0 
     <div className={styles.filters}>
       <button type="button" disabled={disabled} onClick={() => onReview(true)}>{t('knowledge:action.approve')}</button>
       <button type="button" disabled={disabled} onClick={() => onReview(false)}>{t('knowledge:action.reject')}</button>
+      {onDecision && candidate.type === 'fact' && candidate.derivation === 'deterministic' && !candidate.legacySource && !candidate.personalCorrection && !candidate.id.startsWith('remember-candidate:') && <>
+        <button type="button" disabled={disabled} onClick={() => onDecision('score')}>{t('knowledge:review.rescore')}</button>
+        <button type="button" disabled={disabled} onClick={() => onDecision('refine')}>{t('knowledge:review.refine')}</button>
+      </>}
     </div>
   </article>
 }

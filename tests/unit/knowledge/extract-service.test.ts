@@ -646,6 +646,21 @@ describe('KnowledgeExtractService', () => {
       expect(mocks.generateObject).toHaveBeenCalledOnce()
     })
 
+    it('discards model output when the queue invalidates evidence before commit', async () => {
+      const content = 'commit abc: add user index'
+      const candidate = seedDeterministicCandidate('selected', content, 0.9) as CandidateFact
+      await seedJsonl('facts/candidates.jsonl', [candidate])
+      setupLlm({ facts: [{ content, concepts: [], files: ['src/db.ts'], tags: [], confidence: 0.95, kind: 'fact' }], wikiPatches: [], graphEdges: [] })
+      const { knowledgeExtractService } = await loadService()
+      const validateRefinement = vi.fn(async () => false)
+      const result = await knowledgeExtractService.extract({ observations: [makeObservation({ id: 'o1', content })] }, {
+        mode: 'auto', refinementCandidates: { [candidate.id]: candidateDecisionHash(candidate) }, validateRefinement,
+      })
+      expect(validateRefinement).toHaveBeenCalledOnce()
+      expect(result.mergedFactCandidateIds).toEqual([])
+      expect(await knowledgeExtractService.listFactCandidates()).toEqual([candidate])
+    })
+
     it('merge tie-break follows mode on equal confidence', async () => {
       const detContent = 'Project persistence layer uses Postgres for durability.'
       const llmContent = 'Project persistence layer uses Postgres for durability and backups.'

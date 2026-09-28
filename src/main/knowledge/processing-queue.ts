@@ -214,6 +214,7 @@ export class KnowledgeProcessingQueue {
   private refinementHandler: ((workspaceId?: string) => Promise<RefinementRunResult>) | null = null
   private refinementTimer: ReturnType<typeof setInterval> | null = null
   private refinementTickPending = false
+  private candidateActionHandler: ((input: unknown) => Promise<void>) | null = null
   private refinementStats: (() => Promise<RefinementTaskStats>) | undefined
   private maintenanceHandler: MaintenanceHandler | null = null
   private threshold: number
@@ -262,6 +263,15 @@ export class KnowledgeProcessingQueue {
 
   processRefinementsNow(workspaceId?: string): Promise<RefinementRunResult | null> {
     return this.queue.run(async () => this.refinementHandler ? this.refinementHandler(workspaceId) : null)
+  }
+
+  configureCandidateActionHandler(handler: (input: unknown) => Promise<void>): void { this.candidateActionHandler = handler }
+
+  processCandidateAction(input: unknown): Promise<void> {
+    return this.queue.run(async () => {
+      if (!this.candidateActionHandler) throw new Error('candidate-actions-unavailable')
+      await this.candidateActionHandler(input)
+    })
   }
 
   startRefinementLoop(intervalMs = 60000): void {

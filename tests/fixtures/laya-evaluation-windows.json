@@ -1,0 +1,2136 @@
+{
+  "datasetSha256": "467866c79c97b03f4235d844ae4bc33b52af5e0ce2e055fd0b04d10db071a45d",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "ready": {
+    "protocol": 1,
+    "status": "ready",
+    "revision": "e4e9ddf21a7b1903b7acffd8814ad4307bf63a67",
+    "sdk": "0.3.21",
+    "warmupMs": 19855
+  },
+  "adapterSha256": "7a7e187181d55c97e76f2f0ec4f8f8210d43e60ae6ad13462efc4acdb8f05b51",
+  "requirementsSha256": "e7ab087fa3e4007e0241a40e6bee9f8899cfe7600fb3f61230dcd742c15cc26e",
+  "peakWorkingSetBytes": 2325618688,
+  "calibrationId": null,
+  "scope": "24 synthetic cases; no fitted temperature or production quality certification",
+  "p50Ms": 714.5,
+  "p95Ms": 874,
+  "coverage": 1.0,
+  "automaticAcceptanceEnabled": false,
+  "groups": {
+    "calibration/en/retention": {
+      "count": 4,
+      "accuracy": 0,
+      "brier": 1.33710867,
+      "ece10": 0.8060999999999999,
+      "precisionTrue": null,
+      "recallTrue": 0.0
+    },
+    "calibration/en/kind": {
+      "count": 4,
+      "accuracy": 1,
+      "brier": 0.0668669015421737,
+      "ece10": 0.13815838353433382,
+      "precisionTrue": null,
+      "recallTrue": null
+    },
+    "calibration/en/support": {
+      "count": 4,
+      "accuracy": 0.75,
+      "brier": 0.34081811,
+      "ece10": 0.2018,
+      "precisionTrue": 1.0,
+      "recallTrue": 0.6666666666666666
+    },
+    "calibration/en/duplicate": {
+      "count": 4,
+      "accuracy": 0.5,
+      "brier": 0.9359663300000001,
+      "ece10": 0.55195,
+      "precisionTrue": 0.3333333333333333,
+      "recallTrue": 1.0
+    },
+    "calibration/en/supersede": {
+      "count": 4,
+      "accuracy": 1,
+      "brier": 0.020410925,
+      "ece10": 0.08082500000000004,
+      "precisionTrue": 1.0,
+      "recallTrue": 1.0
+    },
+    "calibration/en/conflict": {
+      "count": 4,
+      "accuracy": 0.5,
+      "brier": 0.96328749,
+      "ece10": 0.48835000000000006,
+      "precisionTrue": 0.0,
+      "recallTrue": 0.0
+    },
+    "calibration/zh/retention": {
+      "count": 4,
+      "accuracy": 0.25,
+      "brier": 1.09837954,
+      "ece10": 0.6120000000000001,
+      "precisionTrue": 1.0,
+      "recallTrue": 0.25
+    },
+    "calibration/zh/kind": {
+      "count": 4,
+      "accuracy": 0.75,
+      "brier": 0.239603748616043,
+      "ece10": 0.18987699520101994,
+      "precisionTrue": null,
+      "recallTrue": null
+    },
+    "calibration/zh/support": {
+      "count": 4,
+      "accuracy": 1,
+      "brier": 0.143136045,
+      "ece10": 0.20617500000000002,
+      "precisionTrue": 1.0,
+      "recallTrue": 1.0
+    },
+    "calibration/zh/duplicate": {
+      "count": 4,
+      "accuracy": 0.5,
+      "brier": 0.953754525,
+      "ece10": 0.5077749999999999,
+      "precisionTrue": 0.3333333333333333,
+      "recallTrue": 1.0
+    },
+    "calibration/zh/supersede": {
+      "count": 4,
+      "accuracy": 0.75,
+      "brier": 0.14754497000000003,
+      "ece10": 0.15874999999999997,
+      "precisionTrue": 0.5,
+      "recallTrue": 1.0
+    },
+    "calibration/zh/conflict": {
+      "count": 4,
+      "accuracy": 0.5,
+      "brier": 0.9746528600000001,
+      "ece10": 0.49050000000000005,
+      "precisionTrue": 0.0,
+      "recallTrue": 0.0
+    },
+    "holdout/en/retention": {
+      "count": 8,
+      "accuracy": 0.375,
+      "brier": 0.8935099525,
+      "ece10": 0.3999125,
+      "precisionTrue": 1.0,
+      "recallTrue": 0.2857142857142857
+    },
+    "holdout/en/kind": {
+      "count": 8,
+      "accuracy": 0.5,
+      "brier": 0.7544672861713141,
+      "ece10": 0.38912658484151585,
+      "precisionTrue": null,
+      "recallTrue": null
+    },
+    "holdout/en/support": {
+      "count": 8,
+      "accuracy": 0.875,
+      "brier": 0.218959725,
+      "ece10": 0.08755000000000007,
+      "precisionTrue": 1.0,
+      "recallTrue": 0.8333333333333334
+    },
+    "holdout/en/duplicate": {
+      "count": 8,
+      "accuracy": 0.5,
+      "brier": 0.828286415,
+      "ece10": 0.38345,
+      "precisionTrue": 0.2,
+      "recallTrue": 1.0
+    },
+    "holdout/en/supersede": {
+      "count": 8,
+      "accuracy": 1,
+      "brier": 0.06128048,
+      "ece10": 0.147275,
+      "precisionTrue": null,
+      "recallTrue": null
+    },
+    "holdout/en/conflict": {
+      "count": 8,
+      "accuracy": 0.625,
+      "brier": 0.552628705,
+      "ece10": 0.31115000000000004,
+      "precisionTrue": 0.0,
+      "recallTrue": 0.0
+    },
+    "holdout/zh/retention": {
+      "count": 8,
+      "accuracy": 0.375,
+      "brier": 0.85603648,
+      "ece10": 0.5107499999999999,
+      "precisionTrue": 1.0,
+      "recallTrue": 0.2857142857142857
+    },
+    "holdout/zh/kind": {
+      "count": 8,
+      "accuracy": 0.5,
+      "brier": 0.8912413997989054,
+      "ece10": 0.44565221602339716,
+      "precisionTrue": null,
+      "recallTrue": null
+    },
+    "holdout/zh/support": {
+      "count": 8,
+      "accuracy": 0.875,
+      "brier": 0.2568301075,
+      "ece10": 0.1719625,
+      "precisionTrue": 1.0,
+      "recallTrue": 0.8333333333333334
+    },
+    "holdout/zh/duplicate": {
+      "count": 8,
+      "accuracy": 0.375,
+      "brier": 0.9364577375,
+      "ece10": 0.5260625,
+      "precisionTrue": 0.16666666666666666,
+      "recallTrue": 1.0
+    },
+    "holdout/zh/supersede": {
+      "count": 8,
+      "accuracy": 0.875,
+      "brier": 0.27573547,
+      "ece10": 0.27245,
+      "precisionTrue": 0.0,
+      "recallTrue": null
+    },
+    "holdout/zh/conflict": {
+      "count": 8,
+      "accuracy": 0.625,
+      "brier": 0.5530864525,
+      "ece10": 0.31203749999999997,
+      "precisionTrue": 0.0,
+      "recallTrue": 0.0
+    }
+  },
+  "results": [
+    {
+      "id": "cal-en-fact",
+      "split": "calibration",
+      "language": "en",
+      "labels": [
+        true,
+        "fact",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.2098,
+              "false": 0.7902
+            },
+            "answer_confidence": 0.7902,
+            "noul": 0.2098
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9682031796820318,
+              "decision": 0.0047995200479952005,
+              "preference": 0.005099490050994901,
+              "procedure": 0.021897810218978103
+            },
+            "answer_confidence": 0.9682031796820318
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.9131,
+              "false": 0.08689999999999998
+            },
+            "answer_confidence": 0.9131,
+            "noul": 0.9131
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9504,
+              "false": 0.04959999999999998
+            },
+            "answer_confidence": 0.9504,
+            "noul": 0.9504
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0681,
+              "false": 0.9319
+            },
+            "answer_confidence": 0.9319,
+            "noul": 0.0681
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0065,
+              "false": 0.9935
+            },
+            "answer_confidence": 0.9935,
+            "noul": 0.0065
+          }
+        ]
+      },
+      "wallMs": 595
+    },
+    {
+      "id": "cal-en-negation",
+      "split": "calibration",
+      "language": "en",
+      "labels": [
+        true,
+        "fact",
+        false,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.0291,
+              "false": 0.9709
+            },
+            "answer_confidence": 0.9709,
+            "noul": 0.0291
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.8611,
+              "decision": 0.0487,
+              "preference": 0.0558,
+              "procedure": 0.0344
+            },
+            "answer_confidence": 0.8611
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.1626,
+              "false": 0.8374
+            },
+            "answer_confidence": 0.8374,
+            "noul": 0.1626
+          },
+          {
+            "question": "duplicate",
+            "answer": false,
+            "distribution": {
+              "true": 0.1336,
+              "false": 0.8664000000000001
+            },
+            "answer_confidence": 0.8664000000000001,
+            "noul": 0.1336
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.179,
+              "false": 0.821
+            },
+            "answer_confidence": 0.821,
+            "noul": 0.179
+          },
+          {
+            "question": "conflict",
+            "answer": true,
+            "distribution": {
+              "true": 0.996,
+              "false": 0.0040000000000000036
+            },
+            "answer_confidence": 0.996,
+            "noul": 0.996
+          }
+        ]
+      },
+      "wallMs": 608
+    },
+    {
+      "id": "cal-en-pref",
+      "split": "calibration",
+      "language": "en",
+      "labels": [
+        true,
+        "preference",
+        true,
+        true,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.1332,
+              "false": 0.8668
+            },
+            "answer_confidence": 0.8668,
+            "noul": 0.1332
+          },
+          {
+            "question": "kind",
+            "answer": "preference",
+            "distribution": {
+              "fact": 0.0059994000599940004,
+              "decision": 0.0008999100089991,
+              "preference": 0.9926007399260074,
+              "procedure": 0.0004999500049995
+            },
+            "answer_confidence": 0.9926007399260074
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.2251,
+              "false": 0.7749
+            },
+            "answer_confidence": 0.7749,
+            "noul": 0.2251
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.8377,
+              "false": 0.1623
+            },
+            "answer_confidence": 0.8377,
+            "noul": 0.8377
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0132,
+              "false": 0.9868
+            },
+            "answer_confidence": 0.9868,
+            "noul": 0.0132
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0028,
+              "false": 0.9972
+            },
+            "answer_confidence": 0.9972,
+            "noul": 0.0028
+          }
+        ]
+      },
+      "wallMs": 618
+    },
+    {
+      "id": "cal-en-replace",
+      "split": "calibration",
+      "language": "en",
+      "labels": [
+        true,
+        "fact",
+        true,
+        false,
+        true,
+        true
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.4035,
+              "false": 0.5965
+            },
+            "answer_confidence": 0.5965,
+            "noul": 0.4035
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.6254625462546254,
+              "decision": 0.30983098309830986,
+              "preference": 0.0049004900490049,
+              "procedure": 0.059805980598059805
+            },
+            "answer_confidence": 0.6254625462546254
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.7828,
+              "false": 0.21719999999999995
+            },
+            "answer_confidence": 0.7828,
+            "noul": 0.7828
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9615,
+              "false": 0.03849999999999998
+            },
+            "answer_confidence": 0.9615,
+            "noul": 0.9615
+          },
+          {
+            "question": "supersede",
+            "answer": true,
+            "distribution": {
+              "true": 0.937,
+              "false": 0.06299999999999994
+            },
+            "answer_confidence": 0.937,
+            "noul": 0.937
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0333,
+              "false": 0.9667
+            },
+            "answer_confidence": 0.9667,
+            "noul": 0.0333
+          }
+        ]
+      },
+      "wallMs": 864
+    },
+    {
+      "id": "cal-zh-fact",
+      "split": "calibration",
+      "language": "zh",
+      "labels": [
+        true,
+        "fact",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.3277,
+              "false": 0.6723
+            },
+            "answer_confidence": 0.6723,
+            "noul": 0.3277
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.991,
+              "decision": 0.0008,
+              "preference": 0.0023,
+              "procedure": 0.0059
+            },
+            "answer_confidence": 0.991
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.92,
+              "false": 0.07999999999999996
+            },
+            "answer_confidence": 0.92,
+            "noul": 0.92
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9388,
+              "false": 0.06120000000000003
+            },
+            "answer_confidence": 0.9388,
+            "noul": 0.9388
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0489,
+              "false": 0.9511000000000001
+            },
+            "answer_confidence": 0.9511000000000001,
+            "noul": 0.0489
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0095,
+              "false": 0.9905
+            },
+            "answer_confidence": 0.9905,
+            "noul": 0.0095
+          }
+        ]
+      },
+      "wallMs": 626
+    },
+    {
+      "id": "cal-zh-negation",
+      "split": "calibration",
+      "language": "zh",
+      "labels": [
+        true,
+        "fact",
+        false,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.0173,
+              "false": 0.9827
+            },
+            "answer_confidence": 0.9827,
+            "noul": 0.0173
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9198919891989199,
+              "decision": 0.050805080508050805,
+              "preference": 0.009900990099009903,
+              "procedure": 0.019401940194019404
+            },
+            "answer_confidence": 0.9198919891989199
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.4715,
+              "false": 0.5285
+            },
+            "answer_confidence": 0.5285,
+            "noul": 0.4715
+          },
+          {
+            "question": "duplicate",
+            "answer": false,
+            "distribution": {
+              "true": 0.1839,
+              "false": 0.8161
+            },
+            "answer_confidence": 0.8161,
+            "noul": 0.1839
+          },
+          {
+            "question": "supersede",
+            "answer": true,
+            "distribution": {
+              "true": 0.54,
+              "false": 0.45999999999999996
+            },
+            "answer_confidence": 0.54,
+            "noul": 0.54
+          },
+          {
+            "question": "conflict",
+            "answer": true,
+            "distribution": {
+              "true": 0.9935,
+              "false": 0.00649999999999995
+            },
+            "answer_confidence": 0.9935,
+            "noul": 0.9935
+          }
+        ]
+      },
+      "wallMs": 660
+    },
+    {
+      "id": "cal-zh-pref",
+      "split": "calibration",
+      "language": "zh",
+      "labels": [
+        true,
+        "preference",
+        true,
+        true,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.1215,
+              "false": 0.8785000000000001
+            },
+            "answer_confidence": 0.8785000000000001,
+            "noul": 0.1215
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.6701,
+              "decision": 0.0261,
+              "preference": 0.2936,
+              "procedure": 0.0102
+            },
+            "answer_confidence": 0.6701
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.7628,
+              "false": 0.23719999999999997
+            },
+            "answer_confidence": 0.7628,
+            "noul": 0.7628
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9158,
+              "false": 0.08420000000000005
+            },
+            "answer_confidence": 0.9158,
+            "noul": 0.9158
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0188,
+              "false": 0.9812
+            },
+            "answer_confidence": 0.9812,
+            "noul": 0.0188
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0029,
+              "false": 0.9971
+            },
+            "answer_confidence": 0.9971,
+            "noul": 0.0029
+          }
+        ]
+      },
+      "wallMs": 791
+    },
+    {
+      "id": "cal-zh-replace",
+      "split": "calibration",
+      "language": "zh",
+      "labels": [
+        true,
+        "fact",
+        true,
+        false,
+        true,
+        true
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": true,
+            "distribution": {
+              "true": 0.9145,
+              "false": 0.08550000000000002
+            },
+            "answer_confidence": 0.9145,
+            "noul": 0.9145
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9997000299970004,
+              "decision": 9.999000099990002e-05,
+              "preference": 9.999000099990002e-05,
+              "procedure": 9.999000099990002e-05
+            },
+            "answer_confidence": 0.9997000299970004
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.964,
+              "false": 0.03600000000000003
+            },
+            "answer_confidence": 0.964,
+            "noul": 0.964
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9926,
+              "false": 0.007399999999999962
+            },
+            "answer_confidence": 0.9926,
+            "noul": 0.9926
+          },
+          {
+            "question": "supersede",
+            "answer": true,
+            "distribution": {
+              "true": 0.9727,
+              "false": 0.02729999999999999
+            },
+            "answer_confidence": 0.9727,
+            "noul": 0.9727
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0191,
+              "false": 0.9809
+            },
+            "answer_confidence": 0.9809,
+            "noul": 0.0191
+          }
+        ]
+      },
+      "wallMs": 884
+    },
+    {
+      "id": "test-en-fact",
+      "split": "holdout",
+      "language": "en",
+      "labels": [
+        true,
+        "fact",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": true,
+            "distribution": {
+              "true": 0.5037,
+              "false": 0.49629999999999996
+            },
+            "answer_confidence": 0.5037,
+            "noul": 0.5037
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9959,
+              "decision": 0.0012,
+              "preference": 0.0012,
+              "procedure": 0.0017
+            },
+            "answer_confidence": 0.9959
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.8707,
+              "false": 0.12929999999999997
+            },
+            "answer_confidence": 0.8707,
+            "noul": 0.8707
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9255,
+              "false": 0.07450000000000001
+            },
+            "answer_confidence": 0.9255,
+            "noul": 0.9255
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0364,
+              "false": 0.9636
+            },
+            "answer_confidence": 0.9636,
+            "noul": 0.0364
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0078,
+              "false": 0.9922
+            },
+            "answer_confidence": 0.9922,
+            "noul": 0.0078
+          }
+        ]
+      },
+      "wallMs": 626
+    },
+    {
+      "id": "test-en-unsupported",
+      "split": "holdout",
+      "language": "en",
+      "labels": [
+        true,
+        "fact",
+        false,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.099,
+              "false": 0.901
+            },
+            "answer_confidence": 0.901,
+            "noul": 0.099
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9928,
+              "decision": 0.0014,
+              "preference": 0.0022,
+              "procedure": 0.0036
+            },
+            "answer_confidence": 0.9928
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.082,
+              "false": 0.918
+            },
+            "answer_confidence": 0.918,
+            "noul": 0.082
+          },
+          {
+            "question": "duplicate",
+            "answer": false,
+            "distribution": {
+              "true": 0.3179,
+              "false": 0.6820999999999999
+            },
+            "answer_confidence": 0.6820999999999999,
+            "noul": 0.3179
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.2203,
+              "false": 0.7797000000000001
+            },
+            "answer_confidence": 0.7797000000000001,
+            "noul": 0.2203
+          },
+          {
+            "question": "conflict",
+            "answer": true,
+            "distribution": {
+              "true": 0.6309,
+              "false": 0.3691
+            },
+            "answer_confidence": 0.6309,
+            "noul": 0.6309
+          }
+        ]
+      },
+      "wallMs": 691
+    },
+    {
+      "id": "test-en-procedure",
+      "split": "holdout",
+      "language": "en",
+      "labels": [
+        true,
+        "procedure",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.4986,
+              "false": 0.5014000000000001
+            },
+            "answer_confidence": 0.5014000000000001,
+            "noul": 0.4986
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.999,
+              "decision": 0.0001,
+              "preference": 0.0,
+              "procedure": 0.0009
+            },
+            "answer_confidence": 0.999
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.9299,
+              "false": 0.07010000000000005
+            },
+            "answer_confidence": 0.9299,
+            "noul": 0.9299
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9341,
+              "false": 0.06589999999999996
+            },
+            "answer_confidence": 0.9341,
+            "noul": 0.9341
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.1007,
+              "false": 0.8993
+            },
+            "answer_confidence": 0.8993,
+            "noul": 0.1007
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.014,
+              "false": 0.986
+            },
+            "answer_confidence": 0.986,
+            "noul": 0.014
+          }
+        ]
+      },
+      "wallMs": 785
+    },
+    {
+      "id": "test-en-decision",
+      "split": "holdout",
+      "language": "en",
+      "labels": [
+        true,
+        "decision",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": true,
+            "distribution": {
+              "true": 0.8231,
+              "false": 0.17689999999999995
+            },
+            "answer_confidence": 0.8231,
+            "noul": 0.8231
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9536046395360464,
+              "decision": 0.0417958204179582,
+              "preference": 0.0008999100089991,
+              "procedure": 0.0036996300369963007
+            },
+            "answer_confidence": 0.9536046395360464
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.9531,
+              "false": 0.04690000000000005
+            },
+            "answer_confidence": 0.9531,
+            "noul": 0.9531
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9081,
+              "false": 0.09189999999999998
+            },
+            "answer_confidence": 0.9081,
+            "noul": 0.9081
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0921,
+              "false": 0.9079
+            },
+            "answer_confidence": 0.9079,
+            "noul": 0.0921
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0118,
+              "false": 0.9882
+            },
+            "answer_confidence": 0.9882,
+            "noul": 0.0118
+          }
+        ]
+      },
+      "wallMs": 717
+    },
+    {
+      "id": "test-en-conflict",
+      "split": "holdout",
+      "language": "en",
+      "labels": [
+        true,
+        "fact",
+        true,
+        false,
+        false,
+        true
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.2056,
+              "false": 0.7944
+            },
+            "answer_confidence": 0.7944,
+            "noul": 0.2056
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.8508,
+              "decision": 0.0509,
+              "preference": 0.0871,
+              "procedure": 0.0112
+            },
+            "answer_confidence": 0.8508
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.9022,
+              "false": 0.0978
+            },
+            "answer_confidence": 0.9022,
+            "noul": 0.9022
+          },
+          {
+            "question": "duplicate",
+            "answer": false,
+            "distribution": {
+              "true": 0.3707,
+              "false": 0.6293
+            },
+            "answer_confidence": 0.6293,
+            "noul": 0.3707
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.3114,
+              "false": 0.6886
+            },
+            "answer_confidence": 0.6886,
+            "noul": 0.3114
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0776,
+              "false": 0.9224
+            },
+            "answer_confidence": 0.9224,
+            "noul": 0.0776
+          }
+        ]
+      },
+      "wallMs": 727
+    },
+    {
+      "id": "test-en-duplicate",
+      "split": "holdout",
+      "language": "en",
+      "labels": [
+        true,
+        "preference",
+        true,
+        true,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.1427,
+              "false": 0.8573
+            },
+            "answer_confidence": 0.8573,
+            "noul": 0.1427
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.8204,
+              "decision": 0.0729,
+              "preference": 0.1016,
+              "procedure": 0.0051
+            },
+            "answer_confidence": 0.8204
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.9871,
+              "false": 0.012900000000000023
+            },
+            "answer_confidence": 0.9871,
+            "noul": 0.9871
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9912,
+              "false": 0.00880000000000003
+            },
+            "answer_confidence": 0.9912,
+            "noul": 0.9912
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.2281,
+              "false": 0.7719
+            },
+            "answer_confidence": 0.7719,
+            "noul": 0.2281
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0024,
+              "false": 0.9976
+            },
+            "answer_confidence": 0.9976,
+            "noul": 0.0024
+          }
+        ]
+      },
+      "wallMs": 874
+    },
+    {
+      "id": "test-en-transient",
+      "split": "holdout",
+      "language": "en",
+      "labels": [
+        false,
+        "fact",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.1067,
+              "false": 0.8933
+            },
+            "answer_confidence": 0.8933,
+            "noul": 0.1067
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9196080391960804,
+              "decision": 0.017698230176982303,
+              "preference": 0.024697530246975304,
+              "procedure": 0.037996200379962
+            },
+            "answer_confidence": 0.9196080391960804
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.0865,
+              "false": 0.9135
+            },
+            "answer_confidence": 0.9135,
+            "noul": 0.0865
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.6636,
+              "false": 0.33640000000000003
+            },
+            "answer_confidence": 0.6636,
+            "noul": 0.6636
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0248,
+              "false": 0.9752
+            },
+            "answer_confidence": 0.9752,
+            "noul": 0.0248
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0085,
+              "false": 0.9915
+            },
+            "answer_confidence": 0.9915,
+            "noul": 0.0085
+          }
+        ]
+      },
+      "wallMs": 616
+    },
+    {
+      "id": "test-en-subject",
+      "split": "holdout",
+      "language": "en",
+      "labels": [
+        true,
+        "preference",
+        false,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.0749,
+              "false": 0.9251
+            },
+            "answer_confidence": 0.9251,
+            "noul": 0.0749
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.5809,
+              "decision": 0.0025,
+              "preference": 0.4105,
+              "procedure": 0.0061
+            },
+            "answer_confidence": 0.5809
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.0327,
+              "false": 0.9673
+            },
+            "answer_confidence": 0.9673,
+            "noul": 0.0327
+          },
+          {
+            "question": "duplicate",
+            "answer": false,
+            "distribution": {
+              "true": 0.2837,
+              "false": 0.7162999999999999
+            },
+            "answer_confidence": 0.7162999999999999,
+            "noul": 0.2837
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.1644,
+              "false": 0.8356
+            },
+            "answer_confidence": 0.8356,
+            "noul": 0.1644
+          },
+          {
+            "question": "conflict",
+            "answer": true,
+            "distribution": {
+              "true": 0.9804,
+              "false": 0.01959999999999995
+            },
+            "answer_confidence": 0.9804,
+            "noul": 0.9804
+          }
+        ]
+      },
+      "wallMs": 824
+    },
+    {
+      "id": "test-zh-fact",
+      "split": "holdout",
+      "language": "zh",
+      "labels": [
+        true,
+        "fact",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.4929,
+              "false": 0.5071
+            },
+            "answer_confidence": 0.5071,
+            "noul": 0.4929
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9793,
+              "decision": 0.0046,
+              "preference": 0.0069,
+              "procedure": 0.0092
+            },
+            "answer_confidence": 0.9793
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.698,
+              "false": 0.30200000000000005
+            },
+            "answer_confidence": 0.698,
+            "noul": 0.698
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.862,
+              "false": 0.138
+            },
+            "answer_confidence": 0.862,
+            "noul": 0.862
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0517,
+              "false": 0.9483
+            },
+            "answer_confidence": 0.9483,
+            "noul": 0.0517
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0027,
+              "false": 0.9973
+            },
+            "answer_confidence": 0.9973,
+            "noul": 0.0027
+          }
+        ]
+      },
+      "wallMs": 703
+    },
+    {
+      "id": "test-zh-unsupported",
+      "split": "holdout",
+      "language": "zh",
+      "labels": [
+        true,
+        "fact",
+        false,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.1199,
+              "false": 0.8801
+            },
+            "answer_confidence": 0.8801,
+            "noul": 0.1199
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9773022697730227,
+              "decision": 0.0065993400659934,
+              "preference": 0.011698830116988301,
+              "procedure": 0.004399560043995601
+            },
+            "answer_confidence": 0.9773022697730227
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.2048,
+              "false": 0.7952
+            },
+            "answer_confidence": 0.7952,
+            "noul": 0.2048
+          },
+          {
+            "question": "duplicate",
+            "answer": false,
+            "distribution": {
+              "true": 0.2377,
+              "false": 0.7623
+            },
+            "answer_confidence": 0.7623,
+            "noul": 0.2377
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.481,
+              "false": 0.519
+            },
+            "answer_confidence": 0.519,
+            "noul": 0.481
+          },
+          {
+            "question": "conflict",
+            "answer": true,
+            "distribution": {
+              "true": 0.977,
+              "false": 0.02300000000000002
+            },
+            "answer_confidence": 0.977,
+            "noul": 0.977
+          }
+        ]
+      },
+      "wallMs": 707
+    },
+    {
+      "id": "test-zh-procedure",
+      "split": "holdout",
+      "language": "zh",
+      "labels": [
+        true,
+        "procedure",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.1994,
+              "false": 0.8006
+            },
+            "answer_confidence": 0.8006,
+            "noul": 0.1994
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9993999399939993,
+              "decision": 0.00010001000100010001,
+              "preference": 0.00010001000100010001,
+              "procedure": 0.00040004000400040005
+            },
+            "answer_confidence": 0.9993999399939993
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.8842,
+              "false": 0.11580000000000001
+            },
+            "answer_confidence": 0.8842,
+            "noul": 0.8842
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9366,
+              "false": 0.06340000000000001
+            },
+            "answer_confidence": 0.9366,
+            "noul": 0.9366
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.3199,
+              "false": 0.6800999999999999
+            },
+            "answer_confidence": 0.6800999999999999,
+            "noul": 0.3199
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0257,
+              "false": 0.9742999999999999
+            },
+            "answer_confidence": 0.9742999999999999,
+            "noul": 0.0257
+          }
+        ]
+      },
+      "wallMs": 827
+    },
+    {
+      "id": "test-zh-decision",
+      "split": "holdout",
+      "language": "zh",
+      "labels": [
+        true,
+        "decision",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": true,
+            "distribution": {
+              "true": 0.8775,
+              "false": 0.12250000000000005
+            },
+            "answer_confidence": 0.8775,
+            "noul": 0.8775
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9985998599859987,
+              "decision": 0.001000100010001,
+              "preference": 0.00010001000100010001,
+              "procedure": 0.0003000300030003
+            },
+            "answer_confidence": 0.9985998599859987
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.9633,
+              "false": 0.036699999999999955
+            },
+            "answer_confidence": 0.9633,
+            "noul": 0.9633
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9452,
+              "false": 0.05479999999999996
+            },
+            "answer_confidence": 0.9452,
+            "noul": 0.9452
+          },
+          {
+            "question": "supersede",
+            "answer": true,
+            "distribution": {
+              "true": 0.7965,
+              "false": 0.20350000000000001
+            },
+            "answer_confidence": 0.7965,
+            "noul": 0.7965
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0187,
+              "false": 0.9813
+            },
+            "answer_confidence": 0.9813,
+            "noul": 0.0187
+          }
+        ]
+      },
+      "wallMs": 861
+    },
+    {
+      "id": "test-zh-conflict",
+      "split": "holdout",
+      "language": "zh",
+      "labels": [
+        true,
+        "fact",
+        true,
+        false,
+        false,
+        true
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.1462,
+              "false": 0.8538
+            },
+            "answer_confidence": 0.8538,
+            "noul": 0.1462
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9429,
+              "decision": 0.018,
+              "preference": 0.0262,
+              "procedure": 0.0129
+            },
+            "answer_confidence": 0.9429
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.9394,
+              "false": 0.06059999999999999
+            },
+            "answer_confidence": 0.9394,
+            "noul": 0.9394
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9059,
+              "false": 0.09409999999999996
+            },
+            "answer_confidence": 0.9059,
+            "noul": 0.9059
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.3355,
+              "false": 0.6645
+            },
+            "answer_confidence": 0.6645,
+            "noul": 0.3355
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.2951,
+              "false": 0.7049000000000001
+            },
+            "answer_confidence": 0.7049000000000001,
+            "noul": 0.2951
+          }
+        ]
+      },
+      "wallMs": 828
+    },
+    {
+      "id": "test-zh-duplicate",
+      "split": "holdout",
+      "language": "zh",
+      "labels": [
+        true,
+        "preference",
+        true,
+        true,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": true,
+            "distribution": {
+              "true": 0.6065,
+              "false": 0.39349999999999996
+            },
+            "answer_confidence": 0.6065,
+            "noul": 0.6065
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.8434156584341567,
+              "decision": 0.05399460053994601,
+              "preference": 0.05749425057494251,
+              "procedure": 0.04509549045095491
+            },
+            "answer_confidence": 0.8434156584341567
+          },
+          {
+            "question": "support",
+            "answer": true,
+            "distribution": {
+              "true": 0.9376,
+              "false": 0.06240000000000001
+            },
+            "answer_confidence": 0.9376,
+            "noul": 0.9376
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.9574,
+              "false": 0.04259999999999997
+            },
+            "answer_confidence": 0.9574,
+            "noul": 0.9574
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.055,
+              "false": 0.945
+            },
+            "answer_confidence": 0.945,
+            "noul": 0.055
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.004,
+              "false": 0.996
+            },
+            "answer_confidence": 0.996,
+            "noul": 0.004
+          }
+        ]
+      },
+      "wallMs": 805
+    },
+    {
+      "id": "test-zh-transient",
+      "split": "holdout",
+      "language": "zh",
+      "labels": [
+        false,
+        "fact",
+        true,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.1394,
+              "false": 0.8606
+            },
+            "answer_confidence": 0.8606,
+            "noul": 0.1394
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.9553,
+              "decision": 0.0096,
+              "preference": 0.0226,
+              "procedure": 0.0125
+            },
+            "answer_confidence": 0.9553
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.0665,
+              "false": 0.9335
+            },
+            "answer_confidence": 0.9335,
+            "noul": 0.0665
+          },
+          {
+            "question": "duplicate",
+            "answer": true,
+            "distribution": {
+              "true": 0.5607,
+              "false": 0.4393
+            },
+            "answer_confidence": 0.5607,
+            "noul": 0.5607
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.0118,
+              "false": 0.9882
+            },
+            "answer_confidence": 0.9882,
+            "noul": 0.0118
+          },
+          {
+            "question": "conflict",
+            "answer": false,
+            "distribution": {
+              "true": 0.0062,
+              "false": 0.9938
+            },
+            "answer_confidence": 0.9938,
+            "noul": 0.0062
+          }
+        ]
+      },
+      "wallMs": 629
+    },
+    {
+      "id": "test-zh-subject",
+      "split": "holdout",
+      "language": "zh",
+      "labels": [
+        true,
+        "preference",
+        false,
+        false,
+        false,
+        false
+      ],
+      "result": {
+        "status": "ready",
+        "answers": [
+          {
+            "question": "retention",
+            "answer": false,
+            "distribution": {
+              "true": 0.0872,
+              "false": 0.9128000000000001
+            },
+            "answer_confidence": 0.9128000000000001,
+            "noul": 0.0872
+          },
+          {
+            "question": "kind",
+            "answer": "fact",
+            "distribution": {
+              "fact": 0.869,
+              "decision": 0.0025,
+              "preference": 0.1234,
+              "procedure": 0.0051
+            },
+            "answer_confidence": 0.869
+          },
+          {
+            "question": "support",
+            "answer": false,
+            "distribution": {
+              "true": 0.0207,
+              "false": 0.9793
+            },
+            "answer_confidence": 0.9793,
+            "noul": 0.0207
+          },
+          {
+            "question": "duplicate",
+            "answer": false,
+            "distribution": {
+              "true": 0.197,
+              "false": 0.8029999999999999
+            },
+            "answer_confidence": 0.8029999999999999,
+            "noul": 0.197
+          },
+          {
+            "question": "supersede",
+            "answer": false,
+            "distribution": {
+              "true": 0.1282,
+              "false": 0.8718
+            },
+            "answer_confidence": 0.8718,
+            "noul": 0.1282
+          },
+          {
+            "question": "conflict",
+            "answer": true,
+            "distribution": {
+              "true": 0.8717,
+              "false": 0.12829999999999997
+            },
+            "answer_confidence": 0.8717,
+            "noul": 0.8717
+          }
+        ]
+      },
+      "wallMs": 712
+    }
+  ]
+}

@@ -52,3 +52,4 @@ describe('knowledge context IPC adapter', () => {
     expect(context).toHaveBeenCalledWith(request)
   })
 })
+vi.mock('../../../src/main/knowledge/laya-runtime', () => ({ controlLaya: vi.fn() }))

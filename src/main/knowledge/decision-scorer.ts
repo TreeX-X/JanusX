@@ -1,5 +1,6 @@
 // Note: scorer advice never grants truth or source authority — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { createHash } from 'node:crypto'
+import { memoryCandidateSnapshot } from '../../shared/memory-candidate-snapshot'
 import type { CandidateFact, FactKind, MemoryScope, MemorySourceEvidence } from '../../shared/knowledge'
 import type { MemoryDecisionAnnotation, MemoryDecisionAnswer, MemoryScorerIdentity } from '../../shared/memory-decision'
 
@@ -21,6 +22,8 @@ export interface MemoryDecisionInput {
 
 export interface DecisionScorer {
   readonly identity: MemoryScorerIdentity
+  readonly timeoutMs?: number
+  available?(): boolean
   score(input: MemoryDecisionInput, signal: AbortSignal): Promise<unknown>
 }
 
@@ -32,9 +35,7 @@ export class NoopScorer implements DecisionScorer {
 }
 
 export function candidateDecisionHash(candidate: CandidateFact): string {
-  return createHash('sha256').update(JSON.stringify([
-    candidate.id, candidate.fact, candidate.evidence, candidate.conflicts ?? [], candidate.derivation,
-  ])).digest('hex')
+  return createHash('sha256').update(memoryCandidateSnapshot(candidate)).digest('hex')
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -74,7 +75,7 @@ function parseAnswers(value: unknown): MemoryDecisionAnswer[] | null {
 export async function scoreMemoryDecision(
   input: MemoryDecisionInput,
   scorer: DecisionScorer = new NoopScorer(),
-  timeoutMs = 2000,
+  timeoutMs = scorer.timeoutMs ?? 2000,
 ): Promise<MemoryDecisionAnnotation> {
   const identity = { ...scorer.identity }
   const annotation: MemoryDecisionAnnotation = {

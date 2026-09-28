@@ -86,6 +86,72 @@ describe('durable refinement tasks', () => {
     expect(text).not.toContain(candidates[0]!.fact.content)
   })
 
+  it('runs explicit manual refinement with no scorer and automatic refinement off', async () => {
+    identity.provider = 'noop'
+    settings.mode = 'deterministic-only'
+    delete candidates[0]!.decision
+    const service = new RefinementTaskService(deps)
+    const hash = candidateDecisionHash(candidates[0]!)
+    expect(await service.enqueueManual(candidates[0]!.id, hash)).toBe(1)
+    expect(await service.enqueueManual(candidates[0]!.id, hash)).toBe(0)
+    expect((await service.list())[0]).toMatchObject({ trigger: 'manual', scorer: { provider: 'manual' } })
+    available = false
+    expect(await service.runDue()).toMatchObject({ deferred: 1 })
+    expect((await service.list())[0]!.attempts).toBe(0)
+    available = true
+    expect(await service.runDue()).toMatchObject({ processed: 1 })
+    expect(extract).toHaveBeenCalledExactlyOnceWith(observations, { [candidates[0]!.id]: hash }, expect.any(Function))
+    expect(candidates[0]!.status).toBe('proposed')
+  })
+
+  it('defers Laya automatic tasks when the optional runtime is disabled', async () => {
+    identity.provider = 'laya'
+    seed()
+    const service = new RefinementTaskService(deps)
+    await service.enqueue(plan())
+    expect(await service.runDue()).toMatchObject({ deferred: 1 })
+    expect(extract).not.toHaveBeenCalled()
+    settings.laya = { enabled: true, pythonPath: 'test', modelPath: 'test' }
+    deps.scorerAvailable = () => false
+    expect(await service.runDue()).toMatchObject({ deferred: 1 })
+    deps.scorerAvailable = () => true
+    expect(await service.runDue()).toMatchObject({ processed: 1 })
+  })
+
+  it('revalidates evidence after model work and cancels stale manual output', async () => {
+    const service = new RefinementTaskService(deps)
+    await service.enqueueManual(candidates[0]!.id, candidateDecisionHash(candidates[0]!))
+    extract.mockImplementation(async (_observations, _hashes, validate) => {
+      expect(await validate!()).toBe(true)
+      observations[0]!.content += ' withdrawn'
+      expect(await validate!()).toBe(false)
+    })
+    expect(await service.runDue()).toMatchObject({ cancelled: 1, processed: 0 })
+  })
+
+  it.each(['candidate', 'evidence', 'context', 'review'] as const)('cancels manual refinement after %s changes', async change => {
+    const service = new RefinementTaskService(deps)
+    await service.enqueueManual(candidates[0]!.id, candidateDecisionHash(candidates[0]!))
+    if (change === 'candidate') candidates[0]!.fact.content += ' changed'
+    if (change === 'evidence') observations[0]!.content += ' changed'
+    if (change === 'context') truths.push({ ...candidates[0]!.fact, status: 'active' })
+    if (change === 'review') candidates[0]!.status = 'rejected'
+    expect(await service.runDue()).toMatchObject({ cancelled: 1 })
+    expect(extract).not.toHaveBeenCalled()
+  })
+
+  it.each(['remember', 'owner', 'scope', 'expired', 'stale'] as const)('rejects manual submission with %s evidence', async change => {
+    const service = new RefinementTaskService(deps)
+    const hash = candidateDecisionHash(candidates[0]!)
+    if (change === 'remember') observations[0]!.memoryIntent = 'remember'
+    if (change === 'owner') observations[0]!.workspaceId = 'other'
+    if (change === 'scope') observations[0]!.scope = 'user'
+    if (change === 'expired') observations[0]!.expiresAt = new Date(now - 1).toISOString()
+    if (change === 'stale') candidates[0]!.fact.content += ' changed'
+    await expect(service.enqueueManual(candidates[0]!.id, hash)).rejects.toThrow()
+    expect(await service.list()).toEqual([])
+  })
+
   it('recovers independently of observation cursors with persisted exponential retry', async () => {
     const service = new RefinementTaskService(deps)
     await service.enqueue(plan())

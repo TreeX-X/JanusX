@@ -329,6 +329,8 @@ function filterEvidence(observations: Observation[]): Observation[] {
 export interface ExtractCallOptions {
   /** Host-selected snapshots: refine these proposals only, never append unrelated output. */
   refinementCandidates?: Record<string, string>
+  /** Recheck queue-owned evidence/context after asynchronous model work. */
+  validateRefinement?: () => Promise<boolean>
   /** 合并平局时的内容取舍（默认 deterministic）；测试可直接注入。 */
   mode?: KnowledgeProcessingMode
   /** 单次模型调用超时（默认 60s）；测试可调小。 */
@@ -681,6 +683,10 @@ export class KnowledgeExtractService {
     }
     if (rewritten.size > 0) {
       await withFactCandidatesLock(async () => {
+        if (options.validateRefinement && !await options.validateRefinement()) {
+          rewritten.clear()
+          return
+        }
         const current = await this.listFactCandidates()
         const next = current.map((candidate) => {
           if (candidate.status !== 'proposed' || (refinementCandidates && !eligibleForRefinement(candidate))) {

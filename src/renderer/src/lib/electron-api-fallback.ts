@@ -128,6 +128,8 @@ export function installElectronApiFallback(): void {
       registerExternalMcp: () => unavailableKnowledge(),
       userMemoryOverview: () => unavailableKnowledge(),
       importLegacyPersonalMemory: () => unavailableKnowledge(),
+      layaControl: () => unavailableKnowledge(),
+      candidateAction: () => unavailableKnowledge(),
       forgetPersonalMemory: () => unavailableKnowledge(),
       proposePersonalMemoryCorrection: () => unavailableKnowledge(),
       getSettings: () => unavailableKnowledge(),

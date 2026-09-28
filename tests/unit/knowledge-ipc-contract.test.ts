@@ -41,6 +41,7 @@ vi.mock('electron', () => ({
   },
 }))
 
+vi.mock('../../src/main/knowledge/laya-runtime', () => ({ controlLaya: vi.fn(), syncLayaSettings: vi.fn(async () => {}) }))
 vi.mock('../../src/main/knowledge/contract-service', () => ({ knowledgeContractService: {} }))
 vi.mock('../../src/main/knowledge/audit-service', () => ({ knowledgeAuditService: {} }))
 vi.mock('../../src/main/knowledge/observation-service', () => ({ knowledgeObservationService: {} }))
@@ -86,7 +87,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(37)
+    expect(channels).toHaveLength(39)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -145,6 +146,8 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.registerExternalMcp('cursor')
     await knowledgeApi.userMemoryOverview()
     await knowledgeApi.importLegacyPersonalMemory()
+    await knowledgeApi.layaControl('status')
+    await knowledgeApi.candidateAction({candidateId: 'c', candidateHash: 'a'.repeat(64), action: 'score'})
     await knowledgeApi.forgetPersonalMemory({ targetId: 'old', targetHash: 'hash', kind: 'episode' })
     await knowledgeApi.proposePersonalMemoryCorrection({ targetId: 'old', targetHash: 'hash', content: 'new' })
     await knowledgeApi.getSettings()
@@ -184,6 +187,8 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.registerExternalMcp, 'cursor'],
       [KNOWLEDGE_CHANNELS.userMemoryOverview],
       [KNOWLEDGE_CHANNELS.importLegacyPersonalMemory],
+      [KNOWLEDGE_CHANNELS.layaControl, 'status'],
+      [KNOWLEDGE_CHANNELS.candidateAction, {candidateId: 'c', candidateHash: 'a'.repeat(64), action: 'score'}],
       [KNOWLEDGE_CHANNELS.forgetPersonalMemory, { targetId: 'old', targetHash: 'hash', kind: 'episode' }],
       [KNOWLEDGE_CHANNELS.proposePersonalMemoryCorrection, { targetId: 'old', targetHash: 'hash', content: 'new' }],
       [KNOWLEDGE_CHANNELS.getSettings],
@@ -327,14 +332,16 @@ describe('Knowledge IPC contract', () => {
       () => api.registerExternalMcp('cursor'),
       () => api.userMemoryOverview(),
       () => api.importLegacyPersonalMemory(),
+      () => api.layaControl('status'),
+      () => api.candidateAction({candidateId: 'c', candidateHash: 'a'.repeat(64), action: 'score'}),
       () => api.forgetPersonalMemory({ targetId: 'old', targetHash: 'hash', kind: 'episode' }),
       () => api.proposePersonalMemoryCorrection({ targetId: 'old', targetHash: 'hash', content: 'new' }),
       () => api.getSettings(),
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(37)
-    expect(calls).toHaveLength(37)
+    expect(Object.keys(api)).toHaveLength(39)
+    expect(calls).toHaveLength(39)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

@@ -1,4 +1,16 @@
 {
+  "laya": {
+    "description": "本地决策评分，所有候选仍须审核。请配置安装了固定版本 Laya 依赖的 Python 环境，再下载并校验多语模型（约 678 MB）。",
+    "enabled": "启用 Laya",
+    "python": "Python 可执行文件（绝对路径）",
+    "model": "模型目录（留空使用应用数据目录）",
+    "unknown": "运行状态暂不可用",
+    "timing": "预热：{{warmup}} 毫秒；最近推理：{{inference}} 毫秒",
+    "failed": "运行操作失败，请检查环境配置后重试。",
+    "prepare": "下载并校验模型",
+    "warm": "加载并预热",
+    "stop": "卸载模型"
+  },
   "aria": {
     "section": "知识助手",
     "query": "知识查询",
@@ -142,6 +154,12 @@
     "workbenchUnavailable": "工作台不可用"
   },
   "review": {
+    "rescore": "Laya 重新评分",
+    "refine": "提交 LLM 精炼",
+    "refinementQueued": "已提交精炼；缺少 LLM 时在队列等待，结果仍须人工审核。",
+    "scoreUpdated": "评分已结束，请展开评分详情查看可用状态及结果。",
+    "scoring": "决策评分",
+    "scoreCaution": "模型概率是尚未校准的建议，不代表事实正确或已获批准。",
     "correctionTitle": "个人记忆纠正：批准后替代原记录",
     "correctionCompeting": "另有 {{count}} 项纠正针对同一条记忆；批准其中一项后，其他项需要重新核对。",
     "correctionStale": "原记录已变化或已有其他纠正获批。请刷新、拒绝旧候选，再从画像中重新纠正。",

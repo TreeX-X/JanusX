@@ -49,11 +49,13 @@ export class MemoryDecisionStage {
   configureScorer(scorer: DecisionScorer | null): void { this.scorer = scorer ?? new NoopScorer() }
 
   scorerIdentity() { return { ...this.scorer.identity } }
+  scorerAvailable(): boolean { return this.scorer.available?.() ?? this.scorer.identity.provider !== 'noop' }
 
-  async run(batch: DeterministicBatch): Promise<RefinementPlan> {
+  async run(batch: DeterministicBatch, selection?: { candidateId: string; candidateHash: string }): Promise<RefinementPlan> {
     const batchIds = new Set(batch.observations.map((observation) => observation.id))
     const candidates = (await this.deps.listCandidates()).filter((candidate) => candidate.status === 'proposed'
       && candidate.derivation === 'deterministic' && !candidate.legacySource && !candidate.personalCorrection
+      && (!selection || candidate.id === selection.candidateId && candidateDecisionHash(candidate) === selection.candidateHash)
       && candidate.evidence.observationIds.some((id) => batchIds.has(id)))
       .sort((left, right) => left.id.localeCompare(right.id)).slice(0, MAX_CANDIDATES)
     if (!candidates.length) return { observations: [], candidateHashes: {} }

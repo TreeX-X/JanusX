@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CandidateFact, Observation } from '../../../src/shared/knowledge'
 import { MemoryDecisionStage } from '../../../src/main/knowledge/decision-stage'
-import { DECISION_TEMPLATE_VERSION, type DecisionScorer, type MemoryDecisionInput } from '../../../src/main/knowledge/decision-scorer'
+import { candidateDecisionHash, DECISION_TEMPLATE_VERSION, type DecisionScorer, type MemoryDecisionInput } from '../../../src/main/knowledge/decision-scorer'
 import { knowledgeObservationService, resetObservationServiceEphemeralState } from '../../../src/main/knowledge/observation-service'
 import { knowledgeProcessingQueue, KnowledgeProcessingQueue } from '../../../src/main/knowledge/processing-queue'
 import { runDeterministicStage } from '../../../src/main/knowledge/deterministic-extractor'
@@ -88,6 +88,17 @@ describe('queue-owned memory decision gate', () => {
     const [stored] = await knowledgeExtractService.listFactCandidates()
     expect(stored?.fact).toEqual(candidate.fact)
     expect(stored?.decision).toMatchObject({ status: 'ready', route: 'refine' })
+  })
+
+  it('scores only the manually selected unchanged snapshot', async () => {
+    const { batch, candidate } = await seed()
+    const stage = new MemoryDecisionStage()
+    const score = vi.fn(async (input: MemoryDecisionInput) => output(input))
+    stage.configureScorer(model(score))
+    await stage.run(batch, { candidateId: candidate.id, candidateHash: 'stale' })
+    expect(score).not.toHaveBeenCalled()
+    await stage.run(batch, { candidateId: candidate.id, candidateHash: candidateDecisionHash(candidate) })
+    expect(score).toHaveBeenCalledOnce()
   })
 
   it('filters cross-project and private truth before giving related records to the scorer', async () => {

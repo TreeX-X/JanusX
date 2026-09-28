@@ -29,6 +29,8 @@ import type {
 import type { KnowledgeSettings } from '../knowledge-settings'
 
 export const KNOWLEDGE_CHANNELS = {
+  layaControl: 'knowledge:laya:control',
+  candidateAction: 'knowledge:candidate:action',
   noteWikiPages: 'knowledge:note-wiki:pages',
   prepareNoteWiki: 'knowledge:note-wiki:prepare',
   proposeNoteWiki: 'knowledge:note-wiki:propose',
@@ -291,6 +293,8 @@ export interface KnowledgeAPI {
   registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
   userMemoryOverview: () => Promise<UserMemoryOverview>
   importLegacyPersonalMemory: () => Promise<{ created: number; remaining: number }>
+  layaControl: (action: import('../laya').LayaAction) => Promise<import('../laya').LayaStatus>
+  candidateAction: (input: { candidateId: string; candidateHash: string; action: 'score' | 'refine' }) => Promise<void>
   forgetPersonalMemory: (input: { targetId: string; targetHash: string; kind?: 'fact' | 'episode' }) => Promise<void>
   proposePersonalMemoryCorrection: (input: { targetId: string; targetHash: string; content: string }) => Promise<{ candidateId: string; status: CandidateFact['status'] }>
   getSettings: () => Promise<KnowledgeSettings>

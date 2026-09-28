@@ -1,3 +1,4 @@
+import { LayaSettingsPanel } from './LayaSettingsPanel'
 import { useEffect, useState } from 'react'
 import {
   getKnowledgeSettings,
@@ -131,9 +132,11 @@ export function KnowledgeSettingsPanel() {
       setSettings(next)
       setDraft(next)
       setStatus('saved')
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : t('settings:knowledge.error.save'))
       setStatus('error')
+      return false
     }
   }
 
@@ -152,6 +155,7 @@ export function KnowledgeSettingsPanel() {
 
   return (
     <div className={styles.panel}>
+      <LayaSettingsPanel value={draft.laya} onChange={laya => setDraft(current => ({ ...current, laya }))} onSave={handleSave} disabled={isBusy} />
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.capture')}</h3>
         <SettingSwitch

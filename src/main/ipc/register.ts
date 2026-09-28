@@ -36,6 +36,8 @@ import { handleTerminalHostWindowClosed, registerTerminalHandlers } from './term
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeObservationService } from '../knowledge/observation-service'
 import { runDeterministicStage } from '../knowledge/deterministic-extractor'
+import { registerLayaScorer } from '../knowledge/laya-runtime'
+import { runCandidateAction } from '../knowledge/candidate-actions'
 import { runLlmStage } from '../knowledge/llm-stage'
 import { knowledgeRefinementTasks } from '../knowledge/refinement-tasks'
 import { terminalManager } from '../terminal/manager'
@@ -134,6 +136,8 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   // Phase 1-2: plug the deterministic stage into the processing queue and
   // report unprocessed ranges from the persisted cursor on startup.
   // Persist plans after deterministic batches; recover model tasks independently of cursors.
+  registerLayaScorer()
+  knowledgeProcessingQueue.configureCandidateActionHandler(runCandidateAction)
   knowledgeProcessingQueue.configureDeterministicHandler((batch) =>
     runDeterministicStage(batch).then(() => undefined),
   )

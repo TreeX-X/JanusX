@@ -15,7 +15,7 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。前两片已将个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，补充宿主来源契约，并移除确定性提取器内部的自动接受。Profile 已由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实已提供人工重新确认迁移；自动恢复历史确认资格、单值冲突和跨存储遗忘闭环仍未完成。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)现在只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产环境使用 NoopScorer，真实 Laya 适配及人工精修入口仍待实现。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
 
 需求边界（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。
 
@@ -106,15 +106,29 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 
 ### Laya 部署与校准边界
 
-首期选择 Python 本地 sidecar 加固定多语 checkpoint，通过小型协议适配使用 Agent.system_one；延迟加载单个本地模型并限制问题、证据长度、并发和空闲驻留时间。只绑定 loopback，宿主与 sidecar 使用实例凭证；运行中失联、繁忙、超时或协议错误返回 unavailable，queue 保留规则候选。选择直接固定模型，避免 Router 在英文输入时另行下载英文 checkpoint；不启用 typed-decisions 自动路由。
+首期使用 Python 本地 sidecar 加固定多语 checkpoint，通过父子进程 stdin/stdout 的 NDJSON 协议调用 Agent.predict，不开放 HTTP 监听端口。延迟加载单个本地模型，限制六个问题、1024 token、单次并发和五分钟空闲驻留；截断或选项合并返回 unavailable。预热最多等待 120 秒，下载最多 900 秒，单条评分最多 30 秒；每批最多 20 条，极端超时仍会占用队列时间。运行中失联、繁忙、超时或协议错误保留规则候选。直接固定模型，避免 Router 在英文输入时另行下载英文 checkpoint。
 
-应用仅携带端口、能力探针和少量启动适配，Python/torch 环境与权重按需安装，模型文件置于 userData/laya-weights/。安装、下载、校验、预热与 ready 是不同状态，禁用或未 ready 时不能进入模型决策。固定 SDK 版本、模型 revision 和文件摘要；运行阶段从已校验本地目录加载，不能临时联网拉取新模型。
+应用仅携带 sidecar.py、model-manifest.json 和 requirements.txt，Python/torch 环境与权重按需安装，默认模型目录为 userData/laya-weights/ 下的固定 revision。设置页提供开关、Python 绝对路径、模型目录、下载校验、预热和卸载。安装、下载、校验、预热与 ready 是不同状态，禁用或未 ready 时不能进入模型决策；自动精炼任务也必须检查运行时仍 ready。固定 SDK 0.3.21 和全部模型文件的 SHA-256；运行阶段设置离线模式，不临时联网拉取模型。
+
+Windows 验证环境采用 Python 3.12、torch 2.6.0+cpu、transformers 4.57.6，其余版本见 [requirements.txt](../../resources/laya/requirements.txt)。安装示例为 `uv venv --python 3.12 <环境目录>`，然后 `uv pip install --python <环境目录>/Scripts/python.exe -r resources/laya/requirements.txt`；把该 Python 绝对路径填入设置，再下载并预热。该文件固定版本但没有依赖包哈希，不等同于模型文件的摘要校验。环境和权重未写入仓库，也未修改用户现有 Janus 配置。
+
+SDK 会在加载时改写 tokenizer_config.json，因此 sidecar 在同卷临时目录复制该配置，并为大文件建立硬链接；不支持硬链接时复制文件。下载原件保留原摘要，重复预热仍可验证。正常卸载关闭 stdin，使临时目录清理完成；超时、崩溃和强制结束可能残留 `.runtime-*`，不保证异常退出清理。Windows venv 启动器可能另建 Python 子进程，强制停止必须终止整个专属进程树，不能只结束启动器。
 
 多语模型核对版本为 [e4e9ddf21a7b1903b7acffd8814ad4307bf63a67](https://huggingface.co/convaiinnovations/laya-multilingual/tree/e4e9ddf21a7b1903b7acffd8814ad4307bf63a67)。其 [rl_agent_config.json](https://huggingface.co/convaiinnovations/laya-multilingual/blob/e4e9ddf21a7b1903b7acffd8814ad4307bf63a67/rl_agent_config.json)为 max_len=1024、head_max_len=256、temperature=[1,1,1]、temperature_by_options={}，未附分桶拟合温度。model.safetensors 为 643,835,514 bytes，tokenizer.json 为 34,363,188 bytes，整个该 snapshot 文件约 678.2 MB；“644 MB”只代表权重文件，不包含 tokenizer、Python 环境与运行内存。
 
 上游 [BENCHMARKS.md](https://github.com/NandhaKishorM/laya/blob/9d955671415fc19f069b9cc998928075c1f255ec/BENCHMARKS.md)明确区分任务、语言、温度修正与拟合数据。0.466→0.081 属于上游英文模型特定拟合实验，不能作为 JanusX 多语模型的校准保证。建立真实工程与个人候选的标注集，按来源事件/会话拆分校准与留出测试，避免重复片段泄漏；分别测 retention、kind、support、duplicate、supersede、conflict 的 precision/recall、Brier、ECE、覆盖率和错误接受率。校准不提高分类正确率；质量不足时调模板或另行微调，自动接受继续关闭。
 
-官方已有 Python ONNXAgent 与导出/INT8 工具，但仍复用 Python tokenizer/common 协议，所核对 HF snapshot 没有现成 ONNX 图。首期不把“有 ONNX”写成“可直接在 Electron 无 Python 运行”；ONNX/量化作为后续 CPU 优化，需要另验导出可用性、分词/选项/概率一致性、Windows 性能和重新校准。真实模型准确率、CPU P50/P95、冷启动和内存尚未在本机测量，不把上游 T4 延迟写成 JanusX 承诺，也不宣称 sidecar 成本可忽略。
+官方已有 Python ONNXAgent 与导出/INT8 工具，但仍复用 Python tokenizer/common 协议，所核对 HF snapshot 没有现成 ONNX 图。ONNX/量化作为后续 CPU 优化，需要另验导出、分词、选项、概率一致性及重新校准。
+
+[实测报告](../../tests/fixtures/laya-evaluation-windows.json)记录 Windows CPU、最多四线程、24 条中英文合成样例的完整六题输出、模型版本及适配器摘要：进程预热 19,855 ms，六题总延迟 P50 714.5 ms、P95 874 ms，实际 Python 解释器峰值工作集 2,325,618,688 bytes（约 2.17 GiB）。预热包含校验、导入和推理，不代表清空系统缓存后的磁盘冷启动。报告由 [evaluate-laya.py](../../scripts/evaluate-laya.py)生成；Windows venv 启动器的约 5 MB 内存不能代表模型进程。以上是单台机器测量，不是设备性能承诺。
+
+[评估样例](../../tests/fixtures/laya-memory-eval.json)包含 8 条校准样例和 16 条留出样例，按 source 分离；双语对照共用语义场景，样本量不足以建立生产校准。留出集两种语言 retention 准确率均为 37.5%、kind 为 50%、support 为 87.5%；conflict 正例召回率为 0。逐语言逐题 Brier、ECE 和 precision/recall 保留在报告。未拟合温度，未根据留出集调模板，calibrationId 仍为 null；自动接受在产品中始终关闭，不用零次自动接受伪装通过质量门槛。AC-8 保持未完成：下一项质量工作是扩大真实脱敏标注集、仅用校准部分改进题目，再对新的独立留出集验收。
+
+### 人工评分与可选精炼的实施边界
+
+[审核栏](../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)为普通确定性事实提供重新评分和提交 LLM 精炼。浏览器提交当前候选快照的 SHA-256，宿主从存储重新读取归属和证据；[candidate-actions](../../src/main/knowledge/candidate-actions.ts)在现有处理队列执行，只评分选中候选。旧迁移记录、显式记忆和个人纠正不使用人工精炼入口。评分详情展示模型建议与未校准提示，不能授权事实提交。
+
+[精炼任务](../../src/main/knowledge/refinement-tasks.ts)用 trigger=manual 区分人工意图与 scorer 建议，不伪造 ready 注解。人工任务可在自动精炼关闭或没有 Laya 时运行，但仍要求知识功能启用、模型可用、字符预算充足和证据有效。没有 LLM 时保留 pending 且不消耗尝试；相同快照不重复建任务，失败最多三次，指数退避。执行前以及模型返回、候选写入前复核证据和工程上下文；候选已审核、变化、遗忘或来源失效时不覆盖。精炼只改选中候选，不追加无关事实、Wiki 或图谱输出；所有结果仍待人工审核。
 
 ### 实施顺序与范围
 
@@ -143,17 +157,17 @@ Episode 的新存储过期与遗忘复用 Observation 写锁，覆盖活动分�
 
 确定性提取器不再应用 truth，旧 `autoAcceptDeterministicFacts` 即使为 true 也归一为 false，旧 auto-policy 调用被拒绝，设置面板移除失效开关。缺省模式为 deterministic-only；已有 auto/llm-preferred 配置只允许通过评分门控的按需精修。设置选项显示“按需精修”及“按需精修（优先采用精修结果）”。显式记忆已由规则保留全文，不再送入 LLM；无合格证据返回正常 skip。
 
-[decision-scorer](../../src/main/knowledge/decision-scorer.ts)定义宿主 DecisionScorer 接口、NoopScorer 与有界调用。六类问题为 retention、kind、support、duplicate、supersede、conflict；宿主检查唯一题目、完整选项、概率有限性、归一和、所选答案概率及 noul 方向。缺题、选项折叠、版本不符、异常或 2 秒超时均回到人工审核。每份候选注解保留 provider/modelRevision、模板与校准标识、输入及候选 hash、原文字符范围、相关事实 ID 和截断标志。kind 概率不修改事实 confidence，评分不改变归属、来源、supersedes 或审核状态。
+[decision-scorer](../../src/main/knowledge/decision-scorer.ts)定义宿主 DecisionScorer 接口、NoopScorer 与有界调用。六类问题为 retention、kind、support、duplicate、supersede、conflict；宿主检查唯一题目、完整选项、概率有限性、归一和、所选答案概率及 noul 方向。缺题、选项折叠、版本不符、异常或超时均回到人工审核；通用 scorer 默认 2 秒，真实 CPU Laya 为 30 秒。每份候选注解保留 provider/modelRevision、模板与校准标识、输入及候选 hash、原文字符范围、相关事实 ID 和截断标志。kind 概率不修改事实 confidence，评分不改变归属、来源、supersedes 或审核状态。
 
 [decision-stage](../../src/main/knowledge/decision-stage.ts)通过已有队列的精修阶段运行，最多评估每批 20 个确定性事实候选。先按 scope 和 owner 过滤 active truth，再在最多 200 条同域事实中用 BM25 取前 5 条相关记录；候选证据最多 8 条、每条 6000 字符、总计 12000 字符，相关事实正文每条最多 2000 字符。缺证据、证据失效、归属不合法或上下文超限时保留人工审核，不对截断片段作完整支持度判断。读取仍复用现有全库文件扫描，这些上限限制评分输入，不代表磁盘读取成本已经有界。
 
-完整且有效的评分中，各问题答案一致且所选概率至少为 0.9 时直接留待审核；不一致或不确定才建议精修。0.9 是跳过精修的初始策略阈值，不是校准结果或自动接受门槛；所有结果仍需人工审核。生产缺省 NoopScorer 不会触发 LLM；只有宿主配置有效 scorer、设置允许且存在默认 LLM 时才运行自动精修。测试中的 ready scorer 为替身，不能视作真实 Laya 已接通。
+完整且有效的评分中，各问题答案一致且所选概率至少为 0.9 时直接留待审核；不一致或不确定才建议精修。0.9 是跳过精修的初始策略阈值，不是校准结果或自动接受门槛；所有结果仍需人工审核。生产注册可选 Laya scorer，默认关闭；运行时未 ready、设置不允许或没有默认 LLM 时不执行自动精炼。普通单元测试使用替身，独立真实进程测试和上述固定样例报告才构成实际 Laya 推理证据。
 
 评分落盘前重新核对证据有效性、同域事实集合和 scorer 身份；候选注解在审核锁内按候选 hash 写入，避免覆盖期间的批准、拒绝或内容修改。注解额外记录证据正文/来源 hash 与同域事实内容指纹，访问次数、强度及 lastSeenAt 不参与内容指纹。已通过本批评分门控的候选全部进入精修规划，60000 字符预算移到任务执行时计算，超出预算的任务保留到下次执行；超过本批 20 个评分名额的候选仍留待人工审核。
 
 [refinement-tasks](../../src/main/knowledge/refinement-tasks.ts)以版本化 `processing/refinement-tasks.json` 保存任务，只存候选及证据引用、hash、scorer 身份和运行状态，不复制原文或保存供应商异常正文。任务 ID 绑定 scope、owner、候选快照、评分输入和同域内容指纹，同一任务并发入队或进程重启不会重复创建。状态为 pending、running、succeeded、cancelled、failed；写入采用原子替换，同进程的写入与执行共用串行锁，诊断通过原子文件快照读取，不等待模型调用结束。
 
-队列先持久化任务再推进观察游标；规划或任务写入失败时保留游标，确定性产物仍在原处且可幂等重放。模型调用使用独立任务入口，在启动、已有 processNow 操作及每分钟恢复检查时执行，不依赖新的观察。恢复定时器不会在前一次检查仍等待时积累重复请求。每次恢复最多调用 20 个任务、交付 60000 字符，每个任务绑定单个候选和它的完整证据；关闭知识处理、关闭精修、缺少默认 LLM 或 scorer 暂不可用时保持等待，不增加尝试次数。
+队列先持久化任务再推进观察游标；规划或任务写入失败时保留游标，确定性产物仍在原处且可幂等重放。模型调用使用独立任务入口，在启动、已有 processNow 操作及每分钟恢复检查时执行，不依赖新的观察。恢复定时器不会在前一次检查仍等待时积累重复请求。每次恢复最多调用 20 个任务、交付 60000 字符，每个任务绑定单个候选和它的完整证据；关闭知识处理或缺少默认 LLM 时保持等待，不增加尝试次数。自动任务额外要求精炼开关和 scorer 就绪；人工任务以显式提交意图为依据。
 
 执行前核对候选审核状态、正文版本、证据有效性、归属、同域事实内容及 scorer 版本；候选已修改、批准、拒绝，证据过期/遗忘/不可读，或有效 scorer 版本变化时取消旧任务。模型调用前、返回后及候选写锁内继续检查候选快照，只合并仍有效的目标，不追加模型顺带生成的其他事实、Wiki 或图谱。精修后删除旧评分注解；如果候选已提交而任务完成状态尚未写入，重启会识别失效快照并取消旧任务，不再调用模型。
 
@@ -223,6 +237,16 @@ truth 读取、Profile 投影、近期记忆、治理检索和个人召回都核
 
 机器验证（2026-09-29，聊天与近期事件统一遗忘）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 57 个文件、481 项测试；补充损坏 observation 分片反例后，`npx vitest run tests/unit/knowledge/personal-memory-forgetting.test.ts` 的 14 项全部通过。新增覆盖独立 episode 指纹、原子查询提交与重试、205 条历史事件、宽泛查询拒绝、损坏来源保留，以及真实无头 Chromium 中 episode 类型和 hash 的传递。11 个生产 TypeScript 文件定向 ESLint、`npm run i18n:check`、`npm run check:package-boundary` 通过。`npm run typecheck:strict-unused` 未通过，唯一报告为工作区无关的 `src/main/notifications/agent-hook-config.ts:183`、`:184` 两个未使用常量；未修改该文件，也不把严格检查记为通过。未运行完整 Electron E2E、桌面打包或真实个人数据遗忘。
 
+### Laya 接入与精炼验收（2026-09-29）
+
+`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/laya-settings-ui.test.ts tests/unit/package-boundary.test.ts` 通过 59 个文件、497 项测试；真实模型用例在普通回归中显式跳过。设置 `JANUSX_LAYA_PYTHON` 和 `JANUSX_LAYA_MODEL` 后单独执行 `npx vitest run tests/unit/knowledge/laya-real.test.ts` 通过，覆盖真实 Python 预热、宿主六题校验以及连续两次启动。`python -m unittest discover -s tests/laya -v` 通过 9 项，覆盖概率、摘要、SDK 配置写入隔离与评估指标。设置页补充父组件保存期间取消预热的 Chromium 验收，最终单独复跑通过。
+
+严格未使用检查、生产构建、20 个改动生产文件定向 ESLint、双语键检查和 package-boundary 检查通过。执行项目既有 `npm run prepackage` 后，本地依赖以可打包目录安装，`exclusions:check` 的 416 项排除与生产闭包一致，未修改依赖声明或锁文件。Note 检查中本文零错误，全仓库仍由 debug-mode-plan Note 缺少 Proposal/Risks 两节而失败。
+
+Windows 解包验证使用构建快照，避免运行中的开发服务改写 out 目录；临时配置仅将 out 输入替换为固定快照，保留原打包规则。`npx electron-builder --win --dir --config=artifacts/laya-package-config.json` 成功生成 `artifacts/laya-package-check/win-unpacked`。`node scripts/check-laya-package.mjs artifacts/laya-package-check/win-unpacked` 验证三份适配文件与源文件摘要一致，asar 不包含 Laya 源目录、模型权重或 Python/torch 环境。将 `JANUSX_LAYA_RESOURCES` 指向产物的 resources/laya 后，真实进程测试连续两次启动及六题评分通过。未生成 NSIS/便携安装包，也未运行完整 Electron 桌面 E2E。
+
+第一阶段的运行时接入及 Windows 解包验收完成，第二阶段的人工/自动精炼代码路径可用，真实模型质量验收未通过。第二阶段仍需真实脱敏标注、独立留出与按题目/语言确定质量门槛。未调用真实外部 LLM、未操作真实用户记忆，也未声称 AC-8 或整项重构完成。
+
 ## Alternatives considered
 
 - 直接引入 AgentMemory SDK 与 iii-engine：完整提供编码 Agent 接入、版本记忆、检索和运维能力。否决原因是其默认相似度替代和 legacy 通配不满足本仓审核与域隔离约束，且运行引擎会与现有 queue/review/storage 重叠；选择借鉴检索预筛、来源和版本设计。
@@ -237,10 +261,10 @@ truth 读取、Profile 投影、近期记忆、治理检索和个人召回都核
 - [ ] AC-1: 单管线可达双域 — 一次调度能够结算合法 project/user 输入，分域游标与处理键不串域；Episode、个人保存和 Habit 候选进入统一入口，Profile 仅为派生视图；可归因到用户的工程陈述或行为可派生个人开发习惯，工程事实保持原归属，未归因工程内容不能直接升格为个人偏好。重试、跨批次与多项目转发不重复计数。
 - [ ] AC-2: 工程事实闭环 — agent/checkpoint/git/tool/blueprint 来源可追溯；重复只合证据，相似度不直接替代，显式 supersedes 检查归属与当前版本；测试覆盖版本晋升、冲突、索引失效和退出默认召回，强度变弱不删除有效 truth。
 - [ ] AC-3: 画像证据闭环 — 个人画像服务 Janus，可读取工程知识并归纳有本人证据的开发习惯；明确保存意图不受重复频次门槛限制。人工 override 与可信账本优先，模型推测进入 uncertain 且默认不注入稳定画像；来源可核验、同证据不增快照版本、撤回立即失效、私有数据不进入工程与 MCP 等共享面。
-- [ ] AC-4: Laya 为主决策分流 — ready 时输出 retention/kind/support/duplicate/supersede/conflict 注解，answer_confidence 与 noul 方向校验驱动快道或待精修；关闭、缺席、失联、超时、无效输出时用 NoopScorer 保留规则候选且不抛到聊天主链。兼容既有数据，不要求延续旧自动审核/自动 LLM 行为。
+- [x] AC-4: Laya 为主决策分流 — ready 时输出 retention/kind/support/duplicate/supersede/conflict 注解，answer_confidence 与 noul 方向校验驱动快道或待精修；关闭、缺席、失联、超时、无效输出时用 NoopScorer 保留规则候选且不抛到聊天主链。兼容既有数据，不要求延续旧自动审核/自动 LLM 行为。
 - [x] AC-5: 无 Laya 基线完整 — 无 key、无 sidecar 时规则加 BM25 仍能完成 capture→candidate→人工 review→truth→recall；全部新候选人工审核，原 autoAccept 设置不得绕过；没有默认 LLM 是正常状态。
-- [ ] AC-6: LLM 可选精修 — off 默认不自动调用；on-demand 仅在 Laya 标记、配置允许和预算充足时运行，人工触发也归 queue；超时、重试、字符预算及失败保留候选的语义可测试，精修结果重新核验。
-- [ ] AC-7: Laya 资源受控 — 安装包不包含权重与 Python/torch；模型按需下载、revision/hash 固定、只加载指定多语 checkpoint；预热推理未通过不能 ready，idle 卸载与缺席回退可观察；单纯 health=ok 不算就绪。
+- [x] AC-6: LLM 可选精修 — off 默认不自动调用；on-demand 仅在 Laya 标记、配置允许和预算充足时运行，人工触发也归 queue；超时、重试、字符预算及失败保留候选的语义可测试，精修结果重新核验。
+- [x] AC-7: Laya 资源受控 — 安装包不包含权重与 Python/torch；模型按需下载、revision/hash 固定、只加载指定多语 checkpoint；预热推理未通过不能 ready，idle 卸载与缺席回退可观察；单纯 health=ok 不算就绪。
 - [ ] AC-8: 决策质量可追溯 — 校准集与留出集按来源隔离，记录模型、题型、语言与模板版本的准确率、Brier、ECE、覆盖率和错误接受率；熵型 confidence、分类概率、act_probability、跨窗最大概率都不能冒充事实支持度。未达到已记录的审核策略质量门槛时自动接受保持关闭。
 - [ ] AC-9: 生命周期与召回确定 — 墙钟衰减重复计算和停机恢复等价；只增强最终交付且去重后的记忆，受冷却与上限约束；Episode 到期、遗忘与撤回同步影响索引、Profile 和任务重放，双域预算不互相挤占。
 - [ ] AC-10: 迁移与回归可复现 — 迁移可断点续跑、重复执行不重复数据、未知旧来源不升格；保持 Wiki sourceFactIds/sourceNoteRefs/hash/版本审核语义；相关 Vitest、typecheck、IPC/UI 与打包检查通过，真实 Laya 性能另有 Windows CPU 实测记录。

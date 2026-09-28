@@ -18,6 +18,7 @@ beforeAll(async () => {
       window.items = [candidate('private-choice','user'),candidate('project-rule','project')]
       window.calls = []; window.failLoad = false; window.failAction = false; window.defer = false
       window.electron = {knowledge:{
+        candidateAction:async input=>{window.calls.push(input);if(window.defer)await new Promise(resolve=>window.finish=resolve)},
         importLegacyPersonalMemory:async()=>{window.imports=(window.imports||0)+1;window.items.push({...candidate('old-profile','user'),legacySource:{kind:'profile',id:'identity',hash:'source'}});return {created:1,remaining:0}},
         listCandidates:async()=>{if(window.failLoad)throw Error('unavailable');return window.items},
         listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
@@ -37,6 +38,25 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close() })
 
 describe('memory review browser interactions', () => {
+  it('submits a hashed candidate action without approval and blocks duplicate actions', async () => {
+    const page = await browser.newPage()
+    try {
+      await page.route('http://localhost/memory', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
+      await page.goto('http://localhost/memory')
+      await page.addScriptTag({ content: script })
+      await page.getByRole('button', { name: 'All 2', exact: true }).waitFor()
+      await page.evaluate(() => { (window as any).defer = true })
+      const card = page.locator('article').filter({ hasText: 'private-choice' })
+      await card.getByRole('button', { name: 'Queue LLM refinement', exact: true }).click()
+      await page.waitForFunction(() => (window as any).calls.length === 1)
+      expect(await card.getByRole('button', { name: 'Approve', exact: true }).isDisabled()).toBe(true)
+      const calls = await page.evaluate(() => (window as any).calls)
+      expect(calls).toEqual([{ candidateId: 'private-choice', candidateHash: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'refine' }])
+      await page.evaluate(() => (window as any).finish())
+      await page.getByText(/Refinement submitted/).waitFor()
+      expect(await page.locator('article').count()).toBe(2)
+    } finally { await page.close() }
+  })
   it('imports old records into the personal review filter without automatically approving them', async () => {
     const page = await browser.newPage()
     try {

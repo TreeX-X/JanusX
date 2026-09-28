@@ -1,3 +1,4 @@
+import { controlLaya } from '../knowledge/laya-runtime'
 import { ipcMain } from 'electron'
 import { noteWikiPages, prepareNoteWiki, wikiSourceStatuses } from '../knowledge/note-sources'
 import type { PrepareNoteWikiInput } from '../../shared/ipc/knowledge'
@@ -39,6 +40,8 @@ import type {
 } from '../../shared/knowledge'
 
 export function registerKnowledgeHandlers(): void {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.candidateAction, (_event, input: unknown) => knowledgeProcessingQueue.processCandidateAction(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.layaControl, (_event, action) => controlLaya(action))
   ipcMain.handle(KNOWLEDGE_CHANNELS.importLegacyPersonalMemory, () => importLegacyPersonalMemory())
   ipcMain.handle(KNOWLEDGE_CHANNELS.forgetPersonalMemory, (_event, input: unknown) => forgetPersonalMemory(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.proposePersonalMemoryCorrection, (_event, input: unknown) => proposePersonalMemoryCorrection(input))
