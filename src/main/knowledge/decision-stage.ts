@@ -53,7 +53,7 @@ export class MemoryDecisionStage {
   async run(batch: DeterministicBatch): Promise<RefinementPlan> {
     const batchIds = new Set(batch.observations.map((observation) => observation.id))
     const candidates = (await this.deps.listCandidates()).filter((candidate) => candidate.status === 'proposed'
-      && candidate.derivation === 'deterministic'
+      && candidate.derivation === 'deterministic' && !candidate.legacySource
       && candidate.evidence.observationIds.some((id) => batchIds.has(id)))
       .sort((left, right) => left.id.localeCompare(right.id)).slice(0, MAX_CANDIDATES)
     if (!candidates.length) return { observations: [], candidateHashes: {} }

@@ -127,6 +127,7 @@ export function installElectronApiFallback(): void {
       externalMcpStatus: () => unavailableKnowledge(),
       registerExternalMcp: () => unavailableKnowledge(),
       userMemoryOverview: () => unavailableKnowledge(),
+      importLegacyPersonalMemory: () => unavailableKnowledge(),
       getSettings: () => unavailableKnowledge(),
       updateSettings: () => unavailableKnowledge(),
     },

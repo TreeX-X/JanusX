@@ -18,9 +18,10 @@ beforeAll(async () => {
       window.items = [candidate('private-choice','user'),candidate('project-rule','project')]
       window.calls = []; window.failLoad = false; window.failAction = false; window.defer = false
       window.electron = {knowledge:{
+        importLegacyPersonalMemory:async()=>{window.imports=(window.imports||0)+1;window.items.push({...candidate('old-profile','user'),legacySource:{kind:'profile',id:'identity',hash:'source'}});return {created:1,remaining:0}},
         listCandidates:async()=>{if(window.failLoad)throw Error('unavailable');return window.items},
         listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
-        applyCandidate:async input=>{window.calls.push(input);if(window.failAction)throw Error('review failed');if(window.defer)await new Promise(resolve=>window.finish=resolve);window.items=window.items.filter(item=>item.id!==input.id)},
+        applyCandidate:async input=>{window.calls.push(input);if(window.failAction)throw Error(typeof window.failAction==='string'?window.failAction:'review failed');if(window.defer)await new Promise(resolve=>window.finish=resolve);window.items=window.items.filter(item=>item.id!==input.id)},
         rejectCandidate:async input=>{window.calls.push(input);window.items=window.items.filter(item=>item.id!==input.id)}
       }}
       i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge}},interpolation:{escapeValue:false}}).then(()=>createRoot(document.getElementById('root')).render(<MemoryReviewTool active={true}/>))
@@ -36,6 +37,24 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close() })
 
 describe('memory review browser interactions', () => {
+  it('imports old records into the personal review filter without automatically approving them', async () => {
+    const page = await browser.newPage()
+    try {
+      await page.setContent('<div id="root"></div>')
+      await page.addScriptTag({ content: script })
+      await page.getByRole('button', { name: 'All 2', exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Import old personal records for review', exact: true }).click()
+      await page.getByText('Added 1 records for review; 0 more can be imported.', { exact: true }).waitFor()
+      expect(await page.getByRole('button', { name: 'Personal memory 2', exact: true }).getAttribute('aria-pressed')).toBe('true')
+      expect(await page.locator('article').count()).toBe(2)
+      const legacy = page.locator('article').filter({ hasText: 'old-profile' })
+      expect(await legacy.innerText()).toContain('confirm its content again')
+      expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+      await legacy.getByRole('button', { name: 'Approve', exact: true }).click()
+      await page.getByRole('button', { name: 'Personal memory 1', exact: true }).waitFor()
+      expect(await page.evaluate(() => (window as any).calls)).toEqual([{ type: 'fact', id: 'old-profile' }])
+    } finally { await page.close() }
+  })
   it('filters without changing ownership, blocks duplicate actions, and updates both counts', async () => {
     const page = await browser.newPage()
     try {
@@ -76,6 +95,9 @@ describe('memory review browser interactions', () => {
       await page.getByRole('button', { name: 'Refresh Knowledge Engine' }).click()
       await page.getByRole('button', { name: 'All 2', exact: true }).waitFor()
       expect(await page.getByRole('button', { name: 'Approve', exact: true }).first().isEnabled()).toBe(true)
+      await page.evaluate(() => { (window as any).failAction = 'Legacy memory source changed' })
+      await page.getByRole('button', { name: 'Approve', exact: true }).first().click()
+      await page.getByText('The old source changed or the candidate no longer matches. Refresh, reject the old candidate, then import the records again.', { exact: true }).waitFor()
     } finally { await page.close() }
   })
 })

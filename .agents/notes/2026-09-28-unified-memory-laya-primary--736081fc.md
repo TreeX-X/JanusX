@@ -13,7 +13,7 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 ## Problem
 
-JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。前两片已将个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，补充宿主来源契约，并移除确定性提取器内部的自动接受。Profile 已由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像来源迁移、单值冲突和跨存储遗忘闭环仍未完成。
+JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。前两片已将个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，补充宿主来源契约，并移除确定性提取器内部的自动接受。Profile 已由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实已提供人工重新确认迁移；自动恢复历史确认资格、单值冲突和跨存储遗忘闭环仍未完成。
 
 [确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)现在只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产环境使用 NoopScorer，真实 Laya 适配及人工精修入口仍待实现。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
 
@@ -159,7 +159,7 @@ Episode 的新存储过期与遗忘复用 Observation 写锁，覆盖活动分�
 
 任务调用关闭提取器内部重试，由任务账本统一控制最多 3 次尝试，失败后分别等待 1、2 分钟；最终失败不会被同一计划重新入队而隐式复活。崩溃留下的 running 任务同样受总尝试上限约束。任务成功只表示本次精修已处理，不表示事实已获批准。已有 processingStats 返回按任务状态划分的 refinement 计数及下次重试时间；旧 llm 阶段计数保留为规划结果。任务文件结构错误会明确失败并保留原字节，不按空文件覆盖恢复。
 
-AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-4、AC-6、AC-10 尚未全部完成。旧 Profile 与历史已审核事实的可信迁移、单值画像槽位、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、人工精修/最终失败重试入口、相似习惯候选持续合并、真实 Laya 及完整生命周期仍按后续步骤实施。Episode 失效尚不级联撤销已生成候选或长期事实；任务执行前的失效检查也不构成覆盖整个模型调用期间的跨存储遗忘事务。统一遗忘屏障属于后续账本撤回与 Profile 失效工作，不能将当前 Episode 遗忘描述为全链路删除。新来源进入已确认画像仍须 Inbox 审核。
+AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-4、AC-6、AC-10 尚未全部完成。历史审核资格自动恢复、单值画像槽位、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、人工精修/最终失败重试入口、相似习惯候选持续合并、真实 Laya 及完整生命周期仍按后续步骤实施。Episode 失效尚不级联撤销已生成候选或长期事实；任务执行前的失效检查也不构成覆盖整个模型调用期间的跨存储遗忘事务。统一遗忘屏障属于后续账本撤回与 Profile 失效工作，不能将当前 Episode 遗忘描述为全链路删除。新来源进入已确认画像仍须 Inbox 审核。
 
 机器验证（2026-09-28，持久化精炼任务与恢复）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 50 个文件、422 项测试。[refinement-tasks.test.ts](../../tests/unit/knowledge/refinement-tasks.test.ts)的 20 项测试覆盖并发去重、不复制原文、重启恢复与退避、执行条件不足时延后、候选及来源变更取消、候选提交后崩溃恢复、预算溢出续跑、最多三次尝试、损坏账本保留、持久化失败后的游标重试及执行中状态读取；[processing-queue.test.ts](../../tests/unit/knowledge/processing-queue.test.ts)的 17 项测试包含规划持久化失败不推进游标、定时器合并与销毁。评分门控、精修期间人工审核保护、证据归属、统一写入及 MCP 回归继续通过。`npm run typecheck:strict-unused`、9 个生产 TypeScript 文件的定向 `npx eslint`、`npm run check:package-boundary` 与本片文件的 `git diff --check` 通过。未运行桌面打包/E2E 或真实 Laya 权重测试。
 
@@ -173,11 +173,21 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 
 人工身份及格式/工具偏好通过已有宿主 save 方法写入独立的 `profile/overrides.json`，限制字段与长度并记录审计；审计失败时恢复原 override。后台投影不能覆盖该文件，移除 override 不删除底层事实。未使用的 recordHabitVersion 直接写入口移除，habitVersions 随确认事实派生。override 已持久化但快照写入失败时调用会报错，后续读取仍可据 override 重建；完整跨文件崩溃事务尚未实现。人工编辑 UI、按语义单值槽位消解 override 与自由文本事实冲突仍待实现，当前召回明确标注人工字段优先。
 
-旧 `profile/profile.json` 保留原字节，不自动当作人工 override；没有确认记录的旧个人 truth 保持可读，但不进入生产个人召回的稳定事实集。历史确认资格需要结合原候选与审核审计迁移，不能从旧 actor、active 状态或 model-generated 字段推断。旧画像及旧事实的迁移/重新确认界面仍待实现，现有 overview 仍可展示旧事实，尚未增加 uncertain 分栏。此兼容策略会减少旧资料的自动注入，代价是用户在可信迁移完成前可能需要重新确认原偏好；直接把旧 profile 当 override 可保留原体验，但无法证明其来源。
+旧 `profile/profile.json` 保留原字节，不自动当作人工 override；没有确认记录的旧个人 truth 保持可读，但不进入生产个人召回的稳定事实集。历史 candidate_approved/candidate_applied 审计没有绑定被审核的正文 hash，旧 actor 或 active 状态也不能证明当前内容仍是当时确认的版本，因此选择人工重新确认，不自动恢复历史资格。直接把旧 profile 当 override 可以保留原体验，代价是无法证明其来源；按既有审计自动补确认记录可减少操作，但在缺少内容绑定时仍可能错误升格。现有 overview 仍可展示旧事实，尚未增加 uncertain 分栏。
+
+[旧资料导入](../../src/main/knowledge/legacy-memory-migration.ts)由右侧审核栏的“导入旧个人资料待确认”调用专用 IPC；不向工程 MCP 或 Agent 工具提供迁移写入口。支持现有 truth 读取器能识别的 active、未到期且未有效确认的个人事实，以及旧 profile 的 identity、formatPrefs、toolPrefs。导入只创建候选，每次最多 100 条新增候选，显示新增数量与剩余可导入数量；批次上限限制写入量，源扫描仍是全文件。旧 profile 字段按字段名与原值去重，未知字段不推断用途，不复制成画像偏好。
+
+[迁移来源绑定](../../src/main/knowledge/legacy-memory-source.ts)以种类、来源 ID、正文/版本/证据 hash 生成稳定候选 ID，已有 proposed/applied/rejected ID 都不重复创建。候选账本承担迁移进度，不另设平行状态表；候选新增使用原子替换，重启后重新导入可跳过已生成条目。拒绝或遗忘后，同一旧 profile 原值不能经重复导入复活；来源改变时生成新的待确认候选，旧候选保留供用户拒绝。源 JSON 或候选 JSONL 损坏时明确失败并保留原字节；旧事实的结构兼容仍受现有 truth schema 约束，不将不认识的结构猜测成有效事实。
+
+批准迁移候选前在事实候选写锁中核对源内容、有效性、候选正文与归属；事实撤回共用该锁，失效或已撤回的旧来源不能被迁移批准。旧事实确认通过现有 supersedes 事务归档原事实，生成连续版本的新个人事实与确认记录；旧 profile 字段则生成独立个人事实，不改写旧 profile。源不存在、源已变化或绑定丢失时拒绝批准，界面提示刷新、拒绝旧候选并重新导入。迁移候选不进入自动评分精修，用户审核的是被绑定的源内容。事实候选的批准和拒绝也严格读取 JSONL，避免覆盖其中损坏的行。
+
+该路径保证保守重新确认与候选级续跑，不保证审核、truth 和 audit 多文件的崩溃事务。进程在事实提交后、候选或审计提交前退出仍可能留下待人工核对的中间状态；失效来源检查会阻止重复批准，不声称所有中间状态都自动恢复。旧 profile 单值字段改变后仍是新候选，不自动判定其替代哪条已确认事实；单值槽位与冲突处理继续作为独立后续工作。没有运行用户真实数据迁移，也没有自动批准历史资料。
 
 个人召回按人工字段、已确认 preference、其他已确认事实的稳定次序预留最多 3 条，与 BM25 top-k 分离；其余画像材料及有效 Episode 继续按查询检索，共用既有个人条数/字符预算。已进入快照的事实不会再从旧事实检索路径重复注入；超长条目被跳过且标记截断，不阻断后续可容纳条目。事实行保留 fact/observation 引用及 supersedes，近期 Episode 不写入长期画像。工程召回与 MCP 权限过滤保持原路径。完整画像验收 AC-1、AC-3、AC-9、AC-10 仍未完成。
 
 机器验证（2026-09-28，Profile 派生快照）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 52 个文件、438 项测试。[profile-projection.test.ts](../../tests/unit/knowledge/profile-projection.test.ts)的 12 项测试覆盖人工确认与域过滤、同 ID 修改、来源变更、撤回、TTL、仅排名变化、重启、并发 override、审计失败回滚、旧文件保留、损坏文件保留、缓存正文重建及稳定条目/溢出召回预算。既有人工审核→个人召回、MCP 隔离与替代链回归通过。运行中既有 schema_violation 异步审计在临时目录清理时报告一次 EPERM，未导致测试失败；不据此声称跨存储审计事务已经完整。`npm run typecheck:strict-unused`、6 个生产 TypeScript 文件定向 ESLint、`npm run check:package-boundary` 通过；未运行 Electron 桌面 E2E、打包、真实 Laya 或旧数据迁移演练。
+
+机器验证（2026-09-28，旧个人资料重新确认迁移）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 54 个文件、453 项测试。[legacy-memory-migration.test.ts](../../tests/unit/knowledge/legacy-memory-migration.test.ts)的 12 项测试覆盖仅提案、私有归属、原文件保留、替代版本、并发导入去重、拒绝/遗忘不复活、源变更与撤回、分批续跑、损坏文件保留及审计失败回滚。失效来源提示调整后，IPC 与真实无头 Chromium 的审核交互测试 10 项复跑通过，验证导入不批准、领域筛选、显式批准及失败恢复提示。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary`、11 个生产 TypeScript 文件定向 ESLint 通过。未运行完整 Electron 桌面 E2E、打包或真实旧数据迁移。
 
 ## Alternatives considered
 

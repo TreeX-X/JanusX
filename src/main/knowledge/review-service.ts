@@ -7,7 +7,7 @@
  *  - 候选 JSONL 小体量：整文件读 → 改 status → 原子 rewrite。
  *  - 不触碰 extract 提示词、search 算法、vector/MCP。
  */
-import { appendFile, rename, writeFile, mkdir, readFile, unlink } from 'node:fs/promises'
+import { rename, writeFile, mkdir, readFile, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { createHash } from 'node:crypto'
 import type {
@@ -27,6 +27,7 @@ import { knowledgeAuditService } from './audit-service'
 import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
 import { candidateDecisionHash } from './decision-scorer'
 import { reviewedFactHash } from './profile-projection'
+import { readLegacyJsonl, validateLegacyCandidate } from './legacy-memory-source'
 import type { MemoryDecisionAnnotation } from '../../shared/memory-decision'
 import type {
   ReviewCandidateInput,
@@ -177,7 +178,7 @@ export async function proposeFactCandidates(candidates: CandidateFact[]): Promis
     })
     if (fresh.length) {
       const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : ''
-      await appendFile(file, separator + fresh.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n', 'utf8')
+      await writeTextAtomic(FACT_CANDIDATES_FILE, content + separator + fresh.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n')
     }
     return fresh
   })
@@ -364,9 +365,9 @@ export class KnowledgeReviewService {
   private async rejectLocked(input: ReviewCandidateInput): Promise<ReviewResult> {
     const { type, id, reviewNotes } = input
     const relativePath = candidateRelativePath(type)
-    const records = await readJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(
-      relativePath,
-    )
+    const records = type === 'fact'
+      ? await readLegacyJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(relativePath)
+      : await readJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(relativePath)
     const index = findCandidateIndex(records, id)
     if (index < 0) {
       throw new Error(`Candidate not found: type=${type} id=${id}`)
@@ -411,9 +412,9 @@ export class KnowledgeReviewService {
   private async applyLocked(input: ReviewCandidateInput): Promise<ReviewResult> {
     const { type, id, reviewNotes } = input
     const relativePath = candidateRelativePath(type)
-    const records = await readJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(
-      relativePath,
-    )
+    const records = type === 'fact'
+      ? await readLegacyJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(relativePath)
+      : await readJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(relativePath)
     const index = findCandidateIndex(records, id)
     if (index < 0) {
       throw new Error(`Candidate not found: type=${type} id=${id}`)
@@ -534,7 +535,9 @@ export class KnowledgeReviewService {
         || !candidate.fact.provenance.sourceEvidence.every(isSourceEvidence))) {
       throw new Error('Invalid fact source evidence')
     }
-    const previous = await readJsonl<MemoryFact>(FACTS_FILE)
+    if (candidate.id.startsWith('legacy-memory:') && !candidate.legacySource) throw new Error('Legacy memory source binding is missing')
+    const previous = candidate.legacySource ? await readLegacyJsonl<MemoryFact>(FACTS_FILE) : await readJsonl<MemoryFact>(FACTS_FILE)
+    await validateLegacyCandidate(candidate, previous)
     // Phase 2 supersede: a candidate carrying `supersedes` archives the old
     // active fact and continues its version chain instead of forking a new one.
     let base = previous

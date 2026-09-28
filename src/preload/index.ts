@@ -183,6 +183,7 @@ const knowledgeAPI: KnowledgeAPI = {
   externalMcpStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.externalMcpStatus),
   registerExternalMcp: (client) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.registerExternalMcp, client),
   userMemoryOverview: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.userMemoryOverview),
+  importLegacyPersonalMemory: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.importLegacyPersonalMemory),
   getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
   updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
 }

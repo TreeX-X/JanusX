@@ -130,6 +130,11 @@
   },
   "review": {
     "title": "Review",
+    "legacyStale": "The old source changed or the candidate no longer matches. Refresh, reject the old candidate, then import the records again.",
+    "importLegacy": "Import old personal records for review",
+    "legacyImported": "Added {{created}} records for review; {{remaining}} more can be imported.",
+    "legacyFailed": "Import failed. Source files are unchanged. Check the files and retry.",
+    "legacySource": "Old personal record: confirm its content again. Approval restores it as confirmed Janus memory.",
     "explicitMemory": "Explicit save request",
     "inferredHabit": "Inferred habit: confirm whether it applies to you",
     "personalUse": "Approval stores private Janus memory, excluded from engineering MCP.",

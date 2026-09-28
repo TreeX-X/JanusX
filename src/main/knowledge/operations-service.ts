@@ -13,7 +13,7 @@ import type {
 import type { RevokeTruthInput } from '../../shared/ipc/knowledge'
 export type { RevokeTruthInput, TruthKind } from '../../shared/ipc/knowledge'
 import { knowledgeRootPath } from './constants'
-import { withWikiCandidatesLock } from './review-service'
+import { withFactCandidatesLock, withWikiCandidatesLock } from './review-service'
 import { knowledgeAuditService } from './audit-service'
 
 const paths = {
@@ -64,6 +64,7 @@ function provenanceForEdge(edge: GraphEdge): KnowledgeProvenance {
 
 export class KnowledgeOperationsService {
   async revoke(input: RevokeTruthInput): Promise<void> {
+    if (input.kind === 'fact') return serialized(() => withFactCandidatesLock(() => this.revokeLocked(input)))
     return input.kind === 'wiki' ? withWikiCandidatesLock(() => this.revokeLocked(input)) : serialized(() => this.revokeLocked(input))
   }
 

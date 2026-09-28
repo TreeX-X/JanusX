@@ -493,6 +493,8 @@ export interface AuditEvent {
 }
 
 export interface CandidateFact {
+  /** Host-owned legacy source binding; rechecked before explicit approval. */
+  legacySource?: { kind: 'fact' | 'profile'; id: string; hash: string }
   id: string
   type: 'fact'
   status: CandidateStatus

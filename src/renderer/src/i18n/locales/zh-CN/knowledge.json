@@ -130,6 +130,11 @@
   },
   "review": {
     "title": "审核",
+    "legacyStale": "旧来源已变化或候选不匹配。请刷新，拒绝旧候选后重新导入旧资料。",
+    "importLegacy": "导入旧个人资料待确认",
+    "legacyImported": "新增 {{created}} 条待确认资料，还有 {{remaining}} 条可继续导入。",
+    "legacyFailed": "旧资料导入失败，源文件保持不变。请检查文件后重试。",
+    "legacySource": "旧个人资料：请重新确认内容。批准后才恢复为 Janus 已确认记忆。",
     "explicitMemory": "明确保存的记忆",
     "inferredHabit": "推断习惯，请确认是否符合你",
     "personalUse": "批准后作为 Janus 私有记忆，不进入工程 MCP。",
