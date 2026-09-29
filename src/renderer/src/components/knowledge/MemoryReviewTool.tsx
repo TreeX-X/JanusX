@@ -1,6 +1,7 @@
 import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
 import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { FactReviewControls } from './FactReviewControls'
+import { LegacyEpisodeMigrationControl } from './LegacyEpisodeMigrationControl'
 // Note: one review surface preserves engineering and private memory ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
@@ -117,6 +118,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
       {!loading && filterInboxByScope(candidates, scope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} onDecision={candidate.type === 'fact' ? action => void decide(candidate, action) : undefined} />)}
     </div>
     <footer className={styles.filters}>
+      <LegacyEpisodeMigrationControl />
       <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t('knowledge:action.refresh')}</button>
       <button type="button" disabled={busy || loading} onClick={() => void importLegacy()}>{t('knowledge:review.importLegacy')}</button>
     </footer>

@@ -4,7 +4,7 @@ import { useI18n } from '@/i18n/useI18n'
 import styles from './MemoryReviewTool.module.css'
 
 export function PersonalMemoryForgetForm({ memory, onClose, onForgotten }: {
-  memory: Pick<UserMemoryOverviewHabit, 'id' | 'content' | 'contentHash'> & { kind?: 'episode' }; onClose: () => void; onForgotten: () => void
+  memory: Pick<UserMemoryOverviewHabit, 'id' | 'content' | 'contentHash'> & { kind?: 'episode' | 'override' }; onClose: () => void; onForgotten: () => void
 }) {
   const { t } = useI18n('knowledge')
   const [busy, setBusy] = useState(false)

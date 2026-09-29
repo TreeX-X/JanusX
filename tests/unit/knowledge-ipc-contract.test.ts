@@ -87,7 +87,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(43)
+    expect(channels).toHaveLength(46)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -146,7 +146,10 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.externalMcpStatus()
     await knowledgeApi.registerExternalMcp('cursor')
     await knowledgeApi.userMemoryOverview()
+    await knowledgeApi.personalProfileEditContext()
+    await knowledgeApi.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: { identity: 'Tree' } })
     await knowledgeApi.importLegacyPersonalMemory()
+    await knowledgeApi.migrateLegacyEpisodes({ expectedHash: 'b'.repeat(64) })
     await knowledgeApi.layaControl('status')
     await knowledgeApi.candidateAction({candidateId: 'c', candidateHash: 'a'.repeat(64), action: 'score'})
     await knowledgeApi.forgetPersonalMemory({ targetId: 'old', targetHash: 'hash', kind: 'episode' })
@@ -188,7 +191,10 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.externalMcpStatus],
       [KNOWLEDGE_CHANNELS.registerExternalMcp, 'cursor'],
       [KNOWLEDGE_CHANNELS.userMemoryOverview],
+      [KNOWLEDGE_CHANNELS.personalProfileEditContext],
+      [KNOWLEDGE_CHANNELS.savePersonalProfile, { expectedHash: 'a'.repeat(64), overrides: { identity: 'Tree' } }],
       [KNOWLEDGE_CHANNELS.importLegacyPersonalMemory],
+      [KNOWLEDGE_CHANNELS.migrateLegacyEpisodes, { expectedHash: 'b'.repeat(64) }],
       [KNOWLEDGE_CHANNELS.layaControl, 'status'],
       [KNOWLEDGE_CHANNELS.candidateAction, {candidateId: 'c', candidateHash: 'a'.repeat(64), action: 'score'}],
       [KNOWLEDGE_CHANNELS.forgetPersonalMemory, { targetId: 'old', targetHash: 'hash', kind: 'episode' }],
@@ -358,8 +364,11 @@ describe('Knowledge IPC contract', () => {
     calls.push(() => api.observationRevocationContext({ id: 'source', workspaceId: 'ws' }))
     calls.push(() => api.revokeObservation({ id: 'source', workspaceId: 'ws', sourceHash: 'a'.repeat(64) }))
     calls.push(() => api.observationRevocations({}))
-    expect(Object.keys(api)).toHaveLength(43)
-    expect(calls).toHaveLength(43)
+    calls.push(() => api.personalProfileEditContext())
+    calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
+    calls.push(() => api.migrateLegacyEpisodes())
+    expect(Object.keys(api)).toHaveLength(46)
+    expect(calls).toHaveLength(46)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

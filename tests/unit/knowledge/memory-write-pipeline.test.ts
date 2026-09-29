@@ -11,6 +11,7 @@ import { knowledgeExtractService } from '../../../src/main/knowledge/extract-ser
 import { knowledgeReviewService, proposeFactCandidates } from '../../../src/main/knowledge/review-service'
 import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service'
 import { userEpisodeService } from '../../../src/main/knowledge/user-episode-service'
+import { migrateLegacyEpisodes } from '../../../src/main/knowledge/legacy-episode-migration'
 import { capturePersonChatTurn } from '../../../src/main/knowledge/user-turn-capture'
 import { KnowledgeRecallService } from '../../../src/main/knowledge/recall-service'
 import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
@@ -179,16 +180,27 @@ describe('unified personal memory writes', () => {
     expect((await queue().processNow()).processed).toBe(0)
   })
 
-  it('expires observations from recall and queue without requiring an index rebuild', async () => {
+  it.each([false, true])('expires recent memories from recall and queue without rebuilding the index (migrated: %s)', async migrated => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-09-01T00:00:00Z'))
-    await userEpisodeService.capture({ content: 'Today I repaired Bluebird.', ttlDays: 30 }, { speaker: 'user' })
+    if (migrated) {
+      await mkdir(join(root, 'episodes'), { recursive: true })
+      await writeFile(join(root, 'episodes', 'legacy.jsonl'), JSON.stringify({ id: 'legacy-expiry', content: 'Today I repaired Bluebird.',
+        createdAt: '2026-09-01T00:00:00.000Z', expiresAt: '2026-10-01T00:00:00.000Z', ttlDays: 30,
+        tags: [], sourceObservationIds: [], status: 'active' }) + '\n')
+      const preview = await migrateLegacyEpisodes()
+      await migrateLegacyEpisodes({ expectedHash: preview.hash })
+    } else {
+      await userEpisodeService.capture({ content: 'Today I repaired Bluebird.', ttlDays: 30 }, { speaker: 'user' })
+    }
     const recall = new KnowledgeRecallService(undefined, () => Date.now())
     const request = { query: 'Bluebird', layer: 'governance' as const, scope: 'user' as const, workspaceId: 'user' }
     expect((await recall.recall(request)).documents).toHaveLength(1)
+    expect((await searchUserMemoryDefault('Bluebird')).items).toHaveLength(1)
     vi.setSystemTime(new Date('2026-10-02T00:00:00Z'))
     expect((await recall.recall(request)).documents).toEqual([])
     expect(await userEpisodeService.listActive()).toEqual([])
+    expect((await searchUserMemoryDefault('Bluebird')).items).toEqual([])
     expect((await queue().processNow()).processed).toBe(0)
     expect((await userEpisodeService.harvest(Date.now(), false)).expired).toBe(1)
     expect((await knowledgeObservationService.listAll())[0].episodeStatus).toBe('active')

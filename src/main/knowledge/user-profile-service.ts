@@ -5,6 +5,8 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { MemoryFact, UserProfile } from '../../shared/knowledge'
+import type { PersonalProfileEditContext } from '../../shared/ipc/knowledge'
+import { withFactCandidatesLock } from './review-service'
 import { knowledgeRootPath } from './constants'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeAuditService } from './audit-service'
@@ -49,6 +51,58 @@ export class UserProfileService {
     return profileQueue.run(() => this.project())
   }
 
+  editContext(): Promise<PersonalProfileEditContext> {
+    return profileQueue.run(() => this.readEditContext())
+  }
+
+  private async readEditContext(): Promise<PersonalProfileEditContext> {
+    const stored = Overrides.parse(await readOptional(join(this.deps.root(), 'profile', 'overrides.json')) ?? {})
+    const barrier = await readPersonalForgettingBarrier()
+    const overrides = Overrides.parse(stored)
+    if (overrides.identity && barrier.blocksContent(overrides.identity)) delete overrides.identity
+    if (overrides.formatPrefs) overrides.formatPrefs = overrides.formatPrefs.filter(value => !barrier.blocksContent(value))
+    if (overrides.toolPrefs) overrides.toolPrefs = overrides.toolPrefs.filter(value => !barrier.blocksContent(value))
+    return { overrides, hash: profileContentHash({ stored, overrides }) }
+  }
+
+  /** Whole-form replacement binds the displayed fields; absent fields explicitly clear overrides. */
+  replace(input: unknown): Promise<void> {
+    const request = z.object({ expectedHash: z.string().regex(/^[a-f0-9]{64}$/), overrides: Overrides }).strict().parse(input)
+    return withFactCandidatesLock(() => profileQueue.run(async () => {
+      const context = await this.readEditContext()
+      const next = request.overrides
+      const barrier = await readPersonalForgettingBarrier()
+      if ([next.identity, ...(next.formatPrefs ?? []), ...(next.toolPrefs ?? [])].some(value => value && barrier.blocksContent(value))) {
+        throw new Error('Personal profile contains forgotten content')
+      }
+      // A lost successful response can be retried without another audit or version change.
+      if (context.hash !== request.expectedHash) {
+        if (profileContentHash(context.overrides) === profileContentHash(next)) return
+        throw new Error('Personal profile changed; reload before saving')
+      }
+      await this.writeOverrides(next, Object.keys(next))
+      // Projection is derived on the next read. Its failure cannot turn a committed edit into a failed save.
+    }))
+  }
+
+  private async writeOverrides(next: UserProfileOverrides, fields: string[]): Promise<void> {
+    const path = join(this.deps.root(), 'profile', 'overrides.json')
+    const current = Overrides.parse(await readOptional(path) ?? {})
+    if (profileContentHash(current) === profileContentHash(next)) return
+    await writeFileAtomic(path, JSON.stringify(next, null, 2) + '\n')
+    try {
+      await knowledgeAuditService.record({
+        action: 'user_profile_updated', targetType: 'fact', targetId: 'profile-overrides', before: null,
+        after: { fields },
+        provenance: { workspaceId: 'user', workspaceName: 'user', workspacePath: '', source: 'manual',
+          sourceObservationIds: [], fileRefs: [], actor: 'user-memory', createdAt: new Date(this.deps.now()).toISOString() },
+      })
+    } catch (error) {
+      await writeFileAtomic(path, JSON.stringify(current, null, 2) + '\n')
+      throw error
+    }
+  }
+
   private async project(): Promise<UserProfile> {
     const root = this.deps.root()
     const nowMs = this.deps.now()
@@ -90,18 +144,7 @@ export class UserProfileService {
       const path = join(this.deps.root(), 'profile', 'overrides.json')
       const current = Overrides.parse(await readOptional(path) ?? {})
       const next = Overrides.parse({ ...current, ...Overrides.parse(patch) })
-      await writeFileAtomic(path, JSON.stringify(next, null, 2) + '\n')
-      try {
-        await knowledgeAuditService.record({
-          action: 'user_profile_updated', targetType: 'fact', targetId: 'profile-overrides', before: null,
-          after: { fields: Object.keys(patch) },
-          provenance: { workspaceId: 'user', workspaceName: 'user', workspacePath: '', source: 'manual',
-            sourceObservationIds: [], fileRefs: [], actor: 'user-memory', createdAt: new Date(this.deps.now()).toISOString() },
-        })
-      } catch (error) {
-        await writeFileAtomic(path, JSON.stringify(current, null, 2) + '\n')
-        throw error
-      }
+      await this.writeOverrides(next, Object.keys(patch))
       return this.project()
     })
   }

@@ -1,4 +1,5 @@
 import { reviewCandidateSnapshot, type ReviewCandidate } from '../../shared/review-candidate-snapshot'
+import { prepareFactReview, recoverPendingFactReview } from './fact-review-recovery'
 import { factSlotFields } from '../../shared/fact-slot'
 import { factReviewContext, replacementHash, sameFactDomain } from './fact-conflicts'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
@@ -160,6 +161,7 @@ async function withMutationLock<T>(key: string, operation: () => Promise<T>): Pr
   mutationQueues.set(key, queued)
   await previous
   try {
+    if (key === FACT_CANDIDATES_FILE) await recoverPendingFactReview()
     return await operation()
   } finally {
     release()
@@ -452,7 +454,10 @@ export class KnowledgeReviewService {
   async applyCandidate(input: ReviewCandidateInput): Promise<ReviewResult> {
     // Note: offline candidates always require explicit review — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
     if (input.actor === 'auto-policy') throw new Error('Automatic acceptance is unavailable; explicit review is required')
-    return withMutationLock(candidateRelativePath(input.type), () => this.applyLocked(input))
+    return withMutationLock(candidateRelativePath(input.type), async () => {
+      try { return await this.applyLocked(input) }
+      finally { if (input.type === 'fact') await recoverPendingFactReview() }
+    })
   }
 
   private async applyLocked(input: ReviewCandidateInput): Promise<ReviewResult> {
@@ -478,8 +483,11 @@ export class KnowledgeReviewService {
     let applied: ReviewResult['applied']
     let rollback: () => Promise<void>
     let supersededFact: { id: string; version: number } | undefined
+    let reviewId: string | undefined
     if (type === 'fact') {
-      const transaction = await this.applyFact(current as CandidateFact, input)
+      const nextCandidates = records.map((record, i) => i === index ? { ...record, status: 'applied', ...(reviewNotes !== undefined ? { reviewNotes } : {}) } : record)
+      const transaction = await this.applyFact(current as CandidateFact, input, nextCandidates)
+      reviewId = transaction.reviewId
       applied = { fact: transaction.value }
       rollback = transaction.rollback
       supersededFact = transaction.superseded
@@ -502,7 +510,7 @@ export class KnowledgeReviewService {
     try {
       await writeJsonlAtomic(relativePath, records)
     } catch (error) {
-      await rollback!()
+      if (type !== 'fact') await rollback!()
       throw error
     }
 
@@ -561,19 +569,22 @@ export class KnowledgeReviewService {
       },
       provenance,
     })
-    const auditEvents: AuditEvent[] = await knowledgeAuditService.recordBatch(auditInputs)
+    const auditEvents: AuditEvent[] = await knowledgeAuditService.recordBatch(auditInputs, reviewId)
 
     return { candidate: updated, auditEvents, applied }
     } catch (error) {
-      records[index] = current
-      await writeJsonlAtomic(relativePath, records)
-      await rollback!()
+      if (type !== 'fact') {
+        records[index] = current
+        await writeJsonlAtomic(relativePath, records)
+        await rollback!()
+      }
       throw error
     }
   }
 
-  private async applyFact(candidate: CandidateFact, input: ReviewCandidateInput): Promise<{
+  private async applyFact(candidate: CandidateFact, input: ReviewCandidateInput, nextCandidates: unknown[]): Promise<{
     value: MemoryFact
+    reviewId: string
     rollback: () => Promise<void>
     superseded?: { id: string; version: number }
   }> {
@@ -640,9 +651,11 @@ export class KnowledgeReviewService {
     }
     fact.confirmation = { kind: 'human-review', contentHash: reviewedFactHash(fact), confirmedAt: new Date().toISOString() }
     const next = [...base, fact]
+    const reviewId = await prepareFactReview(next, nextCandidates)
     await writeJsonlAtomic(FACTS_FILE, next)
     return {
       value: fact,
+      reviewId,
       rollback: () => restoreJsonl(FACTS_FILE, previous),
       ...(superseded ? { superseded } : {}),
     }

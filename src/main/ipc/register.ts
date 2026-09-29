@@ -146,9 +146,6 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     (workspaceId) => knowledgeRefinementTasks.runDue(workspaceId),
     () => knowledgeRefinementTasks.stats(),
   )
-  void knowledgeProcessingQueue.processRefinementsNow().catch((error: unknown) => {
-    console.error(`[knowledge] refinement startup recovery failed: ${error instanceof Error ? error.message : String(error)}`)
-  })
   knowledgeProcessingQueue.startRefinementLoop()
   // Phase 5 (§6): retention maintenance joins the queue — daily low-peak
   // autoPrune + archive + compact with confirm:true. Best-effort: failures
@@ -161,8 +158,9 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     await userEpisodeService.harvest(Date.now(), true)
   })
   void knowledgeProcessingQueue.startupRestore()
-    .then(({ pendingTotal }) => {
+    .then(async ({ pendingTotal }) => {
       if (pendingTotal > 0) console.log(`[knowledge] processing queue restored with ${pendingTotal} pending observations`)
+      await knowledgeProcessingQueue.processRefinementsNow()
     })
     .catch((error: unknown) => {
       console.error(`[knowledge] queue startup restore failed: ${error instanceof Error ? error.message : String(error)}`)

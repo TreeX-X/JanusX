@@ -28,6 +28,17 @@ import type {
 } from '../knowledge'
 import type { KnowledgeSettings } from '../knowledge-settings'
 
+export interface PersonalProfileOverrides {
+  identity?: string
+  formatPrefs?: string[]
+  toolPrefs?: string[]
+}
+
+export interface PersonalProfileEditContext {
+  overrides: PersonalProfileOverrides
+  hash: string
+}
+
 export interface ObservationRevocationsPage {
   total: number
   offset: number
@@ -83,7 +94,10 @@ export const KNOWLEDGE_CHANNELS = {
   externalMcpStatus: 'knowledge:external-mcp:status',
   registerExternalMcp: 'knowledge:external-mcp:register',
   userMemoryOverview: 'knowledge:user-memory:overview',
+  personalProfileEditContext: 'knowledge:user-memory:profile-context',
+  savePersonalProfile: 'knowledge:user-memory:profile-save',
   importLegacyPersonalMemory: 'knowledge:user-memory:import-legacy',
+  migrateLegacyEpisodes: 'knowledge:user-memory:migrate-episodes',
   forgetPersonalMemory: 'knowledge:user-memory:forget',
   proposePersonalMemoryCorrection: 'knowledge:user-memory:correct',
   getSettings: 'settings:knowledge:get',
@@ -323,10 +337,13 @@ export interface KnowledgeAPI {
   externalMcpStatus: () => Promise<ExternalMcpStatus>
   registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
   userMemoryOverview: () => Promise<UserMemoryOverview>
+  personalProfileEditContext: () => Promise<PersonalProfileEditContext>
+  savePersonalProfile: (input: { expectedHash: string; overrides: PersonalProfileOverrides }) => Promise<void>
   importLegacyPersonalMemory: () => Promise<{ created: number; remaining: number }>
+  migrateLegacyEpisodes: (input?: { expectedHash?: string }) => Promise<{ hash: string; files: number; episodes: number; migrated: number }>
   layaControl: (action: import('../laya').LayaAction) => Promise<import('../laya').LayaStatus>
   candidateAction: (input: { candidateId: string; candidateHash: string; action: 'score' | 'refine' }) => Promise<void>
-  forgetPersonalMemory: (input: { targetId: string; targetHash: string; kind?: 'fact' | 'episode' }) => Promise<void>
+  forgetPersonalMemory: (input: { targetId: string; targetHash: string; kind?: 'fact' | 'episode' | 'override' }) => Promise<void>
   proposePersonalMemoryCorrection: (input: { targetId: string; targetHash: string; content: string }) => Promise<{ candidateId: string; status: CandidateFact['status'] }>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>

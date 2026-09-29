@@ -7,6 +7,7 @@ import styles from './KnowledgeAssist.module.css'
 import { UserPersonaCards } from './UserPersonaCards'
 import { PersonalMemoryForgetForm } from './PersonalMemoryForgetForm'
 import { PersonalMemoryCorrectionForm } from './PersonalMemoryCorrectionForm'
+import { PersonalProfileEditor } from './PersonalProfileEditor'
 
 type LoadState = 'loading' | 'ready' | 'error'
 
@@ -23,6 +24,7 @@ export function UserPersonaTool({ active = true }: { active?: boolean }) {
   const generation = useRef(0)
   const [forgetting, setForgetting] = useState<(Pick<UserMemoryOverviewHabit, 'id' | 'content' | 'contentHash'> & { kind?: 'episode' }) | null>(null)
   const [correcting, setCorrecting] = useState<UserMemoryOverviewHabit | null>(null)
+  const [editingProfile, setEditingProfile] = useState(false)
 
   const refresh = useCallback(async () => {
     const request = ++generation.current
@@ -52,22 +54,24 @@ export function UserPersonaTool({ active = true }: { active?: boolean }) {
 
   return (
     <section className={styles.root} aria-label={t('knowledge:persona.toolAria')}>
-      {loadState === 'loading' && !correcting && !forgetting && (
+      {loadState === 'loading' && !correcting && !forgetting && !editingProfile && (
         <div className={styles.state}>
           <strong>{t('knowledge:state.loading.title')}</strong>
           <span>{t('knowledge:state.loading.detail')}</span>
         </div>
       )}
-      {loadState === 'error' && !correcting && !forgetting && (
+      {loadState === 'error' && !correcting && !forgetting && !editingProfile && (
         <div className={styles.state}>
           <strong>{t('knowledge:persona.unavailable.title')}</strong>
           <span>{t('knowledge:persona.unavailable.detail')}</span>
           <button type="button" onClick={() => void refresh()}>{t('knowledge:action.refresh')}</button>
         </div>
       )}
-      {loadState === 'ready' && overview && !correcting && !forgetting && (
-        <UserPersonaCards overview={overview} onOpenInbox={openInbox} onForgetEpisode={episode => setForgetting({ ...episode, kind: 'episode' })} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
+      {loadState === 'ready' && overview && !correcting && !forgetting && !editingProfile && (
+        <UserPersonaCards overview={overview} onEditProfile={() => setEditingProfile(true)} onOpenInbox={openInbox} onForgetEpisode={episode => setForgetting({ ...episode, kind: 'episode' })} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
       )}
+      {editingProfile && <PersonalProfileEditor onClose={() => { setEditingProfile(false); void refresh() }}
+        onSaved={() => { setEditingProfile(false); void refresh() }} />}
       {forgetting && <PersonalMemoryForgetForm memory={forgetting}
         onClose={() => { setForgetting(null); void refresh() }}
         onForgotten={() => { setForgetting(null); void refresh() }} />}

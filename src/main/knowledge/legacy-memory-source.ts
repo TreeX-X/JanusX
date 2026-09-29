@@ -1,5 +1,6 @@
 // Note: legacy records require fresh confirmation against unchanged source content — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { readFile } from 'node:fs/promises'
+import { assertFactReviewReady } from './fact-review-recovery'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { CandidateFact, MemoryFact } from '../../shared/knowledge'
@@ -13,9 +14,11 @@ export async function readLegacyJson(path: string): Promise<unknown | undefined>
 }
 
 export async function readLegacyJsonl<T>(path: string): Promise<T[]> {
+  const revision = path.replace(/\\/g, '/').startsWith('facts/') ? await assertFactReviewReady() : undefined
   let raw: string
   try { raw = await readFile(join(knowledgeRootPath(), path), 'utf8') }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error }
+  if (revision !== undefined) await assertFactReviewReady(revision)
   return raw.split('\n').filter(line => line.trim()).map(line => JSON.parse(line) as T)
 }
 

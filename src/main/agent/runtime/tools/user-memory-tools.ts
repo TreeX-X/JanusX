@@ -16,6 +16,7 @@ import { searchUserMemoryDefault } from '../../../knowledge/user-recall-service'
 import { randomUUID } from 'node:crypto'
 import { recordUserMemoryAccessBestEffort } from '../../../knowledge/memory-access'
 import { forgetPersonalMemoryQuery } from '../../../knowledge/personal-memory-forgetting'
+import { currentMemoryToolEvent } from '../memory-tool-context'
 
 const registeredRegistries = new WeakSet<ToolRegistry>()
 const MAX_QUERY_CHARS = 500
@@ -66,7 +67,8 @@ export const userMemorySearchTool: RegisteredTool = {
       truncated: result.truncated,
       eligibleCount: result.eligibleCount,
     }
-    if (!context.signal.aborted) await recordUserMemoryAccessBestEffort(result.delivery, randomUUID(), context.signal)
+    const event = currentMemoryToolEvent()
+    if (!context.signal.aborted) await recordUserMemoryAccessBestEffort(result.delivery, event ? JSON.stringify([event.sessionId, event.sourceEventId]) : randomUUID(), context.signal)
     return output
   },
 }
@@ -87,11 +89,13 @@ export const userMemorySaveTool: RegisteredTool = {
     const { text, redacted } = redactHighConfidenceSecrets(raw)
     const content = text.trim().slice(0, MAX_SAVE_CHARS)
     if (!content) throw new Error('user-memory.save content is empty after normalization')
+    const event = currentMemoryToolEvent()
     const observation = await knowledgeObservationService.capture({
       workspaceId: 'user', workspaceName: 'user', workspacePath: 'user',
       source: 'tool', type: 'user-note', actor: 'user-memory-save', content,
+      sessionId: event?.sessionId, correlationId: event?.sourceEventId,
       tags: [...new Set(['user-memory', ...tags])], visibility: 'restricted',
-    }, { speaker: 'assistant', memoryIntent: 'remember' })
+    }, { speaker: 'assistant', memoryIntent: 'remember', sourceEventId: event?.sourceEventId })
     knowledgeProcessingQueue.scheduleImmediate('user')
     return {
       observationId: observation.id,

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { memoryKey, readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 import { profileContentHash } from './profile-projection'
 import { memoryStrength } from '../../shared/memory-strength'
+import { assertFactReviewReady } from './fact-review-recovery'
 import { replacementHash } from './fact-conflicts'
 import type {
   CandidateFact,
@@ -661,6 +662,7 @@ export class KnowledgeRecallService {
   }
 
   async recall(request: KnowledgeRecallRequest): Promise<KnowledgeRecallResult> {
+    const reviewRevision = await assertFactReviewReady()
     const query = request.query.trim()
     if (!query) return this.emptyResult('empty-query')
     if (request.requireWorkspace && !request.allowGlobal && !request.workspaceId && !request.workspacePath) {
@@ -702,6 +704,7 @@ export class KnowledgeRecallService {
         return [{ ...document, score, scoreExplanation }]
       })
       .sort((left, right) => right.score - left.score || compareText(left.key, right.key))
+    await assertFactReviewReady(reviewRevision)
     return { documents: ranked, indexStats: index.stats() }
   }
 

@@ -14,13 +14,14 @@ import {
   FilePolicyAuditStore,
 } from '@janus-agent/agent-core'
 import type { RendererActionAuthorizer } from '@janus-agent/agent-core'
+import { bindMemoryToolIdentity } from './memory-tool-context'
 
 export type { RendererActionAuthorizer }
 
 const auditStore = new FilePolicyAuditStore()
 
 /** Shell runtime singleton (resolver injected by registerAgentRuntimeHandlers). */
-export const workspaceAgentRuntime = createAgentRuntime({ auditStore })
+export const workspaceAgentRuntime = bindMemoryToolIdentity(createAgentRuntime({ auditStore }))
 
 /** Default renderer-action authorizer (persistent audit, same as before). */
 export const authorizeRendererAction: RendererActionAuthorizer = createRendererActionAuthorizer(auditStore)

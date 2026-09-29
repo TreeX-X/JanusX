@@ -11,6 +11,8 @@ import {
 } from '../notifications/agent-engine-capabilities'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeProcessingQueue } from './processing-queue'
+import { createHash } from 'node:crypto'
+import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 
 interface ActiveTurn {
   id: string
@@ -19,6 +21,7 @@ interface ActiveTurn {
   workspaceId?: string
   workspacePath: string
   prompt?: string
+  promptHash?: string
   sessionId?: string
   startedAt: string
   startedAtMs: number
@@ -126,7 +129,7 @@ class AgentTurnRecorder {
   private resolveTerminal(payload: AgentHookPayload): TerminalContext | null {
     if (payload.terminalId) {
       const terminal = this.terminals.get(payload.terminalId)
-      if (terminal) return terminal
+      if (terminal) return terminal.engine === payload.source ? terminal : null
     }
 
     const sameEngine = Array.from(this.terminals.values()).filter(
@@ -217,10 +220,11 @@ class AgentTurnRecorder {
     terminal: TerminalContext,
   ): Promise<void> {
     const activeTurn = this.activeTurns.get(terminal.terminalId)
+    const promptHash = hasText(payload.message) ? createHash('sha256').update(payload.message).digest('hex') : undefined
     if (
       activeTurn &&
       (!hasText(payload.message) ||
-        (payload.sessionId === activeTurn.sessionId && payload.message === activeTurn.prompt))
+        (payload.sessionId === activeTurn.sessionId && promptHash === activeTurn.promptHash))
     ) {
       return
     }
@@ -233,12 +237,19 @@ class AgentTurnRecorder {
       engine: terminal.engine,
       workspaceId: terminal.workspaceId,
       workspacePath: terminal.cwd,
-      prompt: payload.message,
+      prompt: payload.message && redactHighConfidenceSecrets(payload.message).text,
+      promptHash,
       sessionId: payload.sessionId,
       startedAt,
       startedAtMs: now,
     }
     this.activeTurns.set(terminal.terminalId, turn)
+
+    // Only an actual prompt-submission hook carries the user's words. Status messages do not.
+    const userPrompt = payload.event === 'UserPromptSubmit' && hasText(payload.message)
+    const sourceEventId = payload.timestamp && timestampToMs(payload.timestamp) !== undefined
+      ? createHash('sha256').update(JSON.stringify([terminal.engine, payload.sessionId ?? terminal.terminalId,
+        payload.event, payload.timestamp, payload.message ?? ''])).digest('hex') : undefined
 
     const observation = await knowledgeObservationService.capture({
       workspaceId: terminal.workspaceId,
@@ -246,11 +257,11 @@ class AgentTurnRecorder {
       source: 'agent-stream',
       type: hasText(payload.message) ? 'conversation-turn' : 'system-event',
       content: hasText(payload.message)
-        ? payload.message
+        ? redactHighConfidenceSecrets(payload.message).text
         : `${terminal.engine} terminal task started`,
       summary: `${terminal.engine} terminal task started`,
       tags: ['terminal-hook', 'turn-started', terminal.engine],
-      actor: hasText(payload.message) ? 'user' : terminal.engine,
+      actor: userPrompt ? 'user' : terminal.engine,
       correlationId: turn.id,
       sessionId: payload.sessionId,
       agentId: terminal.engine,
@@ -261,7 +272,7 @@ class AgentTurnRecorder {
         sessionId: payload.sessionId,
         startedAt,
       },
-    })
+    }, { speaker: userPrompt ? 'user' : 'unknown', sourceEventId, createdAt: startedAt })
     this.emitCaptured(payload, terminal, observation.id)
   }
 

@@ -358,7 +358,7 @@ describe('KnowledgeReviewService', () => {
     await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('audit unavailable')
 
     expect((await readJsonl<CandidateFact>('facts/candidates.jsonl'))[0]?.status).toBe('proposed')
-    expect(await readJsonl<MemoryFact>('facts/facts.jsonl')).toEqual([])
+    await expect(readFile(join(process.env.JANUSX_KNOWLEDGE_ROOT!, 'facts/facts.jsonl'))).rejects.toMatchObject({ code: 'ENOENT' })
     vi.restoreAllMocks()
   })
 

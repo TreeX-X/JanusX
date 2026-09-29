@@ -13,13 +13,15 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 ## Problem
 
-JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，使用宿主来源契约；确定性提取器只提出候选。Profile 由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实提供人工重新确认迁移，不自动恢复历史确认资格。持久遗忘约束覆盖个人事实、Episode、候选及精修任务重放；明确格式的发布命令与默认输出语言具有单值冲突约束。来源撤回按显式引用使派生视图失效，Janus 聊天交付驱动事实强度更新；更广泛的语义槽位、撤回恢复与完整迁移验收仍需完成。
+JanusX 的 observation → candidate → review → truth → BM25 管线承载工程与个人两域。个人保存、Habit、新 Episode 和旧事件迁移使用同一观察存储；Profile 由独立人工字段及确认事实派生。审核、显式替代、遗忘、来源撤回和 Janus 交付增强均有宿主约束。缺少这些约束时，重复事件会累计习惯证据，模型文字可能被误认为本人陈述，旧版本或已遗忘材料可能重入召回。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[个人强度计算](../../src/shared/memory-strength.ts)已连接预算后的召回与交付增强；工程事实也接入 Janus 聊天交付增强；observation 撤回已接入显式来源引用链，完整维护和迁移验收仍待完成。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，[审核服务](../../src/main/knowledge/review-service.ts)负责人工确认及事实恢复日志。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)保留工程来源及用户归因；工程内容本身不授予个人偏好资格。[个人资料编辑器](../../src/renderer/src/components/knowledge/PersonalProfileEditor.tsx)支持人工字段编辑与独立遗忘，未确认记忆在画像中单列。Laya 运行时与精修路径可用，真实模型的合成样例结果不足以证明生产质量；真实脱敏标注、固定质量策略及独立留出验收仍未完成。
 
 需求边界（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。
 
-[queue 管线](./2026-09-03-knowledge-pipeline--dcc5e8a0.md)继续拥有结算、游标、失败记录与恢复。[个人与工程分离](./2026-09-15-personal-vs-engineering-memory--4515fa0e.md)及[首片落地](./2026-09-18-personal-engineering-separation--296ddf52.md)提供视图与共享边界。本提案拟替换[旧 Laya 提案](./2026-09-22-laya-decision-model-knowledge-confidence--673865a1.md)中“LLM 默认主路、Laya 仅作补充”的方向；旧文的模型资料只作背景，具体实施与验收以本篇为依据。本文保持 draft，不表示重构或模型验证已经落地。
+[queue 管线](./2026-09-03-knowledge-pipeline--dcc5e8a0.md)继续拥有结算、游标、失败记录与恢复。[个人与工程分离](./2026-09-15-personal-vs-engineering-memory--4515fa0e.md)及[首片落地](./2026-09-18-personal-engineering-separation--296ddf52.md)提供视图与共享边界。本提案拟替换[旧 Laya 提案](./2026-09-22-laya-decision-model-knowledge-confidence--673865a1.md)中“LLM 默认主路、Laya 仅作补充”的方向；旧文的模型资料只作背景，具体实施与验收以本篇为依据。本文保持 draft，完成状态以文末 AC 为准；运行时可用不等于真实数据质量验收通过。
+
+当前验收（2026-09-29）：18 条 AC 中 17 条完成；AC-8 仍缺真实脱敏人工标注数据、事先固定的质量策略及独立留出实测。自动接受保持关闭。
 
 ## Expected behavior
 
@@ -57,9 +59,7 @@ JanusX 已有 queue-owned 的 observation → candidate → review → truth →
 
 [审核存储](../../src/main/knowledge/review-service.ts)与候选列表使用严格 JSONL 读取，只有 ENOENT 表示文件不存在；读取异常和 JSON 解析错误必须中断操作，保留原文件。Wiki 索引解析错误、缺少 pages 数组及页面读取异常也不能当作空库继续发布。确定性 Graph 提取、LLM Wiki/Graph 提取和 Note Wiki 提案均与对应审核动作共用进程内候选锁，新增候选按 ID 去重，在锁内读取并原子替换文件。审核审计失败的回滚不会覆盖等待中的新增候选。
 
-仅在界面刷新列表可以减少过期内容，但不能排除显示到点击之间的后台精修；因此审核请求必须绑定显示快照。继续追加文件成本较低，但与整文件审核回滚并发时会丢失新增记录；采用同类候选串行写入，代价是新增也需读取整文件。当前不提供跨进程锁、跨集合事务或断电恢复日志；大库的文件重写成本需要测量后再决定分片。保持原有宽容读取虽能展示部分记录，却不能用于后续覆盖写入，因此损坏时优先保留数据并显式报错。
-
-机器验证（2026-09-29，审核一致性与存储保护）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 60 个文件、532 项测试；真实 Laya 文件的 1 项测试显式跳过。[审核测试](../../tests/unit/knowledge/review-service.test.ts)覆盖过期快照、缺失 hash、原快照重试、损坏 truth 与候选文件、不可读路径和并发新增期间的审计回滚；[提取测试](../../tests/unit/knowledge/extract-service.test.ts)覆盖三类候选列表损坏时拒绝部分读取；[浏览器测试](../../tests/unit/memory-review-ui.test.ts)覆盖后台改写后保留旧卡片、刷新及重新批准。[Note Wiki 界面测试](../../tests/unit/knowledge-note-ui.test.ts)验证候选 hash 与宿主来源 hash 的职责分离。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary` 通过；8 个生产文件定向 ESLint 零错误，保留 KnowledgeWorkbench 的既有 refresh 依赖警告。全库 Note 检查未通过：debug-mode-plan 缺少 Proposal、Risks，worktree-composer-entry-motion 的 scope/reason 关系字段无效；本篇未报错。未运行完整 Electron E2E、打包、真实模型或真实用户数据操作。
+仅在界面刷新列表可以减少过期内容，但不能排除显示到点击之间的后台精修；因此审核请求必须绑定显示快照。继续追加文件成本较低，但与整文件审核回滚并发时会丢失新增记录；采用同类候选串行写入，代价是新增也需读取整文件。事实批准具有下述进程崩溃恢复日志；当前不提供跨进程锁、Wiki/Graph 跨集合事务或断电持久化保证；大库的文件重写成本需要测量后再决定分片。保持原有宽容读取虽能展示部分记录，却不能用于后续覆盖写入，因此损坏时优先保留数据并显式报错。
 
 审核卡片显示批准用途、正文、事实类型、证据引用数、来源项目、发言者和原文、文件引用、替代目标及已有冲突提示。确定性 remember/habit 候选按宿主生成的稳定 ID 标明明确保存或推断习惯；旧候选缺少这些标识时不猜测意图，缺少来源字段时也不伪造用户原话。Wiki 继续复用 Note 来源核对组件。工程来源的个人习惯按 user 归属留在个人筛选，批准后仍是 Janus 私有记忆。
 
@@ -69,7 +69,7 @@ JanusX 已有 queue-owned 的 observation → candidate → review → truth →
 
 事实沿用 MemoryFact 与 supersedes；isLatest 优先从 active 状态和版本链派生，避免额外维护另一份真相。精确重复合并证据；异值陈述成为独立候选；显式替代须引用同域当前版本，并经 review 检查。对于可结构化的单值槽位，如发布命令和默认输出语言，引入 factKey、polarity、cardinality 与冲突分组；未声明替代的新值进入冲突待审，不按时间或相似度覆盖旧值。自由文本不能确定槽位时保留冲突提示，不强行分类。
 
-[事实冲突审核](../../src/main/knowledge/fact-conflicts.ts)使用严格读取的事实和候选集合，不以搜索索引是否命中判断无冲突。归属比较包括 memory scope、workspaceId、ownerScope、tenantId、projectId 和 ownerUserId；跨域事实及其他所有者的正文不进入审核上下文。新候选的 fact ID 若已经存在于 truth，无论内容相同、不同或旧记录已归档，均拒绝覆盖；只有已 applied 候选的同快照重试保持幂等。truth 已写入但候选仍 proposed 的崩溃残留需要恢复处理，不能借同 ID 再确认来覆盖已有记录。
+[事实冲突审核](../../src/main/knowledge/fact-conflicts.ts)使用严格读取的事实和候选集合，不以搜索索引是否命中判断无冲突。归属比较包括 memory scope、workspaceId、ownerScope、tenantId、projectId 和 ownerUserId；跨域事实及其他所有者的正文不进入审核上下文。新候选的 fact ID 若已经存在于 truth，无论内容相同、不同或旧记录已归档，均拒绝覆盖；只有已 applied 候选的同快照重试保持幂等。新审核由事实恢复日志处理 truth 已写入而候选未提交的中断；没有日志的历史残留仍须人工核对，不能借同 ID 再确认覆盖记录。
 
 [槽位规则](../../src/shared/fact-slot.ts)只识别完整单行的 `发布命令` / `release command` 和 `默认输出语言` / `default output language` 标签，支持冒号、等号及表示否定约束的 `!=`。语言值只归一化当前支持的中英文别名；命令保持大小写和参数。宿主从正文派生 factKey、cardinality 与 polarity，并在落库时拒绝与正文不符的自报字段。旧事实不需要批量重写，审核按同一规则读取正文；新的确认 hash 包含已保存的槽位字段。两个不同肯定值，以及同值的肯定和否定构成冲突；不同值的否定约束可并存。多行、临时要求、第三人称及不支持的语言表达不获得槽位身份。
 
@@ -77,9 +77,7 @@ JanusX 已有 queue-owned 的 observation → candidate → review → truth →
 
 [审核控件](../../src/renderer/src/components/knowledge/FactReviewControls.tsx)在批准前通过专用 factReviewContext IPC 获取当前冲突事实、内容、版本和指纹，并列出同域同槽位的其他待审值。有一个当前目标时必须勾选替代确认，提交同时绑定候选快照与旧事实指纹。模型提供 supersedes 也不能跳过旧值展示与人工确认。主进程在事实共用锁内再次核对目标归属、active 状态、到期时间、遗忘约束和指纹；成功后归档旧版本，新事实记录 supersedes 并递增版本。审计记录所选目标 ID 和指纹，审计失败恢复候选及旧 truth。多个当前冲突目标、重复目标 ID 或失效目标阻止批准，用户须先处理已有冲突；普通批准不能隐式覆盖其中任意一条。读取失败和未完成核对都禁用批准，刷新可以重试；拒绝候选仍走原快照契约。
 
-完整语义分类能覆盖更多表达，但需要可靠的抽取与质量证据；当前选择有限标签规则，避免把临时要求误判为长期单值。只显示冲突提示维护成本较低，却允许两个不同单值同时进入 active，因此提交端也实施约束。同 ID 全部拒绝可保留历史，代价是同内容崩溃残留不能自动修复。审核上下文按卡片读取并扫描当前文件，没有新增持久索引；大候选列表的读取次数和进程内串行等待需要测量，达到交互瓶颈时再引入批量上下文读取。当前没有多目标合并、任意事实选择器或跨进程事务；既有显式个人纠正保留目标的所有者字段。
-
-机器验证（2026-09-29，单值冲突与显式替代）：执行审核一致性段落所列完整 Vitest 命令，通过 61 个文件、551 项测试；真实 Laya 的 1 项测试显式跳过。[事实冲突测试](../../tests/unit/knowledge/fact-conflicts.test.ts)的 15 项测试覆盖 ID 碰撞、语言别名、命令参数、极性、所有者隔离、槽位字段伪造、显式目标确认、旧目标变化、竞争替代与审计回滚；确定性与 LLM 提取测试覆盖不同参数不得被近重复合并；审核浏览器测试覆盖旧值展示、勾选确认、目标指纹提交及读取失败恢复。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary` 通过；16 个生产文件定向 ESLint 零错误，保留 KnowledgeWorkbench 的既有 refresh 依赖警告。全库 Note 检查仍有审核一致性段落列出的三个无关错误，本篇未报错。既有 user-memory-contract 测试在临时 audit 文件 rename 时输出一次 EPERM，未导致测试失败。未运行完整 Electron E2E、打包、真实模型或真实用户数据操作。
+完整语义分类能覆盖更多表达，但需要可靠的抽取与质量证据；当前选择有限标签规则，避免把临时要求误判为长期单值。只显示冲突提示维护成本较低，却允许两个不同单值同时进入 active，因此提交端也实施约束。同 ID 全部拒绝可保留历史；新审核的中断由日志恢复，缺少日志的历史残留不能自动修复。审核上下文按卡片读取并扫描当前文件，没有新增持久索引；大候选列表的读取次数和进程内串行等待需要测量，达到交互瓶颈时再引入批量上下文读取。当前没有多目标合并、任意事实选择器或跨进程事务；既有显式个人纠正保留目标的所有者字段。
 
 保留 WikiPage、GraphEdge、sourceFactIds，以及已落地的 [Note 来源审核](./2026-09-25-note-wiki-r3--844bc2f1.md)中的 sourceNoteRefs、hash、页面版本与回滚约束。Laya 不生成新正文；无 LLM 时可以提取原文事实、生成确定性关系和人工整理 Wiki，但不承诺自动完成多来源长文综合。
 
@@ -105,7 +103,7 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 
 个人事实的有界实现由[强度函数](../../src/shared/memory-strength.ts)和[交付记录器](../../src/main/knowledge/memory-access.ts)承担：半衰期 30 天，每次增强 0.15，上限 1，冷却 10 分钟。宿主将 strength、anchorAt、lastAccessAt 与最近 64 个请求摘要存入 recallState，读取按锚点计算，不使用定时器反复写回衰减值。冷却期内只推进访问水位与请求历史，不重设强度锚点；重复回执及早于最后访问水位的回执被拒绝，时钟回退时保守跳过。审核移除候选自带的 recallState，访问状态不参与确认、替代或画像内容指纹，也不改写真实证据时间、confidence 和事实版本。工程事实的 Janus 聊天交付复用相同的衰减、冷却与上限。
 
-个人召回先过滤失效与到期事实、到期 Episode，再按项目原有独立预算选择并去重；已确认 Profile 的前三项保留稳定名额，其余事实排序使用有效强度。纯搜索和浏览不记录访问。流式聊天只对完整保留在最终模型消息中的个人片段，在首个文本或工具调用输出时记录；仅创建流对象、输出前失败或已取消不记录。非流式聊天在生成成功后记录；user-memory.search 在构造最终工具返回值后记录。这里的交付指宿主交给模型或工具调用方，不证明模型引用了该事实，也不证明用户读到了回答。工具接口没有调用事件 ID，宿主每次执行生成 UUID，仅提供冷却限制，不承诺跨执行重试恰好一次。
+个人召回先过滤失效与到期事实、到期 Episode，再按项目原有独立预算选择并去重；已确认 Profile 的前三项保留稳定名额，其余事实排序使用有效强度。纯搜索和浏览不记录访问。流式聊天只对完整保留在最终模型消息中的个人片段，在首个文本或工具调用输出时记录；仅创建流对象、输出前失败或已取消不记录。非流式聊天在生成成功后记录；user-memory.search 在构造最终工具返回值后记录。这里的交付指宿主交给模型或工具调用方，不证明模型引用了该事实，也不证明用户读到了回答。生产工具适配器传递真实 sessionId/correlationId，交付回执据此去重；调用方没有 correlationId 时宿主为本次执行生成 UUID，不承诺识别未携带身份的跨执行重试。
 
 记录器复用审核锁，重新验证当前确认、快照 hash、TTL、归属与遗忘屏障，再原子写入 facts.jsonl。损坏文件或非法访问状态使写入失败并保留原文件；元数据失败只警告，不阻断聊天。继续使用 JSONL 避免引入第二个数据库，代价是每次有效访问（包括冷却期内的水位更新）都全量读取、重写文件，并可能延迟首个输出。出现大库延迟后应测量再决定分片或独立遥测存储。有限请求历史不提供无限期请求 ID 去重；旧回执由时间水位拦截，同一 ID 在历史淘汰后配合新回执仍可计数。
 
@@ -115,7 +113,7 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 
 [精修任务](../../src/main/knowledge/refinement-tasks.ts)的列表和统计对 pending/running 任务重新核对候选状态与内容、有效事实上下文、证据内容和有效期。事实撤回或到期、候选拒绝、证据变化立即投影为 cancelled；不等待模型可用或自动精修开启。视图读取不争用整个模型调用期间持有的任务锁，也不写账本；下次调度在模型门控前持久化取消。视图判定与持久化之间若来源恢复，尚未落盘的取消可能恢复为 pending，这是只读诊断的明确边界。已持久化的 cancelled 不自动重放，终态历史保持原结果。模型提交回调同时核对候选仍为同一 proposed 快照，避免运行期间人工拒绝后继续提交；生成结束后候选已离开 proposed 时记录取消。
 
-该实现复用现有上下文 hash，无须增加跨文件撤回日志。代价是同域、同 workspace 的任一有效事实变化都会使旧上下文任务失效，统计读取也需扫描来源并解析证据；大量历史或高频刷新出现延迟时应测量后引入可重建缓存。普通事实撤回不等于遗忘其全部观察来源，也不自动删除其他独立事实、Wiki 或图边；候选的替代与纠正目标仍由批准端核验。普通事实撤回不提供跨派生产物事务或已交付内容的撤回；observation 撤回另以原子屏障投影派生失效，完整 AC-9 保持未完成。
+该实现复用现有上下文 hash，无须增加跨文件撤回日志。代价是同域、同 workspace 的任一有效事实变化都会使旧上下文任务失效，统计读取也需扫描来源并解析证据；大量历史或高频刷新出现延迟时应测量后引入可重建缓存。普通事实撤回不等于遗忘其全部观察来源，也不自动删除其他独立事实、Wiki 或图边；候选的替代与纠正目标仍由批准端核验。普通事实撤回不提供跨派生产物事务或已交付内容的撤回；observation 撤回另以原子屏障投影派生失效，生命周期验收遵循该显式来源范围。
 
 ## Scope
 
@@ -201,9 +199,9 @@ Janus 聊天适配器按实际消息角色和请求 ID 记录来源，同一会�
 
 确定性事实与 Habit 的候选身份稳定，追加与已有审核共用锁；相同证据重放不复活已拒绝或已应用的候选，证据集合无新增时不增强频次或强度。旧 Observation/MemoryFact 缺少新增字段仍可读取，旧 user 哨兵仍按个人记忆过滤，其余缺省按 project；旧 actor/source 标签不自动升格为已核验用户来源。
 
-第二片中，`user-memory.save` 先落带 `memoryIntent: remember` 的 user Observation，返回 `status: queued` 和 observation 引用，再由已有队列生成稳定 ID 的候选。一次明确保存即足够，不要求关键词或三次重复；返回 queued 不表示审核通过或已经进入长期事实。工具文本来源为 tool、发言者为 assistant、级别为 model-generated，不能伪装成用户原话。意图和来源只由宿主上下文赋予，payload/metadata 同名字段不参与赋权；工具运行上下文目前没有会话或调用事件 ID，因此该入口采用内容去重，不宣称能区分每次同文确认。
+[工具调用身份](../../src/main/agent/runtime/memory-tool-context.ts)在生产 runtime.executeTool 边界用 AsyncLocalStorage 传递真实会话与 correlationId，覆盖异步审批和并发会话；工具 payload 不参与赋值。user-memory.save 先保存带 remember 意图的私有 Observation，返回 queued 和来源引用，再由队列生成候选。一次明确保存即足够；工具文字仍是 assistant/model-generated，不能伪装成本人原话。user-memory.search 的最终交付沿用相同事件身份。缺少 correlationId 时生成本次调用 UUID，缺少整个宿主上下文的兼容调用仍按内容去重。
 
-新 Episode 是带 `expiresAt`、`episodeStatus` 的 user Observation：个人聊天的用户原文与近期记录共用一份观察，助手回复另存且不作为该 Episode 的本人证据；带工程工作区的聊天也按 session/request 身份保存个人近期记录。原文经脱敏后完整保存，近期展示投影最多 4000 字符。旧 `episodes/*.jsonl` 保留原 ID、状态与 TTL 并继续读取，新内容不再双写旧目录；这属于兼容切换，尚未完成旧文件物理迁移。
+新 Episode 是带 expiresAt、episodeStatus 的 user Observation，保存脱敏原文，近期展示最多 4000 字符。个人聊天的用户原文与近期记录共用观察；助手回复另存，不作为本人证据。带工程工作区的聊天也按 session/request 保存个人近期记录。旧 episodes/*.jsonl 继续兼容读取，并由下述显式迁移入口转入统一存储，新内容不再双写旧目录。
 
 Episode 的新存储过期与遗忘复用 Observation 写锁，覆盖活动分片及 gzip 归档，兼容层继续处理旧 Episode。召回按查询时钟过滤 TTL，即使 BM25 缓存未重建也不交付到期事件；队列、规则提取、Habit 和 LLM 输入排除已失效观察。带原事件身份的重试不会复活已遗忘 Episode。候选写入统一经 `proposeFactCandidates`，与审核共享锁；已写候选但游标未推进时可重试且不重复提案，损坏的候选文件报错保留原文。LLM 合并在锁内重读候选，不能覆盖期间已完成的批准或拒绝。
 
@@ -225,21 +223,15 @@ Episode 的新存储过期与遗忘复用 Observation 写锁，覆盖活动分�
 
 任务调用关闭提取器内部重试，由任务账本统一控制最多 3 次尝试，失败后分别等待 1、2 分钟；最终失败不会被同一计划重新入队而隐式复活。崩溃留下的 running 任务同样受总尝试上限约束。任务成功只表示本次精修已处理，不表示事实已获批准。已有 processingStats 返回按任务状态划分的 refinement 计数及下次重试时间；旧 llm 阶段计数保留为规划结果。任务文件结构错误会明确失败并保留原字节，不按空文件覆盖恢复。
 
-AC-5 的规则加 BM25、人工审核离线基线已验证；AC-1、AC-3、AC-4、AC-6、AC-10 尚未全部完成。历史审核资格自动恢复、单值画像槽位、第三人称/临时表述语义核验、外部终端 Agent 用户行为归因、人工精修/最终失败重试入口、相似习惯候选持续合并、真实 Laya 及完整生命周期仍按后续步骤实施。Episode 失效尚不级联撤销已生成候选或长期事实；任务执行前的失效检查也不构成覆盖整个模型调用期间的跨存储遗忘事务。统一遗忘屏障属于后续账本撤回与 Profile 失效工作，不能将当前 Episode 遗忘描述为全链路删除。新来源进入已确认画像仍须 Inbox 审核。
-
-机器验证（2026-09-28，持久化精炼任务与恢复）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 50 个文件、422 项测试。[refinement-tasks.test.ts](../../tests/unit/knowledge/refinement-tasks.test.ts)的 20 项测试覆盖并发去重、不复制原文、重启恢复与退避、执行条件不足时延后、候选及来源变更取消、候选提交后崩溃恢复、预算溢出续跑、最多三次尝试、损坏账本保留、持久化失败后的游标重试及执行中状态读取；[processing-queue.test.ts](../../tests/unit/knowledge/processing-queue.test.ts)的 17 项测试包含规划持久化失败不推进游标、定时器合并与销毁。评分门控、精修期间人工审核保护、证据归属、统一写入及 MCP 回归继续通过。`npm run typecheck:strict-unused`、9 个生产 TypeScript 文件的定向 `npx eslint`、`npm run check:package-boundary` 与本片文件的 `git diff --check` 通过。未运行桌面打包/E2E 或真实 Laya 权重测试。
-
-机器验证（2026-09-28，统一审核界面）：`npx vitest run tests/unit/knowledge tests/unit/right-tool-state.test.ts tests/unit/right-tool-dock.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/memory-review-ui.test.ts` 覆盖 51 个文件、436 项测试，435 项通过；truth-service 的一项测试在清理临时 audit 目录时遇到 ENOTEMPTY，随后单独运行该文件的 4 项测试全部通过，未修改其测试或生产代码。[memory-review-ui.test.ts](../../tests/unit/memory-review-ui.test.ts)用真实无头 Chromium 验证筛选、批准/拒绝、提交禁用、失败保留与刷新恢复；[memory-review-tool.test.ts](../../tests/unit/knowledge/memory-review-tool.test.ts)的 4 项测试验证来源项目、原文转义、私有归属、独立计数与读取失败。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary` 通过；8 个生产 TypeScript 文件的定向 ESLint 零错误，保留 KnowledgeWorkbench 原有 refresh 依赖警告。未运行完整 Electron 桌面 E2E、打包或真实 Laya 模型验证。
-
-Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；通过临时 Node loader 解析到已安装的 `../janus-agentX/node_modules/yaml` 后执行原检查器，检查 207 篇 Harness Note，本篇零错误，但既有 `2026-09-28-debug-mode-plan--1645e12c.md` 缺少 Proposal、Risks 两节。没有修改该无关草稿，也没有将全库失败记为通过。测试均使用临时知识根目录，未改写真实知识数据。
+离线基线、双域来源、Profile、显式纠正、持久遗忘及任务恢复均由文末测试验证。Episode 自然到期使近期视图、观察检索及未完成精修失效；已经人工确认的长期事实保留独立有效性，不因原会话 TTL 自动删除。显式遗忘或来源撤回通过持久屏障停用已知派生链，并阻止运行中精修提交。第三人称、临时表述及任意自由文本槽位不依靠规则自动确认，仍须人工审核。
 
 [Profile 投影](../../src/main/knowledge/profile-projection.ts)只使用 active、未到期且带有效人工确认记录的 user 事实。审核服务在事实落库时生成 human-review 确认记录，绑定正文、归属、事实版本、类型、替代目标、TTL 和来源证据；模型不能通过候选字段授予确认资格。正文或来源改动后必须重新确认，访问强度与 lastSeenAt 不改变确认 hash。工程会话产生的个人习惯经审核后参与投影，普通工程事实仍由 Janus 的工程上下文通道读取，不直接成为个人画像。
 
 `profile/snapshot.json` 是派生快照，包含已确认事实及来源 hash、人工字段、规则版本、内容指纹、版本与 5 分钟 TTL。每次读取都重新核对事实与 override，不等待 TTL 才发现撤回、到期或同 ID 内容变化。源内容不变时版本与 updatedAt 不变，TTL 到期只续期；快照正文不作为权威输入，内容偏差可从事实重建。结构损坏则报错保留文件，不用空画像覆盖。当前采用全事实扫描与整文件原子写，同进程共享队列；没有跨事实审核、遗忘、override、审计的统一事务，也没有跨进程锁。并发事实变更在后续读取中可见，不宣称已经撤销正在生成的聊天上下文。
 
-人工身份及格式/工具偏好通过已有宿主 save 方法写入独立的 `profile/overrides.json`，限制字段与长度并记录审计；审计失败时恢复原 override。后台投影不能覆盖该文件，移除 override 不删除底层事实。未使用的 recordHabitVersion 直接写入口移除，habitVersions 随确认事实派生。override 已持久化但快照写入失败时调用会报错，后续读取仍可据 override 重建；完整跨文件崩溃事务尚未实现。人工编辑 UI、按语义单值槽位消解 override 与自由文本事实冲突仍待实现，当前召回明确标注人工字段优先。
+人工身份及格式/工具偏好由[编辑器](../../src/renderer/src/components/knowledge/PersonalProfileEditor.tsx)读取专用快照，经 savePersonalProfile 提交完整表单与 expectedHash。未提交字段表示清空；主进程在事实锁与 Profile 队列内核对当前已存字段及遗忘后投影，过期保存必须重读，成功响应丢失后的同值重试不重复审计。字段限制长度和数量，审计失败恢复原 override；派生快照损坏不把已提交编辑伪装成保存失败。后台投影不能覆盖人工字段，清空后仍可使用底层确认事实。普通失败保留草稿，关闭编辑器后忽略迟到响应。完整 override/audit 跨文件崩溃事务不在事实批准日志范围内。
 
-旧 `profile/profile.json` 保留原字节，不自动当作人工 override；没有确认记录的旧个人 truth 保持可读，但不进入生产个人召回的稳定事实集。历史 candidate_approved/candidate_applied 审计没有绑定被审核的正文 hash，旧 actor 或 active 状态也不能证明当前内容仍是当时确认的版本，因此选择人工重新确认，不自动恢复历史资格。直接把旧 profile 当 override 可以保留原体验，代价是无法证明其来源；按既有审计自动补确认记录可减少操作，但在缺少内容绑定时仍可能错误升格。现有 overview 仍可展示旧事实，并标明尚未确认、不用于稳定画像；尚未增加独立 uncertain 分栏。
+旧 `profile/profile.json` 保留原字节，不自动当作人工 override；没有确认记录的旧个人 truth 保持可读，但不进入生产个人召回的稳定事实集。历史 candidate_approved/candidate_applied 审计没有绑定被审核的正文 hash，旧 actor 或 active 状态也不能证明当前内容仍是当时确认的版本，因此选择人工重新确认，不自动恢复历史资格。直接把旧 profile 当 override 可以保留原体验，代价是无法证明其来源；按既有审计自动补确认记录可减少操作，但在缺少内容绑定时仍可能错误升格。画像将有效确认事实与未确认事实分为独立栏，保留来源引用及纠正、遗忘入口；未确认材料不进入稳定画像。
 
 [旧资料导入](../../src/main/knowledge/legacy-memory-migration.ts)由右侧审核栏的“导入旧个人资料待确认”调用专用 IPC；不向工程 MCP 或 Agent 工具提供迁移写入口。支持现有 truth 读取器能识别的 active、未到期且未有效确认的个人事实，以及旧 profile 的 identity、formatPrefs、toolPrefs。导入只创建候选，每次最多 100 条新增候选，显示新增数量与剩余可导入数量；批次上限限制写入量，源扫描仍是全文件。旧 profile 字段按字段名与原值去重，未知字段不推断用途，不复制成画像偏好。
 
@@ -247,13 +239,9 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 
 批准迁移候选前在事实候选写锁中核对源内容、有效性、候选正文与归属；事实撤回共用该锁，失效或已撤回的旧来源不能被迁移批准。旧事实确认通过现有 supersedes 事务归档原事实，生成连续版本的新个人事实与确认记录；旧 profile 字段则生成独立个人事实，不改写旧 profile。源不存在、源已变化或绑定丢失时拒绝批准，界面提示刷新、拒绝旧候选并重新导入。迁移候选不进入自动评分精修，用户审核的是被绑定的源内容。事实候选的批准和拒绝也严格读取 JSONL，避免覆盖其中损坏的行。
 
-该路径保证保守重新确认与候选级续跑，不保证审核、truth 和 audit 多文件的崩溃事务。进程在事实提交后、候选或审计提交前退出仍可能留下待人工核对的中间状态；失效来源检查会阻止重复批准，不声称所有中间状态都自动恢复。旧 profile 单值字段改变后仍是新候选，不自动判定其替代哪条已确认事实；单值槽位与冲突处理继续作为独立后续工作。没有运行用户真实数据迁移，也没有自动批准历史资料。
+旧资料导入保证保守重新确认与候选级续跑，批准迁移候选也使用事实恢复日志。旧 profile 单值字段改变后仍是新候选，不自动猜测替代哪条自由文本事实；已支持的发布命令和默认输出语言槽位沿用统一冲突审核。没有运行用户真实数据迁移，也没有自动批准历史资料。
 
-个人召回按人工字段、已确认 preference、其他已确认事实的稳定次序预留最多 3 条，与 BM25 top-k 分离；其余画像材料及有效 Episode 继续按查询检索，共用既有个人条数/字符预算。已进入快照的事实不会再从旧事实检索路径重复注入；超长条目被跳过且标记截断，不阻断后续可容纳条目。事实行保留 fact/observation 引用及 supersedes，近期 Episode 不写入长期画像。工程召回与 MCP 权限过滤保持原路径。完整画像验收 AC-1、AC-3、AC-9、AC-10 仍未完成。
-
-机器验证（2026-09-28，Profile 派生快照）：`npx vitest run tests/unit/knowledge tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 52 个文件、438 项测试。[profile-projection.test.ts](../../tests/unit/knowledge/profile-projection.test.ts)的 12 项测试覆盖人工确认与域过滤、同 ID 修改、来源变更、撤回、TTL、仅排名变化、重启、并发 override、审计失败回滚、旧文件保留、损坏文件保留、缓存正文重建及稳定条目/溢出召回预算。既有人工审核→个人召回、MCP 隔离与替代链回归通过。运行中既有 schema_violation 异步审计在临时目录清理时报告一次 EPERM，未导致测试失败；不据此声称跨存储审计事务已经完整。`npm run typecheck:strict-unused`、6 个生产 TypeScript 文件定向 ESLint、`npm run check:package-boundary` 通过；未运行 Electron 桌面 E2E、打包、真实 Laya 或旧数据迁移演练。
-
-机器验证（2026-09-28，旧个人资料重新确认迁移）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 54 个文件、453 项测试。[legacy-memory-migration.test.ts](../../tests/unit/knowledge/legacy-memory-migration.test.ts)的 12 项测试覆盖仅提案、私有归属、原文件保留、替代版本、并发导入去重、拒绝/遗忘不复活、源变更与撤回、分批续跑、损坏文件保留及审计失败回滚。失效来源提示调整后，IPC 与真实无头 Chromium 的审核交互测试 10 项复跑通过，验证导入不批准、领域筛选、显式批准及失败恢复提示。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary`、11 个生产 TypeScript 文件定向 ESLint 通过。未运行完整 Electron 桌面 E2E、打包或真实旧数据迁移。
+个人召回按人工字段、已确认 preference、其他已确认事实的稳定次序预留最多 3 条，与 BM25 top-k 分离；其余画像材料及有效 Episode 继续按查询检索，共用既有个人条数/字符预算。已进入快照的事实不会再从旧事实检索路径重复注入；超长条目被跳过且标记截断，不阻断后续可容纳条目。事实行保留 fact/observation 引用及 supersedes，近期 Episode 不写入长期画像。工程召回与 MCP 权限过滤保持原路径。近期事件不写入长期 Profile；Episode TTL 与长期事实 TTL 分别生效。
 
 ### 已选个人记忆的显式纠正
 
@@ -263,9 +251,7 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 
 [画像界面](../../src/renderer/src/components/knowledge/UserPersonaTool.tsx)提供逐条纠正入口，显示未确认旧事实的资格状态；激活或手动刷新时重读来源。编辑草稿在切换栏目和提交失败时保留，提交期间禁用重复操作，关闭工具后迟到的提交响应不重新打开审核。[统一审核卡片](../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)显示旧正文、新正文及同目标竞争纠正数，来源失效时提示刷新并针对当前版本重新纠正。
 
-直接修改事实可以减少一次操作，但会绕过确认记录与版本链；用相似度自动定位替代对象可以省去选择，却无法可靠区分反转、补充与不同语义槽位。因此此入口只纠正用户明确选中的事实。人工 overrides 编辑器、自由文本单值槽位推断、自动冲突消解及完整遗忘事务仍待实现；已有 truth、candidate、audit 普通失败回滚不等于跨文件崩溃事务。AC-1、AC-2、AC-3、AC-9、AC-10 保持未完成。
-
-机器验证（2026-09-28，个人记忆显式纠正）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 56 个文件、465 项测试。其中 [personal-memory-correction.test.ts](../../tests/unit/knowledge/personal-memory-correction.test.ts)的 8 项测试覆盖幂等提案、来源变化、版本替代、竞争纠正、候选篡改、损坏文件保留及审计失败回滚；[personal-memory-correction-ui.test.ts](../../tests/unit/personal-memory-correction-ui.test.ts)的 3 项真实无头 Chromium 测试覆盖草稿、刷新、重复提交与关闭后的异步响应。既有 user-memory-contract 测试在临时目录清理期间输出一次 schema_violation 审计 EPERM，测试仍通过。`npm run typecheck:strict-unused` 通过；17 个生产 TypeScript 文件定向 ESLint 零错误，保留 KnowledgeWorkbench 原有 refresh 依赖警告；`npm run i18n:check` 与 `npm run check:package-boundary` 通过。未运行完整 Electron E2E、桌面打包、真实个人数据操作或 Laya 权重验证。
+直接修改事实可以减少一次操作，但会绕过确认记录与版本链；用相似度自动定位替代对象可以省去选择，却无法可靠区分反转、补充与不同语义槽位。因此纠正入口只针对用户明确选中的事实，任意自由文本冲突不自动消解。人工字段使用独立编辑器，持久遗忘由下述屏障统一实施；事实批准的进程中断由恢复日志处理。
 
 ### 个人记忆的持久遗忘
 
@@ -277,9 +263,7 @@ Note 全库检查未通过：`npm run check:notes` 缺少本地 yaml 依赖；�
 
 truth 读取、Profile 投影、近期记忆、治理检索和个人召回都核对遗忘记录。正文完全相同的人工 override 在投影时抑制，原 override 文件保留；旧 profile 导入也不能重新生成同值候选。候选读取将关联 proposed 条目视为 rejected，候选新增、评分注解和人工批准受同一约束；精修合并在原审核锁中重读有效候选，不能由模型迟到响应恢复。任务读取和统计立即呈现 cancelled，后续任务写入持久化取消状态；运行中的模型请求可继续返回，但不能恢复候选资格。治理检索将遗忘记录纳入索引键并在使用缓存后再次过滤，个人召回若跨越遗忘提交则丢弃本次上下文。已经交付给模型或显示在会话历史中的内容不会被追回。
 
-只归档原事实的实现简单，但无法阻止候选、旧 profile 和旧证据重放；逐个物理删除来源可以减少磁盘残留，但会破坏共享工程证据且需要跨存储恢复协议。因此采用持久生命周期记录与读写约束。此次是逻辑遗忘，原事实、原始会话、候选历史及旧审计文件仍保留。相同正文将持续被禁止进入个人记忆，没有恢复或重新授权入口；不同措辞、全新无关联来源的语义同义内容不在精确识别保证内。当前画像最多展示既有 overview 限额内的事实，未增加全库分页。独立 Episode 和 `user-memory.forget` 查询式工具已共用该记录；物理清除、人工字段独立遗忘和语义级恢复仍待收拢，AC-3、AC-9、AC-10 不据此勾选完成。
-
-机器验证（2026-09-29，已选个人事实遗忘）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 57 个文件、476 项测试。[personal-memory-forgetting.test.ts](../../tests/unit/knowledge/personal-memory-forgetting.test.ts)的 9 项测试覆盖域隔离、版本与证据追溯、候选重放、旧资料导入、重复请求、写入失败、提交后响应丢失、损坏文件保留、热索引与召回并发；[refinement-tasks.test.ts](../../tests/unit/knowledge/refinement-tasks.test.ts)增加运行中遗忘和新服务实例恢复测试；[界面测试](../../tests/unit/personal-memory-correction-ui.test.ts)的 4 项真实无头 Chromium 测试包含遗忘确认、失败重试、提交禁用和刷新。首轮回归发现空遗忘记录影响旧精简候选统计，修复后全量复跑通过。最终回归中既有 user-memory-tools 测试输出一次临时审计目录 EPERM，未导致测试失败。`npm run typecheck:strict-unused`、18 个生产 TypeScript 文件定向 ESLint、`npm run i18n:check` 与 `npm run check:package-boundary` 通过。未运行完整 Electron E2E、桌面打包、真实个人数据遗忘、断电或 Laya 权重验证。
+只归档原事实的实现简单，但无法阻止候选、旧 profile 和旧证据重放；逐个物理删除来源可以减少磁盘残留，但会破坏共享工程证据且需要跨存储恢复协议。因此采用持久生命周期记录与读写约束。此次是逻辑遗忘，原事实、原始会话、候选历史及旧审计文件仍保留。相同正文将持续被禁止进入个人记忆，没有恢复或重新授权入口；不同措辞、全新无关联来源的语义同义内容不在精确识别保证内。当前画像最多展示既有 overview 限额内的事实，未增加全库分页。独立 Episode 和 `user-memory.forget` 查询式工具已共用该记录；人工字段独立遗忘也复用该记录；物理清除和语义级重新授权不在逻辑遗忘的保证范围内。
 
 近期事件的画像卡片提供独立遗忘入口，沿用同一确认页和 IPC，以 `kind: episode` 区分事实。宿主根据正文、来源引用、创建时间、到期时间、状态及标签计算 hash；来源变化、到期、缺失或同 ID 多条记录时拒绝操作。遗忘 episode 的 ID 与来源也进入同一约束，已从它派生的个人事实、候选和任务不能继续使用；读取工程来源不因此受到删除。
 
@@ -287,27 +271,43 @@ truth 读取、Profile 投影、近期记忆、治理检索和个人召回都核
 
 [事件源读取](../../src/main/knowledge/user-episode-service.ts)为遗忘提供不限召回数量的视图；[观察读取器](../../src/main/knowledge/observation-service.ts)增加显式严格读取选项。遗忘读取 active 分片、压缩归档和旧 episode 文件时，JSON、schema、解压或 I/O 错误都不能被解释为空记录；其他已有读取者保持兼容模式。该扫描仍是全量，包含工程 observation 的损坏分片也可能阻止本次个人遗忘；这是防止漏读来源的保守代价。query 仅选择有效事实与近期事件，不单独选择只有候选或只有人工 override 的内容；显式重新授权、已到期事件的独立管理和全库分页仍需后续界面。
 
-机器验证（2026-09-29，聊天与近期事件统一遗忘）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 57 个文件、481 项测试；补充损坏 observation 分片反例后，`npx vitest run tests/unit/knowledge/personal-memory-forgetting.test.ts` 的 14 项全部通过。新增覆盖独立 episode 指纹、原子查询提交与重试、205 条历史事件、宽泛查询拒绝、损坏来源保留，以及真实无头 Chromium 中 episode 类型和 hash 的传递。11 个生产 TypeScript 文件定向 ESLint、`npm run i18n:check`、`npm run check:package-boundary` 通过。`npm run typecheck:strict-unused` 未通过，唯一报告为工作区无关的 `src/main/notifications/agent-hook-config.ts:183`、`:184` 两个未使用常量；未修改该文件，也不把严格检查记为通过。未运行完整 Electron E2E、桌面打包或真实个人数据遗忘。
+### 终端归因、事实恢复与旧事件迁移
 
-### Laya 接入与精炼验收（2026-09-29）
+[终端记录器](../../src/main/knowledge/agent-turn-recorder.ts)只将匹配已登记引擎的 UserPromptSubmit 消息归为本人陈述；OpenCode 状态文字保持 unknown。来源事件身份绑定引擎、会话、事件、时间及消息，重启重放保持相同身份，后续同文轮次仍可区分。开始记录和结束元数据中的 prompt 均脱敏，原文哈希只用于运行中去重，不落盘。checkpoint、git、tool 和 blueprint-maintenance 来源通过候选与 truth 读取保留，来源可追溯并不授予本人资格。
 
-`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/laya-settings-ui.test.ts tests/unit/package-boundary.test.ts` 通过 59 个文件、497 项测试；真实模型用例在普通回归中显式跳过。设置 `JANUSX_LAYA_PYTHON` 和 `JANUSX_LAYA_MODEL` 后单独执行 `npx vitest run tests/unit/knowledge/laya-real.test.ts` 通过，覆盖真实 Python 预热、宿主六题校验以及连续两次启动。`python -m unittest discover -s tests/laya -v` 通过 9 项，覆盖概率、摘要、SDK 配置写入隔离与评估指标。设置页补充父组件保存期间取消预热的 Chromium 验收，最终单独复跑通过。
+[事实批准日志](../../src/main/knowledge/fact-review-recovery.ts)在首次事实写入前，将 facts/facts.jsonl、facts/candidates.jsonl 的原文（含文件缺失）与目标内容写入 facts/review-pending.json。审计批次原子提交是批准的提交点，确定性审计事件 ID 绑定日志操作。持锁恢复时，有提交标记则完成目标状态，无标记则恢复原文；读集出现不属于原文或目标的外部修改，或日志/审计损坏时显式失败并保留全部文件。启动先恢复事实，再调度精修。truth、遗留事实读取及召回检查日志与进程内读版本，禁止返回跨越失败审核的中间事实。
 
-严格未使用检查、生产构建、20 个改动生产文件定向 ESLint、双语键检查和 package-boundary 检查通过。执行项目既有 `npm run prepackage` 后，本地依赖以可打包目录安装，`exclusions:check` 的 416 项排除与生产闭包一致，未修改依赖声明或锁文件。Note 检查中本文零错误，全仓库仍由 debug-mode-plan Note 缺少 Proposal/Risks 两节而失败。
+只做 catch 回滚代码更短，但进程退出不会执行 catch；因此事实批准增加一份可删除的恢复日志。它覆盖新事实、替代及迁移批准，不覆盖 Wiki/Graph、拒绝、人工字段的所有多文件事务，不提供跨进程互斥或断电 fsync 保证。每次批准保存两份完整文件，库规模增加时须测量写入成本。没有日志的历史中间状态不能猜测恢复。
 
-Windows 解包验证使用构建快照，避免运行中的开发服务改写 out 目录；临时配置仅将 out 输入替换为固定快照，保留原打包规则。`npx electron-builder --win --dir --config=artifacts/laya-package-config.json` 成功生成 `artifacts/laya-package-check/win-unpacked`。`node scripts/check-laya-package.mjs artifacts/laya-package-check/win-unpacked` 验证三份适配文件与源文件摘要一致，asar 不包含 Laya 源目录、模型权重或 Python/torch 环境。将 `JANUSX_LAYA_RESOURCES` 指向产物的 resources/laya 后，真实进程测试连续两次启动及六题评分通过。未生成 NSIS/便携安装包，也未运行完整 Electron 桌面 E2E。
+[旧 Episode 迁移](../../src/main/knowledge/legacy-episode-migration.ts)从统一审核栏预览文件与记录数量，确认请求绑定所有来源文件的名称及原字节摘要。严格校验旧结构、重复 ID、目标和备份，按来源分片生成确定名称的 user Observation 文件；保留 ID、正文、创建/到期时间、TTL、状态、标签及原来源引用，标记 unknown/unverified。正文 hash 使用统一 SHA-256 规则，迁移不自动确认任何个人事实。
 
-第一阶段的运行时接入及 Windows 解包验收完成，第二阶段的人工/自动精炼代码路径可用，真实模型质量验收未通过。第二阶段仍需真实脱敏标注、独立留出与按题目/语言确定质量门槛。未调用真实外部 LLM、未操作真实用户记忆，也未声称 AC-8 或整项重构完成。
+迁移持旧事件写锁与观察写锁，先在 migration/episodes/<原字节摘要>-<原文件名> 保存并核验原文，再写入并核验 observations/active/legacy-episodes-<文件名摘要>.jsonl，最后移走旧读入口。若进程在目标提交后中断，读取按迁移标记去重，重试不追加副本；多个分片部分完成后，重新预览剩余文件。内容变化、损坏或冲突要求核对，原文件或验证过的备份继续保留。兼容读路径支持将未改动备份恢复到旧目录；恢复副本不会绕过已有遗忘屏障。测试操作临时数据，实际用户数据迁移须在界面逐次确认。
 
-个人访问生命周期机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 62 个测试文件、568 项测试，真实 Laya 用例显式跳过。新增 `memory-access.test.ts` 的 17 项覆盖锚点、持久化去重、冷却、画像不变、失效/遗忘/取消、损坏与写失败、预算裁剪、工具返回和流消费。补充生产聊天入口测试后，`npx vitest run tests/unit/llm/chat-turn-guard.test.ts` 的 11 项通过，覆盖个人成功输出、工程隔离与输出前失败。严格未使用类型检查、12 个生产文件定向 ESLint、双语键检查与 package-boundary 通过。全库 Note 检查仍有三项无关错误：debug-mode-plan 缺少 Proposal/Risks，worktree-composer-entry-motion 的 scope/reason 位置非法。未运行本切片的 Electron E2E、生产构建、真实模型与真实个人数据验证。
+人工字段遗忘通过 kind=override 与 identity、formatPrefs:N、toolPrefs:N 定位已显示的存储值，绑定整个编辑快照；确认页展示已存内容，草稿不能冒充目标。主进程将该原值与已知同值个人派生链纳入既有遗忘屏障，保留独立字段及工程内容。成功后重新加载字段；精确同值持续被阻止保存，清空字段则仅移除优先显示，不等同于遗忘。
 
-撤回与精修任务失效机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 61 个测试文件、577 项测试，真实 Laya 用例显式跳过。`operations-service.test.ts` 的 11 项覆盖跨 workspace 同 ID、归属内重复 ID、损坏事实/图边保留和审核锁竞争；`refinement-tasks.test.ts` 的 40 项包含真实撤回到取消落盘、停用期间视图失效、来源读取错误保留和运行中拒绝的提交阻断。最终撤回模块定向复跑 11 项通过。严格未使用类型检查及三个生产文件 ESLint 通过；全库 Note 检查仍由上述三项无关错误失败。未运行本切片的生产构建、Electron E2E、真实模型或真实数据操作。
+### Laya 真实数据验收入口
 
-工程事实交付强度机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 62 个测试文件、585 项测试，真实 Laya 用例显式跳过。补充失效事实过滤和真实缓存更新后，`npx vitest run tests/unit/knowledge/memory-access.test.ts tests/unit/knowledge/recall-phase3.test.ts tests/unit/knowledge/recall-service.test.ts tests/unit/knowledge/context-service.test.ts` 的 48 项通过。覆盖工程回执的跨项目同 ID、私有域隔离、重复请求、归档拒绝、实际缓存更新，固定墙钟下的衰减/重启等价、TTL 缓存失效、预算裁剪，以及个人融合/工程聊天成功和输出前失败的真实接线。严格未使用类型检查、八个生产文件定向 ESLint 与 package-boundary 通过；全库 Note 检查仍有上述三项无关错误。未运行本切片的生产构建、Electron E2E、真实模型或真实数据操作。
+[评测脚本](../../scripts/evaluate-laya.py)支持 --dataset、--dataset-kind annotated、--policy 及 --validate-only。输入采用现有 JSON 样例结构：id、source、scenario、language、split、content、evidence、related、labels；labels 按 retention/kind/support/duplicate/supersede/conflict 顺序，除 kind 是 fact/preference/decision/procedure，其余为布尔值。真实脱敏样本须附 annotation.origin=redacted-real、reviewer 和带时区的 reviewedAt。标注元数据只记录来源声明，不能证明标签正确；不能把合成样例改元数据后当作真实验收。
 
-来源撤回机器验证（2026-09-29）：`npx vitest run --maxWorkers=4 tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/observation-revocation-ui.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 64 个测试文件、598 项测试，真实 Laya 用例显式跳过。默认并发运行时一项既有异步 schema_violation 审计断言超时，单文件复跑通过，四 worker 完整回归通过。新增 `observation-revocation.test.ts` 的 10 项覆盖实际来源、画像、Wiki/图边、候选、运行中精修、gzip、重放、同 ID 跨 workspace、重复提交、损坏文件与写失败；`observation-revocation-ui.test.ts` 的两项 Chromium 测试覆盖正文预览、hash 提交、过期失败重读和关闭后不刷新。IPC 的八项测试覆盖 42 个接口及浏览器降级。严格未使用类型检查、19 个生产文件定向 ESLint、双语键和 package-boundary 通过；ESLint 保留 KnowledgeWorkbench 既有 refresh 依赖警告。全库 Note 检查仍有上述三项无关错误。未运行完整 Electron E2E、生产打包、真实模型或真实用户数据撤回。
+source 按会话或原始来源分组，翻译及同事件变体共用 scenario；来源、场景和相同模型输入均禁止跨 calibration/holdout。先用 `<Python> scripts/evaluate-laya.py --dataset <JSON> --dataset-kind annotated --validate-only` 验证，再传入 --python <推理Python> --model-dir <模型目录> --output <报告> --policy <策略JSON> 运行。真实数据文件不写入仓库；策略必须在看留出结果前固定，记录 id、modelRevision、adapterSha256、minCoverage，以及每个 holdout/<语言>/<题目> 的 minCount、minAccuracy、maxBrier、maxEce；布尔题可额外设置 minPositiveRecall/minPositivePrecision。模型 revision 或 sidecar 文件摘要不匹配则拒绝评估。
 
-撤回记录管理机器验证（2026-09-29）：`npx vitest run --maxWorkers=4 tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/observation-revocation-ui.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 64 个测试文件、605 项测试，真实 Laya 用例显式跳过。来源撤回测试新增四种来源状态、25 条记录分页、预览截断、非法分页和损坏来源反例；Chromium 测试新增历史翻页、缺失来源保留及刷新忽略旧响应。严格未使用类型检查、七个生产文件定向 ESLint、双语键与 package-boundary 通过；ESLint 保留 KnowledgeWorkbench 既有 refresh 依赖警告。全库 Note 检查仍有上述三项无关错误。未运行完整 Electron E2E、生产打包或真实数据管理。
+报告保存数据和策略摘要、逐语言逐题准确率/Brier/ECE/正例 precision/recall/假阳性率、覆盖率及性能。合成数据或缺少固定策略时 qualityGate=not-evaluated；未达门槛则 failed。未拟合温度时 calibrationId=null，没有启用自动接受时错误接受率为 null；报告不会修改产品策略。AC-8 仍需真实脱敏人工标注、事先固定的质量门槛和独立留出实测。
+
+### 当前验证（2026-09-29）
+
+相关测试全部使用临时 JANUSX_KNOWLEDGE_ROOT，未修改真实知识库。真实 Laya Windows CPU 的固定版本性能及合成集质量见上文实测报告；此次普通回归显式跳过真实权重用例，不将替身结果当作模型质量。
+
+`npx vitest run --maxWorkers=4 tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/personal-profile-editor-ui.test.ts tests/unit/observation-revocation-ui.test.ts tests/unit/laya-settings-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/agent/memory-tool-context.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 70 个文件、644 项测试，1 个真实 Laya 用例跳过。
+
+新增验证包括资料编辑与人工字段遗忘（9 项服务测试）、资料/迁移交互（5 项 Chromium 测试）、旧 Episode 迁移（5 项）、事实审核恢复（7 项）、真实工具上下文隔离（2 项）及终端来源/脱敏（6 项）。统一写链的 13 项测试包含新写入与迁移事件的到期：热索引、个人召回、近期视图及处理队列同步排除，到期收割幂等。既有来源撤回、运行中遗忘、持久精修重放、双域预算及 Wiki sourceFactIds/sourceNoteRefs/hash/页面版本回归通过。
+
+`<Python 3.12> -m unittest discover -s tests/laya -v` 通过 12 项；`<Python 3.12> scripts/evaluate-laya.py --validate-only` 通过现有 24 条合成样例检查。评测不使用系统 WindowsApps 的 Python 占位入口，使用 uv 已安装的 Python 3.12。
+
+`npm run typecheck:strict-unused`、`npm run build`、`npm run i18n:check`、`npm run check:package-boundary`、`npm run exclusions:check` 通过。改动生产文件的 ESLint 无错误，保留 KnowledgeWorkbench 既有 refresh 依赖警告；事实恢复的最终改动单独复查无警告。知识库相关 diff 检查通过。全库 Note 检查仍由两篇无关草稿的 3 个错误失败：debug-mode-plan 缺少 Proposal/Risks，worktree-composer-entry-motion 的 scope/reason 关系字段不合法；原检查器扫描 210 篇 Harness Note，本篇零错误，不将全库失败记为通过。
+
+`npx playwright test --config playwright.desktop.config.ts tests/e2e/knowledge-pipeline.spec.ts` 的真实 Electron IPC 覆盖采集、规则提案、快照审核、truth、搜索、上下文、资料保存、人工字段遗忘和迁移原文备份及重试。完整 `npx playwright test --config playwright.desktop.config.ts` 9 项通过，覆盖三个工作流、蓝图、编辑器、通用冒烟及知识库 IPC。侧栏收起定位使用现有 aria-label，避免依赖已换成提示组件的 title 属性；蓝图夹具在应用启动前完整落盘，并检查宿主投影可读，避免边创建来源边加载画布。
+
+Windows 产物使用本次 out 的固定快照，执行 `npx electron-builder --win --dir --publish never --config=artifacts/knowledge-package-config.json` 生成 artifacts/knowledge-closeout-package/win-unpacked。配置仅替换构建快照输入与输出目录，沿用项目打包规则。`node scripts/check-laya-package.mjs artifacts/knowledge-closeout-package/win-unpacked` 通过：三份适配文件摘要与源码相同，asar 无权重或 Python/torch。原 check-packaged-runtime.mjs 的临时副本仅调整产物目录，复制到仓库外执行 llm-runtime 与 module-graph 两种启动均通过；未发布、未生成 NSIS/便携安装器。
 
 ## Alternatives considered
 
@@ -330,16 +330,16 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 
 ## Acceptance criteria
 
-- [ ] AC-1: 单管线可达双域 — 一次调度能够结算合法 project/user 输入，分域游标与处理键不串域；Episode、个人保存和 Habit 候选进入统一入口，Profile 仅为派生视图；可归因到用户的工程陈述或行为可派生个人开发习惯，工程事实保持原归属，未归因工程内容不能直接升格为个人偏好。重试、跨批次与多项目转发不重复计数。
-- [ ] AC-2: 工程事实闭环 — agent/checkpoint/git/tool/blueprint 来源可追溯；重复只合证据，相似度不直接替代，显式 supersedes 检查归属与当前版本；测试覆盖版本晋升、冲突、索引失效和退出默认召回，强度变弱不删除有效 truth。
-- [ ] AC-3: 画像证据闭环 — 个人画像服务 Janus，可读取工程知识并归纳有本人证据的开发习惯；明确保存意图不受重复频次门槛限制。人工 override 与可信账本优先，模型推测进入 uncertain 且默认不注入稳定画像；来源可核验、同证据不增快照版本、撤回立即失效、私有数据不进入工程与 MCP 等共享面。
+- [x] AC-1: 单管线可达双域 — 一次调度能够结算合法 project/user 输入，分域游标与处理键不串域；Episode、个人保存和 Habit 候选进入统一入口，Profile 仅为派生视图；可归因到用户的工程陈述或行为可派生个人开发习惯，工程事实保持原归属，未归因工程内容不能直接升格为个人偏好。重试、跨批次与多项目转发不重复计数。
+- [x] AC-2: 工程事实闭环 — agent/checkpoint/git/tool/blueprint 来源可追溯；重复只合证据，相似度不直接替代，显式 supersedes 检查归属与当前版本；测试覆盖版本晋升、冲突、索引失效和退出默认召回，强度变弱不删除有效 truth。
+- [x] AC-3: 画像证据闭环 — 个人画像服务 Janus，可读取工程知识并归纳有本人证据的开发习惯；明确保存意图不受重复频次门槛限制。人工 override 与可信账本优先，模型推测进入 uncertain 且默认不注入稳定画像；来源可核验、同证据不增快照版本、撤回立即失效、私有数据不进入工程与 MCP 等共享面。
 - [x] AC-4: Laya 为主决策分流 — ready 时输出 retention/kind/support/duplicate/supersede/conflict 注解，answer_confidence 与 noul 方向校验驱动快道或待精修；关闭、缺席、失联、超时、无效输出时用 NoopScorer 保留规则候选且不抛到聊天主链。兼容既有数据，不要求延续旧自动审核/自动 LLM 行为。
 - [x] AC-5: 无 Laya 基线完整 — 无 key、无 sidecar 时规则加 BM25 仍能完成 capture→candidate→人工 review→truth→recall；全部新候选人工审核，原 autoAccept 设置不得绕过；没有默认 LLM 是正常状态。
 - [x] AC-6: LLM 可选精修 — off 默认不自动调用；on-demand 仅在 Laya 标记、配置允许和预算充足时运行，人工触发也归 queue；超时、重试、字符预算及失败保留候选的语义可测试，精修结果重新核验。
 - [x] AC-7: Laya 资源受控 — 安装包不包含权重与 Python/torch；模型按需下载、revision/hash 固定、只加载指定多语 checkpoint；预热推理未通过不能 ready，idle 卸载与缺席回退可观察；单纯 health=ok 不算就绪。
 - [ ] AC-8: 决策质量可追溯 — 校准集与留出集按来源隔离，记录模型、题型、语言与模板版本的准确率、Brier、ECE、覆盖率和错误接受率；熵型 confidence、分类概率、act_probability、跨窗最大概率都不能冒充事实支持度。未达到已记录的审核策略质量门槛时自动接受保持关闭。
-- [ ] AC-9: 生命周期与召回确定 — 墙钟衰减重复计算和停机恢复等价；只增强最终交付且去重后的记忆，受冷却与上限约束；Episode 到期、遗忘与撤回同步影响索引、Profile 和任务重放，双域预算不互相挤占。
-- [ ] AC-10: 迁移与回归可复现 — 迁移可断点续跑、重复执行不重复数据、未知旧来源不升格；保持 Wiki sourceFactIds/sourceNoteRefs/hash/版本审核语义；相关 Vitest、typecheck、IPC/UI 与打包检查通过，真实 Laya 性能另有 Windows CPU 实测记录。
+- [x] AC-9: 生命周期与召回确定 — 墙钟衰减重复计算和停机恢复等价；只增强最终交付且去重后的记忆，受冷却与上限约束；Episode 到期、遗忘与撤回同步影响索引、Profile 和任务重放，双域预算不互相挤占。
+- [x] AC-10: 迁移与回归可复现 — 迁移可断点续跑、重复执行不重复数据、未知旧来源不升格；保持 Wiki sourceFactIds/sourceNoteRefs/hash/版本审核语义；相关 Vitest、typecheck、IPC/UI 与打包检查通过，真实 Laya 性能另有 Windows CPU 实测记录。
 - [x] AC-11: 统一审核界面 — 右侧只有一个审核入口，支持全部、工程知识、个人记忆筛选及独立数量；复用候选详情与审核动作，清楚展示来源和批准用途；知识库与个人画像保留各自阅读视图，工程来源的个人习惯仍不进入 MCP 输出。
 - [x] AC-12: 审核一致性与存储保护 — 三个审核入口携带显示快照 hash，主进程锁内核验批准与拒绝；过期快照不能变更候选，原快照成功重试幂等。损坏或不可读的候选、truth、Wiki 索引不得被空数据覆盖；Wiki/Graph 新增与审核回滚共用锁。
 - [x] AC-13: 明确单值事实的冲突审核 — 同 ID 不覆盖 truth；发布命令与默认输出语言按同域、值和极性分组，近似文本不吞掉不同参数；替代展示旧值并要求人工确认，提交绑定旧事实指纹，竞争替代最多成功一次，审计失败可回滚；跨所有者、失效及多目标情况不允许直接批准。
@@ -363,6 +363,6 @@ Laya 多语模型的任务质量和校准仍需本地样本证明；温度拟合
 
 统一写链最易在迁移期间因重放、旧工具直写或习惯跨批次聚合重复积累。上线切换必须有明确的写入所有者、幂等映射和恢复点；模型不可用不能阻塞规则结算，模型恢复也不能把旧候选自动重放成已接受事实。
 
-Episode 兼容期的新观察分片与旧文件分别持锁，不构成跨文件事务；部分失败需重试完成剩余过期处理。当前测试证明普通重试不会恢复同一原事件，但不覆盖已派生候选、长期事实或运行中精修的级联撤回。缺少调用事件 ID 的显式保存只能按内容去重，恢复真实事件身份前不能将同文工具调用当成多次独立本人确认。
+Episode 自然到期保留历史来源，长期确认事实有独立 TTL；逻辑遗忘和显式撤回则停用已知引用链。旧分片迁移按文件提交，剩余文件需重新预览；源、备份或目标发生外部修改时保留文件并要求核对。工具调用身份依赖宿主 correlationId，未知来源及无引用的全新内容不具有语义去重保证。
 
 任务账本采用整文件原子读写并保留终态历史，尚未实现任务归档或跨进程分布式锁；大历史量需要测量后再决定分片。外部模型已返回、候选尚未提交时的崩溃可能导致恢复后重新推理，因此只承诺已提交候选不被重复修改，不承诺供应商侧恰好调用一次。旧评分注解缺少新增证据/内容指纹时不会自动产生任务，需要重新评分；既有 llm 失败记录也不直接升级为有调用资格的精修任务。

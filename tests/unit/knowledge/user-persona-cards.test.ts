@@ -33,6 +33,19 @@ function overview(): UserMemoryOverview {
 }
 
 describe('User persona cards', () => {
+  it('keeps unconfirmed facts outside the confirmed section and renders identity once', () => {
+    const value = overview()
+    value.habits.push({ id: 'confirmed', content: 'Confirmed preference', confirmed: true, observationIds: ['source'] })
+    const markup = renderToStaticMarkup(createElement(UserPersonaCards, { overview: value, onOpenInbox: vi.fn() }))
+    const sections = markup.split('<section ')
+    const confirmed = sections.find(section => section.includes('Confirmed preference'))!
+    const uncertain = sections.find(section => section.includes('我习惯用 pnpm 而不用 npm'))!
+    expect(confirmed).toBeDefined()
+    expect(uncertain).toBeDefined()
+    expect(confirmed).not.toBe(uncertain)
+    expect(confirmed).not.toContain('fact:fact-u1')
+    expect(markup.match(/树/g)).toHaveLength(1)
+  })
   it('renders profile, habits, and recent with source citations and no workspace', () => {
     const markup = renderToStaticMarkup(createElement(UserPersonaCards, { overview: overview(), onOpenInbox: vi.fn() }))
     expect(markup).toContain('我习惯用 pnpm 而不用 npm')

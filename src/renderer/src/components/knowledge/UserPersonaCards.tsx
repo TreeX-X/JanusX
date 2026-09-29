@@ -13,6 +13,7 @@ export function UserPersonaCards({
   onForget,
   onForgetEpisode,
   onRefresh,
+  onEditProfile,
 }: {
   overview: UserMemoryOverview
   onOpenInbox: () => void
@@ -20,6 +21,7 @@ export function UserPersonaCards({
   onForget?: (memory: UserMemoryOverviewHabit) => void
   onCorrect?: (memory: UserMemoryOverviewHabit) => void
   onRefresh?: () => void
+  onEditProfile?: () => void
 }) {
   const { t } = useI18n('knowledge')
   const prefs = [...(overview.profile.formatPrefs ?? []), ...(overview.profile.toolPrefs ?? [])]
@@ -28,7 +30,7 @@ export function UserPersonaCards({
       <section aria-label={t('knowledge:persona.profile.title')}>
         <div className={styles.resultMeta}>
           <span>{t('knowledge:persona.profile.title')}</span>
-          {overview.profile.identity && <strong>{overview.profile.identity}</strong>}
+          {onEditProfile && <button type="button" className={styles.copyButton} onClick={onEditProfile}>{t('knowledge:persona.overrides.edit')}</button>}
         </div>
         {overview.profile.identity && <p className={styles.rowContent}>{overview.profile.identity}</p>}
         {prefs.length === 0 && !overview.profile.identity && (
@@ -41,26 +43,29 @@ export function UserPersonaCards({
           </div>
         ))}
       </section>
-      <section aria-label={t('knowledge:persona.habits.title')}>
+      {[true, false].map(confirmed => {
+        const memories = overview.habits.filter(habit => (habit.confirmed === true) === confirmed)
+        const title = t(confirmed ? 'knowledge:persona.habits.title' : 'knowledge:persona.uncertainTitle')
+        return <section key={String(confirmed)} aria-label={title}>
         <div className={styles.resultMeta}>
-          <span>{t('knowledge:persona.habits.title')}</span>
-          {overview.pendingHabitCount > 0 && (
+          <span>{title}</span>
+          {!confirmed && overview.pendingHabitCount > 0 && (
             <strong>{t('knowledge:persona.pending.label', { count: overview.pendingHabitCount })}</strong>
           )}
         </div>
-        {overview.habits.length === 0 && (
+        {memories.length === 0 && (
           <div className={styles.state}><span>{t('knowledge:persona.habits.empty')}</span></div>
         )}
-        {overview.habits.map((habit) => (
+        {memories.map((habit) => (
           <div key={habit.id} className={styles.resultRow}>
             <span className={styles.rowTop}>
-              <b>{t('knowledge:persona.habits.title')}</b>
+              <b>{title}</b>
               {habit.habitStrength !== undefined && (
                 <code>{t('knowledge:persona.strength', { value: habit.habitStrength.toFixed(2) })}</code>
               )}
             </span>
             <span className={styles.rowContent}>{habit.content}</span>
-            {habit.confirmed === false && <span className={styles.rowSource}>{t('knowledge:persona.unconfirmed')}</span>}
+            {!confirmed && <span className={styles.rowSource}>{t('knowledge:persona.unconfirmed')}</span>}
             {onForget && <button type="button" className={styles.copyButton} disabled={!habit.contentHash} onClick={() => onForget(habit)}>{t('knowledge:persona.forgetMemory')}</button>}
             {onCorrect && <button type="button" className={styles.copyButton} disabled={!habit.contentHash} onClick={() => onCorrect(habit)}>{t('knowledge:persona.correctMemory')}</button>}
             <span className={styles.rowSource}>
@@ -69,6 +74,7 @@ export function UserPersonaCards({
           </div>
         ))}
       </section>
+      })}
       <section aria-label={t('knowledge:persona.recent.title')}>
         <div className={styles.resultMeta}><span>{t('knowledge:persona.recent.title')}</span></div>
         {overview.recent.length === 0 && (

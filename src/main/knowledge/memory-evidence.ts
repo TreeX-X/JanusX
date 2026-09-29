@@ -41,7 +41,7 @@ export function isUserStatement(observation: Observation): boolean {
     || evidence.workspaceId !== observation.workspaceId || evidence.scope !== observationScope(observation)
     || evidence.source !== observation.source || evidence.sessionId !== observation.sessionId) return false
   return (observation.type === 'conversation-turn' || observation.type === 'user-note')
-    && (observation.source === 'janus-chat' || observation.source === 'manual')
+    && (observation.source === 'janus-chat' || observation.source === 'manual' || observation.source === 'agent-stream')
     && evidence.speaker === 'user' && evidence.authority === 'user-stated'
 }
 

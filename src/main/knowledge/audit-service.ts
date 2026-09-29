@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, rename, writeFile, unlink } from 'node:fs/
 import { dirname, join } from 'node:path'
 import type { AuditEvent, KnowledgeProvenance } from '../../shared/knowledge'
 import type { AuditQuery, AuditStats } from '../../shared/ipc/knowledge'
+import { auditBatchEventId } from './fact-review-recovery'
 export type { AuditQuery, AuditStats } from '../../shared/ipc/knowledge'
 import { knowledgeRootPath } from './constants'
 
@@ -57,10 +58,10 @@ export class KnowledgeAuditService {
     return (await this.recordBatch([input]))[0]!
   }
 
-  async recordBatch(inputs: AuditEventInput[]): Promise<AuditEvent[]> {
+  async recordBatch(inputs: AuditEventInput[], operationId?: string): Promise<AuditEvent[]> {
     if (!inputs.length) return []
     return serialized(async () => {
-      const events = inputs.map((input): AuditEvent => ({ id: randomUUID(), ...input }))
+      const events = inputs.map((input, index): AuditEvent => ({ id: operationId ? auditBatchEventId(operationId, index) : randomUUID(), ...input }))
       const absolutePath = await ensureAuditFile()
       const previous = await readFile(absolutePath, 'utf8')
       const tempPath = `${absolutePath}.tmp-${process.pid}-${Date.now()}`

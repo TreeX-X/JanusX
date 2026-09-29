@@ -1,4 +1,5 @@
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
+import { assertFactReviewReady } from './fact-review-recovery'
 import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
@@ -29,7 +30,7 @@ interface WikiPageIndexEntry {
 type JsonRecord = Record<string, unknown>
 
 const KNOWLEDGE_SOURCES = new Set([
-  'agent-stream', 'checkpoint', 'git-analyzer', 'janus-chat', 'manual', 'tool', 'system',
+  'agent-stream', 'blueprint-maintenance', 'checkpoint', 'git-analyzer', 'janus-chat', 'manual', 'tool', 'system',
 ])
 const GRAPH_RELATIONS = new Set([
   'mentions', 'derived_from', 'supersedes', 'depends_on', 'conflicts_with',
@@ -221,6 +222,7 @@ async function readPublishedWikiPages(): Promise<WikiPage[]> {
 
 export class KnowledgeTruthService {
   async list(): Promise<KnowledgeTruthSnapshot> {
+    const reviewRevision = await assertFactReviewReady()
     const [facts, wikiPages, graphEdges] = await Promise.all([
       readJsonl(join('facts', 'facts.jsonl'), isMemoryFact, 'fact'),
       readPublishedWikiPages(),
@@ -229,6 +231,7 @@ export class KnowledgeTruthService {
 
     const barrier = await readPersonalForgettingBarrier()
     const revocations = await readObservationRevocationBarrier()
+    await assertFactReviewReady(reviewRevision)
     return {
       facts: facts.filter(fact => !barrier.blocksFact(fact) && !revocations.blocksFact(fact)),
       wikiPages: wikiPages.filter(page => !revocations.blocksFactIds(page.workspaceId, page.sourceFactIds)),

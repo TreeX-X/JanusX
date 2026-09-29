@@ -363,7 +363,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await expect(embeddedEditor).toHaveCount(0)
     await expect(panelShell).toBeVisible()
 
-    await page.getByTitle('收起侧栏').click()
+    await page.getByRole('button', { name: '收起工作区侧栏', exact: true }).click()
     await expect(rail).toBeVisible()
     expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
     await page.getByRole('main').getByText('Shell', { exact: true }).click()

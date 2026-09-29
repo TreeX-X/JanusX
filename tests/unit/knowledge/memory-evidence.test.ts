@@ -56,6 +56,20 @@ describe('host memory evidence boundary', () => {
     expect(await deriveHabitPromotions([manual, manual, manual])).toEqual([])
   })
 
+  it.each(['agent-stream', 'checkpoint', 'git-analyzer', 'tool', 'blueprint-maintenance'] as const)('preserves %s engineering evidence through review and truth reading', async source => {
+    const observation = await knowledgeObservationService.capture({ workspaceId: 'project-a', workspacePath: 'C:/project-a', source,
+      type: 'analysis-result', content: '决定：采用软删除方案', actor: 'engineering-host', fileRefs: ['src/item.ts'] }, { speaker: 'tool', sourceEventId: 'engineering-event' })
+    expect((await knowledgeObservationService.listAll(true)).some(row => row.id === observation.id)).toBe(true)
+    await runDeterministicStage({ workspaceId: 'project-a', observations: [observation] })
+    const candidate = (await knowledgeExtractService.listFactCandidates()).find(item => item.fact.content.includes('软删除'))!
+    expect(candidate).toBeDefined()
+    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
+    const fact = (await knowledgeTruthService.list()).facts.find(item => item.id === candidate.fact.id)!
+    expect(fact.provenance.sourceObservationIds).toContain(observation.id)
+    expect(fact.provenance.sourceEvidence?.[0]).toMatchObject({ source, authority: 'tool-observed', workspaceId: 'project-a' })
+    expect(await deriveHabitPromotions([observation, observation, observation])).toEqual([])
+  })
+
   it('reserves global assignment for host context and carries it into truth', async () => {
     const globalInput = { ...input, workspaceId: 'global', workspacePath: 'global', content: 'we decided to share a convention' }
     expect((await knowledgeObservationService.capture(globalInput)).scope).toBe('project')

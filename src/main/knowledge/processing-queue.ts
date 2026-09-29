@@ -434,6 +434,8 @@ export class KnowledgeProcessingQueue {
 
   /** Startup recovery (§6): report unprocessed ranges without processing. */
   async startupRestore(): Promise<{ pendingTotal: number; workspaces: WorkspacePending[] }> {
+    const { withFactCandidatesLock } = await import('./review-service')
+    await withFactCandidatesLock(async () => {})
     const stats = await this.buildStats()
     return { pendingTotal: stats.pendingTotal, workspaces: stats.workspaces }
   }

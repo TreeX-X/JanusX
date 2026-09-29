@@ -15,7 +15,9 @@ import { knowledgeTruthService } from '../knowledge/truth-service'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { knowledgeOperationsService } from '../knowledge/operations-service'
 import { getUserMemoryOverview } from '../knowledge/user-overview-service'
+import { userProfileService } from '../knowledge/user-profile-service'
 import { importLegacyPersonalMemory } from '../knowledge/legacy-memory-migration'
+import { migrateLegacyEpisodes } from '../knowledge/legacy-episode-migration'
 import { forgetPersonalMemory } from '../knowledge/personal-memory-forgetting'
 import { proposePersonalMemoryCorrection } from '../knowledge/personal-memory-correction'
 import { knowledgeDiagnosticsService } from '../knowledge/diagnostics-service'
@@ -186,6 +188,9 @@ export function registerKnowledgeHandlers(): void {
   ipcMain.handle(KNOWLEDGE_CHANNELS.userMemoryOverview, async () => {
     return getUserMemoryOverview()
   })
+  ipcMain.handle(KNOWLEDGE_CHANNELS.personalProfileEditContext, () => userProfileService.editContext())
+  ipcMain.handle(KNOWLEDGE_CHANNELS.migrateLegacyEpisodes, (_event, input: unknown) => migrateLegacyEpisodes(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.savePersonalProfile, (_event, input: unknown) => userProfileService.replace(input))
 
   // Phase 0: read-only pipeline diagnostics for the Workbench status bar.
   ipcMain.handle(KNOWLEDGE_CHANNELS.diagnostics, async (_event, query?: KnowledgeDiagnosticsQuery) => {

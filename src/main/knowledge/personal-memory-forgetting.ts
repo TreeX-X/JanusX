@@ -10,18 +10,29 @@ import { contentKeys, episodeContentHash, forgettingPath, forgettingRecordSchema
 import { userEpisodeService } from './user-episode-service'
 import { profileContentHash, reviewedFactHash } from './profile-projection'
 import { isForgettableQuery, matchesForgettingQuery } from './search/tokenizer'
+import { userProfileService } from './user-profile-service'
 
-const inputSchema = z.object({ targetId: z.string().min(1), targetHash: z.string().regex(/^[a-f0-9]{64}$/), kind: z.enum(['fact', 'episode']).optional() }).strict()
+const inputSchema = z.object({ targetId: z.string().min(1), targetHash: z.string().regex(/^[a-f0-9]{64}$/), kind: z.enum(['fact', 'episode', 'override']).optional() }).strict()
 
 /** The atomic barrier is both the lifecycle decision and its content-free audit receipt. */
 export async function forgetPersonalMemory(input: unknown): Promise<void> {
   const parsed = inputSchema.parse(input)
   await withFactCandidatesLock(async () => {
     const existing = await readPersonalForgettingBarrier()
-    const receiptTarget = parsed.kind === 'episode' ? `episode:${parsed.targetId}` : parsed.targetId
+    const receiptTarget = parsed.kind === 'episode' || parsed.kind === 'override' ? `${parsed.kind}:${parsed.targetId}` : parsed.targetId
     if (existing.records.some(record => record.target === memoryKey(receiptTarget) && record.targetHash === parsed.targetHash)) return
     const facts = await readLegacyJsonl<MemoryFact>('facts/facts.jsonl')
     const candidates = await readLegacyJsonl<CandidateFact>('facts/candidates.jsonl')
+    if (parsed.kind === 'override') {
+      const context = await userProfileService.editContext()
+      if (context.hash !== parsed.targetHash) throw new Error('Personal profile changed; reload before forgetting')
+      const match = /^(formatPrefs|toolPrefs):(0|[1-9]\d*)$/.exec(parsed.targetId)
+      const value = parsed.targetId === 'identity' ? context.overrides.identity
+        : match ? context.overrides[match[1] as 'formatPrefs' | 'toolPrefs']?.[Number(match[2])] : undefined
+      if (!value) throw new Error('Personal profile field is missing')
+      await commitForgetting(existing, facts, candidates, [], [], receiptTarget, parsed.targetHash, [value])
+      return
+    }
     if (parsed.kind === 'episode') {
       const targets = (await userEpisodeService.listForForgetting()).filter(episode => episode.id === parsed.targetId)
       if (targets.length !== 1 || targets[0].status !== 'active' || !(Date.parse(targets[0].expiresAt) > Date.now())
@@ -60,9 +71,9 @@ export async function forgetPersonalMemoryQuery(input: unknown): Promise<{ archi
   })
 }
 
-async function commitForgetting(existing: PersonalForgettingBarrier, facts: MemoryFact[], candidates: CandidateFact[], targets: MemoryFact[], episodes: UserEpisode[], targetId: string, targetHash: string): Promise<void> {
+async function commitForgetting(existing: PersonalForgettingBarrier, facts: MemoryFact[], candidates: CandidateFact[], targets: MemoryFact[], episodes: UserEpisode[], targetId: string, targetHash: string, contents: string[] = []): Promise<void> {
   const record = forgettingRecordSchema.parse({ target: memoryKey(targetId), targetHash,
-    createdAt: new Date().toISOString(), facts: [], candidates: [], observations: [], contents: [] })
+    createdAt: new Date().toISOString(), facts: [], candidates: [], observations: [], contents: contents.flatMap(contentKeys) })
   const addFact = (fact: MemoryFact) => {
     record.facts.push(memoryKey(fact.id))
     record.contents.push(...contentKeys(fact.content))

@@ -1,9 +1,11 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
-import { access, mkdir, mkdtemp, rm } from 'fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile, readFile, readdir } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join, resolve } from 'path'
 import type { KnowledgeAPI } from '../../src/shared/ipc/knowledge'
 import { createDesktopTestEnv } from './desktop-test-env'
+import { createHash } from 'node:crypto'
+import { reviewCandidateSnapshot } from '../../src/shared/review-candidate-snapshot'
 
 type KnowledgeWindow = Window & { electron: { knowledge: KnowledgeAPI } }
 
@@ -43,6 +45,12 @@ test('knowledge pipeline: observe → propose → review → truth → search �
     const workspacePath = join(fixtureRoot, 'workspace')
     await mkdir(userDataDir, { recursive: true })
     await mkdir(workspacePath, { recursive: true })
+    const episodeDirectory = join(fixtureRoot, 'knowledge', 'episodes')
+    await mkdir(episodeDirectory, { recursive: true })
+    const legacyEpisode = { id: 'legacy-e2e', content: 'Fixture recent memory', createdAt: '2026-09-01T00:00:00.000Z',
+      expiresAt: '2099-01-01T00:00:00.000Z', ttlDays: 60, tags: [], sourceObservationIds: [], status: 'active' }
+    const legacyBytes = JSON.stringify(legacyEpisode) + '\r\n'
+    await writeFile(join(episodeDirectory, 'fixture.jsonl'), legacyBytes)
 
     application = await electron.launch({
       args: [entry, `--user-data-dir=${userDataDir}`],
@@ -119,18 +127,18 @@ test('knowledge pipeline: observe → propose → review → truth → search �
     expect(preSearch.hits.map((hit) => hit.id)).toContain(decisionId)
 
     // 4. 审核：批准决策候选 → truth 落库且可追溯。
-    const appliedId = await page.evaluate(async () => {
+    const candidates = await page.evaluate(() => (window as unknown as KnowledgeWindow).electron.knowledge.listCandidates())
+    const decision = candidates.find(candidate => candidate.fact.content.includes('软删除'))
+    expect(decision?.derivation).toBe('deterministic')
+    expect(decision?.fact.kind).toBe('decision')
+    if (!decision) throw new Error('decision candidate missing from Inbox')
+    const candidateHash = createHash('sha256').update(reviewCandidateSnapshot(decision)).digest('hex')
+    const appliedId = await page.evaluate(async ({ id, candidateHash }) => {
       const knowledge = (window as unknown as KnowledgeWindow).electron.knowledge
-      const candidates = await knowledge.listCandidates()
-      const decision = candidates.find((c) => c.fact.content.includes('软删除'))
-      if (!decision) throw new Error('decision candidate missing from Inbox')
-      if (decision.derivation !== 'deterministic' || decision.fact.kind !== 'decision') {
-        throw new Error('decision candidate lost derivation/kind')
-      }
-      const applied = await knowledge.applyCandidate({ type: 'fact', id: decision.id })
+      const applied = await knowledge.applyCandidate({ type: 'fact', id, candidateHash })
       if (!applied.applied?.fact) throw new Error('applyCandidate produced no fact')
       return applied.applied.fact.id
-    })
+    }, { id: decision.id, candidateHash })
 
     const truth = await page.evaluate(() => (window as unknown as KnowledgeWindow).electron.knowledge.listTruth())
     const fact = truth.facts.find((f) => f.id === appliedId)
@@ -154,6 +162,32 @@ test('knowledge pipeline: observe → propose → review → truth → search �
     expect(statsAfter.indexUpdatedAt).not.toBeNull()
     expect(diagnostics.indexUpdatedAt).toBe(statsAfter.indexUpdatedAt)
     expect(diagnostics.truth.facts).toBeGreaterThanOrEqual(1)
+
+    // Profile editing and migration use the real preload/IPC contract and isolated storage.
+    const profile = await page.evaluate(async () => {
+      const knowledge = (window as unknown as KnowledgeWindow).electron.knowledge
+      const original = await knowledge.personalProfileEditContext()
+      await knowledge.savePersonalProfile({ expectedHash: original.hash, overrides: { identity: 'Fixture identity', toolPrefs: ['pnpm'] } })
+      const saved = await knowledge.personalProfileEditContext()
+      await knowledge.forgetPersonalMemory({ kind: 'override', targetId: 'toolPrefs:0', targetHash: saved.hash })
+      return knowledge.personalProfileEditContext()
+    })
+    expect(profile.overrides.identity).toBe('Fixture identity')
+    expect(profile.overrides.toolPrefs ?? []).toEqual([])
+    const migration = await page.evaluate(async () => {
+      const knowledge = (window as unknown as KnowledgeWindow).electron.knowledge
+      const preview = await knowledge.migrateLegacyEpisodes({})
+      const result = await knowledge.migrateLegacyEpisodes({ expectedHash: preview.hash })
+      const retry = await knowledge.migrateLegacyEpisodes({ expectedHash: preview.hash })
+      return { preview, result, retry }
+    })
+    expect(migration.preview).toMatchObject({ files: 1, episodes: 1 })
+    expect(migration.result.migrated).toBe(1)
+    expect(migration.retry.migrated).toBe(0)
+    expect(await readdir(episodeDirectory)).toEqual([])
+    const backupDirectory = join(fixtureRoot, 'knowledge', 'migration', 'episodes')
+    const [backup] = await readdir(backupDirectory)
+    expect(await readFile(join(backupDirectory, backup), 'utf8')).toBe(legacyBytes)
   } finally {
     await closeApplication(application).catch(() => undefined)
     if (fixtureRoot) {

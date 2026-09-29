@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
 import type { ExperimentalAPI } from '../../src/shared/ipc/experimental'
+import type { JanusAPI } from '../../src/shared/ipc/janus'
 import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
 import { createDesktopTestEnv } from './desktop-test-env'
 
-type TestWindow = Window & { electron: { workspace: WorkspaceAPI; experimental: ExperimentalAPI; system: { setLanguage(language: string): Promise<void> } } }
+type TestWindow = Window & { electron: { workspace: WorkspaceAPI; janus: JanusAPI; experimental: ExperimentalAPI; system: { setLanguage(language: string): Promise<void> } } }
 
 // V2 只读工作台呈现工作区的 note 投影（不读 legacy 蓝图）：种子 note 即种子画布。
 const CAPSULE_REPO = 'c0ffee00-0000-4000-8000-000000000001'
@@ -25,6 +26,19 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     const workspacePath = join(root, 'workspace')
     await Promise.all([mkdir(userDataDir, { recursive: true }), mkdir(workspacePath, { recursive: true })])
 
+    // Seed the complete Note checkout before the app can list or watch it.
+    await mkdir(join(workspacePath, '.agents', 'notes'), { recursive: true })
+    await writeFile(
+      join(workspacePath, '.agents', 'harness.json'),
+      JSON.stringify({ schemaVersion: 1, repoId: CAPSULE_REPO, name: 'Blueprint UI fixture', profile: SUPPORTED_HARNESS_PROFILE }),
+    )
+    await writeFile(join(workspacePath, '.agents', 'notes', 'capsule.md'), [
+      '---', 'schema: harness-note/1', `id: ${CAPSULE_NOTE}`, 'kind: initiative', 'lifecycle: accepted',
+      'created: 2026-09-27', 'class: architecture', `repositories: {primary: ${CAPSULE_REPO}, related: []}`,
+      '---', '', '# JanusX Capsule Fixture', '', '## Goal', '', 'Capsule fixture.', '', '## Scope', '',
+      'One checkout.', '', '## Acceptance criteria', '', '- [ ] AC-1: Renders.', '',
+    ].join('\n'))
+
     application = await electron.launch({
       args: [entry, `--user-data-dir=${userDataDir}`],
       env: createDesktopTestEnv(root),
@@ -41,22 +55,8 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       (path) => (window as TestWindow).electron.workspace.create({ name: 'Blueprint UI fixture', path }),
       workspacePath,
     )
-    // V2 只读：工作台内新建/删除入口已移除（变更走对话），且工作台不读 legacy
-    // 蓝图；用例直接在工作区落一个合法 harness note（即画布初始节点）。
-    // 注意：必须在 reload 之前落盘——工作台挂载时一次性拉取投影摘要，
-    // reload 之后再写会与加载竞态导致空画布。
-    await mkdir(join(workspacePath, '.agents', 'notes'), { recursive: true })
-    await writeFile(
-      join(workspacePath, '.agents', 'harness.json'),
-      JSON.stringify({ schemaVersion: 1, repoId: CAPSULE_REPO, name: 'Blueprint UI fixture', profile: SUPPORTED_HARNESS_PROFILE }),
-    )
-    await writeFile(join(workspacePath, '.agents', 'notes', 'capsule.md'), [
-      '---', 'schema: harness-note/1', `id: ${CAPSULE_NOTE}`, 'kind: initiative', 'lifecycle: accepted',
-      'created: 2026-09-27', 'class: architecture', `repositories: {primary: ${CAPSULE_REPO}, related: []}`,
-      '---', '', '# JanusX Capsule Fixture', '', '## Goal', '', 'Capsule fixture.', '', '## Scope', '',
-      'One checkout.', '', '## Acceptance criteria', '', '- [ ] AC-1: Renders.', '',
-    ].join('\n'))
     await page.reload()
+    expect(await page.evaluate(path => (window as TestWindow).electron.janus.listBlueprintSummaries(path), workspacePath)).toHaveLength(1)
     await expect(page.getByRole('button', { name: /打开蓝图工作台|Open Blueprint Workbench/ })).toBeVisible()
     await page.getByRole('button', { name: /打开蓝图工作台|Open Blueprint Workbench/ }).click()
     const workbenchShell = page.locator('.blueprint-workbench-shell')

@@ -136,7 +136,7 @@ export function resetObservationServiceEphemeralState(): void {
 
 const HEX64_RE = /^[0-9a-f]{64}$/
 const KNOWN_SOURCES: ReadonlySet<string> = new Set([
-  'agent-stream', 'checkpoint', 'git-analyzer', 'janus-chat', 'manual', 'tool', 'system',
+  'agent-stream', 'blueprint-maintenance', 'checkpoint', 'git-analyzer', 'janus-chat', 'manual', 'tool', 'system',
 ])
 const KNOWN_OBSERVATION_TYPES: ReadonlySet<string> = new Set([
   'conversation-turn', 'tool-call', 'tool-result', 'checkpoint-event',

@@ -17,6 +17,8 @@ import { knowledgeContractService } from './contract-service'
 import { matchesForgettingQuery } from './search/tokenizer'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 import { knowledgeObservationService, type ObservationCaptureContext } from './observation-service'
+import { migratedEpisodeMetadata } from './legacy-episodes'
+import { profileContentHash } from './profile-projection'
 
 const EPISODES_DIR = join('episodes')
 export const EPISODE_TTL_MIN_DAYS = 30
@@ -29,11 +31,12 @@ function clampTtlDays(value?: number): number {
 }
 
 function episodeFromObservation(observation: Observation, content: string): UserEpisode {
+  const migrated = migratedEpisodeMetadata(observation)
   return {
-    id: observation.id, content: content.slice(0, 4000), createdAt: observation.createdAt, expiresAt: observation.expiresAt!,
-    ttlDays: Math.round((Date.parse(observation.expiresAt!) - Date.parse(observation.createdAt)) / 86400000),
+    id: observation.id, content: migrated ? content : content.slice(0, 4000), createdAt: observation.createdAt, expiresAt: observation.expiresAt!,
+    ttlDays: migrated?.ttlDays ?? Math.round((Date.parse(observation.expiresAt!) - Date.parse(observation.createdAt)) / 86400000),
     tags: observation.tags, status: observation.revokedAt ? 'expired' : observation.episodeStatus ?? 'active',
-    sourceObservationIds: [...new Set([observation.id, ...(observation.relatedObservationIds ?? [])])],
+    sourceObservationIds: migrated?.sourceObservationIds ?? [...new Set([observation.id, ...(observation.relatedObservationIds ?? [])])],
   }
 }
 
@@ -53,6 +56,7 @@ export interface EpisodeHarvestResult {
 
 export class UserEpisodeService {
   private readonly writeQueue = new SerialQueue()
+  withLegacyMutation<T>(operation: () => Promise<T>): Promise<T> { return this.writeQueue.run(operation) }
 
   // Note: new episodes are observations; legacy files remain readable — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
   async capture(input: { content: string; ttlDays?: number; tags?: string[]; sourceObservationIds?: string[]; createdAt?: string; sessionId?: string; sourceEventId?: string }, context?: Pick<ObservationCaptureContext, 'speaker'>): Promise<UserEpisode> {
@@ -238,8 +242,11 @@ export class UserEpisodeService {
 
   private async readAll(strict = false): Promise<UserEpisode[]> {
     const out: UserEpisode[] = []
+    const migrated = new Map<string, string>()
     for (const observation of await knowledgeObservationService.listAll(strict)) {
       if (observation.scope !== 'user' || observation.memoryIntent !== 'episode') continue
+      const metadata = migratedEpisodeMetadata(observation)
+      if (metadata) migrated.set(observation.id, metadata.recordHash)
       out.push(episodeFromObservation(observation, await knowledgeObservationService.resolveContent(observation)))
     }
     for (const relativePath of await this.listShardFiles(strict)) {
@@ -255,7 +262,11 @@ export class UserEpisodeService {
         if (!trimmed) continue
         try {
           const parsed = JSON.parse(trimmed) as unknown
-          if (isEpisode(parsed)) out.push(parsed)
+          if (isEpisode(parsed)) {
+            const hash = migrated.get(parsed.id)
+            if (hash && hash !== profileContentHash(parsed)) throw new Error('Legacy episode changed during migration')
+            if (!hash) out.push(parsed)
+          }
           else if (strict) throw new Error('Invalid legacy episode')
         } catch (error) {
           if (strict) throw error

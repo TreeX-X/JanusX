@@ -1,4 +1,4 @@
-"""Synthetic bilingual smoke evaluation, not a production calibration certificate."""
+"""Source-separated memory evaluation. A report never enables automatic acceptance."""
 import argparse
 import hashlib
 import json
@@ -11,8 +11,93 @@ import statistics
 import subprocess
 import threading
 import time
+from datetime import datetime
 
 QUESTIONS = ['retention', 'kind', 'support', 'duplicate', 'supersede', 'conflict']
+
+
+def validate_dataset(dataset, kind='synthetic'):
+    if not isinstance(dataset, list) or not dataset:
+        raise ValueError('Dataset must be a nonempty list')
+    ids, groups, inputs = set(), {}, {}
+    for row in dataset:
+        if not isinstance(row, dict):
+            raise ValueError('Dataset rows must be objects')
+        for field in ['id', 'source', 'language', 'content']:
+            if not isinstance(row.get(field), str) or not row[field].strip():
+                raise ValueError('Missing or invalid dataset field: ' + field)
+        if row['id'] in ids:
+            raise ValueError('Duplicate sample ID')
+        ids.add(row['id'])
+        if row.get('split') not in ['calibration', 'holdout']:
+            raise ValueError('Each sample needs a calibration or holdout split')
+        for field in ['evidence', 'related']:
+            if not isinstance(row.get(field), list) or not all(isinstance(value, str) and value.strip() for value in row[field]):
+                raise ValueError('Invalid text array: ' + field)
+        if not row['evidence']:
+            raise ValueError('A sample requires evidence')
+        labels = row.get('labels')
+        if not isinstance(labels, list) or len(labels) != len(QUESTIONS):
+            raise ValueError('Exactly six human labels are required')
+        if labels[1] not in ['fact', 'preference', 'decision', 'procedure'] or any(type(labels[i]) is not bool for i in [0, 2, 3, 4, 5]):
+            raise ValueError('Invalid task label type')
+        grouping = ['source:' + row['source']]
+        if kind == 'annotated':
+            annotation = row.get('annotation', {})
+            if not isinstance(annotation, dict) or annotation.get('origin') != 'redacted-real' or not annotation.get('reviewer'):
+                raise ValueError('Annotated data requires redacted-real origin and human reviewer metadata')
+            if not isinstance(row.get('scenario'), str) or not row['scenario'].strip():
+                raise ValueError('Annotated data requires a shared scenario ID for translations and related events')
+            reviewed = datetime.fromisoformat(annotation.get('reviewedAt', '').replace('Z', '+00:00'))
+            if reviewed.tzinfo is None:
+                raise ValueError('Human review timestamp must include a timezone')
+            grouping.append('scenario:' + row['scenario'])
+        for group in grouping:
+            if group in groups and groups[group] != row['split']:
+                raise ValueError('Source or scenario leaks between calibration and holdout')
+            groups[group] = row['split']
+        key = json.dumps([row['content'].strip(), row['evidence'], row['related']], ensure_ascii=False)
+        if key in inputs and inputs[key] != row['split']:
+            raise ValueError('Identical model input leaks between calibration and holdout')
+        inputs[key] = row['split']
+    if {row['split'] for row in dataset} != {'calibration', 'holdout'}:
+        raise ValueError('Both calibration and holdout samples are required')
+    return {'kind': kind, 'samples': len(dataset), 'languages': sorted({row['language'] for row in dataset}),
+            'sources': len({row['source'] for row in dataset})}
+
+
+def quality_gate(groups, policy, coverage, dataset_kind):
+    if dataset_kind != 'annotated':
+        return {'status': 'not-evaluated', 'reason': 'synthetic-data'}
+    if not policy:
+        return {'status': 'not-evaluated', 'reason': 'no-pinned-quality-policy'}
+    failures = []
+    required = policy.get('tasks', {})
+    expected = {key for key in groups if key.startswith('holdout/')}
+    if not expected or set(required) != expected or not isinstance(policy.get('id'), str) or not policy['id'].strip():
+        raise ValueError('Quality policy must name every language/task holdout group and have an ID')
+    minimum_coverage = policy.get('minCoverage')
+    if not isinstance(minimum_coverage, (int, float)) or not 0 < minimum_coverage <= 1:
+        raise ValueError('Quality policy needs a positive coverage floor')
+    if coverage < minimum_coverage:
+        failures.append('coverage')
+    for key, limits in required.items():
+        if not isinstance(limits, dict) or type(limits.get('minCount')) is not int or limits['minCount'] < 1:
+            raise ValueError('Every task requires a positive sample floor')
+        result = groups[key]
+        for name in ['minAccuracy', 'maxBrier', 'maxEce']:
+            value = limits.get(name)
+            if type(value) not in [int, float] or not math.isfinite(value) or value < 0 or value > (2 if name == 'maxBrier' else 1):
+                raise ValueError('Invalid or missing task threshold: ' + name)
+        if result['count'] < limits['minCount'] or result.get('accuracy', -1) < limits['minAccuracy'] or result.get('brier', 3) > limits['maxBrier'] or result.get('ece10', 2) > limits['maxEce']:
+            failures.append(key)
+        for limit, metric in [('minPositiveRecall', 'recallTrue'), ('minPositivePrecision', 'precisionTrue')]:
+            if limit in limits:
+                if type(limits[limit]) not in [int, float] or not 0 <= limits[limit] <= 1:
+                    raise ValueError('Invalid positive-class threshold')
+                if result.get(metric) is None or result[metric] < limits[limit]:
+                    failures.append(key + '/' + metric)
+    return {'status': 'failed' if failures else 'passed', 'policyId': policy['id'], 'failures': failures}
 
 
 def peak_memory_bytes(pid):
@@ -39,7 +124,7 @@ def peak_memory_bytes(pid):
 def metrics(rows):
     if not rows:
         return {"count": 0}
-    confidence = [max(row["distribution"].values()) for row in rows]
+    confidence = [row["distribution"][str(row["answer"]).lower()] for row in rows]
     correct = [row["answer"] == row["label"] for row in rows]
     brier = [sum((p - (key == str(row["label"]).lower())) ** 2 for key, p in row["distribution"].items()) for row in rows]
     ece = 0
@@ -50,21 +135,33 @@ def metrics(rows):
     tp = sum(row["answer"] is True and row["label"] is True for row in rows)
     fp = sum(row["answer"] is True and row["label"] is False for row in rows)
     fn = sum(row["answer"] is False and row["label"] is True for row in rows)
+    negatives = sum(row['label'] is False for row in rows)
     return {"count": len(rows), "accuracy": statistics.mean(correct), "brier": statistics.mean(brier), "ece10": ece,
-            "precisionTrue": tp / (tp + fp) if tp + fp else None, "recallTrue": tp / (tp + fn) if tp + fn else None}
+            "precisionTrue": tp / (tp + fp) if tp + fp else None, "recallTrue": tp / (tp + fn) if tp + fn else None,
+            "falsePositiveRate": fp / negatives if negatives else None}
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--python', required=True)
-    parser.add_argument('--model-dir', required=True)
-    parser.add_argument('--output', required=True)
+    parser.add_argument('--python')
+    parser.add_argument('--model-dir')
+    parser.add_argument('--output')
+    parser.add_argument('--dataset', type=Path)
+    parser.add_argument('--dataset-kind', choices=['synthetic', 'annotated'], default='synthetic')
+    parser.add_argument('--policy', type=Path)
+    parser.add_argument('--validate-only', action='store_true')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    dataset_bytes = (root / 'tests/fixtures/laya-memory-eval.json').read_bytes()
+    dataset_bytes = (args.dataset or root / 'tests/fixtures/laya-memory-eval.json').read_bytes()
     dataset = json.loads(dataset_bytes)
-    calibration_sources = {row['source'] for row in dataset if row['split'] == 'calibration'}
-    assert not calibration_sources.intersection(row['source'] for row in dataset if row['split'] == 'holdout')
+    dataset_info = validate_dataset(dataset, args.dataset_kind)
+    policy_bytes = args.policy.read_bytes() if args.policy else None
+    policy = json.loads(policy_bytes) if policy_bytes else None
+    if args.validate_only:
+        print(json.dumps(dataset_info, ensure_ascii=False))
+        return
+    if not args.python or not args.model_dir or not args.output:
+        parser.error('--python, --model-dir and --output are required for inference')
     output = Path(args.output); output.parent.mkdir(parents=True, exist_ok=True)
     with output.with_suffix('.stderr.log').open('w', encoding='utf-8') as errors:
         child = subprocess.Popen([args.python, '-u', str(root / 'resources/laya/sidecar.py'), '--model-dir', args.model_dir],
@@ -81,6 +178,10 @@ def main():
             ready = receive(180)
             if ready.get('status') != 'ready':
                 raise RuntimeError(str(ready))
+            if policy and policy.get('modelRevision') != ready.get('revision'):
+                raise ValueError('Quality policy model revision does not match the running checkpoint')
+            if policy and policy.get('adapterSha256') != hashlib.sha256((root / 'resources/laya/sidecar.py').read_bytes()).hexdigest():
+                raise ValueError('Quality policy adapter hash does not match the question templates')
             results = []
             # Windows venv python.exe can be a redirector; measure the interpreter.
             runtime_pid = ready.pop('pid')
@@ -98,7 +199,7 @@ def main():
                 print(row['id'], results[-1]['wallMs'], flush=True)
             groups = {}
             for split in ['calibration', 'holdout']:
-                for language in ['en', 'zh']:
+                for language in dataset_info['languages']:
                     selected = [row for row in results if row['split'] == split and row['language'] == language]
                     for i, question in enumerate(QUESTIONS):
                         rows = [{**answer, "label": row['labels'][i]} for row in selected for answer in row['result'].get('answers', []) if answer['question'] == question]
@@ -108,10 +209,13 @@ def main():
                       "adapterSha256": hashlib.sha256((root / 'resources/laya/sidecar.py').read_bytes()).hexdigest(),
                       "requirementsSha256": hashlib.sha256((root / 'resources/laya/requirements.txt').read_bytes()).hexdigest(),
                       "peakWorkingSetBytes": peak_memory,
-                      "calibrationId": None, "scope": "24 synthetic cases; no fitted temperature or production quality certification",
+                      "calibrationId": None, "scope": "No fitted temperature; human annotation metadata does not itself certify label quality",
+                      "dataset": dataset_info, "policySha256": hashlib.sha256(policy_bytes).hexdigest() if policy_bytes else None,
                       "p50Ms": statistics.median(latencies), "p95Ms": latencies[math.ceil(len(latencies) * .95) - 1],
                       "coverage": sum(row['result']['status'] == 'ready' for row in results) / len(results),
-                      "automaticAcceptanceEnabled": False, "groups": groups, "results": results}
+                      "automaticAcceptanceEnabled": False, "automaticAcceptanceErrorRate": None,
+                      "groups": groups, "results": results}
+            report['qualityGate'] = quality_gate(groups, policy, report['coverage'], args.dataset_kind)
             output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         finally:
             child.stdin.close()
