@@ -1,0 +1,1050 @@
+[
+  {
+    "id": "cal-en-fact",
+    "split": "calibration",
+    "language": "en",
+    "source": "c1",
+    "content": "The service uses PostgreSQL.",
+    "evidence": [
+      "The service uses PostgreSQL."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "cal-fact",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "cal-en-negation",
+    "split": "calibration",
+    "language": "en",
+    "source": "c2",
+    "content": "The service uses Redis.",
+    "evidence": [
+      "The service does not use Redis."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      false,
+      false,
+      false,
+      false
+    ],
+    "scenario": "cal-negation",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "cal-en-pref",
+    "split": "calibration",
+    "language": "en",
+    "source": "c3",
+    "content": "I prefer short answers.",
+    "evidence": [
+      "I prefer short answers."
+    ],
+    "related": [
+      "I prefer short answers."
+    ],
+    "labels": [
+      true,
+      "preference",
+      true,
+      true,
+      false,
+      false
+    ],
+    "scenario": "cal-pref",
+    "candidateKind": "preference"
+  },
+  {
+    "id": "cal-en-replace",
+    "split": "calibration",
+    "language": "en",
+    "source": "c4",
+    "content": "The service port is 8080.",
+    "evidence": [
+      "Replace the previous service port 3000 with 8080."
+    ],
+    "related": [
+      "The service port is 3000."
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      true,
+      true
+    ],
+    "scenario": "cal-replace",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "cal-zh-fact",
+    "split": "calibration",
+    "language": "zh",
+    "source": "c5",
+    "content": "服务使用 PostgreSQL 数据库。",
+    "evidence": [
+      "服务使用 PostgreSQL 数据库。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "cal-fact",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "cal-zh-negation",
+    "split": "calibration",
+    "language": "zh",
+    "source": "c6",
+    "content": "服务使用 Redis。",
+    "evidence": [
+      "服务不使用 Redis。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      false,
+      false,
+      false,
+      false
+    ],
+    "scenario": "cal-negation",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "cal-zh-pref",
+    "split": "calibration",
+    "language": "zh",
+    "source": "c7",
+    "content": "我偏好简短的回答。",
+    "evidence": [
+      "我偏好简短的回答。"
+    ],
+    "related": [
+      "我偏好简短的回答。"
+    ],
+    "labels": [
+      true,
+      "preference",
+      true,
+      true,
+      false,
+      false
+    ],
+    "scenario": "cal-pref",
+    "candidateKind": "preference"
+  },
+  {
+    "id": "cal-zh-replace",
+    "split": "calibration",
+    "language": "zh",
+    "source": "c8",
+    "content": "服务端口是 8080。",
+    "evidence": [
+      "把服务端口从 3000 改为 8080，替代原配置。"
+    ],
+    "related": [
+      "服务端口是 3000。"
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      true,
+      true
+    ],
+    "scenario": "cal-replace",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-en-fact",
+    "split": "holdout",
+    "language": "en",
+    "source": "t1",
+    "content": "The project uses TypeScript.",
+    "evidence": [
+      "The project uses TypeScript."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-fact",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-en-unsupported",
+    "split": "holdout",
+    "language": "en",
+    "source": "t2",
+    "content": "The project uses Python.",
+    "evidence": [
+      "The project uses TypeScript, not Python."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      false,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-unsupported",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-en-procedure",
+    "split": "holdout",
+    "language": "en",
+    "source": "t3",
+    "content": "To run the tests, execute npm test in the project directory.",
+    "evidence": [
+      "To run the tests, execute npm test in the project directory."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "procedure",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-procedure",
+    "candidateKind": "procedure"
+  },
+  {
+    "id": "test-en-decision",
+    "split": "holdout",
+    "language": "en",
+    "source": "t4",
+    "content": "We chose SQLite because this desktop app needs offline storage.",
+    "evidence": [
+      "We chose SQLite because this desktop app needs offline storage."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "decision",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-decision",
+    "candidateKind": "decision"
+  },
+  {
+    "id": "test-en-conflict",
+    "split": "holdout",
+    "language": "en",
+    "source": "t5",
+    "content": "The default interface language is English.",
+    "evidence": [
+      "The default interface language is English."
+    ],
+    "related": [
+      "The default interface language is Chinese."
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      true
+    ],
+    "scenario": "test-conflict",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-en-duplicate",
+    "split": "holdout",
+    "language": "en",
+    "source": "t6",
+    "content": "I prefer pnpm for my projects.",
+    "evidence": [
+      "I prefer pnpm for my projects."
+    ],
+    "related": [
+      "I prefer pnpm for my projects."
+    ],
+    "labels": [
+      true,
+      "preference",
+      true,
+      true,
+      false,
+      false
+    ],
+    "scenario": "test-duplicate",
+    "candidateKind": "preference"
+  },
+  {
+    "id": "test-en-transient",
+    "split": "holdout",
+    "language": "en",
+    "source": "t7",
+    "content": "Hello!",
+    "evidence": [
+      "Hello!"
+    ],
+    "related": [],
+    "labels": [
+      false,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-transient",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-en-subject",
+    "split": "holdout",
+    "language": "en",
+    "source": "t8",
+    "content": "The user prefers Vim.",
+    "evidence": [
+      "The user's colleague prefers Vim. The user's preference is unknown."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "preference",
+      false,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-subject",
+    "candidateKind": "preference"
+  },
+  {
+    "id": "test-zh-fact",
+    "split": "holdout",
+    "language": "zh",
+    "source": "t9",
+    "content": "项目使用 TypeScript。",
+    "evidence": [
+      "项目使用 TypeScript。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-fact",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-zh-unsupported",
+    "split": "holdout",
+    "language": "zh",
+    "source": "t10",
+    "content": "项目使用 Python。",
+    "evidence": [
+      "项目使用 TypeScript，不使用 Python。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      false,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-unsupported",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-zh-procedure",
+    "split": "holdout",
+    "language": "zh",
+    "source": "t11",
+    "content": "运行测试时，先进入项目目录，再执行 npm test。",
+    "evidence": [
+      "运行测试时，先进入项目目录，再执行 npm test。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "procedure",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-procedure",
+    "candidateKind": "procedure"
+  },
+  {
+    "id": "test-zh-decision",
+    "split": "holdout",
+    "language": "zh",
+    "source": "t12",
+    "content": "我们选择 SQLite，因为桌面应用需要离线存储。",
+    "evidence": [
+      "我们选择 SQLite，因为桌面应用需要离线存储。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "decision",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-decision",
+    "candidateKind": "decision"
+  },
+  {
+    "id": "test-zh-conflict",
+    "split": "holdout",
+    "language": "zh",
+    "source": "t13",
+    "content": "界面的默认语言是英文。",
+    "evidence": [
+      "界面的默认语言是英文。"
+    ],
+    "related": [
+      "界面的默认语言是中文。"
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      true
+    ],
+    "scenario": "test-conflict",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-zh-duplicate",
+    "split": "holdout",
+    "language": "zh",
+    "source": "t14",
+    "content": "我做项目偏好使用 pnpm。",
+    "evidence": [
+      "我做项目偏好使用 pnpm。"
+    ],
+    "related": [
+      "我做项目偏好使用 pnpm。"
+    ],
+    "labels": [
+      true,
+      "preference",
+      true,
+      true,
+      false,
+      false
+    ],
+    "scenario": "test-duplicate",
+    "candidateKind": "preference"
+  },
+  {
+    "id": "test-zh-transient",
+    "split": "holdout",
+    "language": "zh",
+    "source": "t15",
+    "content": "你好！",
+    "evidence": [
+      "你好！"
+    ],
+    "related": [],
+    "labels": [
+      false,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-transient",
+    "candidateKind": "fact"
+  },
+  {
+    "id": "test-zh-subject",
+    "split": "holdout",
+    "language": "zh",
+    "source": "t16",
+    "content": "用户偏好 Vim。",
+    "evidence": [
+      "用户的同事偏好 Vim；尚不知道用户本人的偏好。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "preference",
+      false,
+      false,
+      false,
+      false
+    ],
+    "scenario": "test-subject",
+    "candidateKind": "preference"
+  },
+  {
+    "id": "diagnostic-en-replace-port",
+    "source": "synthetic-replace-port",
+    "scenario": "diagnostic-replace-port",
+    "language": "en",
+    "split": "holdout",
+    "content": "The gateway port is 9443.",
+    "evidence": [
+      "Replace the old gateway port 9000 with 9443. This is the new permanent port."
+    ],
+    "related": [
+      "The gateway port is 9000."
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      true,
+      true
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-zh-replace-port",
+    "source": "synthetic-replace-port",
+    "scenario": "diagnostic-replace-port",
+    "language": "zh",
+    "split": "holdout",
+    "content": "网关端口是 9443。",
+    "evidence": [
+      "把网关原来的 9000 端口替换为 9443，以后固定使用新端口。"
+    ],
+    "related": [
+      "网关端口是 9000。"
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      true,
+      true
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-en-replace-preference",
+    "source": "synthetic-replace-preference",
+    "scenario": "diagnostic-replace-preference",
+    "language": "en",
+    "split": "holdout",
+    "content": "I prefer detailed answers.",
+    "evidence": [
+      "Update my preference: I used to prefer short answers, but from now on I prefer detailed answers."
+    ],
+    "related": [
+      "I prefer short answers."
+    ],
+    "labels": [
+      true,
+      "preference",
+      true,
+      false,
+      true,
+      true
+    ],
+    "candidateKind": "preference"
+  },
+  {
+    "id": "diagnostic-zh-replace-preference",
+    "source": "synthetic-replace-preference",
+    "scenario": "diagnostic-replace-preference",
+    "language": "zh",
+    "split": "holdout",
+    "content": "我偏好详细的回答。",
+    "evidence": [
+      "更新我的偏好：以前我喜欢简短回答，但从现在起我偏好详细回答。"
+    ],
+    "related": [
+      "我偏好简短的回答。"
+    ],
+    "labels": [
+      true,
+      "preference",
+      true,
+      false,
+      true,
+      true
+    ],
+    "candidateKind": "preference"
+  },
+  {
+    "id": "diagnostic-en-different-subject",
+    "source": "synthetic-different-subject",
+    "scenario": "diagnostic-different-subject",
+    "language": "en",
+    "split": "holdout",
+    "content": "Service Beta uses MySQL.",
+    "evidence": [
+      "Service Alpha uses PostgreSQL. Service Beta uses MySQL."
+    ],
+    "related": [
+      "Service Alpha uses PostgreSQL."
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-zh-different-subject",
+    "source": "synthetic-different-subject",
+    "scenario": "diagnostic-different-subject",
+    "language": "zh",
+    "split": "holdout",
+    "content": "乙服务使用 MySQL。",
+    "evidence": [
+      "甲服务使用 PostgreSQL。乙服务使用 MySQL。"
+    ],
+    "related": [
+      "甲服务使用 PostgreSQL。"
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-en-temporary",
+    "source": "synthetic-temporary",
+    "scenario": "diagnostic-temporary",
+    "language": "en",
+    "split": "holdout",
+    "content": "The temporary test window is open.",
+    "evidence": [
+      "The temporary test window is open for this one test; close it afterwards."
+    ],
+    "related": [],
+    "labels": [
+      false,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-zh-temporary",
+    "source": "synthetic-temporary",
+    "scenario": "diagnostic-temporary",
+    "language": "zh",
+    "split": "holdout",
+    "content": "临时测试窗口已打开。",
+    "evidence": [
+      "临时测试窗口已打开，仅用于这一次测试，结束后关闭。"
+    ],
+    "related": [],
+    "labels": [
+      false,
+      "fact",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-en-negated-preference",
+    "source": "synthetic-negated-preference",
+    "scenario": "diagnostic-negated-preference",
+    "language": "en",
+    "split": "holdout",
+    "content": "I do not like animated notifications.",
+    "evidence": [
+      "Please remember: I do not like animated notifications. Use quiet static notifications."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "preference",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "preference"
+  },
+  {
+    "id": "diagnostic-zh-negated-preference",
+    "source": "synthetic-negated-preference",
+    "scenario": "diagnostic-negated-preference",
+    "language": "zh",
+    "split": "holdout",
+    "content": "我不喜欢带动画的通知。",
+    "evidence": [
+      "请记住：我不喜欢带动画的通知，请使用安静的静态通知。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "preference",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "preference"
+  },
+  {
+    "id": "diagnostic-en-quoted-subject",
+    "source": "synthetic-quoted-subject",
+    "scenario": "diagnostic-quoted-subject",
+    "language": "en",
+    "split": "holdout",
+    "content": "The user prefers Emacs.",
+    "evidence": [
+      "The user quotes a colleague: \"I prefer Emacs.\" The user says their own editor preference is unknown."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "preference",
+      false,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "preference"
+  },
+  {
+    "id": "diagnostic-zh-quoted-subject",
+    "source": "synthetic-quoted-subject",
+    "scenario": "diagnostic-quoted-subject",
+    "language": "zh",
+    "split": "holdout",
+    "content": "用户偏好 Emacs。",
+    "evidence": [
+      "用户引用同事的话：“我偏好 Emacs。”用户说自己的编辑器偏好尚未确定。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "preference",
+      false,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "preference"
+  },
+  {
+    "id": "diagnostic-en-semantic-duplicate",
+    "source": "synthetic-semantic-duplicate",
+    "scenario": "diagnostic-semantic-duplicate",
+    "language": "en",
+    "split": "holdout",
+    "content": "The app stores data locally in SQLite.",
+    "evidence": [
+      "The app stores data locally in SQLite."
+    ],
+    "related": [
+      "SQLite provides local data storage for the app."
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      true,
+      false,
+      false
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-zh-semantic-duplicate",
+    "source": "synthetic-semantic-duplicate",
+    "scenario": "diagnostic-semantic-duplicate",
+    "language": "zh",
+    "split": "holdout",
+    "content": "应用使用 SQLite 在本地存储数据。",
+    "evidence": [
+      "应用使用 SQLite 在本地存储数据。"
+    ],
+    "related": [
+      "应用的本地数据存储由 SQLite 提供。"
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      true,
+      false,
+      false
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-en-negated-support",
+    "source": "synthetic-negated-support",
+    "scenario": "diagnostic-negated-support",
+    "language": "en",
+    "split": "holdout",
+    "content": "Telemetry is enabled by default.",
+    "evidence": [
+      "Telemetry is not enabled by default. It remains disabled until the user opts in."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      false,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-zh-negated-support",
+    "source": "synthetic-negated-support",
+    "scenario": "diagnostic-negated-support",
+    "language": "zh",
+    "split": "holdout",
+    "content": "遥测默认启用。",
+    "evidence": [
+      "遥测并非默认启用，用户主动选择前始终关闭。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "fact",
+      false,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-en-numeric-conflict",
+    "source": "synthetic-numeric-conflict",
+    "scenario": "diagnostic-numeric-conflict",
+    "language": "en",
+    "split": "holdout",
+    "content": "The maximum upload size is 50 MB.",
+    "evidence": [
+      "The configuration specifies a maximum upload size of 50 MB."
+    ],
+    "related": [
+      "The maximum upload size is 100 MB."
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      true
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-zh-numeric-conflict",
+    "source": "synthetic-numeric-conflict",
+    "scenario": "diagnostic-numeric-conflict",
+    "language": "zh",
+    "split": "holdout",
+    "content": "上传大小上限为 50 MB。",
+    "evidence": [
+      "配置规定上传大小上限为 50 MB。"
+    ],
+    "related": [
+      "上传大小上限为 100 MB。"
+    ],
+    "labels": [
+      true,
+      "fact",
+      true,
+      false,
+      false,
+      true
+    ],
+    "candidateKind": "fact"
+  },
+  {
+    "id": "diagnostic-en-ordered-procedure",
+    "source": "synthetic-ordered-procedure",
+    "scenario": "diagnostic-ordered-procedure",
+    "language": "en",
+    "split": "holdout",
+    "content": "To restore a backup, stop the service, restore the database, then restart the service.",
+    "evidence": [
+      "To restore a backup, stop the service, restore the database, then restart the service."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "procedure",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "procedure"
+  },
+  {
+    "id": "diagnostic-zh-ordered-procedure",
+    "source": "synthetic-ordered-procedure",
+    "scenario": "diagnostic-ordered-procedure",
+    "language": "zh",
+    "split": "holdout",
+    "content": "恢复备份时，先停止服务，再恢复数据库，最后重启服务。",
+    "evidence": [
+      "恢复备份时，先停止服务，再恢复数据库，最后重启服务。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "procedure",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "procedure"
+  },
+  {
+    "id": "diagnostic-en-decision-rationale",
+    "source": "synthetic-decision-rationale",
+    "scenario": "diagnostic-decision-rationale",
+    "language": "en",
+    "split": "holdout",
+    "content": "We chose a local queue because requests must survive offline periods.",
+    "evidence": [
+      "We chose a local queue because requests must survive offline periods."
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "decision",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "decision"
+  },
+  {
+    "id": "diagnostic-zh-decision-rationale",
+    "source": "synthetic-decision-rationale",
+    "scenario": "diagnostic-decision-rationale",
+    "language": "zh",
+    "split": "holdout",
+    "content": "我们选择本地队列，因为离线期间也必须保留请求。",
+    "evidence": [
+      "我们选择本地队列，因为离线期间也必须保留请求。"
+    ],
+    "related": [],
+    "labels": [
+      true,
+      "decision",
+      true,
+      false,
+      false,
+      false
+    ],
+    "candidateKind": "decision"
+  },
+  {
+    "id": "diagnostic-en-duplicate-procedure",
+    "source": "synthetic-duplicate-procedure",
+    "scenario": "diagnostic-duplicate-procedure",
+    "language": "en",
+    "split": "holdout",
+    "content": "Run npm test from the repository root to execute the tests.",
+    "evidence": [
+      "Run npm test from the repository root to execute the tests."
+    ],
+    "related": [
+      "To execute the tests, go to the repository root and run npm test."
+    ],
+    "labels": [
+      true,
+      "procedure",
+      true,
+      true,
+      false,
+      false
+    ],
+    "candidateKind": "procedure"
+  },
+  {
+    "id": "diagnostic-zh-duplicate-procedure",
+    "source": "synthetic-duplicate-procedure",
+    "scenario": "diagnostic-duplicate-procedure",
+    "language": "zh",
+    "split": "holdout",
+    "content": "在仓库根目录运行 npm test 执行测试。",
+    "evidence": [
+      "在仓库根目录运行 npm test 执行测试。"
+    ],
+    "related": [
+      "执行测试的方法是进入仓库根目录，然后运行 npm test。"
+    ],
+    "labels": [
+      true,
+      "procedure",
+      true,
+      true,
+      false,
+      false
+    ],
+    "candidateKind": "procedure"
+  }
+]

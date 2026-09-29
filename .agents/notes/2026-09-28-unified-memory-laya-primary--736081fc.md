@@ -293,6 +293,20 @@ truth 读取、Profile 投影、近期记忆、治理检索和个人召回都核
 
 人工字段遗忘通过 kind=override 与 identity、formatPrefs:N、toolPrefs:N 定位已显示的存储值，绑定整个编辑快照；确认页展示已存内容，草稿不能冒充目标。主进程将该原值与已知同值个人派生链纳入既有遗忘屏障，保留独立字段及工程内容。成功后重新加载字段；精确同值持续被阻止保存，清空字段则仅移除优先显示，不等同于遗忘。
 
+### 前置分流诊断（2026-09-30）
+
+[诊断集](../../tests/fixtures/laya-memory-diagnostics.json)包含 48 条中英文合成样例，其中 8 条标记为 calibration、40 条标记为 holdout；每种语言的评估部分均覆盖六题的全部标签，包括明确替代、不同主体、否定、引用和语义重复。相同语义场景及翻译共用 scenario，合成集也禁止跨 split。该集合保留既有样例，仅用于前置角色诊断；预期标签由测试作者设定，没有真实用户数据或独立人工标注，不构成新的生产留出验收。
+
+[评测脚本](../../scripts/evaluate-laya.py)只统计符合宿主完整六题契约的输出。拒答和无效 ready 输出保留在 attempted 与覆盖率分母中；报告同时给出条件准确率、正确数占全部尝试的比例、各类样本数、混淆矩阵、逐类 precision/recall/F1、平衡准确率、macro-F1、多数类基线、Brier、ECE 及错误样例 ID。Wilson 95% 区间按单组样本独立假设计算，不表示跨场景或真实分布保证。缺少任一类别时平衡准确率和 macro-F1 为 null。真实验收策略逐语言逐题检查覆盖率及类别数，minClassCount 默认至少 1，可设更高门槛；单类高准确率不能通过。质量策略失败时先保存报告，再以退出码 2 结束。
+
+前置分流报告使用显式 candidateKind 和宿主单块证据的 0.9 规则，统计六题全对率、跳过精修比例、漏精修与多余精修。此诊断集的初始 candidateKind 设为预期类别，以隔离 Laya 判断；它不测试确定性提取器的分类错误或长证据分块。没有 candidateKind 的旧集合不推断该字段，而报告 missingCandidateKind。[宿主对照测试](../../tests/unit/knowledge/laya-evaluation-routing.test.ts)把已记录的真实模型输出交给 scoreMemoryDecision，核对中英文的分流计数，避免 Python 报告与生产规则漂移。
+
+[Windows 实测](../../tests/fixtures/laya-diagnostics-windows.json)使用固定 revision 和未改动的六题模板，不拟合温度：48 条评分覆盖率为 100%，预热 52,872 ms，六题合计 P50 718 ms、P95 841 ms，解释器峰值工作集 2,358,120,448 bytes（约 2.20 GiB）。测量设备为 Ryzen 9 7945HX、16 核 32 线程、约 32 GB 内存，sidecar 使用 CPU 且计算线程最多 4 个。预热包含校验、导入和推理，与已有 19,855 ms 记录的差异不表示算法变更；没有受控的磁盘冷缓存比较。隔离测试 Python 依赖目录文件合计约 1.31 GB，固定模型文件约 678.2 MB，不含下载缓存或宿主应用。
+
+40 条评估样例均建议精修：跳过精修覆盖率为 0，按标签需要精修的 26 条全部进入精修，本可直接交人工审核的 14 条也全部进入精修。中英文各自六题全对率均为 0。中文 retention/kind/support/duplicate/supersede/conflict 准确率依次为 30%/50%/75%/40%/70%/65%，英文为 25%/55%/70%/55%/85%/65%；两种语言的 conflict 正例召回率均为 25%。本轮没有显示减少 LLM 精修的收益，不能据零次漏精修推断有效分流。此结果支持先检验题目适配和各题职责，再决定前置角色；不调整生产阈值、不启用自动批准，AC-8 保持未完成。
+
+可复现命令为 `<Python> scripts/evaluate-laya.py --python <推理Python> --model-dir <模型目录> --dataset tests/fixtures/laya-memory-diagnostics.json --output tests/fixtures/laya-diagnostics-windows.json`。`<Python 3.12> -m unittest discover -s tests/laya -v` 通过 24 项；`--dataset tests/fixtures/laya-memory-diagnostics.json --validate-only` 通过 48 条输入检查；`npx vitest run tests/unit/knowledge/laya-evaluation-routing.test.ts tests/unit/knowledge/decision-scorer.test.ts --maxWorkers=2 --reporter=dot` 通过 2 个文件、18 项。`npm run typecheck:strict-unused` 与范围内 diff 检查通过；全仓 Note 检查仍有其他文档的 4 项既有错误，本篇零错误。真实模型报告的质量状态为 synthetic-data / not-evaluated，不以工具测试通过替代模型质量结论。
+
 ### Laya 真实数据验收入口
 
 [评测脚本](../../scripts/evaluate-laya.py)支持 --dataset、--dataset-kind annotated、--policy 及 --validate-only。输入采用现有 JSON 样例结构：id、source、scenario、language、split、content、evidence、related、labels；labels 按 retention/kind/support/duplicate/supersede/conflict 顺序，除 kind 是 fact/preference/decision/procedure，其余为布尔值。真实脱敏样本须附 annotation.origin=redacted-real、reviewer 和带时区的 reviewedAt。标注元数据只记录来源声明，不能证明标签正确；不能把合成样例改元数据后当作真实验收。

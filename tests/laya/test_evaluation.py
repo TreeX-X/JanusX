@@ -67,7 +67,8 @@ class MetricsTests(unittest.TestCase):
     def test_quality_gate_never_certifies_synthetic_or_unpinned_data(self):
         self.assertEqual(evaluation.quality_gate({}, None, 1, 'synthetic')['status'], 'not-evaluated')
         self.assertEqual(evaluation.quality_gate({}, None, 1, 'annotated')['status'], 'not-evaluated')
-        group = {'holdout/en/conflict': {'count': 100, 'accuracy': .99, 'brier': .01, 'ece10': .01, 'recallTrue': 0}}
+        group = {'holdout/en/conflict': {'count': 100, 'accuracy': .99, 'brier': .01, 'ece10': .01, 'recallTrue': 0,
+                                        'coverage': 1, 'classSupport': {'true': 50, 'false': 50}}}
         policy = {'id': 'fixture', 'minCoverage': .95, 'tasks': {'holdout/en/conflict': {
             'minCount': 100, 'minAccuracy': .9, 'maxBrier': .1, 'maxEce': .1, 'minPositiveRecall': .9}}}
         self.assertEqual(evaluation.quality_gate(group, policy, 1, 'annotated')['status'], 'failed')
