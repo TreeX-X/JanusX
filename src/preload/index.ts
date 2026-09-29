@@ -161,6 +161,7 @@ const knowledgeAPI: KnowledgeAPI = {
   pruneObservations: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.pruneObservations, query),
   observationRevocationContext: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.observationRevocationContext, input),
   revokeObservation: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.revokeObservation, input),
+  observationRevocations: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.observationRevocations, input),
   autoPruneObservations: (nowMs) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.autoPruneObservations, nowMs),
   resolveObservationContent: (observation) =>
     ipcRenderer.invoke(KNOWLEDGE_CHANNELS.resolveObservationContent, observation),

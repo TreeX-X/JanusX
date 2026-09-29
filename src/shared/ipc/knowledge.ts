@@ -28,6 +28,20 @@ import type {
 } from '../knowledge'
 import type { KnowledgeSettings } from '../knowledge-settings'
 
+export interface ObservationRevocationsPage {
+  total: number
+  offset: number
+  limit: number
+  items: Array<{
+    key: string
+    revokedAt: string
+    observationCount: number
+    factCount: number
+    sourceStatus: 'available' | 'changed' | 'missing' | 'ambiguous'
+    source?: { id: string; workspaceId: string; content: string; truncated: boolean }
+  }>
+}
+
 export const KNOWLEDGE_CHANNELS = {
   layaControl: 'knowledge:laya:control',
   candidateAction: 'knowledge:candidate:action',
@@ -42,6 +56,7 @@ export const KNOWLEDGE_CHANNELS = {
   pruneObservations: 'knowledge:observations:prune',
   observationRevocationContext: 'knowledge:observations:revocation-context',
   revokeObservation: 'knowledge:observations:revoke',
+  observationRevocations: 'knowledge:observations:revocations',
   autoPruneObservations: 'knowledge:observations:auto-prune',
   resolveObservationContent: 'knowledge:observations:resolve-content',
   retentionStats: 'knowledge:retention:stats',
@@ -283,6 +298,7 @@ export interface KnowledgeAPI {
   pruneObservations: (query: ObservationPruneQuery) => Promise<ObservationPruneResult>
   observationRevocationContext: (input: { id: string; workspaceId: string }) => Promise<{ sourceHash: string; revoked: boolean; content: string }>
   revokeObservation: (input: { id: string; workspaceId: string; sourceHash: string }) => Promise<void>
+  observationRevocations: (input: { offset?: number; limit?: number }) => Promise<ObservationRevocationsPage>
   autoPruneObservations: (nowMs?: number) => Promise<ObservationPruneResult>
   resolveObservationContent: (observation: Observation) => Promise<string>
   retentionStats: () => Promise<RetentionStats>

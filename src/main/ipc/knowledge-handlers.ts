@@ -5,7 +5,7 @@ import type { PrepareNoteWikiInput } from '../../shared/ipc/knowledge'
 import { knowledgeContractService } from '../knowledge/contract-service'
 import { knowledgeAuditService } from '../knowledge/audit-service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
-import { observationRevocationContext, revokeObservation } from '../knowledge/observation-revocation'
+import { observationRevocationContext, revokeObservation, listObservationRevocations } from '../knowledge/observation-revocation'
 import { knowledgeExtractService } from '../knowledge/extract-service'
 import {
   knowledgeReviewService,
@@ -80,6 +80,7 @@ export function registerKnowledgeHandlers(): void {
   })
   ipcMain.handle(KNOWLEDGE_CHANNELS.observationRevocationContext, (_event, input: unknown) => observationRevocationContext(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.revokeObservation, (_event, input: unknown) => revokeObservation(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.observationRevocations, (_event, input: unknown) => listObservationRevocations(input))
 
   ipcMain.handle(KNOWLEDGE_CHANNELS.resolveObservationContent, async (_event, observation: Observation) => {
     return knowledgeObservationService.resolveContent(observation)

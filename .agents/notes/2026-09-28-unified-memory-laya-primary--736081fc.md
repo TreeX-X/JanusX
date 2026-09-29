@@ -119,13 +119,19 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 
 ## Scope
 
+知识库审计页的[已撤回来源](../../src/renderer/src/components/knowledge/ObservationRevocations.tsx)从[宿主分页接口](../../src/main/knowledge/observation-revocation.ts)读取原子撤回记录，不依赖仍然可召回的观察卡片，也不复制正文进新日志。按撤回时间倒序、来源摘要稳定打破同时间排序，默认每页 20 条，宿主最多 100 条。条目显示撤回时间、原始回执记录的观察/事实身份数量（包含待审事实），不将它们冒充当前有效事实或 Wiki/图边数量。
+
+宿主严格扫描现存 active 与 gzip 来源，只解析本页唯一匹配来源的正文，预览最多 4,000 字符。状态区分与撤回快照一致、正文或元数据已变化、来源缺失、同身份存在多个记录；缺失或歧义时仍显示撤回记录，但不挑选正文。变化时明确展示当前正文，不能从无正文回执重建历史内容。损坏来源或 blob 读取失败向界面报错，不能当作空列表或已删除。管理页刷新返回首页，卸载或新请求会使旧响应失效，浏览与翻页不写入回执、事实或强度。
+
+该入口仅接入本地 Knowledge IPC 与审计页，不加入 MCP 输出，不解除撤回。选择复用原回执而非新增持久索引，代价是每次分页仍扫描来源元数据；offset 分页在并发新增记录时可能移动页边界，用户刷新可重新从首页读取。大库应测量扫描耗时后再考虑可重建索引和稳定游标。恢复必须另行定义重新授权和派生内容复审规则，不能通过删除回执恢复所有历史派生项。
+
 [来源撤回](../../src/main/knowledge/observation-revocation.ts)提供宿主预览与提交接口；知识库观察详情通过[确认控件](../../src/renderer/src/components/knowledge/ObservationRevokeControl.tsx)先读取当前完整正文及 sourceHash，再由用户确认撤回。hash 绑定解析后的观察全部字段与解析后的 blob 正文，排除宿主派生 revokedAt；workspace 与 ID 唯一定位来源。来源缺失、重复、损坏、摘要过期或已撤回时拒绝新提交；相同成功快照重试幂等。失败后界面清除旧预览，要求重新读取；关闭详情后，未完成请求不能重新打开或刷新其他详情。
 
 宿主按事实、Wiki、图边审核锁、观察写锁的固定顺序进入撤回，严格读取 active 与 gzip 归档观察及事实、候选日志。沿同 workspace 的 relatedObservationIds 求已有观察后代集合，再依据 provenance、sourceEvidence 与候选 evidence 记录关联事实身份。单次原子写入 `observations/revoked.json`，保存 workspace/ID 摘要、来源快照摘要、派生身份摘要和时间；该记录同时是撤回决策与无正文审计回执，不另写一个可能失败的审计事务。损坏输入或写入失败不改变原库。
 
 [撤回屏障](../../src/main/knowledge/observation-revocation-barrier.ts)将观察投影为 revokedAt，并在候选读取、提议、批准、truth、Profile、Episode、搜索缓存与访问增强处重新核验。已知事实退出有效视图，引用这些事实的 Wiki 页面和图边整体退出；原始事实、观察、候选和页面正文保留。待审候选投影为 rejected，精修任务依据已失效的候选与来源取消，运行中的模型提交回调重新检查。恢复原始观察分片或重放同一来源 ID 不能绕过屏障；屏障文件不可读时必须失败，不能当作未撤回。个人 override 属于独立人工输入，不随来源自动删除。
 
-选择投影视图而非逐文件删除，避免跨分片、事实、Wiki、图边和任务的多文件回滚。代价是每个正式读取/写入入口必须尊重屏障，撤回扫描持有多把写锁，较大的来源库可能阻塞采集和审核；测量锁等待与扫描量后再决定可重建引用索引。含一条撤回来源的多证据事实、含一个失效事实的 Wiki/图边均保守整体退出，不自动重写剩余内容或做语义归因。这里只保证显式引用和已知观察后代，不推断无引用文本的语义派生，也不承诺已组装或已交付消息可被召回。新 ID 且不保留来源引用的重新导入不属于同源重放保护；恢复授权、已撤回来源的独立管理页和引用精细拆分仍待设计。
+选择投影视图而非逐文件删除，避免跨分片、事实、Wiki、图边和任务的多文件回滚。代价是每个正式读取/写入入口必须尊重屏障，撤回扫描持有多把写锁，较大的来源库可能阻塞采集和审核；测量锁等待与扫描量后再决定可重建引用索引。含一条撤回来源的多证据事实、含一个失效事实的 Wiki/图边均保守整体退出，不自动重写剩余内容或做语义归因。这里只保证显式引用和已知观察后代，不推断无引用文本的语义派生，也不承诺已组装或已交付消息可被召回。新 ID 且不保留来源引用的重新导入不属于同源重放保护；恢复授权和引用精细拆分仍待设计；撤回记录在知识库审计页独立管理。
 
 工程事实在[召回服务](../../src/main/knowledge/recall-service.ts)中使用 `memoryStrength × 0.5` 作为独立 strengthBoost，保留 BM25、可信度与新鲜度项。衰减按每次召回的墙钟计算，不固定在索引构建时；active 与 TTL 过滤在缓存命中后重新执行，过滤后文档身份进入 BM25 缓存键，确保到期文档不继续影响词频。强度落盘仍会改变现有文件指纹并重建缓存，未引入单独的排名数据库。
 
@@ -301,7 +307,11 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 
 来源撤回机器验证（2026-09-29）：`npx vitest run --maxWorkers=4 tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/observation-revocation-ui.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 64 个测试文件、598 项测试，真实 Laya 用例显式跳过。默认并发运行时一项既有异步 schema_violation 审计断言超时，单文件复跑通过，四 worker 完整回归通过。新增 `observation-revocation.test.ts` 的 10 项覆盖实际来源、画像、Wiki/图边、候选、运行中精修、gzip、重放、同 ID 跨 workspace、重复提交、损坏文件与写失败；`observation-revocation-ui.test.ts` 的两项 Chromium 测试覆盖正文预览、hash 提交、过期失败重读和关闭后不刷新。IPC 的八项测试覆盖 42 个接口及浏览器降级。严格未使用类型检查、19 个生产文件定向 ESLint、双语键和 package-boundary 通过；ESLint 保留 KnowledgeWorkbench 既有 refresh 依赖警告。全库 Note 检查仍有上述三项无关错误。未运行完整 Electron E2E、生产打包、真实模型或真实用户数据撤回。
 
+撤回记录管理机器验证（2026-09-29）：`npx vitest run --maxWorkers=4 tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/observation-revocation-ui.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 64 个测试文件、605 项测试，真实 Laya 用例显式跳过。来源撤回测试新增四种来源状态、25 条记录分页、预览截断、非法分页和损坏来源反例；Chromium 测试新增历史翻页、缺失来源保留及刷新忽略旧响应。严格未使用类型检查、七个生产文件定向 ESLint、双语键与 package-boundary 通过；ESLint 保留 KnowledgeWorkbench 既有 refresh 依赖警告。全库 Note 检查仍有上述三项无关错误。未运行完整 Electron E2E、生产打包或真实数据管理。
+
 ## Alternatives considered
+
+- 只在原观察详情显示撤回状态：实现最小，但来源退出召回或文件被清理后就无法找到记录。把全部正文复制进撤回日志便于离线查看，却扩大敏感内容留存；采用原回执加现存来源解析，以明确缺失/变化状态承担历史正文不可恢复的边界。
 
 - 撤回时删除所有关联原文件：清理直观，但会破坏来源追溯，并需要观察归档、候选、事实、Wiki、图边与任务之间的跨文件事务。沿用普通事实归档最省实现，却不能约束来源重放；采用单一撤回屏障与受约束视图，保留原始证据，并明确承担入口一致性和全量扫描成本。
 
@@ -337,6 +347,7 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 - [x] AC-15: 撤回与精修任务失效 — 事实撤回按归属定位并保护损坏存储，图边撤回与审核串行；待处理和运行中任务的视图立即反映候选、证据及有效上下文失效，下次调度持久化取消；模型提交重新检查候选审核状态，不将已拒绝候选记为精修成功。
 - [x] AC-16: 工程事实的 Janus 交付强度 — 直接交付的工程事实按 workspace 与快照绑定增强，复用衰减、冷却、去重与上限；缓存命中仍按当前时间衰减和过滤到期事实，访问落盘影响后续排名，私有事实与跨项目同 ID 不串写。普通搜索保持只读，Wiki/图边不按引用增强，不据强度归档或删除 truth。
 - [x] AC-17: 显式来源撤回 — 观察详情预览当前正文并绑定 hash 二次确认；原子屏障使来源与已有显式派生链退出候选、truth、画像、近期事件和召回，阻止旧来源重放及运行中精修提交；严格读取和失败写入保留原文件。保留独立来源与跨 workspace 同 ID，不提供语义派生推断或恢复授权。
+- [x] AC-18: 撤回记录可管理 — 审计页分页展示撤回回执与历史影响数量，来源缺失、变化和歧义分别可见；当前正文预览有上限，失败不显示假空列表，刷新忽略旧响应；浏览不写数据、不解除撤回，不加入 MCP 共享面。
 
 ## Risks
 

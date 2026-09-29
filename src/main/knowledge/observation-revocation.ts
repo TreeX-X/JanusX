@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { CandidateFact, MemoryFact } from '../../shared/knowledge'
+import type { ObservationRevocationsPage } from '../../shared/ipc/knowledge'
 import { writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeObservationService } from './observation-service'
 import { withFactCandidatesLock, withWikiCandidatesLock, withGraphCandidatesLock } from './review-service'
@@ -8,6 +9,32 @@ import { ObservationRevocationBarrier, observationRevocationHash, readObservatio
 
 const targetSchema = z.object({ id: z.string().min(1), workspaceId: z.string().min(1) }).strict()
 const revokeSchema = targetSchema.extend({ sourceHash: z.string().regex(/^[a-f0-9]{64}$/) })
+
+/** Resolve only the requested page; historical impact counts come from the receipt. */
+// Note: withdrawal history remains readable when original sources disappear — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+export async function listObservationRevocations(input: unknown): Promise<ObservationRevocationsPage> {
+  const { offset, limit } = z.object({ offset: z.number().int().nonnegative().default(0), limit: z.number().int().min(1).max(100).default(20) }).strict().parse(input)
+  const records = [...(await readObservationRevocationBarrier()).records].sort((a, b) => b.revokedAt.localeCompare(a.revokedAt) || a.source.localeCompare(b.source))
+  const page = records.slice(offset, offset + limit)
+  if (!page.length) return { total: records.length, offset, limit, items: [] }
+  const sources = await knowledgeObservationService.listAll(true)
+  const byKey = new Map<string, typeof sources>()
+  for (const source of sources) {
+    const key = sourceKey(source.workspaceId, source.id)
+    const matches = byKey.get(key) ?? []
+    matches.push(source); byKey.set(key, matches)
+  }
+  const items: ObservationRevocationsPage['items'] = await Promise.all(page.map(async record => {
+    const matches = byKey.get(record.source) ?? []
+    const entry = { key: record.source, revokedAt: record.revokedAt, observationCount: new Set([record.source, ...record.observations]).size, factCount: new Set(record.facts).size }
+    if (matches.length !== 1) return { ...entry, sourceStatus: matches.length ? 'ambiguous' as const : 'missing' as const }
+    const source = matches[0]
+    const content = await knowledgeObservationService.resolveContent(source)
+    return { ...entry, sourceStatus: observationRevocationHash(source, content) === record.sourceHash ? 'available' as const : 'changed' as const,
+      source: { id: source.id, workspaceId: source.workspaceId, content: content.slice(0, 4000), truncated: content.length > 4000 } }
+  }))
+  return { total: records.length, offset, limit, items }
+}
 
 export async function observationRevocationContext(input: unknown): Promise<{ sourceHash: string; revoked: boolean; content: string }> {
   const target = targetSchema.parse(input)

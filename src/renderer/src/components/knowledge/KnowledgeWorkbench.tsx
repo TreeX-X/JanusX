@@ -18,6 +18,7 @@ import {
 import type { KnowledgeProcessingStats } from '../../../../shared/ipc/knowledge'
 import { MemoryReviewCard } from './MemoryReviewTool'
 import { ObservationRevokeControl } from './ObservationRevokeControl'
+import { ObservationRevocations } from './ObservationRevocations'
 import { KnowledgeStatusBar } from './KnowledgeStatusBar'
 import { NoteWikiEditor, WikiPageDetail, WikiCandidateSources } from './NoteWikiLinks'
 import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas'
@@ -435,7 +436,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                 <CardCollection title={t('knowledge:wiki.empty.title')} detail={t('knowledge:wiki.empty.detail')} cards={snapshot.wikiPatches.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />
               </div>}
               {tab === 'graph' && <KnowledgeGraphCanvas snapshot={snapshot} selectedId={selectedId} resolveRecord={resolveCanvasRecord} onSelect={selectGraph} />}
-              {tab === 'audit' && <AuditList events={snapshot.auditEvents} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} />}
+              {tab === 'audit' && <><ObservationRevocations /><AuditList events={snapshot.auditEvents} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} /></>}
             </>}
           </section>
           {detailAnim.rendered ? (

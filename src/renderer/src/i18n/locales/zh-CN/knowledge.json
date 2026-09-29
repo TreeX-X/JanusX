@@ -1,5 +1,21 @@
 {
   "observation": {
+    "history": "已撤回来源",
+    "historyRefresh": "刷新记录",
+    "historyDetail": "来源文件缺失时仍保留撤回记录。数量表示撤回时记录的观察与事实身份，包含待审事实。目前不提供恢复操作。",
+    "historyEmpty": "暂无已撤回来源。",
+    "unresolvedSource": "无法唯一定位来源",
+    "impact": "撤回时：{{observations}} 条观察 · {{facts}} 个事实身份",
+    "currentSource": "当前来源正文",
+    "previewTruncated": "预览限于前 4,000 个字符。",
+    "previous": "上一页",
+    "next": "下一页",
+    "sourceStatus": {
+      "available": "来源与撤回时的快照一致。",
+      "changed": "来源在撤回后发生变化；下方展示当前正文。",
+      "missing": "原始来源已缺失，撤回记录仍然有效。",
+      "ambiguous": "多个记录匹配该来源，未选择任何正文。"
+    },
     "revoke": "撤回这条来源",
     "confirmRevoke": "确认撤回来源",
     "revoked": "来源已撤回",

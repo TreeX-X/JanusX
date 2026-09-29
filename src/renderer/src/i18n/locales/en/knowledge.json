@@ -1,5 +1,21 @@
 {
   "observation": {
+    "history": "Withdrawn sources",
+    "historyRefresh": "Refresh records",
+    "historyDetail": "Withdrawal records are retained even when their source files are missing. Counts describe recorded source and fact identities, including proposed facts, at withdrawal. Restore is not available.",
+    "historyEmpty": "No sources have been withdrawn.",
+    "unresolvedSource": "Source cannot be uniquely resolved",
+    "impact": "At withdrawal: {{observations}} observations · {{facts}} fact identities",
+    "currentSource": "Current source text",
+    "previewTruncated": "Preview limited to 4,000 characters.",
+    "previous": "Previous page",
+    "next": "Next page",
+    "sourceStatus": {
+      "available": "Source matches the withdrawn snapshot.",
+      "changed": "Source has changed since withdrawal; the text below is its current content.",
+      "missing": "Original source is missing; the withdrawal record remains effective.",
+      "ambiguous": "Multiple records match this source; no content is selected."
+    },
     "revoke": "Withdraw this source",
     "confirmRevoke": "Confirm source withdrawal",
     "revoked": "Source withdrawn",

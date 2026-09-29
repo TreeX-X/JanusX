@@ -106,6 +106,7 @@ export function installElectronApiFallback(): void {
       pruneObservations: () => unavailableKnowledge(),
       observationRevocationContext: () => unavailableKnowledge(),
       revokeObservation: () => unavailableKnowledge(),
+      observationRevocations: () => unavailableKnowledge(),
       autoPruneObservations: () => unavailableKnowledge(),
       resolveObservationContent: () => unavailableKnowledge(),
       retentionStats: () => unavailableKnowledge(),

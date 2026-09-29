@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import type { CandidateFact, MemoryFact, Observation } from '../../../src/shared/knowledge'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 import { knowledgeObservationService } from '../../../src/main/knowledge/observation-service'
-import { observationRevocationContext, revokeObservation } from '../../../src/main/knowledge/observation-revocation'
-import { readObservationRevocationBarrier, revocationPath } from '../../../src/main/knowledge/observation-revocation-barrier'
+import { observationRevocationContext, revokeObservation, listObservationRevocations } from '../../../src/main/knowledge/observation-revocation'
+import { readObservationRevocationBarrier, revocationPath, sourceKey } from '../../../src/main/knowledge/observation-revocation-barrier'
 import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service'
 import { knowledgeExtractService } from '../../../src/main/knowledge/extract-service'
 import { knowledgeReviewService, proposeFactCandidates } from '../../../src/main/knowledge/review-service'
@@ -52,6 +52,38 @@ afterEach(async () => {
 })
 
 describe('durable observation revocation', () => {
+  it.each(['available', 'changed', 'missing', 'ambiguous'] as const)('keeps the receipt visible when source is %s without writing storage', async status => {
+    await revokeObservation(await input())
+    if (status === 'changed') await records('observations/active/2026-09.jsonl', [{ ...source, content: 'new text' }])
+    if (status === 'missing') await records('observations/active/2026-09.jsonl', [])
+    if (status === 'ambiguous') await records('observations/active/2026-09.jsonl', [source, source])
+    const before = await readFile(revocationPath(), 'utf8')
+    const page = await listObservationRevocations({})
+    expect(page).toMatchObject({ total: 1, offset: 0, limit: 20, items: [{ sourceStatus: status, observationCount: 1, factCount: 2 }] })
+    if (status === 'available') expect(page.items[0].source?.content).toBe(source.content)
+    if (status === 'changed') expect(page.items[0].source?.content).toBe('new text')
+    if (status === 'missing' || status === 'ambiguous') expect(page.items[0].source).toBeUndefined()
+    expect(await readFile(revocationPath(), 'utf8')).toBe(before)
+  })
+
+  it('pages deterministically, bounds previews and rejects invalid pagination or damaged sources', async () => {
+    await revokeObservation(await input())
+    const record = (await readObservationRevocationBarrier()).records[0]
+    await writeFile(revocationPath(), JSON.stringify({ version: 1, records: Array.from({ length: 25 }, (_, index) => ({ ...record, source: index === 0 ? record.source : sourceKey('ws', `source-${index}`), revokedAt: new Date(Date.UTC(2026, 8, 29, 0, 25 - index)).toISOString() })) }))
+    await records('observations/active/2026-09.jsonl', [{ ...source, content: 'x'.repeat(5000) }])
+    const first = await listObservationRevocations({ limit: 20 })
+    const second = await listObservationRevocations({ offset: 20, limit: 20 })
+    expect(first.total).toBe(25)
+    expect(first.items).toHaveLength(20)
+    expect(second.items).toHaveLength(5)
+    expect(new Set([...first.items, ...second.items].map(item => item.key)).size).toBe(25)
+    expect(first.items[0].source).toMatchObject({ truncated: true, content: 'x'.repeat(4000) })
+    await expect(listObservationRevocations({ limit: 101 })).rejects.toThrow()
+    await expect(listObservationRevocations({ offset: -1 })).rejects.toThrow()
+    await writeFile(join(root, 'observations/active/broken.jsonl'), '{bad')
+    await expect(listObservationRevocations({})).rejects.toThrow()
+  })
+
   it('cancels refinement and rejects provider output when its source is withdrawn in flight', async () => {
     candidate.fact.scope = 'project'
     await records('facts/candidates.jsonl', [candidate])
