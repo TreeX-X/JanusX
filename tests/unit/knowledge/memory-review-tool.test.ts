@@ -22,6 +22,20 @@ beforeAll(async () => { await i18n.use(initReactI18next).init({ lng: 'en', resou
 afterEach(() => vi.unstubAllGlobals())
 
 describe('unified memory review', () => {
+  it('shows window-specific source ranges and probabilities without a whole-source confidence', () => {
+    const candidate = fact('chunked', 'user')
+    candidate.decision = { version: 1, scorer: { provider: 'laya', modelRevision: 'fixture', templateVersion: 'memory-decision/1', calibrationId: null },
+      inputHash: 'hash', candidateHash: 'hash', createdAt: '2026-09-29', status: 'ready', route: 'review', reason: 'cross-chunk-conflict',
+      answers: [], evidenceRanges: [{ observationId: 'obs-1', start: 0, end: 1000 }], relatedFactIds: [], truncated: false,
+      chunks: [{ evidenceRanges: [{ observationId: 'obs-1', start: 0, end: 800 }], answers: [{ question: 'support', answer: true, answer_confidence: .98, distribution: { true: .98, false: .02 }, noul: .98 }] },
+        { evidenceRanges: [{ observationId: 'obs-1', start: 672, end: 1000 }], answers: [{ question: 'support', answer: false, answer_confidence: .99, distribution: { true: .01, false: .99 }, noul: .01 }] }],
+    }
+    const markup = renderToStaticMarkup(createElement(MemoryReviewCard, { candidate, disabled: false, onReview: vi.fn() }))
+    expect(markup).toContain('obs-1 [0, 800)')
+    expect(markup).toContain('obs-1 [672, 1000)')
+    expect(markup).toContain('support: true (98%)')
+    expect(markup).toContain('support: false (99%)')
+  })
   it('shows the previous and proposed values and competing correction warning', () => {
     const candidate = fact('correction', 'user')
     candidate.fact.content = 'Prefer npm'

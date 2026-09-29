@@ -147,6 +147,10 @@ export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, co
       <p>{candidate.decision.scorer.provider} · {candidate.decision.status} · {candidate.decision.reason}</p>
       <p>{t('knowledge:review.scoreCaution')}</p>
       <ul>{candidate.decision.answers.map(answer => <li key={answer.question}>{answer.question}: {String(answer.answer)} ({Math.round(answer.answer_confidence * 100)}%)</li>)}</ul>
+      {candidate.decision.chunks?.map((chunk, index) => <details key={index}>
+        <summary>{t('knowledge:inspector.sourceRefs')}: {chunk.evidenceRanges.map(range => `${range.observationId} [${range.start}, ${range.end})`).join(', ')}</summary>
+        <ul>{chunk.answers.map(answer => <li key={answer.question}>{answer.question}: {String(answer.answer)} ({Math.round(answer.answer_confidence * 100)}%)</li>)}</ul>
+      </details>)}
     </details>}
     <details>
       <summary>{t('knowledge:inspector.provenance')}</summary>

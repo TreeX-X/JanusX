@@ -21,7 +21,7 @@ JanusX 的 observation → candidate → review → truth → BM25 管线承载�
 
 [queue 管线](./2026-09-03-knowledge-pipeline--dcc5e8a0.md)继续拥有结算、游标、失败记录与恢复。[个人与工程分离](./2026-09-15-personal-vs-engineering-memory--4515fa0e.md)及[首片落地](./2026-09-18-personal-engineering-separation--296ddf52.md)提供视图与共享边界。本提案拟替换[旧 Laya 提案](./2026-09-22-laya-decision-model-knowledge-confidence--673865a1.md)中“LLM 默认主路、Laya 仅作补充”的方向；旧文的模型资料只作背景，具体实施与验收以本篇为依据。本文保持 draft，完成状态以文末 AC 为准；运行时可用不等于真实数据质量验收通过。
 
-当前验收（2026-09-29）：18 条 AC 中 17 条完成；AC-8 仍缺真实脱敏人工标注数据、事先固定的质量策略及独立留出实测。自动接受保持关闭。
+当前验收（2026-09-29）：功能完成范围以各 AC、实际验证及本文边界为准。跨批次事实合证据、普通候选来源复核、画像到期过滤、待审读取报错、长证据分块和校准产物接入有对应实现；AC-8 仍缺真实脱敏人工标注数据、事先固定的质量策略及独立留出实测。自动接受保持关闭。
 
 ## Expected behavior
 
@@ -92,6 +92,8 @@ JanusX 的 observation → candidate → review → truth → BM25 管线承载�
 LLM 精修策略明确为 off（默认）、on-demand 和人工触发。on-demand 下，只有 Laya 标记需精修且用户配置允许、预算充足时调用；Laya 缺席不会触发自动 LLM。人工精修仍走 queue-owned 任务。复用原有超时、重试、批次和字符预算；精修结果保留原候选关联与新增证据，重新接受证据/冲突检查，不能沿用精修前的置信度直接落库。无模型是正常不可用状态，原规则候选继续留在 Inbox。
 
 长证据按可回溯片段切分并限制总块数和问题数。截断不得丢失否定、主体或替代对象。跨块矛盾进入复核；Laya predict_long 的最大概率窗口不能作为整篇证据的已校准支持度。retention 注解只建议后续分类，不能把长期证据降成 noise 后直接交给清理任务删除。
+
+[证据分块](../../src/main/knowledge/decision-evidence-chunks.ts)保留 UTF-16 原文位置，每块最多 800 字符、相邻块重叠 128 字符，优先在句末切分且不拆开代理对。每候选最多 20 块、每块 6 题，全部调用共享一次评分超时；宿主仍限制最多 8 个来源和 12,000 个证据字符。来源、候选或相关事实超出完整上下文预算时转人工审核。各块概率单独保存在注解并显示来源范围，顶层不制造整篇概率。块间答案不一致直接人工复核；答案一致但有不确定或需精修信号时，允许进入既有可选精修队列，仍受策略和预算控制。重叠无法保证跨远距离指代的语义完整，因此分块结果没有整篇自动接受资格。
 
 ### 画像、召回与生命周期
 
@@ -277,6 +279,12 @@ truth 读取、Profile 投影、近期记忆、治理检索和个人召回都核
 
 [事实批准日志](../../src/main/knowledge/fact-review-recovery.ts)在首次事实写入前，将 facts/facts.jsonl、facts/candidates.jsonl 的原文（含文件缺失）与目标内容写入 facts/review-pending.json。审计批次原子提交是批准的提交点，确定性审计事件 ID 绑定日志操作。持锁恢复时，有提交标记则完成目标状态，无标记则恢复原文；读集出现不属于原文或目标的外部修改，或日志/审计损坏时显式失败并保留全部文件。启动先恢复事实，再调度精修。truth、遗留事实读取及召回检查日志与进程内读版本，禁止返回跨越失败审核的中间事实。
 
+[普通事实来源核验](../../src/main/knowledge/fact-evidence-review.ts)在审核锁内严格读取观察，对带来源快照的候选核对引用集合、归属、发言来源、完整正文 SHA-256 与当前有效期。正文从实际文件或解压后重新计算摘要，不能只信任 JSONL 中的摘要字段。来源缺失、歧义、变化或到期均阻止新批准；迁移与纠正继续走各自的来源绑定。旧候选没有完整正文绑定但声称有来源快照时要求重新创建；没有归因信息的旧候选保留显式人工审核，不因此获得来源可信等级。已确认长期事实的 TTL 独立于来源 Episode，自然到期不追溯撤销此前确认。
+
+同域、同所有者、同类型、同正文、同 TTL 及同槽位元数据的有效事实在批准时合并来源，保留原事实 ID、版本和访问状态。来源快照冲突或已有多个同文事实时要求人工处理；显式替代、迁移和纠正继续使用原版本链。合并与候选状态共用事实恢复日志，审计失败恢复原字节。与提案阶段自动更改已确认事实相比，批准时合并保证新增证据经过审核；代价是待审列表可同时保留同文候选，已有历史重复记录不会被静默批量修复。
+
+[个人概览](../../src/main/knowledge/user-overview-service.ts)在选取卡片前过滤已到期事实，避免将到期误标为未确认。候选账本读取失败时整个概览返回错误，界面显示不可用与重试，不把失败计为零待审。
+
 只做 catch 回滚代码更短，但进程退出不会执行 catch；因此事实批准增加一份可删除的恢复日志。它覆盖新事实、替代及迁移批准，不覆盖 Wiki/Graph、拒绝、人工字段的所有多文件事务，不提供跨进程互斥或断电 fsync 保证。每次批准保存两份完整文件，库规模增加时须测量写入成本。没有日志的历史中间状态不能猜测恢复。
 
 [旧 Episode 迁移](../../src/main/knowledge/legacy-episode-migration.ts)从统一审核栏预览文件与记录数量，确认请求绑定所有来源文件的名称及原字节摘要。严格校验旧结构、重复 ID、目标和备份，按来源分片生成确定名称的 user Observation 文件；保留 ID、正文、创建/到期时间、TTL、状态、标签及原来源引用，标记 unknown/unverified。正文 hash 使用统一 SHA-256 规则，迁移不自动确认任何个人事实。
@@ -291,23 +299,27 @@ truth 读取、Profile 投影、近期记忆、治理检索和个人召回都核
 
 source 按会话或原始来源分组，翻译及同事件变体共用 scenario；来源、场景和相同模型输入均禁止跨 calibration/holdout。先用 `<Python> scripts/evaluate-laya.py --dataset <JSON> --dataset-kind annotated --validate-only` 验证，再传入 --python <推理Python> --model-dir <模型目录> --output <报告> --policy <策略JSON> 运行。真实数据文件不写入仓库；策略必须在看留出结果前固定，记录 id、modelRevision、adapterSha256、minCoverage，以及每个 holdout/<语言>/<题目> 的 minCount、minAccuracy、maxBrier、maxEce；布尔题可额外设置 minPositiveRecall/minPositivePrecision。模型 revision 或 sidecar 文件摘要不匹配则拒绝评估。
 
-报告保存数据和策略摘要、逐语言逐题准确率/Brier/ECE/正例 precision/recall/假阳性率、覆盖率及性能。合成数据或缺少固定策略时 qualityGate=not-evaluated；未达门槛则 failed。未拟合温度时 calibrationId=null，没有启用自动接受时错误接受率为 null；报告不会修改产品策略。AC-8 仍需真实脱敏人工标注、事先固定的质量门槛和独立留出实测。
+报告保存数据和策略摘要、逐语言逐题准确率/Brier/ECE/正例 precision/recall/假阳性率、覆盖率及性能。合成数据或缺少固定策略时 qualityGate=not-evaluated；未达门槛则 failed。没有启用自动接受时错误接受率为 null；报告不会修改产品策略。AC-8 仍需真实脱敏人工标注、事先固定的质量门槛和独立留出实测。
+
+评测增加 `--calibration-output <产物JSON>` 与 `--min-calibration-count`（默认每题 20 个可用样本）。拟合只读取 calibration 分区，按题型在 0.05–20 范围确定性搜索使负对数似然最小的温度；holdout 标签不参与拟合。报告保留原始输出与校准输出，按校准后的独立留出指标判定预先固定的策略。产物记录数据、策略、适配器摘要、模型与模板版本、拟合来源和温度；calibrationId 是最终产物原字节的 SHA-256。没有请求拟合时保持 null。产物仅保留样本 ID，不复制原始正文；完整评测报告仍包含输入结果，需保存在受控的本地目录。
+
+[校准加载器](../../src/main/knowledge/laya-calibration.ts)从设置中的模型目录读取可选 `calibration.json`。只有真实标注声明、独立验收 passed、完整质量策略摘要和匹配模型/模板/sidecar 摘要的产物可用于评分；损坏、不匹配、合成或验收失败的文件使当前评分不可用，不回用旧校准。不存在产物时原始概率继续作为人工审核的辅助信息。载入后逐题归一化分布、被选答案概率和 noul，保持答案方向；产物变更使旧身份失效。真实标注声明和 passed 报告仍依赖数据作者如实提供，不是来源真实性的密码学证明。这个机制不启用自动批准，也不能证明超出留出集语言和场景的质量。
 
 ### 当前验证（2026-09-29）
 
 相关测试全部使用临时 JANUSX_KNOWLEDGE_ROOT，未修改真实知识库。真实 Laya Windows CPU 的固定版本性能及合成集质量见上文实测报告；此次普通回归显式跳过真实权重用例，不将替身结果当作模型质量。
 
-`npx vitest run --maxWorkers=4 tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/personal-profile-editor-ui.test.ts tests/unit/observation-revocation-ui.test.ts tests/unit/laya-settings-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/agent/memory-tool-context.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 70 个文件、644 项测试，1 个真实 Laya 用例跳过。
+`npx vitest run --maxWorkers=4 tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/personal-profile-editor-ui.test.ts tests/unit/observation-revocation-ui.test.ts tests/unit/laya-settings-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/agent/memory-tool-context.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 72 个文件、666 项测试，1 个真实 Laya 文件及其用例跳过。新增反例覆盖跨批次同文合证据、并发与审计回滚、来源正文/摘要/有效期核验、画像到期过滤、候选账本损坏、长证据范围与矛盾、校准产物版本约束。
 
 新增验证包括资料编辑与人工字段遗忘（9 项服务测试）、资料/迁移交互（5 项 Chromium 测试）、旧 Episode 迁移（5 项）、事实审核恢复（7 项）、真实工具上下文隔离（2 项）及终端来源/脱敏（6 项）。统一写链的 13 项测试包含新写入与迁移事件的到期：热索引、个人召回、近期视图及处理队列同步排除，到期收割幂等。既有来源撤回、运行中遗忘、持久精修重放、双域预算及 Wiki sourceFactIds/sourceNoteRefs/hash/页面版本回归通过。
 
-`<Python 3.12> -m unittest discover -s tests/laya -v` 通过 12 项；`<Python 3.12> scripts/evaluate-laya.py --validate-only` 通过现有 24 条合成样例检查。评测不使用系统 WindowsApps 的 Python 占位入口，使用 uv 已安装的 Python 3.12。
+`<Python 3.12> -m unittest discover -s tests/laya -v` 通过 14 项，包含 calibration/holdout 隔离、温度拟合与分布校验；`<Python 3.12> scripts/evaluate-laya.py --validate-only` 通过现有 24 条合成样例检查。评测不使用系统 WindowsApps 的 Python 占位入口，使用 uv 已安装的 Python 3.12。
 
-`npm run typecheck:strict-unused`、`npm run build`、`npm run i18n:check`、`npm run check:package-boundary`、`npm run exclusions:check` 通过。改动生产文件的 ESLint 无错误，保留 KnowledgeWorkbench 既有 refresh 依赖警告；事实恢复的最终改动单独复查无警告。知识库相关 diff 检查通过。全库 Note 检查仍由两篇无关草稿的 3 个错误失败：debug-mode-plan 缺少 Proposal/Risks，worktree-composer-entry-motion 的 scope/reason 关系字段不合法；原检查器扫描 210 篇 Harness Note，本篇零错误，不将全库失败记为通过。
+`npm run typecheck:strict-unused`、`npm run build`、`npm run i18n:check`、`npm run check:package-boundary`、`npm run exclusions:check` 通过。本次涉及的生产文件 ESLint 无错误或警告。知识库相关 diff 检查通过。全库 Note 检查仍由两篇无关草稿的 3 个错误失败：debug-mode-plan 缺少 Proposal/Risks，worktree-composer-entry-motion 的 scope/reason 关系字段不合法；原检查器扫描 210 篇 Harness Note，本篇零错误，不将全库失败记为通过。
 
-`npx playwright test --config playwright.desktop.config.ts tests/e2e/knowledge-pipeline.spec.ts` 的真实 Electron IPC 覆盖采集、规则提案、快照审核、truth、搜索、上下文、资料保存、人工字段遗忘和迁移原文备份及重试。完整 `npx playwright test --config playwright.desktop.config.ts` 9 项通过，覆盖三个工作流、蓝图、编辑器、通用冒烟及知识库 IPC。侧栏收起定位使用现有 aria-label，避免依赖已换成提示组件的 title 属性；蓝图夹具在应用启动前完整落盘，并检查宿主投影可读，避免边创建来源边加载画布。
+`npx playwright test --config playwright.desktop.config.ts tests/e2e/knowledge-pipeline.spec.ts` 的真实 Electron IPC 覆盖采集、规则提案、快照审核、truth、搜索、上下文、资料保存、人工字段遗忘和迁移原文备份及重试。当前知识库 Electron 测试 1 项通过。`a8f0235` 基线的完整 `npx playwright test --config playwright.desktop.config.ts` 9 项通过，覆盖三个工作流、蓝图、编辑器、通用冒烟及知识库 IPC；该全桌面结果不代替当前增量测试。侧栏收起定位使用现有 aria-label，避免依赖已换成提示组件的 title 属性；蓝图夹具在应用启动前完整落盘，并检查宿主投影可读，避免边创建来源边加载画布。
 
-Windows 产物使用本次 out 的固定快照，执行 `npx electron-builder --win --dir --publish never --config=artifacts/knowledge-package-config.json` 生成 artifacts/knowledge-closeout-package/win-unpacked。配置仅替换构建快照输入与输出目录，沿用项目打包规则。`node scripts/check-laya-package.mjs artifacts/knowledge-closeout-package/win-unpacked` 通过：三份适配文件摘要与源码相同，asar 无权重或 Python/torch。原 check-packaged-runtime.mjs 的临时副本仅调整产物目录，复制到仓库外执行 llm-runtime 与 module-graph 两种启动均通过；未发布、未生成 NSIS/便携安装器。
+`a8f0235` 基线的 Windows 产物使用其 out 固定快照，执行 `npx electron-builder --win --dir --publish never --config=artifacts/knowledge-package-config.json` 生成 artifacts/knowledge-closeout-package/win-unpacked。配置仅替换构建快照输入与输出目录，沿用项目打包规则。`node scripts/check-laya-package.mjs artifacts/knowledge-closeout-package/win-unpacked` 通过：三份适配文件摘要与源码相同，asar 无权重或 Python/torch。原 check-packaged-runtime.mjs 的临时副本仅调整产物目录，复制到仓库外执行 llm-runtime 与 module-graph 两种启动均通过；未发布、未生成 NSIS/便携安装器。
 
 ## Alternatives considered
 

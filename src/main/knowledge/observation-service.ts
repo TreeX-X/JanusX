@@ -511,6 +511,7 @@ export class KnowledgeObservationService {
         relatedObservationIds: context.relatedObservationIds ?? [],
       } : {}),
       sourceEvidence: {
+        contentHash: classification.contentHash,
         observationId: id,
         workspaceId,
         scope,

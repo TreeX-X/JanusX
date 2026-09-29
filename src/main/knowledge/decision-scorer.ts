@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { memoryCandidateSnapshot } from '../../shared/memory-candidate-snapshot'
 import type { CandidateFact, FactKind, MemoryScope, MemorySourceEvidence } from '../../shared/knowledge'
 import type { MemoryDecisionAnnotation, MemoryDecisionAnswer, MemoryScorerIdentity } from '../../shared/memory-decision'
+import { decisionEvidenceChunks } from './decision-evidence-chunks'
 
 export const DECISION_TEMPLATE_VERSION = 'memory-decision/1'
 const KINDS = ['fact', 'decision', 'preference', 'procedure'] as const
@@ -46,7 +47,7 @@ function probability(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
 }
 
-function parseAnswers(value: unknown): MemoryDecisionAnswer[] | null {
+export function parseDecisionAnswers(value: unknown): MemoryDecisionAnswer[] | null {
   if (!Array.isArray(value) || value.length !== QUESTIONS.length) return null
   const answers: MemoryDecisionAnswer[] = []
   for (const question of QUESTIONS) {
@@ -89,25 +90,49 @@ export async function scoreMemoryDecision(
   if (!input.evidence.length) return { ...annotation, reason: 'missing-evidence' }
   if (input.truncated) return { ...annotation, reason: 'incomplete-context' }
   if (identity.templateVersion !== DECISION_TEMPLATE_VERSION) return { ...annotation, reason: 'template-mismatch' }
+  const inputs = decisionEvidenceChunks(input)
+  if (!inputs) return { ...annotation, reason: 'chunk-budget-exceeded' }
   const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const raw = await Promise.race([
-      Promise.resolve().then(() => scorer.score(structuredClone(input), controller.signal)),
+    const results = await Promise.race([
+      (async () => {
+        const outputs: Array<{ input: MemoryDecisionInput; raw: unknown }> = []
+        for (const chunk of inputs) {
+          if (controller.signal.aborted) throw new Error('scorer-timeout')
+          const raw = await scorer.score(structuredClone(chunk), controller.signal)
+          outputs.push({ input: chunk, raw })
+          if (!record(raw) || raw.status !== 'ready') break
+        }
+        return outputs
+      })(),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => { controller.abort(); reject(new Error('scorer-timeout')) }, timeoutMs)
       }),
     ])
-    if (!record(raw)) return { ...annotation, reason: 'invalid-output' }
-    if (raw.status === 'unavailable') return { ...annotation, reason: 'scorer-unavailable' }
-    const answers = parseAnswers(raw.answers)
-    if (raw.status !== 'ready' || !answers || identity.provider === 'noop') return { ...annotation, reason: 'invalid-output' }
+    const chunks: NonNullable<MemoryDecisionAnnotation['chunks']> = []
+    for (const { input: chunk, raw } of results) {
+      if (!record(raw)) return { ...annotation, reason: 'invalid-output' }
+      if (raw.status === 'unavailable') return { ...annotation, reason: 'scorer-unavailable' }
+      const answers = parseDecisionAnswers(raw.answers)
+      if (raw.status !== 'ready' || !answers || identity.provider === 'noop') return { ...annotation, reason: 'invalid-output' }
+      chunks.push({ evidenceRanges: chunk.evidence.map(({ observationId, start, end }) => ({ observationId, start, end })), answers })
+    }
+    if (chunks.length !== inputs.length) return { ...annotation, reason: 'incomplete-context' }
     const expected: Record<string, string | boolean> = {
       retention: true, kind: input.kind ?? 'fact', support: true, duplicate: false, supersede: false, conflict: false,
     }
-    const needsRefinement = answers.some((answer) => answer.answer_confidence < 0.9 || answer.answer !== expected[answer.question])
-    return { ...annotation, status: 'ready', answers, route: needsRefinement ? 'refine' : 'review',
-      reason: needsRefinement ? 'needs-refinement' : 'consistent-review' }
+    const needsRefinement = (answers: MemoryDecisionAnswer[]) => answers.some(answer => answer.answer_confidence < 0.9 || answer.answer !== expected[answer.question])
+    if (chunks.length > 1) {
+      const conflict = QUESTIONS.some(question => new Set(chunks.flatMap(chunk => chunk.answers.filter(answer => answer.question === question).map(answer => answer.answer))).size > 1)
+      const refine = !conflict && chunks.some(chunk => needsRefinement(chunk.answers))
+      return { ...annotation, status: 'ready', chunks, route: refine ? 'refine' : 'review',
+        reason: conflict ? 'cross-chunk-conflict' : refine ? 'chunked-refinement' : 'chunked-review' }
+    }
+    const answers = chunks[0]!.answers
+    const refine = needsRefinement(answers)
+    return { ...annotation, status: 'ready', answers, route: refine ? 'refine' : 'review',
+      reason: refine ? 'needs-refinement' : 'consistent-review' }
   } catch {
     return { ...annotation, reason: controller.signal.aborted ? 'scorer-timeout' : 'scorer-error' }
   } finally {

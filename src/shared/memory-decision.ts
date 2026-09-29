@@ -39,6 +39,8 @@ export interface MemoryDecisionAnnotation {
   evidenceRanges: Array<{ observationId: string; start: number; end: number }>
   relatedFactIds: string[]
   truncated: boolean
+  /** Per-window answers only. No window maximum represents whole-evidence support. */
+  chunks?: Array<{ evidenceRanges: Array<{ observationId: string; start: number; end: number }>; answers: MemoryDecisionAnswer[] }>
   /** Optional on legacy advice; required before creating a durable refinement task. */
   evidenceHashes?: Record<string, string>
   contextHash?: string

@@ -10,6 +10,34 @@ spec.loader.exec_module(evaluation)
 
 
 class MetricsTests(unittest.TestCase):
+    def calibration_rows(self):
+        answers = [{'question': question, 'answer': 'fact' if question == 'kind' else True,
+                    'distribution': {'fact': .97, 'decision': .01, 'preference': .01, 'procedure': .01} if question == 'kind' else {'true': .99, 'false': .01}}
+                   for question in evaluation.QUESTIONS]
+        return [{'id': str(i), 'split': 'calibration' if i < 20 else 'holdout', 'language': 'en',
+                 'labels': [True, 'fact', True, True, True, True] if i % 2 else [False, 'decision', False, False, False, False],
+                 'result': {'status': 'ready', 'answers': answers}} for i in range(24)]
+
+    def test_temperature_fit_ignores_holdout_labels_and_reduces_overconfidence(self):
+        rows = self.calibration_rows()
+        fitted = evaluation.fit_temperatures(rows)
+        modified = copy.deepcopy(rows)
+        for row in modified:
+            if row['split'] == 'holdout': row['labels'] = [False] * 6
+        self.assertEqual(fitted, evaluation.fit_temperatures(modified))
+        calibrated = evaluation.calibrated_results(rows, fitted)
+        self.assertGreater(fitted['support'], 1)
+        self.assertLess(calibrated[0]['result']['answers'][2]['answer_confidence'], .99)
+        self.assertEqual(rows[0]['result']['answers'][2]['distribution']['true'], .99)
+        for answer in calibrated[0]['result']['answers']:
+            self.assertAlmostEqual(sum(answer['distribution'].values()), 1)
+
+    def test_calibration_rejects_missing_data_and_invalid_probabilities(self):
+        with self.assertRaises(ValueError): evaluation.fit_temperatures(self.calibration_rows(), 21)
+        with self.assertRaises(ValueError): evaluation.temperature_distribution({'true': .9, 'false': .9}, 1)
+        with self.assertRaises(ValueError): evaluation.temperature_distribution({'true': 1, 'false': 0}, 0)
+        self.assertAlmostEqual(evaluation.temperature_distribution({'true': .01, 'false': .99}, 2)['false'], .908674751315651, places=12)
+
     def sample_data(self):
         return json.loads((Path(__file__).parents[2] / 'tests/fixtures/laya-memory-eval.json').read_text(encoding='utf-8'))
 

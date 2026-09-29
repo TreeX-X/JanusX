@@ -144,7 +144,7 @@ describe('queue-owned memory decision gate', () => {
   })
 
   it('keeps truncated evidence on the manual path without calling the scorer', async () => {
-    const observation = await capture('project', 'Decided to use Postgres. ' + 'long evidence '.repeat(600))
+    const observation = await capture('project', 'Decided to use Postgres. ' + 'long evidence '.repeat(1000))
     const batch = { workspaceId: observation.workspaceId, observations: [observation] }
     await runDeterministicStage(batch)
     const score = vi.fn(async (input: MemoryDecisionInput) => output(input))

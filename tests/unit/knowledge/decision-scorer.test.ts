@@ -27,6 +27,42 @@ function scorer(output: unknown): DecisionScorer {
 }
 
 describe('memory decision scorer validation', () => {
+  function longInput(text = '项目说明。'.repeat(400)): MemoryDecisionInput {
+    return { ...input, evidence: [{ ...input.evidence[0]!, text, end: text.length }] }
+  }
+
+  it('covers long evidence with overlapping source ranges and no aggregate probability', async () => {
+    const text = '🙂项目决定使用 Postgres。'.repeat(160)
+    const model = scorer({ status: 'ready', answers: readyAnswers() })
+    const result = await scoreMemoryDecision(longInput(text), model)
+    expect(result).toMatchObject({ status: 'ready', route: 'review', reason: 'chunked-review', answers: [], truncated: false })
+    let covered = 0
+    for (const [chunk] of vi.mocked(model.score).mock.calls) {
+      const evidence = chunk.evidence[0]!
+      expect(evidence.start).toBeLessThanOrEqual(covered)
+      expect(evidence.text).toBe(text.slice(evidence.start, evidence.end))
+      expect(evidence.text).not.toMatch(/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/)
+      covered = evidence.end
+    }
+    expect(covered).toBe(text.length)
+    expect(result.chunks).toHaveLength(vi.mocked(model.score).mock.calls.length)
+  })
+
+  it('sends contradictory windows to human review even with high probabilities', async () => {
+    const model = scorer({ status: 'ready', answers: readyAnswers() })
+    const disagree = readyAnswers().map(answer => answer.question === 'support' ? { ...answer, answer: false, noul: .02, distribution: { true: .02, false: .98 } } : answer)
+    vi.mocked(model.score).mockResolvedValueOnce({ status: 'ready', answers: disagree })
+    expect(await scoreMemoryDecision(longInput(), model)).toMatchObject({ status: 'ready', reason: 'cross-chunk-conflict', route: 'review', answers: [] })
+  })
+
+  it('refuses unbounded chunks and partial scoring without manufacturing a ready result', async () => {
+    const model = scorer({ status: 'ready', answers: readyAnswers() })
+    expect(await scoreMemoryDecision(longInput('x'.repeat(30000)), model)).toMatchObject({ reason: 'chunk-budget-exceeded', route: 'review' })
+    expect(model.score).not.toHaveBeenCalled()
+    vi.mocked(model.score).mockResolvedValueOnce({ status: 'ready', answers: readyAnswers() }).mockResolvedValueOnce({ status: 'unavailable' })
+    expect(await scoreMemoryDecision(longInput(), model)).toMatchObject({ status: 'unavailable', answers: [], route: 'review' })
+  })
+
   it('keeps unavailable scoring on the manual path with traceable host evidence', async () => {
     const result = await scoreMemoryDecision(input, new NoopScorer())
     expect(result).toMatchObject({ status: 'unavailable', route: 'review', evidenceRanges: [{ observationId: 'o1', start: 0, end: 13 }] })

@@ -16,6 +16,49 @@ from datetime import datetime
 QUESTIONS = ['retention', 'kind', 'support', 'duplicate', 'supersede', 'conflict']
 
 
+def temperature_distribution(distribution, temperature):
+    if type(temperature) not in [int, float] or not math.isfinite(temperature) or not .05 <= temperature <= 20:
+        raise ValueError('Invalid calibration temperature')
+    if not distribution or any(type(p) not in [int, float] or not math.isfinite(p) or not 0 <= p <= 1 for p in distribution.values()) or abs(sum(distribution.values()) - 1) > 1e-6:
+        raise ValueError('Invalid calibration distribution')
+    logits = {key: math.log(max(1e-12, p)) / temperature for key, p in distribution.items()}
+    peak = max(logits.values())
+    weights = {key: math.exp(value - peak) for key, value in logits.items()}
+    total = sum(weights.values())
+    return {key: value / total for key, value in weights.items()}
+
+
+def fit_temperatures(results, min_count=20):
+    if type(min_count) is not int or min_count < 1:
+        raise ValueError('Calibration sample floor must be positive')
+    selected = [row for row in results if row['split'] == 'calibration' and row['result'].get('status') == 'ready']
+    temperatures = {}
+    for i, question in enumerate(QUESTIONS):
+        rows = [(answer['distribution'], str(row['labels'][i]).lower()) for row in selected
+                for answer in row['result'].get('answers', []) if answer['question'] == question]
+        if len(rows) < min_count:
+            raise ValueError('Insufficient calibration samples for ' + question)
+        def loss(temperature):
+            return sum(-math.log(max(1e-12, temperature_distribution(distribution, temperature)[label])) for distribution, label in rows) / len(rows)
+        # Deterministic bounded NLL search. Holdout labels never enter fitting.
+        choices = [1.] + [math.exp(math.log(.05) + index * math.log(400) / 240) for index in range(241)]
+        choices = [max(.05, min(20., value)) for value in choices]
+        temperatures[question] = min(choices, key=loss)
+    return temperatures
+
+
+def calibrated_results(results, temperatures):
+    calibrated = []
+    for row in results:
+        answers = []
+        for answer in row['result'].get('answers', []):
+            distribution = temperature_distribution(answer['distribution'], temperatures[answer['question']])
+            answers.append({**answer, 'distribution': distribution, 'answer_confidence': distribution[str(answer['answer']).lower()],
+                            **({'noul': distribution['true']} if answer['question'] != 'kind' else {})})
+        calibrated.append({**row, 'result': {**row['result'], 'answers': answers}})
+    return calibrated
+
+
 def validate_dataset(dataset, kind='synthetic'):
     if not isinstance(dataset, list) or not dataset:
         raise ValueError('Dataset must be a nonempty list')
@@ -150,6 +193,8 @@ def main():
     parser.add_argument('--dataset-kind', choices=['synthetic', 'annotated'], default='synthetic')
     parser.add_argument('--policy', type=Path)
     parser.add_argument('--validate-only', action='store_true')
+    parser.add_argument('--calibration-output', type=Path, help='Fit on calibration split and export a version-bound artifact')
+    parser.add_argument('--min-calibration-count', type=int, default=20)
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     dataset_bytes = (args.dataset or root / 'tests/fixtures/laya-memory-eval.json').read_bytes()
@@ -197,6 +242,10 @@ def main():
                                 "result": response['result'], "wallMs": round((time.perf_counter() - started) * 1000)})
                 peak_memory = max(peak_memory or 0, peak_memory_bytes(runtime_pid) or 0) or None
                 print(row['id'], results[-1]['wallMs'], flush=True)
+            temperatures = fit_temperatures(results, args.min_calibration_count) if args.calibration_output else None
+            raw_results = results
+            if temperatures:
+                results = calibrated_results(results, temperatures)
             groups = {}
             for split in ['calibration', 'holdout']:
                 for language in dataset_info['languages']:
@@ -209,13 +258,23 @@ def main():
                       "adapterSha256": hashlib.sha256((root / 'resources/laya/sidecar.py').read_bytes()).hexdigest(),
                       "requirementsSha256": hashlib.sha256((root / 'resources/laya/requirements.txt').read_bytes()).hexdigest(),
                       "peakWorkingSetBytes": peak_memory,
-                      "calibrationId": None, "scope": "No fitted temperature; human annotation metadata does not itself certify label quality",
+                      "calibrationId": None, "scope": "Per-question temperature fitted on calibration only" if temperatures else "No fitted temperature; human annotation metadata does not itself certify label quality",
                       "dataset": dataset_info, "policySha256": hashlib.sha256(policy_bytes).hexdigest() if policy_bytes else None,
                       "p50Ms": statistics.median(latencies), "p95Ms": latencies[math.ceil(len(latencies) * .95) - 1],
                       "coverage": sum(row['result']['status'] == 'ready' for row in results) / len(results),
                       "automaticAcceptanceEnabled": False, "automaticAcceptanceErrorRate": None,
                       "groups": groups, "results": results}
             report['qualityGate'] = quality_gate(groups, policy, report['coverage'], args.dataset_kind)
+            if temperatures:
+                artifact = {'schema': 'laya-calibration/1', 'modelRevision': ready['revision'], 'templateVersion': 'memory-decision/1',
+                            'adapterSha256': report['adapterSha256'], 'datasetSha256': report['datasetSha256'], 'datasetKind': args.dataset_kind,
+                            'fittedOn': 'calibration', 'policySha256': report['policySha256'], 'qualityGate': report['qualityGate'],
+                            'temperatures': temperatures, 'calibrationSampleIds': [row['id'] for row in raw_results if row['split'] == 'calibration' and row['result'].get('status') == 'ready']}
+                artifact_bytes = (json.dumps(artifact, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode('utf-8')
+                args.calibration_output.parent.mkdir(parents=True, exist_ok=True)
+                args.calibration_output.write_bytes(artifact_bytes)
+                report['calibrationId'] = hashlib.sha256(artifact_bytes).hexdigest()
+                report['rawResults'] = raw_results
             output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         finally:
             child.stdin.close()

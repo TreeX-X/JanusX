@@ -35,6 +35,7 @@ import { candidateDecisionHash } from './decision-scorer'
 import { reviewedFactHash } from './profile-projection'
 import { readLegacyJsonl, validateLegacyCandidate } from './legacy-memory-source'
 import { validatePersonalCorrection } from './personal-correction-source'
+import { isExactFactDuplicate, mergeFactEvidence, validateFactEvidence } from './fact-evidence-review'
 import type { MemoryDecisionAnnotation } from '../../shared/memory-decision'
 import type {
   ReviewCandidateInput,
@@ -600,6 +601,7 @@ export class KnowledgeReviewService {
     const previous = await readJsonl<MemoryFact>(FACTS_FILE)
     await validateLegacyCandidate(candidate, previous)
     validatePersonalCorrection(candidate, previous)
+    await validateFactEvidence(candidate)
     if (previous.some(item => item.id === candidate.fact.id)) throw new Error('Fact ID already exists; create a distinct replacement candidate')
     const fields = factSlotFields(candidate.fact.content)
     for (const key of ['factKey', 'cardinality', 'polarity'] as const) {
@@ -641,7 +643,7 @@ export class KnowledgeReviewService {
       superseded = { id: target.id, version: target.version }
     }
     const { recallState: _untrustedRecallState, ...candidateFact } = candidate.fact
-    const fact: MemoryFact = {
+    let fact: MemoryFact = {
       ...candidateFact,
       ...fields,
       ...(targetId ? { supersedes: targetId } : {}),
@@ -649,8 +651,14 @@ export class KnowledgeReviewService {
       status: 'active',
       version,
     }
+    const duplicates = targetId || candidate.legacySource || candidate.personalCorrection ? [] : base.filter(item =>
+      item.status === 'active' && (!item.ttl || Date.parse(item.ttl) > Date.now())
+      && !barrier.blocksFact(item) && !revocations.blocksFact(item) && isExactFactDuplicate(item, fact))
+    if (duplicates.length > 1) throw new Error('Multiple identical facts already exist; resolve them before merging evidence')
+    const duplicate = duplicates[0]
+    if (duplicate) fact = mergeFactEvidence(duplicate, fact)
     fact.confirmation = { kind: 'human-review', contentHash: reviewedFactHash(fact), confirmedAt: new Date().toISOString() }
-    const next = [...base, fact]
+    const next = duplicate ? base.map(item => item === duplicate ? fact : item) : [...base, fact]
     const reviewId = await prepareFactReview(next, nextCandidates)
     await writeJsonlAtomic(FACTS_FILE, next)
     return {

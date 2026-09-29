@@ -17,6 +17,7 @@ import { knowledgeReviewService } from '../../../src/main/knowledge/review-servi
 import type { AuditEvent, CandidateFact, MemoryFact } from '../../../src/shared/knowledge'
 import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection'
 import { personalObservation } from './memory-observation.fixture'
+import { createHash } from 'node:crypto'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
@@ -98,11 +99,15 @@ describe('user memory MVP contract', () => {
     ], now)
     expect(thin).toHaveLength(0)
 
-    const promotions = await deriveHabitPromotions([
+    const observations = [
       personalObservation({ id: 'o1', content: '我习惯用 pnpm 而不用 npm', createdAt: now }),
       personalObservation({ id: 'o2', content: '我习惯用 pnpm 而不用 npm', createdAt: now }),
       personalObservation({ id: 'o3', content: '我习惯用 pnpm 而不用 npm', createdAt: now }),
-    ], now)
+    ].map(row => ({ ...row, contentHash: createHash('sha256').update(row.content).digest('hex') }))
+    const shard = join(knowledgeRoot, 'observations', 'active', '2026-09.jsonl')
+    await mkdir(dirname(shard), { recursive: true })
+    await writeFile(shard, observations.map(row => JSON.stringify(row)).join('\n') + '\n')
+    const promotions = await deriveHabitPromotions(observations, now)
     expect(promotions).toHaveLength(1)
     expect(promotions[0]!.frequency).toBe(3)
 

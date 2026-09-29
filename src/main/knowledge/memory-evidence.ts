@@ -23,7 +23,7 @@ export function sourceEvidence(observation: Observation): MemorySourceEvidence {
     authority: 'unverified' as const,
     excerpt: observation.content.slice(0, 280),
   }
-  return { ...evidence, excerpt: redactHighConfidenceSecrets(evidence.excerpt).text }
+  return { ...evidence, contentHash: observation.contentHash, excerpt: redactHighConfidenceSecrets(evidence.excerpt).text }
 }
 
 export function observationEventKey(observation: Observation): string {
@@ -68,6 +68,7 @@ export function isSourceEvidence(value: unknown): value is MemorySourceEvidence 
     && (record.authority !== 'model-generated' || record.speaker === 'assistant')
     && (record.authority !== 'tool-observed' || record.speaker === 'tool')
     && typeof record.excerpt === 'string'
+    && (record.contentHash === undefined || typeof record.contentHash === 'string' && /^[a-f0-9]{64}$/.test(record.contentHash))
     && (record.sourceEventId === undefined || (typeof record.sourceEventId === 'string' && record.sourceEventId.length > 0))
     && (record.sessionId === undefined || typeof record.sessionId === 'string')
 }

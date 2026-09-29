@@ -91,7 +91,7 @@ export class MemoryDecisionStage {
         let text: string
         try { text = await this.deps.resolveContent(observation) } catch { input.truncated = true; continue }
         evidenceHashes[id] = refinementEvidenceHash(observation, text)
-        const excerpt = text.slice(0, Math.min(REFINEMENT_OBSERVATION_CHARS, MAX_EVIDENCE_CHARS - evidenceChars))
+        const excerpt = text.slice(0, Math.max(0, MAX_EVIDENCE_CHARS - evidenceChars))
         input.truncated ||= excerpt.length !== text.length
         evidenceChars += excerpt.length
         input.evidence.push({ observationId: id, start: 0, end: excerpt.length, text: excerpt, source: sourceEvidence(observation) })

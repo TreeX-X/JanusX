@@ -7,7 +7,7 @@ import { memoryStrength } from '../../shared/memory-strength'
  * episodes, and the pending habit-candidate count for the Island badge. Read
  * paths only; cards and badges show state and initiate no privileged action.
  */
-import type { CandidateFact, UserMemoryOverview } from '../../shared/knowledge'
+import type { UserMemoryOverview } from '../../shared/knowledge'
 import { knowledgeContractService } from './contract-service'
 import { knowledgeTruthService } from './truth-service'
 import { listProposedUserFactCandidates } from './review-service'
@@ -19,24 +19,17 @@ import { reviewedFactHash } from './profile-projection'
 export const OVERVIEW_HABIT_LIMIT = 20
 export const OVERVIEW_RECENT_LIMIT = 10
 
-async function readProposedUserCandidates(): Promise<CandidateFact[]> {
-  try {
-    return await listProposedUserFactCandidates()
-  } catch {
-    return []
-  }
-}
-
 export async function getUserMemoryOverview(nowMs: number = Date.now()): Promise<UserMemoryOverview> {
   await knowledgeContractService.bootstrapWorkspace(undefined)
-  const [snapshot, profile, episodes, candidates] = await Promise.all([
+  const candidates = await listProposedUserFactCandidates()
+  const [snapshot, profile, episodes] = await Promise.all([
     knowledgeTruthService.list(),
     userProfileService.load(),
     userEpisodeService.listActive(nowMs, OVERVIEW_RECENT_LIMIT),
-    readProposedUserCandidates(),
   ])
   const habits = snapshot.facts
     .filter((fact) => fact.scope === 'user' || fact.provenance.workspaceId === 'user')
+    .filter((fact) => !fact.ttl || Date.parse(fact.ttl) > nowMs)
     .sort((left, right) => (right.lastSeenAt ?? right.provenance.createdAt)
       .localeCompare(left.lastSeenAt ?? left.provenance.createdAt))
     .slice(0, OVERVIEW_HABIT_LIMIT)

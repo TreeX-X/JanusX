@@ -103,6 +103,8 @@ export type MemorySpeaker = 'user' | 'assistant' | 'tool' | 'system' | 'unknown'
 /** Origin is not truth: even a user statement still needs candidate review. */
 export type MemorySourceAuthority = 'user-stated' | 'model-generated' | 'tool-observed' | 'unverified'
 export interface MemorySourceEvidence {
+  /** Full source content digest captured by the host; absent on legacy evidence. */
+  contentHash?: string
   observationId: string
   workspaceId: string
   scope: MemoryScope
