@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { MemoryFact } from '../../shared/knowledge'
-import { memoryStrength, reheatHabitStrength, MEMORY_ACCESS_COOLDOWN_MS, MEMORY_ACCESS_REQUEST_LIMIT, type UserMemoryDelivery } from '../../shared/memory-strength'
+import { memoryStrength, reheatHabitStrength, MEMORY_ACCESS_COOLDOWN_MS, MEMORY_ACCESS_REQUEST_LIMIT, type UserMemoryDelivery, type ProjectMemoryDelivery } from '../../shared/memory-strength'
 import { knowledgeRootPath } from './constants'
 import { withFactCandidatesLock } from './review-service'
 import { readLegacyJsonl } from './legacy-memory-source'
@@ -14,21 +14,34 @@ import { writeFileAtomic } from '../lib/atomic-file'
 
 /** Revalidates delivered snapshots under the same lock as approval and forgetting. */
 export async function recordUserMemoryAccess(receipt: UserMemoryDelivery, requestId: string, nowMs = Date.now(), signal?: AbortSignal): Promise<number> {
+  return recordMemoryAccess(receipt, requestId, nowMs, signal)
+}
+
+export async function recordProjectMemoryAccess(receipt: ProjectMemoryDelivery, requestId: string, nowMs = Date.now(), signal?: AbortSignal): Promise<number> {
+  return recordMemoryAccess(receipt, requestId, nowMs, signal, true)
+}
+
+async function recordMemoryAccess(receipt: UserMemoryDelivery | ProjectMemoryDelivery, requestId: string, nowMs: number, signal?: AbortSignal, project = false): Promise<number> {
   if (!requestId || !Number.isFinite(nowMs) || !Number.isFinite(receipt.capturedAt) || receipt.capturedAt > nowMs || signal?.aborted) return 0
   return withFactCandidatesLock(async () => {
     if (signal?.aborted) return 0
     const facts = await readLegacyJsonl<MemoryFact>('facts/facts.jsonl')
-    const barrier = await readPersonalForgettingBarrier()
-    const refs = new Map(receipt.facts.map(ref => [ref.id, ref.hash]))
+    const barrier = project ? undefined : await readPersonalForgettingBarrier()
+    const key = (id: string, workspaceId?: string) => project ? JSON.stringify([workspaceId, id]) : id
+    const refs = new Map(receipt.facts.map(ref => [key(ref.id, 'workspaceId' in ref ? String(ref.workspaceId) : undefined), ref.hash]))
     const counts = new Map<string, number>()
-    for (const fact of facts) counts.set(fact.id, (counts.get(fact.id) ?? 0) + 1)
+    for (const fact of facts) {
+      const id = key(fact.id, fact.provenance.workspaceId)
+      counts.set(id, (counts.get(id) ?? 0) + 1)
+    }
     const requestHash = createHash('sha256').update(requestId).digest('hex')
     let changed = 0
     const next = facts.map(fact => {
-      if (!refs.has(fact.id) || counts.get(fact.id) !== 1 || factScope(fact) !== 'user'
-        || fact.status !== 'active' || fact.ttl && !(Date.parse(fact.ttl) > nowMs) || barrier.blocksFact(fact)
-        || fact.confirmation?.kind !== 'human-review' || fact.confirmation.contentHash !== reviewedFactHash(fact)
-        || refs.get(fact.id) !== replacementHash(fact)) return fact
+      const id = key(fact.id, fact.provenance.workspaceId)
+      if (!refs.has(id) || counts.get(id) !== 1 || (project ? factScope(fact) === 'user' : factScope(fact) !== 'user')
+        || fact.status !== 'active' || fact.ttl && !(Date.parse(fact.ttl) > nowMs) || barrier?.blocksFact(fact)
+        || !project && (fact.confirmation?.kind !== 'human-review' || fact.confirmation.contentHash !== reviewedFactHash(fact))
+        || refs.get(id) !== replacementHash(fact)) return fact
       const state = fact.recallState
       if (state && (!Number.isFinite(state.strength) || state.strength < 0 || state.strength > 1
         || !Number.isFinite(Date.parse(state.anchorAt)) || !Number.isFinite(Date.parse(state.lastAccessAt))
@@ -56,6 +69,12 @@ export async function recordUserMemoryAccessBestEffort(receipt: UserMemoryDelive
   if (!receipt?.facts.length || signal?.aborted) return
   try { await recordUserMemoryAccess(receipt, requestId, Date.now(), signal) }
   catch (error) { console.warn('[knowledge] memory access was not recorded:', error instanceof Error ? error.message : String(error)) }
+}
+
+export async function recordProjectMemoryAccessBestEffort(receipt: ProjectMemoryDelivery | undefined, requestId: string, signal?: AbortSignal): Promise<void> {
+  if (!receipt?.facts.length || signal?.aborted) return
+  try { await recordProjectMemoryAccess(receipt, requestId, Date.now(), signal) }
+  catch (error) { console.warn('[knowledge] project memory access was not recorded:', error instanceof Error ? error.message : String(error)) }
 }
 
 /** A receipt is eligible only when its complete section survives final message budgeting. */

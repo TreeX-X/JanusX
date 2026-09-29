@@ -15,7 +15,7 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，使用宿主来源契约；确定性提取器只提出候选。Profile 由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实提供人工重新确认迁移，不自动恢复历史确认资格。持久遗忘约束覆盖个人事实、Episode、候选及精修任务重放；明确格式的发布命令与默认输出语言具有单值冲突约束。更广泛的语义槽位、普通来源撤回的级联处理与召回强度更新仍需完成。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[个人强度计算](../../src/shared/memory-strength.ts)已连接预算后的召回与交付增强；工程强度、任务级联撤回和完整维护闭环仍待实现。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[个人强度计算](../../src/shared/memory-strength.ts)已连接预算后的召回与交付增强；工程事实也接入 Janus 聊天交付增强；observation 级联撤回和完整维护闭环仍待实现。
 
 需求边界（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。
 
@@ -103,7 +103,7 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 
 统一 strength 为 [0,1] 的保留/排序强度，与 confidence、authority、是否仍然正确分开。采用墙钟锚点衰减与有冷却时间的有界增强：同一时刻重复计算和停机后计算结果一致；最后真实证据时间、最后访问时间与强度锚点分开保存。只对通过权限、有效性、去重和最终预算后真正交付的记忆记录访问，浏览列表、后台相似检索和被裁掉的候选不增强；同一请求去重，频繁读取不构成新证据。
 
-个人事实的有界实现由[强度函数](../../src/shared/memory-strength.ts)和[交付记录器](../../src/main/knowledge/memory-access.ts)承担：半衰期 30 天，每次增强 0.15，上限 1，冷却 10 分钟。宿主将 strength、anchorAt、lastAccessAt 与最近 64 个请求摘要存入 recallState，读取按锚点计算，不使用定时器反复写回衰减值。冷却期内只推进访问水位与请求历史，不重设强度锚点；重复回执及早于最后访问水位的回执被拒绝，时钟回退时保守跳过。审核移除候选自带的 recallState，访问状态不参与确认、替代或画像内容指纹，也不改写真实证据时间、confidence 和事实版本。工程事实的强度闭环仍待实现。
+个人事实的有界实现由[强度函数](../../src/shared/memory-strength.ts)和[交付记录器](../../src/main/knowledge/memory-access.ts)承担：半衰期 30 天，每次增强 0.15，上限 1，冷却 10 分钟。宿主将 strength、anchorAt、lastAccessAt 与最近 64 个请求摘要存入 recallState，读取按锚点计算，不使用定时器反复写回衰减值。冷却期内只推进访问水位与请求历史，不重设强度锚点；重复回执及早于最后访问水位的回执被拒绝，时钟回退时保守跳过。审核移除候选自带的 recallState，访问状态不参与确认、替代或画像内容指纹，也不改写真实证据时间、confidence 和事实版本。工程事实的 Janus 聊天交付复用相同的衰减、冷却与上限。
 
 个人召回先过滤失效与到期事实、到期 Episode，再按项目原有独立预算选择并去重；已确认 Profile 的前三项保留稳定名额，其余事实排序使用有效强度。纯搜索和浏览不记录访问。流式聊天只对完整保留在最终模型消息中的个人片段，在首个文本或工具调用输出时记录；仅创建流对象、输出前失败或已取消不记录。非流式聊天在生成成功后记录；user-memory.search 在构造最终工具返回值后记录。这里的交付指宿主交给模型或工具调用方，不证明模型引用了该事实，也不证明用户读到了回答。工具接口没有调用事件 ID，宿主每次执行生成 UUID，仅提供冷却限制，不承诺跨执行重试恰好一次。
 
@@ -118,6 +118,12 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 该实现复用现有上下文 hash，无须增加跨文件撤回日志。代价是同域、同 workspace 的任一有效事实变化都会使旧上下文任务失效，统计读取也需扫描来源并解析证据；大量历史或高频刷新出现延迟时应测量后引入可重建缓存。普通事实撤回不等于遗忘其全部观察来源，也不自动删除其他独立事实、Wiki 或图边；候选的替代与纠正目标仍由批准端核验。本切片不提供 observation 撤回入口、跨派生产物事务或已交付内容的撤回，完整 AC-9 保持未完成。
 
 ## Scope
+
+工程事实在[召回服务](../../src/main/knowledge/recall-service.ts)中使用 `memoryStrength × 0.5` 作为独立 strengthBoost，保留 BM25、可信度与新鲜度项。衰减按每次召回的墙钟计算，不固定在索引构建时；active 与 TTL 过滤在缓存命中后重新执行，过滤后文档身份进入 BM25 缓存键，确保到期文档不继续影响词频。强度落盘仍会改变现有文件指纹并重建缓存，未引入单独的排名数据库。
+
+[工程上下文](../../src/main/knowledge/context-service.ts)只为预算后直接交付的事实生成回执，绑定 workspace、ID、事实快照 hash 和完整上下文段落；Wiki/图边的引用不间接增强源事实。Janus 的个人融合聊天和工程聊天均在首个非空模型文本或工具调用输出后记录工程回执，非流式生成在成功后记录；最终消息裁剪了完整段落时保守跳过该回执。工程记录器在审核锁内核验 active、TTL、域、workspace、唯一身份与快照，拒绝跨项目同 ID 和私有事实串写。沿用工程 active truth 的资格规则，兼容没有个人 human-review 字段的历史工程事实，访问本身不会授予确认或修改事实内容与版本。
+
+工程浏览、普通搜索、MCP、maintenance 和其他尚未接入交付确认的调用面保持只读；工程闭环验收范围是 Janus 聊天中的直接事实。整个段落作为回执会少计部分裁剪后仍保留的单条事实，但避免把被裁掉的上下文算作已交付。工程与个人回执分别写入同一文件，各自只影响本域事实，代价是融合聊天最多触发两次整文件更新；出现首输出延迟时需测量后考虑合并同请求更新。
 
 ### 上游源码核对
 
@@ -283,7 +289,11 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 
 撤回与精修任务失效机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 61 个测试文件、577 项测试，真实 Laya 用例显式跳过。`operations-service.test.ts` 的 11 项覆盖跨 workspace 同 ID、归属内重复 ID、损坏事实/图边保留和审核锁竞争；`refinement-tasks.test.ts` 的 40 项包含真实撤回到取消落盘、停用期间视图失效、来源读取错误保留和运行中拒绝的提交阻断。最终撤回模块定向复跑 11 项通过。严格未使用类型检查及三个生产文件 ESLint 通过；全库 Note 检查仍由上述三项无关错误失败。未运行本切片的生产构建、Electron E2E、真实模型或真实数据操作。
 
+工程事实交付强度机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 62 个测试文件、585 项测试，真实 Laya 用例显式跳过。补充失效事实过滤和真实缓存更新后，`npx vitest run tests/unit/knowledge/memory-access.test.ts tests/unit/knowledge/recall-phase3.test.ts tests/unit/knowledge/recall-service.test.ts tests/unit/knowledge/context-service.test.ts` 的 48 项通过。覆盖工程回执的跨项目同 ID、私有域隔离、重复请求、归档拒绝、实际缓存更新，固定墙钟下的衰减/重启等价、TTL 缓存失效、预算裁剪，以及个人融合/工程聊天成功和输出前失败的真实接线。严格未使用类型检查、八个生产文件定向 ESLint 与 package-boundary 通过；全库 Note 检查仍有上述三项无关错误。未运行本切片的生产构建、Electron E2E、真实模型或真实数据操作。
+
 ## Alternatives considered
+
+- 工程记忆沿用仅 BM25、可信度和新鲜度排序：成本最低，但实际访问无法参与排名。为工程域另建强度库可降低事实文件写入量，却引入第二份身份和恢复机制；采用同一 recallState 与写锁，工程回执额外绑定 workspace，并接受访问时重建现有文件指纹缓存的成本。
 
 - 撤回时同步修改所有精修任务：能立即落盘取消，但现有任务锁覆盖模型调用，会使撤回等待供应商响应，并增加事实锁与任务锁的逆序风险。选择只读来源校验投影加调度持久化；保留读取与落盘之间的恢复窗口，不伪称跨文件事务。
 
@@ -313,6 +323,7 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 - [x] AC-13: 明确单值事实的冲突审核 — 同 ID 不覆盖 truth；发布命令与默认输出语言按同域、值和极性分组，近似文本不吞掉不同参数；替代展示旧值并要求人工确认，提交绑定旧事实指纹，竞争替代最多成功一次，审计失败可回滚；跨所有者、失效及多目标情况不允许直接批准。
 - [x] AC-14: 个人事实访问强度 — 锚点衰减可重复计算，只有最终交付的有效个人事实可增强；持久化请求去重、水位、10 分钟冷却与上限生效；访问不改变事实证据、确认或画像版本，损坏存储与失败写入不丢失原数据。此项不代替 AC-9 的工程域、任务级联撤回及完整生命周期验收。
 - [x] AC-15: 撤回与精修任务失效 — 事实撤回按归属定位并保护损坏存储，图边撤回与审核串行；待处理和运行中任务的视图立即反映候选、证据及有效上下文失效，下次调度持久化取消；模型提交重新检查候选审核状态，不将已拒绝候选记为精修成功。
+- [x] AC-16: 工程事实的 Janus 交付强度 — 直接交付的工程事实按 workspace 与快照绑定增强，复用衰减、冷却、去重与上限；缓存命中仍按当前时间衰减和过滤到期事实，访问落盘影响后续排名，私有事实与跨项目同 ID 不串写。普通搜索保持只读，Wiki/图边不按引用增强，不据强度归档或删除 truth。
 
 ## Risks
 

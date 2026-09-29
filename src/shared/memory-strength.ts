@@ -26,3 +26,8 @@ export interface UserMemoryDelivery {
   section: string
   facts: Array<{ id: string; hash: string }>
 }
+
+export interface ProjectMemoryDelivery extends UserMemoryDelivery {
+  scope: 'project'
+  facts: Array<{ id: string; workspaceId: string; hash: string }>
+}

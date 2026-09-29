@@ -459,6 +459,7 @@ export interface KnowledgeContextItem {
 }
 
 export interface KnowledgeContextResult {
+  projectMemoryDelivery?: import('./memory-strength').ProjectMemoryDelivery
   /** JanusX-owned receipt; plain searches never record an access. */
   userMemoryDelivery?: import('./memory-strength').UserMemoryDelivery
   items: KnowledgeContextItem[]
@@ -640,6 +641,7 @@ export interface KnowledgeSearchQuery {
 
 /** BM25 score parts (§8 stage one): why a document matched, in rank order. */
 export interface KnowledgeScoreExplanation {
+  strengthBoost?: number
   bm25: number
   exactTitle: number
   titlePhrase: number

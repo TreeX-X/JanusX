@@ -92,6 +92,7 @@ export class KnowledgeContextService {
 
     const items: KnowledgeContextItem[] = []
     const sections: string[] = []
+    const deliveredFacts: Array<{ id: string; workspaceId: string; hash: string }> = []
     for (const document of recalled.documents) {
       if (items.length >= maxItems) break
       if (!document.contextItem) continue
@@ -105,9 +106,11 @@ export class KnowledgeContextService {
       if ([...sections, section].join('\n\n').length > maxChars) break
       items.push(item)
       sections.push(section)
+      if (item.kind === 'fact' && document.factHash) deliveredFacts.push({ id: item.id, workspaceId: item.workspaceId, hash: document.factHash })
     }
     return {
       items,
+      projectMemoryDelivery: { scope: 'project', capturedAt: Date.now(), section: sections.join('\n\n'), facts: deliveredFacts },
       compactContext: sections.join('\n\n'),
       truncated: items.length < recalled.documents.length,
       eligibleCount: recalled.documents.length,

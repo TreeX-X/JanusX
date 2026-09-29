@@ -2,6 +2,8 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { memoryKey, readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 import { profileContentHash } from './profile-projection'
+import { memoryStrength } from '../../shared/memory-strength'
+import { replacementHash } from './fact-conflicts'
 import type {
   CandidateFact,
   CandidateGraphEdge,
@@ -52,6 +54,8 @@ export interface KnowledgeRecallRequest extends Omit<KnowledgeSearchQuery, 'limi
 }
 
 export interface KnowledgeRecallDocument {
+  factSnapshot?: MemoryFact
+  factHash?: string
   key: string
   hit: KnowledgeSearchHit
   contextItem?: Omit<KnowledgeContextItem, 'score'>
@@ -232,7 +236,8 @@ export function recallFilterKey(request: KnowledgeRecallRequest): string {
 
 function matchesFilters(document: KnowledgeRecallDocument, request: KnowledgeRecallRequest, nowMs: number): boolean {
   const { hit } = document
-  if (hit.status === 'expired' || (hit.expiresAt && Date.parse(hit.expiresAt) <= nowMs)) return false
+  if (hit.status === 'expired' || (hit.type === 'memory-fact' && hit.status !== 'active')
+    || (hit.expiresAt && !(Date.parse(hit.expiresAt) > nowMs))) return false
   // User memory M2: person-scoped documents stay private by default; only an
   // explicit user-scope request observes them, on any shared-surface path.
   if (request.scope !== 'user' && (hit.scope === 'user' || hit.workspaceId === 'user')) return false
@@ -397,6 +402,7 @@ function factDocument(fact: MemoryFact): KnowledgeRecallDocument {
     createdAt: provenance.createdAt,
     confidence: fact.confidence,
     status: fact.status,
+    expiresAt: fact.ttl,
     ...(fact.scope ? { scope: fact.scope } : {}),
   }
   return {
@@ -418,6 +424,8 @@ function factDocument(fact: MemoryFact): KnowledgeRecallDocument {
         createdAt: provenance.createdAt,
       },
     },
+    factSnapshot: fact,
+    factHash: replacementHash(fact),
   }
 }
 
@@ -666,7 +674,7 @@ export class KnowledgeRecallService {
           || barrier.blocksObservations(hit.sourceObservationIds) || barrier.blocksContent(hit.title) || barrier.blocksContent(hit.content))) return false
       return matchesFilters(document, request, this.nowMs())
     })
-    const filterKey = recallFilterKey(request) + profileContentHash(barrier.records)
+    const filterKey = recallFilterKey(request) + profileContentHash([barrier.records, documents.map(document => document.key)])
     const index = this.cachedIndex(filterKey, fingerprint, () => new Bm25Index(documents.map((document) => ({
       id: document.key,
       text: searchText(document.hit),
@@ -678,7 +686,11 @@ export class KnowledgeRecallService {
       .flatMap(({ id, score: bm25 }) => {
         const document = byKey.get(id)
         if (!document) return []
-        const scoreExplanation = lexicalExplanation(document.hit, query, bm25, now)
+        const scoreExplanation = {
+          ...lexicalExplanation(document.hit, query, bm25, now),
+          ...(document.factSnapshot && document.hit.scope !== 'user' && document.hit.workspaceId !== 'user'
+            ? { strengthBoost: memoryStrength(document.factSnapshot, now) * 0.5 } : {}),
+        }
         const score = Object.values(scoreExplanation).reduce((total, value) => total + value, 0)
         return [{ ...document, score, scoreExplanation }]
       })

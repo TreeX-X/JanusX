@@ -237,8 +237,9 @@ describe('KnowledgeContextService', () => {
     const search = (facts: MemoryFact[]) => service({ facts, wikiPages: [], graphEdges: [] })
       .search({ query: 'duplicate context', workspaceId: 'workspace-a' })
 
-    const forward = await search([older, newer])
-    const reversed = await search([newer, older])
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-09-29T00:00:00Z'))
+    const [forward, reversed] = await Promise.all([search([older, newer]), search([newer, older])])
+      .finally(() => clock.mockRestore())
 
     expect(forward.items).toHaveLength(1)
     expect(forward.items[0]?.content).toBe('duplicate context newer')

@@ -40,8 +40,8 @@ import {
 import { injectUserMemoryContext, type UserRecallResult } from '../knowledge/user-recall-service'
 import { capturePersonChatTurn, capturePersonEpisodeFromTurn } from '../knowledge/user-turn-capture'
 import { sanitizeLoopMessages } from './loop-message-sanitize'
-import type { UserMemoryDelivery } from '../../shared/memory-strength'
-import { containsMemoryDelivery, recordUserMemoryAccessBestEffort, trackMemoryStream } from '../knowledge/memory-access'
+import type { UserMemoryDelivery, ProjectMemoryDelivery } from '../../shared/memory-strength'
+import { containsMemoryDelivery, recordUserMemoryAccessBestEffort, recordProjectMemoryAccessBestEffort, trackMemoryStream } from '../knowledge/memory-access'
 
 /** 对话消息类型 */
 export interface ChatMessage {
@@ -107,8 +107,14 @@ export async function prepareJanusChatRecall(
   search: ContextSearch = knowledgeContextService.search.bind(knowledgeContextService),
   searchUser?: UserSearch,
   domain?: 'personal' | 'project',
-): Promise<{ messages: ChatMessage[]; trace: import('@janus-agent/chat-core').KnowledgeRecallTrace; userMemoryDelivery?: UserMemoryDelivery }> {
-  const project = await prepareCoreRecall({ requestId, messages, workspaceId, workspacePath, search })
+): Promise<{ messages: ChatMessage[]; trace: import('@janus-agent/chat-core').KnowledgeRecallTrace; userMemoryDelivery?: UserMemoryDelivery; projectMemoryDelivery?: ProjectMemoryDelivery }> {
+  let projectMemoryDelivery: ProjectMemoryDelivery | undefined
+  const recalled = await prepareCoreRecall({ requestId, messages, workspaceId, workspacePath, search: async input => {
+    const result = await search(input)
+    projectMemoryDelivery = result.projectMemoryDelivery
+    return result
+  } })
+  const project = { ...recalled, ...(projectMemoryDelivery ? { projectMemoryDelivery } : {}) }
   // S6 domain isolation: project sessions never auto-inject personal history.
   // Only an explicit user-provided snippet (not the whole timeline) may cross.
   if (domain === 'project') return project
@@ -124,7 +130,7 @@ export async function prepareJanusChatRecall(
     return project
   }
   if (!user || !user.compactContext) return project
-  return { messages: injectUserMemoryContext(project.messages, user.compactContext), trace: project.trace, ...(user.delivery ? { userMemoryDelivery: user.delivery } : {}) }
+  return { ...project, messages: injectUserMemoryContext(project.messages, user.compactContext), ...(user.delivery ? { userMemoryDelivery: user.delivery } : {}) }
 }
 
 /*-- delta 合批窗口：高速流下把每 token 一次 IPC 压到每 40ms 一次 --*/
@@ -289,6 +295,7 @@ function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['
 /** 壳默认 ports：生产单例装配（可注入版本见 janus-agent-ports）。 */
 function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'personal' | 'project', conversationId?: string): ChatTurnPorts {
   const deliveries = new Map<string, UserMemoryDelivery>()
+  const projectDeliveries = new Map<string, ProjectMemoryDelivery>()
   return buildJanusChatTurnPorts({
     callerId,
     getProviderSettings: (providerId) => llmService.getProviderSettings('janus', providerId),
@@ -305,6 +312,10 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
     listRegistryTools: () => workspaceAgentRuntime.registry.list(),
     listRegistryManifests: () => workspaceAgentRuntime.registry.listManifests?.(),
     knowledgeSearch: async (input) => {
+      const rememberProject = (result: import('../../shared/knowledge').KnowledgeContextResult) => {
+        if (result.projectMemoryDelivery) projectDeliveries.set(result.projectMemoryDelivery.section, result.projectMemoryDelivery)
+        return result
+      }
       const base = {
         query: input.query,
         workspaceId: input.workspaceId,
@@ -314,21 +325,21 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
       }
       // S6 domain isolation: project turns use project recall only; personal
       // history never fuses automatically into the engineering context.
-      if (domain === 'project') return knowledgeContextService.search(base)
+      if (domain === 'project') return rememberProject(await knowledgeContextService.search(base))
       // Fused chat recall stays transparent to the loop: the port input keeps
       // its generic shape (no persona types cross into janus-agentX) while the
       // shell appends the user section under its own budget. The guard keeps
       // older hermetic mocks (search-only) on the legacy path.
       const service = knowledgeContextService as Partial<Pick<typeof knowledgeContextService, 'searchWithUser'>>
       if (typeof service.searchWithUser !== 'function') {
-        return knowledgeContextService.search(base)
+        return rememberProject(await knowledgeContextService.search(base))
       }
       try {
         const result = await knowledgeContextService.searchWithUser(base)
         if (result.userMemoryDelivery) deliveries.set(result.userMemoryDelivery.section, result.userMemoryDelivery)
-        return result
+        return rememberProject(result)
       } catch {
-        return knowledgeContextService.search(base)
+        return rememberProject(await knowledgeContextService.search(base))
       }
     },
     captureObservation: (input: JanusCaptureInput) => knowledgeObservationService.capture({
@@ -356,6 +367,9 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
       const receipts = [...deliveries.values()].filter(receipt => containsMemoryDelivery(sanitized, receipt))
       return trackMemoryStream(result, async () => {
         for (const receipt of receipts) await recordUserMemoryAccessBestEffort(receipt, requestId, options.abortSignal as AbortSignal | undefined)
+        for (const receipt of projectDeliveries.values()) {
+          if (containsMemoryDelivery(sanitized, receipt)) await recordProjectMemoryAccessBestEffort(receipt, requestId, options.abortSignal as AbortSignal | undefined)
+        }
       })
     }) as unknown as ChatTurnPorts['streamTextFn'],
     question: createShellQuestionPort(requestId),

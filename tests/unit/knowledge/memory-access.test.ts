@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import type { MemoryFact } from '../../../src/shared/knowledge'
 import { decayHabitStrength, memoryStrength, MEMORY_ACCESS_COOLDOWN_MS } from '../../../src/shared/memory-strength'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
-import { recordUserMemoryAccess, containsMemoryDelivery, trackMemoryStream } from '../../../src/main/knowledge/memory-access'
+import { recordUserMemoryAccess, recordProjectMemoryAccess, containsMemoryDelivery, trackMemoryStream } from '../../../src/main/knowledge/memory-access'
 import { replacementHash } from '../../../src/main/knowledge/fact-conflicts'
 import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection'
 import { userProfileService } from '../../../src/main/knowledge/user-profile-service'
@@ -13,6 +13,7 @@ import { searchUserMemory } from '../../../src/main/knowledge/user-recall-servic
 import { forgetPersonalMemory } from '../../../src/main/knowledge/personal-memory-forgetting'
 import * as atomic from '../../../src/main/lib/atomic-file'
 import { userMemorySearchTool } from '../../../src/main/agent/runtime/tools/user-memory-tools'
+import { KnowledgeContextService } from '../../../src/main/knowledge/context-service'
 
 const originalRoot = process.env.JANUSX_KNOWLEDGE_ROOT
 const now = Date.parse('2026-09-29T00:00:00Z')
@@ -40,6 +41,30 @@ afterEach(async () => {
 })
 
 describe('personal memory delivery lifecycle', () => {
+  it('reinforces engineering truth by workspace without touching matching private or other project ids', async () => {
+    const project: MemoryFact = { ...fact, scope: 'project', provenance: { ...fact.provenance, workspaceId: 'project-a' } }
+    delete project.confirmation
+    const other = { ...project, provenance: { ...project.provenance, workspaceId: 'project-b' } }
+    await save([fact, project, other])
+    const context = new KnowledgeContextService()
+    const query = { query: 'pnpm', workspaceId: 'project-a' }
+    const beforeScore = (await context.search(query)).items[0]!.score
+    const delivery = { scope: 'project' as const, capturedAt: now, section: 'engineering', facts: [{ id: project.id, workspaceId: 'project-a', hash: replacementHash(project) }] }
+    expect(await recordProjectMemoryAccess(delivery, 'project-turn', now)).toBe(1)
+    const rows: MemoryFact[] = (await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    expect(rows[0]).toEqual(fact)
+    expect(rows[2]).toEqual(other)
+    expect(rows[1]!.recallState!.strength).toBeGreaterThan(memoryStrength(project, now))
+    expect(rows[1]!.confirmation).toBeUndefined()
+    expect((await context.search(query)).items[0]!.score).toBeGreaterThan(beforeScore)
+    expect(replacementHash(rows[1]!)).toBe(replacementHash(project))
+    expect(await recordProjectMemoryAccess(delivery, 'project-turn', now)).toBe(0)
+    expect(await recordProjectMemoryAccess({ ...delivery, facts: [{ ...delivery.facts[0]!, workspaceId: 'user', hash: replacementHash(fact) }] }, 'private', now)).toBe(0)
+    project.status = 'archived'
+    await save([project])
+    expect(await recordProjectMemoryAccess(delivery, 'stale', now)).toBe(0)
+  })
+
   it('decays from a fixed anchor with restart equivalence and bounded values', () => {
     const anchor = new Date(now).toISOString()
     const later = now + 30 * 86400000

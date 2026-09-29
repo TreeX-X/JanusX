@@ -348,6 +348,7 @@ export function fuseKnowledgeResults(
   }))
   return {
     items: [...project.items, ...userItems],
+    ...(project.projectMemoryDelivery ? { projectMemoryDelivery: project.projectMemoryDelivery } : {}),
     ...(user.delivery ? { userMemoryDelivery: user.delivery } : {}),
     compactContext: project.compactContext
       ? `${project.compactContext}\n\n${user.compactContext}`

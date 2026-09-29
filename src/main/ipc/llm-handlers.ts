@@ -7,8 +7,8 @@
 
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { UserMemoryDelivery } from '../../shared/memory-strength'
-import { containsMemoryDelivery, recordUserMemoryAccessBestEffort } from '../knowledge/memory-access'
+import type { UserMemoryDelivery, ProjectMemoryDelivery } from '../../shared/memory-strength'
+import { containsMemoryDelivery, recordUserMemoryAccessBestEffort, recordProjectMemoryAccessBestEffort } from '../knowledge/memory-access'
 import { llmService } from '../llm/LlmService'
 import type { ProviderSettings } from '@janusx/llm-core'
 import { knowledgeObservationService } from '../knowledge/observation-service'
@@ -197,6 +197,7 @@ export function registerLlmHandlers(): void {
         }))
 
       let userMemoryDelivery: UserMemoryDelivery | undefined
+      let projectMemoryDelivery: ProjectMemoryDelivery | undefined
       const recallRequestId = randomUUID()
       if (sourceTag === 'janus-chat') {
         const recalled = await prepareJanusChatRecall(
@@ -207,6 +208,7 @@ export function registerLlmHandlers(): void {
         )
         formattedMessages = recalled.messages
         userMemoryDelivery = recalled.userMemoryDelivery
+        projectMemoryDelivery = recalled.projectMemoryDelivery
       }
 
       // 使用 AI SDK
@@ -222,6 +224,9 @@ export function registerLlmHandlers(): void {
 
       if (userMemoryDelivery && containsMemoryDelivery(formattedMessages, userMemoryDelivery)) {
         await recordUserMemoryAccessBestEffort(userMemoryDelivery, recallRequestId)
+      }
+      if (projectMemoryDelivery && containsMemoryDelivery(formattedMessages, projectMemoryDelivery)) {
+        await recordProjectMemoryAccessBestEffort(projectMemoryDelivery, recallRequestId)
       }
 
       if (sourceTag === 'janus-chat') {

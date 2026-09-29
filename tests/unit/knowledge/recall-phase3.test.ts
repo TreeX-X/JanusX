@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { KnowledgeContextService } from '../../../src/main/knowledge/context-service'
 import {
   capObservationsPerWorkspace,
   confidenceBoostFor,
@@ -97,6 +98,45 @@ describe('Phase3 retrieval', () => {
     await rm(knowledgeRoot, { recursive: true, force: true })
     if (previousKnowledgeRoot === undefined) delete process.env.JANUSX_KNOWLEDGE_ROOT
     else process.env.JANUSX_KNOWLEDGE_ROOT = previousKnowledgeRoot
+  })
+
+  it('decays engineering strength on a warm index and excludes facts at their expiry', async () => {
+    let now = FIXED_NOW
+    const snapshot = { facts: [
+      fact('warm', 'phase3 strength', { recallState: { strength: 0.8, anchorAt: new Date(now).toISOString(), lastAccessAt: new Date(now).toISOString(), recentRequests: [] } }),
+      fact('cold', 'phase3 strength', { habitStrength: 0.1 }),
+      fact('expires', 'phase3 strength', { ttl: new Date(now + 1).toISOString() }),
+      fact('archived', 'phase3 strength', { status: 'archived' }),
+      fact('invalid-ttl', 'phase3 strength', { ttl: 'invalid' }),
+    ], wikiPages: [], graphEdges: [] }
+    const recall = new KnowledgeRecallService(sources(snapshot), () => now)
+    const request = { query: 'phase3 strength', layer: 'truth' as const, workspaceId: 'workspace-a' }
+    const first = await recall.recall(request)
+    expect(first.documents[0]!.hit.id).toBe('warm')
+    expect(first.documents).toHaveLength(3)
+    expect(first.documents[0]!.scoreExplanation.strengthBoost).toBe(0.4)
+    const builtAt = recall.getLastIndexBuildAt()
+    now += 30 * 86400000
+    const later = await recall.recall(request)
+    expect(later.documents.find(doc => doc.hit.id === 'warm')!.scoreExplanation.strengthBoost).toBe(0.2)
+    expect(later.documents.some(doc => doc.hit.id === 'expires')).toBe(false)
+    expect(recall.getLastIndexBuildAt()).toBe(builtAt)
+    const restarted = await new KnowledgeRecallService(sources(snapshot), () => now).recall(request)
+    expect(later.documents.map(doc => [doc.hit.id, doc.score])).toEqual(restarted.documents.map(doc => [doc.hit.id, doc.score]))
+    expect(snapshot.facts[0]!.version).toBe(1)
+    expect(snapshot.facts[0]!.status).toBe('active')
+  })
+
+  it('creates receipts only for engineering facts surviving the final context budget', async () => {
+    const snapshot = { facts: [fact('one', 'phase3 receipt'), fact('two', 'phase3 receipt')], wikiPages: [], graphEdges: [] }
+    const context = new KnowledgeContextService({ list: async () => snapshot })
+    const result = await context.search({ query: 'phase3 receipt', workspaceId: 'workspace-a', maxItems: 1 })
+    expect(result.items).toHaveLength(1)
+    expect(result.projectMemoryDelivery).toMatchObject({ scope: 'project', section: result.compactContext,
+      facts: [{ id: result.items[0]!.id, workspaceId: 'workspace-a', hash: expect.stringMatching(/^[a-f0-9]{64}$/) }] })
+    const clipped = await context.search({ query: 'phase3 receipt', workspaceId: 'workspace-a', maxChars: 1 })
+    expect(clipped.projectMemoryDelivery!.facts).toEqual([])
+    expect(snapshot.facts.every(item => !item.recallState)).toBe(true)
   })
 
   it('ranks higher confidence first on otherwise identical text', async () => {
