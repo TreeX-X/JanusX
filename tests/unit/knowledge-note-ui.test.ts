@@ -40,7 +40,8 @@ afterAll(async () => { await browser?.close() })
 
 async function open(): Promise<Page> {
   const page = await browser.newPage()
-  await page.setContent('<div id="root"></div>')
+  await page.route('http://localhost/review', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
+      await page.goto('http://localhost/review')
   await page.addScriptTag({ content: script })
   await page.addStyleTag({ content: css })
   return page
@@ -62,7 +63,7 @@ describe('Note wiki reachable UI', () => {
     } finally { await page.close() }
   })
 
-  it('composes from multiple sources and publishes through existing approval with no renderer hash payload', async () => {
+  it('publishes with a candidate snapshot while source hashes remain host-owned', async () => {
     const page = await open()
     try {
       await page.getByLabel('Page slug').fill('summary')
@@ -78,7 +79,7 @@ describe('Note wiki reachable UI', () => {
       const calls = await page.evaluate(() => (window as unknown as { calls: unknown[][] }).calls)
       expect(calls.find(call => call[0] === 'prepare')?.[1]).toMatchObject({ uris: [uri, secondUri] })
       expect(calls.find(call => call[0] === 'propose')?.[1]).toEqual({ draftId: 'host-receipt', title: 'Combined summary', markdown: '# Reviewed replacement', rationale: 'Reviewed all source content' })
-      expect(calls.find(call => call[0] === 'apply')?.[1]).toEqual({ type: 'wiki-patch', id: 'candidate-1' })
+      expect(calls.find(call => call[0] === 'apply')?.[1]).toEqual({ type: 'wiki-patch', id: 'candidate-1', candidateHash: expect.stringMatching(/^[a-f0-9]{64}$/) })
     } finally { await page.close() }
   })
 

@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -55,7 +56,7 @@ describe('legacy personal memory migration', () => {
   it('confirms through the existing review transaction and keeps the archived predecessor', async () => {
     await importLegacyPersonalMemory()
     const [candidate] = await candidates()
-    await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
     const truth = await records<MemoryFact>('facts/facts.jsonl')
     expect(truth.find(item => item.id === 'old-personal')?.status).toBe('archived')
     const approved = truth.find(item => item.id === candidate.fact.id)!
@@ -69,7 +70,7 @@ describe('legacy personal memory migration', () => {
     const imported = await Promise.all([importLegacyPersonalMemory(), importLegacyPersonalMemory()])
     expect(imported.reduce((sum, result) => sum + result.created, 0)).toBe(1)
     const [candidate] = await candidates()
-    await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
+    await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
     expect((await importLegacyPersonalMemory()).created).toBe(0)
     expect((await candidates())[0].status).toBe('rejected')
   })
@@ -78,7 +79,7 @@ describe('legacy personal memory migration', () => {
     await importLegacyPersonalMemory()
     const [candidate] = await candidates()
     await writeFacts([{ ...fact(), content: 'Prefer npm' }])
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow('source changed')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('source changed')
     expect((await importLegacyPersonalMemory()).created).toBe(1)
     expect((await records<MemoryFact>('facts/facts.jsonl'))[0].content).toBe('Prefer npm')
   })
@@ -89,7 +90,7 @@ describe('legacy personal memory migration', () => {
     await importLegacyPersonalMemory()
     const [candidate] = await candidates()
     await writeFile(join(root, 'profile/profile.json'), '{}')
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow('source changed')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('source changed')
     expect(await readFile(join(root, 'profile/profile.json'), 'utf8')).toBe('{}')
   })
 
@@ -98,7 +99,7 @@ describe('legacy personal memory migration', () => {
     await writeFile(join(root, 'profile/profile.json'), '{"identity":"Tree"}')
     await importLegacyPersonalMemory()
     const [candidate] = await candidates()
-    await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
     await knowledgeOperationsService.revoke({ kind: 'fact', id: candidate.fact.id, workspaceId: 'user' })
     expect((await importLegacyPersonalMemory()).created).toBe(0)
     expect((await userProfileService.load()).confirmedFacts).toEqual([])
@@ -108,9 +109,9 @@ describe('legacy personal memory migration', () => {
     await importLegacyPersonalMemory()
     const [candidate] = await candidates()
     await writeFile(join(root, 'facts/candidates.jsonl'), JSON.stringify({ ...candidate, fact: { ...candidate.fact, content: 'tampered' } }))
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow('does not match')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('does not match')
     await knowledgeOperationsService.revoke({ kind: 'fact', id: 'old-personal', workspaceId: 'user' })
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow('source changed')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('source changed')
   })
 
   it('continues bounded imports without duplicate candidates', async () => {
@@ -136,11 +137,11 @@ describe('legacy personal memory migration', () => {
     await importLegacyPersonalMemory()
     const [candidate] = await candidates()
     await writeFile(join(root, 'facts/facts.jsonl'), '{broken-fact')
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow()
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow()
     expect(await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).toBe('{broken-fact')
     await writeFacts([fact()])
     vi.spyOn(knowledgeAuditService, 'recordBatch').mockRejectedValueOnce(new Error('audit unavailable'))
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow('audit unavailable')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('audit unavailable')
     expect((await records<MemoryFact>('facts/facts.jsonl')).map(item => item.id)).toEqual(['old-personal'])
     expect((await candidates())[0].status).toBe('proposed')
   })
@@ -150,8 +151,8 @@ describe('legacy personal memory migration', () => {
     const [candidate] = await candidates()
     const raw = JSON.stringify(candidate) + '\n{broken'
     await writeFile(join(root, 'facts/candidates.jsonl'), raw)
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow()
-    await expect(knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow()
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow()
+    await expect(knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow()
     expect(await readFile(join(root, 'facts/candidates.jsonl'), 'utf8')).toBe(raw)
   })
 
@@ -159,6 +160,6 @@ describe('legacy personal memory migration', () => {
     await importLegacyPersonalMemory()
     const [candidate] = await candidates()
     await writeFile(join(root, 'facts/candidates.jsonl'), JSON.stringify({ ...candidate, legacySource: undefined }))
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow('binding is missing')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('binding is missing')
   })
 })

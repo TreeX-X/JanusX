@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,7 +72,7 @@ describe('queue-owned memory decision gate', () => {
       expect(enqueue).not.toHaveBeenCalled()
       const [candidate] = await knowledgeExtractService.listFactCandidates()
       expect(candidate).toMatchObject({ status: 'proposed', decision: { scorer: { provider: 'noop' }, route: 'review' } })
-      await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate!.id })
+      await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate!.id }))
     } finally { queue.dispose() }
   })
 
@@ -122,7 +123,7 @@ describe('queue-owned memory decision gate', () => {
     const { batch, candidate } = await seed()
     const stage = new MemoryDecisionStage()
     stage.configureScorer(model(async (input) => {
-      await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+      await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
       return output(input)
     }))
     expect((await stage.run(batch)).observations).toEqual([])

@@ -105,7 +105,7 @@ describe('Knowledge IPC contract', () => {
       type: 'user-note' as const,
       content: 'note',
     }
-    const reviewInput = { type: 'fact' as const, id: 'candidate-1' }
+    const reviewInput = { type: 'fact' as const, id: 'candidate-1', candidateHash: 'a'.repeat(64) }
     const feedbackInput = {
       action: 'open' as const,
       resultKind: 'fact' as const,
@@ -316,8 +316,8 @@ describe('Knowledge IPC contract', () => {
       () => api.listCandidates(),
       () => api.listGraphCandidates(),
       () => api.listWikiPatchCandidates(),
-      () => api.rejectCandidate({ type: 'fact', id: 'candidate' }),
-      () => api.applyCandidate({ type: 'fact', id: 'candidate' }),
+      () => api.rejectCandidate({ type: 'fact', id: 'candidate', candidateHash: 'a'.repeat(64) }),
+      () => api.applyCandidate({ type: 'fact', id: 'candidate', candidateHash: 'a'.repeat(64) }),
       () => api.search({ query: 'fallback' }),
       () => api.listTruth(),
       () => api.revokeTruth({ kind: 'fact', id: 'fact', workspaceId: 'workspace' }),

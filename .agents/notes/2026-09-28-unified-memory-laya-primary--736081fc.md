@@ -13,7 +13,7 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 ## Problem
 
-JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。前两片已将个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，补充宿主来源契约，并移除确定性提取器内部的自动接受。Profile 已由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实已提供人工重新确认迁移；自动恢复历史确认资格、单值冲突和跨存储遗忘闭环仍未完成。
+JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，使用宿主来源契约；确定性提取器只提出候选。Profile 由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实提供人工重新确认迁移，不自动恢复历史确认资格。持久遗忘约束覆盖个人事实、Episode、候选及精修任务重放；单值冲突治理、普通来源撤回的级联处理与召回强度更新仍需完成。
 
 [确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
 
@@ -51,7 +51,15 @@ JanusX 已有 queue-owned 的 observation → candidate → review → truth →
 
 先统一审核入口和交互，再随 Profile 派生机制调整画像页面。保留两个独立审核面可突出领域区别，但会重复卡片和操作；将知识阅读、画像展示与审核全部合并则混淆已确认内容与候选。采用统一审核、分域筛选，继续保留知识库与画像两个阅读视图。[右侧审核栏](../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)提供全部、工程知识、个人记忆筛选与独立计数；画像卡片的审核按钮打开同一栏目，画像工具图标不再承担待审提醒。知识库工作台的候选详情复用同一审核卡片及原有审核服务。
 
-审核栏打开或重新激活时读取三个候选集合，只展示 proposed；批准、拒绝后重新读取，另提供手动刷新。任一集合读取失败都显示错误与未知计数，不将部分读取结果解释为零条待审，并禁用旧列表上的审核操作。提交期间所有审核按钮禁用，主进程继续拥有候选状态及落库校验；筛选和提交只传候选类型与 ID，不改变归属。当前没有后台推送或批量批准，长时间停留时通过刷新获得外部新增候选。
+审核栏打开或重新激活时读取三个候选集合，只展示 proposed；批准、拒绝后重新读取，另提供手动刷新。任一集合读取失败都显示错误与未知计数，不将部分读取结果解释为零条待审，并禁用旧列表上的审核操作。提交期间所有审核按钮禁用，主进程继续拥有候选状态及落库校验；提交携带候选类型、ID 与显示内容的 candidateHash，不改变归属。当前没有后台推送或批量批准，长时间停留时通过刷新获得外部新增候选。
+
+[审核快照](../../src/shared/review-candidate-snapshot.ts)绑定完整候选的正文、归属、证据、冲突、替代目标及 Wiki 来源和页面版本，递归排序对象键后计算 SHA-256；外层处理状态、审核备注与评分建议不参与指纹。统一审核栏、知识工作台和 Note Wiki 编辑器都从已显示候选生成请求。主进程在候选锁内重新计算指纹；缺少或不匹配时拒绝批准和拒绝动作，用户须刷新后重审。提交成功但响应丢失时，原快照仍可对相同终态幂等重试。此指纹证明请求对应的候选内容，不授予来源可信资格，也不替代宿主的 Note hash、事实替代与遗忘核验。
+
+[审核存储](../../src/main/knowledge/review-service.ts)与候选列表使用严格 JSONL 读取，只有 ENOENT 表示文件不存在；读取异常和 JSON 解析错误必须中断操作，保留原文件。Wiki 索引解析错误、缺少 pages 数组及页面读取异常也不能当作空库继续发布。确定性 Graph 提取、LLM Wiki/Graph 提取和 Note Wiki 提案均与对应审核动作共用进程内候选锁，新增候选按 ID 去重，在锁内读取并原子替换文件。审核审计失败的回滚不会覆盖等待中的新增候选。
+
+仅在界面刷新列表可以减少过期内容，但不能排除显示到点击之间的后台精修；因此审核请求必须绑定显示快照。继续追加文件成本较低，但与整文件审核回滚并发时会丢失新增记录；采用同类候选串行写入，代价是新增也需读取整文件。当前不提供跨进程锁、跨集合事务或断电恢复日志；大库的文件重写成本需要测量后再决定分片。保持原有宽容读取虽能展示部分记录，却不能用于后续覆盖写入，因此损坏时优先保留数据并显式报错。
+
+机器验证（2026-09-29，审核一致性与存储保护）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 60 个文件、532 项测试；真实 Laya 文件的 1 项测试显式跳过。[审核测试](../../tests/unit/knowledge/review-service.test.ts)覆盖过期快照、缺失 hash、原快照重试、损坏 truth 与候选文件、不可读路径和并发新增期间的审计回滚；[提取测试](../../tests/unit/knowledge/extract-service.test.ts)覆盖三类候选列表损坏时拒绝部分读取；[浏览器测试](../../tests/unit/memory-review-ui.test.ts)覆盖后台改写后保留旧卡片、刷新及重新批准。[Note Wiki 界面测试](../../tests/unit/knowledge-note-ui.test.ts)验证候选 hash 与宿主来源 hash 的职责分离。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary` 通过；8 个生产文件定向 ESLint 零错误，保留 KnowledgeWorkbench 的既有 refresh 依赖警告。全库 Note 检查未通过：debug-mode-plan 缺少 Proposal、Risks，worktree-composer-entry-motion 的 scope/reason 关系字段无效；本篇未报错。未运行完整 Electron E2E、打包、真实模型或真实用户数据操作。
 
 审核卡片显示批准用途、正文、事实类型、证据引用数、来源项目、发言者和原文、文件引用、替代目标及已有冲突提示。确定性 remember/habit 候选按宿主生成的稳定 ID 标明明确保存或推断习惯；旧候选缺少这些标识时不猜测意图，缺少来源字段时也不伪造用户原话。Wiki 继续复用 Note 来源核对组件。工程来源的个人习惯按 user 归属留在个人筛选，批准后仍是 Janus 私有记忆。
 
@@ -269,6 +277,7 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 - [ ] AC-9: 生命周期与召回确定 — 墙钟衰减重复计算和停机恢复等价；只增强最终交付且去重后的记忆，受冷却与上限约束；Episode 到期、遗忘与撤回同步影响索引、Profile 和任务重放，双域预算不互相挤占。
 - [ ] AC-10: 迁移与回归可复现 — 迁移可断点续跑、重复执行不重复数据、未知旧来源不升格；保持 Wiki sourceFactIds/sourceNoteRefs/hash/版本审核语义；相关 Vitest、typecheck、IPC/UI 与打包检查通过，真实 Laya 性能另有 Windows CPU 实测记录。
 - [x] AC-11: 统一审核界面 — 右侧只有一个审核入口，支持全部、工程知识、个人记忆筛选及独立数量；复用候选详情与审核动作，清楚展示来源和批准用途；知识库与个人画像保留各自阅读视图，工程来源的个人习惯仍不进入 MCP 输出。
+- [x] AC-12: 审核一致性与存储保护 — 三个审核入口携带显示快照 hash，主进程锁内核验批准与拒绝；过期快照不能变更候选，原快照成功重试幂等。损坏或不可读的候选、truth、Wiki 索引不得被空数据覆盖；Wiki/Graph 新增与审核回滚共用锁。
 
 ## Risks
 

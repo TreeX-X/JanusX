@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -59,7 +60,7 @@ describe('durable selected personal memory forgetting', () => {
     expect((await searchUserMemoryDefault('pnpm')).compactContext).toBe('')
     expect(await listProposedUserFactCandidates()).toEqual([])
     expect((await knowledgeExtractService.listFactCandidates())[0].status).toBe('rejected')
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: correction.candidateId })).rejects.toThrow('forgotten')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: correction.candidateId }))).rejects.toThrow('forgotten')
     expect(await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).toBe(raw)
     const receipt = await readFile(join(root, 'profile/forgotten.json'), 'utf8')
     expect(receipt).not.toContain('Prefer pnpm')

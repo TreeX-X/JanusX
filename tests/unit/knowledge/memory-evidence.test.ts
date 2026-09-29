@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -62,7 +63,7 @@ describe('host memory evidence boundary', () => {
     await runDeterministicStage({ workspaceId: 'global', observations: [observation] })
     const [candidate] = await knowledgeExtractService.listFactCandidates()
     expect(candidate.fact.scope).toBe('global')
-    const result = await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
     expect(result.applied?.fact?.scope).toBe('global')
     expect(result.applied?.fact?.provenance.sourceEvidence).toEqual(candidate.evidence.sources)
   })
@@ -122,8 +123,8 @@ describe('host memory evidence boundary', () => {
     const engineering = candidates.filter((candidate) => !candidate.fact.tags.includes('habit'))
     expect(engineering).toHaveLength(3)
     expect(engineering.every((candidate) => candidate.fact.scope === 'project')).toBe(true)
-    const approvedProject = await knowledgeReviewService.applyCandidate({ type: 'fact', id: engineering[0].id })
-    await knowledgeReviewService.applyCandidate({ type: 'fact', id: habits[0].id })
+    const approvedProject = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: engineering[0].id }))
+    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: habits[0].id }))
     const shared = await knowledgeRecallService.recall({ query: 'pnpm', layer: 'truth', allowGlobal: true })
     expect(shared.documents.map((document) => document.hit.id)).toEqual([approvedProject.applied!.fact!.id])
   })
@@ -157,7 +158,7 @@ describe('host memory evidence boundary', () => {
     expect(habits).toHaveLength(1)
     expect(habits[0].evidence.sources).toHaveLength(3)
     expect(habits[0].evidence.sources?.every((evidence) => evidence.sessionId === 'chat-session' && evidence.excerpt === preference)).toBe(true)
-    const approved = await knowledgeReviewService.applyCandidate({ type: 'fact', id: habits[0].id })
+    const approved = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: habits[0].id }))
     expect(approved.applied?.fact?.provenance.sourceEvidence).toEqual(habits[0].evidence.sources)
     const replay = await runDeterministicStage({ workspaceId: 'user', observations: [last] })
     expect(replay.proposals).toBe(0)
@@ -172,7 +173,7 @@ describe('host memory evidence boundary', () => {
     const batch = { workspaceId: 'project-a', observations: [observation] }
     await runDeterministicStage(batch)
     const [candidate] = await knowledgeExtractService.listFactCandidates()
-    await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
+    await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
     expect((await runDeterministicStage(batch)).proposals).toBe(0)
     expect((await knowledgeExtractService.listFactCandidates())[0].status).toBe('rejected')
   })

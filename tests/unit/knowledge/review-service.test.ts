@@ -1,3 +1,5 @@
+import { reviewCandidateInput } from '../../../src/shared/review-candidate-snapshot'
+import { reviewFixture } from './review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
@@ -127,11 +129,11 @@ describe('KnowledgeReviewService', () => {
     await seedJsonl('facts/candidates.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
 
-    const result = await knowledgeReviewService.rejectCandidate({
+    const result = await knowledgeReviewService.rejectCandidate(await reviewFixture({
       type: 'fact',
       id: candidate.id,
       reviewNotes: 'not durable enough',
-    })
+    }))
 
     expect(result.candidate.status).toBe('rejected')
     expect(result.candidate.reviewNotes).toBe('not durable enough')
@@ -149,10 +151,10 @@ describe('KnowledgeReviewService', () => {
     await seedJsonl('facts/candidates.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
 
-    const result = await knowledgeReviewService.applyCandidate({
+    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({
       type: 'fact',
       id: candidate.id,
-    })
+    }))
 
     expect(result.candidate.status).toBe('applied')
     expect(result.applied?.fact?.status).toBe('active')
@@ -176,11 +178,11 @@ describe('KnowledgeReviewService', () => {
     await seedJsonl('facts/candidates.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
 
-    const result = await knowledgeReviewService.applyCandidate({
+    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({
       type: 'fact',
       id: candidate.id,
       actor: 'human-review',
-    })
+    }))
 
     expect(result.candidate.status).toBe('applied')
     expect(result.auditEvents).toHaveLength(2)
@@ -194,10 +196,10 @@ describe('KnowledgeReviewService', () => {
     await seedJsonl('graph/candidates.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
 
-    const result = await knowledgeReviewService.applyCandidate({
+    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({
       type: 'graph-edge',
       id: candidate.id,
-    })
+    }))
 
     expect(result.candidate.status).toBe('applied')
     expect(result.applied?.edge?.from).toBe('persistence')
@@ -215,11 +217,11 @@ describe('KnowledgeReviewService', () => {
     await seedJsonl('wiki/patches.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
 
-    const result = await knowledgeReviewService.applyCandidate({
+    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({
       type: 'wiki-patch',
       id: candidate.id,
       reviewNotes: 'lgtm',
-    })
+    }))
 
     expect(result.candidate.status).toBe('applied')
     expect(result.applied?.page?.slug).toBe('knowledge-engine/persistence')
@@ -281,7 +283,7 @@ describe('KnowledgeReviewService', () => {
     )
     const { knowledgeReviewService } = await loadService()
 
-    const result = await knowledgeReviewService.applyCandidate({ type: 'wiki-patch', id: candidate.id })
+    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'wiki-patch', id: candidate.id }))
 
     expect(result.applied?.page?.sourceFactIds).toEqual(['fact-old', 'fact-new'])
   })
@@ -297,11 +299,11 @@ describe('KnowledgeReviewService', () => {
     const { knowledgeReviewService } = await loadService()
 
     await expect(
-      knowledgeReviewService.applyCandidate({ type: 'fact', id: 'missing' }),
+      knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: 'missing' })),
     ).rejects.toThrow(/not found/i)
 
     await expect(
-      knowledgeReviewService.rejectCandidate({ type: 'fact', id: 'cand-b' }),
+      knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: 'cand-b' })),
     ).rejects.toThrow(/not proposed/i)
   })
 
@@ -310,8 +312,8 @@ describe('KnowledgeReviewService', () => {
     await seedJsonl('facts/candidates.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
 
-    const first = await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
-    const second = await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
+    const first = await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
+    const second = await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
 
     expect(first.candidate.status).toBe('rejected')
     expect(second.candidate.status).toBe('rejected')
@@ -324,8 +326,8 @@ describe('KnowledgeReviewService', () => {
     const { knowledgeReviewService } = await loadService()
 
     const results = await Promise.all([
-      knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id }),
-      knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id }),
+      knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id })),
+      knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id })),
     ])
 
     const facts = await readJsonl<MemoryFact>('facts/facts.jsonl')
@@ -340,7 +342,7 @@ describe('KnowledgeReviewService', () => {
     await writeFile(pagePath, `# ${candidate.title}\n\n${candidate.patchMarkdown}\n`, 'utf8')
     const { knowledgeReviewService } = await loadService()
 
-    await knowledgeReviewService.applyCandidate({ type: 'wiki-patch', id: candidate.id })
+    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'wiki-patch', id: candidate.id }))
 
     const markdown = await readFile(pagePath, 'utf8')
     expect(markdown.split(candidate.patchMarkdown)).toHaveLength(2)
@@ -353,7 +355,7 @@ describe('KnowledgeReviewService', () => {
     const { knowledgeAuditService } = await import('../../../src/main/knowledge/audit-service')
     vi.spyOn(knowledgeAuditService, 'recordBatch').mockRejectedValueOnce(new Error('audit unavailable'))
 
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })).rejects.toThrow('audit unavailable')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('audit unavailable')
 
     expect((await readJsonl<CandidateFact>('facts/candidates.jsonl'))[0]?.status).toBe('proposed')
     expect(await readJsonl<MemoryFact>('facts/facts.jsonl')).toEqual([])
@@ -390,7 +392,7 @@ describe('KnowledgeReviewService', () => {
     await seedJsonl('facts/candidates.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
 
-    const result = await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
 
     expect(result.applied?.fact?.id).toBe('fact-new')
     expect(result.applied?.fact?.version).toBe(4)
@@ -443,14 +445,106 @@ describe('KnowledgeReviewService', () => {
     const { knowledgeReviewService } = await loadService()
 
     await expect(
-      knowledgeReviewService.applyCandidate({ type: 'fact', id: 'cand-dangling' }),
+      knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: 'cand-dangling' })),
     ).rejects.toThrow(/no active truth fact/i)
     await expect(
-      knowledgeReviewService.applyCandidate({ type: 'fact', id: 'cand-stale' }),
+      knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: 'cand-stale' })),
     ).rejects.toThrow(/no active truth fact/i)
 
     const candidates = await readJsonl<CandidateFact>('facts/candidates.jsonl')
     expect(candidates.map((candidate) => candidate.status)).toEqual(['proposed', 'proposed'])
     expect(await readJsonl<MemoryFact>('facts/facts.jsonl')).toHaveLength(1)
   })
+  it.each(['wiki-patch', 'graph-edge'] as const)('refuses damaged %s candidates without dropping records', async type => {
+    const candidate = type === 'wiki-patch' ? makeWikiCandidate() : makeGraphCandidate()
+    const path = type === 'wiki-patch' ? 'wiki/patches.jsonl' : 'graph/candidates.jsonl'
+    await seedJsonl(path, [candidate])
+    const original = (await readFile(join(knowledgeRoot, path), 'utf8')) + '{damaged\n'
+    await writeFile(join(knowledgeRoot, path), original)
+    const { knowledgeReviewService, proposeDerivedCandidates } = await loadService()
+    await expect(proposeDerivedCandidates([{ ...candidate, id: 'new' }])).rejects.toThrow()
+    await expect(knowledgeReviewService.rejectCandidate(await reviewCandidateInput(candidate))).rejects.toThrow()
+    expect(await readFile(join(knowledgeRoot, path), 'utf8')).toBe(original)
+  })
+
+  it.each(['applyCandidate', 'rejectCandidate'] as const)('rejects stale content for %s and requires a fresh snapshot', async action => {
+    const candidate = makeFactCandidate()
+    const input = await reviewCandidateInput(candidate)
+    const changed = { ...candidate, fact: { ...candidate.fact, content: 'Changed after display' } }
+    await seedJsonl('facts/candidates.jsonl', [changed])
+    const { knowledgeReviewService } = await loadService()
+    await expect(knowledgeReviewService[action](input)).rejects.toThrow('Candidate changed')
+    expect((await readJsonl<CandidateFact>('facts/candidates.jsonl'))[0].status).toBe('proposed')
+    await knowledgeReviewService[action](await reviewCandidateInput(changed))
+  })
+
+  it.each(['applyCandidate', 'rejectCandidate'] as const)('rejects missing snapshot for %s', async action => {
+    const candidate = makeFactCandidate()
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    const { knowledgeReviewService } = await loadService()
+    await expect(knowledgeReviewService[action]({ type: 'fact', id: candidate.id, candidateHash: '' })).rejects.toThrow('snapshot missing')
+  })
+
+  it.each(['wiki-patch', 'graph-edge'] as const)('binds %s content and evidence', async type => {
+    const candidate = type === 'wiki-patch' ? makeWikiCandidate() : makeGraphCandidate()
+    const input = await reviewCandidateInput(candidate)
+    const changed = { ...candidate, evidence: { observationIds: ['new-source'] } }
+    await seedJsonl(type === 'wiki-patch' ? 'wiki/patches.jsonl' : 'graph/candidates.jsonl', [changed])
+    const { knowledgeReviewService } = await loadService()
+    await expect(knowledgeReviewService.applyCandidate(input)).rejects.toThrow('Candidate changed')
+  })
+
+  it('keeps retries idempotent with the original displayed snapshot', async () => {
+    const candidate = makeFactCandidate()
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    const input = await reviewCandidateInput(candidate)
+    const { knowledgeReviewService } = await loadService()
+    await knowledgeReviewService.applyCandidate(input)
+    expect((await knowledgeReviewService.applyCandidate(input)).auditEvents).toEqual([])
+  })
+
+  it.each(['facts/facts.jsonl', 'graph/edges.jsonl', 'wiki/pages-index.json'])('preserves malformed truth store %s', async path => {
+    const candidate = path.startsWith('facts') ? makeFactCandidate() : path.startsWith('graph') ? makeGraphCandidate() : makeWikiCandidate()
+    const candidatesPath = candidate.type === 'fact' ? 'facts/candidates.jsonl' : candidate.type === 'graph-edge' ? 'graph/candidates.jsonl' : 'wiki/patches.jsonl'
+    await seedJsonl(candidatesPath, [candidate])
+    const original = '{broken record\n'
+    await writeFile(join(knowledgeRoot, path), original)
+    const { knowledgeReviewService } = await loadService()
+    await expect(knowledgeReviewService.applyCandidate(await reviewCandidateInput(candidate))).rejects.toThrow()
+    expect(await readFile(join(knowledgeRoot, path), 'utf8')).toBe(original)
+    expect((await readJsonl<CandidateFact>(candidatesPath))[0].status).toBe('proposed')
+  })
+
+  it('does not treat an unreadable truth path as an empty file', async () => {
+    const candidate = makeFactCandidate()
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    await mkdir(join(knowledgeRoot, 'facts/facts.jsonl'))
+    const { knowledgeReviewService } = await loadService()
+    await expect(knowledgeReviewService.applyCandidate(await reviewCandidateInput(candidate))).rejects.toThrow()
+    expect((await readJsonl<CandidateFact>('facts/candidates.jsonl'))[0].status).toBe('proposed')
+  })
+
+  it.each(['wiki-patch', 'graph-edge'] as const)('preserves %s admissions across an audit rollback', async type => {
+    const candidate = type === 'wiki-patch' ? makeWikiCandidate() : makeGraphCandidate()
+    const next = { ...candidate, id: 'arrived-during-review' }
+    const path = type === 'wiki-patch' ? 'wiki/patches.jsonl' : 'graph/candidates.jsonl'
+    await seedJsonl(path, [candidate])
+    const { knowledgeReviewService, proposeDerivedCandidates } = await loadService()
+    const { knowledgeAuditService } = await import('../../../src/main/knowledge/audit-service')
+    let entered!: () => void
+    let release!: () => void
+    const waiting = new Promise<void>(resolve => { entered = resolve })
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const spy = vi.spyOn(knowledgeAuditService, 'recordBatch').mockImplementationOnce(async () => {
+      entered(); await gate; throw new Error('audit unavailable')
+    })
+    const applied = knowledgeReviewService.applyCandidate(await reviewCandidateInput(candidate))
+    const rejected = expect(applied).rejects.toThrow('audit unavailable')
+    await waiting
+    const admission = proposeDerivedCandidates([next])
+    release()
+    try { await Promise.all([rejected, admission]) } finally { spy.mockRestore() }
+    expect((await readJsonl<CandidateFact>(path)).map(item => [item.id, item.status])).toEqual([[candidate.id, 'proposed'], [next.id, 'proposed']])
+  })
+
 })

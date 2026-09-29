@@ -125,6 +125,7 @@ export type ReviewCandidateType = 'fact' | 'wiki-patch' | 'graph-edge'
 export interface ReviewCandidateInput {
   type: ReviewCandidateType
   id: string
+  candidateHash: string
   reviewNotes?: string
   /** Audit actor override for explicit review. Legacy auto-policy is rejected. Defaults to 'knowledge-review'. */
   actor?: string

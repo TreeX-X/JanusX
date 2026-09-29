@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
@@ -81,6 +82,20 @@ describe('KnowledgeExtractService', () => {
     } else {
       process.env.JANUSX_KNOWLEDGE_ROOT = previousKnowledgeRoot
     }
+  })
+
+  it.each([
+    ['wiki/patches.jsonl', 'listWikiPatchCandidates'],
+    ['graph/candidates.jsonl', 'listGraphCandidates'],
+    ['facts/candidates.jsonl', 'listFactCandidates'],
+  ] as const)('reports damaged %s instead of returning a partial list', async (path, method) => {
+    const file = join(knowledgeRoot, path)
+    await mkdir(dirname(file), { recursive: true })
+    const original = '{"id":"valid-row"}\n{damaged\n'
+    await writeFile(file, original)
+    const { knowledgeExtractService } = await loadService()
+    await expect(knowledgeExtractService[method]()).rejects.toThrow()
+    expect(await readFile(file, 'utf8')).toBe(original)
   })
 
   it('degrades safely when no default LLM is configured', async () => {
@@ -587,8 +602,8 @@ describe('KnowledgeExtractService', () => {
       const read = vi.spyOn(knowledgeExtractService, 'listFactCandidates').mockImplementationOnce(async () => {
         const stale = await listCandidates()
         // Finish a real review after extraction read its proposed candidate.
-        if (action === 'apply') await knowledgeReviewService.applyCandidate({ type: 'fact', id: 'det-race' })
-        else await knowledgeReviewService.rejectCandidate({ type: 'fact', id: 'det-race' })
+        if (action === 'apply') await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: 'det-race' }))
+        else await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: 'det-race' }))
         return stale
       })
       try {
@@ -617,8 +632,8 @@ describe('KnowledgeExtractService', () => {
       const result = await knowledgeExtractService.extract({ observations: [makeObservation({ id: 'o1', content })] }, {
         mode: 'auto', refinementCandidates: { [candidate.id]: candidateDecisionHash(candidate) },
         callModel: async () => {
-          if (action === 'apply') await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
-          else await knowledgeReviewService.rejectCandidate({ type: 'fact', id: candidate.id })
+          if (action === 'apply') await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
+          else await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
           return { object: { facts: [{ content, concepts: [], files: ['src/db.ts'], tags: [], confidence: 0.95, kind: 'fact' }], wikiPatches: [], graphEdges: [] } }
         },
       })

@@ -1,3 +1,4 @@
+import { reviewFixture } from './knowledge/review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -40,7 +41,7 @@ async function propose(options: { root?: string; mode?: 'incremental' | 'full-pa
   const draft = await prepareNoteWiki({ rootPath: options.root ?? root, uris: options.uris ?? [uri()], pageSlug: 'design', reviewMode: options.mode ?? 'full-page', expectedVersion: options.version ?? 0 })
   return knowledgeReviewService.proposeNoteWiki({ draftId: draft.draftId, title: 'Design', markdown: options.markdown ?? '# Design\n\nReviewed source summary.', rationale: 'Reviewed complete page' })
 }
-async function apply(candidate: CandidateWikiPatch) { return knowledgeReviewService.applyCandidate({ type: 'wiki-patch', id: candidate.id }) }
+async function apply(candidate: CandidateWikiPatch) { return knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'wiki-patch', id: candidate.id })) }
 async function page() { return (await knowledgeTruthService.list()).wikiPages.find(p => p.workspaceId === root)! }
 async function stored() { return readFile(join(knowledge, 'wiki', 'pages-index.json'), 'utf8') }
 async function candidates(): Promise<CandidateWikiPatch[]> { return (await readFile(join(knowledge, 'wiki', 'patches.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)) }

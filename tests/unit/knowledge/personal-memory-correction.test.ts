@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -69,8 +70,8 @@ describe('explicit personal memory corrections', () => {
     const b = await proposePersonalMemoryCorrection(input('Prefer yarn'))
     const candidates = await records<CandidateFact>('facts/candidates.jsonl')
     expect(competingCorrections(candidates, candidates[0])).toBe(1)
-    await knowledgeReviewService.applyCandidate({ type: 'fact', id: a.candidateId })
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: b.candidateId })).rejects.toThrow('Personal correction target changed')
+    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: a.candidateId }))
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: b.candidateId }))).rejects.toThrow('Personal correction target changed')
     const truth = await records<MemoryFact>('facts/facts.jsonl')
     expect(truth.find(fact => fact.id === target.id)?.status).toBe('archived')
     const active = truth.find(fact => fact.status === 'active')!
@@ -94,14 +95,14 @@ describe('explicit personal memory corrections', () => {
     const proposed = await proposePersonalMemoryCorrection(input())
     target.content = 'Changed original'
     await writeTarget()
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: proposed.candidateId })).rejects.toThrow('Personal correction target changed')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))).rejects.toThrow('Personal correction target changed')
     await knowledgeOperationsService.revoke({ kind: 'fact', id: target.id, workspaceId: 'user' })
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: proposed.candidateId })).rejects.toThrow('Personal correction target changed')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))).rejects.toThrow('Personal correction target changed')
   })
 
   it('does not recreate rejected corrections and rejects empty, oversized, unchanged or expired submissions', async () => {
     const proposed = await proposePersonalMemoryCorrection(input())
-    await knowledgeReviewService.rejectCandidate({ type: 'fact', id: proposed.candidateId })
+    await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))
     expect((await proposePersonalMemoryCorrection(input())).status).toBe('rejected')
     expect(await records('facts/candidates.jsonl')).toHaveLength(1)
     for (const content of ['', 'x'.repeat(4001), target.content]) await expect(proposePersonalMemoryCorrection(input(content))).rejects.toThrow()
@@ -113,19 +114,19 @@ describe('explicit personal memory corrections', () => {
     const proposed = await proposePersonalMemoryCorrection(input())
     const [candidate] = await records<CandidateFact>('facts/candidates.jsonl')
     await writeFile(join(root, 'facts/candidates.jsonl'), JSON.stringify({ ...candidate, fact: { ...candidate.fact, content: 'not submitted' } }))
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: proposed.candidateId })).rejects.toThrow('no longer matches')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))).rejects.toThrow('no longer matches')
     await writeFile(join(root, 'facts/candidates.jsonl'), JSON.stringify({ ...candidate, personalCorrection: undefined }))
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: proposed.candidateId })).rejects.toThrow('binding is missing')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))).rejects.toThrow('binding is missing')
   })
 
   it('preserves corrupt truth and rolls back approval when audit fails', async () => {
     const proposed = await proposePersonalMemoryCorrection(input())
     await writeFile(join(root, 'facts/facts.jsonl'), '{broken')
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: proposed.candidateId })).rejects.toThrow()
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))).rejects.toThrow()
     expect(await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).toBe('{broken')
     await writeTarget()
     vi.spyOn(knowledgeAuditService, 'recordBatch').mockRejectedValueOnce(new Error('audit failed'))
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: proposed.candidateId })).rejects.toThrow('audit failed')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))).rejects.toThrow('audit failed')
     expect((await records<MemoryFact>('facts/facts.jsonl')).map(fact => fact.id)).toEqual([target.id])
     expect((await records<CandidateFact>('facts/candidates.jsonl'))[0].status).toBe('proposed')
   })

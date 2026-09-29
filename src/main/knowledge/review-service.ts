@@ -1,3 +1,4 @@
+import { reviewCandidateSnapshot, type ReviewCandidate } from '../../shared/review-candidate-snapshot'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 /**
  * @file KnowledgeReviewService —— 候选审核 / 应用闭环（MVP）
@@ -100,25 +101,33 @@ async function ensureParent(filePath: string): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
 }
 
-async function readJsonl<T>(relativePath: string): Promise<T[]> {
-  const filePath = absolute(relativePath)
-  let content: string
-  try {
-    content = await readFile(filePath, 'utf8')
-  } catch {
-    return []
+// Strict reads preserve damaged or inaccessible stores instead of rewriting partial snapshots.
+const readJsonl = readLegacyJsonl
+
+function assertReviewedSnapshot(candidate: ReviewCandidate, input: ReviewCandidateInput): void {
+  const hash = createHash('sha256').update(reviewCandidateSnapshot(candidate)).digest('hex')
+  if (!/^[a-f0-9]{64}$/.test(input.candidateHash ?? '') || hash !== input.candidateHash) {
+    throw new Error('Candidate changed or review snapshot missing; refresh before reviewing')
   }
-  const results: T[] = []
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    try {
-      results.push(JSON.parse(trimmed) as T)
-    } catch {
-      // skip malformed
-    }
+}
+
+export async function proposeDerivedCandidates(candidates: Array<CandidateWikiPatch | CandidateGraphEdge>): Promise<void> {
+  for (const type of ['wiki-patch', 'graph-edge'] as const) {
+    const incoming = candidates.filter(candidate => candidate.type === type)
+    if (!incoming.length) continue
+    const path = candidateRelativePath(type)
+    await withMutationLock(path, async () => {
+      const records = await readJsonl<CandidateWikiPatch | CandidateGraphEdge>(path)
+      const ids = new Set(records.map(candidate => candidate.id))
+      const fresh = incoming.filter(candidate => {
+        if (candidate.status !== 'proposed') throw new Error('Candidates require review before applying')
+        if (ids.has(candidate.id)) return false
+        ids.add(candidate.id)
+        return true
+      })
+      if (fresh.length) await writeJsonlAtomic(path, [...records, ...fresh])
+    })
   }
-  return results
 }
 
 async function writeJsonlAtomic(relativePath: string, records: unknown[]): Promise<void> {
@@ -302,11 +311,12 @@ async function readWikiIndex(): Promise<WikiPagesIndex> {
     const raw = await readFile(filePath, 'utf8')
     const parsed = JSON.parse(raw) as WikiPagesIndex
     if (!parsed || !Array.isArray(parsed.pages)) {
-      return { version: 1, pages: [] }
+      throw new Error('Invalid wiki index; restore it before review')
     }
     return { version: 1, pages: parsed.pages }
-  } catch {
-    return { version: 1, pages: [] }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { version: 1, pages: [] }
+    throw error
   }
 }
 
@@ -339,8 +349,9 @@ async function writeTextAtomic(relativePath: string, content: string): Promise<v
 async function readWikiMarkdown(relativePath: string): Promise<string | null> {
   try {
     return await readFile(absolute(relativePath), 'utf8')
-  } catch {
-    return null
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
   }
 }
 
@@ -372,15 +383,14 @@ export class KnowledgeReviewService {
   private async rejectLocked(input: ReviewCandidateInput): Promise<ReviewResult> {
     const { type, id, reviewNotes } = input
     const relativePath = candidateRelativePath(type)
-    const records = type === 'fact'
-      ? await readLegacyJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(relativePath)
-      : await readJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(relativePath)
+    const records = await readJsonl<ReviewCandidate>(relativePath)
     const index = findCandidateIndex(records, id)
     if (index < 0) {
       throw new Error(`Candidate not found: type=${type} id=${id}`)
     }
 
     const current = records[index]!
+    assertReviewedSnapshot(current, input)
     if (current.status === 'rejected') {
       return { candidate: current, auditEvents: [] }
     }
@@ -419,15 +429,14 @@ export class KnowledgeReviewService {
   private async applyLocked(input: ReviewCandidateInput): Promise<ReviewResult> {
     const { type, id, reviewNotes } = input
     const relativePath = candidateRelativePath(type)
-    const records = type === 'fact'
-      ? await readLegacyJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(relativePath)
-      : await readJsonl<CandidateFact | CandidateWikiPatch | CandidateGraphEdge>(relativePath)
+    const records = await readJsonl<ReviewCandidate>(relativePath)
     const index = findCandidateIndex(records, id)
     if (index < 0) {
       throw new Error(`Candidate not found: type=${type} id=${id}`)
     }
 
     const current = records[index]!
+    assertReviewedSnapshot(current, input)
     if (type === 'fact' && (await readPersonalForgettingBarrier()).blocksCandidate(current as CandidateFact)) {
       throw new Error('Personal memory has been forgotten')
     }
@@ -546,7 +555,7 @@ export class KnowledgeReviewService {
       throw new Error('Invalid fact source evidence')
     }
     if (candidate.id.startsWith('legacy-memory:') && !candidate.legacySource) throw new Error('Legacy memory source binding is missing')
-    const previous = candidate.legacySource || candidate.personalCorrection ? await readLegacyJsonl<MemoryFact>(FACTS_FILE) : await readJsonl<MemoryFact>(FACTS_FILE)
+    const previous = await readJsonl<MemoryFact>(FACTS_FILE)
     await validateLegacyCandidate(candidate, previous)
     validatePersonalCorrection(candidate, previous)
     // Phase 2 supersede: a candidate carrying `supersedes` archives the old

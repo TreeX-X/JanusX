@@ -1,3 +1,4 @@
+import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
 // Note: wiki proposals use host source receipts — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
 import { useEffect, useRef, useState } from 'react'
 import type { CandidateWikiPatch, WikiNoteStatus, WikiPage } from '../../../../shared/knowledge'
@@ -67,8 +68,8 @@ export function NoteWikiEditor({ rootPath = '', initialUris = [], page, onPropos
       <button type="button" disabled={busy} onClick={() => { setDraft(null); setReviewed(false) }}>Read sources again</button>
     </>}
     {candidate && <><h4>Proposed full page · {candidate.status}</h4><pre>{candidate.patchMarkdown}</pre><WikiSourceList sources={(candidate.sourceNoteRefs ?? []).map(ref => ({ ...ref, status: 'unknown', detail: 'Sources are checked again at approval' }))} />
-      <div className={styles.actions}><button type="button" disabled={busy || candidate.status !== 'proposed'} onClick={() => void act(async () => { const result = await window.electron.knowledge.applyCandidate({ type: 'wiki-patch', id: candidate.id }); if (mounted.current) { setCandidate(result.candidate as CandidateWikiPatch); setNotice('Published through the existing wiki approval and audit path.') } })}>Approve and publish</button>
-      <button type="button" disabled={busy || candidate.status !== 'proposed'} onClick={() => void act(async () => { const result = await window.electron.knowledge.rejectCandidate({ type: 'wiki-patch', id: candidate.id }); if (mounted.current) setCandidate(result.candidate as CandidateWikiPatch) })}>Reject proposal</button></div>
+      <div className={styles.actions}><button type="button" disabled={busy || candidate.status !== 'proposed'} onClick={() => void act(async () => { const result = await window.electron.knowledge.applyCandidate(await reviewCandidateInput(candidate)); if (mounted.current) { setCandidate(result.candidate as CandidateWikiPatch); setNotice('Published through the existing wiki approval and audit path.') } })}>Approve and publish</button>
+      <button type="button" disabled={busy || candidate.status !== 'proposed'} onClick={() => void act(async () => { const result = await window.electron.knowledge.rejectCandidate(await reviewCandidateInput(candidate)); if (mounted.current) setCandidate(result.candidate as CandidateWikiPatch) })}>Reject proposal</button></div>
     </>}
     {notice && <p role="status">{notice}</p>}{error && <p role="alert">{error}</p>}
   </section>

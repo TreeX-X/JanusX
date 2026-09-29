@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -64,7 +65,7 @@ describe('unified personal memory writes', () => {
     expect(candidate).toMatchObject({ status: 'proposed', fact: { scope: 'user', kind: 'fact', content: remember.content } })
     expect(candidate.evidence.sources?.[0]).toMatchObject({ observationId: observation.id, speaker: 'assistant', authority: 'model-generated' })
     expect((await knowledgeTruthService.list()).facts).toEqual([])
-    await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
     expect((await searchUserMemoryDefault('Bluebird')).items.map((item) => item.id)).toContain(candidate.fact.id)
   })
 
@@ -119,7 +120,7 @@ describe('unified personal memory writes', () => {
     await knowledgeObservationService.capture(remember, { speaker: 'assistant', memoryIntent: 'remember' })
     await queue().processNow()
     const [candidate] = await knowledgeExtractService.listFactCandidates()
-    await expect(knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id, actor: 'auto-policy' })).rejects.toThrow('explicit review')
+    await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id, actor: 'auto-policy' }))).rejects.toThrow('explicit review')
     expect((await knowledgeTruthService.list()).facts).toEqual([])
     expect((await knowledgeExtractService.listFactCandidates())[0].status).toBe('proposed')
   })

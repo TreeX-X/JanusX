@@ -14,7 +14,7 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readFile, appendFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
   CandidateFact,
@@ -34,11 +34,10 @@ export { observationDedupeKey } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { deriveHabitPromotions, habitPromotionToCandidate } from './habit-aggregator'
 import { knowledgeTruthService } from './truth-service'
-import { proposeFactCandidates } from './review-service'
+import { proposeDerivedCandidates, proposeFactCandidates } from './review-service'
 import { isActiveObservation, isUserStatement, observationEventKey, observationScope, sourceEvidence } from './memory-evidence'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 
-const GRAPH_CANDIDATES_FILE = join('graph', 'candidates.jsonl')
 const DERIVED_DIR = join('processing', 'derived')
 
 const NORMALIZE_MAX_CHARS = 4000
@@ -319,12 +318,7 @@ async function writeDerived(derived: DerivedObservation): Promise<void> {
   await writeFileAtomic(file, `${JSON.stringify(derived)}\n`)
 }
 
-async function appendCandidateGraphEdges(candidates: CandidateGraphEdge[]): Promise<void> {
-  if (candidates.length === 0) return
-  const file = join(knowledgeRootPath(), GRAPH_CANDIDATES_FILE)
-  await mkdir(dirname(file), { recursive: true })
-  await appendFile(file, candidates.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n', 'utf8')
-}
+const appendCandidateGraphEdges = proposeDerivedCandidates
 
 /**
  * Truth–truth `mentions` proposals: settled facts in one workspace sharing a

@@ -1,3 +1,4 @@
+import { readLegacyJsonl } from './legacy-memory-source'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 /**
  * @file KnowledgeExtractService —— Phase 6 候选知识提炼，Phase 2 LLM 增强
@@ -17,7 +18,7 @@ import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
  *    模型失败/超时/非法输出同样降级返回，由 llm-stage 转为队列 `llm` 阶段失败账本。
  */
 import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import type {
@@ -36,7 +37,7 @@ import { knowledgeRootPath } from './constants'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { knowledgeTruthService } from './truth-service'
-import { proposeFactCandidates, withFactCandidatesLock } from './review-service'
+import { proposeDerivedCandidates, proposeFactCandidates, withFactCandidatesLock } from './review-service'
 import { factScope, isActiveObservation, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
 import { candidateDecisionHash } from './decision-scorer'
 import { findConflicts, toConflictTargets, tokenJaccard } from './deterministic-extractor'
@@ -192,22 +193,6 @@ function buildUserMessage(observations: Observation[], truths: MemoryFact[]): st
     ...(truthLines.length > 0 ? ['【已有知识（同一工作区）】', ...truthLines, ''] : []),
     '请基于上述观察按 schema 产出候选知识。',
   ].join('\n\n')
-}
-
-async function ensureCandidateFile(relativePath: string): Promise<string> {
-  const absolutePath = join(knowledgeRootPath(), relativePath)
-  await mkdir(dirname(absolutePath), { recursive: true })
-  try {
-    await readFile(absolutePath, 'utf8')
-  } catch {
-    await appendFile(absolutePath, '', 'utf8')
-  }
-  return absolutePath
-}
-
-async function appendJsonl(relativePath: string, record: unknown): Promise<void> {
-  const absolutePath = await ensureCandidateFile(relativePath)
-  await appendFile(absolutePath, `${JSON.stringify(record)}\n`, 'utf8')
 }
 
 function mapFactCandidate(
@@ -704,12 +689,7 @@ export class KnowledgeExtractService {
 
     // 10. 落盘候选
     await proposeFactCandidates(appendedFacts)
-    for (const patch of wikiPatchCandidates) {
-      await appendJsonl(WIKI_PATCHES_FILE, patch)
-    }
-    for (const edge of graphEdgeCandidates) {
-      await appendJsonl(GRAPH_CANDIDATES_FILE, edge)
-    }
+    await proposeDerivedCandidates([...wikiPatchCandidates, ...graphEdgeCandidates])
 
     // 11. 写一条批次级 candidate_proposed audit
     let auditEventId: string | undefined
@@ -763,24 +743,7 @@ export class KnowledgeExtractService {
   }
 
   private async readJsonl<T>(relativePath: string): Promise<T[]> {
-    const absolutePath = await ensureCandidateFile(relativePath)
-    let content: string
-    try {
-      content = await readFile(absolutePath, 'utf8')
-    } catch {
-      return []
-    }
-    const results: T[] = []
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      try {
-        results.push(JSON.parse(trimmed) as T)
-      } catch {
-        // 跳过畸形行
-      }
-    }
-    return results
+    return readLegacyJsonl<T>(relativePath)
   }
 }
 

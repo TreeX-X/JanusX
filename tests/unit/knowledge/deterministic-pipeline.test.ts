@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
@@ -79,7 +80,7 @@ describe('deterministic pipeline (Phase 1-2, no LLM)', () => {
 
       // Apply the first git proposal → truth carries the deterministic kind.
       const gitCandidate = deterministic.find((c) => c.fact.content.includes('add user index'))!
-      const applied = await knowledgeReviewService.applyCandidate({ type: 'fact', id: gitCandidate.id })
+      const applied = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: gitCandidate.id }))
       expect(applied.applied?.fact?.kind).toBe('fact')
       const truthId = applied.applied!.fact!.id
 

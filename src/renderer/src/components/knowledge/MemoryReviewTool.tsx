@@ -1,3 +1,4 @@
+import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
 // Note: one review surface preserves engineering and private memory ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
@@ -52,7 +53,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
     setBusy(true)
     setError('')
     try {
-      const input = { type: candidate.type, id: candidate.id }
+      const input = await reviewCandidateInput(candidate)
       await (approve ? applyKnowledgeCandidate(input) : rejectKnowledgeCandidate(input))
       setCandidates(current => current.filter(item => item.type !== candidate.type || item.id !== candidate.id))
       await refresh()

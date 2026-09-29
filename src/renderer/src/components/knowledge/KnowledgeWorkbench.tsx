@@ -1,3 +1,4 @@
+import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
@@ -264,7 +265,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     setReviewBusy(true)
     setReviewError('')
     try {
-      const input = { id: selected.id, type: selected.reviewType }
+      const candidate = snapshot && [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates].find(item => item.id === selected.id && item.type === selected.reviewType)
+      if (!candidate) throw new Error('Candidate unavailable; refresh before reviewing')
+      const input = await reviewCandidateInput(candidate)
       if (action === 'apply') await applyKnowledgeCandidate(input)
       else await rejectKnowledgeCandidate(input)
       await refresh()

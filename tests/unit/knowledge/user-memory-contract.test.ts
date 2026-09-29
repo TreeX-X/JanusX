@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -108,7 +109,7 @@ describe('user memory MVP contract', () => {
     const candidate = habitPromotionToCandidate(promotions[0]!, now)
     expect(candidate.fact.scope).toBe('user')
     await appendCandidates([candidate])
-    await knowledgeReviewService.applyCandidate({ type: 'fact', id: candidate.id })
+    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
 
     const recalled = await searchUserMemoryDefault('pnpm')
     expect(recalled.items.map((item) => item.id)).toContain(candidate.fact.id)

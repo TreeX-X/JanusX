@@ -1,3 +1,4 @@
+import { reviewFixture } from './review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
@@ -111,7 +112,7 @@ describe('knowledge pipeline e2e (Phase 5, no LLM)', () => {
       expect(decisionCandidate.evidence.observationIds).toContain(decision.id)
 
       // 5. 审核：批准决策 → truth 可追溯到 observation / workspace / derivation 证据链。
-      const applied = await knowledgeReviewService.applyCandidate({ type: 'fact', id: decisionCandidate.id })
+      const applied = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: decisionCandidate.id }))
       const factId = applied.applied!.fact!.id
       const truth = await knowledgeTruthService.list()
       const fact = truth.facts.find((f) => f.id === factId)!
