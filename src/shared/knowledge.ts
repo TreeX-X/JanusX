@@ -297,6 +297,10 @@ export interface RetentionStats {
 }
 
 export interface MemoryFact {
+  /** Host-derived from supported explicit single-value statements. */
+  factKey?: 'release.command' | 'response.language'
+  cardinality?: 'single'
+  polarity?: 'positive' | 'negative'
   /** Host-written on explicit review; binds the reviewed content, never model authority. */
   confirmation?: { kind: 'human-review'; contentHash: string; confirmedAt: string }
   id: string

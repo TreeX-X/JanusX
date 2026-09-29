@@ -1,4 +1,6 @@
 import { reviewCandidateSnapshot, type ReviewCandidate } from '../../shared/review-candidate-snapshot'
+import { factSlotFields } from '../../shared/fact-slot'
+import { factReviewContext, replacementHash, sameFactDomain } from './fact-conflicts'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 /**
  * @file KnowledgeReviewService —— 候选审核 / 应用闭环（MVP）
@@ -365,6 +367,21 @@ function mergeWikiMarkdown(existing: string | null, title: string, patchMarkdown
 }
 
 export class KnowledgeReviewService {
+  async factReviewContext(input: ReviewCandidateInput) {
+    if (input.type !== 'fact') throw new Error('Fact review requires a fact candidate')
+    return withFactCandidatesLock(async () => {
+      const candidates = await readJsonl<CandidateFact>(FACT_CANDIDATES_FILE)
+      const candidate = candidates.find(item => item.id === input.id)
+      if (!candidate) throw new Error('Candidate not found')
+      assertReviewedSnapshot(candidate, input)
+      requireProposed(candidate.status, candidate.id)
+      const barrier = await readPersonalForgettingBarrier()
+      if (barrier.blocksCandidate(candidate)) throw new Error('Personal memory has been forgotten')
+      const facts = (await readJsonl<MemoryFact>(FACTS_FILE)).filter(fact => !barrier.blocksFact(fact))
+      return factReviewContext(candidate, facts, candidates.filter(item => !barrier.blocksCandidate(item)))
+    })
+  }
+
   async proposeNoteWiki(input: { draftId: string; title: string; markdown: string; rationale: string }): Promise<CandidateWikiPatch> {
     return withWikiCandidatesLock(async () => {
       const { buildNoteWikiCandidate } = await import('./note-sources')
@@ -449,7 +466,7 @@ export class KnowledgeReviewService {
     let rollback: () => Promise<void>
     let supersededFact: { id: string; version: number } | undefined
     if (type === 'fact') {
-      const transaction = await this.applyFact(current as CandidateFact)
+      const transaction = await this.applyFact(current as CandidateFact, input)
       applied = { fact: transaction.value }
       rollback = transaction.rollback
       supersededFact = transaction.superseded
@@ -484,7 +501,8 @@ export class KnowledgeReviewService {
       targetType,
       targetId: id,
       before: { status: current.status },
-      after: { status: 'applied', reviewNotes: reviewNotes ?? null },
+      after: { status: 'applied', reviewNotes: reviewNotes ?? null,
+        ...(input.replacement ? { replacementId: input.replacement.id, replacementHash: input.replacement.hash } : {}) },
       provenance,
     }]
 
@@ -541,7 +559,7 @@ export class KnowledgeReviewService {
     }
   }
 
-  private async applyFact(candidate: CandidateFact): Promise<{
+  private async applyFact(candidate: CandidateFact, input: ReviewCandidateInput): Promise<{
     value: MemoryFact
     rollback: () => Promise<void>
     superseded?: { id: string; version: number }
@@ -558,15 +576,25 @@ export class KnowledgeReviewService {
     const previous = await readJsonl<MemoryFact>(FACTS_FILE)
     await validateLegacyCandidate(candidate, previous)
     validatePersonalCorrection(candidate, previous)
+    if (previous.some(item => item.id === candidate.fact.id)) throw new Error('Fact ID already exists; create a distinct replacement candidate')
+    const fields = factSlotFields(candidate.fact.content)
+    for (const key of ['factKey', 'cardinality', 'polarity'] as const) {
+      if (candidate.fact[key] !== undefined && candidate.fact[key] !== fields[key]) throw new Error('Fact slot metadata does not match content')
+    }
+    const barrier = await readPersonalForgettingBarrier()
+    const context = factReviewContext(candidate, previous.filter(fact => !barrier.blocksFact(fact)), [])
+    if (context.blocked === 'multiple-targets') throw new Error('Multiple current facts conflict; resolve them before replacement')
+    if (candidate.fact.supersedes && input.replacement && candidate.fact.supersedes !== input.replacement.id) throw new Error('Replacement does not match the proposed target')
     // Phase 2 supersede: a candidate carrying `supersedes` archives the old
     // active fact and continues its version chain instead of forking a new one.
     let base = previous
     let version = candidate.fact.version || 1
     let superseded: { id: string; version: number } | undefined
-    const targetId = candidate.fact.supersedes?.trim()
+    const targetId = candidate.fact.supersedes?.trim() || input.replacement?.id
+    if (context.targets.length && !targetId) throw new Error('Single-value conflict requires explicit replacement')
     if (targetId) {
       const target = previous.find((item) => item.id === targetId)
-      if (!target || target.status !== 'active') {
+      if (!target || target.status !== 'active' || previous.filter(item => item.id === targetId).length !== 1) {
         throw new Error(`Cannot supersede ${targetId}: no active truth fact with that id`)
       }
       if (target.provenance.workspaceId !== candidate.fact.provenance.workspaceId) {
@@ -574,6 +602,12 @@ export class KnowledgeReviewService {
       }
       if (factScope(target) !== factScope(candidate.fact)) {
         throw new Error(`Cannot supersede ${targetId}: memory scope mismatch`)
+      }
+      if (!sameFactDomain(target, candidate.fact)) throw new Error('Cannot supersede: ownership mismatch')
+      if (barrier.blocksFact(target) || target.ttl && !(Date.parse(target.ttl) > Date.now())) throw new Error('Replacement target is no longer eligible')
+      if (!context.targets.some(item => item.id === targetId)) throw new Error('Replacement target is not a current conflict')
+      if (!input.replacement || input.replacement.id !== targetId || input.replacement.hash !== replacementHash(target)) {
+        throw new Error('Replacement target changed or was not explicitly reviewed; refresh before reviewing')
       }
       base = previous.map((item) =>
         item.id === targetId ? { ...item, status: 'archived' as const } : item,
@@ -583,12 +617,14 @@ export class KnowledgeReviewService {
     }
     const fact: MemoryFact = {
       ...candidate.fact,
+      ...fields,
+      ...(targetId ? { supersedes: targetId } : {}),
       scope: factScope(candidate.fact),
       status: 'active',
       version,
     }
     fact.confirmation = { kind: 'human-review', contentHash: reviewedFactHash(fact), confirmedAt: new Date().toISOString() }
-    const next = [...base.filter((item) => item.id !== fact.id), fact]
+    const next = [...base, fact]
     await writeJsonlAtomic(FACTS_FILE, next)
     return {
       value: fact,

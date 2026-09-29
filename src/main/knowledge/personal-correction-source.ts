@@ -18,6 +18,7 @@ export function personalCorrectionCandidate(target: MemoryFact, content: string)
     personalCorrection: { targetId: target.id, targetHash, previousContent: target.content },
     evidence: { observationIds: [], snippets: [content] },
     fact: { id: `personal-corrected:${key}`, content, kind: target.kind, scope: 'user', status: 'proposed', version: 1,
+      ownerScope: target.ownerScope, tenantId: target.tenantId, projectId: target.projectId, ownerUserId: target.ownerUserId,
       supersedes: target.id, concepts: [], files: [], tags: ['personal-correction'], confidence: 0.5,
       provenance: { workspaceId: target.provenance.workspaceId, workspaceName: target.provenance.workspaceName,
         workspacePath: target.provenance.workspacePath, source: 'manual', actor: 'personal-memory-correction',

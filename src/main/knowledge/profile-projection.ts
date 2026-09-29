@@ -13,6 +13,7 @@ export function profileContentHash(value: unknown): string {
 export function reviewedFactHash(fact: MemoryFact): string {
   return profileContentHash({ id: fact.id, scope: factScope(fact), owner: fact.provenance.workspaceId, content: fact.content,
     kind: fact.kind, version: fact.version, supersedes: fact.supersedes, ttl: fact.ttl,
+    factKey: fact.factKey, cardinality: fact.cardinality, polarity: fact.polarity,
     observationIds: fact.provenance.sourceObservationIds, sources: fact.provenance.sourceEvidence })
 }
 

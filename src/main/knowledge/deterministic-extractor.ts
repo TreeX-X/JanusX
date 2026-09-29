@@ -14,6 +14,7 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto'
+import { canMergeFactText, factSlot } from '../../shared/fact-slot'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
@@ -143,7 +144,7 @@ export function clusterNearDuplicates<T>(items: T[], textOf: (item: T) => string
   const groups: Array<{ members: T[]; latestText: string }> = []
   for (const item of items) {
     const text = textOf(item)
-    const target = groups.find((group) => tokenJaccard(text, group.latestText) >= NEAR_DUPE_JACCARD)
+    const target = groups.find((group) => canMergeFactText(text, group.latestText) && tokenJaccard(text, group.latestText) >= NEAR_DUPE_JACCARD)
     if (target) {
       target.members.push(item)
       target.latestText = text
@@ -238,6 +239,8 @@ export function classifyDeterministic(
   normalizedText: string,
   signalRepeats: number,
 ): PatternMatch | null {
+  const slot = factSlot(normalizedText)
+  if (slot) return { kind: slot.factKey === 'release.command' ? 'procedure' : 'preference', confidence: 0.7 }
   if (observationType === 'git-event' || observationType === 'checkpoint-event') {
     return { kind: 'fact', confidence: 0.9 }
   }
@@ -544,7 +547,7 @@ export async function runDeterministicStage(
       actor: 'knowledge-deterministic',
       createdAt: nowIso,
     }
-    const content = match.kind === 'fact'
+    const content = factSlot(primary.text) ? primary.text : match.kind === 'fact'
       ? firstLine(primary.text) + (files.length > 0 ? ` [${files.join(', ')}]` : '')
       : match.kind === 'procedure'
         ? signal

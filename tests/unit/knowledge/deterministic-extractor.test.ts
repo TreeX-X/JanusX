@@ -95,6 +95,14 @@ describe('deterministic extractor (Phase 1-2)', () => {
     expect(groups[1]?.primary.id).toBe('other')
   })
 
+  it('keeps explicit command values separate despite high token similarity', () => {
+    const first = 'release command: npm run release --target production --region asia --channel stable --mode full'
+    const second = first + ' --dry-run'
+    expect(tokenJaccard(first, second)).toBeGreaterThanOrEqual(0.85)
+    expect(clusterNearDuplicates([first, second], text => text)).toHaveLength(2)
+    expect(classifyDeterministic('user-note', first, 1)?.kind).toBe('procedure')
+  })
+
   it('classifies the four high-precision patterns and ignores the rest', () => {
     expect(classifyDeterministic('git-event', 'commit abc', 0)).toEqual({ kind: 'fact', confidence: 0.9 })
     expect(classifyDeterministic('checkpoint-event', 'snap', 0)).toEqual({ kind: 'fact', confidence: 0.9 })

@@ -1,4 +1,5 @@
 import { readLegacyJsonl } from './legacy-memory-source'
+import { canMergeFactText } from '../../shared/fact-slot'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 /**
  * @file KnowledgeExtractService —— Phase 6 候选知识提炼，Phase 2 LLM 增强
@@ -653,6 +654,7 @@ export class KnowledgeExtractService {
       let bestScore = 0
       for (const deterministic of mergeable) {
         const current = rewritten.get(deterministic.id) ?? deterministic
+        if (!canMergeFactText(llm.fact.content, current.fact.content)) continue
         const score = tokenJaccard(llm.fact.content, current.fact.content)
         if (score >= MERGE_JACCARD_THRESHOLD && (best === null || score > bestScore)) {
           best = current

@@ -87,7 +87,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(39)
+    expect(channels).toHaveLength(40)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -132,6 +132,7 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.listWikiPatchCandidates()
     await knowledgeApi.rejectCandidate(reviewInput)
     await knowledgeApi.applyCandidate(reviewInput)
+    await knowledgeApi.factReviewContext(reviewInput)
     await knowledgeApi.search({ query: 'typed boundary' })
     await knowledgeApi.listTruth()
     await knowledgeApi.revokeTruth({ kind: 'fact', id: 'fact-1', workspaceId: 'workspace-1' })
@@ -173,6 +174,7 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.listWikiPatchCandidates],
       [KNOWLEDGE_CHANNELS.rejectCandidate, reviewInput],
       [KNOWLEDGE_CHANNELS.applyCandidate, reviewInput],
+      [KNOWLEDGE_CHANNELS.factReviewContext, reviewInput],
       [KNOWLEDGE_CHANNELS.search, { query: 'typed boundary' }],
       [KNOWLEDGE_CHANNELS.listTruth],
       [KNOWLEDGE_CHANNELS.revokeTruth, { kind: 'fact', id: 'fact-1', workspaceId: 'workspace-1' }],
@@ -318,6 +320,7 @@ describe('Knowledge IPC contract', () => {
       () => api.listWikiPatchCandidates(),
       () => api.rejectCandidate({ type: 'fact', id: 'candidate', candidateHash: 'a'.repeat(64) }),
       () => api.applyCandidate({ type: 'fact', id: 'candidate', candidateHash: 'a'.repeat(64) }),
+      () => api.factReviewContext({ type: 'fact', id: 'candidate', candidateHash: 'a'.repeat(64) }),
       () => api.search({ query: 'fallback' }),
       () => api.listTruth(),
       () => api.revokeTruth({ kind: 'fact', id: 'fact', workspaceId: 'workspace' }),
@@ -340,8 +343,8 @@ describe('Knowledge IPC contract', () => {
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(39)
-    expect(calls).toHaveLength(39)
+    expect(Object.keys(api)).toHaveLength(40)
+    expect(calls).toHaveLength(40)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

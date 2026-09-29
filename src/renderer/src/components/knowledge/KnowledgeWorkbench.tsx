@@ -1,3 +1,4 @@
+import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
@@ -260,7 +261,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const resolveCanvasRecord = (node: KnowledgeGraphNode): InspectorRecord | null =>
     snapshot ? resolveGraphRecord(snapshot, node.id) : null
 
-  const review = async (action: 'apply' | 'reject') => {
+  const review = async (action: 'apply' | 'reject', replacement?: ReviewCandidateInput['replacement']) => {
     if (!selected?.reviewType || selected.status !== 'proposed' || snapshot?.usingDemoData) return
     setReviewBusy(true)
     setReviewError('')
@@ -268,7 +269,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
       const candidate = snapshot && [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates].find(item => item.id === selected.id && item.type === selected.reviewType)
       if (!candidate) throw new Error('Candidate unavailable; refresh before reviewing')
       const input = await reviewCandidateInput(candidate)
-      if (action === 'apply') await applyKnowledgeCandidate(input)
+      if (action === 'apply') await applyKnowledgeCandidate({ ...input, replacement })
       else await rejectKnowledgeCandidate(input)
       await refresh()
     } catch (error) {
@@ -442,7 +443,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               data-visible={detailAnim.visible ? 'true' : 'false'}
               aria-hidden={detailAnim.visible ? undefined : 'true'}
             >
-              <Inspector record={shownSelected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={() => void review('apply')} onReject={() => void review('reject')} onRevoke={() => void revoke()} onCloseDetail={clearDetail} />
+              <Inspector record={shownSelected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={replacement => void review('apply', replacement)} onReject={() => void review('reject')} onRevoke={() => void revoke()} onCloseDetail={clearDetail} />
             </aside>
           ) : null}
         </main>
@@ -567,7 +568,7 @@ function KnowledgeCardTile({ card, active, onSelect }: { card: KnowledgeCard; ac
   )
 }
 
-function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevoke, onCloseDetail }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: () => void; onReject: () => void; onRevoke: () => void; onCloseDetail: () => void }) {
+function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevoke, onCloseDetail }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: (replacement?: ReviewCandidateInput['replacement']) => void; onReject: () => void; onRevoke: () => void; onCloseDetail: () => void }) {
   const { t } = useI18n('knowledge')
   if (!record) return <StateBlock title={t('knowledge:inspector.empty')} compact />
   const wikiCandidate = record.reviewType === 'wiki-patch' ? snapshot?.wikiPatches.find(candidate => candidate.id === record.id) : undefined
@@ -577,12 +578,12 @@ function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevok
   const reviewCandidate = record.reviewType && snapshot ? [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates].find(candidate => candidate.id === record.id && candidate.type === record.reviewType) : undefined
   if (reviewCandidate?.status === 'proposed') return <div className={styles.inspector}>
     <button type="button" onClick={onCloseDetail}>{t('knowledge:inspector.closeDetail')}</button>
-    <MemoryReviewCard candidate={reviewCandidate} competing={competingCorrections(snapshot?.factCandidates ?? [], reviewCandidate)} disabled={!canReview} onReview={approve => approve ? onApprove() : onReject()} />
+    <MemoryReviewCard candidate={reviewCandidate} competing={competingCorrections(snapshot?.factCandidates ?? [], reviewCandidate)} disabled={!canReview} onReview={(approve, replacement) => approve ? onApprove(replacement) : onReject()} />
     {conflicts.length > 0 && <p>{t('knowledge:inspector.conflict', { detail: conflicts.map(item => item.reason).join(', ') })}</p>}
     {error && <p role="alert">{error}</p>}
   </div>
   const canRevoke = record.status === 'active' && record.kind !== 'observation' && Boolean(record.workspaceId) && !busy
-  return <div className={styles.inspector}><div className={styles.detailBar}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><button type="button" className={styles.detailClose} onClick={onCloseDetail} aria-label={t('knowledge:inspector.closeDetail')} title={t('knowledge:inspector.closeDetail')}><X size={16} aria-hidden="true" /></button></div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{wikiCandidate && <WikiCandidateSources key={wikiCandidate.id} candidate={wikiCandidate} />}{wikiPage && <WikiPageDetail key={JSON.stringify([wikiPage.workspaceId, wikiPage.slug])} page={wikiPage} />}{record.confidence !== undefined && <Metric label={t('knowledge:inspector.confidence')} value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label={t('knowledge:inspector.status')} value={record.status} />}{record.derivation && <KeyValue label={t('knowledge:inspector.derivation')} value={record.derivation} />}{record.factKind && <KeyValue label={t('knowledge:inspector.factKind')} value={record.factKind} />}{record.scoreExplanation && <KeyValue label={t('knowledge:inspector.scoreExplanation')} value={formatScoreExplanation(record.scoreExplanation)} />}<TagRow tags={record.tags} /><KeyValue label={t('knowledge:inspector.created')} value={formatDate(record.createdAt, t('knowledge:time.unknown'))} /><KeyValue label={t('knowledge:inspector.sourceRefs')} value={record.sourceIds.join(', ') || t('knowledge:inspector.none')} /><KeyValue label={t('knowledge:inspector.files')} value={record.fileRefs.join(', ') || t('knowledge:inspector.none')} />{conflicts.length > 0 && <div className={styles.demoNotice}>{t('knowledge:inspector.conflict', { detail: conflicts.map((item) => `${item.reason} with ${item.targetId}`).join(', ') })}</div>}<div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={onApprove}>{busy ? t('knowledge:action.working') : t('knowledge:action.approve')}</button><button type="button" disabled={!canReview} onClick={onReject}>{t('knowledge:action.reject')}</button><button type="button" disabled={!canRevoke} onClick={onRevoke}>{t('knowledge:action.archive')}</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>{t('knowledge:inspector.demoNotice')}</div>}</div>
+  return <div className={styles.inspector}><div className={styles.detailBar}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><button type="button" className={styles.detailClose} onClick={onCloseDetail} aria-label={t('knowledge:inspector.closeDetail')} title={t('knowledge:inspector.closeDetail')}><X size={16} aria-hidden="true" /></button></div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{wikiCandidate && <WikiCandidateSources key={wikiCandidate.id} candidate={wikiCandidate} />}{wikiPage && <WikiPageDetail key={JSON.stringify([wikiPage.workspaceId, wikiPage.slug])} page={wikiPage} />}{record.confidence !== undefined && <Metric label={t('knowledge:inspector.confidence')} value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label={t('knowledge:inspector.status')} value={record.status} />}{record.derivation && <KeyValue label={t('knowledge:inspector.derivation')} value={record.derivation} />}{record.factKind && <KeyValue label={t('knowledge:inspector.factKind')} value={record.factKind} />}{record.scoreExplanation && <KeyValue label={t('knowledge:inspector.scoreExplanation')} value={formatScoreExplanation(record.scoreExplanation)} />}<TagRow tags={record.tags} /><KeyValue label={t('knowledge:inspector.created')} value={formatDate(record.createdAt, t('knowledge:time.unknown'))} /><KeyValue label={t('knowledge:inspector.sourceRefs')} value={record.sourceIds.join(', ') || t('knowledge:inspector.none')} /><KeyValue label={t('knowledge:inspector.files')} value={record.fileRefs.join(', ') || t('knowledge:inspector.none')} />{conflicts.length > 0 && <div className={styles.demoNotice}>{t('knowledge:inspector.conflict', { detail: conflicts.map((item) => `${item.reason} with ${item.targetId}`).join(', ') })}</div>}<div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={() => onApprove()}>{busy ? t('knowledge:action.working') : t('knowledge:action.approve')}</button><button type="button" disabled={!canReview} onClick={onReject}>{t('knowledge:action.reject')}</button><button type="button" disabled={!canRevoke} onClick={onRevoke}>{t('knowledge:action.archive')}</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>{t('knowledge:inspector.demoNotice')}</div>}</div>
 }
 
 /** User memory M4: person-scoped candidates carry an explicit scope tag in the Inbox. */

@@ -13,7 +13,7 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 ## Problem
 
-JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，使用宿主来源契约；确定性提取器只提出候选。Profile 由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实提供人工重新确认迁移，不自动恢复历史确认资格。持久遗忘约束覆盖个人事实、Episode、候选及精修任务重放；单值冲突治理、普通来源撤回的级联处理与召回强度更新仍需完成。
+JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，使用宿主来源契约；确定性提取器只提出候选。Profile 由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实提供人工重新确认迁移，不自动恢复历史确认资格。持久遗忘约束覆盖个人事实、Episode、候选及精修任务重放；明确格式的发布命令与默认输出语言具有单值冲突约束。更广泛的语义槽位、普通来源撤回的级联处理与召回强度更新仍需完成。
 
 [确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
 
@@ -68,6 +68,18 @@ JanusX 已有 queue-owned 的 observation → candidate → review → truth →
 规则层负责从原文提取有出处的陈述，保留文件和工程事件引用。BM25 在归属与权限过滤后的语料中查找相关事实，再用精确匹配、Jaccard 与概念/文件交集形成重复和冲突提示。相似度只用于候选召回，0.7/0.85 等阈值不得直接执行替代或删除；短文本、否定句、命令参数和同名跨项目内容必须有反例测试。索引未就绪时使用有界同域扫描或标记待复核，不得把“没搜到”解释成“没有冲突”。
 
 事实沿用 MemoryFact 与 supersedes；isLatest 优先从 active 状态和版本链派生，避免额外维护另一份真相。精确重复合并证据；异值陈述成为独立候选；显式替代须引用同域当前版本，并经 review 检查。对于可结构化的单值槽位，如发布命令和默认输出语言，引入 factKey、polarity、cardinality 与冲突分组；未声明替代的新值进入冲突待审，不按时间或相似度覆盖旧值。自由文本不能确定槽位时保留冲突提示，不强行分类。
+
+[事实冲突审核](../../src/main/knowledge/fact-conflicts.ts)使用严格读取的事实和候选集合，不以搜索索引是否命中判断无冲突。归属比较包括 memory scope、workspaceId、ownerScope、tenantId、projectId 和 ownerUserId；跨域事实及其他所有者的正文不进入审核上下文。新候选的 fact ID 若已经存在于 truth，无论内容相同、不同或旧记录已归档，均拒绝覆盖；只有已 applied 候选的同快照重试保持幂等。truth 已写入但候选仍 proposed 的崩溃残留需要恢复处理，不能借同 ID 再确认来覆盖已有记录。
+
+[槽位规则](../../src/shared/fact-slot.ts)只识别完整单行的 `发布命令` / `release command` 和 `默认输出语言` / `default output language` 标签，支持冒号、等号及表示否定约束的 `!=`。语言值只归一化当前支持的中英文别名；命令保持大小写和参数。宿主从正文派生 factKey、cardinality 与 polarity，并在落库时拒绝与正文不符的自报字段。旧事实不需要批量重写，审核按同一规则读取正文；新的确认 hash 包含已保存的槽位字段。两个不同肯定值，以及同值的肯定和否定构成冲突；不同值的否定约束可并存。多行、临时要求、第三人称及不支持的语言表达不获得槽位身份。
+
+确定性近重复聚类和 LLM 合并都核对槽位值与极性。不同命令参数、不同值或相反极性不得因 Jaccard 相似而合并；明确格式的命令候选保留规范化后的完整正文，不使用卡片预览截断。普通自由文本继续使用既有规则；这不承诺任意自然语言矛盾检测。
+
+[审核控件](../../src/renderer/src/components/knowledge/FactReviewControls.tsx)在批准前通过专用 factReviewContext IPC 获取当前冲突事实、内容、版本和指纹，并列出同域同槽位的其他待审值。有一个当前目标时必须勾选替代确认，提交同时绑定候选快照与旧事实指纹。模型提供 supersedes 也不能跳过旧值展示与人工确认。主进程在事实共用锁内再次核对目标归属、active 状态、到期时间、遗忘约束和指纹；成功后归档旧版本，新事实记录 supersedes 并递增版本。审计记录所选目标 ID 和指纹，审计失败恢复候选及旧 truth。多个当前冲突目标、重复目标 ID 或失效目标阻止批准，用户须先处理已有冲突；普通批准不能隐式覆盖其中任意一条。读取失败和未完成核对都禁用批准，刷新可以重试；拒绝候选仍走原快照契约。
+
+完整语义分类能覆盖更多表达，但需要可靠的抽取与质量证据；当前选择有限标签规则，避免把临时要求误判为长期单值。只显示冲突提示维护成本较低，却允许两个不同单值同时进入 active，因此提交端也实施约束。同 ID 全部拒绝可保留历史，代价是同内容崩溃残留不能自动修复。审核上下文按卡片读取并扫描当前文件，没有新增持久索引；大候选列表的读取次数和进程内串行等待需要测量，达到交互瓶颈时再引入批量上下文读取。当前没有多目标合并、任意事实选择器或跨进程事务；既有显式个人纠正保留目标的所有者字段。
+
+机器验证（2026-09-29，单值冲突与显式替代）：执行审核一致性段落所列完整 Vitest 命令，通过 61 个文件、551 项测试；真实 Laya 的 1 项测试显式跳过。[事实冲突测试](../../tests/unit/knowledge/fact-conflicts.test.ts)的 15 项测试覆盖 ID 碰撞、语言别名、命令参数、极性、所有者隔离、槽位字段伪造、显式目标确认、旧目标变化、竞争替代与审计回滚；确定性与 LLM 提取测试覆盖不同参数不得被近重复合并；审核浏览器测试覆盖旧值展示、勾选确认、目标指纹提交及读取失败恢复。`npm run typecheck:strict-unused`、`npm run i18n:check`、`npm run check:package-boundary` 通过；16 个生产文件定向 ESLint 零错误，保留 KnowledgeWorkbench 的既有 refresh 依赖警告。全库 Note 检查仍有审核一致性段落列出的三个无关错误，本篇未报错。既有 user-memory-contract 测试在临时 audit 文件 rename 时输出一次 EPERM，未导致测试失败。未运行完整 Electron E2E、打包、真实模型或真实用户数据操作。
 
 保留 WikiPage、GraphEdge、sourceFactIds，以及已落地的 [Note 来源审核](./2026-09-25-note-wiki-r3--844bc2f1.md)中的 sourceNoteRefs、hash、页面版本与回滚约束。Laya 不生成新正文；无 LLM 时可以提取原文事实、生成确定性关系和人工整理 Wiki，但不承诺自动完成多来源长文综合。
 
@@ -278,6 +290,7 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 - [ ] AC-10: 迁移与回归可复现 — 迁移可断点续跑、重复执行不重复数据、未知旧来源不升格；保持 Wiki sourceFactIds/sourceNoteRefs/hash/版本审核语义；相关 Vitest、typecheck、IPC/UI 与打包检查通过，真实 Laya 性能另有 Windows CPU 实测记录。
 - [x] AC-11: 统一审核界面 — 右侧只有一个审核入口，支持全部、工程知识、个人记忆筛选及独立数量；复用候选详情与审核动作，清楚展示来源和批准用途；知识库与个人画像保留各自阅读视图，工程来源的个人习惯仍不进入 MCP 输出。
 - [x] AC-12: 审核一致性与存储保护 — 三个审核入口携带显示快照 hash，主进程锁内核验批准与拒绝；过期快照不能变更候选，原快照成功重试幂等。损坏或不可读的候选、truth、Wiki 索引不得被空数据覆盖；Wiki/Graph 新增与审核回滚共用锁。
+- [x] AC-13: 明确单值事实的冲突审核 — 同 ID 不覆盖 truth；发布命令与默认输出语言按同域、值和极性分组，近似文本不吞掉不同参数；替代展示旧值并要求人工确认，提交绑定旧事实指纹，竞争替代最多成功一次，审计失败可回滚；跨所有者、失效及多目标情况不允许直接批准。
 
 ## Risks
 

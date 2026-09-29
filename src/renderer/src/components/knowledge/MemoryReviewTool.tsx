@@ -1,4 +1,6 @@
 import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
+import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
+import { FactReviewControls } from './FactReviewControls'
 // Note: one review surface preserves engineering and private memory ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
@@ -47,14 +49,14 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
     return () => { generation.current += 1 }
   }, [active, refresh])
 
-  const review = async (candidate: InboxCandidate, approve: boolean) => {
+  const review = async (candidate: InboxCandidate, approve: boolean, replacement?: ReviewCandidateInput['replacement']) => {
     if (actionLock.current) return
     actionLock.current = true
     setBusy(true)
     setError('')
     try {
       const input = await reviewCandidateInput(candidate)
-      await (approve ? applyKnowledgeCandidate(input) : rejectKnowledgeCandidate(input))
+      await (approve ? applyKnowledgeCandidate({ ...input, replacement }) : rejectKnowledgeCandidate(input))
       setCandidates(current => current.filter(item => item.type !== candidate.type || item.id !== candidate.id))
       await refresh()
     } catch (reason) {
@@ -112,7 +114,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
       {notice && <p role="status">{notice}</p>}
       {loading && <p role="status">{t('knowledge:state.loading.title')}</p>}
       {!loading && !error && filterInboxByScope(candidates, scope).length === 0 && <p>{t('knowledge:inbox.empty.title')}</p>}
-      {!loading && filterInboxByScope(candidates, scope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={approve => void review(candidate, approve)} onDecision={candidate.type === 'fact' ? action => void decide(candidate, action) : undefined} />)}
+      {!loading && filterInboxByScope(candidates, scope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} onDecision={candidate.type === 'fact' ? action => void decide(candidate, action) : undefined} />)}
     </div>
     <footer className={styles.filters}>
       <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t('knowledge:action.refresh')}</button>
@@ -121,7 +123,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
   </section>
 }
 
-export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, competing = 0 }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean) => void; onDecision?: (action: 'score' | 'refine') => void; competing?: number }) {
+export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, competing = 0 }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean, replacement?: ReviewCandidateInput['replacement']) => void; onDecision?: (action: 'score' | 'refine') => void; competing?: number }) {
   const { t } = useI18n('knowledge')
   const personal = isUserScopeCandidate(candidate)
   const provenance = candidate.type === 'fact' ? candidate.fact.provenance : candidate.type === 'wiki-patch' ? candidate.provenance : undefined
@@ -156,7 +158,7 @@ export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, co
       {!!candidate.conflicts?.length && <p>{t('knowledge:inspector.conflict', { detail: candidate.conflicts.join(', ') })}</p>}
     </details>
     <div className={styles.filters}>
-      <button type="button" disabled={disabled} onClick={() => onReview(true)}>{t('knowledge:action.approve')}</button>
+      {candidate.type === 'fact' ? <FactReviewControls candidate={candidate} disabled={disabled} onApprove={replacement => onReview(true, replacement)} /> : <button type="button" disabled={disabled} onClick={() => onReview(true)}>{t('knowledge:action.approve')}</button>}
       <button type="button" disabled={disabled} onClick={() => onReview(false)}>{t('knowledge:action.reject')}</button>
       {onDecision && candidate.type === 'fact' && candidate.derivation === 'deterministic' && !candidate.legacySource && !candidate.personalCorrection && !candidate.id.startsWith('remember-candidate:') && <>
         <button type="button" disabled={disabled} onClick={() => onDecision('score')}>{t('knowledge:review.rescore')}</button>

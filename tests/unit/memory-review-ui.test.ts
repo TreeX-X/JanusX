@@ -23,6 +23,7 @@ beforeAll(async () => {
         if (!current || (await reviewCandidateInput(current)).candidateHash !== input.candidateHash) throw Error('Candidate changed')
       }
       window.electron = {knowledge:{
+        factReviewContext:async()=>{if(window.failContext)throw Error('unavailable');return window.conflictContext ?? {targets:[],competing:[]}},
         candidateAction:async input=>{window.calls.push(input);if(window.defer)await new Promise(resolve=>window.finish=resolve)},
         importLegacyPersonalMemory:async()=>{window.imports=(window.imports||0)+1;window.items.push({...candidate('old-profile','user'),legacySource:{kind:'profile',id:'identity',hash:'source'}});return {created:1,remaining:0}},
         listCandidates:async()=>{if(window.failLoad)throw Error('unavailable');return window.items},
@@ -43,6 +44,43 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close() })
 
 describe('memory review browser interactions', () => {
+  it('shows the old value and requires explicit replacement confirmation', async () => {
+    const page = await browser.newPage()
+    try {
+      await page.route('http://localhost/review', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
+      await page.goto('http://localhost/review')
+      await page.evaluate(() => { (window as any).conflictContext = { factKey: 'response.language', targets: [{ id: 'old', hash: 'a'.repeat(64), content: 'Default output language: Chinese', version: 3 }], competing: [{ id: 'peer', content: 'Default output language: English' }] } })
+      await page.addScriptTag({ content: script })
+      const card = page.locator('article').first()
+      await card.getByText('Default output language: Chinese', { exact: true }).waitFor()
+      expect(await card.innerText()).toContain('Current fact · version 3')
+      expect(await card.innerText()).toContain('Other pending values')
+      expect(await card.getByRole('button', { name: 'Approve replacement', exact: true }).isDisabled()).toBe(true)
+      await card.getByRole('checkbox').check()
+      await card.getByRole('button', { name: 'Approve replacement', exact: true }).click()
+      await page.getByRole('button', { name: 'All 1', exact: true }).waitFor()
+      const calls = await page.evaluate(() => (window as any).calls)
+      expect(calls[0].replacement).toEqual({ id: 'old', hash: 'a'.repeat(64) })
+    } finally { await page.close() }
+  })
+
+  it('blocks approval on a failed conflict read and retries without changing the candidate', async () => {
+    const page = await browser.newPage()
+    try {
+      await page.route('http://localhost/review', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
+      await page.goto('http://localhost/review')
+      await page.evaluate(() => { (window as any).failContext = true })
+      await page.addScriptTag({ content: script })
+      const card = page.locator('article').first()
+      await card.getByRole('alert').waitFor()
+      expect(await card.getByRole('button', { name: 'Approve', exact: true }).isDisabled()).toBe(true)
+      expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+      await page.evaluate(() => { (window as any).failContext = false })
+      await card.getByRole('button', { name: 'Refresh conflict check' }).click()
+      await page.waitForFunction(() => [...document.querySelectorAll('article button')].some(button => button.textContent === 'Approve' && !(button as HTMLButtonElement).disabled))
+      expect(await card.getByRole('button', { name: 'Approve', exact: true }).isEnabled()).toBe(true)
+    } finally { await page.close() }
+  })
   it('retains the displayed snapshot until refresh after a background edit', async () => {
     const page = await browser.newPage()
     try {

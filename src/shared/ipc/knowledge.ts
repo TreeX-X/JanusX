@@ -52,6 +52,7 @@ export const KNOWLEDGE_CHANNELS = {
   listWikiPatchCandidates: 'knowledge:candidates:list-wiki-patches',
   rejectCandidate: 'knowledge:candidates:reject',
   applyCandidate: 'knowledge:candidates:apply',
+  factReviewContext: 'knowledge:candidates:fact-review-context',
   search: 'knowledge:search',
   listTruth: 'knowledge:truth:list',
   revokeTruth: 'knowledge:truth:revoke',
@@ -126,9 +127,17 @@ export interface ReviewCandidateInput {
   type: ReviewCandidateType
   id: string
   candidateHash: string
+  replacement?: { id: string; hash: string }
   reviewNotes?: string
   /** Audit actor override for explicit review. Legacy auto-policy is rejected. Defaults to 'knowledge-review'. */
   actor?: string
+}
+
+export interface FactReviewContext {
+  factKey?: string
+  targets: Array<{ id: string; hash: string; content: string; version: number }>
+  competing: Array<{ id: string; content: string }>
+  blocked?: 'id-collision' | 'invalid-target' | 'multiple-targets'
 }
 
 export interface ReviewResult {
@@ -280,6 +289,7 @@ export interface KnowledgeAPI {
   listWikiPatchCandidates: () => Promise<CandidateWikiPatch[]>
   rejectCandidate: (input: ReviewCandidateInput) => Promise<ReviewResult>
   applyCandidate: (input: ReviewCandidateInput) => Promise<ReviewResult>
+  factReviewContext: (input: ReviewCandidateInput) => Promise<FactReviewContext>
   search: (query: KnowledgeSearchQuery) => Promise<KnowledgeSearchResult>
   listTruth: () => Promise<KnowledgeTruthSnapshot>
   revokeTruth: (input: RevokeTruthInput) => Promise<void>

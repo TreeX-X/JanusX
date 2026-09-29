@@ -622,6 +622,17 @@ describe('KnowledgeExtractService', () => {
       }
     })
 
+    it('does not merge a similar command with different arguments into the displayed candidate', async () => {
+      const content = 'release command: npm run release --target production --region asia --channel stable --mode full'
+      await seedJsonl('facts/candidates.jsonl', [seedDeterministicCandidate('det-command', content, 0.9)])
+      setupLlm({ facts: [{ content: content + ' --dry-run', concepts: [], files: [], tags: [], confidence: 0.95, kind: 'procedure' }], wikiPatches: [], graphEdges: [] })
+      const { knowledgeExtractService } = await loadService()
+      const result = await knowledgeExtractService.extract({ observations: [makeObservation({ id: 'o1' })] }, { mode: 'auto' })
+      expect(result.mergedFactCandidateIds).toEqual([])
+      expect((await knowledgeExtractService.listFactCandidates()).find(item => item.id === 'det-command')?.fact.content).toBe(content)
+      expect(result.facts).toHaveLength(1)
+    })
+
     it.each(['apply', 'reject'] as const)('does not revive a selected candidate after %s during the model call', async (action) => {
       const content = 'commit abc: add user index'
       const candidate = seedDeterministicCandidate('selected', content, 0.9) as CandidateFact

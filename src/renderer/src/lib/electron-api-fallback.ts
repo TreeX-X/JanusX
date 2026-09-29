@@ -114,6 +114,7 @@ export function installElectronApiFallback(): void {
       listWikiPatchCandidates: () => unavailableKnowledge(),
       rejectCandidate: () => unavailableKnowledge(),
       applyCandidate: () => unavailableKnowledge(),
+      factReviewContext: () => unavailableKnowledge(),
       search: () => unavailableKnowledge(),
       listTruth: () => unavailableKnowledge(),
       revokeTruth: () => unavailableKnowledge(),

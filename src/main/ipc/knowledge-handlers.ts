@@ -135,6 +135,7 @@ export function registerKnowledgeHandlers(): void {
   })
 
   // MVP review loop: reject / apply (approve+apply combined)
+  ipcMain.handle(KNOWLEDGE_CHANNELS.factReviewContext, async (_event, input: ReviewCandidateInput) => knowledgeReviewService.factReviewContext(input))
   ipcMain.handle(
     KNOWLEDGE_CHANNELS.rejectCandidate,
     async (_event, input: ReviewCandidateInput) => {

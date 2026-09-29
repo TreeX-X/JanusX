@@ -170,6 +170,7 @@ const knowledgeAPI: KnowledgeAPI = {
   listWikiPatchCandidates: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listWikiPatchCandidates),
   rejectCandidate: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.rejectCandidate, input),
   applyCandidate: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.applyCandidate, input),
+  factReviewContext: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.factReviewContext, input),
   search: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.search, query),
   listTruth: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.listTruth),
   revokeTruth: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.revokeTruth, input),

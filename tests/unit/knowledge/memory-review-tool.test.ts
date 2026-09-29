@@ -47,7 +47,9 @@ describe('unified memory review', () => {
 
   it('disables both review actions while a mutation or load failure is unresolved', () => {
     const markup = renderToStaticMarkup(createElement(MemoryReviewCard, { candidate: fact('a', 'user'), disabled: true, onReview: vi.fn() }))
-    expect(markup.match(/disabled=""/g)).toHaveLength(2)
+    for (const label of ['Approve', 'Reject', 'Refresh conflict check']) {
+      expect(markup).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${label}</button>`))
+    }
   })
 
   it('loads both domains, excludes terminal candidates and computes independent counts', async () => {

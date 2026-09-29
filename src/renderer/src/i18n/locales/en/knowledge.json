@@ -154,6 +154,17 @@
     "workbenchUnavailable": "Workbench unavailable"
   },
   "review": {
+    "conflictLoadFailed": "Conflict check failed. Refresh before approving.",
+    "checkingConflicts": "Checking current facts…",
+    "singleValue": "Single-value fact",
+    "slotRelease": "Release command",
+    "slotLanguage": "Default output language",
+    "competingValues": "Other pending values",
+    "currentValue": "Current fact · version {{version}}",
+    "conflictBlocked": "The fact ID or replacement target is ambiguous or unavailable. Resolve it before approval.",
+    "confirmReplacement": "I reviewed the current value and want this candidate to replace it.",
+    "approveReplacement": "Approve replacement",
+    "refreshConflicts": "Refresh conflict check",
     "rescore": "Score with Laya",
     "refine": "Queue LLM refinement",
     "refinementQueued": "Refinement submitted. It waits in the queue if no LLM is available; review is still required.",

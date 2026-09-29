@@ -154,6 +154,17 @@
     "workbenchUnavailable": "工作台不可用"
   },
   "review": {
+    "conflictLoadFailed": "冲突检查失败，请刷新后批准。",
+    "checkingConflicts": "正在核对当前事实…",
+    "singleValue": "单值事实",
+    "slotRelease": "发布命令",
+    "slotLanguage": "默认输出语言",
+    "competingValues": "其他待审值",
+    "currentValue": "当前事实 · 版本 {{version}}",
+    "conflictBlocked": "事实 ID 或替代目标存在歧义或不可用，请先处理再批准。",
+    "confirmReplacement": "我已核对当前值，确认用这条候选替代它。",
+    "approveReplacement": "批准替代",
+    "refreshConflicts": "刷新冲突检查",
     "rescore": "Laya 重新评分",
     "refine": "提交 LLM 精炼",
     "refinementQueued": "已提交精炼；缺少 LLM 时在队列等待，结果仍须人工审核。",
