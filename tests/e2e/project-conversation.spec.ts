@@ -6,7 +6,7 @@ test.afterEach(() => expect(pageErrors).toEqual([]))
 
 test('island and blueprint entries stay independent across panel remounts', async ({ page }) => {
   await page.goto('/project.html')
-  await page.addStyleTag({ content: '.fixture-layout { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; padding:16px; } .fixture-layout > section { min-width:0; height:650px; overflow:auto; } .fixture-layout .janus-chat { width:100%; height:100%; } @media(max-width:600px) { .fixture-layout { grid-template-columns:minmax(0,1fr); } }' })
+  await page.addStyleTag({ content: '.fixture-layout { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; padding:16px; } .fixture-layout > section { display:flex; flex-direction:column; min-width:0; height:650px; overflow:auto; } .fixture-layout .janus-chat { width:100%; height:100%; } @media(max-width:600px) { .fixture-layout { grid-template-columns:minmax(0,1fr); } }' })
   const main = page.getByTestId('main-chat')
   const blueprint = page.getByTestId('blueprint-chat')
   await expect(blueprint.locator('.janus-chat')).toBeVisible()
@@ -67,7 +67,7 @@ test('island and blueprint entries stay independent across panel remounts', asyn
   await expect(blueprint.locator('.janus-chat-sidebar')).toHaveCount(0)
   await expect(blueprint.locator('.bp-maintenance-context')).toHaveCount(0)
   await expect(blueprint.locator('.bp-maintenance-controls')).toHaveCount(0)
-  await expect(blueprint.getByRole('button', { name: 'Compose as proposal', exact: true })).toHaveCount(0)
+  await expect(blueprint.getByRole('button', { name: 'Compose as proposal', exact: true })).toBeVisible()
   await page.reload()
   await expect(page.getByTestId('controller')).toHaveAttribute('data-id', id!)
   await expect(page.getByTestId('main-chat')).toContainText('Inspect this task')

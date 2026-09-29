@@ -1,11 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const api = vi.hoisted(() => ({ applyMaintenanceChangeSet: vi.fn(), applyMaintenanceUndo: vi.fn(), listMaintenanceAudits: vi.fn(), prepareMaintenanceUndo: vi.fn(), refresh: vi.fn(), error: null as string | null }))
-vi.mock('../../src/renderer/src/services/blueprint', () => ({ ...api, cancelMaintenanceTask: vi.fn(), completeMaintenanceTask: vi.fn(), dismissMaintenanceProposal: vi.fn(), listMaintenanceTasks: vi.fn(), onMaintenanceTask: vi.fn(), startMaintenanceTask: vi.fn() }))
+const api = vi.hoisted(() => ({ applyMaintenanceChangeSet: vi.fn(), applyMaintenanceUndo: vi.fn(), listMaintenanceAudits: vi.fn(), listMaintenanceTasks: vi.fn(), onMaintenanceTask: vi.fn(), prepareMaintenanceUndo: vi.fn(), refresh: vi.fn(), error: null as string | null }))
+vi.mock('../../src/renderer/src/services/blueprint', () => ({ ...api, cancelMaintenanceTask: vi.fn(), completeMaintenanceTask: vi.fn(), dismissMaintenanceProposal: vi.fn(), startMaintenanceTask: vi.fn() }))
 vi.mock('../../src/renderer/src/stores/blueprint', () => ({ useBlueprintStore: { getState: () => ({ refreshAfterAnalysis: api.refresh, error: api.error }) } }))
 import { useBlueprintMaintenanceStore as store } from '../../src/renderer/src/stores/blueprint-maintenance'
 
 describe('maintenance audit and refresh store', () => {
   beforeEach(() => { vi.clearAllMocks(); api.error = null; store.setState({ tasks: [], audits: {}, pendingUndo: null, error: null }); api.refresh.mockResolvedValue(undefined); api.listMaintenanceAudits.mockResolvedValue([]) })
+  it('keeps a newer proposal event when an older list response arrives, retaining other tasks', async () => {
+    let finish!: (tasks: unknown[]) => void
+    api.listMaintenanceTasks.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    const reading = store.getState().initialize()
+    const fresh = { id: 'one', status: 'proposal-ready', updatedAt: '2026-09-30T00:00:01Z' }
+    api.onMaintenanceTask.mock.calls.at(-1)![0]({ task: fresh })
+    finish([{ id: 'one', status: 'analyzing', updatedAt: '' }, { id: 'two', status: 'active', updatedAt: '' }])
+    await reading
+    expect(store.getState().tasks).toEqual([fresh, expect.objectContaining({ id: 'two' })])
+  })
+  it('ignores an older initialization failure after a successful refresh', async () => {
+    let reject!: (error: Error) => void
+    api.listMaintenanceTasks.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
+    const old = store.getState().initialize()
+    api.listMaintenanceTasks.mockResolvedValueOnce([])
+    await store.getState().initialize()
+    reject(new Error('old failure'))
+    await old
+    expect(store.getState().error).toBeNull()
+  })
   it('uses actual applied/rejected audit records and refreshes after apply', async () => {
     const task = { id: 'task', blueprintId: 'checkout-b', updatedAt: '' }
     const audit = { id: 'audit', selectedOperationIds: ['one'], rejectedOperationIds: ['two'], status: 'applied' }

@@ -7,6 +7,7 @@ import { BlueprintWorkbench } from '../../../src/renderer/src/components/bluepri
 import { createWorkbenchGraph, installWorkbenchBoundary } from './workbench-fixture'
 import { HarnessRunPanel } from '../../../src/renderer/src/components/janus/HarnessRunPanel'
 import { useBlueprintStore } from '../../../src/renderer/src/stores/blueprint'
+import { useBlueprintMaintenanceStore } from '../../../src/renderer/src/stores/blueprint-maintenance'
 import { installMaintenanceFixture } from './maintenance-fixture'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
@@ -242,6 +243,7 @@ if (twoCheckouts) maintenance.checkoutViews[secondWorkspace.path] = {
   ...blueprint, id: blueprint.id + ':checkout-b', nodeIds: [id], nodes: { [id]: { ...blueprint.nodes[id], title: 'Task checkout B', sourceHash: 'd'.repeat(64) } }, composition: undefined,
 } as never
 Object.assign(fixture, { maintenance,
+  selectMaintenanceNode: (nodeId?: string) => useBlueprintMaintenanceStore.getState().requestOpen({ blueprintId: blueprint.id, nodeId }),
   finishStream: () => emit({ type: 'stream_end', requestId: fixture.streams.at(-1)!.requestId, cancelled: false }),
   failStream: () => emit({ type: 'stream_error', requestId: fixture.streams.at(-1)!.requestId, error: 'Fixture provider unavailable' }),
   snapshot: () => { const state = useBlueprintStore.getState(); return { graph: state.currentBlueprint, node: state.activeSession?.nodeSnapshot } },

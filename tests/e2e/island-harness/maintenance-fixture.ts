@@ -12,6 +12,8 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
     graphReads: [] as string[], refreshes: [] as string[], mutations: 0,
     checkoutViews: {} as Record<string, Blueprint>,
     tasks: [] as BlueprintMaintenanceTask[], audits: [] as BlueprintMaintenanceAuditRecord[],
+    gateStart: false, finishStart: null as (() => void) | null,
+    failList: false,
     changeSourceHash(hash: string) { graph.nodes[nodeId].sourceHash = hash },
     completeProposal(taskId: string) {
       const task = state.tasks.find(item => item.id === taskId)!
@@ -42,11 +44,12 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
   })
   let reverse: BlueprintChangeSet | null = null
   Object.assign(window.electron.janus, {
-    listMaintenanceTasks: async () => structuredClone(state.tasks),
+    listMaintenanceTasks: async () => { if (state.failList) throw new Error('Task list unavailable'); return structuredClone(state.tasks) },
     listMaintenanceAudits: async () => structuredClone(state.audits),
     onMaintenanceTask: (listener: (event: BlueprintMaintenanceEvent) => void) => { listeners.add(listener); return () => listeners.delete(listener) },
     startMaintenanceTask: async (input: BlueprintMaintenanceStartInput) => {
       state.starts.push(structuredClone(input))
+      if (state.gateStart) await new Promise<void>(resolve => { state.finishStart = resolve })
       const task: BlueprintMaintenanceTask = { ...input, id: 'maintenance-1', blueprintName: graph.name, baseRevision: 1, status: 'draft', progress: 0, phase: 'Created', messages: [], changeSet: null, changeSetHistory: [], createdAt: '2026-09-25T00:00:00Z', updatedAt: '2026-09-25T00:00:00Z' }
       state.tasks = [task]; publish(task); return structuredClone(task)
     },
@@ -54,7 +57,10 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
       state.applies.push(structuredClone(input))
       const task = state.tasks.find(item => item.id === input.taskId)!
       const changeSet = task.changeSet!
-      if (changeSet.sourceHashes?.[nodeId] !== graph.nodes[nodeId].sourceHash) throw new Error('STALE_SOURCE_HASH: selected note changed; refresh and propose again')
+      if (changeSet.sourceHashes?.[nodeId] !== graph.nodes[nodeId].sourceHash) {
+        task.status = 'stale'; task.error = 'STALE_SOURCE_HASH: selected note changed; refresh and propose again'; publish(task)
+        throw new Error(task.error)
+      }
       if (input.operationIds.includes('description') && !input.operationIds.includes('rename')) throw new Error('Missing dependency rename')
       for (const op of changeSet.operations.filter(op => input.operationIds.includes(op.operationId))) {
         if (op.type === 'delete-node' && !input.confirmedDeleteOperationIds?.includes(op.operationId)) throw new Error('Deletion needs individual confirmation')
@@ -72,6 +78,11 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
     loadBlueprint: async (cwd: string) => { state.refreshes.push(cwd); return structuredClone(graph) },
     completeMaintenanceTask: async (taskId: string) => { const task = state.tasks.find(item => item.id === taskId)!; task.status = 'completed'; publish(task); return structuredClone(task) },
     cancelMaintenanceTask: async (taskId: string) => { const task = state.tasks.find(item => item.id === taskId)!; task.status = 'cancelled'; publish(task); return structuredClone(task) },
+    dismissMaintenanceProposal: async ({ taskId }: { taskId: string }) => {
+      const task = state.tasks.find(item => item.id === taskId)!
+      task.changeSetHistory.push({ ...task.changeSet!, status: 'rejected' }); task.changeSet = null; task.status = 'active'; publish(task)
+      return structuredClone(task)
+    },
     prepareMaintenanceUndo: async (input: { blueprintId: string; auditId: string }) => {
       state.undoPrepares.push(input)
       const audit = state.audits.find(item => item.id === input.auditId)!

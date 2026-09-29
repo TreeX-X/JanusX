@@ -155,6 +155,8 @@ export interface UseJanusChatRegistryReturn {
    */
   bindPanelProject: (context: EngineeringContext, workspaceIds: string[], title: string) => string
   getController: (conversationId?: string) => UseJanusChatReturn
+  /** Includes ephemeral project panels without exposing them in the island list. */
+  getProjectController: (viewRef: NonNullable<EngineeringContext['viewRef']>) => UseJanusChatReturn | null
 }
 
 interface ConversationRuntime {
@@ -1156,5 +1158,12 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     updateConversation,
   ])
 
-  return { islandConversationId, getController, bindProject, bindPanelProject, persistenceReady }
+  const getProjectController = (viewRef: NonNullable<EngineeringContext['viewRef']>): UseJanusChatReturn | null => {
+    const conversation = conversations.find(item => item.engineeringContext?.domain === 'project'
+      && item.engineeringContext.viewRef?.ownerRepoId === viewRef.ownerRepoId
+      && item.engineeringContext.viewRef?.viewId === viewRef.viewId)
+    return conversation ? getController(conversation.id) : null
+  }
+
+  return { islandConversationId, getController, getProjectController, bindProject, bindPanelProject, persistenceReady }
 }

@@ -80,6 +80,8 @@ interface JanusChatProps {
    * question gates, composer (with › prefix + square orange send).
    */
   minimalComposer?: boolean
+  /** Host-owned actions rendered after the discussion, inside its scroll area. */
+  discussionFooter?: React.ReactNode
   /** Only the focused presentation owns input focus and global shortcuts. */
   focused?: boolean
   /** 当前模式颜色 */
@@ -371,6 +373,7 @@ export function JanusChat({
   compactNavigation = false,
   discussionOnly = false,
   minimalComposer = false,
+  discussionFooter,
   focused = true,
   modeColor,
   messages,
@@ -1492,6 +1495,7 @@ export function JanusChat({
           </div>
         )}
 
+        {discussionFooter}
         <span ref={messagesEndRef} className="janus-chat-end-anchor" />
 
         {showNewMessageBadge && (

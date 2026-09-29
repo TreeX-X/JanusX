@@ -28,10 +28,7 @@ export function useJanusChatController(conversationId?: string): UseJanusChatRet
 export function useOptionalJanusChatController(viewRef?: EngineeringContext['viewRef']): UseJanusChatReturn | null {
   const registry = useContext(JanusChatContext)
   if (registry && viewRef) {
-    return registry.getController().conversations.map(({ id }) => registry.getController(id)).find((controller) =>
-      controller.engineeringContext?.domain === 'project'
-      && controller.engineeringContext.viewRef?.ownerRepoId === viewRef.ownerRepoId
-      && controller.engineeringContext.viewRef?.viewId === viewRef.viewId) ?? null
+    return registry.getProjectController(viewRef)
   }
   return registry?.getController() ?? null
 }

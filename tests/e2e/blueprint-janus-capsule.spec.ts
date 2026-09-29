@@ -45,6 +45,11 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     })
     const page = await application.firstWindow({ timeout: 30_000 })
     await page.evaluate(() => (window as TestWindow).electron.system.setLanguage('zh-CN'))
+    // Enable the target workbench in the isolated desktop profile before reload.
+    await page.evaluate(async () => {
+      const experimental = (window as TestWindow).electron.experimental
+      await experimental.update({ ...await experimental.get(), ...{ blueprint: true } })
+    })
     const settleWorkbench = () => page.locator('.blueprint-workbench-shell').evaluate(async (element) => {
       const animations = element.getAnimations({ subtree: true })
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
@@ -95,6 +100,7 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await expect(conversation).toBeVisible()
     // 单会话工作区对话：面板头为 Janus 标识（旧 COPILOT CONTROL 标题已随 chrome 精简移除）。
     await expect(conversation.getByText('Janus', { exact: true })).toBeVisible()
+    await expect(conversation.getByRole('button', { name: '整理为提案', exact: true })).toBeDisabled()
     const conversationBoxBeforeDetail = await conversation.boundingBox()
 
     await page.locator('.react-flow__node').first().dblclick()

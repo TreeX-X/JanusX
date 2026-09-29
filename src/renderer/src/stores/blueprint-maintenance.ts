@@ -51,6 +51,7 @@ function upsert(tasks: BlueprintMaintenanceTask[], task: BlueprintMaintenanceTas
 
 let unsubscribe: (() => void) | null = null
 let undoRequest = 0
+let initializeRequest = 0
 
 async function refreshComposedView(): Promise<void> {
   await useBlueprintStore.getState().refreshAfterAnalysis()
@@ -62,11 +63,20 @@ export const useBlueprintMaintenanceStore = create<BlueprintMaintenanceStore>((s
   tasks: [], audits: {}, pendingUndo: null, openRequest: null, contextSelection: null, initialized: false, error: null,
   selectContext: (contextSelection) => set({ contextSelection }),
   initialize: async () => {
+    const request = ++initializeRequest
+    const initialTasks = get().tasks
     if (!unsubscribe) unsubscribe = onMaintenanceTask(({ task }) => set((state) => ({
       tasks: upsert(state.tasks, task),
     })))
-    try { set({ tasks: await listMaintenanceTasks(), initialized: true, error: null }) }
-    catch (error) { set({ initialized: true, error: error instanceof Error ? error.message : String(error) }) }
+    try {
+      const listed = await listMaintenanceTasks()
+      if (request !== initializeRequest) return
+      // Events and completed mutations after this read began outrank its snapshot.
+      const changed = get().tasks.filter(task => initialTasks.find(item => item.id === task.id) !== task)
+      set({ tasks: changed.reduce(upsert, listed), initialized: true, error: null })
+    } catch (error) {
+      if (request === initializeRequest) set({ initialized: true, error: error instanceof Error ? error.message : String(error) })
+    }
   },
   requestOpen: (openRequest) => set({ openRequest, contextSelection: openRequest }),
   clearOpenRequest: () => set({ openRequest: null }),
