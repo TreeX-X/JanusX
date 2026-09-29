@@ -27,6 +27,47 @@ describe('KnowledgeOperationsService', () => {
     expect(await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).toContain('"status":"archived"')
   })
 
+  it('selects truth by workspace and rejects ambiguous identities', async () => {
+    const other = { ...fact, provenance: { ...provenance, workspaceId: 'other' } }
+    await seed('facts/facts.jsonl', [other, fact])
+    const { knowledgeOperationsService } = await import('../../../src/main/knowledge/operations-service')
+    await knowledgeOperationsService.revoke({ kind: 'fact', id: fact.id, workspaceId: 'ws' })
+    const rows = (await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    expect(rows.map(row => row.status)).toEqual(['active', 'archived'])
+    await seed('facts/facts.jsonl', [fact, fact])
+    const before = await readFile(join(root, 'facts/facts.jsonl'), 'utf8')
+    await expect(knowledgeOperationsService.revoke({ kind: 'fact', id: fact.id, workspaceId: 'ws' })).rejects.toThrow('Ambiguous')
+    expect(await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).toBe(before)
+  })
+
+  it.each(['fact', 'graph'] as const)('preserves damaged %s storage on revoke', async kind => {
+    const path = kind === 'fact' ? 'facts/facts.jsonl' : 'graph/edges.jsonl'
+    await seed(path, [kind === 'fact' ? fact : { id: fact.id, workspaceId: 'ws', status: 'active' }])
+    const before = (await readFile(join(root, path), 'utf8')) + '{invalid json\n'
+    await writeFile(join(root, path), before)
+    const { knowledgeOperationsService } = await import('../../../src/main/knowledge/operations-service')
+    await expect(knowledgeOperationsService.revoke({ kind, id: fact.id, workspaceId: 'ws' })).rejects.toThrow()
+    expect(await readFile(join(root, path), 'utf8')).toBe(before)
+  })
+
+  it('shares the graph review lock when revoking', async () => {
+    await seed('graph/edges.jsonl', [{ id: 'edge', workspaceId: 'ws', status: 'active' }])
+    const { withGraphCandidatesLock } = await import('../../../src/main/knowledge/review-service')
+    const { knowledgeOperationsService } = await import('../../../src/main/knowledge/operations-service')
+    let release!: () => void
+    let entered!: () => void
+    const ready = new Promise<void>(resolve => { entered = resolve })
+    const held = withGraphCandidatesLock(async () => { entered(); await new Promise<void>(resolve => { release = resolve }) })
+    await ready
+    let finished = false
+    const revoked = knowledgeOperationsService.revoke({ kind: 'graph', id: 'edge', workspaceId: 'ws' }).then(() => { finished = true })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(finished).toBe(false)
+    release()
+    await Promise.all([held, revoked])
+    expect(finished).toBe(true)
+  })
+
   it('surfaces a proposed fact that conflicts with accepted truth', async () => {
     const candidate: CandidateFact = { id: 'c1', type: 'fact', status: 'proposed', fact: { ...fact, content: 'different', status: 'proposed' } }
     await seed('facts/facts.jsonl', [fact]); await seed('facts/candidates.jsonl', [candidate])

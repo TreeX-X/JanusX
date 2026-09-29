@@ -96,8 +96,33 @@ export class RefinementTaskService {
     await writeFileAtomic(join(knowledgeRootPath(), 'processing/refinement-tasks.json'), JSON.stringify({ version: 1, tasks: await this.applyForgetting(tasks) }))
   }
 
-  /** Atomic snapshots keep diagnostics responsive while a model call is in flight. */
-  list(): Promise<RefinementTask[]> { return this.read() }
+  /** Diagnostics expose source invalidation even while a model holds the task lock.
+   * The next run persists cancellation; reading this view never writes the ledger.
+   */
+  async list(): Promise<RefinementTask[]> {
+    const tasks = await this.read()
+    if (!tasks.some(task => ['pending', 'running'].includes(task.status))) return tasks
+    const [candidates, facts, observations] = await Promise.all([
+      this.deps.listCandidates(), this.deps.listTruth(), this.deps.listObservations(),
+    ])
+    const sources = new Map(observations.map(source => [source.id, source]))
+    const now = this.deps.nowMs()
+    return Promise.all(tasks.map(async task => {
+      if (!['pending', 'running'].includes(task.status)) return task
+      const candidate = candidates.find(item => item.id === task.candidateId)
+      let reason: string | undefined
+      if (!candidate || candidate.status !== 'proposed' || candidateDecisionHash(candidate) !== task.candidateHash) reason = 'candidate-changed'
+      else if (refinementContextHash(facts, task.scope, task.workspaceId, now) !== task.contextHash) reason = 'evidence-or-context-changed'
+      else for (const [id, hash] of Object.entries(task.evidenceHashes)) {
+        const source = sources.get(id)
+        if (!source || !isActiveObservation(source, now)
+          || refinementEvidenceHash(source, await this.deps.resolveContent(source)) !== hash) {
+          reason = 'evidence-or-context-changed'; break
+        }
+      }
+      return reason ? { ...task, status: 'cancelled' as const, reason } : task
+    }))
+  }
 
   /** Explicit user intent is recorded separately from model advice. */
   enqueueManual(candidateId: string, candidateHash: string): Promise<number> {
@@ -140,7 +165,7 @@ export class RefinementTaskService {
 
   async stats(): Promise<RefinementTaskStats> {
     const result: RefinementTaskStats = { pending: 0, running: 0, succeeded: 0, cancelled: 0, failed: 0, nextRetryAt: null }
-    for (const task of await this.read()) {
+    for (const task of await this.list()) {
       result[task.status]++
       if (task.status === 'pending') result.nextRetryAt = Math.min(result.nextRetryAt ?? Infinity, task.nextRetryAt)
     }
@@ -255,7 +280,13 @@ export class RefinementTaskService {
         }
         try {
           if ((await readPersonalForgettingBarrier()).blocksTask(task)) { await cancel('personal-memory-forgotten'); continue }
-          await this.deps.extract(observations, { [task.candidateId]: task.candidateHash }, validate)
+          await this.deps.extract(observations, { [task.candidateId]: task.candidateHash }, async () => {
+            const current = (await this.deps.listCandidates()).find(item => item.id === task.candidateId)
+            return !!current && current.status === 'proposed' && candidateDecisionHash(current) === task.candidateHash && await validate()
+          })
+          if ((await this.deps.listCandidates()).find(item => item.id === task.candidateId)?.status !== 'proposed') {
+            await cancel('candidate-changed'); continue
+          }
           if (!await validate()) { await cancel('evidence-or-context-changed'); continue }
           if ((await readPersonalForgettingBarrier()).blocksTask(task)) { await cancel('personal-memory-forgotten'); continue }
           task.status = 'succeeded'; result.processed++

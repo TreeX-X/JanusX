@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -74,6 +74,61 @@ describe('durable refinement tasks', () => {
     await rm(root, { recursive: true, force: true })
     if (previousRoot === undefined) delete process.env.JANUSX_KNOWLEDGE_ROOT
     else process.env.JANUSX_KNOWLEDGE_ROOT = previousRoot
+  })
+
+  it.each(['revoke', 'expire', 'review', 'evidence'] as const)('exposes %s invalidation while disabled and persists cancellation on the next run', async change => {
+    truths = [{ ...candidates[0]!.fact, status: 'active' }]
+    seed()
+    const service = new RefinementTaskService(deps)
+    await service.enqueue(plan())
+    const before = await readFile(journal(), 'utf8')
+    if (change === 'revoke') truths[0]!.status = 'archived'
+    if (change === 'expire') truths[0]!.ttl = new Date(now - 1).toISOString()
+    if (change === 'review') candidates[0]!.status = 'rejected'
+    if (change === 'evidence') observations[0]!.content += ' withdrawn'
+    settings.enabled = false
+    available = false
+    expect(await service.stats()).toMatchObject({ cancelled: 1, pending: 0 })
+    expect(await readFile(journal(), 'utf8')).toBe(before)
+    expect(await service.runDue()).toMatchObject({ cancelled: 1, processed: 0 })
+    expect(JSON.parse(await readFile(journal(), 'utf8')).tasks[0].status).toBe('cancelled')
+    expect((await new RefinementTaskService(deps).list())[0]!.status).toBe('cancelled')
+    expect(extract).not.toHaveBeenCalled()
+  })
+
+  it('propagates a real fact revocation into durable task cancellation', async () => {
+    const truth = { ...candidates[0]!.fact, status: 'active' }
+    await mkdir(join(root, 'facts'))
+    await writeFile(join(root, 'facts/facts.jsonl'), JSON.stringify(truth) + '\n')
+    deps.listTruth = async () => (await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
+    const service = new RefinementTaskService(deps)
+    await service.enqueueManual(candidates[0]!.id, candidateDecisionHash(candidates[0]!))
+    const { knowledgeOperationsService } = await import('../../../src/main/knowledge/operations-service')
+    await knowledgeOperationsService.revoke({ kind: 'fact', id: truth.id, workspaceId: truth.provenance.workspaceId })
+    expect(await service.stats()).toMatchObject({ pending: 0, cancelled: 1 })
+    expect(await service.runDue()).toMatchObject({ cancelled: 1 })
+    expect(extract).not.toHaveBeenCalled()
+  })
+
+  it('rechecks candidate review while the provider is running', async () => {
+    const service = new RefinementTaskService(deps)
+    await service.enqueue(plan())
+    extract.mockImplementation(async (_observations, _hashes, validate) => {
+      expect(await validate!()).toBe(true)
+      candidates[0]!.status = 'rejected'
+      expect(await service.stats()).toMatchObject({ cancelled: 1, running: 0 })
+      expect(await validate!()).toBe(false)
+    })
+    expect(await service.runDue()).toMatchObject({ cancelled: 1, processed: 0 })
+  })
+
+  it('does not mask unreadable source state in task diagnostics', async () => {
+    const service = new RefinementTaskService(deps)
+    await service.enqueue(plan())
+    const before = await readFile(journal(), 'utf8')
+    deps.listTruth = async () => { throw new Error('truth unreadable') }
+    await expect(service.stats()).rejects.toThrow('truth unreadable')
+    expect(await readFile(journal(), 'utf8')).toBe(before)
   })
 
   it('deduplicates concurrent submissions and stores hashes without copied private text', async () => {

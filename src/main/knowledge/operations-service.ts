@@ -1,3 +1,4 @@
+// Note: revocation preserves unreadable truth and shares review ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
@@ -13,7 +14,8 @@ import type {
 import type { RevokeTruthInput } from '../../shared/ipc/knowledge'
 export type { RevokeTruthInput, TruthKind } from '../../shared/ipc/knowledge'
 import { knowledgeRootPath } from './constants'
-import { withFactCandidatesLock, withWikiCandidatesLock } from './review-service'
+import { withFactCandidatesLock, withWikiCandidatesLock, withGraphCandidatesLock } from './review-service'
+import { readLegacyJsonl } from './legacy-memory-source'
 import { knowledgeAuditService } from './audit-service'
 
 const paths = {
@@ -38,11 +40,7 @@ async function serialized<T>(operation: () => Promise<T>): Promise<T> {
 function absolute(path: string): string { return join(knowledgeRootPath(), path) }
 
 async function readJsonl<T>(path: string): Promise<T[]> {
-  try {
-    return (await readFile(absolute(path), 'utf8')).split('\n').filter(Boolean).flatMap((line) => {
-      try { return [JSON.parse(line) as T] } catch { return [] }
-    })
-  } catch { return [] }
+  return readLegacyJsonl<T>(path)
 }
 
 async function writeJsonl(path: string, records: unknown[]): Promise<void> {
@@ -65,13 +63,13 @@ function provenanceForEdge(edge: GraphEdge): KnowledgeProvenance {
 export class KnowledgeOperationsService {
   async revoke(input: RevokeTruthInput): Promise<void> {
     if (input.kind === 'fact') return serialized(() => withFactCandidatesLock(() => this.revokeLocked(input)))
-    return input.kind === 'wiki' ? withWikiCandidatesLock(() => this.revokeLocked(input)) : serialized(() => this.revokeLocked(input))
+    return input.kind === 'wiki' ? withWikiCandidatesLock(() => this.revokeLocked(input)) : serialized(() => withGraphCandidatesLock(() => this.revokeLocked(input)))
   }
 
   private async revokeLocked(input: RevokeTruthInput): Promise<void> {
     if (input.kind === 'wiki') {
-      let index: { version: 1; pages: Array<{ slug: string; status: string; workspaceId: string }> }
-      try { index = JSON.parse(await readFile(absolute(paths.wikiIndex), 'utf8')) } catch { throw new Error(`Truth not found: wiki:${input.id}`) }
+      const index: { version: 1; pages: Array<{ slug: string; status: string; workspaceId: string }> } = JSON.parse(await readFile(absolute(paths.wikiIndex), 'utf8'))
+      if (index.pages.filter(item => item.slug === input.id && item.workspaceId === input.workspaceId).length > 1) throw new Error('Ambiguous truth identity')
       const page = index.pages.find((item) => item.slug === input.id && item.workspaceId === input.workspaceId)
       if (!page) throw new Error(`Truth not found: wiki:${input.id}`)
       if (page.workspaceId !== input.workspaceId) throw new Error('Truth workspace mismatch')
@@ -93,15 +91,12 @@ export class KnowledgeOperationsService {
     }
     const path = paths[input.kind]
     const records = await readJsonl<MemoryFact | GraphEdge>(path)
-    const index = records.findIndex((record) => record.id === input.id)
-    if (index < 0) throw new Error(`Truth not found: ${input.kind}:${input.id}`)
+    const matches = records.map((record, index) => ({ record, index })).filter(({ record }) => record.id === input.id
+      && (input.kind === 'fact' ? (record as MemoryFact).provenance.workspaceId : (record as GraphEdge).workspaceId) === input.workspaceId)
+    if (matches.length > 1) throw new Error('Ambiguous truth identity')
+    const index = matches[0]?.index ?? -1
+    if (index < 0) throw new Error(`Truth not found in workspace: ${input.kind}:${input.id}`)
     const current = records[index]!
-    const currentWorkspaceId = input.kind === 'fact'
-      ? (current as MemoryFact).provenance.workspaceId
-      : (current as GraphEdge).workspaceId
-    if (currentWorkspaceId !== input.workspaceId) {
-      throw new Error('Truth workspace mismatch')
-    }
     if (current.status === 'archived') return
     const updated = { ...current, status: 'archived' as const }
     records[index] = updated

@@ -111,6 +111,12 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 
 强度变弱首先影响排序与热度，不能据此认定工程事实失效或删除当前 truth。替代/撤回由审核改变有效性，Episode TTL 到期后退出近期视图；仍被事实引用的证据保留可解释来源或明确的过期标记。清理必须检查引用、候选和待处理任务。遗忘须使候选重放、画像缓存、搜索索引与派生产物都不能复活已遗忘内容，并保留不泄露原文的必要审计记录。
 
+[撤回服务](../../src/main/knowledge/operations-service.ts)按 workspace 与 ID 共同定位事实及图边，同一归属内的重复身份拒绝操作；事实、Wiki 和图边分别与对应审核共用写锁。撤回及反馈读取 JSONL 时只将缺失文件视为空集合，损坏行或读取错误直接失败，不能将剩余记录重写为完整库。Wiki 索引损坏保留原异常，不解释为找不到目标。
+
+[精修任务](../../src/main/knowledge/refinement-tasks.ts)的列表和统计对 pending/running 任务重新核对候选状态与内容、有效事实上下文、证据内容和有效期。事实撤回或到期、候选拒绝、证据变化立即投影为 cancelled；不等待模型可用或自动精修开启。视图读取不争用整个模型调用期间持有的任务锁，也不写账本；下次调度在模型门控前持久化取消。视图判定与持久化之间若来源恢复，尚未落盘的取消可能恢复为 pending，这是只读诊断的明确边界。已持久化的 cancelled 不自动重放，终态历史保持原结果。模型提交回调同时核对候选仍为同一 proposed 快照，避免运行期间人工拒绝后继续提交；生成结束后候选已离开 proposed 时记录取消。
+
+该实现复用现有上下文 hash，无须增加跨文件撤回日志。代价是同域、同 workspace 的任一有效事实变化都会使旧上下文任务失效，统计读取也需扫描来源并解析证据；大量历史或高频刷新出现延迟时应测量后引入可重建缓存。普通事实撤回不等于遗忘其全部观察来源，也不自动删除其他独立事实、Wiki 或图边；候选的替代与纠正目标仍由批准端核验。本切片不提供 observation 撤回入口、跨派生产物事务或已交付内容的撤回，完整 AC-9 保持未完成。
+
 ## Scope
 
 ### 上游源码核对
@@ -275,7 +281,11 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 
 个人访问生命周期机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 62 个测试文件、568 项测试，真实 Laya 用例显式跳过。新增 `memory-access.test.ts` 的 17 项覆盖锚点、持久化去重、冷却、画像不变、失效/遗忘/取消、损坏与写失败、预算裁剪、工具返回和流消费。补充生产聊天入口测试后，`npx vitest run tests/unit/llm/chat-turn-guard.test.ts` 的 11 项通过，覆盖个人成功输出、工程隔离与输出前失败。严格未使用类型检查、12 个生产文件定向 ESLint、双语键检查与 package-boundary 通过。全库 Note 检查仍有三项无关错误：debug-mode-plan 缺少 Proposal/Risks，worktree-composer-entry-motion 的 scope/reason 位置非法。未运行本切片的 Electron E2E、生产构建、真实模型与真实个人数据验证。
 
+撤回与精修任务失效机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 61 个测试文件、577 项测试，真实 Laya 用例显式跳过。`operations-service.test.ts` 的 11 项覆盖跨 workspace 同 ID、归属内重复 ID、损坏事实/图边保留和审核锁竞争；`refinement-tasks.test.ts` 的 40 项包含真实撤回到取消落盘、停用期间视图失效、来源读取错误保留和运行中拒绝的提交阻断。最终撤回模块定向复跑 11 项通过。严格未使用类型检查及三个生产文件 ESLint 通过；全库 Note 检查仍由上述三项无关错误失败。未运行本切片的生产构建、Electron E2E、真实模型或真实数据操作。
+
 ## Alternatives considered
+
+- 撤回时同步修改所有精修任务：能立即落盘取消，但现有任务锁覆盖模型调用，会使撤回等待供应商响应，并增加事实锁与任务锁的逆序风险。选择只读来源校验投影加调度持久化；保留读取与落盘之间的恢复窗口，不伪称跨文件事务。
 
 - 只保留已有衰减函数而不连接交付：实现成本最低，但生产排名无法反映实际访问。定时写回强度能简化读取，却增加停机恢复、重复衰减和后台写入复杂度；个人事实采用只读锚点计算和交付时更新，承担整文件写入成本，工程生命周期另行验收。
 
@@ -302,6 +312,7 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 - [x] AC-12: 审核一致性与存储保护 — 三个审核入口携带显示快照 hash，主进程锁内核验批准与拒绝；过期快照不能变更候选，原快照成功重试幂等。损坏或不可读的候选、truth、Wiki 索引不得被空数据覆盖；Wiki/Graph 新增与审核回滚共用锁。
 - [x] AC-13: 明确单值事实的冲突审核 — 同 ID 不覆盖 truth；发布命令与默认输出语言按同域、值和极性分组，近似文本不吞掉不同参数；替代展示旧值并要求人工确认，提交绑定旧事实指纹，竞争替代最多成功一次，审计失败可回滚；跨所有者、失效及多目标情况不允许直接批准。
 - [x] AC-14: 个人事实访问强度 — 锚点衰减可重复计算，只有最终交付的有效个人事实可增强；持久化请求去重、水位、10 分钟冷却与上限生效；访问不改变事实证据、确认或画像版本，损坏存储与失败写入不丢失原数据。此项不代替 AC-9 的工程域、任务级联撤回及完整生命周期验收。
+- [x] AC-15: 撤回与精修任务失效 — 事实撤回按归属定位并保护损坏存储，图边撤回与审核串行；待处理和运行中任务的视图立即反映候选、证据及有效上下文失效，下次调度持久化取消；模型提交重新检查候选审核状态，不将已拒绝候选记为精修成功。
 
 ## Risks
 

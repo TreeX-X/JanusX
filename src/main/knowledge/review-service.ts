@@ -203,6 +203,10 @@ export function withWikiCandidatesLock<T>(operation: () => Promise<T>): Promise<
   return withMutationLock(WIKI_PATCHES_FILE, operation)
 }
 
+export function withGraphCandidatesLock<T>(operation: () => Promise<T>): Promise<T> {
+  return withMutationLock(GRAPH_CANDIDATES_FILE, operation)
+}
+
 /** Attach advice only if the candidate still matches the scored snapshot. */
 export async function annotateFactDecisions(updates: Map<string, MemoryDecisionAnnotation>): Promise<string[]> {
   if (!updates.size) return []
