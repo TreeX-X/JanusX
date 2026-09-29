@@ -13,7 +13,7 @@ export function sameFactDomain(a: MemoryFact, b: MemoryFact): boolean {
 }
 
 export function replacementHash(fact: MemoryFact): string {
-  const { habitStrength: _strength, lastSeenAt: _seen, ...stable } = fact
+  const { habitStrength: _strength, lastSeenAt: _seen, recallState: _recall, ...stable } = fact
   return createHash('sha256').update(reviewCandidateSnapshot({ id: fact.id, type: 'fact', status: 'proposed', derivation: 'deterministic', fact: stable,
     evidence: { observationIds: fact.provenance.sourceObservationIds } })).digest('hex')
 }

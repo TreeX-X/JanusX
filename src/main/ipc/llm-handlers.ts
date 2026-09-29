@@ -6,6 +6,9 @@
  */
 
 import { ipcMain } from 'electron'
+import { randomUUID } from 'node:crypto'
+import type { UserMemoryDelivery } from '../../shared/memory-strength'
+import { containsMemoryDelivery, recordUserMemoryAccessBestEffort } from '../knowledge/memory-access'
 import { llmService } from '../llm/LlmService'
 import type { ProviderSettings } from '@janusx/llm-core'
 import { knowledgeObservationService } from '../knowledge/observation-service'
@@ -193,13 +196,17 @@ export function registerLlmHandlers(): void {
           content: m.content
         }))
 
+      let userMemoryDelivery: UserMemoryDelivery | undefined
+      const recallRequestId = randomUUID()
       if (sourceTag === 'janus-chat') {
-        formattedMessages = (await prepareJanusChatRecall(
+        const recalled = await prepareJanusChatRecall(
           'non-stream',
           formattedMessages,
           soleResource?.workspaceId ?? workspaceId,
           soleResource?.workspacePath ?? workspacePath,
-        )).messages
+        )
+        formattedMessages = recalled.messages
+        userMemoryDelivery = recalled.userMemoryDelivery
       }
 
       // 使用 AI SDK
@@ -212,6 +219,10 @@ export function registerLlmHandlers(): void {
           content: m.content
         })),
       })
+
+      if (userMemoryDelivery && containsMemoryDelivery(formattedMessages, userMemoryDelivery)) {
+        await recordUserMemoryAccessBestEffort(userMemoryDelivery, recallRequestId)
+      }
 
       if (sourceTag === 'janus-chat') {
         const userMessage = [...formattedMessages].reverse().find((message) => message.role === 'user')

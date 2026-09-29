@@ -15,7 +15,7 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，使用宿主来源契约；确定性提取器只提出候选。Profile 由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实提供人工重新确认迁移，不自动恢复历史确认资格。持久遗忘约束覆盖个人事实、Episode、候选及精修任务重放；明确格式的发布命令与默认输出语言具有单值冲突约束。更广泛的语义槽位、普通来源撤回的级联处理与召回强度更新仍需完成。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[强度计算](../../src/main/knowledge/habit-aggregator.ts)已有衰减与增强函数，但生产召回和维护尚未形成完整更新闭环。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[个人强度计算](../../src/shared/memory-strength.ts)已连接预算后的召回与交付增强；工程强度、任务级联撤回和完整维护闭环仍待实现。
 
 需求边界（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。
 
@@ -102,6 +102,12 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 共享召回实现与缓存协议，但保持按域过滤的索引视图、独立项目预算与独立画像预算。个人聊天可在允许时融合两段上下文，工程、maintenance、roundtable、remote、MCP 和共享通知默认排除 user。混合排序首期以 BM25 加新鲜度、可信来源和强度为基础，保留有界图扩展与可选向量接口；不把 embedding 变成默认依赖，也不让未配置的通道占排序权重。
 
 统一 strength 为 [0,1] 的保留/排序强度，与 confidence、authority、是否仍然正确分开。采用墙钟锚点衰减与有冷却时间的有界增强：同一时刻重复计算和停机后计算结果一致；最后真实证据时间、最后访问时间与强度锚点分开保存。只对通过权限、有效性、去重和最终预算后真正交付的记忆记录访问，浏览列表、后台相似检索和被裁掉的候选不增强；同一请求去重，频繁读取不构成新证据。
+
+个人事实的有界实现由[强度函数](../../src/shared/memory-strength.ts)和[交付记录器](../../src/main/knowledge/memory-access.ts)承担：半衰期 30 天，每次增强 0.15，上限 1，冷却 10 分钟。宿主将 strength、anchorAt、lastAccessAt 与最近 64 个请求摘要存入 recallState，读取按锚点计算，不使用定时器反复写回衰减值。冷却期内只推进访问水位与请求历史，不重设强度锚点；重复回执及早于最后访问水位的回执被拒绝，时钟回退时保守跳过。审核移除候选自带的 recallState，访问状态不参与确认、替代或画像内容指纹，也不改写真实证据时间、confidence 和事实版本。工程事实的强度闭环仍待实现。
+
+个人召回先过滤失效与到期事实、到期 Episode，再按项目原有独立预算选择并去重；已确认 Profile 的前三项保留稳定名额，其余事实排序使用有效强度。纯搜索和浏览不记录访问。流式聊天只对完整保留在最终模型消息中的个人片段，在首个文本或工具调用输出时记录；仅创建流对象、输出前失败或已取消不记录。非流式聊天在生成成功后记录；user-memory.search 在构造最终工具返回值后记录。这里的交付指宿主交给模型或工具调用方，不证明模型引用了该事实，也不证明用户读到了回答。工具接口没有调用事件 ID，宿主每次执行生成 UUID，仅提供冷却限制，不承诺跨执行重试恰好一次。
+
+记录器复用审核锁，重新验证当前确认、快照 hash、TTL、归属与遗忘屏障，再原子写入 facts.jsonl。损坏文件或非法访问状态使写入失败并保留原文件；元数据失败只警告，不阻断聊天。继续使用 JSONL 避免引入第二个数据库，代价是每次有效访问（包括冷却期内的水位更新）都全量读取、重写文件，并可能延迟首个输出。出现大库延迟后应测量再决定分片或独立遥测存储。有限请求历史不提供无限期请求 ID 去重；旧回执由时间水位拦截，同一 ID 在历史淘汰后配合新回执仍可计数。
 
 强度变弱首先影响排序与热度，不能据此认定工程事实失效或删除当前 truth。替代/撤回由审核改变有效性，Episode TTL 到期后退出近期视图；仍被事实引用的证据保留可解释来源或明确的过期标记。清理必须检查引用、候选和待处理任务。遗忘须使候选重放、画像缓存、搜索索引与派生产物都不能复活已遗忘内容，并保留不泄露原文的必要审计记录。
 
@@ -267,7 +273,11 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 
 第一阶段的运行时接入及 Windows 解包验收完成，第二阶段的人工/自动精炼代码路径可用，真实模型质量验收未通过。第二阶段仍需真实脱敏标注、独立留出与按题目/语言确定质量门槛。未调用真实外部 LLM、未操作真实用户记忆，也未声称 AC-8 或整项重构完成。
 
+个人访问生命周期机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 62 个测试文件、568 项测试，真实 Laya 用例显式跳过。新增 `memory-access.test.ts` 的 17 项覆盖锚点、持久化去重、冷却、画像不变、失效/遗忘/取消、损坏与写失败、预算裁剪、工具返回和流消费。补充生产聊天入口测试后，`npx vitest run tests/unit/llm/chat-turn-guard.test.ts` 的 11 项通过，覆盖个人成功输出、工程隔离与输出前失败。严格未使用类型检查、12 个生产文件定向 ESLint、双语键检查与 package-boundary 通过。全库 Note 检查仍有三项无关错误：debug-mode-plan 缺少 Proposal/Risks，worktree-composer-entry-motion 的 scope/reason 位置非法。未运行本切片的 Electron E2E、生产构建、真实模型与真实个人数据验证。
+
 ## Alternatives considered
+
+- 只保留已有衰减函数而不连接交付：实现成本最低，但生产排名无法反映实际访问。定时写回强度能简化读取，却增加停机恢复、重复衰减和后台写入复杂度；个人事实采用只读锚点计算和交付时更新，承担整文件写入成本，工程生命周期另行验收。
 
 - 直接引入 AgentMemory SDK 与 iii-engine：完整提供编码 Agent 接入、版本记忆、检索和运维能力。否决原因是其默认相似度替代和 legacy 通配不满足本仓审核与域隔离约束，且运行引擎会与现有 queue/review/storage 重叠；选择借鉴检索预筛、来源和版本设计。
 - 整体引入 MaiBot/A_memorix 的 SQLite、向量池与关系检索：画像账本、证据、快照、生命周期实现完整。否决原因是已有事实存储与审核所有权会被复制，聊天实体与 namespace 服务不是当前工程域需求；许可与依赖也增加直接集成成本。保留其证据状态机与画像投影机制，自行实现。
@@ -291,6 +301,7 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 - [x] AC-11: 统一审核界面 — 右侧只有一个审核入口，支持全部、工程知识、个人记忆筛选及独立数量；复用候选详情与审核动作，清楚展示来源和批准用途；知识库与个人画像保留各自阅读视图，工程来源的个人习惯仍不进入 MCP 输出。
 - [x] AC-12: 审核一致性与存储保护 — 三个审核入口携带显示快照 hash，主进程锁内核验批准与拒绝；过期快照不能变更候选，原快照成功重试幂等。损坏或不可读的候选、truth、Wiki 索引不得被空数据覆盖；Wiki/Graph 新增与审核回滚共用锁。
 - [x] AC-13: 明确单值事实的冲突审核 — 同 ID 不覆盖 truth；发布命令与默认输出语言按同域、值和极性分组，近似文本不吞掉不同参数；替代展示旧值并要求人工确认，提交绑定旧事实指纹，竞争替代最多成功一次，审计失败可回滚；跨所有者、失效及多目标情况不允许直接批准。
+- [x] AC-14: 个人事实访问强度 — 锚点衰减可重复计算，只有最终交付的有效个人事实可增强；持久化请求去重、水位、10 分钟冷却与上限生效；访问不改变事实证据、确认或画像版本，损坏存储与失败写入不丢失原数据。此项不代替 AC-9 的工程域、任务级联撤回及完整生命周期验收。
 
 ## Risks
 

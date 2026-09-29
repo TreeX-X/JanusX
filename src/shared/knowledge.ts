@@ -297,6 +297,8 @@ export interface RetentionStats {
 }
 
 export interface MemoryFact {
+  /** Host-only retrieval metadata; never evidence, confirmation, or fact version. */
+  recallState?: { strength: number; anchorAt: string; lastAccessAt: string; recentRequests: string[] }
   /** Host-derived from supported explicit single-value statements. */
   factKey?: 'release.command' | 'response.language'
   cardinality?: 'single'
@@ -457,6 +459,8 @@ export interface KnowledgeContextItem {
 }
 
 export interface KnowledgeContextResult {
+  /** JanusX-owned receipt; plain searches never record an access. */
+  userMemoryDelivery?: import('./memory-strength').UserMemoryDelivery
   items: KnowledgeContextItem[]
   compactContext: string
   truncated: boolean

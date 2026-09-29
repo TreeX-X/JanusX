@@ -152,6 +152,7 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'kind',
       'scope',
       'habitStrength',
+      'recallState',
       'lastSeenAt',
       'ttl',
     ],

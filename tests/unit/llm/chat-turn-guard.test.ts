@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KnowledgeContextResult } from '../../../src/shared/knowledge'
 
-const { search, capture, streamText, getSession, executeFunctionCall, scheduleImmediate, capturePersonTurn, capturePersonEpisode } = vi.hoisted(() => ({
+const { search, searchWithUser, recordAccess, capture, streamText, getSession, executeFunctionCall, scheduleImmediate, capturePersonTurn, capturePersonEpisode } = vi.hoisted(() => ({
   search: vi.fn(),
+  searchWithUser: vi.fn(),
+  recordAccess: vi.fn(),
   capture: vi.fn(),
   streamText: vi.fn(),
   getSession: vi.fn(),
@@ -16,7 +18,11 @@ vi.mock('../../../src/main/janus/maintenance/service', () => ({ blueprintMainten
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/janusx-test' } }))
 vi.mock('../../../src/main/knowledge/context-service', () => ({
-  knowledgeContextService: { search },
+  knowledgeContextService: { search, searchWithUser },
+}))
+vi.mock('../../../src/main/knowledge/memory-access', async importOriginal => ({
+  ...await importOriginal<typeof import('../../../src/main/knowledge/memory-access')>(),
+  recordUserMemoryAccessBestEffort: recordAccess,
 }))
 vi.mock('../../../src/main/knowledge/observation-service', () => ({
   knowledgeObservationService: { capture },
@@ -110,6 +116,8 @@ describe('chat turn guard (S6-a)', () => {
   })
   beforeEach(() => {
     search.mockReset().mockResolvedValue(emptyResult)
+    searchWithUser.mockReset().mockImplementation(input => search(input))
+    recordAccess.mockReset().mockResolvedValue(undefined)
     capture.mockReset().mockResolvedValue(undefined)
     streamText.mockReset()
     getSession.mockReset()
@@ -246,6 +254,27 @@ describe('chat turn guard (S6-a)', () => {
     expect(capturePersonTurn).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'personal-evidence-conversation', correlationId: 'personal-evidence-turn',
     }))
+  })
+
+  it.each(['personal', 'project', 'failure'] as const)('records delivered context at the production stream boundary: %s', async mode => {
+    const section = '[janus-user-memory]\nPrefer pnpm\n[/janus-user-memory]'
+    const delivery = { capturedAt: Date.now(), section, facts: [{ id: 'personal', hash: 'snapshot' }] }
+    searchWithUser.mockResolvedValue({ ...emptyResult, compactContext: section, userMemoryDelivery: delivery })
+    streamText.mockImplementation(async () => {
+      expect(recordAccess).not.toHaveBeenCalled()
+      return { textStream: (async function* () {
+        expect(recordAccess).not.toHaveBeenCalled()
+        if (mode === 'failure') throw new Error('provider unavailable')
+        yield 'answer'
+      })() }
+    })
+    await handleChatStream({ reply: vi.fn() } as never, {
+      requestId: `delivery-${mode}`, conversationId: `delivery-${mode}`,
+      messages: userMessages, providerId: 'provider-a', sourceTag: 'janus-chat', domain: mode === 'project' ? 'project' : 'personal',
+    } as never)
+    if (mode === 'personal') {
+      expect(recordAccess).toHaveBeenCalledExactlyOnceWith(delivery, `delivery-${mode}`, expect.any(AbortSignal))
+    } else expect(recordAccess).not.toHaveBeenCalled()
   })
 
   it('skips personal recall injection for project domain when a user search exists', async () => {

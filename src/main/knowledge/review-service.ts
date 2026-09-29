@@ -615,8 +615,9 @@ export class KnowledgeReviewService {
       version = target.version + 1
       superseded = { id: target.id, version: target.version }
     }
+    const { recallState: _untrustedRecallState, ...candidateFact } = candidate.fact
     const fact: MemoryFact = {
-      ...candidate.fact,
+      ...candidateFact,
       ...fields,
       ...(targetId ? { supersedes: targetId } : {}),
       scope: factScope(candidate.fact),

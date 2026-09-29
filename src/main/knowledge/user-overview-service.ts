@@ -1,3 +1,4 @@
+import { memoryStrength } from '../../shared/memory-strength'
 // Note: glance payload for persona cards plus badge — see .agents/notes/2026-09-15-user-memory-surface-m4--b32f92b5.md
 /**
  * @file User memory overview service (M4).
@@ -45,7 +46,7 @@ export async function getUserMemoryOverview(nowMs: number = Date.now()): Promise
       confirmed: fact.confirmation?.kind === 'human-review' && fact.confirmation.contentHash === reviewedFactHash(fact)
         && (!fact.ttl || Date.parse(fact.ttl) > nowMs),
       content: fact.content,
-      ...(fact.habitStrength !== undefined ? { habitStrength: fact.habitStrength } : {}),
+      ...(fact.habitStrength !== undefined ? { habitStrength: memoryStrength(fact, nowMs) } : {}),
       ...(fact.lastSeenAt ? { lastSeenAt: fact.lastSeenAt } : {}),
       ...(fact.supersedes?.trim() ? { succession: `supersedes ${fact.supersedes.trim()}` } : {}),
       observationIds: fact.provenance.sourceObservationIds,

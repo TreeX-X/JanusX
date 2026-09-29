@@ -13,6 +13,8 @@ import { redactHighConfidenceSecrets, type RegisteredTool, type ToolRegistry } f
 import { knowledgeObservationService } from '../../../knowledge/observation-service'
 import { knowledgeProcessingQueue } from '../../../knowledge/processing-queue'
 import { searchUserMemoryDefault } from '../../../knowledge/user-recall-service'
+import { randomUUID } from 'node:crypto'
+import { recordUserMemoryAccessBestEffort } from '../../../knowledge/memory-access'
 import { forgetPersonalMemoryQuery } from '../../../knowledge/personal-memory-forgetting'
 
 const registeredRegistries = new WeakSet<ToolRegistry>()
@@ -48,10 +50,10 @@ export const userMemorySearchTool: RegisteredTool = {
     required: ['query'],
     additionalProperties: false,
   },
-  execute: async (input) => {
+  execute: async (input, context) => {
     const query = boundedText(input.query, 'user-memory.search query', MAX_QUERY_CHARS)
     const result = await searchUserMemoryDefault(query)
-    return {
+    const output = {
       matches: result.items.map((item) => ({
         id: item.id,
         kind: item.kind,
@@ -64,6 +66,8 @@ export const userMemorySearchTool: RegisteredTool = {
       truncated: result.truncated,
       eligibleCount: result.eligibleCount,
     }
+    if (!context.signal.aborted) await recordUserMemoryAccessBestEffort(result.delivery, randomUUID(), context.signal)
+    return output
   },
 }
 

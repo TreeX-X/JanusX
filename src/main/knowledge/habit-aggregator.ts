@@ -12,7 +12,7 @@ import { knowledgeAuditService } from './audit-service'
 import { isUserStatement, sourceEvidence } from './memory-evidence'
 
 export const HABIT_PROMOTION_THRESHOLD = 3
-export const HABIT_DECAY_HALF_LIFE_DAYS = 30
+export { HABIT_DECAY_HALF_LIFE_DAYS, decayHabitStrength, reheatHabitStrength } from '../../shared/memory-strength'
 export const HABIT_SIMILARITY_THRESHOLD = 0.6
 
 function tokenizeForHabit(text: string): string[] {
@@ -93,19 +93,6 @@ export function proposeHabitCandidates(
     })
     .filter((promotion) => promotion.content.length > 0)
     .map((promotion) => ({ ...promotion, key: `${promotion.key}:${promotion.content.length}` }))
-}
-
-/** Ebbinghaus decay: strength * 0.5^(ageDays / halfLife). */
-export function decayHabitStrength(strength: number, lastSeenAt: string, nowMs: number = Date.now()): number {
-  const lastMs = Date.parse(lastSeenAt)
-  if (!Number.isFinite(lastMs)) return strength
-  const ageDays = Math.max(0, (nowMs - lastMs) / (24 * 60 * 60 * 1000))
-  return strength * Math.pow(0.5, ageDays / HABIT_DECAY_HALF_LIFE_DAYS)
-}
-
-/** Retrieval reheat: successful recall refreshes strength and lastSeenAt. */
-export function reheatHabitStrength(strength: number, boost = 0.15): number {
-  return Math.min(1, strength + boost)
 }
 
 function initialHabitStrength(frequency: number): number {

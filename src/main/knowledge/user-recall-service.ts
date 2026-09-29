@@ -1,3 +1,7 @@
+import { memoryStrength, type UserMemoryDelivery } from '../../shared/memory-strength'
+import { replacementHash } from './fact-conflicts'
+import { reviewedFactHash } from './profile-projection'
+import { factScope } from './memory-evidence'
 // Note: user-scope recall with independent budget behind the shell seam — see .agents/notes/2026-09-15-user-recall-m2--dec987d8.md
 /**
  * @file User recall service (M2).
@@ -52,6 +56,7 @@ export interface UserRecallItem {
 }
 
 export interface UserRecallResult {
+  delivery?: UserMemoryDelivery
   items: UserRecallItem[]
   compactContext: string
   truncated: boolean
@@ -197,10 +202,12 @@ export async function searchUserMemory(
     deps.listActiveEpisodes(),
   ])
 
-  const stableDocs = profileDocs(profile)
+  const validFacts = facts.filter(fact => factScope(fact) === 'user' && fact.status === 'active' && (!fact.ttl || Date.parse(fact.ttl) > nowMs))
+  const factsById = new Map(validFacts.map(fact => [fact.id, fact]))
+  const stableDocs = profileDocs({ ...profile, confirmedFacts: profile.confirmedFacts?.filter(fact => factsById.has(fact.id)) })
   const stableFactIds = new Set((profile.confirmedFacts ?? []).map(fact => fact.id))
   const docs: UserDoc[] = []
-  for (const { fact, succession } of applyHabitSuccession(facts)) {
+  for (const { fact, succession } of applyHabitSuccession(validFacts)) {
     if (profile.derivation || stableFactIds.has(fact.id)) continue
     docs.push({
       id: `fact:${fact.id}`,
@@ -213,13 +220,13 @@ export async function searchUserMemory(
         factIds: [fact.id],
         observationIds: fact.provenance.sourceObservationIds,
         episodeIds: [],
-        habitStrength: fact.habitStrength,
+        habitStrength: memoryStrength(fact, nowMs),
         lastSeenAt: fact.lastSeenAt,
         ...(succession ? { succession } : {}),
       },
     })
   }
-  for (const episode of episodes) {
+  for (const episode of episodes.filter(episode => episode.status === 'active' && Date.parse(episode.expiresAt) > nowMs)) {
     docs.push({
       id: `episode:${episode.id}`,
       text: `${episode.content}\n${episode.tags.join(' ')}`,
@@ -246,9 +253,9 @@ export async function searchUserMemory(
     const doc = byId.get(hit.id)
     if (!doc) continue
     let boost = 0
-    if (doc.item.kind === 'habit') {
-      const strength = doc.item.habitStrength ?? 0.5
-      boost = strength * 0.5 + recencyBoost(doc.item.lastSeenAt, nowMs, 180) * 0.3
+    const fact = factsById.get(doc.item.factIds[0])
+    if (fact) {
+      boost = memoryStrength(fact, nowMs) * 0.5 + recencyBoost(fact.recallState?.lastAccessAt ?? fact.lastSeenAt, nowMs, 180) * 0.3
     } else if (doc.item.kind === 'episode') {
       const episode = episodes.find((candidate) => candidate.id === doc.item.id)
       boost = recencyBoost(episode?.createdAt, nowMs, 90) * 0.5
@@ -260,14 +267,22 @@ export async function searchUserMemory(
   const ordered = [...stable.map(doc => ({ ...doc.item, score: 0, bm25Score: 0 })), ...ranked]
   const lines: string[] = []
   const items: UserRecallItem[] = []
+  const seen = new Set<string>()
+  const seenFacts = new Set<string>()
   for (const item of ordered) {
+    if (seen.has(`${item.kind}:${item.id}`) || item.factIds.some(id => seenFacts.has(id))) continue
     if (items.length >= maxItems) break
     const line = formatUserLine(item)
     if ([...lines, line].join('\n').length > maxChars) continue
     lines.push(line)
     items.push(item)
+    seen.add(`${item.kind}:${item.id}`)
+    item.factIds.forEach(id => seenFacts.add(id))
   }
+  const deliveredFacts = validFacts.filter(fact => seenFacts.has(fact.id) && items.some(item => item.factIds.includes(fact.id) && item.content === fact.content)
+    && (!profile.derivation || profile.confirmedFacts?.some(ref => ref.id === fact.id && ref.sourceHash === reviewedFactHash(fact))))
   return {
+    delivery: { capturedAt: nowMs, section: formatUserMemorySection(lines), facts: [...new Map(deliveredFacts.map(fact => [fact.id, { id: fact.id, hash: replacementHash(fact) }])).values()] },
     items,
     compactContext: formatUserMemorySection(lines),
     truncated: items.length < ordered.length,
@@ -291,7 +306,7 @@ export async function searchUserMemoryDefault(query: string): Promise<UserRecall
     listActiveEpisodes: () => userEpisodeService.listActive(Date.now()),
   })
   const after = await readPersonalForgettingBarrier()
-  if (JSON.stringify(before.records) !== JSON.stringify(after.records)) return { ...result, items: [], compactContext: '', eligibleCount: 0, truncated: false }
+  if (JSON.stringify(before.records) !== JSON.stringify(after.records)) return { ...result, delivery: undefined, items: [], compactContext: '', eligibleCount: 0, truncated: false }
   return result
 }
 
@@ -333,6 +348,7 @@ export function fuseKnowledgeResults(
   }))
   return {
     items: [...project.items, ...userItems],
+    ...(user.delivery ? { userMemoryDelivery: user.delivery } : {}),
     compactContext: project.compactContext
       ? `${project.compactContext}\n\n${user.compactContext}`
       : user.compactContext,

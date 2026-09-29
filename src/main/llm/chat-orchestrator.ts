@@ -40,6 +40,8 @@ import {
 import { injectUserMemoryContext, type UserRecallResult } from '../knowledge/user-recall-service'
 import { capturePersonChatTurn, capturePersonEpisodeFromTurn } from '../knowledge/user-turn-capture'
 import { sanitizeLoopMessages } from './loop-message-sanitize'
+import type { UserMemoryDelivery } from '../../shared/memory-strength'
+import { containsMemoryDelivery, recordUserMemoryAccessBestEffort, trackMemoryStream } from '../knowledge/memory-access'
 
 /** 对话消息类型 */
 export interface ChatMessage {
@@ -105,7 +107,7 @@ export async function prepareJanusChatRecall(
   search: ContextSearch = knowledgeContextService.search.bind(knowledgeContextService),
   searchUser?: UserSearch,
   domain?: 'personal' | 'project',
-): Promise<{ messages: ChatMessage[]; trace: import('@janus-agent/chat-core').KnowledgeRecallTrace }> {
+): Promise<{ messages: ChatMessage[]; trace: import('@janus-agent/chat-core').KnowledgeRecallTrace; userMemoryDelivery?: UserMemoryDelivery }> {
   const project = await prepareCoreRecall({ requestId, messages, workspaceId, workspacePath, search })
   // S6 domain isolation: project sessions never auto-inject personal history.
   // Only an explicit user-provided snippet (not the whole timeline) may cross.
@@ -122,7 +124,7 @@ export async function prepareJanusChatRecall(
     return project
   }
   if (!user || !user.compactContext) return project
-  return { messages: injectUserMemoryContext(project.messages, user.compactContext), trace: project.trace }
+  return { messages: injectUserMemoryContext(project.messages, user.compactContext), trace: project.trace, ...(user.delivery ? { userMemoryDelivery: user.delivery } : {}) }
 }
 
 /*-- delta 合批窗口：高速流下把每 token 一次 IPC 压到每 40ms 一次 --*/
@@ -286,6 +288,7 @@ function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['
 
 /** 壳默认 ports：生产单例装配（可注入版本见 janus-agent-ports）。 */
 function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'personal' | 'project', conversationId?: string): ChatTurnPorts {
+  const deliveries = new Map<string, UserMemoryDelivery>()
   return buildJanusChatTurnPorts({
     callerId,
     getProviderSettings: (providerId) => llmService.getProviderSettings('janus', providerId),
@@ -321,7 +324,9 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
         return knowledgeContextService.search(base)
       }
       try {
-        return await knowledgeContextService.searchWithUser(base)
+        const result = await knowledgeContextService.searchWithUser(base)
+        if (result.userMemoryDelivery) deliveries.set(result.userMemoryDelivery.section, result.userMemoryDelivery)
+        return result
       } catch {
         return knowledgeContextService.search(base)
       }
@@ -346,7 +351,12 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
     streamTextFn: (async (options: Record<string, unknown>) => {
       const messages = (options as { messages?: Array<{ role: string }> }).messages
       if (!Array.isArray(messages)) return streamText(options as never)
-      return streamText({ ...options, messages: sanitizeLoopMessages(messages) } as never)
+      const sanitized = sanitizeLoopMessages(messages)
+      const result = await streamText({ ...options, messages: sanitized } as never)
+      const receipts = [...deliveries.values()].filter(receipt => containsMemoryDelivery(sanitized, receipt))
+      return trackMemoryStream(result, async () => {
+        for (const receipt of receipts) await recordUserMemoryAccessBestEffort(receipt, requestId, options.abortSignal as AbortSignal | undefined)
+      })
     }) as unknown as ChatTurnPorts['streamTextFn'],
     question: createShellQuestionPort(requestId),
   })
