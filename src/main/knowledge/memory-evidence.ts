@@ -45,8 +45,8 @@ export function isUserStatement(observation: Observation): boolean {
     && evidence.speaker === 'user' && evidence.authority === 'user-stated'
 }
 
-export function isActiveObservation(observation: Pick<Observation, 'episodeStatus' | 'expiresAt'>, nowMs = Date.now()): boolean {
-  return observation.episodeStatus !== 'expired'
+export function isActiveObservation(observation: Pick<Observation, 'episodeStatus' | 'expiresAt' | 'revokedAt'>, nowMs = Date.now()): boolean {
+  return !observation.revokedAt && observation.episodeStatus !== 'expired'
     && (!observation.expiresAt || Date.parse(observation.expiresAt) > nowMs)
 }
 

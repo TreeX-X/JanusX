@@ -189,6 +189,8 @@ export interface KnowledgeProvenance {
 }
 
 export interface Observation {
+  /** Host-derived from the durable source revocation ledger. */
+  revokedAt?: string
   id: string
   /** Host-owned write intent. Payload fields cannot grant this intent. */
   memoryIntent?: 'remember' | 'episode'

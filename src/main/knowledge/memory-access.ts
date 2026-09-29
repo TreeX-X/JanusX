@@ -7,6 +7,7 @@ import { knowledgeRootPath } from './constants'
 import { withFactCandidatesLock } from './review-service'
 import { readLegacyJsonl } from './legacy-memory-source'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 import { factScope } from './memory-evidence'
 import { replacementHash } from './fact-conflicts'
 import { reviewedFactHash } from './profile-projection'
@@ -27,6 +28,7 @@ async function recordMemoryAccess(receipt: UserMemoryDelivery | ProjectMemoryDel
     if (signal?.aborted) return 0
     const facts = await readLegacyJsonl<MemoryFact>('facts/facts.jsonl')
     const barrier = project ? undefined : await readPersonalForgettingBarrier()
+    const revocations = await readObservationRevocationBarrier()
     const key = (id: string, workspaceId?: string) => project ? JSON.stringify([workspaceId, id]) : id
     const refs = new Map(receipt.facts.map(ref => [key(ref.id, 'workspaceId' in ref ? String(ref.workspaceId) : undefined), ref.hash]))
     const counts = new Map<string, number>()
@@ -39,7 +41,7 @@ async function recordMemoryAccess(receipt: UserMemoryDelivery | ProjectMemoryDel
     const next = facts.map(fact => {
       const id = key(fact.id, fact.provenance.workspaceId)
       if (!refs.has(id) || counts.get(id) !== 1 || (project ? factScope(fact) === 'user' : factScope(fact) !== 'user')
-        || fact.status !== 'active' || fact.ttl && !(Date.parse(fact.ttl) > nowMs) || barrier?.blocksFact(fact)
+        || fact.status !== 'active' || fact.ttl && !(Date.parse(fact.ttl) > nowMs) || barrier?.blocksFact(fact) || revocations.blocksFact(fact)
         || !project && (fact.confirmation?.kind !== 'human-review' || fact.confirmation.contentHash !== reviewedFactHash(fact))
         || refs.get(id) !== replacementHash(fact)) return fact
       const state = fact.recallState

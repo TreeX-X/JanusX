@@ -87,7 +87,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(40)
+    expect(channels).toHaveLength(42)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -195,6 +195,16 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.proposePersonalMemoryCorrection, { targetId: 'old', targetHash: 'hash', content: 'new' }],
       [KNOWLEDGE_CHANNELS.getSettings],
       [KNOWLEDGE_CHANNELS.updateSettings, { enabled: false }],
+    ])
+  })
+
+  it('binds source withdrawal to the workspace and reviewed source snapshot', async () => {
+    const target = { id: 'source', workspaceId: 'workspace' }
+    await knowledgeApi.observationRevocationContext(target)
+    await knowledgeApi.revokeObservation({ ...target, sourceHash: 'a'.repeat(64) })
+    expect(mocks.invoke.mock.calls).toEqual([
+      [KNOWLEDGE_CHANNELS.observationRevocationContext, target],
+      [KNOWLEDGE_CHANNELS.revokeObservation, { ...target, sourceHash: 'a'.repeat(64) }],
     ])
   })
 
@@ -343,8 +353,10 @@ describe('Knowledge IPC contract', () => {
       () => api.updateSettings({ enabled: false }),
     ]
 
-    expect(Object.keys(api)).toHaveLength(40)
-    expect(calls).toHaveLength(40)
+    calls.push(() => api.observationRevocationContext({ id: 'source', workspaceId: 'ws' }))
+    calls.push(() => api.revokeObservation({ id: 'source', workspaceId: 'ws', sourceHash: 'a'.repeat(64) }))
+    expect(Object.keys(api)).toHaveLength(42)
+    expect(calls).toHaveLength(42)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

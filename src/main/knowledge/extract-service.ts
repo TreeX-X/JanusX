@@ -1,6 +1,7 @@
 import { readLegacyJsonl } from './legacy-memory-source'
 import { canMergeFactText } from '../../shared/fact-slot'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 /**
  * @file KnowledgeExtractService —— Phase 6 候选知识提炼，Phase 2 LLM 增强
  * @description
@@ -731,17 +732,20 @@ export class KnowledgeExtractService {
   async listFactCandidates(): Promise<CandidateFact[]> {
     const records = await this.readJsonl<CandidateFact>(FACT_CANDIDATES_FILE)
     const barrier = await readPersonalForgettingBarrier()
-    return records.map(candidate => barrier.candidate(candidate))
+    const revocations = await readObservationRevocationBarrier()
+    return records.map(candidate => revocations.candidate(barrier.candidate(candidate)))
   }
 
   /** 读取 graph/candidates.jsonl（追加写）。 */
   async listGraphCandidates(): Promise<CandidateGraphEdge[]> {
-    return this.readJsonl<CandidateGraphEdge>(GRAPH_CANDIDATES_FILE)
+    const revocations = await readObservationRevocationBarrier()
+    return (await this.readJsonl<CandidateGraphEdge>(GRAPH_CANDIDATES_FILE)).map(candidate => revocations.candidate(candidate))
   }
 
   /** 读取 wiki/patches.jsonl（追加写）。 */
   async listWikiPatchCandidates(): Promise<CandidateWikiPatch[]> {
-    return this.readJsonl<CandidateWikiPatch>(WIKI_PATCHES_FILE)
+    const revocations = await readObservationRevocationBarrier()
+    return (await this.readJsonl<CandidateWikiPatch>(WIKI_PATCHES_FILE)).map(candidate => revocations.candidate(candidate))
   }
 
   private async readJsonl<T>(relativePath: string): Promise<T[]> {

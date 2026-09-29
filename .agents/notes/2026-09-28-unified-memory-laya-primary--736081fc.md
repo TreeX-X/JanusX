@@ -13,9 +13,9 @@ tags: [memory, knowledge, unification, laya, decision-model]
 
 ## Problem
 
-JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，使用宿主来源契约；确定性提取器只提出候选。Profile 由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实提供人工重新确认迁移，不自动恢复历史确认资格。持久遗忘约束覆盖个人事实、Episode、候选及精修任务重放；明确格式的发布命令与默认输出语言具有单值冲突约束。更广泛的语义槽位、普通来源撤回的级联处理与召回强度更新仍需完成。
+JanusX 已有 queue-owned 的 observation → candidate → review → truth → BM25 管线。个人 Habit、显式保存与新 Episode 接入同一观察存储和队列，使用宿主来源契约；确定性提取器只提出候选。Profile 由人工 override 与带确认记录的个人事实派生，个人召回仍保留独立索引；旧 Episode 继续兼容读取。旧画像与个人事实提供人工重新确认迁移，不自动恢复历史确认资格。持久遗忘约束覆盖个人事实、Episode、候选及精修任务重放；明确格式的发布命令与默认输出语言具有单值冲突约束。来源撤回按显式引用使派生视图失效，Janus 聊天交付驱动事实强度更新；更广泛的语义槽位、撤回恢复与完整迁移验收仍需完成。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[个人强度计算](../../src/shared/memory-strength.ts)已连接预算后的召回与交付增强；工程事实也接入 Janus 聊天交付增强；observation 级联撤回和完整维护闭环仍待实现。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，由 [review-service](../../src/main/knowledge/review-service.ts)统一接收并等待人工审核。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)按宿主核验的用户发言筛选来源，允许从工程会话学习开发习惯；项目配置、工具结果和助手回复本身不构成个人偏好证据。[个人保存工具](../../src/main/agent/runtime/tools/user-memory-tools.ts)及 [Episode](../../src/main/knowledge/user-episode-service.ts)已收拢新写入，[Profile](../../src/main/knowledge/user-profile-service.ts)生成带来源指纹的事实派生快照。[精修规划阶段](../../src/main/knowledge/llm-stage.ts)持久化通过评分门控的任务，由现有队列独立恢复执行；缺省关闭精修，无模型时保留等待且不消耗尝试次数。生产运行时已接入可选 Laya sidecar 和人工精炼入口；真实模型推理可用，但合成留出集质量不足，不能宣称生产校准完成。[个人强度计算](../../src/shared/memory-strength.ts)已连接预算后的召回与交付增强；工程事实也接入 Janus 聊天交付增强；observation 撤回已接入显式来源引用链，完整维护和迁移验收仍待完成。
 
 需求边界（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。
 
@@ -115,9 +115,17 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 
 [精修任务](../../src/main/knowledge/refinement-tasks.ts)的列表和统计对 pending/running 任务重新核对候选状态与内容、有效事实上下文、证据内容和有效期。事实撤回或到期、候选拒绝、证据变化立即投影为 cancelled；不等待模型可用或自动精修开启。视图读取不争用整个模型调用期间持有的任务锁，也不写账本；下次调度在模型门控前持久化取消。视图判定与持久化之间若来源恢复，尚未落盘的取消可能恢复为 pending，这是只读诊断的明确边界。已持久化的 cancelled 不自动重放，终态历史保持原结果。模型提交回调同时核对候选仍为同一 proposed 快照，避免运行期间人工拒绝后继续提交；生成结束后候选已离开 proposed 时记录取消。
 
-该实现复用现有上下文 hash，无须增加跨文件撤回日志。代价是同域、同 workspace 的任一有效事实变化都会使旧上下文任务失效，统计读取也需扫描来源并解析证据；大量历史或高频刷新出现延迟时应测量后引入可重建缓存。普通事实撤回不等于遗忘其全部观察来源，也不自动删除其他独立事实、Wiki 或图边；候选的替代与纠正目标仍由批准端核验。本切片不提供 observation 撤回入口、跨派生产物事务或已交付内容的撤回，完整 AC-9 保持未完成。
+该实现复用现有上下文 hash，无须增加跨文件撤回日志。代价是同域、同 workspace 的任一有效事实变化都会使旧上下文任务失效，统计读取也需扫描来源并解析证据；大量历史或高频刷新出现延迟时应测量后引入可重建缓存。普通事实撤回不等于遗忘其全部观察来源，也不自动删除其他独立事实、Wiki 或图边；候选的替代与纠正目标仍由批准端核验。普通事实撤回不提供跨派生产物事务或已交付内容的撤回；observation 撤回另以原子屏障投影派生失效，完整 AC-9 保持未完成。
 
 ## Scope
+
+[来源撤回](../../src/main/knowledge/observation-revocation.ts)提供宿主预览与提交接口；知识库观察详情通过[确认控件](../../src/renderer/src/components/knowledge/ObservationRevokeControl.tsx)先读取当前完整正文及 sourceHash，再由用户确认撤回。hash 绑定解析后的观察全部字段与解析后的 blob 正文，排除宿主派生 revokedAt；workspace 与 ID 唯一定位来源。来源缺失、重复、损坏、摘要过期或已撤回时拒绝新提交；相同成功快照重试幂等。失败后界面清除旧预览，要求重新读取；关闭详情后，未完成请求不能重新打开或刷新其他详情。
+
+宿主按事实、Wiki、图边审核锁、观察写锁的固定顺序进入撤回，严格读取 active 与 gzip 归档观察及事实、候选日志。沿同 workspace 的 relatedObservationIds 求已有观察后代集合，再依据 provenance、sourceEvidence 与候选 evidence 记录关联事实身份。单次原子写入 `observations/revoked.json`，保存 workspace/ID 摘要、来源快照摘要、派生身份摘要和时间；该记录同时是撤回决策与无正文审计回执，不另写一个可能失败的审计事务。损坏输入或写入失败不改变原库。
+
+[撤回屏障](../../src/main/knowledge/observation-revocation-barrier.ts)将观察投影为 revokedAt，并在候选读取、提议、批准、truth、Profile、Episode、搜索缓存与访问增强处重新核验。已知事实退出有效视图，引用这些事实的 Wiki 页面和图边整体退出；原始事实、观察、候选和页面正文保留。待审候选投影为 rejected，精修任务依据已失效的候选与来源取消，运行中的模型提交回调重新检查。恢复原始观察分片或重放同一来源 ID 不能绕过屏障；屏障文件不可读时必须失败，不能当作未撤回。个人 override 属于独立人工输入，不随来源自动删除。
+
+选择投影视图而非逐文件删除，避免跨分片、事实、Wiki、图边和任务的多文件回滚。代价是每个正式读取/写入入口必须尊重屏障，撤回扫描持有多把写锁，较大的来源库可能阻塞采集和审核；测量锁等待与扫描量后再决定可重建引用索引。含一条撤回来源的多证据事实、含一个失效事实的 Wiki/图边均保守整体退出，不自动重写剩余内容或做语义归因。这里只保证显式引用和已知观察后代，不推断无引用文本的语义派生，也不承诺已组装或已交付消息可被召回。新 ID 且不保留来源引用的重新导入不属于同源重放保护；恢复授权、已撤回来源的独立管理页和引用精细拆分仍待设计。
 
 工程事实在[召回服务](../../src/main/knowledge/recall-service.ts)中使用 `memoryStrength × 0.5` 作为独立 strengthBoost，保留 BM25、可信度与新鲜度项。衰减按每次召回的墙钟计算，不固定在索引构建时；active 与 TTL 过滤在缓存命中后重新执行，过滤后文档身份进入 BM25 缓存键，确保到期文档不继续影响词频。强度落盘仍会改变现有文件指纹并重建缓存，未引入单独的排名数据库。
 
@@ -291,7 +299,11 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 
 工程事实交付强度机器验证（2026-09-29）：`npx vitest run tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 62 个测试文件、585 项测试，真实 Laya 用例显式跳过。补充失效事实过滤和真实缓存更新后，`npx vitest run tests/unit/knowledge/memory-access.test.ts tests/unit/knowledge/recall-phase3.test.ts tests/unit/knowledge/recall-service.test.ts tests/unit/knowledge/context-service.test.ts` 的 48 项通过。覆盖工程回执的跨项目同 ID、私有域隔离、重复请求、归档拒绝、实际缓存更新，固定墙钟下的衰减/重启等价、TTL 缓存失效、预算裁剪，以及个人融合/工程聊天成功和输出前失败的真实接线。严格未使用类型检查、八个生产文件定向 ESLint 与 package-boundary 通过；全库 Note 检查仍有上述三项无关错误。未运行本切片的生产构建、Electron E2E、真实模型或真实数据操作。
 
+来源撤回机器验证（2026-09-29）：`npx vitest run --maxWorkers=4 tests/unit/knowledge tests/unit/knowledge-ipc-contract.test.ts tests/unit/observation-revocation-ui.test.ts tests/unit/memory-review-ui.test.ts tests/unit/personal-memory-correction-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/note-wiki.test.ts tests/unit/agent/user-memory-tools.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/llm/janus-agent-ports.test.ts` 通过 64 个测试文件、598 项测试，真实 Laya 用例显式跳过。默认并发运行时一项既有异步 schema_violation 审计断言超时，单文件复跑通过，四 worker 完整回归通过。新增 `observation-revocation.test.ts` 的 10 项覆盖实际来源、画像、Wiki/图边、候选、运行中精修、gzip、重放、同 ID 跨 workspace、重复提交、损坏文件与写失败；`observation-revocation-ui.test.ts` 的两项 Chromium 测试覆盖正文预览、hash 提交、过期失败重读和关闭后不刷新。IPC 的八项测试覆盖 42 个接口及浏览器降级。严格未使用类型检查、19 个生产文件定向 ESLint、双语键和 package-boundary 通过；ESLint 保留 KnowledgeWorkbench 既有 refresh 依赖警告。全库 Note 检查仍有上述三项无关错误。未运行完整 Electron E2E、生产打包、真实模型或真实用户数据撤回。
+
 ## Alternatives considered
+
+- 撤回时删除所有关联原文件：清理直观，但会破坏来源追溯，并需要观察归档、候选、事实、Wiki、图边与任务之间的跨文件事务。沿用普通事实归档最省实现，却不能约束来源重放；采用单一撤回屏障与受约束视图，保留原始证据，并明确承担入口一致性和全量扫描成本。
 
 - 工程记忆沿用仅 BM25、可信度和新鲜度排序：成本最低，但实际访问无法参与排名。为工程域另建强度库可降低事实文件写入量，却引入第二份身份和恢复机制；采用同一 recallState 与写锁，工程回执额外绑定 workspace，并接受访问时重建现有文件指纹缓存的成本。
 
@@ -324,6 +336,7 @@ Windows 解包验证使用构建快照，避免运行中的开发服务改写 ou
 - [x] AC-14: 个人事实访问强度 — 锚点衰减可重复计算，只有最终交付的有效个人事实可增强；持久化请求去重、水位、10 分钟冷却与上限生效；访问不改变事实证据、确认或画像版本，损坏存储与失败写入不丢失原数据。此项不代替 AC-9 的工程域、任务级联撤回及完整生命周期验收。
 - [x] AC-15: 撤回与精修任务失效 — 事实撤回按归属定位并保护损坏存储，图边撤回与审核串行；待处理和运行中任务的视图立即反映候选、证据及有效上下文失效，下次调度持久化取消；模型提交重新检查候选审核状态，不将已拒绝候选记为精修成功。
 - [x] AC-16: 工程事实的 Janus 交付强度 — 直接交付的工程事实按 workspace 与快照绑定增强，复用衰减、冷却、去重与上限；缓存命中仍按当前时间衰减和过滤到期事实，访问落盘影响后续排名，私有事实与跨项目同 ID 不串写。普通搜索保持只读，Wiki/图边不按引用增强，不据强度归档或删除 truth。
+- [x] AC-17: 显式来源撤回 — 观察详情预览当前正文并绑定 hash 二次确认；原子屏障使来源与已有显式派生链退出候选、truth、画像、近期事件和召回，阻止旧来源重放及运行中精修提交；严格读取和失败写入保留原文件。保留独立来源与跨 workspace 同 ID，不提供语义派生推断或恢复授权。
 
 ## Risks
 

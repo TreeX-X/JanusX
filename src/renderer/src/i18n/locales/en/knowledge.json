@@ -1,4 +1,10 @@
 {
+  "observation": {
+    "revoke": "Withdraw this source",
+    "confirmRevoke": "Confirm source withdrawal",
+    "revoked": "Source withdrawn",
+    "revokeDetail": "This source and its linked memories, candidates, wiki pages and graph edges will leave active views. Pending refinement will be cancelled. Original evidence is retained; this action has no restore control."
+  },
   "laya": {
     "description": "Local decision scoring; every candidate still requires review. Configure a Python environment with the pinned Laya dependencies, then download the verified multilingual model (about 678 MB).",
     "enabled": "Enable Laya",

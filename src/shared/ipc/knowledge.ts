@@ -40,6 +40,8 @@ export const KNOWLEDGE_CHANNELS = {
   observe: 'knowledge:observe',
   listObservations: 'knowledge:observations:list',
   pruneObservations: 'knowledge:observations:prune',
+  observationRevocationContext: 'knowledge:observations:revocation-context',
+  revokeObservation: 'knowledge:observations:revoke',
   autoPruneObservations: 'knowledge:observations:auto-prune',
   resolveObservationContent: 'knowledge:observations:resolve-content',
   retentionStats: 'knowledge:retention:stats',
@@ -279,6 +281,8 @@ export interface KnowledgeAPI {
   observe: (input: CaptureObservationInput) => Promise<Observation>
   listObservations: (query: ObservationQuery) => Promise<Observation[]>
   pruneObservations: (query: ObservationPruneQuery) => Promise<ObservationPruneResult>
+  observationRevocationContext: (input: { id: string; workspaceId: string }) => Promise<{ sourceHash: string; revoked: boolean; content: string }>
+  revokeObservation: (input: { id: string; workspaceId: string; sourceHash: string }) => Promise<void>
   autoPruneObservations: (nowMs?: number) => Promise<ObservationPruneResult>
   resolveObservationContent: (observation: Observation) => Promise<string>
   retentionStats: () => Promise<RetentionStats>

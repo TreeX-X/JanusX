@@ -24,6 +24,7 @@ import { knowledgeObservationService } from './observation-service'
 import { Bm25Index } from './search/bm25'
 import { knowledgeTruthService } from './truth-service'
 import { readDerivedObservation, type DerivedObservation } from './deterministic-extractor'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 
 /**
  * Phase 3 (§8): per-workspace observation cap. Replaces the old global
@@ -54,6 +55,7 @@ export interface KnowledgeRecallRequest extends Omit<KnowledgeSearchQuery, 'limi
 }
 
 export interface KnowledgeRecallDocument {
+  candidateSnapshot?: CandidateFact | CandidateWikiPatch | CandidateGraphEdge
   factSnapshot?: MemoryFact
   factHash?: string
   key: string
@@ -302,7 +304,7 @@ function observationDocument(
     fileRefs,
     sourceObservationIds: [observation.id],
     createdAt: observation.createdAt,
-    status: observation.episodeStatus ?? 'active',
+    status: observation.revokedAt ? 'expired' : observation.episodeStatus ?? 'active',
     ...(observation.agentId ? { agentId: observation.agentId } : {}),
     ...(observation.sessionId ? { sessionId: observation.sessionId } : {}),
   }
@@ -332,7 +334,7 @@ function factCandidateDocument(candidate: CandidateFact): KnowledgeRecallDocumen
     derivation: candidate.derivation,
     ...(fact.scope ? { scope: fact.scope } : {}),
   }
-  return { key: documentKey(hit), hit }
+  return { key: documentKey(hit), hit, candidateSnapshot: candidate }
 }
 
 function wikiPatchDocument(patch: CandidateWikiPatch): KnowledgeRecallDocument {
@@ -356,7 +358,7 @@ function wikiPatchDocument(patch: CandidateWikiPatch): KnowledgeRecallDocument {
     status: patch.status,
     derivation: patch.derivation,
   }
-  return { key: documentKey(hit), hit }
+  return { key: documentKey(hit), hit, candidateSnapshot: patch }
 }
 
 function graphCandidateDocument(candidate: CandidateGraphEdge): KnowledgeRecallDocument {
@@ -380,7 +382,7 @@ function graphCandidateDocument(candidate: CandidateGraphEdge): KnowledgeRecallD
     status: candidate.status,
     derivation: candidate.derivation,
   }
-  return { key: documentKey(hit), hit }
+  return { key: documentKey(hit), hit, candidateSnapshot: candidate }
 }
 
 function factDocument(fact: MemoryFact): KnowledgeRecallDocument {
@@ -667,8 +669,13 @@ export class KnowledgeRecallService {
 
     const { fingerprint, documents: allDocuments } = await this.cachedDocumentsWithFingerprint(request.layer)
     const barrier = await readPersonalForgettingBarrier()
+    const revocations = await readObservationRevocationBarrier()
     const documents = allDocuments.filter((document) => {
       const hit = document.hit
+      if (document.factSnapshot && revocations.blocksFact(document.factSnapshot)
+        || document.candidateSnapshot && revocations.blocksCandidate(document.candidateSnapshot)
+        || revocations.blocksObservations(hit.workspaceId, hit.sourceObservationIds)
+        || revocations.blocksFactIds(hit.workspaceId, document.contextItem?.provenance.factIds ?? [])) return false
       if ((hit.scope === 'user' || hit.workspaceId === 'user')
         && (barrier.facts.has(memoryKey(hit.id)) || barrier.candidates.has(memoryKey(hit.id))
           || barrier.blocksObservations(hit.sourceObservationIds) || barrier.blocksContent(hit.title) || barrier.blocksContent(hit.content))) return false

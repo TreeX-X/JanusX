@@ -1,4 +1,5 @@
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 // Note: profile snapshots derive from confirmed facts; manual overrides stay separate — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -63,7 +64,8 @@ export class UserProfileService {
     if (overrides.formatPrefs) overrides.formatPrefs = overrides.formatPrefs.filter(value => !barrier.blocksContent(value))
     if (overrides.toolPrefs) overrides.toolPrefs = overrides.toolPrefs.filter(value => !barrier.blocksContent(value))
     const previous = rawSnapshot === undefined ? undefined : SnapshotMetadata.parse(rawSnapshot)
-    const confirmedFacts = confirmedProfileFacts(facts.filter(fact => !barrier.blocksFact(fact)), nowMs)
+    const revocations = await readObservationRevocationBarrier()
+    const confirmedFacts = confirmedProfileFacts(facts.filter(fact => !barrier.blocksFact(fact) && !revocations.blocksFact(fact)), nowMs)
     const fingerprint = profileContentHash({ ruleVersion: PROFILE_RULE_VERSION, overrides, confirmedFacts })
     const unchanged = previous?.derivation.fingerprint === fingerprint && previous.derivation.ruleVersion === PROFILE_RULE_VERSION
     const profile: UserProfile = {

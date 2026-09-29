@@ -1,4 +1,5 @@
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -227,10 +228,11 @@ export class KnowledgeTruthService {
     ])
 
     const barrier = await readPersonalForgettingBarrier()
+    const revocations = await readObservationRevocationBarrier()
     return {
-      facts: facts.filter(fact => !barrier.blocksFact(fact)),
-      wikiPages,
-      graphEdges,
+      facts: facts.filter(fact => !barrier.blocksFact(fact) && !revocations.blocksFact(fact)),
+      wikiPages: wikiPages.filter(page => !revocations.blocksFactIds(page.workspaceId, page.sourceFactIds)),
+      graphEdges: graphEdges.filter(edge => !revocations.blocksFactIds(edge.workspaceId, edge.sourceFactIds)),
     }
   }
 }

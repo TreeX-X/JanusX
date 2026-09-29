@@ -2,6 +2,7 @@ import { reviewCandidateSnapshot, type ReviewCandidate } from '../../shared/revi
 import { factSlotFields } from '../../shared/fact-slot'
 import { factReviewContext, replacementHash, sameFactDomain } from './fact-conflicts'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 /**
  * @file KnowledgeReviewService —— 候选审核 / 应用闭环（MVP）
  * @description
@@ -120,8 +121,10 @@ export async function proposeDerivedCandidates(candidates: Array<CandidateWikiPa
     const path = candidateRelativePath(type)
     await withMutationLock(path, async () => {
       const records = await readJsonl<CandidateWikiPatch | CandidateGraphEdge>(path)
+      const revocations = await readObservationRevocationBarrier()
       const ids = new Set(records.map(candidate => candidate.id))
       const fresh = incoming.filter(candidate => {
+        if (revocations.blocksCandidate(candidate)) return false
         if (candidate.status !== 'proposed') throw new Error('Candidates require review before applying')
         if (ids.has(candidate.id)) return false
         ids.add(candidate.id)
@@ -184,7 +187,9 @@ export async function proposeFactCandidates(candidates: CandidateFact[]): Promis
     }
     const ids = new Set(content.split('\n').filter((line) => line.trim()).map((line) => (JSON.parse(line) as CandidateFact).id))
     const barrier = await readPersonalForgettingBarrier()
+    const revocations = await readObservationRevocationBarrier()
     const fresh = candidates.filter((candidate) => {
+      if (revocations.blocksCandidate(candidate)) return false
       if (barrier.blocksCandidate(candidate)) return false
       if (candidate.status !== 'proposed' || candidate.fact.status !== 'proposed') throw new Error('Candidates require review before applying')
       if (ids.has(candidate.id)) return false
@@ -239,7 +244,8 @@ export async function annotateFactDecisions(updates: Map<string, MemoryDecisionA
 export async function listProposedUserFactCandidates(): Promise<CandidateFact[]> {
   const records = await readJsonl<CandidateFact>(FACT_CANDIDATES_FILE)
   const barrier = await readPersonalForgettingBarrier()
-  return records.map(candidate => barrier.candidate(candidate)).filter((candidate) =>
+  const revocations = await readObservationRevocationBarrier()
+  return records.map(candidate => revocations.candidate(barrier.candidate(candidate))).filter((candidate) =>
     candidate?.type === 'fact'
     && candidate.status === 'proposed'
     && (candidate.fact.scope === 'user' || candidate.fact.provenance.workspaceId === 'user'),
@@ -381,7 +387,9 @@ export class KnowledgeReviewService {
       requireProposed(candidate.status, candidate.id)
       const barrier = await readPersonalForgettingBarrier()
       if (barrier.blocksCandidate(candidate)) throw new Error('Personal memory has been forgotten')
-      const facts = (await readJsonl<MemoryFact>(FACTS_FILE)).filter(fact => !barrier.blocksFact(fact))
+      const revocations = await readObservationRevocationBarrier()
+      if (revocations.blocksCandidate(candidate)) throw new Error('Observation source has been revoked')
+      const facts = (await readJsonl<MemoryFact>(FACTS_FILE)).filter(fact => !barrier.blocksFact(fact) && !revocations.blocksFact(fact))
       return factReviewContext(candidate, facts, candidates.filter(item => !barrier.blocksCandidate(item)))
     })
   }
@@ -461,6 +469,7 @@ export class KnowledgeReviewService {
     if (type === 'fact' && (await readPersonalForgettingBarrier()).blocksCandidate(current as CandidateFact)) {
       throw new Error('Personal memory has been forgotten')
     }
+    if ((await readObservationRevocationBarrier()).blocksCandidate(current)) throw new Error('Observation source has been revoked')
     if (current.status === 'applied') {
       return { candidate: current, auditEvents: [] }
     }
@@ -586,7 +595,8 @@ export class KnowledgeReviewService {
       if (candidate.fact[key] !== undefined && candidate.fact[key] !== fields[key]) throw new Error('Fact slot metadata does not match content')
     }
     const barrier = await readPersonalForgettingBarrier()
-    const context = factReviewContext(candidate, previous.filter(fact => !barrier.blocksFact(fact)), [])
+    const revocations = await readObservationRevocationBarrier()
+    const context = factReviewContext(candidate, previous.filter(fact => !barrier.blocksFact(fact) && !revocations.blocksFact(fact)), [])
     if (context.blocked === 'multiple-targets') throw new Error('Multiple current facts conflict; resolve them before replacement')
     if (candidate.fact.supersedes && input.replacement && candidate.fact.supersedes !== input.replacement.id) throw new Error('Replacement does not match the proposed target')
     // Phase 2 supersede: a candidate carrying `supersedes` archives the old
@@ -608,7 +618,7 @@ export class KnowledgeReviewService {
         throw new Error(`Cannot supersede ${targetId}: memory scope mismatch`)
       }
       if (!sameFactDomain(target, candidate.fact)) throw new Error('Cannot supersede: ownership mismatch')
-      if (barrier.blocksFact(target) || target.ttl && !(Date.parse(target.ttl) > Date.now())) throw new Error('Replacement target is no longer eligible')
+      if (barrier.blocksFact(target) || revocations.blocksFact(target) || target.ttl && !(Date.parse(target.ttl) > Date.now())) throw new Error('Replacement target is no longer eligible')
       if (!context.targets.some(item => item.id === targetId)) throw new Error('Replacement target is not a current conflict')
       if (!input.replacement || input.replacement.id !== targetId || input.replacement.hash !== replacementHash(target)) {
         throw new Error('Replacement target changed or was not explicitly reviewed; refresh before reviewing')

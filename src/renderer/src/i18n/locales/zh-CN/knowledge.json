@@ -1,4 +1,10 @@
 {
+  "observation": {
+    "revoke": "撤回这条来源",
+    "confirmRevoke": "确认撤回来源",
+    "revoked": "来源已撤回",
+    "revokeDetail": "这条来源及关联记忆、候选、Wiki 页面和图边将退出有效视图，待处理精修将被取消。原始证据保留；目前不提供恢复入口。"
+  },
   "laya": {
     "description": "本地决策评分，所有候选仍须审核。请配置安装了固定版本 Laya 依赖的 Python 环境，再下载并校验多语模型（约 678 MB）。",
     "enabled": "启用 Laya",

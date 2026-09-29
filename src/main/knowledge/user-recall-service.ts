@@ -1,4 +1,5 @@
 import { memoryStrength, type UserMemoryDelivery } from '../../shared/memory-strength'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 import { replacementHash } from './fact-conflicts'
 import { reviewedFactHash } from './profile-projection'
 import { factScope } from './memory-evidence'
@@ -294,6 +295,7 @@ export async function searchUserMemory(
 
 /** Production wiring over the M1 singleton stores. */
 export async function searchUserMemoryDefault(query: string): Promise<UserRecallResult> {
+  const sourcesBefore = await readObservationRevocationBarrier()
   const before = await readPersonalForgettingBarrier()
   const result = await searchUserMemory(query, {
     listUserFacts: async () => {
@@ -306,6 +308,7 @@ export async function searchUserMemoryDefault(query: string): Promise<UserRecall
     listActiveEpisodes: () => userEpisodeService.listActive(Date.now()),
   })
   const after = await readPersonalForgettingBarrier()
+  if (JSON.stringify(sourcesBefore.records) !== JSON.stringify((await readObservationRevocationBarrier()).records)) return { ...result, delivery: undefined, items: [], compactContext: '', eligibleCount: 0, truncated: false }
   if (JSON.stringify(before.records) !== JSON.stringify(after.records)) return { ...result, delivery: undefined, items: [], compactContext: '', eligibleCount: 0, truncated: false }
   return result
 }

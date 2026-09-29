@@ -1,4 +1,5 @@
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 /**
  * @file User episode service (M1).
  * @description Projects user observations and reads legacy episode files with
@@ -31,7 +32,7 @@ function episodeFromObservation(observation: Observation, content: string): User
   return {
     id: observation.id, content: content.slice(0, 4000), createdAt: observation.createdAt, expiresAt: observation.expiresAt!,
     ttlDays: Math.round((Date.parse(observation.expiresAt!) - Date.parse(observation.createdAt)) / 86400000),
-    tags: observation.tags, status: observation.episodeStatus ?? 'active',
+    tags: observation.tags, status: observation.revokedAt ? 'expired' : observation.episodeStatus ?? 'active',
     sourceObservationIds: [...new Set([observation.id, ...(observation.relatedObservationIds ?? [])])],
   }
 }
@@ -74,8 +75,9 @@ export class UserEpisodeService {
   async listActive(nowMs: number = Date.now(), limit: number = EPISODE_WORKING_SET_LIMIT): Promise<UserEpisode[]> {
     const all = await this.readAll()
     const barrier = await readPersonalForgettingBarrier()
+    const revocations = await readObservationRevocationBarrier()
     return all
-      .filter((episode) => !barrier.blocksEpisode(episode) && episode.status === 'active' && Date.parse(episode.expiresAt) > nowMs)
+      .filter((episode) => !barrier.blocksEpisode(episode) && !revocations.blocksObservations('user', [episode.id, ...episode.sourceObservationIds]) && episode.status === 'active' && Date.parse(episode.expiresAt) > nowMs)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, Math.max(1, Math.min(EPISODE_WORKING_SET_LIMIT, Math.trunc(limit))))
   }

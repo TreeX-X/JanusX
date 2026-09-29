@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { readObservationRevocationBarrier } from './observation-revocation-barrier'
 import { gzip, gunzip } from 'node:zlib'
 import { promisify } from 'node:util'
 import { appendFile, mkdir, readFile, readdir, stat, unlink, writeFile } from 'node:fs/promises'
@@ -452,6 +453,7 @@ export interface ObservationCaptureContext {
 }
 
 export class KnowledgeObservationService {
+  withSourceMutation<T>(operation: () => Promise<T>): Promise<T> { return this.writeQueue.run(operation) }
   /** 串行化 shard 追加与重写：防止 prune/archive 整文件重写吞掉并发 capture 的追加 */
   private readonly writeQueue = new SerialQueue()
 
@@ -698,7 +700,8 @@ export class KnowledgeObservationService {
     reportObservationSchemaViolations(violations)
 
     observations.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    return observations.slice(0, clampLimit(query.limit))
+    const revocations = await readObservationRevocationBarrier()
+    return observations.slice(0, clampLimit(query.limit)).map(source => revocations.observation(source))
   }
 
   /** Phase 0 diagnostics: every parseable observation across all shards, unsorted and uncapped. */
@@ -714,7 +717,8 @@ export class KnowledgeObservationService {
     }
     if (strict && violations.length) throw new Error('Invalid observation source journal')
     reportObservationSchemaViolations(violations)
-    return observations
+    const revocations = await readObservationRevocationBarrier()
+    return observations.map(source => revocations.observation(source))
   }
 
   async prune(query: ObservationPruneQuery): Promise<ObservationPruneResult> {
