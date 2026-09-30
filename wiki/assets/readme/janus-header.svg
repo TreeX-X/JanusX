@@ -6,7 +6,7 @@
 text{letter-spacing:0}
 text{font-family:"Cascadia Code","SFMono-Regular",Consolas,"Liberation Mono","PingFang SC","Hiragino Sans GB","Microsoft YaHei",monospace}
 g[shape-rendering="crispEdges"]{transform:translate(8px,35px) scale(10)}
-.pf{visibility:hidden;animation-duration:6000ms;animation-timing-function:step-end;animation-iteration-count:infinite}
+.pf{display:none;visibility:hidden;animation-duration:6000ms;animation-timing-function:step-end;animation-iteration-count:infinite}
 .pf0{animation-name:pf0}.pf1{animation-name:pf1}.pf2{animation-name:pf2}.pf3{animation-name:pf3}.pf4{animation-name:pf4}
 @keyframes pf0{0%,16.67%,33.33%{visibility:visible}8.33%,25%,41.67%,46%,50%,54%,58.33%,66.67%,75%,83.33%,91.67%,100%{visibility:hidden}}@keyframes pf1{8.33%,41.67%{visibility:visible}0%,16.67%,25%,33.33%,46%,50%,54%,58.33%,66.67%,75%,83.33%,91.67%,100%{visibility:hidden}}@keyframes pf2{25%{visibility:visible}0%,8.33%,16.67%,33.33%,41.67%,46%,50%,54%,58.33%,66.67%,75%,83.33%,91.67%,100%{visibility:hidden}}@keyframes pf3{46%,50%{visibility:visible}0%,8.33%,16.67%,25%,33.33%,41.67%,54%,58.33%,66.67%,75%,83.33%,91.67%,100%{visibility:hidden}}@keyframes pf4{54%,58.33%,66.67%,75%,83.33%,91.67%{visibility:visible}0%,8.33%,16.67%,25%,33.33%,41.67%,46%,50%,100%{visibility:hidden}}
 .sqf{visibility:hidden;animation-duration:6000ms;animation-timing-function:step-end;animation-iteration-count:infinite}
@@ -70,6 +70,6 @@ g[shape-rendering="crispEdges"]{transform:translate(8px,35px) scale(10)}
   <g class="sqf sq1"><rect x="4" y="6" width="2" height="3" class="ceye"/><rect x="8" y="6" width="2" height="3" class="ceye"/></g>
   <g class="sqf sq2"><rect x="6" y="6" width="2" height="3" class="ceye"/><rect x="10" y="6" width="2" height="3" class="ceye"/></g>
   <g class="sqf sq3"><rect x="5" y="7" width="2" height="1" class="ceye"/><rect x="9" y="7" width="2" height="1" class="ceye"/></g>
-  <g class="sqf sq4"><rect x="5" y="6" width="1" height="1" class="ceye"/><rect x="6" y="7" width="1" height="1" class="ceye"/><rect x="10" y="6" width="1" height="1" class="ceye"/><rect x="9" y="7" width="1" height="1" class="ceye"/></g>
+  <g class="sqf sq4"><rect x="5" y="7" width="1" height="1" class="ceye"/><rect x="6" y="6" width="1" height="1" class="ceye"/><rect x="7" y="7" width="1" height="1" class="ceye"/><rect x="9" y="7" width="1" height="1" class="ceye"/><rect x="10" y="6" width="1" height="1" class="ceye"/><rect x="11" y="7" width="1" height="1" class="ceye"/></g>
 </g>
 </svg>
