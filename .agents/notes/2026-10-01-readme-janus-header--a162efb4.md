@@ -14,7 +14,7 @@ The README hero mixed a small Janus animation with a separate logo image, and it
 
 ## Decision
 
-`wiki/assets/readme/janus-header.svg` is the single README hero asset at `760x180`. Janus stays in the upper-left as the persistent identity anchor. The right side holds the pixel wordmark, descriptor line, prompt bubble, and a linked Star button. Prompt and Star states share a 5.2 second timeline: each state fades in from below, holds long enough to read, then exits upward. The existing five-frame Janus eye animation and dark-mode palette remain in place.
+`wiki/assets/readme/janus-header.svg` is the single README hero asset at `760x180`. Janus stays in the upper-left as a compact pixel square. The right side holds the pixel wordmark, descriptor line, prompt bubble, and a linked Star button. The square contains only one pair of eyes: centered, looking left, looking right, blinking, then a small happy expression during the Star/heart phase. Prompt and Star states share a 5.2 second timeline: each state fades in from below, holds long enough to read, then exits upward.
 
 ## Alternatives considered
 
@@ -25,6 +25,7 @@ The README hero mixed a small Janus animation with a separate logo image, and it
 ## Consequences
 
 - **Gains**: one responsive hero asset, a clear left-to-right reading order, readable prompt transitions, and a direct GitHub Star target.
+- **Character detail**: the capsule identity is reduced to a clean square frame and one expressive eye pair, so the left/right motion and Star reaction remain legible at README scale.
 - **Costs and limits**: GitHub README renderers may pause or reduce SVG CSS animation; the static first frame therefore keeps the Janus and wordmark legible even when motion is unavailable.
 - **Revisit signals**: add a mobile-specific SVG only if the 760:180 aspect ratio becomes unreadable below the existing README width.
 
