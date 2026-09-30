@@ -457,7 +457,7 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 根据 [Qwen3.5-4B 官方模型卡](https://huggingface.co/Qwen/Qwen3.5-4B)、[Qwen3-4B-Instruct-2507 官方模型卡](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507)和 [Thinking-2507 官方模型卡](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507)，拟主测 Qwen3.5-4B，使用 Qwen3-4B-Instruct-2507 作低延迟对照。两者均为 Apache-2.0 模型，可本地运行；Qwen3.5 支持开启/关闭思考，Instruct-2507 仅支持非思考模式。Thinking-2507 专注较长推理，先不作为后台常驻审核首选。Reranker、Embedding 和 Guard 的目标分别是相关性、向量表示和安全审核，不能直接替代知识证据判断。保留 Jev 云端路径可节省本地算力，但已有高置信度数值误判且依赖外部服务；Qwen 的实际质量仍待同集测试，官方通用榜单不能证明其优于 Jev。
 
-本机只读检查：`nvidia-smi` 显示 RTX 4060 Laptop GPU，显存总量 8,188 MiB，检查时空闲 6,180 MiB；系统可见内存约 31.7 GiB。拟采用支持 Qwen3.5 的新版 llama.cpp Windows CUDA 服务、单请求并发，先给短证据审核设置 8,192 token 总上下文，优先测试非思考，再单独测试思考模式。8K 是本任务成本约束下的测试配置，并非官方最大能力；超长输入和输出截断必须显式记为未完成，不能静默截断后放行。官方模型卡为复杂长推理建议更长上下文，因此短上下文结果不能代表完整长推理能力。现有 Laya Python 环境不承担 Qwen3.5 依赖升级。此处只完成部署调研，尚未下载模型、安装运行时或运行 Qwen 推理。
+本机只读检查：`nvidia-smi` 显示 RTX 4060 Laptop GPU，显存总量 8,188 MiB，检查时空闲 6,180 MiB；系统可见内存约 31.7 GiB。拟采用支持 Qwen3.5 的新版 llama.cpp Windows CUDA 服务、单请求并发，先给短证据审核设置 8,192 token 总上下文，优先测试非思考，再单独测试思考模式。8K 是本任务成本约束下的测试配置，并非官方最大能力；超长输入和输出截断必须显式记为未完成，不能静默截断后放行。官方模型卡为复杂长推理建议更长上下文，因此短上下文结果不能代表完整长推理能力。现有 Laya Python 环境不承担 Qwen3.5 依赖升级。实际部署与非思考模式结果见下节，CUDA 下载失败后的实测后端为 Vulkan。
 
 量化候选来自 Unsloth 社区转换，不是 Qwen 官方直接发布的 GGUF。模型文件大小取自 Hugging Face 文件元数据，GB 为十进制；它们不等于运行显存，KV 缓存、计算缓冲和桌面占用还需实测。
 
@@ -469,6 +469,41 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 主测文件 `Qwen3.5-4B-Q5_K_M.gguf` 的仓库 revision 为 `e87f176479d0855a907a41277aca2f8ee7a09523`，文件 SHA256 为 `8814232b85594dcd46c50e5b8b29324a7efe9e746edbe8a3d1df3d3fce7aad39`。对照文件 `Qwen3-4B-Instruct-2507-Q5_K_M.gguf` 的 revision 为 `a06e946bb6b655725eafa393f4a9745d460374c9`，SHA256 为 `5bde5e9d883622acb02bf77fe7dcbc56a8b9a9ad4be78a72ca23a532658b4ecb`。实际下载时须核验摘要，并固定运行时版本、模板、采样参数、上下文和输出预算；思考与非思考分别报告。量化影响必须通过相同模型不同量化实测，不能预设 Q5 无损。
 
 后续拟复用原集与扩展集的证据、标签、逐次重复和 Wiki 全断言通过规则，以错误放行、正确通过率、动作稳定性、格式/超时失败、显存和耗时衡量部署效果。生成模型自报置信度不等同于 Jev 的支持分，需定义单独的输出与决策适配，不直接沿用自报 0.9 放行。Jev 已知数值反例保留为回归；另固定未参与提示词调整的留出集，验证组合流程。知识库自动接受和未完成验收项保持原状态。
+
+
+### Qwen 本机量化实测（2026-09-30）
+
+本机以 [benchmark-qwen-reviewer.py](../../scripts/benchmark-qwen-reviewer.py)完成 Qwen3.5-4B 和 Qwen3-4B-Instruct-2507 两个 Q5_K_M 的非思考模式评测。下载的模型摘要与上节固定版本一致。CUDA 发布包下载发生连接中断，采用 [llama.cpp b11277 Windows Vulkan 发布包](https://github.com/ggml-org/llama.cpp/releases/tag/b11277)，下载后校验 GitHub 发布摘要，版本输出为 `0.5.0-dev / build 11277 / eae11d221`。Vulkan 使用本机 RTX 4060 Laptop 加速；本次没有 CUDA 性能结果，也未升级系统驱动或 Laya 依赖。两个服务顺序运行，各先完成 3 个开发样例、每例三次的试跑，再进行 164 个样例、每例三次的完整测试。主评测共 984 次调用，另有 18 次试跑，全部返回完整合法结果；无资源停止、请求错误或输出截断。
+
+运行配置为单并发、总上下文 8,192、GPU layers `all`、4 个 CPU 线程、batch 256、ubatch 128，禁用上下文移动和提示缓存。固定非思考模式、temperature 0.7、top_p 0.8、top_k 20、min_p 0、三次种子分别为 20260930/31/32，输出上限 160 token。生成结果为 `supported / unsupported / uncertain` 和一句理由，分别映射通过、拦截、暂存；不使用自报概率。共享统计函数内部以二值标签映射计算分类指标，这些 0/1 不是模型置信度。Jev 仍以其支持分和原 0.9 门槛决策，因此下面是相同题目下不同审核配置的结果对比，不是相同概率校准下的模型排名。原题、扩展题及标签不变，提示词在正式评测前固定，未根据结果调参。
+
+启动前要求至少 5,000 MiB 空闲显存和 6 GiB 可用系统内存；每约两秒采样，空闲显存低于 768 MiB、可用系统内存低于 3 GiB 或监测失败时终止本次服务。测试绑定 `127.0.0.1:18791`，端口已占用则不启动，服务由测试进程拥有并在结束时退出。两个模型均实测可在本机运行，测试结束检查无残留评测服务，显存空闲恢复约 6,035 MiB。
+
+| 实测资源与时间 | Qwen3.5-4B Q5_K_M | Qwen3-4B-Instruct-2507 Q5_K_M |
+| --- | --- | --- |
+| 整张显卡显存占用峰值 | 5,740 MiB | 5,886 MiB |
+| 空闲显存最低值 | 2,218 MiB | 2,072 MiB |
+| 服务进程 RSS 峰值 | 3,373 MiB | 2,955 MiB |
+| 单次延迟 P50 / P95 | 1,219 / 2,016 ms | 828 / 1,875 ms |
+| 主评测耗时（492 次，含加载及校验） | 668.8 秒 | 496.2 秒 |
+
+显存数据包含桌面和其他应用，不能作为隔离测得的模型显存。测试最大输入加输出分别为 1,656 / 1,718 token；配置 8K 不等于已验证满 8K 的真实知识材料。Qwen3.5 的较小文件和实测显存关系不能外推到其他上下文或后端。GPU 在连续测试中经常接近满利用率，本次没有测量同时使用其他 GPU 应用的交互延迟。
+
+| 验证集指标（三次重复） | Jev 已有结果 | Qwen3.5 非思考 | Qwen3-Instruct |
+| --- | --- | --- | --- |
+| 原始 28 个判断分类准确率 | 100% / 100% / 100% | 100% / 100% / 100% | 96.4% / 96.4% / 96.4% |
+| 原始反例错误放行（分母 10） | 0 / 0 / 0 | 0 / 0 / 0 | 1 / 1 / 1 |
+| 扩展 112 个判断分类准确率 | 98.2% / 98.2% / 98.2% | 94.6% / 93.8% / 94.6% | 94.6% / 94.6% / 94.6% |
+| 扩展反例错误放行（分母 44） | 1 / 1 / 1 | 0 / 1 / 0 | 2 / 2 / 2 |
+| 扩展正例正确通过（分母 68） | 59 / 58 / 58 | 62 / 62 / 62 | 64 / 64 / 64 |
+
+两个 Qwen 配置对原始与扩展合计 16 篇 Wiki 的预设断言审核均为三次正确通过 8 篇、拦截 8 篇。这个结果不包含断言提取、遗漏检测或来源真实性。两套 Qwen 的每例重复动作均只有一个样例翻转：Qwen3.5 为扩展 `expanded-32-no`，Qwen3-Instruct 为开发集 `config-unresolved`。后者前两次主动给出 uncertain，属于暂存而非接口失败。
+
+Qwen3.5 三次均正确拦截 Jev 的“98.5% 到 99.5% 提高10个百分点”错误，但扩展 `expanded-32-no`（首次调用不计入最多两次重试，候选却称总共最多调用两次）有一次错误放行；正确的条件、单位换算、冲突描述等共 6 个扩展正例三次都被拦截。原开发集 `preference-quote` 和 `numeric-conflict` 三次均被错误放行，分别体现同事偏好归属错误和来源冲突未解决仍认定配置。这些一致错误无法用重复投票消除。Qwen3-Instruct 三次均错误放行原验证 `entry-memory-quote`，以及扩展 `expanded-04-no`（协助排障误作项目负责人）、`expanded-14-no`（10 MiB 错作 10,000,000 字节）。
+
+选型判断：本机低成本非思考审核优先继续研究 Qwen3.5，而不为约 0.4 秒的中位延迟优势选择本次误放行更多的 Qwen3-Instruct。Jev 在扩展集分类准确率仍最高，但有数值高置信度错误；不能仅据小样本错误数量认定任一方案可独立自动放行。拟继续验证数值确定性校验、来源冲突处理、作用域和版本规则，以及另行固定的独立留出集。思考模式、其他量化和真实长知识材料尚未实测，不能把非思考结果概括为 Qwen 的全部能力。自动接受保持关闭，知识库重构验收项仍未完成。
+
+完整报告：[Qwen3.5](../../tests/fixtures/qwen35-review-benchmark-live.json)、[Qwen3-Instruct](../../tests/fixtures/qwen3-instruct-review-benchmark-live.json)，包含各次答案与理由、耗时、资源采样、模型/脚本/运行时/数据摘要。复验命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-qwen-reviewer.py --server artifacts/qwen-review/vulkan/llama-server.exe --model artifacts/qwen-review/Qwen3.5-4B-Q5_K_M.gguf --output artifacts/qwen-review/qwen35-full.json`；对照模型替换模型名和输出路径。`--limit 3 --max-seconds 240` 用于试跑。单元验证命令 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe -m unittest discover -s tests/laya` 实跑 51 项通过。
 
 
 ### Laya 真实数据验收入口
