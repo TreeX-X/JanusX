@@ -1,0 +1,1046 @@
+{
+  "schema": 1,
+  "kind": "local-nimble-systemone",
+  "qualityGate": "not-evaluated-synthetic",
+  "model": "nimble:9b-q4_K_M",
+  "requestModel": "nimble-review:q4-k-m-ctx2048",
+  "modelSha256": "0e228c45932655a4b97b175eba79a578e180778ce0d576a10b86f8726962d993",
+  "parameters": {
+    "num_ctx": 2048,
+    "num_batch": 128,
+    "num_thread": 4
+  },
+  "scriptSha256": "f4f2e92cce72c676b4841d3f2c1c41121609252180b11e70696324e3d184835a",
+  "serverSha256": "ecdb9fe1c52a08a0629d8ca658f9577b24f83a1600857fe31646f41b5dec52fc",
+  "standardSha256": "66676bce02c8063735113c303cad060bf5d7abf3b8c6fe2bf821e3a2d4202b0e",
+  "expandedSha256": "e69096d1de9f9302409d864e2175ee0acbe00ee86b7fdce320ea7c36f521bdcc",
+  "developmentSha256": "e98ea215a0837fe5bc60d9e37b351ad96ef8d56afd761ccf890e2c8ff156711e",
+  "environment": {
+    "OLLAMA_HOST": "127.0.0.1:18792",
+    "OLLAMA_MODELS": "C:\\Users\\Tree\\Desktop\\git\\JanusX\\artifacts\\nimble-review\\models",
+    "OLLAMA_NO_CLOUD": "1",
+    "OLLAMA_NUM_PARALLEL": "1",
+    "OLLAMA_MAX_LOADED_MODELS": "1",
+    "OLLAMA_CONTEXT_LENGTH": "2048",
+    "OLLAMA_GPU_OVERHEAD": "1073741824",
+    "LLAMA_ARG_FIT_TARGET": "1200",
+    "OLLAMA_VULKAN": "1",
+    "OLLAMA_LLM_LIBRARY": "vulkan"
+  },
+  "baselineResources": {
+    "usedMiB": 2612,
+    "freeMiB": 5346,
+    "utilization": 17,
+    "availableRamMiB": 16260.37109375
+  },
+  "repetitions": 3,
+  "threshold": 0.9,
+  "requestExample": {
+    "model": "nimble-review:q4-k-m-ctx2048",
+    "keep_alive": "10m",
+    "state": "{\"candidate\": \"Atlas 生产服务端口为 9443。\", \"evidence\": [\"已确认 Atlas 生产服务配置：端口为 9443，长期生效。\"], \"existing_facts\": []}",
+    "questions": {
+      "support": {
+        "type": "noul",
+        "instructions": "Does the evidence directly support the candidate, including its subject and any negation?"
+      }
+    }
+  },
+  "limits": [
+    "Synthetic correlated evidence checks, not independent production acceptance.",
+    "One noul question per request, same input and question as Jev; no generated confidence text.",
+    "Q4 quantization and 2048 context, not full 8K testing.",
+    "GPU samples include other applications; process-tree RSS may count shared pages more than once.",
+    "First scored call includes cold prompt/kernel work; separately recorded model loading excluded from request latency."
+  ],
+  "results": [
+    {
+      "id": "config-add",
+      "split": "development",
+      "track": "entry",
+      "evidence": "已确认 Atlas 生产服务配置：端口为 9443，长期生效。",
+      "claim": "Atlas 生产服务端口为 9443。",
+      "supported": true,
+      "dataset": "original-development",
+      "runs": [
+        {
+          "pSupport": 0.9994991990382607,
+          "usage": {
+            "input_tokens": 204,
+            "output_tokens": 1
+          },
+          "latencyMs": 1859.0000000112923
+        },
+        {
+          "pSupport": 0.9994991990382607,
+          "usage": {
+            "input_tokens": 204,
+            "output_tokens": 1
+          },
+          "latencyMs": 202.99999999406282
+        },
+        {
+          "pSupport": 0.9994991990382607,
+          "usage": {
+            "input_tokens": 204,
+            "output_tokens": 1
+          },
+          "latencyMs": 187.9999999946449
+        }
+      ]
+    },
+    {
+      "id": "config-negation",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 生产服务不使用 9443 端口，实际端口为 9000。",
+      "claim": "Atlas 生产服务端口为 9443。",
+      "supported": false,
+      "dataset": "original-development",
+      "runs": [
+        {
+          "pSupport": 0.05695163416959304,
+          "usage": {
+            "input_tokens": 207,
+            "output_tokens": 1
+          },
+          "latencyMs": 1328.0000000086147
+        },
+        {
+          "pSupport": 0.05695163416959304,
+          "usage": {
+            "input_tokens": 207,
+            "output_tokens": 1
+          },
+          "latencyMs": 218.99999999732245
+        },
+        {
+          "pSupport": 0.05695163416959304,
+          "usage": {
+            "input_tokens": 207,
+            "output_tokens": 1
+          },
+          "latencyMs": 171.00000000209548
+        }
+      ]
+    },
+    {
+      "id": "config-update",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 生产服务端口从 9000 正式改为 9443，旧配置废止。",
+      "claim": "Atlas 生产服务端口为 9443。",
+      "supported": true,
+      "dataset": "original-development",
+      "runs": [
+        {
+          "pSupport": 0.9989435498623683,
+          "usage": {
+            "input_tokens": 209,
+            "output_tokens": 1
+          },
+          "latencyMs": 546.9999999913853
+        },
+        {
+          "pSupport": 0.9989435498623683,
+          "usage": {
+            "input_tokens": 209,
+            "output_tokens": 1
+          },
+          "latencyMs": 188.0000000091968
+        },
+        {
+          "pSupport": 0.9989435498623683,
+          "usage": {
+            "input_tokens": 209,
+            "output_tokens": 1
+          },
+          "latencyMs": 202.99999999406282
+        }
+      ]
+    }
+  ],
+  "serverVersion": {
+    "version": "0.35.0"
+  },
+  "create": {
+    "status": "success"
+  },
+  "modelDetails": {
+    "details": {
+      "parent_model": "nimble:9b-q4_K_M",
+      "format": "gguf",
+      "family": "qwen35",
+      "families": [
+        "qwen35"
+      ],
+      "parameter_size": "9.0B",
+      "quantization_level": "Q4_K_M"
+    },
+    "parameters": "num_thread                     4\nnum_batch                      128\nnum_ctx                        2048",
+    "model_info": {
+      "general.architecture": "qwen35",
+      "general.basename": "Bespoke-Nimble",
+      "general.file_type": 15,
+      "general.finetune": "merged-current",
+      "general.parameter_count": 8953803264,
+      "general.quantization_version": 2,
+      "general.size_label": "9B",
+      "general.type": "model",
+      "qwen35.attention.head_count": 16,
+      "qwen35.attention.head_count_kv": 4,
+      "qwen35.attention.key_length": 256,
+      "qwen35.attention.layer_norm_rms_epsilon": 1e-06,
+      "qwen35.attention.recurrent_layers": [
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        false
+      ],
+      "qwen35.attention.value_length": 256,
+      "qwen35.block_count": 32,
+      "qwen35.context_length": 262144,
+      "qwen35.embedding_length": 4096,
+      "qwen35.feed_forward_length": 12288,
+      "qwen35.full_attention_interval": 4,
+      "qwen35.rope.dimension_count": 64,
+      "qwen35.rope.dimension_sections": [
+        11,
+        11,
+        10,
+        0
+      ],
+      "qwen35.rope.freq_base": 10000000,
+      "qwen35.ssm.conv_kernel": 4,
+      "qwen35.ssm.group_count": 16,
+      "qwen35.ssm.inner_size": 4096,
+      "qwen35.ssm.state_size": 128,
+      "qwen35.ssm.time_step_rank": 32,
+      "tokenizer.ggml.eos_token_id": 248046,
+      "tokenizer.ggml.merges": [],
+      "tokenizer.ggml.model": "gpt2",
+      "tokenizer.ggml.padding_token_id": 248044,
+      "tokenizer.ggml.pre": "qwen35",
+      "tokenizer.ggml.token_type": [],
+      "tokenizer.ggml.tokens": []
+    },
+    "capabilities": [
+      "decision",
+      "tools",
+      "thinking",
+      "completion"
+    ]
+  },
+  "loadResponse": {
+    "model": "nimble-review:q4-k-m-ctx2048",
+    "created_at": "2026-09-30T14:10:08.4466255Z",
+    "response": "",
+    "done": true,
+    "done_reason": "load"
+  },
+  "loadSeconds": 9.5,
+  "loadedModels": {
+    "models": [
+      {
+        "name": "nimble-review:q4-k-m-ctx2048",
+        "model": "nimble-review:q4-k-m-ctx2048",
+        "size": 5191499776,
+        "digest": "5bb04e70735e265323a33c2e3ec3381c2a349b0b98f4f30caadb42741b61d1be",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "qwen35",
+          "families": [
+            "qwen35"
+          ],
+          "parameter_size": "9.0B",
+          "quantization_level": "Q4_K_M"
+        },
+        "expires_at": "2026-09-30T22:20:08.4466255+08:00",
+        "size_vram": 5191499776,
+        "context_length": 2048
+      }
+    ]
+  },
+  "stopReason": null,
+  "summary": {
+    "byRepeat": [
+      {
+        "repeat": 1,
+        "all": {
+          "count": 3,
+          "positiveCount": 2,
+          "negativeCount": 1,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 2,
+            "block": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "byDataset": {
+          "original-development": {
+            "count": 3,
+            "positiveCount": 2,
+            "negativeCount": 1,
+            "unavailable": 0,
+            "accuracy": 1.0,
+            "balancedAccuracy": 1.0,
+            "decisions": {
+              "pass": 2,
+              "block": 1
+            },
+            "passPrecision": 1.0,
+            "passPrecisionWilson95": [
+              0.34237195288961925,
+              1.0
+            ],
+            "correctPassCoverage": 1.0,
+            "falsePassCount": 0,
+            "falsePassRate": 0.0,
+            "falsePassIds": [],
+            "missedSupportedIds": []
+          }
+        },
+        "wikiPages": {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      },
+      {
+        "repeat": 2,
+        "all": {
+          "count": 3,
+          "positiveCount": 2,
+          "negativeCount": 1,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 2,
+            "block": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "byDataset": {
+          "original-development": {
+            "count": 3,
+            "positiveCount": 2,
+            "negativeCount": 1,
+            "unavailable": 0,
+            "accuracy": 1.0,
+            "balancedAccuracy": 1.0,
+            "decisions": {
+              "pass": 2,
+              "block": 1
+            },
+            "passPrecision": 1.0,
+            "passPrecisionWilson95": [
+              0.34237195288961925,
+              1.0
+            ],
+            "correctPassCoverage": 1.0,
+            "falsePassCount": 0,
+            "falsePassRate": 0.0,
+            "falsePassIds": [],
+            "missedSupportedIds": []
+          }
+        },
+        "wikiPages": {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      },
+      {
+        "repeat": 3,
+        "all": {
+          "count": 3,
+          "positiveCount": 2,
+          "negativeCount": 1,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 2,
+            "block": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "byDataset": {
+          "original-development": {
+            "count": 3,
+            "positiveCount": 2,
+            "negativeCount": 1,
+            "unavailable": 0,
+            "accuracy": 1.0,
+            "balancedAccuracy": 1.0,
+            "decisions": {
+              "pass": 2,
+              "block": 1
+            },
+            "passPrecision": 1.0,
+            "passPrecisionWilson95": [
+              0.34237195288961925,
+              1.0
+            ],
+            "correctPassCoverage": 1.0,
+            "falsePassCount": 0,
+            "falsePassRate": 0.0,
+            "falsePassIds": [],
+            "missedSupportedIds": []
+          }
+        },
+        "wikiPages": {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      }
+    ],
+    "strictNumericStability": {
+      "all": {
+        "count": 3,
+        "positiveCount": 2,
+        "negativeCount": 1,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 2,
+          "block": 1
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.34237195288961925,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      },
+      "byDataset": {
+        "original-development": {
+          "count": 3,
+          "positiveCount": 2,
+          "negativeCount": 1,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 2,
+            "block": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      },
+      "wikiPages": {
+        "count": 0,
+        "positiveCount": 0,
+        "negativeCount": 0,
+        "unavailable": 0,
+        "accuracy": null,
+        "balancedAccuracy": null,
+        "decisions": {},
+        "passPrecision": null,
+        "passPrecisionWilson95": null,
+        "correctPassCoverage": null,
+        "falsePassCount": 0,
+        "falsePassRate": null,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      }
+    },
+    "actionAgreementDiagnostic": {
+      "all": {
+        "count": 3,
+        "positiveCount": 2,
+        "negativeCount": 1,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 2,
+          "block": 1
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.34237195288961925,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      },
+      "byDataset": {
+        "original-development": {
+          "count": 3,
+          "positiveCount": 2,
+          "negativeCount": 1,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 2,
+            "block": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      },
+      "wikiPages": {
+        "count": 0,
+        "positiveCount": 0,
+        "negativeCount": 0,
+        "unavailable": 0,
+        "accuracy": null,
+        "balancedAccuracy": null,
+        "decisions": {},
+        "passPrecision": null,
+        "passPrecisionWilson95": null,
+        "correctPassCoverage": null,
+        "falsePassCount": 0,
+        "falsePassRate": null,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      }
+    },
+    "numericFlipIds": [],
+    "classificationFlipIds": [],
+    "actionFlipIds": [],
+    "expandedSensitivityByRepeat": {
+      "0.5": [
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      ],
+      "0.7": [
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      ],
+      "0.8": [
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      ],
+      "0.9": [
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      ],
+      "0.95": [
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      ],
+      "0.99": [
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        {
+          "count": 0,
+          "positiveCount": 0,
+          "negativeCount": 0,
+          "unavailable": 0,
+          "accuracy": null,
+          "balancedAccuracy": null,
+          "decisions": {},
+          "passPrecision": null,
+          "passPrecisionWilson95": null,
+          "correctPassCoverage": null,
+          "falsePassCount": 0,
+          "falsePassRate": null,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        }
+      ]
+    }
+  },
+  "elapsedSeconds": 17.922000000005937,
+  "resourceSamples": [
+    {
+      "usedMiB": 2600,
+      "freeMiB": 5358,
+      "utilization": 14,
+      "availableRamMiB": 14876.29296875,
+      "processTreeRssMiB": 42.92578125,
+      "elapsedSeconds": 1.1560000000026776
+    },
+    {
+      "usedMiB": 2589,
+      "freeMiB": 5369,
+      "utilization": 23,
+      "availableRamMiB": 13787.171875,
+      "processTreeRssMiB": 65.08203125,
+      "elapsedSeconds": 2.297000000005937
+    },
+    {
+      "usedMiB": 2580,
+      "freeMiB": 5378,
+      "utilization": 24,
+      "availableRamMiB": 16072.0234375,
+      "processTreeRssMiB": 77.3671875,
+      "elapsedSeconds": 3.4530000000086147
+    },
+    {
+      "usedMiB": 2581,
+      "freeMiB": 5377,
+      "utilization": 30,
+      "availableRamMiB": 15474.75,
+      "processTreeRssMiB": 135.66796875,
+      "elapsedSeconds": 4.578000000008615
+    },
+    {
+      "usedMiB": 2604,
+      "freeMiB": 5354,
+      "utilization": 2,
+      "availableRamMiB": 14606.27734375,
+      "processTreeRssMiB": 203.98828125,
+      "elapsedSeconds": 5.718000000008033
+    },
+    {
+      "usedMiB": 5616,
+      "freeMiB": 2342,
+      "utilization": 27,
+      "availableRamMiB": 15397.10546875,
+      "processTreeRssMiB": 204.0703125,
+      "elapsedSeconds": 7.1560000000026776
+    },
+    {
+      "usedMiB": 6679,
+      "freeMiB": 1279,
+      "utilization": 2,
+      "availableRamMiB": 11651.09375,
+      "processTreeRssMiB": 3117.94140625,
+      "elapsedSeconds": 8.281000000002678
+    },
+    {
+      "usedMiB": 6671,
+      "freeMiB": 1287,
+      "utilization": 6,
+      "availableRamMiB": 10883.265625,
+      "processTreeRssMiB": 4990.9453125,
+      "elapsedSeconds": 9.389999999999418
+    },
+    {
+      "usedMiB": 6884,
+      "freeMiB": 1074,
+      "utilization": 14,
+      "availableRamMiB": 9668.95703125,
+      "processTreeRssMiB": 5843.4375,
+      "elapsedSeconds": 10.514999999999418
+    },
+    {
+      "usedMiB": 6568,
+      "freeMiB": 1390,
+      "utilization": 99,
+      "availableRamMiB": 9592.2109375,
+      "processTreeRssMiB": 5841.546875,
+      "elapsedSeconds": 11.656000000002678
+    },
+    {
+      "usedMiB": 6572,
+      "freeMiB": 1386,
+      "utilization": 88,
+      "availableRamMiB": 9845.8671875,
+      "processTreeRssMiB": 5966.52734375,
+      "elapsedSeconds": 12.781000000002678
+    },
+    {
+      "usedMiB": 6594,
+      "freeMiB": 1364,
+      "utilization": 59,
+      "availableRamMiB": 9903.96875,
+      "processTreeRssMiB": 5969.89453125,
+      "elapsedSeconds": 13.906000000002678
+    },
+    {
+      "usedMiB": 6575,
+      "freeMiB": 1383,
+      "utilization": 95,
+      "availableRamMiB": 9552.6953125,
+      "processTreeRssMiB": 6020.7109375,
+      "elapsedSeconds": 15.031000000002678
+    },
+    {
+      "usedMiB": 6597,
+      "freeMiB": 1361,
+      "utilization": 94,
+      "availableRamMiB": 10520.8046875,
+      "processTreeRssMiB": 6071.59765625,
+      "elapsedSeconds": 16.187000000005355
+    }
+  ],
+  "resourceMonitorErrors": [],
+  "completedRequests": 9,
+  "attemptedRequests": 9,
+  "latencyP50Ms": 202.99999999406282,
+  "latencyP95Ms": 1859.0000000112923
+}
