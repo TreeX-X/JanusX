@@ -86,9 +86,19 @@ export const EXTERNAL_CLI_TOOLS: Record<ExternalCliToolId, ExternalCliToolDescri
       packageName: '@janus-agent/cli',
     },
   },
+  dsh: {
+    id: 'dsh',
+    displayName: 'DeepSeek Harness',
+    binaryNames: ['dsh'],
+    npmPackage: '@deepseek-ai/dsh',
+    // 上游 TUI 安装口径（ccch1mneyyy/dsh-TUI README）：dsh 与 TUI 启动器一起装全局，
+    // 首次运行 `dsh-tui` 自动初始化 dsh-tui profile；终端启动命令见 shared/terminalLaunch。
+    manualInstallCommand: 'npm i -g @deepseek-ai/dsh @deepseek-harness-tui/dsh-tui && dsh-tui',
+    latestStrategy: 'npm-dist-tags',
+  },
 }
 
 export function getExternalCliTool(toolId: string): ExternalCliToolDescriptor | undefined {
-  if (toolId !== 'claude' && toolId !== 'codex' && toolId !== 'opencode' && toolId !== 'pi' && toolId !== 'janus') return undefined
+  if (toolId !== 'claude' && toolId !== 'codex' && toolId !== 'opencode' && toolId !== 'pi' && toolId !== 'janus' && toolId !== 'dsh') return undefined
   return EXTERNAL_CLI_TOOLS[toolId]
 }

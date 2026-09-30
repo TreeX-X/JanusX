@@ -17,6 +17,7 @@ import { createTerminalScrollIntentController } from '@/lib/terminal-scroll-inte
 import { attachTerminalTuiWheelHandler } from '@/lib/terminal-tui-wheel'
 import {
   createRuntimeTelemetryStreamParser,
+  extractDshTurnStatus,
   mergeRuntimeTelemetrySnapshot,
   type RuntimeTelemetrySnapshot,
 } from '@/lib/runtime-telemetry'
@@ -80,6 +81,22 @@ export function CLITerminal({
 
     if (Object.keys(patch).length === 0) return
     store.updateTerminal(terminalId, patch)
+  }, [terminalId])
+
+  // dsh owns no hook pipeline (phase 1): PTY turn markers assert running on
+  // the live turn header and degraded on a turn error. Forward-only: idle is
+  // never inferred here (a successful turn end has no observed marker yet),
+  // so a quiet terminal keeps whatever the lifecycle paths last reported.
+  const applyDshTurnStatus = useCallback((data: string) => {
+    const turnStatus = extractDshTurnStatus(data)
+    if (!turnStatus) return
+    const store = useWorkspaceStore.getState()
+    const terminal = store.terminals.find((item) => item.id === terminalId)
+    if (!terminal || terminal.preset !== 'dsh') return
+    const next = turnStatus === 'running' ? 'running' : 'degraded'
+    if (terminal.status === next) return
+    if (terminal.status === 'needs-approval' || terminal.status === 'needs-input' || terminal.status === 'error') return
+    store.updateTerminal(terminalId, { status: next, updatedAt: Date.now() })
   }, [terminalId])
 
   useEffect(() => {
@@ -443,6 +460,7 @@ export function CLITerminal({
       for (const telemetry of telemetryParserRef.current.push(data)) {
         applyTelemetryPatch(telemetry)
       }
+      applyDshTurnStatus(data)
     }
 
     const flushQueuedLiveOutput = () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createRuntimeTelemetryStreamParser,
   detectModelFromText,
+  extractDshTurnStatus,
   extractRuntimeTelemetry,
   getEstimatedContextWindow,
   getRegistryContextWindow,
@@ -209,6 +210,37 @@ describe('runtime telemetry model context lookup', () => {
       confidence: 'estimated',
     })
     expect(snapshot.contextTokens).toBeUndefined()
+  })
+
+  it('detects the model from the dsh-TUI status bar without matching prose', () => {
+    expect(detectModelFromText('deepseek-flash · Max effort')).toBe('DeepSeek-flash')
+    expect(detectModelFromText('deepseek-flash · max · JanusX-dsh')).toBe('DeepSeek-flash')
+    expect(detectModelFromText('the flash · maximum effort today')).toBeUndefined()
+  })
+
+  it('reads dsh-TUI turn lifecycle markers as running or degraded, never idle', () => {
+    expect(extractDshTurnStatus('🌑 模型醒了… · 12s · 3.2k tokens · esc 中断')).toBe('running')
+    expect(extractDshTurnStatus('❯ hi turn error · llm-deepseek: no API key for provider route')).toBe('degraded')
+    expect(extractDshTurnStatus('deepseek-flash · Max effort')).toBeUndefined()
+    expect(extractDshTurnStatus('? for shortcuts')).toBeUndefined()
+  })
+
+  it('falls back to a 128k window for dsh terminals without a registry hit', () => {
+    expect(getEstimatedContextWindow('dsh', 'some-unlisted-model')).toBe(128_000)
+    expect(resolveContextWindows('dsh', undefined)).toEqual({
+      effectiveWindow: 128_000,
+      effectiveSource: 'estimated',
+    })
+  })
+
+  it('emits a model snapshot from a dsh-TUI status line through the stream parser', () => {
+    const parser = createRuntimeTelemetryStreamParser(() => 3_000)
+    const [snapshot] = parser.push('deepseek-flash · Max effort C:/repo\n')
+
+    expect(snapshot).toMatchObject({
+      detectedModel: 'DeepSeek-flash',
+      source: 'terminal-text',
+    })
   })
 
   it('parses pi short-key usage JSON as a structured runtime event', () => {

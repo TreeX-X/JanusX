@@ -319,4 +319,16 @@ describe('AgentHookConfigManager', () => {
     const uninstalled = await manager.uninstall('janus')
     expect(uninstalled.installed).toBe(false)
   })
+
+  it('treats dsh as hook-less: no-op without touching the opencode plugin dir', async () => {
+    const homeDir = await createTempDir()
+    const userDataDir = join(homeDir, 'userData')
+    const manager = makeManager(homeDir, { userDataDir })
+
+    const installed = await manager.ensureInstalled('dsh')
+    expect(installed).toEqual({ engine: 'dsh', installed: true, path: manager.getHooksRootDir() })
+    expect(await manager.isInstalled('dsh')).toBe(true)
+    const uninstalled = await manager.uninstall('dsh')
+    expect(uninstalled.installed).toBe(false)
+  })
 })

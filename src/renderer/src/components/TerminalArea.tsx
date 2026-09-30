@@ -76,6 +76,7 @@ import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
 import piIcon from '@/assets/icons/pi.svg'
+import dshIcon from '@/assets/icons/dsh.svg'
 
 const PRESET_ICONS: Record<TerminalPreset, string> = {
   shell: terminalIcon,
@@ -84,6 +85,7 @@ const PRESET_ICONS: Record<TerminalPreset, string> = {
   opencode: opencodeIcon,
   janus: janusIcon,
   'pi': piIcon,
+  dsh: dshIcon,
 }
 
 type TerminalPresetOption = { type: TerminalPreset; name: string; icon: string }
@@ -99,6 +101,7 @@ const PRESETS: TerminalPresetOption[] = [
   createPreset('codex'),
   createPreset('opencode'),
   createPreset('pi'),
+  createPreset('dsh'),
 ]
 
 // 收起态 24×24 圆角 4,与工具栏相邻 h-6 w-6 rounded 按钮对齐
@@ -124,6 +127,8 @@ function providerLabel(preset: TerminalPreset, t: (key: string) => string): stri
       return t('terminal:provider.janus')
     case 'pi':
       return t('terminal:provider.pi')
+    case 'dsh':
+      return t('terminal:provider.dsh')
     case 'shell':
       return t('terminal:provider.shell')
   }

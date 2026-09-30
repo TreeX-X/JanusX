@@ -16,6 +16,7 @@ import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
 import piIcon from '@/assets/icons/pi.svg'
+import dshIcon from '@/assets/icons/dsh.svg'
 import styles from './TerminalSelector.module.css'
 
 const ICONS: Record<TerminalPreset, string> = {
@@ -25,6 +26,7 @@ const ICONS: Record<TerminalPreset, string> = {
   opencode: opencodeIcon,
   janus: janusIcon,
   'pi': piIcon,
+  dsh: dshIcon,
 }
 
 interface TerminalOptionProps {
@@ -110,7 +112,7 @@ export function TerminalSelector() {
         </div>
       </div>
       <div className={styles.grid}>
-        {(['shell', 'janus', 'claude', 'codex', 'opencode', 'pi'] as TerminalPreset[]).map((preset) => (
+        {(['shell', 'janus', 'claude', 'codex', 'opencode', 'pi', 'dsh'] as TerminalPreset[]).map((preset) => (
           <TerminalOption
             key={preset}
             preset={preset}

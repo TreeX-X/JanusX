@@ -381,6 +381,9 @@
       },
       "janus": {
         "desc": "In-house Janus CLI. Installed and upgraded via npm globally; restart terminals afterwards."
+      },
+      "dsh": {
+        "desc": "DeepSeek Harness CLI; runs dsh --profile dsh-tui inside the terminal. Install the TUI launcher first and run it once: npm i -g @deepseek-harness-tui/dsh-tui && dsh-tui."
       }
     },
     "state": {

@@ -450,5 +450,6 @@ export const terminalProjectors = new TerminalProjectors()
 export function terminalModelUnsupported(toolId: ExternalCliToolId): string {
   if (toolId === 'janus') return 'Janus keeps an internal binding only and owns no external file.'
   if (toolId === 'claude') return 'Claude Code syncs the full credential triple; use the credential sync action.'
+  if (toolId === 'dsh') return 'DSH owns no external model file; switch models inside the TUI with /model.'
   return 'Unsupported tool.'
 }

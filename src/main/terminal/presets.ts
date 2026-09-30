@@ -27,6 +27,7 @@ export const PRESETS: Record<TerminalPreset, TerminalPresetConfig> = {
   opencode: createPresetConfig('opencode', 'OpenCode', '自动启动 OpenCode CLI'),
   janus: createPresetConfig('janus', 'Janus', '自动启动 Janus CLI'),
   'pi': createPresetConfig('pi', 'Pi', '自动启动 Pi CLI'),
+  dsh: createPresetConfig('dsh', 'DeepSeek', '自动启动 DeepSeek Harness TUI'),
 }
 
 export function getAutoCommand(preset: TerminalPreset): string | undefined {

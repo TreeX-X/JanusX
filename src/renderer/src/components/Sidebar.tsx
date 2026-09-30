@@ -24,6 +24,7 @@ import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
 import piIcon from '@/assets/icons/pi.svg'
+import dshIcon from '@/assets/icons/dsh.svg'
 import {
   clearWorkspaceSidebarGroup,
   groupWorkspaceInSidebar,
@@ -197,6 +198,7 @@ const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
   opencode: opencodeIcon,
   janus: janusIcon,
   'pi': piIcon,
+  dsh: dshIcon,
 }
 
 // Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/2026-09-19-terminal-status-ring--fc9a87e5.md

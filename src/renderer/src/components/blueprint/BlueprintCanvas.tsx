@@ -49,6 +49,7 @@ import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
 import piIcon from '@/assets/icons/pi.svg'
+import dshIcon from '@/assets/icons/dsh.svg'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 import { useBlueprintDetailPortal } from './blueprintDetailPortal'
 import { useAnimatedOpen } from '@/components/shared/CardFrame'
@@ -81,7 +82,8 @@ const TERMINAL_PRESETS: {
   createTerminalPreset('claude'),
   createTerminalPreset('codex'),
   createTerminalPreset('opencode'),
-  createTerminalPreset('pi')
+  createTerminalPreset('pi'),
+  createTerminalPreset('dsh')
 ]
 
 function createTerminalPreset(type: TerminalPreset): { type: TerminalPreset; label: string; name: string } {
@@ -97,6 +99,7 @@ const TERMINAL_PRESET_ICONS: Record<TerminalPreset, string> = {
   codex: codexIcon,
   opencode: opencodeIcon,
   pi: piIcon,
+  dsh: dshIcon,
 }
 type StatusFilter = ToolbarStatusFilter
 type KindFilter = ToolbarKindFilter

@@ -91,7 +91,7 @@ export interface OfficeStopPreviewRequest extends OfficeFileRequest {
 export interface OfficeReloadPreviewRequest extends OfficeStopPreviewRequest {}
 
 export interface OfficeBuildPromptRequest extends OfficeFileRequest {
-  terminalPreset: 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
+  terminalPreset: 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
   skillId?: OfficeSkillId
 }
 

@@ -191,6 +191,14 @@ describe('ExternalCliService terminal model channels', () => {
     await expect(instance.rollbackTerminal('janus')).resolves.toMatchObject({ success: false })
   })
 
+  it('rejects dsh on the model-only channels: no external model file', async () => {
+    const instance = service()
+    await expect(instance.readTerminalModel('dsh')).resolves.toMatchObject({ exists: false, configPath: null })
+    expect((await instance.readTerminalModel('dsh')).error).toMatch(/\/model/)
+    await expect(instance.applyTerminalModel({ toolId: 'dsh', model: 'm' })).resolves.toMatchObject({ success: false })
+    await expect(instance.rollbackTerminal('dsh')).resolves.toMatchObject({ success: false })
+  })
+
   it('applies and reads back a pi model through the service', async () => {
     const instance = service()
     await expect(instance.applyTerminalModel({ toolId: 'pi', model: 'owner/m' })).resolves.toMatchObject({ success: true })

@@ -3,7 +3,7 @@ import {
   type AgentHookPayload,
 } from '../notifications/agent-hook-types'
 
-export type CompanionEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
+export type CompanionEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
 
 export interface CompanionTerminalMetadata {
   terminalId: string

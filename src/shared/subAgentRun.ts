@@ -1,6 +1,6 @@
 export type SubAgentRunSource = 'terminal' | 'headless' | 'hook' | 'manual' | 'workflowx'
 
-export type SubAgentRunEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
+export type SubAgentRunEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
 
 export type SubAgentRunRole =
   | 'main'

@@ -23,7 +23,7 @@ export const TERMINAL_EVENT_CHANNELS = {
   turnChanges: 'terminal:turn-changes',
 } as const
 
-export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
+export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
 
 // Note: six internal states route hooks and sort order; approval and input share one attention visual — see .agents/notes/2026-09-12-terminal-status-display--27891818.md
 // Sidebar display status of a terminal entry.

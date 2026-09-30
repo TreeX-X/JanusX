@@ -38,15 +38,18 @@ const DEFAULT_TYPE_PER_TERMINAL: Record<ExternalCliToolId, ProviderType> = {
   codex: 'openai-compatible',
   opencode: 'openai-compatible',
   pi: 'openai-compatible',
+  dsh: 'openai-compatible',
 }
 
-/** 精简版各终端拥有的 model 键；janus 为内部直连，claude 走凭证三元组。 */
+/** 精简版各终端拥有的 model 键；janus 为内部直连，claude 走凭证三元组，
+ * dsh 无外部模型文件（bundle 默认 + TUI 内 /model 会话切换），三者均不在此列。 */
 const TERMINAL_FILE_META: Record<ExternalCliToolId, { format: string; ownedKey: string } | null> = {
   janus: null,
   claude: null,
   codex: { format: 'TOML', ownedKey: 'model' },
   opencode: { format: 'JSON / JSONC', ownedKey: 'model' },
   pi: { format: 'JSON', ownedKey: 'defaultModel' },
+  dsh: null,
 }
 
 function formatSyncTime(syncedAt: number): string {

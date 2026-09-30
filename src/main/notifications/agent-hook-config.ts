@@ -571,6 +571,13 @@ export class AgentHookConfigManager {
       return { engine, installed: true, path: this.getHooksRootDir() }
     }
 
+    // dsh has no hook contract yet (phase 1 = bare PTY via `dsh --profile dsh-tui`,
+    // see .agents/notes/dsh-integration.md): no-op so a dsh launch never
+    // touches the opencode plugin dir as a side effect.
+    if (engine === 'dsh') {
+      return { engine, installed: true, path: this.getHooksRootDir() }
+    }
+
     if (engine === 'pi') {
       await this.ensurePiExtension()
       return { engine, installed: true, path: this.getPiExtensionPath() }
@@ -612,6 +619,11 @@ export class AgentHookConfigManager {
       return { engine, installed: false, path: this.getHooksRootDir() }
     }
 
+    // dsh owns no hook files (see ensureInstalled): uninstall is a no-op.
+    if (engine === 'dsh') {
+      return { engine, installed: false, path: this.getHooksRootDir() }
+    }
+
     if (engine === 'pi') {
       const extensionPath = this.getPiExtensionPath()
       try {
@@ -635,6 +647,10 @@ export class AgentHookConfigManager {
 
   async isInstalled(engine: HookableEngine): Promise<boolean> {
     if (engine === 'janus') return true
+
+    // dsh has no installable hook surface yet: always report installed so
+    // terminal creation never falls through to the opencode plugin path.
+    if (engine === 'dsh') return true
 
     if (engine === 'pi') {
       try {

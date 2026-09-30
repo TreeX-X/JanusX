@@ -414,8 +414,7 @@ describe('runtime telemetry history', () => {
     })
   })
 
-  it('rejects a pi session whose header belongs to another workspace', async () => {
-    const sessionRoot = join(testContext.homeDir, '.pi', 'agent', 'sessions', '---C--other--')
+  it('rejects a pi session whose header belongs to another workspace', async () => {    const sessionRoot = join(testContext.homeDir, '.pi', 'agent', 'sessions', '---C--other--')
     await mkdir(sessionRoot, { recursive: true })
     const sessionId = 'ffffffff-1111-2222-3333-444444444444'
     await writeFile(join(sessionRoot, `2026-01-01_${sessionId}.jsonl`), [
@@ -425,5 +424,58 @@ describe('runtime telemetry history', () => {
 
     const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'pi', cwd: 'C:/repo', sessionId })
     expect(snapshot).toBeNull()
+  })
+
+  it('reads the declared dsh model from model recents before the composed default', async () => {
+    const tuiDir = join(testContext.homeDir, '.dsh-tui')
+    await mkdir(tuiDir, { recursive: true })
+    await writeFile(join(tuiDir, 'model-recents.json'), JSON.stringify(['deepseek-v4', 'deepseek-flash']))
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'dsh', cwd: 'C:/repo' })
+
+    expect(snapshot).toMatchObject({
+      detectedModel: 'deepseek-v4',
+      contextTokens: 0,
+      contextWindowTokens: 128_000,
+      source: 'configuration',
+      confidence: 'declared',
+    })
+    expect(snapshot?.sessionId).toBeUndefined()
+  })
+
+  it('falls back to the composed dsh default model without recents', async () => {
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'dsh', cwd: 'C:/repo' })
+
+    expect(snapshot).toMatchObject({
+      detectedModel: 'deepseek-flash',
+      contextTokens: 0,
+      contextWindowTokens: 128_000,
+      source: 'configuration',
+      confidence: 'declared',
+    })
+  })
+
+  it('binds a dsh session dir only inside the exact workspace and on id match', async () => {
+    const sessionId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const workspaceDir = join(testContext.homeDir, '.dsh', 'sessions', '--C-repo--')
+    await mkdir(join(workspaceDir, sessionId), { recursive: true })
+    await writeFile(join(workspaceDir, sessionId, 'session.v4.jsonl.zstd'), 'opaque-bytes')
+    const otherDir = join(testContext.homeDir, '.dsh', 'sessions', '--C-other--')
+    await mkdir(join(otherDir, sessionId), { recursive: true })
+
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'dsh', cwd: 'C:/repo', sessionId: sessionId.slice(0, 8) })
+
+    expect(snapshot).toMatchObject({
+      sessionId,
+      source: 'history',
+      confidence: 'derived',
+    })
+    expect(snapshot?.filePath).toContain(sessionId)
+
+    const mismatch = await getRuntimeTelemetrySnapshot({ preset: 'dsh', cwd: 'C:/repo', sessionId: 'zzzzzzzz' })
+    expect(mismatch).toBeNull()
+
+    const stale = await getRuntimeTelemetrySnapshot({ preset: 'dsh', cwd: 'C:/repo', sessionId, startedAt: Date.now() + 1_000_000 })
+    expect(stale).toBeNull()
   })
 })

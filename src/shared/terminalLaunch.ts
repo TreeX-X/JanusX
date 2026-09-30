@@ -1,4 +1,4 @@
-export type TerminalPreset = 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
+export type TerminalPreset = 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
 
 export interface TerminalPresetMeta {
   name: string
@@ -48,6 +48,12 @@ const TERMINAL_PRESET_META: Record<TerminalPreset, TerminalPresetMeta> = {
     name: 'pi',
     label: 'Pi',
     command: 'pi'
+  },
+  dsh: {
+    name: 'dsh',
+    label: 'DeepSeek',
+    command: 'dsh',
+    args: ['--profile', 'dsh-tui']
   }
 }
 
@@ -62,7 +68,8 @@ export function isTerminalPreset(value: unknown): value is TerminalPreset {
     value === 'codex' ||
     value === 'opencode' ||
     value === 'janus' ||
-    value === 'pi'
+    value === 'pi' ||
+    value === 'dsh'
   )
 }
 

@@ -381,6 +381,9 @@
       },
       "janus": {
         "desc": "自有 Janus CLI。通过 npm 全局安装与升级，安装后重启终端生效。"
+      },
+      "dsh": {
+        "desc": "DeepSeek Harness CLI，终端内运行 dsh --profile dsh-tui 启动 TUI。先装 TUI 启动器并运行一次：npm i -g @deepseek-harness-tui/dsh-tui && dsh-tui。"
       }
     },
     "state": {
