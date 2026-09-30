@@ -16,7 +16,7 @@ tags: [memory, knowledge, parent, governance]
 
 ## Scope
 
-2026-09-30：知识库重构计划尚未结束。[统一记忆内核需求](./2026-09-28-unified-memory-laya-primary--736081fc.md)记录最新的 Laya 本地自动审核目标、实现差距和待验证问题，保持 draft 并等待后续讨论验证；已有功能和测试交付不表示整体重构完成。
+2026-09-30：知识库重构计划尚未结束。[统一记忆内核需求](./2026-09-28-unified-memory-laya-primary--736081fc.md)记录最新的 Laya 本地自动审核目标、实现差距，以及知识库简洁性、人工与自动操作历史、事实/Wiki 定位和沉淀体验问题，保持 draft 并等待后续讨论验证；已有功能和测试交付不表示整体重构完成。
 
 [MVP 总纲](./2026-09-14-independent-knowledge-assistant--6e34d77d.md)为本域直接子并兼 M 链链头：[M1 存储](./2026-09-15-user-memory-m1--fd02d3bc.md)以总纲为父，[M2 召回](./2026-09-15-user-recall-m2--dec987d8.md)以 M1 为父，[M3 工具](./2026-09-15-user-memory-tools-m3--939f0bcf.md)以 M2 为父，[M4 一瞥](./2026-09-15-user-memory-surface-m4--b32f92b5.md)以 M3 为父。
 

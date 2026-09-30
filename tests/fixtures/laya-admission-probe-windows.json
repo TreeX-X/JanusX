@@ -1,0 +1,5907 @@
+{
+  "schema": 1,
+  "kind": "assistant-authored-synthetic",
+  "qualityGate": "not-evaluated-synthetic-exploration",
+  "policy": {
+    "threshold": 0.9,
+    "hostChecks": "assumed-valid; not exercised against application",
+    "writes": "simulated only"
+  },
+  "model": "convaiinnovations/laya-multilingual",
+  "revision": "e4e9ddf21a7b1903b7acffd8814ad4307bf63a67",
+  "sdk": "0.3.21",
+  "python": "3.12.13",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "device": "cpu",
+  "threads": 4,
+  "datasetSha256": "e98ea215a0837fe5bc60d9e37b351ad96ef8d56afd761ccf890e2c8ff156711e",
+  "scriptSha256": "6740137a895159133afe325db2c5dbe5a7d6870a2b03b777533a4804404f87fc",
+  "adapterSha256": "7a7e187181d55c97e76f2f0ec4f8f8210d43e60ae6ad13462efc4acdb8f05b51",
+  "templates": {
+    "current-six": {
+      "retention": {
+        "type": "noul",
+        "instructions": "Is the candidate useful durable knowledge rather than temporary chatter?"
+      },
+      "kind": {
+        "type": "choice",
+        "instructions": "Which category describes the candidate?",
+        "criteria": {
+          "fact": "A factual statement",
+          "decision": "A chosen approach with rationale",
+          "preference": "A person's preference or habit",
+          "procedure": "Instructions for performing a task"
+        }
+      },
+      "support": {
+        "type": "noul",
+        "instructions": "Does the evidence directly support the candidate, including its subject and any negation?"
+      },
+      "duplicate": {
+        "type": "noul",
+        "instructions": "Does an existing fact express the same claim as the candidate? If there are no existing facts, answer false."
+      },
+      "supersede": {
+        "type": "noul",
+        "instructions": "Does the evidence explicitly say that the candidate replaces an existing fact? If none, answer false."
+      },
+      "conflict": {
+        "type": "noul",
+        "instructions": "Does the candidate contradict an existing fact about the same subject? If none, answer false."
+      }
+    },
+    "focused-en": {
+      "support": {
+        "type": "noul",
+        "instructions": "Does the evidence establish the entire candidate as a confirmed statement? Preserve who, project, environment, time, negation and conditions. A suggestion, someone else's preference, or unresolved conflicting records do not establish it."
+      },
+      "retention": {
+        "type": "noul",
+        "instructions": "Would the candidate, if supported, be reusable long-term knowledge, such as a configuration, decision, preference or operating rule? A transient progress/status message is not durable knowledge."
+      },
+      "relation": {
+        "type": "choice",
+        "instructions": "Compare candidate with existing_facts using the evidence. Select the relationship. An explicit replacement is update even though the values differ.",
+        "criteria": {
+          "none": "There are no existing facts.",
+          "unrelated": "Different subjects, environments or independent claims; both can hold.",
+          "duplicate": "Same claim and conditions; no change.",
+          "update": "Evidence explicitly establishes that the new claim replaces an old claim about the same subject.",
+          "conflict": "Incompatible claims about the same subject and conditions, without an established replacement."
+        }
+      }
+    },
+    "focused-zh": {
+      "support": {
+        "type": "noul",
+        "instructions": "证据是否足以确认候选的完整陈述？必须核对主体、项目、环境、时间、否定和适用条件。尚未采纳的建议、别人的偏好、未解决的相互矛盾记录不能确认该候选。"
+      },
+      "retention": {
+        "type": "noul",
+        "instructions": "假设有证据支持，候选是否属于可长期复用的知识，例如配置、决策、个人偏好或操作规则？短暂的进度和运行状态不属于长期知识。"
+      },
+      "relation": {
+        "type": "choice",
+        "instructions": "根据证据比较候选与已有知识，选择关系。明确的新旧替代应选择 update，即使新旧值不同。",
+        "criteria": {
+          "none": "没有已有知识。",
+          "unrelated": "主体、环境不同或描述独立事项，两者可以同时成立。",
+          "duplicate": "相同条件下表达同一结论，没有变更。",
+          "update": "证据明确确认候选替代同一主体的旧结论。",
+          "conflict": "同一主体和条件下结论不兼容，而且没有确立新旧替代关系。"
+        }
+      }
+    }
+  },
+  "limits": [
+    "24 related synthetic cases; no independent human labels or holdout",
+    "No threshold fitting; all variants exploratory",
+    "No extraction, live host transactions, retrieval or wiki generation tested",
+    "Current-six actions use the new sandbox policy, not production routing"
+  ],
+  "results": [
+    {
+      "id": "config-add",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.9416,
+          "distribution": {
+            "true": 0.0584,
+            "false": 0.9416
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9978,
+          "distribution": {
+            "fact": 0.9978,
+            "decision": 0.0007,
+            "preference": 0.0003,
+            "procedure": 0.0012
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9932,
+          "distribution": {
+            "true": 0.0068,
+            "false": 0.9932
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.9876,
+          "distribution": {
+            "true": 0.0124,
+            "false": 0.9876
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.9907,
+          "distribution": {
+            "true": 0.0093,
+            "false": 0.9907
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9942,
+          "distribution": {
+            "true": 0.0058,
+            "false": 0.9942
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9932,
+          "distribution": {
+            "true": 0.0068,
+            "false": 0.9932
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9416,
+          "distribution": {
+            "true": 0.0584,
+            "false": 0.9416
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 503
+    },
+    {
+      "id": "config-negation",
+      "variant": "current-six",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.9934,
+          "distribution": {
+            "true": 0.0066,
+            "false": 0.9934
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9945005499450056,
+          "distribution": {
+            "fact": 0.9945005499450056,
+            "decision": 0.0031996800319968005,
+            "preference": 0.0007999200079992001,
+            "procedure": 0.0014998500149985001
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9842,
+          "distribution": {
+            "true": 0.0158,
+            "false": 0.9842
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.9742999999999999,
+          "distribution": {
+            "true": 0.0257,
+            "false": 0.9742999999999999
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.987,
+          "distribution": {
+            "true": 0.987,
+            "false": 0.013000000000000012
+          }
+        },
+        "conflict": {
+          "value": true,
+          "confidence": 0.9956,
+          "distribution": {
+            "true": 0.9956,
+            "false": 0.0043999999999999595
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9842,
+          "distribution": {
+            "true": 0.0158,
+            "false": 0.9842
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9934,
+          "distribution": {
+            "true": 0.0066,
+            "false": 0.9934
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 509
+    },
+    {
+      "id": "config-update",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.7757000000000001,
+          "distribution": {
+            "true": 0.2243,
+            "false": 0.7757000000000001
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.997,
+          "distribution": {
+            "fact": 0.997,
+            "decision": 0.002,
+            "preference": 0.0004,
+            "procedure": 0.0006
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9238999999999999,
+          "distribution": {
+            "true": 0.0761,
+            "false": 0.9238999999999999
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.7156,
+          "distribution": {
+            "true": 0.2844,
+            "false": 0.7156
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.5492,
+          "distribution": {
+            "true": 0.5492,
+            "false": 0.4508
+          }
+        },
+        "conflict": {
+          "value": true,
+          "confidence": 0.7039,
+          "distribution": {
+            "true": 0.7039,
+            "false": 0.29610000000000003
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9238999999999999,
+          "distribution": {
+            "true": 0.0761,
+            "false": 0.9238999999999999
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7757000000000001,
+          "distribution": {
+            "true": 0.2243,
+            "false": 0.7757000000000001
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.5492
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 592
+    },
+    {
+      "id": "config-unresolved",
+      "variant": "current-six",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.8886000000000001,
+          "distribution": {
+            "true": 0.1114,
+            "false": 0.8886000000000001
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9996,
+          "distribution": {
+            "fact": 0.9996,
+            "decision": 0.0001,
+            "preference": 0.0002,
+            "procedure": 0.0001
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.8722,
+          "distribution": {
+            "true": 0.8722,
+            "false": 0.12780000000000002
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.763,
+          "distribution": {
+            "true": 0.763,
+            "false": 0.237
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.8215,
+          "distribution": {
+            "true": 0.8215,
+            "false": 0.1785
+          }
+        },
+        "conflict": {
+          "value": true,
+          "confidence": 0.9864,
+          "distribution": {
+            "true": 0.9864,
+            "false": 0.013599999999999945
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8722,
+          "distribution": {
+            "true": 0.8722,
+            "false": 0.12780000000000002
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8886000000000001,
+          "distribution": {
+            "true": 0.1114,
+            "false": 0.8886000000000001
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.763
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 668
+    },
+    {
+      "id": "procedure-add",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.9398,
+          "distribution": {
+            "true": 0.0602,
+            "false": 0.9398
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9935006499350065,
+          "distribution": {
+            "fact": 0.9935006499350065,
+            "decision": 0.0004999500049995,
+            "preference": 0.0004999500049995,
+            "procedure": 0.005499450054994501
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9166,
+          "distribution": {
+            "true": 0.0834,
+            "false": 0.9166
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.5126,
+          "distribution": {
+            "true": 0.5126,
+            "false": 0.48740000000000006
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.9418,
+          "distribution": {
+            "true": 0.0582,
+            "false": 0.9418
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9906,
+          "distribution": {
+            "true": 0.0094,
+            "false": 0.9906
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9166,
+          "distribution": {
+            "true": 0.0834,
+            "false": 0.9166
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9398,
+          "distribution": {
+            "true": 0.0602,
+            "false": 0.9398
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 510
+    },
+    {
+      "id": "procedure-temporary",
+      "variant": "current-six",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.8456,
+          "distribution": {
+            "true": 0.1544,
+            "false": 0.8456
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9948,
+          "distribution": {
+            "fact": 0.9948,
+            "decision": 0.0015,
+            "preference": 0.0006,
+            "procedure": 0.0031
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9336,
+          "distribution": {
+            "true": 0.0664,
+            "false": 0.9336
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.9407,
+          "distribution": {
+            "true": 0.0593,
+            "false": 0.9407
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.9335,
+          "distribution": {
+            "true": 0.0665,
+            "false": 0.9335
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.94,
+          "distribution": {
+            "true": 0.06,
+            "false": 0.94
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9336,
+          "distribution": {
+            "true": 0.0664,
+            "false": 0.9336
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8456,
+          "distribution": {
+            "true": 0.1544,
+            "false": 0.8456
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 547
+    },
+    {
+      "id": "procedure-duplicate",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": true,
+          "confidence": 0.9159,
+          "distribution": {
+            "true": 0.9159,
+            "false": 0.08409999999999995
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9974002599740026,
+          "distribution": {
+            "fact": 0.9974002599740026,
+            "decision": 0.0005999400059994001,
+            "preference": 0.00039996000399960006,
+            "procedure": 0.0015998400159984002
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.985,
+          "distribution": {
+            "true": 0.985,
+            "false": 0.015000000000000013
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.9883,
+          "distribution": {
+            "true": 0.9883,
+            "false": 0.011700000000000044
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.6174999999999999,
+          "distribution": {
+            "true": 0.3825,
+            "false": 0.6174999999999999
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9918,
+          "distribution": {
+            "true": 0.0082,
+            "false": 0.9918
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.985,
+          "distribution": {
+            "true": 0.985,
+            "false": 0.015000000000000013
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9159,
+          "distribution": {
+            "true": 0.9159,
+            "false": 0.08409999999999995
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.6174999999999999
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 614
+    },
+    {
+      "id": "procedure-update",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": true,
+          "confidence": 0.9421,
+          "distribution": {
+            "true": 0.9421,
+            "false": 0.05789999999999995
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9916,
+          "distribution": {
+            "fact": 0.9916,
+            "decision": 0.004,
+            "preference": 0.001,
+            "procedure": 0.0034
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.9741,
+          "distribution": {
+            "true": 0.9741,
+            "false": 0.025900000000000034
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.985,
+          "distribution": {
+            "true": 0.985,
+            "false": 0.015000000000000013
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.969,
+          "distribution": {
+            "true": 0.969,
+            "false": 0.031000000000000028
+          }
+        },
+        "conflict": {
+          "value": true,
+          "confidence": 0.9447,
+          "distribution": {
+            "true": 0.9447,
+            "false": 0.055300000000000016
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9741,
+          "distribution": {
+            "true": 0.9741,
+            "false": 0.025900000000000034
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9421,
+          "distribution": {
+            "true": 0.9421,
+            "false": 0.05789999999999995
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.9447
+        }
+      },
+      "action": "replace",
+      "elapsedMs": 603
+    },
+    {
+      "id": "decision-add",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.9554,
+          "distribution": {
+            "true": 0.0446,
+            "false": 0.9554
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9497,
+          "distribution": {
+            "fact": 0.9497,
+            "decision": 0.0443,
+            "preference": 0.0021,
+            "procedure": 0.0039
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9737,
+          "distribution": {
+            "true": 0.0263,
+            "false": 0.9737
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.946,
+          "distribution": {
+            "true": 0.054,
+            "false": 0.946
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.9465,
+          "distribution": {
+            "true": 0.0535,
+            "false": 0.9465
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.971,
+          "distribution": {
+            "true": 0.029,
+            "false": 0.971
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9737,
+          "distribution": {
+            "true": 0.0263,
+            "false": 0.9737
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9554,
+          "distribution": {
+            "true": 0.0446,
+            "false": 0.9554
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 540
+    },
+    {
+      "id": "decision-proposal",
+      "variant": "current-six",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.9088,
+          "distribution": {
+            "true": 0.0912,
+            "false": 0.9088
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9517,
+          "distribution": {
+            "fact": 0.9517,
+            "decision": 0.01,
+            "preference": 0.0371,
+            "procedure": 0.0012
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9843,
+          "distribution": {
+            "true": 0.0157,
+            "false": 0.9843
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.5769,
+          "distribution": {
+            "true": 0.4231,
+            "false": 0.5769
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.8219,
+          "distribution": {
+            "true": 0.1781,
+            "false": 0.8219
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.6034999999999999,
+          "distribution": {
+            "true": 0.3965,
+            "false": 0.6034999999999999
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9843,
+          "distribution": {
+            "true": 0.0157,
+            "false": 0.9843
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9088,
+          "distribution": {
+            "true": 0.0912,
+            "false": 0.9088
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 528
+    },
+    {
+      "id": "decision-duplicate",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": true,
+          "confidence": 0.8448,
+          "distribution": {
+            "true": 0.8448,
+            "false": 0.1552
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.8836116388361165,
+          "distribution": {
+            "fact": 0.8836116388361165,
+            "decision": 0.08909109089091091,
+            "preference": 0.004999500049995001,
+            "procedure": 0.022297770222977704
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.9707,
+          "distribution": {
+            "true": 0.9707,
+            "false": 0.029299999999999993
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.9679,
+          "distribution": {
+            "true": 0.9679,
+            "false": 0.03210000000000002
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.8637,
+          "distribution": {
+            "true": 0.8637,
+            "false": 0.13629999999999998
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9849,
+          "distribution": {
+            "true": 0.0151,
+            "false": 0.9849
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9707,
+          "distribution": {
+            "true": 0.9707,
+            "false": 0.029299999999999993
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.8448,
+          "distribution": {
+            "true": 0.8448,
+            "false": 0.1552
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.8637
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 579
+    },
+    {
+      "id": "different-project",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "unrelated",
+        "action": "add"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.891,
+          "distribution": {
+            "true": 0.109,
+            "false": 0.891
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9706,
+          "distribution": {
+            "fact": 0.9706,
+            "decision": 0.0168,
+            "preference": 0.0086,
+            "procedure": 0.004
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.5979,
+          "distribution": {
+            "true": 0.4021,
+            "false": 0.5979
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.6681,
+          "distribution": {
+            "true": 0.3319,
+            "false": 0.6681
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.6129,
+          "distribution": {
+            "true": 0.6129,
+            "false": 0.3871
+          }
+        },
+        "conflict": {
+          "value": true,
+          "confidence": 0.7441,
+          "distribution": {
+            "true": 0.7441,
+            "false": 0.2559
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.5979,
+          "distribution": {
+            "true": 0.4021,
+            "false": 0.5979
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.891,
+          "distribution": {
+            "true": 0.109,
+            "false": 0.891
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.6129
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 425
+    },
+    {
+      "id": "preference-add",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.6788000000000001,
+          "distribution": {
+            "true": 0.3212,
+            "false": 0.6788000000000001
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.8809119088091191,
+          "distribution": {
+            "fact": 0.8809119088091191,
+            "decision": 0.008799120087991202,
+            "preference": 0.10668933106689331,
+            "procedure": 0.0035996400359964
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9194,
+          "distribution": {
+            "true": 0.0806,
+            "false": 0.9194
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.5208999999999999,
+          "distribution": {
+            "true": 0.4791,
+            "false": 0.5208999999999999
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.6415,
+          "distribution": {
+            "true": 0.3585,
+            "false": 0.6415
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.8092,
+          "distribution": {
+            "true": 0.1908,
+            "false": 0.8092
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9194,
+          "distribution": {
+            "true": 0.0806,
+            "false": 0.9194
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.6788000000000001,
+          "distribution": {
+            "true": 0.3212,
+            "false": 0.6788000000000001
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 471
+    },
+    {
+      "id": "preference-quote",
+      "variant": "current-six",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.9469,
+          "distribution": {
+            "true": 0.0531,
+            "false": 0.9469
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.7142000000000001,
+          "distribution": {
+            "fact": 0.7142000000000001,
+            "decision": 0.0027000000000000006,
+            "preference": 0.28230000000000005,
+            "procedure": 0.0008000000000000001
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9797,
+          "distribution": {
+            "true": 0.0203,
+            "false": 0.9797
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.9443,
+          "distribution": {
+            "true": 0.0557,
+            "false": 0.9443
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.9528,
+          "distribution": {
+            "true": 0.0472,
+            "false": 0.9528
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.5746,
+          "distribution": {
+            "true": 0.4254,
+            "false": 0.5746
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9797,
+          "distribution": {
+            "true": 0.0203,
+            "false": 0.9797
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9469,
+          "distribution": {
+            "true": 0.0531,
+            "false": 0.9469
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 531
+    },
+    {
+      "id": "preference-update",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": true,
+          "confidence": 0.7302,
+          "distribution": {
+            "true": 0.7302,
+            "false": 0.26980000000000004
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9703,
+          "distribution": {
+            "fact": 0.9703,
+            "decision": 0.0048,
+            "preference": 0.0244,
+            "procedure": 0.0005
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.8968,
+          "distribution": {
+            "true": 0.8968,
+            "false": 0.10319999999999996
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.9611,
+          "distribution": {
+            "true": 0.9611,
+            "false": 0.038900000000000046
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.9505,
+          "distribution": {
+            "true": 0.9505,
+            "false": 0.04949999999999999
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.635,
+          "distribution": {
+            "true": 0.365,
+            "false": 0.635
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8968,
+          "distribution": {
+            "true": 0.8968,
+            "false": 0.10319999999999996
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.7302,
+          "distribution": {
+            "true": 0.7302,
+            "false": 0.26980000000000004
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.635
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 551
+    },
+    {
+      "id": "preference-duplicate",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.8311999999999999,
+          "distribution": {
+            "true": 0.1688,
+            "false": 0.8311999999999999
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.7674,
+          "distribution": {
+            "fact": 0.7674,
+            "decision": 0.0349,
+            "preference": 0.1893,
+            "procedure": 0.0084
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.8014,
+          "distribution": {
+            "true": 0.1986,
+            "false": 0.8014
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.8524,
+          "distribution": {
+            "true": 0.8524,
+            "false": 0.14759999999999995
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.9328,
+          "distribution": {
+            "true": 0.0672,
+            "false": 0.9328
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9774,
+          "distribution": {
+            "true": 0.0226,
+            "false": 0.9774
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.8014,
+          "distribution": {
+            "true": 0.1986,
+            "false": 0.8014
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8311999999999999,
+          "distribution": {
+            "true": 0.1688,
+            "false": 0.8311999999999999
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.8524
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 486
+    },
+    {
+      "id": "temporary-status",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": false,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.9531000000000001,
+          "distribution": {
+            "true": 0.0469,
+            "false": 0.9531000000000001
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9997000299970004,
+          "distribution": {
+            "fact": 0.9997000299970004,
+            "decision": 9.999000099990002e-05,
+            "preference": 9.999000099990002e-05,
+            "procedure": 9.999000099990002e-05
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9813,
+          "distribution": {
+            "true": 0.0187,
+            "false": 0.9813
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.532,
+          "distribution": {
+            "true": 0.532,
+            "false": 0.46799999999999997
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.8591,
+          "distribution": {
+            "true": 0.1409,
+            "false": 0.8591
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9957,
+          "distribution": {
+            "true": 0.0043,
+            "false": 0.9957
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9813,
+          "distribution": {
+            "true": 0.0187,
+            "false": 0.9813
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9531000000000001,
+          "distribution": {
+            "true": 0.0469,
+            "false": 0.9531000000000001
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 521
+    },
+    {
+      "id": "durable-policy",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": true,
+          "confidence": 0.6498,
+          "distribution": {
+            "true": 0.6498,
+            "false": 0.35019999999999996
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9981,
+          "distribution": {
+            "fact": 0.9981,
+            "decision": 0.0003,
+            "preference": 0.0001,
+            "procedure": 0.0015
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.8905,
+          "distribution": {
+            "true": 0.1095,
+            "false": 0.8905
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.6394,
+          "distribution": {
+            "true": 0.3606,
+            "false": 0.6394
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.9376,
+          "distribution": {
+            "true": 0.0624,
+            "false": 0.9376
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.983,
+          "distribution": {
+            "true": 0.017,
+            "false": 0.983
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.8905,
+          "distribution": {
+            "true": 0.1095,
+            "false": 0.8905
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.6498,
+          "distribution": {
+            "true": 0.6498,
+            "false": 0.35019999999999996
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 454
+    },
+    {
+      "id": "numeric-conflict",
+      "variant": "current-six",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.8954,
+          "distribution": {
+            "true": 0.1046,
+            "false": 0.8954
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9993999399939993,
+          "distribution": {
+            "fact": 0.9993999399939993,
+            "decision": 0.00020002000200020003,
+            "preference": 0.00020002000200020003,
+            "procedure": 0.00020002000200020003
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.9151,
+          "distribution": {
+            "true": 0.9151,
+            "false": 0.08489999999999998
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.9932,
+          "distribution": {
+            "true": 0.9932,
+            "false": 0.006800000000000028
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.8783,
+          "distribution": {
+            "true": 0.8783,
+            "false": 0.12170000000000003
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9845,
+          "distribution": {
+            "true": 0.0155,
+            "false": 0.9845
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9151,
+          "distribution": {
+            "true": 0.9151,
+            "false": 0.08489999999999998
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8954,
+          "distribution": {
+            "true": 0.1046,
+            "false": 0.8954
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.8783
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 601
+    },
+    {
+      "id": "numeric-update",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.5472,
+          "distribution": {
+            "true": 0.4528,
+            "false": 0.5472
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9997,
+          "distribution": {
+            "fact": 0.9997,
+            "decision": 0.0001,
+            "preference": 0.0001,
+            "procedure": 0.0001
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.9862,
+          "distribution": {
+            "true": 0.9862,
+            "false": 0.013800000000000034
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.9925,
+          "distribution": {
+            "true": 0.9925,
+            "false": 0.007499999999999951
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.8577,
+          "distribution": {
+            "true": 0.8577,
+            "false": 0.14229999999999998
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 1.0,
+          "distribution": {
+            "true": 0.0,
+            "false": 1.0
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9862,
+          "distribution": {
+            "true": 0.9862,
+            "false": 0.013800000000000034
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.5472,
+          "distribution": {
+            "true": 0.4528,
+            "false": 0.5472
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.8577
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 583
+    },
+    {
+      "id": "different-environment",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "unrelated",
+        "action": "add"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.9944,
+          "distribution": {
+            "true": 0.0056,
+            "false": 0.9944
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9975002499750025,
+          "distribution": {
+            "fact": 0.9975002499750025,
+            "decision": 0.0010998900109989002,
+            "preference": 0.0005999400059994001,
+            "procedure": 0.0007999200079992001
+          }
+        },
+        "support": {
+          "value": false,
+          "confidence": 0.9841,
+          "distribution": {
+            "true": 0.0159,
+            "false": 0.9841
+          }
+        },
+        "duplicate": {
+          "value": false,
+          "confidence": 0.5503,
+          "distribution": {
+            "true": 0.4497,
+            "false": 0.5503
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.5293,
+          "distribution": {
+            "true": 0.5293,
+            "false": 0.4707
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9664,
+          "distribution": {
+            "true": 0.0336,
+            "false": 0.9664
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9841,
+          "distribution": {
+            "true": 0.0159,
+            "false": 0.9841
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9944,
+          "distribution": {
+            "true": 0.0056,
+            "false": 0.9944
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.5293
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 538
+    },
+    {
+      "id": "config-duplicate",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": true,
+          "confidence": 0.5001,
+          "distribution": {
+            "true": 0.5001,
+            "false": 0.4999
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9966,
+          "distribution": {
+            "fact": 0.9966,
+            "decision": 0.0024,
+            "preference": 0.0003,
+            "procedure": 0.0007
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.8439,
+          "distribution": {
+            "true": 0.8439,
+            "false": 0.15610000000000002
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.9657,
+          "distribution": {
+            "true": 0.9657,
+            "false": 0.0343
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.6843,
+          "distribution": {
+            "true": 0.6843,
+            "false": 0.3157
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.8766,
+          "distribution": {
+            "true": 0.1234,
+            "false": 0.8766
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8439,
+          "distribution": {
+            "true": 0.8439,
+            "false": 0.15610000000000002
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.5001,
+          "distribution": {
+            "true": 0.5001,
+            "false": 0.4999
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.6843
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 443
+    },
+    {
+      "id": "backup-add",
+      "variant": "current-six",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": true,
+          "confidence": 0.7788,
+          "distribution": {
+            "true": 0.7788,
+            "false": 0.22119999999999995
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9995,
+          "distribution": {
+            "fact": 0.9995,
+            "decision": 0.0002,
+            "preference": 0.0001,
+            "procedure": 0.0002
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.6037,
+          "distribution": {
+            "true": 0.6037,
+            "false": 0.3963
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.7369,
+          "distribution": {
+            "true": 0.7369,
+            "false": 0.2631
+          }
+        },
+        "supersede": {
+          "value": false,
+          "confidence": 0.7503,
+          "distribution": {
+            "true": 0.2497,
+            "false": 0.7503
+          }
+        },
+        "conflict": {
+          "value": false,
+          "confidence": 0.9904,
+          "distribution": {
+            "true": 0.0096,
+            "false": 0.9904
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.6037,
+          "distribution": {
+            "true": 0.6037,
+            "false": 0.3963
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.7788,
+          "distribution": {
+            "true": 0.7788,
+            "false": 0.22119999999999995
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 471
+    },
+    {
+      "id": "backup-unresolved",
+      "variant": "current-six",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "retention": {
+          "value": false,
+          "confidence": 0.7842,
+          "distribution": {
+            "true": 0.2158,
+            "false": 0.7842
+          }
+        },
+        "kind": {
+          "value": "fact",
+          "confidence": 0.9999,
+          "distribution": {
+            "fact": 0.9999,
+            "decision": 0.0,
+            "preference": 0.0001,
+            "procedure": 0.0
+          }
+        },
+        "support": {
+          "value": true,
+          "confidence": 0.8004,
+          "distribution": {
+            "true": 0.8004,
+            "false": 0.1996
+          }
+        },
+        "duplicate": {
+          "value": true,
+          "confidence": 0.838,
+          "distribution": {
+            "true": 0.838,
+            "false": 0.16200000000000003
+          }
+        },
+        "supersede": {
+          "value": true,
+          "confidence": 0.9442,
+          "distribution": {
+            "true": 0.9442,
+            "false": 0.05579999999999996
+          }
+        },
+        "conflict": {
+          "value": true,
+          "confidence": 0.9627,
+          "distribution": {
+            "true": 0.9627,
+            "false": 0.0373
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8004,
+          "distribution": {
+            "true": 0.8004,
+            "false": 0.1996
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7842,
+          "distribution": {
+            "true": 0.2158,
+            "false": 0.7842
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.838
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 590
+    },
+    {
+      "id": "config-add",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9711,
+          "distribution": {
+            "true": 0.0289,
+            "false": 0.9711
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8654,
+          "distribution": {
+            "true": 0.1346,
+            "false": 0.8654
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.7298,
+          "distribution": {
+            "none": 0.7298,
+            "unrelated": 0.0569,
+            "duplicate": 0.2017,
+            "update": 0.0089,
+            "conflict": 0.0027
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9711,
+          "distribution": {
+            "true": 0.0289,
+            "false": 0.9711
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8654,
+          "distribution": {
+            "true": 0.1346,
+            "false": 0.8654
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.7298,
+          "distribution": {
+            "none": 0.7298,
+            "unrelated": 0.0569,
+            "duplicate": 0.2017,
+            "update": 0.0089,
+            "conflict": 0.0027
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 410
+    },
+    {
+      "id": "config-negation",
+      "variant": "focused-en",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9921,
+          "distribution": {
+            "true": 0.0079,
+            "false": 0.9921
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8395,
+          "distribution": {
+            "true": 0.1605,
+            "false": 0.8395
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.2722,
+          "distribution": {
+            "none": 0.2473,
+            "unrelated": 0.2064,
+            "duplicate": 0.2722,
+            "update": 0.0558,
+            "conflict": 0.2183
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9921,
+          "distribution": {
+            "true": 0.0079,
+            "false": 0.9921
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8395,
+          "distribution": {
+            "true": 0.1605,
+            "false": 0.8395
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.2722,
+          "distribution": {
+            "none": 0.2473,
+            "unrelated": 0.2064,
+            "duplicate": 0.2722,
+            "update": 0.0558,
+            "conflict": 0.2183
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 417
+    },
+    {
+      "id": "config-update",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9245,
+          "distribution": {
+            "true": 0.0755,
+            "false": 0.9245
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.6965,
+          "distribution": {
+            "true": 0.6965,
+            "false": 0.3035
+          }
+        },
+        "relation": {
+          "value": "unrelated",
+          "confidence": 0.4107,
+          "distribution": {
+            "none": 0.208,
+            "unrelated": 0.4107,
+            "duplicate": 0.3053,
+            "update": 0.0365,
+            "conflict": 0.0395
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9245,
+          "distribution": {
+            "true": 0.0755,
+            "false": 0.9245
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.6965,
+          "distribution": {
+            "true": 0.6965,
+            "false": 0.3035
+          }
+        },
+        "relation": {
+          "value": "unrelated",
+          "confidence": 0.4107,
+          "distribution": {
+            "none": 0.208,
+            "unrelated": 0.4107,
+            "duplicate": 0.3053,
+            "update": 0.0365,
+            "conflict": 0.0395
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 450
+    },
+    {
+      "id": "config-unresolved",
+      "variant": "focused-en",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.873,
+          "distribution": {
+            "true": 0.127,
+            "false": 0.873
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.7992,
+          "distribution": {
+            "true": 0.7992,
+            "false": 0.20079999999999998
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.4030403040304031,
+          "distribution": {
+            "none": 0.4030403040304031,
+            "unrelated": 0.2008200820082008,
+            "duplicate": 0.3795379537953795,
+            "update": 0.007600760076007601,
+            "conflict": 0.009000900090009
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.873,
+          "distribution": {
+            "true": 0.127,
+            "false": 0.873
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.7992,
+          "distribution": {
+            "true": 0.7992,
+            "false": 0.20079999999999998
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.4030403040304031,
+          "distribution": {
+            "none": 0.4030403040304031,
+            "unrelated": 0.2008200820082008,
+            "duplicate": 0.3795379537953795,
+            "update": 0.007600760076007601,
+            "conflict": 0.009000900090009
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 504
+    },
+    {
+      "id": "procedure-add",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9268,
+          "distribution": {
+            "true": 0.0732,
+            "false": 0.9268
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7377,
+          "distribution": {
+            "true": 0.2623,
+            "false": 0.7377
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.6968,
+          "distribution": {
+            "none": 0.6968,
+            "unrelated": 0.0819,
+            "duplicate": 0.1995,
+            "update": 0.0073,
+            "conflict": 0.0145
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9268,
+          "distribution": {
+            "true": 0.0732,
+            "false": 0.9268
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7377,
+          "distribution": {
+            "true": 0.2623,
+            "false": 0.7377
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.6968,
+          "distribution": {
+            "none": 0.6968,
+            "unrelated": 0.0819,
+            "duplicate": 0.1995,
+            "update": 0.0073,
+            "conflict": 0.0145
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 393
+    },
+    {
+      "id": "procedure-temporary",
+      "variant": "focused-en",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.8831,
+          "distribution": {
+            "true": 0.1169,
+            "false": 0.8831
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9479,
+          "distribution": {
+            "true": 0.0521,
+            "false": 0.9479
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8698,
+          "distribution": {
+            "none": 0.8698,
+            "unrelated": 0.0623,
+            "duplicate": 0.0587,
+            "update": 0.0035,
+            "conflict": 0.0057
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.8831,
+          "distribution": {
+            "true": 0.1169,
+            "false": 0.8831
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9479,
+          "distribution": {
+            "true": 0.0521,
+            "false": 0.9479
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8698,
+          "distribution": {
+            "none": 0.8698,
+            "unrelated": 0.0623,
+            "duplicate": 0.0587,
+            "update": 0.0035,
+            "conflict": 0.0057
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 442
+    },
+    {
+      "id": "procedure-duplicate",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.984,
+          "distribution": {
+            "true": 0.984,
+            "false": 0.016000000000000014
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9884,
+          "distribution": {
+            "true": 0.9884,
+            "false": 0.011600000000000055
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.7567,
+          "distribution": {
+            "none": 0.1438,
+            "unrelated": 0.0181,
+            "duplicate": 0.7567,
+            "update": 0.0716,
+            "conflict": 0.0098
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.984,
+          "distribution": {
+            "true": 0.984,
+            "false": 0.016000000000000014
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9884,
+          "distribution": {
+            "true": 0.9884,
+            "false": 0.011600000000000055
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.7567,
+          "distribution": {
+            "none": 0.1438,
+            "unrelated": 0.0181,
+            "duplicate": 0.7567,
+            "update": 0.0716,
+            "conflict": 0.0098
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 454
+    },
+    {
+      "id": "procedure-update",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9046,
+          "distribution": {
+            "true": 0.9046,
+            "false": 0.09540000000000004
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9722,
+          "distribution": {
+            "true": 0.9722,
+            "false": 0.027800000000000047
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.63,
+          "distribution": {
+            "none": 0.279,
+            "unrelated": 0.0461,
+            "duplicate": 0.63,
+            "update": 0.0329,
+            "conflict": 0.012
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9046,
+          "distribution": {
+            "true": 0.9046,
+            "false": 0.09540000000000004
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9722,
+          "distribution": {
+            "true": 0.9722,
+            "false": 0.027800000000000047
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.63,
+          "distribution": {
+            "none": 0.279,
+            "unrelated": 0.0461,
+            "duplicate": 0.63,
+            "update": 0.0329,
+            "conflict": 0.012
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 465
+    },
+    {
+      "id": "decision-add",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9758,
+          "distribution": {
+            "true": 0.0242,
+            "false": 0.9758
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9718,
+          "distribution": {
+            "true": 0.0282,
+            "false": 0.9718
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.49874987498749873,
+          "distribution": {
+            "none": 0.49874987498749873,
+            "unrelated": 0.36283628362836284,
+            "duplicate": 0.0629062906290629,
+            "update": 0.008200820082008202,
+            "conflict": 0.0673067306730673
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9758,
+          "distribution": {
+            "true": 0.0242,
+            "false": 0.9758
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9718,
+          "distribution": {
+            "true": 0.0282,
+            "false": 0.9718
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.49874987498749873,
+          "distribution": {
+            "none": 0.49874987498749873,
+            "unrelated": 0.36283628362836284,
+            "duplicate": 0.0629062906290629,
+            "update": 0.008200820082008202,
+            "conflict": 0.0673067306730673
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 397
+    },
+    {
+      "id": "decision-proposal",
+      "variant": "focused-en",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9321,
+          "distribution": {
+            "true": 0.0679,
+            "false": 0.9321
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7833,
+          "distribution": {
+            "true": 0.2167,
+            "false": 0.7833
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.6067,
+          "distribution": {
+            "none": 0.6067,
+            "unrelated": 0.3377,
+            "duplicate": 0.024,
+            "update": 0.0042,
+            "conflict": 0.0274
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9321,
+          "distribution": {
+            "true": 0.0679,
+            "false": 0.9321
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7833,
+          "distribution": {
+            "true": 0.2167,
+            "false": 0.7833
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.6067,
+          "distribution": {
+            "none": 0.6067,
+            "unrelated": 0.3377,
+            "duplicate": 0.024,
+            "update": 0.0042,
+            "conflict": 0.0274
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 419
+    },
+    {
+      "id": "decision-duplicate",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.953,
+          "distribution": {
+            "true": 0.953,
+            "false": 0.04700000000000004
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9778,
+          "distribution": {
+            "true": 0.9778,
+            "false": 0.022199999999999998
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5803,
+          "distribution": {
+            "none": 0.258,
+            "unrelated": 0.0468,
+            "duplicate": 0.5803,
+            "update": 0.0984,
+            "conflict": 0.0165
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.953,
+          "distribution": {
+            "true": 0.953,
+            "false": 0.04700000000000004
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9778,
+          "distribution": {
+            "true": 0.9778,
+            "false": 0.022199999999999998
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5803,
+          "distribution": {
+            "none": 0.258,
+            "unrelated": 0.0468,
+            "duplicate": 0.5803,
+            "update": 0.0984,
+            "conflict": 0.0165
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 443
+    },
+    {
+      "id": "different-project",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "unrelated",
+        "action": "add"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7968999999999999,
+          "distribution": {
+            "true": 0.2031,
+            "false": 0.7968999999999999
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.6606,
+          "distribution": {
+            "true": 0.6606,
+            "false": 0.33940000000000003
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.614,
+          "distribution": {
+            "none": 0.614,
+            "unrelated": 0.2655,
+            "duplicate": 0.0843,
+            "update": 0.0103,
+            "conflict": 0.0259
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7968999999999999,
+          "distribution": {
+            "true": 0.2031,
+            "false": 0.7968999999999999
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.6606,
+          "distribution": {
+            "true": 0.6606,
+            "false": 0.33940000000000003
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.614,
+          "distribution": {
+            "none": 0.614,
+            "unrelated": 0.2655,
+            "duplicate": 0.0843,
+            "update": 0.0103,
+            "conflict": 0.0259
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 382
+    },
+    {
+      "id": "preference-add",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.6587000000000001,
+          "distribution": {
+            "true": 0.3413,
+            "false": 0.6587000000000001
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.5919,
+          "distribution": {
+            "true": 0.4081,
+            "false": 0.5919
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.5934,
+          "distribution": {
+            "none": 0.5934,
+            "unrelated": 0.2144,
+            "duplicate": 0.119,
+            "update": 0.0603,
+            "conflict": 0.0129
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.6587000000000001,
+          "distribution": {
+            "true": 0.3413,
+            "false": 0.6587000000000001
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.5919,
+          "distribution": {
+            "true": 0.4081,
+            "false": 0.5919
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.5934,
+          "distribution": {
+            "none": 0.5934,
+            "unrelated": 0.2144,
+            "duplicate": 0.119,
+            "update": 0.0603,
+            "conflict": 0.0129
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 407
+    },
+    {
+      "id": "preference-quote",
+      "variant": "focused-en",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9038,
+          "distribution": {
+            "true": 0.0962,
+            "false": 0.9038
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9198999999999999,
+          "distribution": {
+            "true": 0.0801,
+            "false": 0.9198999999999999
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.5062506250625062,
+          "distribution": {
+            "none": 0.5062506250625062,
+            "unrelated": 0.39503950395039505,
+            "duplicate": 0.0735073507350735,
+            "update": 0.0014001400140014,
+            "conflict": 0.023802380238023804
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9038,
+          "distribution": {
+            "true": 0.0962,
+            "false": 0.9038
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9198999999999999,
+          "distribution": {
+            "true": 0.0801,
+            "false": 0.9198999999999999
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.5062506250625062,
+          "distribution": {
+            "none": 0.5062506250625062,
+            "unrelated": 0.39503950395039505,
+            "duplicate": 0.0735073507350735,
+            "update": 0.0014001400140014,
+            "conflict": 0.023802380238023804
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 406
+    },
+    {
+      "id": "preference-update",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.7869,
+          "distribution": {
+            "true": 0.7869,
+            "false": 0.21309999999999996
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9686,
+          "distribution": {
+            "true": 0.9686,
+            "false": 0.031399999999999983
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.6236,
+          "distribution": {
+            "none": 0.6236,
+            "unrelated": 0.2059,
+            "duplicate": 0.1261,
+            "update": 0.0108,
+            "conflict": 0.0336
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.7869,
+          "distribution": {
+            "true": 0.7869,
+            "false": 0.21309999999999996
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9686,
+          "distribution": {
+            "true": 0.9686,
+            "false": 0.031399999999999983
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.6236,
+          "distribution": {
+            "none": 0.6236,
+            "unrelated": 0.2059,
+            "duplicate": 0.1261,
+            "update": 0.0108,
+            "conflict": 0.0336
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 458
+    },
+    {
+      "id": "preference-duplicate",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.6286,
+          "distribution": {
+            "true": 0.6286,
+            "false": 0.37139999999999995
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.7558,
+          "distribution": {
+            "true": 0.7558,
+            "false": 0.24419999999999997
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5571,
+          "distribution": {
+            "none": 0.2997,
+            "unrelated": 0.0467,
+            "duplicate": 0.5571,
+            "update": 0.0665,
+            "conflict": 0.03
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.6286,
+          "distribution": {
+            "true": 0.6286,
+            "false": 0.37139999999999995
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.7558,
+          "distribution": {
+            "true": 0.7558,
+            "false": 0.24419999999999997
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5571,
+          "distribution": {
+            "none": 0.2997,
+            "unrelated": 0.0467,
+            "duplicate": 0.5571,
+            "update": 0.0665,
+            "conflict": 0.03
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 443
+    },
+    {
+      "id": "temporary-status",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": false,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9567,
+          "distribution": {
+            "true": 0.0433,
+            "false": 0.9567
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9915,
+          "distribution": {
+            "true": 0.0085,
+            "false": 0.9915
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8493,
+          "distribution": {
+            "none": 0.8493,
+            "unrelated": 0.1015,
+            "duplicate": 0.046,
+            "update": 0.0016,
+            "conflict": 0.0016
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9567,
+          "distribution": {
+            "true": 0.0433,
+            "false": 0.9567
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9915,
+          "distribution": {
+            "true": 0.0085,
+            "false": 0.9915
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8493,
+          "distribution": {
+            "none": 0.8493,
+            "unrelated": 0.1015,
+            "duplicate": 0.046,
+            "update": 0.0016,
+            "conflict": 0.0016
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 407
+    },
+    {
+      "id": "durable-policy",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.687,
+          "distribution": {
+            "true": 0.313,
+            "false": 0.687
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.8544,
+          "distribution": {
+            "true": 0.8544,
+            "false": 0.14559999999999995
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8171817181718172,
+          "distribution": {
+            "none": 0.8171817181718172,
+            "unrelated": 0.07570757075707571,
+            "duplicate": 0.09730973097309731,
+            "update": 0.0039003900390039,
+            "conflict": 0.005900590059005901
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.687,
+          "distribution": {
+            "true": 0.313,
+            "false": 0.687
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.8544,
+          "distribution": {
+            "true": 0.8544,
+            "false": 0.14559999999999995
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8171817181718172,
+          "distribution": {
+            "none": 0.8171817181718172,
+            "unrelated": 0.07570757075707571,
+            "duplicate": 0.09730973097309731,
+            "update": 0.0039003900390039,
+            "conflict": 0.005900590059005901
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 506
+    },
+    {
+      "id": "numeric-conflict",
+      "variant": "focused-en",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9564,
+          "distribution": {
+            "true": 0.9564,
+            "false": 0.04359999999999997
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9732,
+          "distribution": {
+            "true": 0.9732,
+            "false": 0.026800000000000046
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5309,
+          "distribution": {
+            "none": 0.3666,
+            "unrelated": 0.0771,
+            "duplicate": 0.5309,
+            "update": 0.0132,
+            "conflict": 0.0122
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9564,
+          "distribution": {
+            "true": 0.9564,
+            "false": 0.04359999999999997
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9732,
+          "distribution": {
+            "true": 0.9732,
+            "false": 0.026800000000000046
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5309,
+          "distribution": {
+            "none": 0.3666,
+            "unrelated": 0.0771,
+            "duplicate": 0.5309,
+            "update": 0.0132,
+            "conflict": 0.0122
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 555
+    },
+    {
+      "id": "numeric-update",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9753,
+          "distribution": {
+            "true": 0.9753,
+            "false": 0.024700000000000055
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9926,
+          "distribution": {
+            "true": 0.9926,
+            "false": 0.007399999999999962
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.6447,
+          "distribution": {
+            "none": 0.1981,
+            "unrelated": 0.0141,
+            "duplicate": 0.1284,
+            "update": 0.6447,
+            "conflict": 0.0147
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9753,
+          "distribution": {
+            "true": 0.9753,
+            "false": 0.024700000000000055
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9926,
+          "distribution": {
+            "true": 0.9926,
+            "false": 0.007399999999999962
+          }
+        },
+        "relation": {
+          "value": "update",
+          "confidence": 0.6447,
+          "distribution": {
+            "none": 0.1981,
+            "unrelated": 0.0141,
+            "duplicate": 0.1284,
+            "update": 0.6447,
+            "conflict": 0.0147
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 507
+    },
+    {
+      "id": "different-environment",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "unrelated",
+        "action": "add"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7177,
+          "distribution": {
+            "true": 0.2823,
+            "false": 0.7177
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.7266,
+          "distribution": {
+            "true": 0.7266,
+            "false": 0.2734
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8355,
+          "distribution": {
+            "none": 0.8355,
+            "unrelated": 0.0265,
+            "duplicate": 0.1288,
+            "update": 0.0059,
+            "conflict": 0.0033
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7177,
+          "distribution": {
+            "true": 0.2823,
+            "false": 0.7177
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.7266,
+          "distribution": {
+            "true": 0.7266,
+            "false": 0.2734
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8355,
+          "distribution": {
+            "none": 0.8355,
+            "unrelated": 0.0265,
+            "duplicate": 0.1288,
+            "update": 0.0059,
+            "conflict": 0.0033
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 463
+    },
+    {
+      "id": "config-duplicate",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8479,
+          "distribution": {
+            "true": 0.8479,
+            "false": 0.1521
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9308,
+          "distribution": {
+            "true": 0.9308,
+            "false": 0.06920000000000004
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5940405959404059,
+          "distribution": {
+            "none": 0.21337866213378662,
+            "unrelated": 0.052594740525947405,
+            "duplicate": 0.5940405959404059,
+            "update": 0.11028897110288971,
+            "conflict": 0.029697030296970305
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8479,
+          "distribution": {
+            "true": 0.8479,
+            "false": 0.1521
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9308,
+          "distribution": {
+            "true": 0.9308,
+            "false": 0.06920000000000004
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5940405959404059,
+          "distribution": {
+            "none": 0.21337866213378662,
+            "unrelated": 0.052594740525947405,
+            "duplicate": 0.5940405959404059,
+            "update": 0.11028897110288971,
+            "conflict": 0.029697030296970305
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 457
+    },
+    {
+      "id": "backup-add",
+      "variant": "focused-en",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.6908,
+          "distribution": {
+            "true": 0.6908,
+            "false": 0.30920000000000003
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.8995,
+          "distribution": {
+            "true": 0.8995,
+            "false": 0.10050000000000003
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.4799,
+          "distribution": {
+            "none": 0.4333,
+            "unrelated": 0.0775,
+            "duplicate": 0.4799,
+            "update": 0.0042,
+            "conflict": 0.0051
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.6908,
+          "distribution": {
+            "true": 0.6908,
+            "false": 0.30920000000000003
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.8995,
+          "distribution": {
+            "true": 0.8995,
+            "false": 0.10050000000000003
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.4799,
+          "distribution": {
+            "none": 0.4333,
+            "unrelated": 0.0775,
+            "duplicate": 0.4799,
+            "update": 0.0042,
+            "conflict": 0.0051
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 449
+    },
+    {
+      "id": "backup-unresolved",
+      "variant": "focused-en",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9373,
+          "distribution": {
+            "true": 0.0627,
+            "false": 0.9373
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.722,
+          "distribution": {
+            "true": 0.722,
+            "false": 0.278
+          }
+        },
+        "relation": {
+          "value": "unrelated",
+          "confidence": 0.8352835283528354,
+          "distribution": {
+            "none": 0.09760976097609761,
+            "unrelated": 0.8352835283528354,
+            "duplicate": 0.054305430543054305,
+            "update": 0.0107010701070107,
+            "conflict": 0.0021002100210021
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9373,
+          "distribution": {
+            "true": 0.0627,
+            "false": 0.9373
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.722,
+          "distribution": {
+            "true": 0.722,
+            "false": 0.278
+          }
+        },
+        "relation": {
+          "value": "unrelated",
+          "confidence": 0.8352835283528354,
+          "distribution": {
+            "none": 0.09760976097609761,
+            "unrelated": 0.8352835283528354,
+            "duplicate": 0.054305430543054305,
+            "update": 0.0107010701070107,
+            "conflict": 0.0021002100210021
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 672
+    },
+    {
+      "id": "config-add",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9711,
+          "distribution": {
+            "true": 0.0289,
+            "false": 0.9711
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.813,
+          "distribution": {
+            "true": 0.813,
+            "false": 0.18700000000000006
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8164,
+          "distribution": {
+            "none": 0.8164,
+            "unrelated": 0.0502,
+            "duplicate": 0.104,
+            "update": 0.0282,
+            "conflict": 0.0012
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9711,
+          "distribution": {
+            "true": 0.0289,
+            "false": 0.9711
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.813,
+          "distribution": {
+            "true": 0.813,
+            "false": 0.18700000000000006
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8164,
+          "distribution": {
+            "none": 0.8164,
+            "unrelated": 0.0502,
+            "duplicate": 0.104,
+            "update": 0.0282,
+            "conflict": 0.0012
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 526
+    },
+    {
+      "id": "config-negation",
+      "variant": "focused-zh",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9988,
+          "distribution": {
+            "true": 0.0012,
+            "false": 0.9988
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.996,
+          "distribution": {
+            "true": 0.004,
+            "false": 0.996
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.4677467746774677,
+          "distribution": {
+            "none": 0.15421542154215423,
+            "unrelated": 0.11541154115411541,
+            "duplicate": 0.4677467746774677,
+            "update": 0.0673067306730673,
+            "conflict": 0.19531953195319532
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9988,
+          "distribution": {
+            "true": 0.0012,
+            "false": 0.9988
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.996,
+          "distribution": {
+            "true": 0.004,
+            "false": 0.996
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.4677467746774677,
+          "distribution": {
+            "none": 0.15421542154215423,
+            "unrelated": 0.11541154115411541,
+            "duplicate": 0.4677467746774677,
+            "update": 0.0673067306730673,
+            "conflict": 0.19531953195319532
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 506
+    },
+    {
+      "id": "config-update",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9535,
+          "distribution": {
+            "true": 0.0465,
+            "false": 0.9535
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.5037,
+          "distribution": {
+            "true": 0.4963,
+            "false": 0.5037
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.6492649264926492,
+          "distribution": {
+            "none": 0.07620762076207621,
+            "unrelated": 0.19371937193719374,
+            "duplicate": 0.6492649264926492,
+            "update": 0.04610461046104611,
+            "conflict": 0.03470347034703471
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9535,
+          "distribution": {
+            "true": 0.0465,
+            "false": 0.9535
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.5037,
+          "distribution": {
+            "true": 0.4963,
+            "false": 0.5037
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.6492649264926492,
+          "distribution": {
+            "none": 0.07620762076207621,
+            "unrelated": 0.19371937193719374,
+            "duplicate": 0.6492649264926492,
+            "update": 0.04610461046104611,
+            "conflict": 0.03470347034703471
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 540
+    },
+    {
+      "id": "config-unresolved",
+      "variant": "focused-zh",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9017,
+          "distribution": {
+            "true": 0.0983,
+            "false": 0.9017
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8815999999999999,
+          "distribution": {
+            "true": 0.1184,
+            "false": 0.8815999999999999
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.73,
+          "distribution": {
+            "none": 0.1367,
+            "unrelated": 0.0746,
+            "duplicate": 0.73,
+            "update": 0.0389,
+            "conflict": 0.0198
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9017,
+          "distribution": {
+            "true": 0.0983,
+            "false": 0.9017
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8815999999999999,
+          "distribution": {
+            "true": 0.1184,
+            "false": 0.8815999999999999
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.73,
+          "distribution": {
+            "none": 0.1367,
+            "unrelated": 0.0746,
+            "duplicate": 0.73,
+            "update": 0.0389,
+            "conflict": 0.0198
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 627
+    },
+    {
+      "id": "procedure-add",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7992,
+          "distribution": {
+            "true": 0.2008,
+            "false": 0.7992
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8573999999999999,
+          "distribution": {
+            "true": 0.1426,
+            "false": 0.8573999999999999
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.7251,
+          "distribution": {
+            "none": 0.7251,
+            "unrelated": 0.0885,
+            "duplicate": 0.1702,
+            "update": 0.0044,
+            "conflict": 0.0118
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7992,
+          "distribution": {
+            "true": 0.2008,
+            "false": 0.7992
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8573999999999999,
+          "distribution": {
+            "true": 0.1426,
+            "false": 0.8573999999999999
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.7251,
+          "distribution": {
+            "none": 0.7251,
+            "unrelated": 0.0885,
+            "duplicate": 0.1702,
+            "update": 0.0044,
+            "conflict": 0.0118
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 530
+    },
+    {
+      "id": "procedure-temporary",
+      "variant": "focused-zh",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9198,
+          "distribution": {
+            "true": 0.0802,
+            "false": 0.9198
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.5413,
+          "distribution": {
+            "true": 0.4587,
+            "false": 0.5413
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.6088,
+          "distribution": {
+            "none": 0.6088,
+            "unrelated": 0.1567,
+            "duplicate": 0.2036,
+            "update": 0.0095,
+            "conflict": 0.0214
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9198,
+          "distribution": {
+            "true": 0.0802,
+            "false": 0.9198
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.5413,
+          "distribution": {
+            "true": 0.4587,
+            "false": 0.5413
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.6088,
+          "distribution": {
+            "none": 0.6088,
+            "unrelated": 0.1567,
+            "duplicate": 0.2036,
+            "update": 0.0095,
+            "conflict": 0.0214
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 524
+    },
+    {
+      "id": "procedure-duplicate",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9902,
+          "distribution": {
+            "true": 0.9902,
+            "false": 0.009800000000000031
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9892,
+          "distribution": {
+            "true": 0.9892,
+            "false": 0.010800000000000032
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.808,
+          "distribution": {
+            "none": 0.0534,
+            "unrelated": 0.0371,
+            "duplicate": 0.808,
+            "update": 0.0927,
+            "conflict": 0.0088
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9902,
+          "distribution": {
+            "true": 0.9902,
+            "false": 0.009800000000000031
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9892,
+          "distribution": {
+            "true": 0.9892,
+            "false": 0.010800000000000032
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.808,
+          "distribution": {
+            "none": 0.0534,
+            "unrelated": 0.0371,
+            "duplicate": 0.808,
+            "update": 0.0927,
+            "conflict": 0.0088
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 573
+    },
+    {
+      "id": "procedure-update",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9666,
+          "distribution": {
+            "true": 0.9666,
+            "false": 0.033399999999999985
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9816,
+          "distribution": {
+            "true": 0.9816,
+            "false": 0.018399999999999972
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.766023397660234,
+          "distribution": {
+            "none": 0.12458754124587541,
+            "unrelated": 0.0456954304569543,
+            "duplicate": 0.766023397660234,
+            "update": 0.04539546045395461,
+            "conflict": 0.0182981701829817
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9666,
+          "distribution": {
+            "true": 0.9666,
+            "false": 0.033399999999999985
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9816,
+          "distribution": {
+            "true": 0.9816,
+            "false": 0.018399999999999972
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.766023397660234,
+          "distribution": {
+            "none": 0.12458754124587541,
+            "unrelated": 0.0456954304569543,
+            "duplicate": 0.766023397660234,
+            "update": 0.04539546045395461,
+            "conflict": 0.0182981701829817
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 553
+    },
+    {
+      "id": "decision-add",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9488,
+          "distribution": {
+            "true": 0.0512,
+            "false": 0.9488
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8763,
+          "distribution": {
+            "true": 0.1237,
+            "false": 0.8763
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8139,
+          "distribution": {
+            "none": 0.8139,
+            "unrelated": 0.0735,
+            "duplicate": 0.0951,
+            "update": 0.0039,
+            "conflict": 0.0136
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9488,
+          "distribution": {
+            "true": 0.0512,
+            "false": 0.9488
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.8763,
+          "distribution": {
+            "true": 0.1237,
+            "false": 0.8763
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.8139,
+          "distribution": {
+            "none": 0.8139,
+            "unrelated": 0.0735,
+            "duplicate": 0.0951,
+            "update": 0.0039,
+            "conflict": 0.0136
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 528
+    },
+    {
+      "id": "decision-proposal",
+      "variant": "focused-zh",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.5569,
+          "distribution": {
+            "true": 0.5569,
+            "false": 0.44310000000000005
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9703,
+          "distribution": {
+            "true": 0.0297,
+            "false": 0.9703
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.7993,
+          "distribution": {
+            "none": 0.7993,
+            "unrelated": 0.041,
+            "duplicate": 0.1162,
+            "update": 0.0045,
+            "conflict": 0.039
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.5569,
+          "distribution": {
+            "true": 0.5569,
+            "false": 0.44310000000000005
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9703,
+          "distribution": {
+            "true": 0.0297,
+            "false": 0.9703
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.7993,
+          "distribution": {
+            "none": 0.7993,
+            "unrelated": 0.041,
+            "duplicate": 0.1162,
+            "update": 0.0045,
+            "conflict": 0.039
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 489
+    },
+    {
+      "id": "decision-duplicate",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9688,
+          "distribution": {
+            "true": 0.9688,
+            "false": 0.031200000000000006
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9545,
+          "distribution": {
+            "true": 0.9545,
+            "false": 0.045499999999999985
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.45889177835567113,
+          "distribution": {
+            "none": 0.2451490298059612,
+            "unrelated": 0.13532706541308262,
+            "duplicate": 0.45889177835567113,
+            "update": 0.10452090418083616,
+            "conflict": 0.05611122224444889
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9688,
+          "distribution": {
+            "true": 0.9688,
+            "false": 0.031200000000000006
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9545,
+          "distribution": {
+            "true": 0.9545,
+            "false": 0.045499999999999985
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.45889177835567113,
+          "distribution": {
+            "none": 0.2451490298059612,
+            "unrelated": 0.13532706541308262,
+            "duplicate": 0.45889177835567113,
+            "update": 0.10452090418083616,
+            "conflict": 0.05611122224444889
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 514
+    },
+    {
+      "id": "different-project",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "unrelated",
+        "action": "add"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7836,
+          "distribution": {
+            "true": 0.2164,
+            "false": 0.7836
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.6579,
+          "distribution": {
+            "true": 0.6579,
+            "false": 0.34209999999999996
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5773577357735774,
+          "distribution": {
+            "none": 0.16481648164816481,
+            "unrelated": 0.13901390139013903,
+            "duplicate": 0.5773577357735774,
+            "update": 0.04830483048304831,
+            "conflict": 0.0705070507050705
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7836,
+          "distribution": {
+            "true": 0.2164,
+            "false": 0.7836
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.6579,
+          "distribution": {
+            "true": 0.6579,
+            "false": 0.34209999999999996
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5773577357735774,
+          "distribution": {
+            "none": 0.16481648164816481,
+            "unrelated": 0.13901390139013903,
+            "duplicate": 0.5773577357735774,
+            "update": 0.04830483048304831,
+            "conflict": 0.0705070507050705
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 455
+    },
+    {
+      "id": "preference-add",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7302,
+          "distribution": {
+            "true": 0.2698,
+            "false": 0.7302
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7423,
+          "distribution": {
+            "true": 0.2577,
+            "false": 0.7423
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.41575842415758424,
+          "distribution": {
+            "none": 0.41575842415758424,
+            "unrelated": 0.1277872212778722,
+            "duplicate": 0.409059094090591,
+            "update": 0.014098590140985901,
+            "conflict": 0.03329667033296671
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7302,
+          "distribution": {
+            "true": 0.2698,
+            "false": 0.7302
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7423,
+          "distribution": {
+            "true": 0.2577,
+            "false": 0.7423
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.41575842415758424,
+          "distribution": {
+            "none": 0.41575842415758424,
+            "unrelated": 0.1277872212778722,
+            "duplicate": 0.409059094090591,
+            "update": 0.014098590140985901,
+            "conflict": 0.03329667033296671
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 469
+    },
+    {
+      "id": "preference-quote",
+      "variant": "focused-zh",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7888,
+          "distribution": {
+            "true": 0.2112,
+            "false": 0.7888
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.948,
+          "distribution": {
+            "true": 0.052,
+            "false": 0.948
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.5368,
+          "distribution": {
+            "none": 0.5368,
+            "unrelated": 0.1763,
+            "duplicate": 0.1638,
+            "update": 0.0018,
+            "conflict": 0.1213
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.7888,
+          "distribution": {
+            "true": 0.2112,
+            "false": 0.7888
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.948,
+          "distribution": {
+            "true": 0.052,
+            "false": 0.948
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.5368,
+          "distribution": {
+            "none": 0.5368,
+            "unrelated": 0.1763,
+            "duplicate": 0.1638,
+            "update": 0.0018,
+            "conflict": 0.1213
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 519
+    },
+    {
+      "id": "preference-update",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9594,
+          "distribution": {
+            "true": 0.9594,
+            "false": 0.04059999999999997
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.94,
+          "distribution": {
+            "true": 0.94,
+            "false": 0.06000000000000005
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.4104,
+          "distribution": {
+            "none": 0.2909,
+            "unrelated": 0.1679,
+            "duplicate": 0.4104,
+            "update": 0.0341,
+            "conflict": 0.0967
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9594,
+          "distribution": {
+            "true": 0.9594,
+            "false": 0.04059999999999997
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.94,
+          "distribution": {
+            "true": 0.94,
+            "false": 0.06000000000000005
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.4104,
+          "distribution": {
+            "none": 0.2909,
+            "unrelated": 0.1679,
+            "duplicate": 0.4104,
+            "update": 0.0341,
+            "conflict": 0.0967
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 594
+    },
+    {
+      "id": "preference-duplicate",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.6931,
+          "distribution": {
+            "true": 0.6931,
+            "false": 0.30689999999999995
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.6602,
+          "distribution": {
+            "true": 0.3398,
+            "false": 0.6602
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.6981301869813019,
+          "distribution": {
+            "none": 0.13498650134986503,
+            "unrelated": 0.07169283071692831,
+            "duplicate": 0.6981301869813019,
+            "update": 0.05089491050894911,
+            "conflict": 0.044295570442955706
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.6931,
+          "distribution": {
+            "true": 0.6931,
+            "false": 0.30689999999999995
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.6602,
+          "distribution": {
+            "true": 0.3398,
+            "false": 0.6602
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.6981301869813019,
+          "distribution": {
+            "none": 0.13498650134986503,
+            "unrelated": 0.07169283071692831,
+            "duplicate": 0.6981301869813019,
+            "update": 0.05089491050894911,
+            "conflict": 0.044295570442955706
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 468
+    },
+    {
+      "id": "temporary-status",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": false,
+        "relation": "none",
+        "action": "reject"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9948,
+          "distribution": {
+            "true": 0.0052,
+            "false": 0.9948
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9032,
+          "distribution": {
+            "true": 0.0968,
+            "false": 0.9032
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.9842015798420157,
+          "distribution": {
+            "none": 0.9842015798420157,
+            "unrelated": 0.007699230076992301,
+            "duplicate": 0.007699230076992301,
+            "update": 0.00019998000199980003,
+            "conflict": 0.00019998000199980003
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9948,
+          "distribution": {
+            "true": 0.0052,
+            "false": 0.9948
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.9032,
+          "distribution": {
+            "true": 0.0968,
+            "false": 0.9032
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.9842015798420157,
+          "distribution": {
+            "none": 0.9842015798420157,
+            "unrelated": 0.007699230076992301,
+            "duplicate": 0.007699230076992301,
+            "update": 0.00019998000199980003,
+            "conflict": 0.00019998000199980003
+          }
+        }
+      },
+      "action": "reject",
+      "elapsedMs": 501
+    },
+    {
+      "id": "durable-policy",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.7326,
+          "distribution": {
+            "true": 0.7326,
+            "false": 0.26739999999999997
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7099,
+          "distribution": {
+            "true": 0.2901,
+            "false": 0.7099
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.4757,
+          "distribution": {
+            "none": 0.4757,
+            "unrelated": 0.0625,
+            "duplicate": 0.4421,
+            "update": 0.0075,
+            "conflict": 0.0122
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.7326,
+          "distribution": {
+            "true": 0.7326,
+            "false": 0.26739999999999997
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7099,
+          "distribution": {
+            "true": 0.2901,
+            "false": 0.7099
+          }
+        },
+        "relation": {
+          "value": "none",
+          "confidence": 0.4757,
+          "distribution": {
+            "none": 0.4757,
+            "unrelated": 0.0625,
+            "duplicate": 0.4421,
+            "update": 0.0075,
+            "conflict": 0.0122
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 481
+    },
+    {
+      "id": "numeric-conflict",
+      "variant": "focused-zh",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8354,
+          "distribution": {
+            "true": 0.8354,
+            "false": 0.16459999999999997
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9813,
+          "distribution": {
+            "true": 0.9813,
+            "false": 0.01870000000000005
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.6171,
+          "distribution": {
+            "none": 0.238,
+            "unrelated": 0.0946,
+            "duplicate": 0.6171,
+            "update": 0.0324,
+            "conflict": 0.0179
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8354,
+          "distribution": {
+            "true": 0.8354,
+            "false": 0.16459999999999997
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9813,
+          "distribution": {
+            "true": 0.9813,
+            "false": 0.01870000000000005
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.6171,
+          "distribution": {
+            "none": 0.238,
+            "unrelated": 0.0946,
+            "duplicate": 0.6171,
+            "update": 0.0324,
+            "conflict": 0.0179
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 540
+    },
+    {
+      "id": "numeric-update",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "update",
+        "action": "replace"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9837,
+          "distribution": {
+            "true": 0.9837,
+            "false": 0.01629999999999998
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9942,
+          "distribution": {
+            "true": 0.9942,
+            "false": 0.005800000000000027
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5829417058294171,
+          "distribution": {
+            "none": 0.10988901109889011,
+            "unrelated": 0.059494050594940506,
+            "duplicate": 0.5829417058294171,
+            "update": 0.20327967203279673,
+            "conflict": 0.04439556044395561
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9837,
+          "distribution": {
+            "true": 0.9837,
+            "false": 0.01629999999999998
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9942,
+          "distribution": {
+            "true": 0.9942,
+            "false": 0.005800000000000027
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5829417058294171,
+          "distribution": {
+            "none": 0.10988901109889011,
+            "unrelated": 0.059494050594940506,
+            "duplicate": 0.5829417058294171,
+            "update": 0.20327967203279673,
+            "conflict": 0.04439556044395561
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 559
+    },
+    {
+      "id": "different-environment",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "unrelated",
+        "action": "add"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9799,
+          "distribution": {
+            "true": 0.0201,
+            "false": 0.9799
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.5264,
+          "distribution": {
+            "true": 0.5264,
+            "false": 0.4736
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.7175717571757176,
+          "distribution": {
+            "none": 0.17211721172117211,
+            "unrelated": 0.04390439043904391,
+            "duplicate": 0.7175717571757176,
+            "update": 0.057705770577057704,
+            "conflict": 0.0087008700870087
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.9799,
+          "distribution": {
+            "true": 0.0201,
+            "false": 0.9799
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.5264,
+          "distribution": {
+            "true": 0.5264,
+            "false": 0.4736
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.7175717571757176,
+          "distribution": {
+            "none": 0.17211721172117211,
+            "unrelated": 0.04390439043904391,
+            "duplicate": 0.7175717571757176,
+            "update": 0.057705770577057704,
+            "conflict": 0.0087008700870087
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 491
+    },
+    {
+      "id": "config-duplicate",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "duplicate",
+        "action": "merge"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9393,
+          "distribution": {
+            "true": 0.9393,
+            "false": 0.060699999999999976
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9499,
+          "distribution": {
+            "true": 0.9499,
+            "false": 0.05010000000000003
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.7015,
+          "distribution": {
+            "none": 0.1169,
+            "unrelated": 0.0777,
+            "duplicate": 0.7015,
+            "update": 0.0576,
+            "conflict": 0.0463
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.9393,
+          "distribution": {
+            "true": 0.9393,
+            "false": 0.060699999999999976
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.9499,
+          "distribution": {
+            "true": 0.9499,
+            "false": 0.05010000000000003
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.7015,
+          "distribution": {
+            "none": 0.1169,
+            "unrelated": 0.0777,
+            "duplicate": 0.7015,
+            "update": 0.0576,
+            "conflict": 0.0463
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 496
+    },
+    {
+      "id": "backup-add",
+      "variant": "focused-zh",
+      "gold": {
+        "support": true,
+        "retention": true,
+        "relation": "none",
+        "action": "add"
+      },
+      "hasRelated": false,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8723,
+          "distribution": {
+            "true": 0.8723,
+            "false": 0.12770000000000004
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.8877,
+          "distribution": {
+            "true": 0.8877,
+            "false": 0.11229999999999996
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.8206820682068207,
+          "distribution": {
+            "none": 0.11611161116111611,
+            "unrelated": 0.043304330433043305,
+            "duplicate": 0.8206820682068207,
+            "update": 0.0107010701070107,
+            "conflict": 0.0092009200920092
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": true,
+          "confidence": 0.8723,
+          "distribution": {
+            "true": 0.8723,
+            "false": 0.12770000000000004
+          }
+        },
+        "retention": {
+          "value": true,
+          "confidence": 0.8877,
+          "distribution": {
+            "true": 0.8877,
+            "false": 0.11229999999999996
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.8206820682068207,
+          "distribution": {
+            "none": 0.11611161116111611,
+            "unrelated": 0.043304330433043305,
+            "duplicate": 0.8206820682068207,
+            "update": 0.0107010701070107,
+            "conflict": 0.0092009200920092
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 478
+    },
+    {
+      "id": "backup-unresolved",
+      "variant": "focused-zh",
+      "gold": {
+        "support": false,
+        "retention": true,
+        "relation": "conflict",
+        "action": "defer"
+      },
+      "hasRelated": true,
+      "status": "ready",
+      "error": null,
+      "answers": {
+        "support": {
+          "value": false,
+          "confidence": 0.6915,
+          "distribution": {
+            "true": 0.3085,
+            "false": 0.6915
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7818,
+          "distribution": {
+            "true": 0.2182,
+            "false": 0.7818
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5186,
+          "distribution": {
+            "none": 0.2584,
+            "unrelated": 0.1818,
+            "duplicate": 0.5186,
+            "update": 0.0276,
+            "conflict": 0.0136
+          }
+        }
+      },
+      "policyAnswers": {
+        "support": {
+          "value": false,
+          "confidence": 0.6915,
+          "distribution": {
+            "true": 0.3085,
+            "false": 0.6915
+          }
+        },
+        "retention": {
+          "value": false,
+          "confidence": 0.7818,
+          "distribution": {
+            "true": 0.2182,
+            "false": 0.7818
+          }
+        },
+        "relation": {
+          "value": "duplicate",
+          "confidence": 0.5186,
+          "distribution": {
+            "none": 0.2584,
+            "unrelated": 0.1818,
+            "duplicate": 0.5186,
+            "update": 0.0276,
+            "conflict": 0.0136
+          }
+        }
+      },
+      "action": "defer",
+      "elapsedMs": 483
+    }
+  ],
+  "summary": {
+    "current-six": {
+      "samples": 24,
+      "unavailable": 0,
+      "actions": {
+        "reject": 7,
+        "defer": 16,
+        "replace": 1
+      },
+      "correctActions": 8,
+      "actionAccuracy": 0.3333333333333333,
+      "writeCount": 1,
+      "correctWrites": 1,
+      "wrongWrites": 0,
+      "writePrecision": 1.0,
+      "eligibleWriteCount": 16,
+      "correctWriteCoverage": 0.0625,
+      "missedEligibleIds": [
+        "config-add",
+        "config-update",
+        "procedure-add",
+        "procedure-duplicate",
+        "decision-add",
+        "decision-duplicate",
+        "different-project",
+        "preference-add",
+        "preference-update",
+        "preference-duplicate",
+        "durable-policy",
+        "numeric-update",
+        "different-environment",
+        "config-duplicate",
+        "backup-add"
+      ],
+      "wrongWriteIds": [],
+      "confusion": {
+        "add": {
+          "reject": 3,
+          "defer": 5
+        },
+        "merge": {
+          "defer": 4
+        },
+        "replace": {
+          "defer": 3,
+          "replace": 1
+        },
+        "reject": {
+          "reject": 4,
+          "defer": 1
+        },
+        "defer": {
+          "defer": 3
+        }
+      },
+      "judgments": {
+        "support": {
+          "correct": 11,
+          "total": 24
+        },
+        "retention": {
+          "correct": 8,
+          "total": 24
+        },
+        "relation": {
+          "correct": 6,
+          "total": 13
+        }
+      }
+    },
+    "focused-en": {
+      "samples": 24,
+      "unavailable": 0,
+      "actions": {
+        "defer": 21,
+        "reject": 3
+      },
+      "correctActions": 5,
+      "actionAccuracy": 0.20833333333333334,
+      "writeCount": 0,
+      "correctWrites": 0,
+      "wrongWrites": 0,
+      "writePrecision": null,
+      "eligibleWriteCount": 16,
+      "correctWriteCoverage": 0.0,
+      "missedEligibleIds": [
+        "config-add",
+        "config-update",
+        "procedure-add",
+        "procedure-duplicate",
+        "procedure-update",
+        "decision-add",
+        "decision-duplicate",
+        "different-project",
+        "preference-add",
+        "preference-update",
+        "preference-duplicate",
+        "durable-policy",
+        "numeric-update",
+        "different-environment",
+        "config-duplicate",
+        "backup-add"
+      ],
+      "wrongWriteIds": [],
+      "confusion": {
+        "add": {
+          "defer": 7,
+          "reject": 1
+        },
+        "merge": {
+          "defer": 4
+        },
+        "replace": {
+          "defer": 4
+        },
+        "reject": {
+          "defer": 3,
+          "reject": 2
+        },
+        "defer": {
+          "defer": 3
+        }
+      },
+      "judgments": {
+        "support": {
+          "correct": 14,
+          "total": 24
+        },
+        "retention": {
+          "correct": 16,
+          "total": 24
+        },
+        "relation": {
+          "correct": 5,
+          "total": 13
+        }
+      }
+    },
+    "focused-zh": {
+      "samples": 24,
+      "unavailable": 0,
+      "actions": {
+        "defer": 22,
+        "reject": 2
+      },
+      "correctActions": 5,
+      "actionAccuracy": 0.20833333333333334,
+      "writeCount": 0,
+      "correctWrites": 0,
+      "wrongWrites": 0,
+      "writePrecision": null,
+      "eligibleWriteCount": 16,
+      "correctWriteCoverage": 0.0,
+      "missedEligibleIds": [
+        "config-add",
+        "config-update",
+        "procedure-add",
+        "procedure-duplicate",
+        "procedure-update",
+        "decision-add",
+        "decision-duplicate",
+        "different-project",
+        "preference-add",
+        "preference-update",
+        "preference-duplicate",
+        "durable-policy",
+        "numeric-update",
+        "different-environment",
+        "config-duplicate",
+        "backup-add"
+      ],
+      "wrongWriteIds": [],
+      "confusion": {
+        "add": {
+          "defer": 8
+        },
+        "merge": {
+          "defer": 4
+        },
+        "replace": {
+          "defer": 4
+        },
+        "reject": {
+          "reject": 2,
+          "defer": 3
+        },
+        "defer": {
+          "defer": 3
+        }
+      },
+      "judgments": {
+        "support": {
+          "correct": 14,
+          "total": 24
+        },
+        "retention": {
+          "correct": 12,
+          "total": 24
+        },
+        "relation": {
+          "correct": 4,
+          "total": 13
+        }
+      }
+    }
+  },
+  "loadMs": 12386
+}
