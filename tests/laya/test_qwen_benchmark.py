@@ -36,5 +36,15 @@ class QwenBenchmarkTests(unittest.TestCase):
         self.assertFalse(body['chat_template_kwargs']['enable_thinking'])
         self.assertEqual(body['max_tokens'],160)
 
+    def test_thinking_mode_and_reasoning_metadata(self):
+        body=qwen.payload({'evidence':'source','claim':'candidate'},0,True)
+        self.assertTrue(body['chat_template_kwargs']['enable_thinking'])
+        self.assertEqual(body['max_tokens'],1536)
+        response=self.response()
+        response['choices'][0]['message']['reasoning_content']='Internal reasoning.'
+        parsed=qwen.parse(response)
+        self.assertEqual(parsed['reasoningCharacters'],19)
+        self.assertNotIn('reasoning_content',parsed)
+
 
 if __name__=='__main__':unittest.main()

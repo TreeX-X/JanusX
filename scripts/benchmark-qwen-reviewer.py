@@ -42,7 +42,9 @@ def parse(data):
         raise ValueError('invalid-verdict')
     usage=data.get('usage',{})
     if any(type(usage.get(k)) is not int or usage[k]<0 for k in ['prompt_tokens','completion_tokens']): raise ValueError('invalid-usage')
-    return {**value,'usage':usage,'timings':data.get('timings')}
+    reasoning=choices[0]['message'].get('reasoning_content') or ''
+    if not isinstance(reasoning,str):raise ValueError('invalid-reasoning-metadata')
+    return {**value,'usage':usage,'timings':data.get('timings'),'reasoningCharacters':len(reasoning)}
 
 
 def project(row,verdict):
@@ -79,10 +81,12 @@ def main():
     p.add_argument('--model',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--thinking',action='store_true')
+    p.add_argument('--reasoning-budget',type=int,default=-1,help='Thinking tokens before closing reasoning; -1 is unrestricted.')
     p.add_argument('--limit',type=int,default=0,help='Smoke test first N cases; 0 means all cases.')
     p.add_argument('--max-seconds',type=int,default=2400)
     args=p.parse_args()
     if args.limit<0 or args.max_seconds<1:p.error('Invalid case or time budget')
+    if args.reasoning_budget < -1 or (args.reasoning_budget>=0 and not args.thinking):p.error('Reasoning budget requires thinking mode and must be >= -1')
     with socket.socket() as probe:
         probe.bind(('127.0.0.1',18791))
     original=json.loads(benchmark.STANDARD.read_text(encoding='utf-8'))
@@ -96,6 +100,7 @@ def main():
     log_path=args.output.with_suffix('.server.log')
     command=[str(args.server.resolve()),'-m',str(args.model.resolve()),'--alias','local-reviewer','--host','127.0.0.1','--port','18791',
              '-c','8192','-np','1','-ngl','all','-b','256','-ub','128','-t','4','--jinja','--no-context-shift','--cache-ram','0']
+    if args.reasoning_budget>=0:command+=['--reasoning-budget',str(args.reasoning_budget)]
     baseline=gpu()
     if baseline['freeMiB']<5000:raise SystemExit('Insufficient free VRAM; need 5000 MiB before starting.')
     if psutil.virtual_memory().available<6*1024**3:raise SystemExit('Insufficient available system RAM.')
@@ -104,7 +109,7 @@ def main():
     report={'schema':1,'kind':'local-generative-review','qualityGate':'not-evaluated-synthetic','modelFile':args.model.name,
             'modelSha256':benchmark.sha(args.model),'scriptSha256':benchmark.sha(Path(__file__)),
             'serverSha256':benchmark.sha(args.server),'standardSha256':benchmark.sha(benchmark.STANDARD),'expandedSha256':benchmark.sha(expanded_path),
-            'thinking':args.thinking,'repetitions':repetitions,'systemPrompt':PROMPT,'requestExample':payload(rows[0],0,args.thinking),
+            'thinking':args.thinking,'reasoningBudget':args.reasoning_budget,'repetitions':repetitions,'systemPrompt':PROMPT,'requestExample':payload(rows[0],0,args.thinking),
             'command':command,'baselineGpu':baseline,'limits':['Verdicts are discrete decisions, not calibrated support probabilities.',
             'Same case texts and labels as Jev; prompt and decision mechanism differ.','8K total context; truncated generations fail closed.',
             'GPU samples are whole-device values including other applications. No claim of isolated model VRAM.',
@@ -146,17 +151,22 @@ def main():
                     if stop_reason:break
                     tick=time.monotonic()
                     body=payload(row,repeat,args.thinking)
+                    data=None
                     try:
                         req=urllib.request.Request('http://127.0.0.1:18791/v1/chat/completions',json.dumps(body).encode(),{'Content-Type':'application/json'})
                         with urllib.request.urlopen(req,timeout=120) as response:data=json.load(response)
                         result=parse(data)
                         result['latencyMs']=(time.monotonic()-tick)*1000;latencies.append(result['latencyMs'])
-                    except (ValueError,KeyError,TypeError) as exc:result={'error':'invalid-or-incomplete-response','errorType':type(exc).__name__}
+                    except (ValueError,KeyError,TypeError) as exc:
+                        result={'error':'invalid-or-incomplete-response','errorType':type(exc).__name__,
+                                'finishReason':data.get('choices',[{}])[0].get('finish_reason') if isinstance(data,dict) and data.get('choices') else None,
+                                'usage':data.get('usage') if isinstance(data,dict) else None}
                     except (OSError,urllib.error.URLError) as exc:
                         result={'error':'request-failed','errorType':type(exc).__name__};stop_reason='resource-floor' if resource_stop.is_set() else 'request-failed'
                     runs.append(result)
+                    if 'latencyMs' not in result:result['latencyMs']=(time.monotonic()-tick)*1000
                 report['results'].append({**row,'runs':runs})
-                if index%10==0 or index==len(rows)-1:
+                if args.thinking or index%10==0 or index==len(rows)-1:
                     print(json.dumps({'completed':index+1,'total':len(rows),'elapsedSeconds':round(time.monotonic()-started),'gpu':samples[-1] if samples else None,'stopReason':stop_reason}),flush=True)
                     benchmark.write_json(args.output,report)
     except RuntimeError as exc:stop_reason=str(exc)
