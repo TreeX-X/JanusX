@@ -416,6 +416,18 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 准备验证：运行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-jev-reviewer.py` 输出 52 样例、最多 156 请求的无网络预览；`-m unittest discover -s tests/laya` 通过 44 项测试。[接入测试](../../tests/laya/test_jev_benchmark.py)覆盖 noul 方向、模型漂移、非法 usage、预算和失败后保留分母、重复不稳定及重定向/错误消息的凭证保护。提供凭证后使用同一 Python 执行 `scripts/benchmark-jev-reviewer.py --run --key-file <仓库外密钥文件>`，或在已配置环境变量时仅加 `--run`。截至接入交付没有真实 Jev 请求，不能将替身测试通过解释为服务可用或模型质量通过。
 
+### Jev 真实调用与重复稳定性诊断（2026-09-30）
+
+用户提供 API 凭证后，使用固定官方端点与 `jev-1.13.0` 完成原标准 52 条样例、各 3 次的 156 次调用。凭证仅进入本次子进程环境，结束后清除，未写入仓库、报告或应用配置。全部响应模型与协议有效，无鉴权、网络或限流中断；[原始测试报告](../../tests/fixtures/jev-review-benchmark-live.json)保留原门控结果和各次概率。输入共 53,763 token，输出 3,120 token；按每百万输入 token 0.042 美元估算为 0.002258046 美元，输出免费，最终以厂商账单为准。客户端请求 P50 为 383.07ms、P95 为 460.07ms，包含网络和服务端耗时，不与本地 CPU 推理时间视为同一种资源测量。
+
+原标准要求三次概率最大差不超过 1e-5。Jev 有 32/52 条超过该数值条件，其中开发集 15/24、验证集 17/28；因此脚本以不稳定结果退出码 2 结束，不能将它表述为原标准通过，也不能称这些调用为 API 不可用。按未修改的严格规则，新验证集仅放行 8/18 条正确陈述、其余 17 条样例暂存、3 条阻止，无错误放行；8 篇 Wiki 仅放行 1 篇正确页面，其余暂存。原始报告完整保留此结果。
+
+为区分数值波动与语义判断，新增仅离线读取结果的[重复诊断脚本](../../scripts/analyze-jev-repeat-results.py)及[补充报告](../../tests/fixtures/jev-review-repeat-diagnostics.json)，三轮分别计算原有 0.5 分类和 0.9 门控，不选最优轮次、不更改阈值、不重发请求。每一轮的新验证集均为 28/28 分类正确，18 条支持陈述全部放行、8 条不支持陈述阻止、2 条不支持陈述暂存，没有错误放行；每轮 4 篇正确 Wiki 放行、4 篇错误 Wiki 阻止。开发集每轮分类正确 22/24，零误放，正确内容放行分别 16/17、17/17、16/17。
+
+52 条样例没有发生跨 0.5 的分类翻转；开发集 `preference-update` 的概率为 0.89/0.91/0.89，导致放行与暂存切换，其他开发样例及全部新验证样例的动作一致。验证集概率最大范围为 0.03，开发集为 0.04。补充诊断是在观察到波动后增加，不能代替预先确定的验收标准。后续可讨论将语义正确率、动作稳定性和数值稳定性分别验收，并对临界概率设置复核规则；本次不修改既有标准或启用自动批准。
+
+同样的新验证陈述上，Jev 的三次原始判断均优于本地模型，值得作为后续自动审核的优先验证候选；这一结论只适用于当前中文合成短样例，不证明真实资料、长 Wiki、完整性、来源变化和全流程安全。独立人工标注、额外边界样例以及稳定性验收仍缺失。运行 `scripts/analyze-jev-repeat-results.py --input tests/fixtures/jev-review-benchmark-live.json --output tests/fixtures/jev-review-repeat-diagnostics.json` 可复现补充统计；`-m unittest discover -s tests/laya` 通过 47 项测试，包括[波动诊断测试](../../tests/laya/test_jev_repeat_analysis.py)。知识库重构及自动审核验收继续未完成。
+
 ### Laya 真实数据验收入口
 
 [评测脚本](../../scripts/evaluate-laya.py)支持 --dataset、--dataset-kind annotated、--policy 及 --validate-only。输入采用现有 JSON 样例结构：id、source、scenario、language、split、content、evidence、related、labels；labels 按 retention/kind/support/duplicate/supersede/conflict 顺序，除 kind 是 fact/preference/decision/procedure，其余为布尔值。真实脱敏样本须附 annotation.origin=redacted-real、reviewer 和带时区的 reviewedAt。标注元数据只记录来源声明，不能证明标签正确；不能把合成样例改元数据后当作真实验收。

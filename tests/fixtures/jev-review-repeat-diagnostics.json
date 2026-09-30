@@ -1,0 +1,438 @@
+{
+  "kind": "post-run-repeat-diagnostics",
+  "qualityGate": "not-evaluated-synthetic",
+  "originalStrictSummary": {
+    "development": {
+      "count": 24,
+      "positiveCount": 17,
+      "negativeCount": 7,
+      "unavailable": 15,
+      "accuracy": 0.375,
+      "balancedAccuracy": 0.3907563025210084,
+      "decisions": {
+        "pass": 6,
+        "block": 2,
+        "defer": 16
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6096569663469354,
+        0.9999999999999999
+      ],
+      "correctPassCoverage": 0.35294117647058826,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "procedure-add",
+        "procedure-duplicate",
+        "decision-add",
+        "decision-duplicate",
+        "preference-add",
+        "preference-update",
+        "preference-duplicate",
+        "temporary-status",
+        "different-environment",
+        "config-duplicate",
+        "backup-add"
+      ]
+    },
+    "validation": {
+      "count": 28,
+      "positiveCount": 18,
+      "negativeCount": 10,
+      "unavailable": 17,
+      "accuracy": 0.39285714285714285,
+      "balancedAccuracy": 0.37222222222222223,
+      "decisions": {
+        "pass": 8,
+        "block": 3,
+        "defer": 17
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6755843804891231,
+        1.0
+      ],
+      "correctPassCoverage": 0.4444444444444444,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "validationEntries": {
+      "count": 12,
+      "positiveCount": 6,
+      "negativeCount": 6,
+      "unavailable": 6,
+      "accuracy": 0.5,
+      "balancedAccuracy": 0.5,
+      "decisions": {
+        "pass": 3,
+        "block": 3,
+        "defer": 6
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.43849391955098227,
+        1.0
+      ],
+      "correctPassCoverage": 0.5,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported"
+      ]
+    },
+    "validationWikiClaims": {
+      "count": 16,
+      "positiveCount": 12,
+      "negativeCount": 4,
+      "unavailable": 11,
+      "accuracy": 0.3125,
+      "balancedAccuracy": 0.20833333333333334,
+      "decisions": {
+        "pass": 5,
+        "defer": 11
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.5655085052479191,
+        1.0000000000000002
+      ],
+      "correctPassCoverage": 0.4166666666666667,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "wikiPages": {
+      "count": 8,
+      "positiveCount": 4,
+      "negativeCount": 4,
+      "unavailable": 7,
+      "accuracy": 0.125,
+      "balancedAccuracy": 0.125,
+      "decisions": {
+        "pass": 1,
+        "defer": 7
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.20654329147389294,
+        1.0
+      ],
+      "correctPassCoverage": 0.25,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "wiki-config-correct",
+        "wiki-access-correct",
+        "wiki-backup-correct"
+      ]
+    }
+  },
+  "byRepeat": [
+    {
+      "repeat": 1,
+      "development": {
+        "count": 24,
+        "positiveCount": 17,
+        "negativeCount": 7,
+        "unavailable": 0,
+        "accuracy": 0.9166666666666666,
+        "balancedAccuracy": 0.8571428571428572,
+        "decisions": {
+          "pass": 16,
+          "block": 2,
+          "defer": 6
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8063865817272802,
+          1.0
+        ],
+        "correctPassCoverage": 0.9411764705882353,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": [
+          "preference-update"
+        ]
+      },
+      "validation": {
+        "count": 28,
+        "positiveCount": 18,
+        "negativeCount": 10,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 18,
+          "block": 8,
+          "defer": 2
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8241154494176252,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      },
+      "wikiPages": {
+        "count": 8,
+        "positiveCount": 4,
+        "negativeCount": 4,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 4,
+          "block": 4
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.5100999795960008,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      }
+    },
+    {
+      "repeat": 2,
+      "development": {
+        "count": 24,
+        "positiveCount": 17,
+        "negativeCount": 7,
+        "unavailable": 0,
+        "accuracy": 0.9166666666666666,
+        "balancedAccuracy": 0.8571428571428572,
+        "decisions": {
+          "pass": 17,
+          "block": 2,
+          "defer": 5
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8156763396284354,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      },
+      "validation": {
+        "count": 28,
+        "positiveCount": 18,
+        "negativeCount": 10,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 18,
+          "block": 8,
+          "defer": 2
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8241154494176252,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      },
+      "wikiPages": {
+        "count": 8,
+        "positiveCount": 4,
+        "negativeCount": 4,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 4,
+          "block": 4
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.5100999795960008,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      }
+    },
+    {
+      "repeat": 3,
+      "development": {
+        "count": 24,
+        "positiveCount": 17,
+        "negativeCount": 7,
+        "unavailable": 0,
+        "accuracy": 0.9166666666666666,
+        "balancedAccuracy": 0.8571428571428572,
+        "decisions": {
+          "pass": 16,
+          "block": 2,
+          "defer": 6
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8063865817272802,
+          1.0
+        ],
+        "correctPassCoverage": 0.9411764705882353,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": [
+          "preference-update"
+        ]
+      },
+      "validation": {
+        "count": 28,
+        "positiveCount": 18,
+        "negativeCount": 10,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 18,
+          "block": 8,
+          "defer": 2
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8241154494176252,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      },
+      "wikiPages": {
+        "count": 8,
+        "positiveCount": 4,
+        "negativeCount": 4,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 4,
+          "block": 4
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.5100999795960008,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      }
+    }
+  ],
+  "stability": {
+    "development": {
+      "cases": 24,
+      "numericVariationIds": [
+        "config-unresolved",
+        "procedure-add",
+        "procedure-duplicate",
+        "decision-add",
+        "decision-duplicate",
+        "preference-add",
+        "preference-quote",
+        "preference-update",
+        "preference-duplicate",
+        "temporary-status",
+        "numeric-conflict",
+        "different-environment",
+        "config-duplicate",
+        "backup-add",
+        "backup-unresolved"
+      ],
+      "classificationFlipIds": [],
+      "actionFlipIds": [
+        "preference-update"
+      ],
+      "maxProbabilityRange": 0.03999999999999998
+    },
+    "validation": {
+      "cases": 28,
+      "numericVariationIds": [
+        "entry-memory-supported",
+        "entry-memory-quote",
+        "entry-retry-supported",
+        "entry-retry-overgeneralized",
+        "entry-update-supported",
+        "entry-update-stale",
+        "wiki-release-order-error:0",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:0",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:0",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0",
+        "wiki-backup-invented-detail:1"
+      ],
+      "classificationFlipIds": [],
+      "actionFlipIds": [],
+      "maxProbabilityRange": 0.03
+    }
+  },
+  "limits": [
+    "Diagnostic added after observing Jev numerical variation; not a replacement acceptance policy.",
+    "All repetitions reported separately, no favorable repeat or new threshold selected.",
+    "Original 1e-5 stability results retained; no API calls or new evaluation samples.",
+    "Synthetic correlated samples cannot certify production accuracy."
+  ],
+  "sourceSha256": "5e4ab462368cf0f9468ca8efcb89e94a8830ecd00da2b2ae3bbdcbdae9cad878",
+  "standardSha256": "66676bce02c8063735113c303cad060bf5d7abf3b8c6fe2bf821e3a2d4202b0e",
+  "analysisScriptSha256": "1ae065a4478b80cde2376e88b934af622080c0e7c6ec64d2109523efbb3c376c"
+}

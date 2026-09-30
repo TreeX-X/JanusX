@@ -1,0 +1,1520 @@
+{
+  "schema": 1,
+  "standardId": "knowledge-evidence-review-v1",
+  "standardSha256": "66676bce02c8063735113c303cad060bf5d7abf3b8c6fe2bf821e3a2d4202b0e",
+  "developmentSha256": "e98ea215a0837fe5bc60d9e37b351ad96ef8d56afd761ccf890e2c8ff156711e",
+  "adapterSha256": "6c0d84314be4c5199662c6d122e28928f7cf14b074a610b12889a550820c89e9",
+  "metricsScriptSha256": "4c75ad3cf7e168912f5bd0517cb9b8c87e80ee554dacafab9ca21318ad901225",
+  "qualityGate": "not-evaluated-synthetic",
+  "maxRequests": 156,
+  "requestTimeoutSeconds": 30,
+  "stopStartingRequestsAfterSeconds": 600,
+  "automaticRetries": 0,
+  "priceUsdPerMillionInputTokens": 0.042,
+  "limits": [
+    "Only frozen synthetic fixtures are sent; no project knowledge or credentials in reports.",
+    "Same question, cases, thresholds and three-repetition stability rule as local benchmark.",
+    "Cloud latency includes network/service; no comparable server RAM or CPU measurement.",
+    "Jev tokenizer is unavailable locally; 512-token parity cannot be verified, input text is the same.",
+    "No warmup API request; first call latency is included. No automatic retries or resume.",
+    "Usage is known only for validated successful responses; failed requests may still be billed.",
+    "Time limit checked before each request; one final request can exceed it by the timeout."
+  ],
+  "model": "jev-1.13.0",
+  "endpoint": "https://api.typesafe.ai/v1/systemone",
+  "stopReason": null,
+  "attemptedRequests": 156,
+  "usage": {
+    "input_tokens": 53763,
+    "output_tokens": 3120,
+    "requestsWithUnknownUsage": 0
+  },
+  "estimatedKnownUsageUsd": 0.002258046,
+  "latencyP50Ms": 383.06630000079167,
+  "latencyP95Ms": 460.07100000133505,
+  "summary": {
+    "development": {
+      "count": 24,
+      "positiveCount": 17,
+      "negativeCount": 7,
+      "unavailable": 15,
+      "accuracy": 0.375,
+      "balancedAccuracy": 0.3907563025210084,
+      "decisions": {
+        "pass": 6,
+        "block": 2,
+        "defer": 16
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6096569663469354,
+        0.9999999999999999
+      ],
+      "correctPassCoverage": 0.35294117647058826,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "procedure-add",
+        "procedure-duplicate",
+        "decision-add",
+        "decision-duplicate",
+        "preference-add",
+        "preference-update",
+        "preference-duplicate",
+        "temporary-status",
+        "different-environment",
+        "config-duplicate",
+        "backup-add"
+      ]
+    },
+    "validation": {
+      "count": 28,
+      "positiveCount": 18,
+      "negativeCount": 10,
+      "unavailable": 17,
+      "accuracy": 0.39285714285714285,
+      "balancedAccuracy": 0.37222222222222223,
+      "decisions": {
+        "pass": 8,
+        "block": 3,
+        "defer": 17
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6755843804891231,
+        1.0
+      ],
+      "correctPassCoverage": 0.4444444444444444,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "validationEntries": {
+      "count": 12,
+      "positiveCount": 6,
+      "negativeCount": 6,
+      "unavailable": 6,
+      "accuracy": 0.5,
+      "balancedAccuracy": 0.5,
+      "decisions": {
+        "pass": 3,
+        "block": 3,
+        "defer": 6
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.43849391955098227,
+        1.0
+      ],
+      "correctPassCoverage": 0.5,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported"
+      ]
+    },
+    "validationWikiClaims": {
+      "count": 16,
+      "positiveCount": 12,
+      "negativeCount": 4,
+      "unavailable": 11,
+      "accuracy": 0.3125,
+      "balancedAccuracy": 0.20833333333333334,
+      "decisions": {
+        "pass": 5,
+        "defer": 11
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.5655085052479191,
+        1.0000000000000002
+      ],
+      "correctPassCoverage": 0.4166666666666667,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "wikiPages": {
+      "count": 8,
+      "positiveCount": 4,
+      "negativeCount": 4,
+      "unavailable": 7,
+      "accuracy": 0.125,
+      "balancedAccuracy": 0.125,
+      "decisions": {
+        "pass": 1,
+        "defer": 7
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.20654329147389294,
+        1.0
+      ],
+      "correctPassCoverage": 0.25,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "wiki-config-correct",
+        "wiki-access-correct",
+        "wiki-backup-correct"
+      ]
+    }
+  },
+  "sensitivity": {
+    "0.5": {
+      "count": 28,
+      "positiveCount": 18,
+      "negativeCount": 10,
+      "unavailable": 17,
+      "accuracy": 0.39285714285714285,
+      "balancedAccuracy": 0.37222222222222223,
+      "decisions": {
+        "pass": 8,
+        "block": 3,
+        "defer": 17
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6755843804891231,
+        1.0
+      ],
+      "correctPassCoverage": 0.4444444444444444,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "0.7": {
+      "count": 28,
+      "positiveCount": 18,
+      "negativeCount": 10,
+      "unavailable": 17,
+      "accuracy": 0.39285714285714285,
+      "balancedAccuracy": 0.37222222222222223,
+      "decisions": {
+        "pass": 8,
+        "block": 3,
+        "defer": 17
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6755843804891231,
+        1.0
+      ],
+      "correctPassCoverage": 0.4444444444444444,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "0.8": {
+      "count": 28,
+      "positiveCount": 18,
+      "negativeCount": 10,
+      "unavailable": 17,
+      "accuracy": 0.39285714285714285,
+      "balancedAccuracy": 0.37222222222222223,
+      "decisions": {
+        "pass": 8,
+        "block": 3,
+        "defer": 17
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6755843804891231,
+        1.0
+      ],
+      "correctPassCoverage": 0.4444444444444444,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "0.9": {
+      "count": 28,
+      "positiveCount": 18,
+      "negativeCount": 10,
+      "unavailable": 17,
+      "accuracy": 0.39285714285714285,
+      "balancedAccuracy": 0.37222222222222223,
+      "decisions": {
+        "pass": 8,
+        "block": 3,
+        "defer": 17
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6755843804891231,
+        1.0
+      ],
+      "correctPassCoverage": 0.4444444444444444,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "0.95": {
+      "count": 28,
+      "positiveCount": 18,
+      "negativeCount": 10,
+      "unavailable": 17,
+      "accuracy": 0.39285714285714285,
+      "balancedAccuracy": 0.37222222222222223,
+      "decisions": {
+        "pass": 8,
+        "block": 2,
+        "defer": 18
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6755843804891231,
+        1.0
+      ],
+      "correctPassCoverage": 0.4444444444444444,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-memory-supported",
+        "entry-retry-supported",
+        "entry-update-supported",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-invented-detail:0"
+      ]
+    },
+    "0.99": {
+      "count": 28,
+      "positiveCount": 18,
+      "negativeCount": 10,
+      "unavailable": 17,
+      "accuracy": 0.39285714285714285,
+      "balancedAccuracy": 0.37222222222222223,
+      "decisions": {
+        "defer": 28
+      },
+      "passPrecision": null,
+      "passPrecisionWilson95": null,
+      "correctPassCoverage": 0.0,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "entry-cache-supported",
+        "entry-memory-supported",
+        "entry-decision-supported",
+        "entry-retry-supported",
+        "entry-limit-supported",
+        "entry-update-supported",
+        "wiki-release-correct:0",
+        "wiki-release-correct:1",
+        "wiki-release-order-error:1",
+        "wiki-config-correct:0",
+        "wiki-config-correct:1",
+        "wiki-config-number-error:1",
+        "wiki-access-correct:0",
+        "wiki-access-correct:1",
+        "wiki-access-negation-error:1",
+        "wiki-backup-correct:0",
+        "wiki-backup-correct:1",
+        "wiki-backup-invented-detail:0"
+      ]
+    }
+  },
+  "results": [
+    {
+      "id": "config-add",
+      "split": "development",
+      "track": "entry",
+      "evidence": "已确认 Atlas 生产服务配置：端口为 9443，长期生效。",
+      "claim": "Atlas 生产服务端口为 9443。",
+      "supported": true,
+      "pSupport": 0.97,
+      "decision": "pass",
+      "latencyMs": [
+        424.04740000347374,
+        401.84859999862965,
+        369.98809999931837
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.97
+      ],
+      "error": null
+    },
+    {
+      "id": "config-negation",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 生产服务不使用 9443 端口，实际端口为 9000。",
+      "claim": "Atlas 生产服务端口为 9443。",
+      "supported": false,
+      "pSupport": 0.04,
+      "decision": "block",
+      "latencyMs": [
+        386.20250000531087,
+        342.7326999953948,
+        340.57860000029905
+      ],
+      "repeatProbabilities": [
+        0.04,
+        0.04,
+        0.04
+      ],
+      "error": null
+    },
+    {
+      "id": "config-update",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 生产服务端口从 9000 正式改为 9443，旧配置废止。",
+      "claim": "Atlas 生产服务端口为 9443。",
+      "supported": true,
+      "pSupport": 0.95,
+      "decision": "pass",
+      "latencyMs": [
+        346.4358000055654,
+        360.44830000173533,
+        422.2776000024169
+      ],
+      "repeatProbabilities": [
+        0.95,
+        0.95,
+        0.95
+      ],
+      "error": null
+    },
+    {
+      "id": "config-unresolved",
+      "split": "development",
+      "track": "entry",
+      "evidence": "配置表记载 Atlas 生产端口为 9443。值班记录记载同一生产服务端口为 9000。两份记录同日，尚未核实哪份正确。",
+      "claim": "Atlas 生产服务端口为 9443。",
+      "supported": false,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        385.47249999828637,
+        469.31449999829056,
+        329.87190000130795
+      ],
+      "repeatProbabilities": [
+        0.53,
+        0.5,
+        0.5
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "procedure-add",
+      "split": "development",
+      "track": "entry",
+      "evidence": "团队发布规范：Atlas 每次发布前必须运行 pnpm test。",
+      "claim": "Atlas 每次发布前必须运行 pnpm test。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        352.96440000092844,
+        457.5098999994225,
+        356.0464000038337
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.98
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "procedure-temporary",
+      "split": "development",
+      "track": "entry",
+      "evidence": "仅这次排查问题先运行 pnpm test；这不是长期发布要求。",
+      "claim": "Atlas 每次发布前必须运行 pnpm test。",
+      "supported": false,
+      "pSupport": 0.05,
+      "decision": "block",
+      "latencyMs": [
+        399.0821999977925,
+        365.16970000229776,
+        390.74360000086017
+      ],
+      "repeatProbabilities": [
+        0.05,
+        0.05,
+        0.05
+      ],
+      "error": null
+    },
+    {
+      "id": "procedure-duplicate",
+      "split": "development",
+      "track": "entry",
+      "evidence": "团队再次确认 Atlas 每次发布前必须运行 pnpm test。",
+      "claim": "Atlas 每次发布前必须运行 pnpm test。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        348.5288999945624,
+        356.86169999826234,
+        385.67000000330154
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.96
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "procedure-update",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 发布检查命令正式由 pnpm test 改为 pnpm verify，以后按新命令执行。",
+      "claim": "Atlas 发布检查命令为 pnpm verify。",
+      "supported": true,
+      "pSupport": 0.94,
+      "decision": "pass",
+      "latencyMs": [
+        426.86650000541704,
+        339.9234999960754,
+        362.03999999997905
+      ],
+      "repeatProbabilities": [
+        0.94,
+        0.94,
+        0.94
+      ],
+      "error": null
+    },
+    {
+      "id": "decision-add",
+      "split": "development",
+      "track": "entry",
+      "evidence": "架构决策已通过：Atlas 采用 SQLite，原因是需要离线运行。",
+      "claim": "Atlas 采用 SQLite，以支持离线运行。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        383.33309999870835,
+        428.1859999973676,
+        405.23730000131764
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.97,
+        0.97
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "decision-proposal",
+      "split": "development",
+      "track": "entry",
+      "evidence": "有人建议 Atlas 采用 SQLite 支持离线运行，但团队尚未作出决定。",
+      "claim": "Atlas 采用 SQLite，以支持离线运行。",
+      "supported": false,
+      "pSupport": 0.1,
+      "decision": "defer",
+      "latencyMs": [
+        356.94649999641115,
+        399.8700000011013,
+        337.240799999563
+      ],
+      "repeatProbabilities": [
+        0.1,
+        0.1,
+        0.1
+      ],
+      "error": null
+    },
+    {
+      "id": "decision-duplicate",
+      "split": "development",
+      "track": "entry",
+      "evidence": "重申已通过的决策：为了离线可用，Atlas 使用 SQLite。",
+      "claim": "Atlas 采用 SQLite，以支持离线运行。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        349.4009000060032,
+        406.75370000099065,
+        394.0366000024369
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.96,
+        0.95
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "different-project",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 项目数据库配置为 PostgreSQL。",
+      "claim": "Atlas 使用 PostgreSQL。",
+      "supported": true,
+      "pSupport": 0.96,
+      "decision": "pass",
+      "latencyMs": [
+        383.08049999614013,
+        484.74579999310663,
+        377.54470000072615
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "error": null
+    },
+    {
+      "id": "preference-add",
+      "split": "development",
+      "track": "entry",
+      "evidence": "用户本人：请记住，以后默认用中文回答我。",
+      "claim": "用户默认希望收到中文回答。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        397.6094999961788,
+        504.77170000522165,
+        353.0467000018689
+      ],
+      "repeatProbabilities": [
+        0.93,
+        0.91,
+        0.93
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "preference-quote",
+      "split": "development",
+      "track": "entry",
+      "evidence": "用户本人：我的同事默认希望收到中文回答；这是他的偏好，不是我的。",
+      "claim": "用户默认希望收到中文回答。",
+      "supported": false,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        378.51129999762634,
+        370.2629999970668,
+        412.17280000273604
+      ],
+      "repeatProbabilities": [
+        0.47,
+        0.48,
+        0.44
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "preference-update",
+      "split": "development",
+      "track": "entry",
+      "evidence": "用户本人：把我之前默认英文回答的偏好改掉，以后默认用中文回答我。",
+      "claim": "用户默认希望收到中文回答。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        371.33779999567196,
+        389.944700000342,
+        357.8535000051488
+      ],
+      "repeatProbabilities": [
+        0.89,
+        0.91,
+        0.89
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "preference-duplicate",
+      "split": "development",
+      "track": "entry",
+      "evidence": "用户本人再次确认：默认中文回答。",
+      "claim": "用户默认希望收到中文回答。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        346.92940000240924,
+        363.92139999952633,
+        400.8218000017223
+      ],
+      "repeatProbabilities": [
+        0.95,
+        0.95,
+        0.94
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "temporary-status",
+      "split": "development",
+      "track": "entry",
+      "evidence": "临时状态：Atlas 测试服务当前正在重启，预计一分钟后结束，无长期配置变化。",
+      "claim": "Atlas 测试服务当前正在重启。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        341.6600999989896,
+        400.59610000025714,
+        433.593200003088
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.96
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "durable-policy",
+      "split": "development",
+      "track": "entry",
+      "evidence": "长期运维规范：Atlas 服务重启前必须备份数据库。",
+      "claim": "Atlas 服务重启前必须备份数据库。",
+      "supported": true,
+      "pSupport": 0.97,
+      "decision": "pass",
+      "latencyMs": [
+        351.853400003165,
+        344.4199000005028,
+        390.903999999864
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.97
+      ],
+      "error": null
+    },
+    {
+      "id": "numeric-conflict",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 配置记录写着生产超时 60 秒，但不知道与另一份 30 秒记录谁新谁旧，尚未确认。",
+      "claim": "Atlas 生产超时配置为 60 秒。",
+      "supported": false,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        353.96509999554837,
+        365.023199999996,
+        381.8851999967592
+      ],
+      "repeatProbabilities": [
+        0.68,
+        0.71,
+        0.68
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "numeric-update",
+      "split": "development",
+      "track": "entry",
+      "evidence": "已生效变更：Atlas 生产超时从 30 秒调整为 60 秒，30 秒配置停止使用。",
+      "claim": "Atlas 生产超时配置为 60 秒。",
+      "supported": true,
+      "pSupport": 0.96,
+      "decision": "pass",
+      "latencyMs": [
+        353.541899996344,
+        383.2871000049636,
+        396.0220000008121
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "error": null
+    },
+    {
+      "id": "different-environment",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 测试环境固定超时为 60 秒。",
+      "claim": "Atlas 测试环境超时为 60 秒。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        377.552600002673,
+        369.9533999970299,
+        367.4895000003744
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.96,
+        0.96
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "config-duplicate",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 的数据库再次确认为 PostgreSQL。",
+      "claim": "Atlas 的数据库是 PostgreSQL。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        396.1005999954068,
+        440.6286999947042,
+        388.34789999964414
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.96,
+        0.97
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "backup-add",
+      "split": "development",
+      "track": "entry",
+      "evidence": "已确认的长期备份计划：Atlas 数据库每天凌晨两点备份。",
+      "claim": "Atlas 数据库每天凌晨两点备份。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        417.5866000005044,
+        418.87510000378825,
+        357.4841000008746
+      ],
+      "repeatProbabilities": [
+        0.98,
+        0.97,
+        0.98
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "backup-unresolved",
+      "split": "development",
+      "track": "entry",
+      "evidence": "Atlas 有两份同日备份计划，一份写每天两点，另一份写每天三点，目前未确定采用哪份。",
+      "claim": "Atlas 数据库每天凌晨两点备份。",
+      "supported": false,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        383.0521000054432,
+        388.8383999947109,
+        411.00290000031237
+      ],
+      "repeatProbabilities": [
+        0.25,
+        0.28,
+        0.26
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "entry-cache-supported",
+      "group": "cache",
+      "evidence": "Orion 生产环境已固定采用 Redis 作为缓存。",
+      "claim": "Orion 生产环境的缓存是 Redis。",
+      "supported": true,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": 0.96,
+      "decision": "pass",
+      "latencyMs": [
+        382.0290000003297,
+        422.8062000038335,
+        375.9425000025658
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "error": null
+    },
+    {
+      "id": "entry-cache-wrong-project",
+      "group": "cache",
+      "evidence": "Orion 生产环境已固定采用 Redis 作为缓存。",
+      "claim": "Nova 生产环境的缓存是 Redis。",
+      "supported": false,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": 0.04,
+      "decision": "block",
+      "latencyMs": [
+        434.1238999986672,
+        351.4620000059949,
+        422.5929000022006
+      ],
+      "repeatProbabilities": [
+        0.04,
+        0.04,
+        0.04
+      ],
+      "error": null
+    },
+    {
+      "id": "entry-memory-supported",
+      "group": "memory",
+      "evidence": "用户本人明确要求：以后回复代码时，请保留完整的函数签名。",
+      "claim": "用户希望代码回答保留完整函数签名。",
+      "supported": true,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        382.2798999972292,
+        415.0962000057916,
+        460.07100000133505
+      ],
+      "repeatProbabilities": [
+        0.95,
+        0.94,
+        0.94
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "entry-memory-quote",
+      "group": "memory",
+      "evidence": "用户说：同事小林要求代码回答保留完整函数签名，我没有这个偏好。",
+      "claim": "用户希望代码回答保留完整函数签名。",
+      "supported": false,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        402.7642000000924,
+        414.64709999854676,
+        352.36499999882653
+      ],
+      "repeatProbabilities": [
+        0.16,
+        0.16,
+        0.17
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "entry-decision-supported",
+      "group": "decision",
+      "evidence": "团队已经决定使用本地文件存储，以便断网时继续工作。",
+      "claim": "团队选择本地文件存储，是为了断网可用。",
+      "supported": true,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": 0.97,
+      "decision": "pass",
+      "latencyMs": [
+        452.6786999995238,
+        391.7275999992853,
+        374.97699999948964
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.97
+      ],
+      "error": null
+    },
+    {
+      "id": "entry-decision-pending",
+      "group": "decision",
+      "evidence": "团队正在讨论使用本地文件存储以支持断网工作，目前还没有决定。",
+      "claim": "团队已经选择本地文件存储。",
+      "supported": false,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": 0.06,
+      "decision": "block",
+      "latencyMs": [
+        389.4196000037482,
+        340.87620000354946,
+        421.6985000020941
+      ],
+      "repeatProbabilities": [
+        0.06,
+        0.06,
+        0.06
+      ],
+      "error": null
+    },
+    {
+      "id": "entry-retry-supported",
+      "group": "retry",
+      "evidence": "接口仅在收到 HTTP 503 时自动重试，其他错误不自动重试。",
+      "claim": "HTTP 503 会触发接口自动重试。",
+      "supported": true,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        371.44419999822276,
+        335.7873999993899,
+        455.04519999667536
+      ],
+      "repeatProbabilities": [
+        0.92,
+        0.93,
+        0.93
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "entry-retry-overgeneralized",
+      "group": "retry",
+      "evidence": "接口仅在收到 HTTP 503 时自动重试，其他错误不自动重试。",
+      "claim": "所有 HTTP 错误都会触发接口自动重试。",
+      "supported": false,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        481.2060999975074,
+        374.4159000052605,
+        343.7793000048259
+      ],
+      "repeatProbabilities": [
+        0.07,
+        0.07,
+        0.05
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "entry-limit-supported",
+      "group": "limit",
+      "evidence": "生产上传上限为 32 MB，测试环境上传上限为 8 MB。",
+      "claim": "生产环境允许的上传上限是 32 MB。",
+      "supported": true,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": 0.97,
+      "decision": "pass",
+      "latencyMs": [
+        384.44060000620084,
+        359.5719000004465,
+        350.41739999724086
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.97
+      ],
+      "error": null
+    },
+    {
+      "id": "entry-limit-swapped",
+      "group": "limit",
+      "evidence": "生产上传上限为 32 MB，测试环境上传上限为 8 MB。",
+      "claim": "生产环境允许的上传上限是 8 MB。",
+      "supported": false,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": 0.02,
+      "decision": "block",
+      "latencyMs": [
+        358.1412999992608,
+        398.38249999593245,
+        430.5902000050992
+      ],
+      "repeatProbabilities": [
+        0.02,
+        0.02,
+        0.02
+      ],
+      "error": null
+    },
+    {
+      "id": "entry-update-supported",
+      "group": "update",
+      "evidence": "今天正式废止旧的 yarn build 命令，发布构建以后必须使用 pnpm build。",
+      "claim": "当前发布构建命令是 pnpm build。",
+      "supported": true,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        357.91210000024876,
+        353.84379999595694,
+        391.7407999979332
+      ],
+      "repeatProbabilities": [
+        0.91,
+        0.9,
+        0.9
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "entry-update-stale",
+      "group": "update",
+      "evidence": "今天正式废止旧的 yarn build 命令，发布构建以后必须使用 pnpm build。",
+      "claim": "当前发布构建命令是 yarn build。",
+      "supported": false,
+      "split": "validation",
+      "track": "entry",
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        381.09340000664815,
+        365.7653000045684,
+        401.50359999825014
+      ],
+      "repeatProbabilities": [
+        0.21,
+        0.19,
+        0.18
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-release-correct:0",
+      "page": "wiki-release-correct",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "发布规范：先备份数据库，再执行迁移。迁移失败时必须恢复备份。",
+      "claim": "执行迁移之前需要备份数据库。",
+      "supported": true,
+      "pSupport": 0.96,
+      "decision": "pass",
+      "latencyMs": [
+        350.44209999614395,
+        426.05859999457607,
+        536.7086999976891
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "error": null
+    },
+    {
+      "id": "wiki-release-correct:1",
+      "page": "wiki-release-correct",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "发布规范：先备份数据库，再执行迁移。迁移失败时必须恢复备份。",
+      "claim": "迁移失败时必须恢复备份。",
+      "supported": true,
+      "pSupport": 0.97,
+      "decision": "pass",
+      "latencyMs": [
+        386.4322000008542,
+        363.26109999936307,
+        405.1776999986032
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.97
+      ],
+      "error": null
+    },
+    {
+      "id": "wiki-release-order-error:0",
+      "page": "wiki-release-order-error",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "发布规范：先备份数据库，再执行迁移。迁移失败时必须恢复备份。",
+      "claim": "应先执行迁移，再备份数据库。",
+      "supported": false,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        393.6482000062824,
+        364.7670999998809,
+        404.18169999611564
+      ],
+      "repeatProbabilities": [
+        0.03,
+        0.02,
+        0.02
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-release-order-error:1",
+      "page": "wiki-release-order-error",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "发布规范：先备份数据库，再执行迁移。迁移失败时必须恢复备份。",
+      "claim": "迁移失败时必须恢复备份。",
+      "supported": true,
+      "pSupport": 0.97,
+      "decision": "pass",
+      "latencyMs": [
+        381.41219999670284,
+        361.4649999944959,
+        383.80019999749493
+      ],
+      "repeatProbabilities": [
+        0.97,
+        0.97,
+        0.97
+      ],
+      "error": null
+    },
+    {
+      "id": "wiki-config-correct:0",
+      "page": "wiki-config-correct",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "Orion 生产端口为 7443，测试端口为 7000。两个环境都使用 PostgreSQL。",
+      "claim": "Orion 生产端口是 7443。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        446.57010000082664,
+        365.2058000006946,
+        488.76329999620793
+      ],
+      "repeatProbabilities": [
+        0.98,
+        0.98,
+        0.97
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-config-correct:1",
+      "page": "wiki-config-correct",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "Orion 生产端口为 7443，测试端口为 7000。两个环境都使用 PostgreSQL。",
+      "claim": "两个环境都使用 PostgreSQL。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        354.00400000071386,
+        415.25299999921117,
+        365.5559999970137
+      ],
+      "repeatProbabilities": [
+        0.98,
+        0.97,
+        0.98
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-config-number-error:0",
+      "page": "wiki-config-number-error",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "Orion 生产端口为 7443，测试端口为 7000。两个环境都使用 PostgreSQL。",
+      "claim": "Orion 生产端口是 7000。",
+      "supported": false,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        393.1721999979345,
+        422.7801000015461,
+        435.0637000025017
+      ],
+      "repeatProbabilities": [
+        0.03,
+        0.03,
+        0.04
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-config-number-error:1",
+      "page": "wiki-config-number-error",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "Orion 生产端口为 7443，测试端口为 7000。两个环境都使用 PostgreSQL。",
+      "claim": "两个环境都使用 PostgreSQL。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        357.4019000006956,
+        374.6968999985256,
+        369.99549999745796
+      ],
+      "repeatProbabilities": [
+        0.98,
+        0.97,
+        0.97
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-access-correct:0",
+      "page": "wiki-access-correct",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "权限规范：只有管理员可以删除项目，访客禁止删除项目。所有删除操作均记入历史。",
+      "claim": "访客不能删除项目。",
+      "supported": true,
+      "pSupport": 0.98,
+      "decision": "pass",
+      "latencyMs": [
+        413.03570000309264,
+        459.00210000399966,
+        383.6699999956181
+      ],
+      "repeatProbabilities": [
+        0.98,
+        0.98,
+        0.98
+      ],
+      "error": null
+    },
+    {
+      "id": "wiki-access-correct:1",
+      "page": "wiki-access-correct",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "权限规范：只有管理员可以删除项目，访客禁止删除项目。所有删除操作均记入历史。",
+      "claim": "删除项目的操作会进入历史记录。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        388.66289999714354,
+        340.96990000398364,
+        365.1471999983187
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.97,
+        0.96
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-access-negation-error:0",
+      "page": "wiki-access-negation-error",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "权限规范：只有管理员可以删除项目，访客禁止删除项目。所有删除操作均记入历史。",
+      "claim": "访客可以删除项目。",
+      "supported": false,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        348.7855000057607,
+        359.13549999531824,
+        457.94390000082785
+      ],
+      "repeatProbabilities": [
+        0.05,
+        0.05,
+        0.08
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-access-negation-error:1",
+      "page": "wiki-access-negation-error",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "权限规范：只有管理员可以删除项目，访客禁止删除项目。所有删除操作均记入历史。",
+      "claim": "删除项目的操作会进入历史记录。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        370.5446999956621,
+        377.5521999996272,
+        358.051199997135
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.97,
+        0.96
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-backup-correct:0",
+      "page": "wiki-backup-correct",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "备份策略：每天进行一次完整备份，备份保留七天。没有规定备份加密方式。",
+      "claim": "系统每天进行完整备份。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        357.1561999997357,
+        413.232800005062,
+        376.77160000021104
+      ],
+      "repeatProbabilities": [
+        0.94,
+        0.95,
+        0.95
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-backup-correct:1",
+      "page": "wiki-backup-correct",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "备份策略：每天进行一次完整备份，备份保留七天。没有规定备份加密方式。",
+      "claim": "备份保留七天。",
+      "supported": true,
+      "pSupport": 0.96,
+      "decision": "pass",
+      "latencyMs": [
+        376.9481999988784,
+        398.240700000315,
+        391.2637999965227
+      ],
+      "repeatProbabilities": [
+        0.96,
+        0.96,
+        0.96
+      ],
+      "error": null
+    },
+    {
+      "id": "wiki-backup-invented-detail:0",
+      "page": "wiki-backup-invented-detail",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "备份策略：每天进行一次完整备份，备份保留七天。没有规定备份加密方式。",
+      "claim": "系统每天进行完整备份。",
+      "supported": true,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        441.96630000078585,
+        497.3898000025656,
+        371.39079999906244
+      ],
+      "repeatProbabilities": [
+        0.94,
+        0.95,
+        0.94
+      ],
+      "error": "unstable-repetitions"
+    },
+    {
+      "id": "wiki-backup-invented-detail:1",
+      "page": "wiki-backup-invented-detail",
+      "split": "validation",
+      "track": "wiki",
+      "evidence": "备份策略：每天进行一次完整备份，备份保留七天。没有规定备份加密方式。",
+      "claim": "备份必须使用 AES-256 加密。",
+      "supported": false,
+      "pSupport": null,
+      "decision": "defer",
+      "latencyMs": [
+        383.9650000008987,
+        356.1196000009659,
+        328.5870999970939
+      ],
+      "repeatProbabilities": [
+        0.05,
+        0.05,
+        0.04
+      ],
+      "error": "unstable-repetitions"
+    }
+  ]
+}
