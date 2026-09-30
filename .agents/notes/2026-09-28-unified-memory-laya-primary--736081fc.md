@@ -55,6 +55,26 @@ JanusX 的 observation → candidate → review → truth → BM25 管线承载�
 
 还需补足原始记录、候选、评分、暂存与入库之间的可见状态，帮助用户判断“未采集”“未提取”“尚未处理”与“处理失败”。[工作台快照读取](../../src/renderer/src/services/knowledge.ts)对部分列表失败回退为空数组，可能把不可用显示成空库，应与统一审核栏已有的显式报错行为区分并修正。现有状态栏已有部分计数，但完整自动处理过程、历史和长期维护能力仍待验收。保留搜索与人工审核能力是明确需求；是否合并 Wiki/图谱为知识库子视图、是否新增概览、最终 Tab 数量与默认入口继续讨论。
 
+### 本地审核替代模型与 Jev 调研（2026-09-30）
+
+用户明确允许接入 LLM 整理 Wiki，希望知识条目准入和 LLM 生成 Wiki 的评估仍由低成本判断模型承担，从而自动积累、审核与沉淀。此前“不依赖外部 LLM”的目标继续适用于基础知识准入审核，不应解释为禁止 Wiki 成文调用 LLM。用户指定的 Jev 是 TypeSafe 官方闭源模型，不能与社区 Open-Jev、AgentJev 或 Jev-style 权重混为一谈。以下为官方文档、发布者模型卡及 Hugging Face 文件元数据调研，不是替代模型在本仓库的实测或选型批准。
+
+优先候选为 [mDeBERTa-v3-base-mnli-xnli](https://huggingface.co/MoritzLaurer/mDeBERTa-v3-base-mnli-xnli)（MIT），它以证据和陈述组成输入，输出 entailment、neutral、contradiction，即支持、信息不足和矛盾。元数据 revision 为 `8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c`，约 279M 参数，发布者提供约 558 MB 的 safetensors 及约 339 MB 的量化 ONNX 文件。模型卡报告中文 XNLI 准确率 81.16%，该基准与知识入库、Wiki 验收不同，不能移作本项目准确率。建议先验证原精度基线，再对量化版本验证概率和错误放行变化；ONNX CPU 路径可降低对 Python/PyTorch 常驻运行的依赖，但仍需要分词器与适配。
+
+更小的 CPU 对照为 [multilingual-MiniLMv2-L6-mnli-xnli](https://huggingface.co/MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli)（MIT），revision `0a71e92a985b6e1ad1828cf67ce9c459639c1dca`，约 107M 参数、6 层，现有 FP32 权重约 428 MB。模型卡报告中文 XNLI 准确率 72.1%，作者明确以更低成本交换部分性能；参数量小不意味着当前下载文件比量化 mDeBERTa 小。两者输入预算约 512 token，需对证据和候选联合计数，不能整篇 Wiki 直接送入或静默截断否定和条件；多段核验不能只取最高支持分而忽略其他冲突证据。两者都适合探测来源支持和矛盾，不原生决定保留价值、明确版本替代、整篇 Wiki 完整性或操作顺序正确性。这些职责应通过类型规则、宿主版本管理及独立任务评测处理，不能直接替换为一个 NLI 概率。
+
+[Vectara HHEM-2.1-Open](https://huggingface.co/vectara/hallucination_evaluation_model)（Apache-2.0）专门检查来源与生成文本的一致性，约 110M 参数、438.5 MB FP32 权重。发布者称可在 CPU 运行，32 位模式内存低于 600 MB、现代 x86 CPU 上 2k-token 输入约 1.5 秒；这些是发布者测量而非本机性能。开放模型卡标记英语；中文在 HHEM-2.3 商业服务的能力列表中，不能把商业版中文能力归给本地开放版。因此它适合作为英文 Wiki 一致性对照，不优先用于本项目中文自动审核。
+
+其他候选及不优先理由：[Granite Guardian 3.2 3B-A800M](https://huggingface.co/ibm-granite/granite-guardian-3.2-3b-a800m)（Apache-2.0）提供 groundedness/relevance 判断，但模型卡明确仅在英语训练测试，约 3.30B 总参数、BF16 权重约 6.60 GB，800M 激活参数不等于只需装载 800M 权重。[Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507)（Apache-2.0）可作为中文复杂判断的本地生成式对照，BF16 权重约 8.05 GB；4 位纯参数下限约 2 GB，实际量化文件、缓存和运行内存更大，尚未核验具体量化包或本机耗时，不能称为最低成本非生成式方案。
+
+社区同类模型仅列观察：[AgentJev-0.6B](https://huggingface.co/aimeigaoshou/agent-jev)（Apache-2.0）公开权重约 2.39 GB FP32，当前发布的是 coding-completion checkpoint，报告代码完成准确率 57.8%，发票指标为教师一致率；不是已验证的通用知识审核模型。[Tasksource-JEV-Nano-v0](https://huggingface.co/tasksource/tasksource-jev-nano-v0)（Apache-2.0）主干约 149M、另有投影层，公开材料标记英语，虽提供 choice/noul/score，但没有本项目中文证据核验实测。不能因同样输出分布就假定优于 Laya。[BGE reranker](https://huggingface.co/BAAI/bge-reranker-v2-m3)输出相关性，适合筛选证据，不能用归一化相关性代替事实支持度或 Wiki 正确率。
+
+[TypeSafe 模型文档](https://docs.typesafe.ai/models)当前列出 `jev-1.13.0`，价格为每百万输入 token 0.042 美元，输出免费。假设每次请求含全部问题共 2,000 输入 token，10,000 次约 0.84 美元，未计 Wiki 生成费用、重试及其他请求；这是公开价格下的算术估算，不是本项目账单。公开文档提供云 API，未找到可下载权重或公开的自托管安装/报价说明，企业私有部署是否可获得仍未知。它可作为低用量云端对照，不满足已经验证的本地离线部署条件。本轮未联系厂商、注册账号、发送项目知识或调用付费推理。
+
+Jev 官方有[引文核验示例](https://docs.typesafe.ai/cookbooks/citation_check)，先由代码定位来源，再判断支持、矛盾或未提及，结构贴近条目与 Wiki 审核；示例不等于中文生产质量保证。官方说明英语为主要训练语言，[已知限制](https://docs.typesafe.ai/model-jaggedness/jev-1.13)包括数字精度、日期比较、多跳理解、冗余长上下文、对抗内容和不同问法不满足预期概率恒等式。因此迁移到 Jev 仍需固定版本与专项验收，也不能复用 Laya 门槛。
+
+建议下一轮先比较 mDeBERTa 与 MiniLM 的证据核验，复用当前 24 条样例作为开发诊断，另外准备固定的未调参验收集；知识条目统计错误放行、正确写入覆盖、拒绝/暂存和主体/否定/版本错误。Wiki 增加带引用的正确正文及单处篡改对照，包括改端口、漏否定、不同项目拼接、旧版本、无来源新结论、漏关键条件和步骤颠倒。应核验正文中需证实的断言覆盖，不能只审核生成器自报的断言列表；逐断言支持、关键内容覆盖与流程约束分别计量，最终以整篇错误发布率验收，不以平均段落分数掩盖关键错误。先测原精度再测量化和实际 CPU 延迟/峰值内存；所有模型文件大小均不等于总部署占用，运行时、分词器、批次和上下文另计。是否增加 Jev 云端对照与本地生成式评审，待用户选定部署边界后决定。
+
 ### 当前实现基线
 
 采用 JanusX 原生的单记忆内核，保留工程与个人两种视图。复用现有文件存储、review 与 audit；AgentMemory 和 MaiBot 提供经核对的机制参考。统一管线为：
