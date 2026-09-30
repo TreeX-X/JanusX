@@ -1,0 +1,1387 @@
+{
+  "kind": "post-run-repeat-diagnostics",
+  "qualityGate": "not-evaluated-synthetic",
+  "originalStrictSummary": {
+    "development": {
+      "count": 24,
+      "positiveCount": 17,
+      "negativeCount": 7,
+      "unavailable": 15,
+      "accuracy": 0.375,
+      "balancedAccuracy": 0.3487394957983193,
+      "decisions": {
+        "pass": 7,
+        "block": 2,
+        "defer": 15
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.6456611570247934,
+        1.0
+      ],
+      "correctPassCoverage": 0.4117647058823529,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "procedure-add",
+        "decision-add",
+        "decision-duplicate",
+        "preference-add",
+        "preference-update",
+        "preference-duplicate",
+        "numeric-update",
+        "different-environment",
+        "config-duplicate",
+        "backup-add"
+      ]
+    },
+    "validation": {
+      "count": 112,
+      "positiveCount": 68,
+      "negativeCount": 44,
+      "unavailable": 67,
+      "accuracy": 0.4017857142857143,
+      "balancedAccuracy": 0.39505347593582885,
+      "decisions": {
+        "defer": 68,
+        "pass": 29,
+        "block": 15
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.8830264055344442,
+        1.0
+      ],
+      "correctPassCoverage": 0.4264705882352941,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "expanded-01-yes",
+        "expanded-02-yes",
+        "expanded-05-yes",
+        "expanded-07-yes",
+        "expanded-08-yes",
+        "expanded-09-yes",
+        "expanded-10-yes",
+        "expanded-11-yes",
+        "expanded-12-yes",
+        "expanded-13-yes",
+        "expanded-14-yes",
+        "expanded-16-yes",
+        "expanded-17-yes",
+        "expanded-19-yes",
+        "expanded-21-yes",
+        "expanded-24-yes",
+        "expanded-26-yes",
+        "expanded-29-yes",
+        "expanded-31-yes",
+        "expanded-32-yes",
+        "expanded-33-yes",
+        "expanded-34-yes",
+        "expanded-35-yes",
+        "expanded-36-yes",
+        "expanded-38-yes",
+        "expanded-39-yes",
+        "expanded-40-yes",
+        "expanded-wiki-1-correct:0",
+        "expanded-wiki-1-corrupt:2",
+        "expanded-wiki-1-corrupt:3",
+        "expanded-wiki-2-corrupt:0",
+        "expanded-wiki-2-corrupt:2",
+        "expanded-wiki-3-correct:0",
+        "expanded-wiki-3-correct:3",
+        "expanded-wiki-3-corrupt:0",
+        "expanded-wiki-4-correct:0",
+        "expanded-wiki-4-correct:2",
+        "expanded-wiki-4-correct:3",
+        "expanded-wiki-4-corrupt:0"
+      ]
+    },
+    "validationEntries": {
+      "count": 80,
+      "positiveCount": 40,
+      "negativeCount": 40,
+      "unavailable": 52,
+      "accuracy": 0.35,
+      "balancedAccuracy": 0.35,
+      "decisions": {
+        "defer": 53,
+        "pass": 13,
+        "block": 14
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.7718981569447083,
+        1.0
+      ],
+      "correctPassCoverage": 0.325,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "expanded-01-yes",
+        "expanded-02-yes",
+        "expanded-05-yes",
+        "expanded-07-yes",
+        "expanded-08-yes",
+        "expanded-09-yes",
+        "expanded-10-yes",
+        "expanded-11-yes",
+        "expanded-12-yes",
+        "expanded-13-yes",
+        "expanded-14-yes",
+        "expanded-16-yes",
+        "expanded-17-yes",
+        "expanded-19-yes",
+        "expanded-21-yes",
+        "expanded-24-yes",
+        "expanded-26-yes",
+        "expanded-29-yes",
+        "expanded-31-yes",
+        "expanded-32-yes",
+        "expanded-33-yes",
+        "expanded-34-yes",
+        "expanded-35-yes",
+        "expanded-36-yes",
+        "expanded-38-yes",
+        "expanded-39-yes",
+        "expanded-40-yes"
+      ]
+    },
+    "validationWikiClaims": {
+      "count": 32,
+      "positiveCount": 28,
+      "negativeCount": 4,
+      "unavailable": 15,
+      "accuracy": 0.53125,
+      "balancedAccuracy": 0.4107142857142857,
+      "decisions": {
+        "defer": 15,
+        "pass": 16,
+        "block": 1
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.8063865817272802,
+        1.0
+      ],
+      "correctPassCoverage": 0.5714285714285714,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "expanded-wiki-1-correct:0",
+        "expanded-wiki-1-corrupt:2",
+        "expanded-wiki-1-corrupt:3",
+        "expanded-wiki-2-corrupt:0",
+        "expanded-wiki-2-corrupt:2",
+        "expanded-wiki-3-correct:0",
+        "expanded-wiki-3-correct:3",
+        "expanded-wiki-3-corrupt:0",
+        "expanded-wiki-4-correct:0",
+        "expanded-wiki-4-correct:2",
+        "expanded-wiki-4-correct:3",
+        "expanded-wiki-4-corrupt:0"
+      ]
+    },
+    "wikiPages": {
+      "count": 8,
+      "positiveCount": 4,
+      "negativeCount": 4,
+      "unavailable": 7,
+      "accuracy": 0.125,
+      "balancedAccuracy": 0.125,
+      "decisions": {
+        "defer": 6,
+        "pass": 1,
+        "block": 1
+      },
+      "passPrecision": 1.0,
+      "passPrecisionWilson95": [
+        0.20654329147389294,
+        1.0
+      ],
+      "correctPassCoverage": 0.25,
+      "falsePassCount": 0,
+      "falsePassRate": 0.0,
+      "falsePassIds": [],
+      "missedSupportedIds": [
+        "expanded-wiki-1-correct",
+        "expanded-wiki-3-correct",
+        "expanded-wiki-4-correct"
+      ]
+    }
+  },
+  "byRepeat": [
+    {
+      "repeat": 1,
+      "development": {
+        "count": 24,
+        "positiveCount": 17,
+        "negativeCount": 7,
+        "unavailable": 0,
+        "accuracy": 0.9166666666666666,
+        "balancedAccuracy": 0.8571428571428572,
+        "decisions": {
+          "pass": 17,
+          "block": 2,
+          "defer": 5
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8156763396284354,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      },
+      "validation": {
+        "count": 112,
+        "positiveCount": 68,
+        "negativeCount": 44,
+        "unavailable": 0,
+        "accuracy": 0.9821428571428571,
+        "balancedAccuracy": 0.9812834224598931,
+        "decisions": {
+          "pass": 60,
+          "block": 39,
+          "defer": 13
+        },
+        "passPrecision": 0.9833333333333333,
+        "passPrecisionWilson95": [
+          0.9114466177322051,
+          0.9970519161391262
+        ],
+        "correctPassCoverage": 0.8676470588235294,
+        "falsePassCount": 1,
+        "falsePassRate": 0.022727272727272728,
+        "falsePassIds": [
+          "expanded-16-no"
+        ],
+        "missedSupportedIds": [
+          "expanded-05-yes",
+          "expanded-07-yes",
+          "expanded-24-yes",
+          "expanded-26-yes",
+          "expanded-29-yes",
+          "expanded-32-yes",
+          "expanded-38-yes",
+          "expanded-39-yes",
+          "expanded-40-yes"
+        ]
+      },
+      "validationByCategory": {
+        "conditions": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "conflict": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 0.875,
+          "balancedAccuracy": 0.875,
+          "decisions": {
+            "pass": 3,
+            "block": 4,
+            "defer": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.43849391955098227,
+            1.0
+          ],
+          "correctPassCoverage": 0.75,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-26-yes"
+          ]
+        },
+        "injection": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "long-context": {
+          "count": 32,
+          "positiveCount": 28,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 28,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.8793527963418923,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "negation": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "defer": 3,
+            "block": 3,
+            "pass": 2
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 0.5,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-05-yes",
+            "expanded-07-yes"
+          ]
+        },
+        "numbers": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 0.875,
+          "balancedAccuracy": 0.875,
+          "decisions": {
+            "pass": 5,
+            "block": 2,
+            "defer": 1
+          },
+          "passPrecision": 0.8,
+          "passPrecisionWilson95": [
+            0.3755282641185388,
+            0.9637768390302125
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 1,
+          "falsePassRate": 0.25,
+          "falsePassIds": [
+            "expanded-16-no"
+          ],
+          "missedSupportedIds": []
+        },
+        "ownership": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "procedure": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "defer": 3,
+            "block": 3,
+            "pass": 2
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 0.5,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-29-yes",
+            "expanded-32-yes"
+          ]
+        },
+        "scope": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "unsupported": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 1,
+            "block": 4,
+            "defer": 3
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.20654329147389294,
+            1.0
+          ],
+          "correctPassCoverage": 0.25,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-38-yes",
+            "expanded-39-yes",
+            "expanded-40-yes"
+          ]
+        },
+        "version": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 3,
+            "defer": 2,
+            "block": 3
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.43849391955098227,
+            1.0
+          ],
+          "correctPassCoverage": 0.75,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-24-yes"
+          ]
+        }
+      },
+      "wikiPages": {
+        "count": 8,
+        "positiveCount": 4,
+        "negativeCount": 4,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 4,
+          "block": 4
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.5100999795960008,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      }
+    },
+    {
+      "repeat": 2,
+      "development": {
+        "count": 24,
+        "positiveCount": 17,
+        "negativeCount": 7,
+        "unavailable": 0,
+        "accuracy": 0.9166666666666666,
+        "balancedAccuracy": 0.8571428571428572,
+        "decisions": {
+          "pass": 17,
+          "block": 3,
+          "defer": 4
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8156763396284354,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      },
+      "validation": {
+        "count": 112,
+        "positiveCount": 68,
+        "negativeCount": 44,
+        "unavailable": 0,
+        "accuracy": 0.9821428571428571,
+        "balancedAccuracy": 0.9812834224598931,
+        "decisions": {
+          "pass": 59,
+          "block": 39,
+          "defer": 14
+        },
+        "passPrecision": 0.9830508474576272,
+        "passPrecisionWilson95": [
+          0.9100406253761469,
+          0.9970018433070186
+        ],
+        "correctPassCoverage": 0.8529411764705882,
+        "falsePassCount": 1,
+        "falsePassRate": 0.022727272727272728,
+        "falsePassIds": [
+          "expanded-16-no"
+        ],
+        "missedSupportedIds": [
+          "expanded-05-yes",
+          "expanded-07-yes",
+          "expanded-24-yes",
+          "expanded-26-yes",
+          "expanded-29-yes",
+          "expanded-31-yes",
+          "expanded-32-yes",
+          "expanded-38-yes",
+          "expanded-39-yes",
+          "expanded-40-yes"
+        ]
+      },
+      "validationByCategory": {
+        "conditions": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "conflict": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 0.875,
+          "balancedAccuracy": 0.875,
+          "decisions": {
+            "pass": 3,
+            "block": 4,
+            "defer": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.43849391955098227,
+            1.0
+          ],
+          "correctPassCoverage": 0.75,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-26-yes"
+          ]
+        },
+        "injection": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "long-context": {
+          "count": 32,
+          "positiveCount": 28,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 28,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.8793527963418923,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "negation": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "defer": 3,
+            "block": 3,
+            "pass": 2
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 0.5,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-05-yes",
+            "expanded-07-yes"
+          ]
+        },
+        "numbers": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 0.875,
+          "balancedAccuracy": 0.875,
+          "decisions": {
+            "pass": 5,
+            "block": 2,
+            "defer": 1
+          },
+          "passPrecision": 0.8,
+          "passPrecisionWilson95": [
+            0.3755282641185388,
+            0.9637768390302125
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 1,
+          "falsePassRate": 0.25,
+          "falsePassIds": [
+            "expanded-16-no"
+          ],
+          "missedSupportedIds": []
+        },
+        "ownership": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "procedure": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "defer": 4,
+            "block": 3,
+            "pass": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.20654329147389294,
+            1.0
+          ],
+          "correctPassCoverage": 0.25,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-29-yes",
+            "expanded-31-yes",
+            "expanded-32-yes"
+          ]
+        },
+        "scope": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "unsupported": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 1,
+            "block": 4,
+            "defer": 3
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.20654329147389294,
+            1.0
+          ],
+          "correctPassCoverage": 0.25,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-38-yes",
+            "expanded-39-yes",
+            "expanded-40-yes"
+          ]
+        },
+        "version": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 3,
+            "defer": 2,
+            "block": 3
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.43849391955098227,
+            1.0
+          ],
+          "correctPassCoverage": 0.75,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-24-yes"
+          ]
+        }
+      },
+      "wikiPages": {
+        "count": 8,
+        "positiveCount": 4,
+        "negativeCount": 4,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 4,
+          "block": 4
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.5100999795960008,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      }
+    },
+    {
+      "repeat": 3,
+      "development": {
+        "count": 24,
+        "positiveCount": 17,
+        "negativeCount": 7,
+        "unavailable": 0,
+        "accuracy": 0.9166666666666666,
+        "balancedAccuracy": 0.8571428571428572,
+        "decisions": {
+          "pass": 16,
+          "block": 2,
+          "defer": 6
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.8063865817272802,
+          1.0
+        ],
+        "correctPassCoverage": 0.9411764705882353,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": [
+          "preference-update"
+        ]
+      },
+      "validation": {
+        "count": 112,
+        "positiveCount": 68,
+        "negativeCount": 44,
+        "unavailable": 0,
+        "accuracy": 0.9821428571428571,
+        "balancedAccuracy": 0.9812834224598931,
+        "decisions": {
+          "pass": 59,
+          "block": 39,
+          "defer": 14
+        },
+        "passPrecision": 0.9830508474576272,
+        "passPrecisionWilson95": [
+          0.9100406253761469,
+          0.9970018433070186
+        ],
+        "correctPassCoverage": 0.8529411764705882,
+        "falsePassCount": 1,
+        "falsePassRate": 0.022727272727272728,
+        "falsePassIds": [
+          "expanded-16-no"
+        ],
+        "missedSupportedIds": [
+          "expanded-05-yes",
+          "expanded-07-yes",
+          "expanded-24-yes",
+          "expanded-26-yes",
+          "expanded-29-yes",
+          "expanded-31-yes",
+          "expanded-32-yes",
+          "expanded-38-yes",
+          "expanded-39-yes",
+          "expanded-40-yes"
+        ]
+      },
+      "validationByCategory": {
+        "conditions": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "conflict": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 0.875,
+          "balancedAccuracy": 0.875,
+          "decisions": {
+            "pass": 3,
+            "block": 4,
+            "defer": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.43849391955098227,
+            1.0
+          ],
+          "correctPassCoverage": 0.75,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-26-yes"
+          ]
+        },
+        "injection": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "long-context": {
+          "count": 32,
+          "positiveCount": 28,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 28,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.8793527963418923,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "negation": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "defer": 3,
+            "block": 3,
+            "pass": 2
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.34237195288961925,
+            1.0
+          ],
+          "correctPassCoverage": 0.5,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-05-yes",
+            "expanded-07-yes"
+          ]
+        },
+        "numbers": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 0.875,
+          "balancedAccuracy": 0.875,
+          "decisions": {
+            "pass": 5,
+            "block": 2,
+            "defer": 1
+          },
+          "passPrecision": 0.8,
+          "passPrecisionWilson95": [
+            0.3755282641185388,
+            0.9637768390302125
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 1,
+          "falsePassRate": 0.25,
+          "falsePassIds": [
+            "expanded-16-no"
+          ],
+          "missedSupportedIds": []
+        },
+        "ownership": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "procedure": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "defer": 4,
+            "block": 3,
+            "pass": 1
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.20654329147389294,
+            1.0
+          ],
+          "correctPassCoverage": 0.25,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-29-yes",
+            "expanded-31-yes",
+            "expanded-32-yes"
+          ]
+        },
+        "scope": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 4,
+            "block": 4
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.5100999795960008,
+            1.0
+          ],
+          "correctPassCoverage": 1.0,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": []
+        },
+        "unsupported": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 1,
+            "block": 4,
+            "defer": 3
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.20654329147389294,
+            1.0
+          ],
+          "correctPassCoverage": 0.25,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-38-yes",
+            "expanded-39-yes",
+            "expanded-40-yes"
+          ]
+        },
+        "version": {
+          "count": 8,
+          "positiveCount": 4,
+          "negativeCount": 4,
+          "unavailable": 0,
+          "accuracy": 1.0,
+          "balancedAccuracy": 1.0,
+          "decisions": {
+            "pass": 3,
+            "defer": 2,
+            "block": 3
+          },
+          "passPrecision": 1.0,
+          "passPrecisionWilson95": [
+            0.43849391955098227,
+            1.0
+          ],
+          "correctPassCoverage": 0.75,
+          "falsePassCount": 0,
+          "falsePassRate": 0.0,
+          "falsePassIds": [],
+          "missedSupportedIds": [
+            "expanded-24-yes"
+          ]
+        }
+      },
+      "wikiPages": {
+        "count": 8,
+        "positiveCount": 4,
+        "negativeCount": 4,
+        "unavailable": 0,
+        "accuracy": 1.0,
+        "balancedAccuracy": 1.0,
+        "decisions": {
+          "pass": 4,
+          "block": 4
+        },
+        "passPrecision": 1.0,
+        "passPrecisionWilson95": [
+          0.5100999795960008,
+          1.0
+        ],
+        "correctPassCoverage": 1.0,
+        "falsePassCount": 0,
+        "falsePassRate": 0.0,
+        "falsePassIds": [],
+        "missedSupportedIds": []
+      }
+    }
+  ],
+  "stability": {
+    "development": {
+      "cases": 24,
+      "numericVariationIds": [
+        "config-unresolved",
+        "procedure-add",
+        "decision-add",
+        "decision-proposal",
+        "decision-duplicate",
+        "preference-add",
+        "preference-quote",
+        "preference-update",
+        "preference-duplicate",
+        "numeric-conflict",
+        "numeric-update",
+        "different-environment",
+        "config-duplicate",
+        "backup-add",
+        "backup-unresolved"
+      ],
+      "classificationFlipIds": [],
+      "actionFlipIds": [
+        "decision-proposal",
+        "preference-update"
+      ],
+      "maxProbabilityRange": 0.10000000000000003
+    },
+    "validation": {
+      "cases": 112,
+      "numericVariationIds": [
+        "expanded-01-yes",
+        "expanded-01-no",
+        "expanded-02-yes",
+        "expanded-02-no",
+        "expanded-03-no",
+        "expanded-04-no",
+        "expanded-05-yes",
+        "expanded-06-no",
+        "expanded-07-yes",
+        "expanded-08-yes",
+        "expanded-08-no",
+        "expanded-09-yes",
+        "expanded-10-yes",
+        "expanded-10-no",
+        "expanded-11-yes",
+        "expanded-12-yes",
+        "expanded-12-no",
+        "expanded-13-yes",
+        "expanded-13-no",
+        "expanded-14-yes",
+        "expanded-14-no",
+        "expanded-15-no",
+        "expanded-16-yes",
+        "expanded-16-no",
+        "expanded-17-yes",
+        "expanded-17-no",
+        "expanded-18-no",
+        "expanded-19-yes",
+        "expanded-20-no",
+        "expanded-21-yes",
+        "expanded-21-no",
+        "expanded-22-no",
+        "expanded-24-yes",
+        "expanded-25-no",
+        "expanded-26-yes",
+        "expanded-26-no",
+        "expanded-29-yes",
+        "expanded-29-no",
+        "expanded-30-no",
+        "expanded-31-yes",
+        "expanded-32-yes",
+        "expanded-32-no",
+        "expanded-33-yes",
+        "expanded-33-no",
+        "expanded-34-yes",
+        "expanded-35-yes",
+        "expanded-35-no",
+        "expanded-36-yes",
+        "expanded-38-yes",
+        "expanded-39-yes",
+        "expanded-40-yes",
+        "expanded-40-no",
+        "expanded-wiki-1-correct:0",
+        "expanded-wiki-1-corrupt:0",
+        "expanded-wiki-1-corrupt:2",
+        "expanded-wiki-1-corrupt:3",
+        "expanded-wiki-2-corrupt:0",
+        "expanded-wiki-2-corrupt:2",
+        "expanded-wiki-3-correct:0",
+        "expanded-wiki-3-correct:3",
+        "expanded-wiki-3-corrupt:0",
+        "expanded-wiki-3-corrupt:2",
+        "expanded-wiki-4-correct:0",
+        "expanded-wiki-4-correct:2",
+        "expanded-wiki-4-correct:3",
+        "expanded-wiki-4-corrupt:0",
+        "expanded-wiki-4-corrupt:3"
+      ],
+      "classificationFlipIds": [],
+      "actionFlipIds": [
+        "expanded-31-yes"
+      ],
+      "maxProbabilityRange": 0.06
+    }
+  },
+  "reportingPlan": "Frozen before requests: retain strict 1e-5 stability; report every repeat at classification .5 and gate .9, per-category quality, action flips and whole-page all-claims gate. No threshold tuning.",
+  "limits": [
+    "Repeat diagnostics do not replace the original strict acceptance policy.",
+    "All repetitions reported separately, no favorable repeat or new threshold selected.",
+    "Original 1e-5 stability results retained; no API calls or new evaluation samples.",
+    "Synthetic correlated samples cannot certify production accuracy."
+  ],
+  "sourceSha256": "91518c800ba1fa8b3db772934816d45bf69f2c2dd75613212f356791f1a6fca0",
+  "standardSha256": "e69096d1de9f9302409d864e2175ee0acbe00ee86b7fdce320ea7c36f521bdcc",
+  "analysisScriptSha256": "7097442d596329e033ae09e5f1c015e671acaafd009a53c8b19f4bcb8ebd0f05"
+}

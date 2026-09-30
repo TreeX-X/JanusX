@@ -144,14 +144,15 @@ def main():
     parser.add_argument('--key-file',type=Path,help='Read a key from a local file, preferably outside the repository; never copied to reports.')
     parser.add_argument('--output',type=Path,default=ROOT/'artifacts/jev-review-benchmark.json')
     parser.add_argument('--max-requests',type=int,default=156)
+    parser.add_argument('--standard',type=Path,default=benchmark.STANDARD)
     args=parser.parse_args()
-    standard=json.loads(benchmark.STANDARD.read_text(encoding='utf-8'))
+    standard=json.loads(args.standard.read_text(encoding='utf-8'))
     rows=benchmark.cases(standard)
     if not 1<=args.max_requests<=len(rows)*standard['repetitions']:
         parser.error('--max-requests must be between 1 and the standard request count')
     timeout=30
     max_seconds=600
-    metadata={'schema':1,'standardId':standard['id'],'standardSha256':benchmark.sha(benchmark.STANDARD),
+    metadata={'schema':1,'standardId':standard['id'],'standardSha256':benchmark.sha(args.standard),
               'developmentSha256':benchmark.sha(ROOT/standard['developmentDataset']),
               'adapterSha256':benchmark.sha(Path(__file__)),'metricsScriptSha256':benchmark.sha(ROOT/'scripts/benchmark-knowledge-reviewers.py'),
               'qualityGate':'not-evaluated-synthetic','maxRequests':args.max_requests,

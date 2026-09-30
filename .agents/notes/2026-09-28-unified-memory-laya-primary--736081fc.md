@@ -428,6 +428,31 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 同样的新验证陈述上，Jev 的三次原始判断均优于本地模型，值得作为后续自动审核的优先验证候选；这一结论只适用于当前中文合成短样例，不证明真实资料、长 Wiki、完整性、来源变化和全流程安全。独立人工标注、额外边界样例以及稳定性验收仍缺失。运行 `scripts/analyze-jev-repeat-results.py --input tests/fixtures/jev-review-benchmark-live.json --output tests/fixtures/jev-review-repeat-diagnostics.json` 可复现补充统计；`-m unittest discover -s tests/laya` 通过 47 项测试，包括[波动诊断测试](../../tests/laya/test_jev_repeat_analysis.py)。知识库重构及自动审核验收继续未完成。
 
+### Jev 扩展样本实测（2026-09-30）
+
+扩展标准保存在 [knowledge-review-expanded-standard.json](../../tests/fixtures/knowledge-review-expanded-standard.json)，标识 `knowledge-evidence-review-expanded-v2`，调用前固定的 SHA256 为 `e69096d1de9f9302409d864e2175ee0acbe00ee86b7fdce320ea7c36f521bdcc`。新增 80 条条目判断、8 篇 Wiki 的 32 条断言，共 112 个验证判断（68 正例、44 反例），另复测原有 24 条开发样例。新集覆盖主体、否定、条件、数值、作用域、版本、冲突、步骤、干扰指令、证据不足和长文本。条目采用 40 组正反对照，Wiki 使用 4 组共享结构的长文本，各配正确与错误页面；不能把这些相关样本或三次重复视为独立样本。原标准及原报告保留。
+
+采用原问题、0.5 分类线、0.9 放行线和三次重复，调用前约定同时报告原始 `1e-5` 数值稳定性、逐次质量、类别结果和动作翻转，不根据扩展集调整阈值。[原始结果](../../tests/fixtures/jev-review-expanded-live.json)记录 Jev `1.13.0` 的 408 次有效请求，无接口错误；输入 305,301 token、输出 8,160 token，按公开单价估算 $0.012822642，含网络的单次延迟 P50 402.75ms、P95 568.68ms。脚本返回码 2 来自数值不稳定，不能解释为 API 调用失败。
+
+[逐次诊断](../../tests/fixtures/jev-review-expanded-diagnostics.json)保留全部重复与原始严格结果，新增验证集的结果如下。分类准确率衡量 0.5 分类线，正确通过率衡量 0.9 放行线，两者不能混用。
+
+| 指标 | 第一次 | 第二次 | 第三次 |
+| --- | --- | --- | --- |
+| 分类正确 | 110/112（98.2%） | 110/112（98.2%） | 110/112（98.2%） |
+| 反例被错误放行 | 1/44（2.27%） | 1/44（2.27%） | 1/44（2.27%） |
+| 正例正确通过 | 59/68（86.8%） | 58/68（85.3%） | 58/68（85.3%） |
+| 正确 Wiki 整页通过 | 4/4 | 4/4 | 4/4 |
+| 错误 Wiki 整页拦截 | 4/4 | 4/4 | 4/4 |
+
+关键反例 `expanded-16-no`：证据是成功率由 98.5% 升至 99.5%，错误候选声称“提高10个百分点”；三次支持分为 0.94、0.95、0.95，均错误放行。`expanded-26-yes` 的证据包含两份同日有效配置的不同端口，正确候选“当前有效配置存在端口冲突”得分为 0.49、0.43、0.46，分类错误但在审核中暂存。`expanded-31-yes` 的“启动之前要校验签名”得分 0.90、0.86、0.89，跨越放行线。验证集无 0.5 分类翻转，1 个审核动作翻转，67/112 有超过 `1e-5` 的数值变化，最大差 0.06。
+
+原始严格稳定规则将 67 个数值变化样例视为不可用，最终 29 通过、15 拦截、68 暂存，正确通过率 29/68（42.6%）、零错误放行；上述数值错误也被这条规则挡住。这只是本次严格规则的结果，不能证明重复数值一致能保证正确。原始严格 Wiki 为 1 通过、1 拦截、6 暂存。逐次规则下，数值类分类正确 7/8、冲突类 7/8，其余类别分类全部正确；仍有多个正确候选未达到放行阈值。
+
+选型判断：Jev 值得继续作为证据审核候选，但不能仅依靠其支持分实现无人审核。保留统一标准比根据反例临时提高阈值更有利于复验；继续只用原小集则会遗漏本次数值错误。拟补充数值/单位的确定性校验、冲突与版本处理，以及低置信度暂存机制，再固定新的独立留出集验证整个组合流程。三次投票无法修复本次三次一致的错误。此扩展集只实测 Jev，本地模型仍只有原集成绩，不能把两套不同题目的准确率直接排名。Wiki 测试针对预先给定断言的证据支持，尚未覆盖 LLM 自动拆解断言、遗漏检测、来源真实性和完整发布链路。AC-8、AC-20、AC-21、AC-22 仍未完成，自动接受保持关闭。
+
+验证命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe -m unittest discover -s tests/laya`，48 项通过；运行适配器使用 `--standard tests/fixtures/knowledge-review-expanded-standard.json --max-requests 408 --run`，诊断脚本使用同一 `--standard` 与上述原始结果路径。报告保存标准、脚本和来源摘要，不保存密钥。仓库 Note 检查仍有 4 个既有错误，位于 debug-mode-plan、worktree-composer-entry-motion、dsh-integration，不属于本项变更。
+
+
 ### Laya 真实数据验收入口
 
 [评测脚本](../../scripts/evaluate-laya.py)支持 --dataset、--dataset-kind annotated、--policy 及 --validate-only。输入采用现有 JSON 样例结构：id、source、scenario、language、split、content、evidence、related、labels；labels 按 retention/kind/support/duplicate/supersede/conflict 顺序，除 kind 是 fact/preference/decision/procedure，其余为布尔值。真实脱敏样本须附 annotation.origin=redacted-real、reviewer 和带时区的 reviewedAt。标注元数据只记录来源声明，不能证明标签正确；不能把合成样例改元数据后当作真实验收。
