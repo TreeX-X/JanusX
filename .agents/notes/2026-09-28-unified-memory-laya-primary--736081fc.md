@@ -404,6 +404,18 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 `-m unittest discover -s tests/laya` 通过 37 项测试；标准校验、Python 编译和报告摘要与当前脚本/标准 SHA-256 对照通过。脚本成功运行仅表示测量完成，报告 `qualityGate` 保持 `not-evaluated-synthetic`。AC-8、AC-20、AC-21、AC-22 继续未完成；本轮不修改应用中的审核模型、设置或正式知识。
 
+### Jev 统一标准测试接入（2026-09-30）
+
+用户要求保留三模型标准及结果，并准备 TypeSafe Jev 接入，待提供 API 凭证后实测。[Jev 适配器](../../scripts/benchmark-jev-reviewer.py)复用原标准的 52 条合成样例、support 问题、0.9 门控、敏感性门槛、三次重复稳定性及条目/整页指标，不改写本地模型标准和已存报告。接口固定为官方 `https://api.typesafe.ai/v1/systemone`，模型固定为 `jev-1.13.0`；按[官方 API 契约](https://docs.typesafe.ai/api)读取 noul=P(支持)，不要求 Laya 特有的 answer_confidence，不将 Choice 的 confidence 当成支持概率。返回模型不符、概率非法、题目不完整或 usage 非法时停止并报告不可用。
+
+脚本默认预览且不读凭证、不联网；传入 `--run` 才发送合成样例。凭证从 `TYPESAFE_API_KEY` 或 `--key-file` 读取，建议文件位于仓库外，不将密钥作为命令行明文参数。请求仅发往固定官方地址并拒绝重定向；报告与错误输出不记录认证头、凭证路径、响应错误正文或原始异常信息。没有读取应用真实知识，凭证和原始服务器响应不进入结果文件。
+
+默认上限 156 次请求，`--max-requests` 可以降低上限；每次超时 30 秒，经过 600 秒后停止发起新请求，最后一个请求仍可能消耗一个超时周期。没有自动重试，鉴权、限流、网络或协议失败立即停止，未完成及未尝试的样例继续留在分母并按不可用处理；重跑会重新发送，不提供自动续跑。对三次概率差异超过 1e-5 的样例保留三次结果并标为不稳定，不挑选有利答案。输入 token 使用量来自合法成功响应，失败请求的未知用量单独计数；按调研时每百万输入 token 0.042 美元估算已知用量，不声称是账单或硬金额上限。
+
+默认结果文件为 `artifacts/jev-review-benchmark.json`，保留标准、开发样例、适配器和指标脚本的摘要，避免覆盖本地模型报告。Jev 时延包含网络和服务端时间，没有可比的服务器 CPU/RSS；官方分词器未在本地提供，因此只能保证输入文字一致，不能宣称已核验 512-token 分词预算完全一致。API 不增加预热调用，首次请求包含在时延内；这些差异须随最终对照报告呈现。
+
+准备验证：运行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-jev-reviewer.py` 输出 52 样例、最多 156 请求的无网络预览；`-m unittest discover -s tests/laya` 通过 44 项测试。[接入测试](../../tests/laya/test_jev_benchmark.py)覆盖 noul 方向、模型漂移、非法 usage、预算和失败后保留分母、重复不稳定及重定向/错误消息的凭证保护。提供凭证后使用同一 Python 执行 `scripts/benchmark-jev-reviewer.py --run --key-file <仓库外密钥文件>`，或在已配置环境变量时仅加 `--run`。截至接入交付没有真实 Jev 请求，不能将替身测试通过解释为服务可用或模型质量通过。
+
 ### Laya 真实数据验收入口
 
 [评测脚本](../../scripts/evaluate-laya.py)支持 --dataset、--dataset-kind annotated、--policy 及 --validate-only。输入采用现有 JSON 样例结构：id、source、scenario、language、split、content、evidence、related、labels；labels 按 retention/kind/support/duplicate/supersede/conflict 顺序，除 kind 是 fact/preference/decision/procedure，其余为布尔值。真实脱敏样本须附 annotation.origin=redacted-real、reviewer 和带时区的 reviewedAt。标注元数据只记录来源声明，不能证明标签正确；不能把合成样例改元数据后当作真实验收。
