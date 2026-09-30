@@ -57,6 +57,29 @@ Qwen3.5 的本地价值包括断网运行、数据留在本机和同一份权重
 
 复验：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-qwen-reviewer.py --server artifacts/qwen-review/vulkan/llama-server.exe --model artifacts/qwen-review/Qwen3.5-4B-Q5_K_M.gguf --output artifacts/qwen-review/qwen35-thinking256-full.json --thinking --reasoning-budget 256 --max-seconds 7200`。工具验证 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe -m unittest discover -s tests/laya`，52 项通过；新增覆盖思考开关、输出预算及思考元数据，截断仍暂存并保留耗时与 token 使用。未单独限制思考段的试跑来自加入 CLI 思考预算之前的脚本修订，报告保留原始脚本摘要；完整评测与预算试跑使用最终脚本。其运行时脚本含 Windows 混合换行，报告摘要对应原始字节；已核对换行规范化后与 Git 源码一致，LF 规范化 SHA256 为 `a08d848ff3db516ac877ba29b0bfdb2f5a14f736e5c056ae4edec6bed2ed9eb4`。原始标准、旧模型报告及非思考报告保留。仓库 Note 检查存在 7 项其他文件错误，本篇未报错。
 
+### Nimble 与更大 Qwen3.5 的部署调研（2026-09-30）
+
+用户提出 [Ollama Nimble](https://ollama.com/library/nimble)作为开源 Jev 替代候选，并要求先评估资源与更大 Qwen3.5 型号。本节只完成官方资料、发布元数据和本机资源检查，没有下载或运行新模型。Nimble 由 Bespoke Labs 基于 Qwen3.5-9B 做决策训练，Apache-2.0，开放权重适配器、数据和训练配方；[项目说明](https://github.com/bespokelabsai/nimble)明确没有从 Jev 蒸馏。[模型卡](https://huggingface.co/bespokelabs/Bespoke-Nimble-9B)中的约165 MiB 文件是 LoRA 适配器，仍需要完整9B基座，不能理解为165 MiB运行模型。
+
+Nimble 对每题允许的答案 token 直接取 logits 并转换为概率，没有长推理或自由文本生成；支持 choice、noul、score，适合证据判断、策略和路由，不能生成 Wiki 正文、解释或任意嵌套 JSON。Ollama 0.35 起提供与 Jev 风格兼容的 `/v1/systemone`，可以复用现有证据、问题和指标，但当前 Jev 适配器固定云端地址和模型名，仍需单独的本地适配，不能把 Nimble 当通用 chat 模型直接测。Ollama 文档限定1～64题、choice/score为2～26选项；上游 Python 最新契约允许最多255选项，两套服务限制不能混用。每题独立评分，题间一致性需宿主检查；Ollama/CUDA 路径会按题重读完整提示，不应假设64题成本等于1题。
+
+“接近 Jev”的依据是发布方结果，而非 JanusX 实测：Ollama 页面列出13个公开子集、3,880次决策的平均准确率 Nimble 75.7%、Jev 76.0%；原始 Nimble 发布的同类结果为74.8%对76.0%，324条自建留出集为90.12%对93.21%。版本、后端和集合不同，不能混算；公布的子集也不构成中文知识审核验收。Noul 是模型对 true 的支持分，choice/score 的 confidence 是分布集中程度，都不能直接当本项目的正确率。最新检查点默认 T=1.0，不能套用旧检查点2.179温度；量化后也必须重新测试阈值、误放行和覆盖率。MacBook Pro M5 Max 上低于100ms的宣传不能移用于本机 Windows RTX4060。
+
+[Ollama 标签](https://ollama.com/library/nimble/tags)中，latest/9b 指向约9.5GB的 Q8_0，而非较小的 Q4。registry 模型层元数据显示 Q4_K_M 为5,629,108,736字节（约5.63GB/5.24GiB），SHA256 `0e228c45932655a4b97b175eba79a578e180778ce0d576a10b86f8726962d993`；Q8_0 为9,527,501,312字节，SHA256 `bbf1d6fc03bb0ed24d88f4c214ed7b5d1768aeb43d5cf433fb69eff0c8578013`。BF16标签约18GB。页面列表标256K上下文，但决策说明及上游契约限制每题完整提示8,192 token，发布参数实际为 `num_ctx:8194`；应按8K决策限制规划，短提示更有验证依据。
+
+本机 RTX4060 Laptop 显存总量8,188 MiB，检查时空闲5,599 MiB，系统可见内存约31.7GiB、当时可用约17GiB。Q8_0权重本身超过整张显卡容量，需要大量CPU/系统内存卸载，不推荐作为本机起点；Q4_K_M权重约5,368MiB，相对当时空闲显存仅余约231MiB，还未计缓存和工作缓冲，因此不能保证全GPU运行。Q4是值得受控试跑的边界配置，拟采用短上下文、单并发、保留资源余量，必要时部分卸载，速度与准确率均待实测。现有4B Q5_K_M约3.14GB；它与Nimble Q4两份权重合计已超过8GiB显卡容量，不能计划二者同时完整常驻GPU。分时卸载或按批切换可减少压力，但有加载延迟；保持4B本地通用服务加Jev云端复核仍是资源更宽裕的候选。
+
+Qwen 官方已发布比4B更大的 [9B](https://huggingface.co/Qwen/Qwen3.5-9B)、[27B](https://huggingface.co/Qwen/Qwen3.5-27B)、[35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B)、122B-A10B、397B-A17B。下表为 Unsloth 社区 GGUF 发布文件大小，GB为十进制，均不是运行显存或已测性能：
+
+| 型号 | Q4_K_M | Q5_K_M | 本机评估 |
+| --- | --- | --- | --- |
+| [Qwen3.5-9B](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF) | 5.68GB | 6.58GB | Q4为主要升级试验候选，GPU余量紧张，可能需要部分卸载；Q5更不宽裕 |
+| [Qwen3.5-27B](https://huggingface.co/unsloth/Qwen3.5-27B-GGUF) | 16.74GB | 19.61GB | 大量依赖系统内存/CPU，当前可用RAM也紧张，不推荐本机常驻 |
+| [Qwen3.5-35B-A3B](https://huggingface.co/unsloth/Qwen3.5-35B-A3B-GGUF) | 22.02GB | 26.25GB | A3B指每token约3B激活参数，仍要存放35B总权重；不适合当作3B小模型部署 |
+
+122B-A10B和397B-A17B也不能按激活参数量估算权重内存，不属于这台8GB显卡、32GB RAM电脑的合理常驻选择。更大模型可能改善生成和理解，但不是对审核准确率的保证；9B与4B也需固定量化、题目和模式后比较。若继续测试，拟优先验证 `nimble:9b-q4_K_M` 的本机加载与中文审核收益，再评估 Qwen3.5-9B Q4 对通用生成的增益；维持4B为已验证的本地基线，Jev保留，尚不采纳Nimble为自动放行策略。新模型并未改变知识库重构及真实质量验收未完成的状态。
+
+
 ### Laya 自动审核目标与待验证问题（2026-09-30）
 
 知识库重构计划尚未结束，本篇保持 draft。用户尚未开始使用知识库，当前检验的是 Laya 能否承担知识审核的前置角色，没有真实脱敏人工标注集。现阶段记录目标与发现，继续讨论和验证；本节不表示自动审核方案已经定稿、质量已经达标或已授权本轮实现与启用。
