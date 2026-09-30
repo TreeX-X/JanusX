@@ -453,6 +453,24 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 验证命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe -m unittest discover -s tests/laya`，48 项通过；运行适配器使用 `--standard tests/fixtures/knowledge-review-expanded-standard.json --max-requests 408 --run`，诊断脚本使用同一 `--standard` 与上述原始结果路径。报告保存标准、脚本和来源摘要，不保存密钥。仓库 Note 检查仍有 4 个既有错误，位于 debug-mode-plan、worktree-composer-entry-motion、dsh-integration，不属于本项变更。
 
 
+### Qwen 本地审核部署候选（2026-09-30）
+
+根据 [Qwen3.5-4B 官方模型卡](https://huggingface.co/Qwen/Qwen3.5-4B)、[Qwen3-4B-Instruct-2507 官方模型卡](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507)和 [Thinking-2507 官方模型卡](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507)，拟主测 Qwen3.5-4B，使用 Qwen3-4B-Instruct-2507 作低延迟对照。两者均为 Apache-2.0 模型，可本地运行；Qwen3.5 支持开启/关闭思考，Instruct-2507 仅支持非思考模式。Thinking-2507 专注较长推理，先不作为后台常驻审核首选。Reranker、Embedding 和 Guard 的目标分别是相关性、向量表示和安全审核，不能直接替代知识证据判断。保留 Jev 云端路径可节省本地算力，但已有高置信度数值误判且依赖外部服务；Qwen 的实际质量仍待同集测试，官方通用榜单不能证明其优于 Jev。
+
+本机只读检查：`nvidia-smi` 显示 RTX 4060 Laptop GPU，显存总量 8,188 MiB，检查时空闲 6,180 MiB；系统可见内存约 31.7 GiB。拟采用支持 Qwen3.5 的新版 llama.cpp Windows CUDA 服务、单请求并发，先给短证据审核设置 8,192 token 总上下文，优先测试非思考，再单独测试思考模式。8K 是本任务成本约束下的测试配置，并非官方最大能力；超长输入和输出截断必须显式记为未完成，不能静默截断后放行。官方模型卡为复杂长推理建议更长上下文，因此短上下文结果不能代表完整长推理能力。现有 Laya Python 环境不承担 Qwen3.5 依赖升级。此处只完成部署调研，尚未下载模型、安装运行时或运行 Qwen 推理。
+
+量化候选来自 Unsloth 社区转换，不是 Qwen 官方直接发布的 GGUF。模型文件大小取自 Hugging Face 文件元数据，GB 为十进制；它们不等于运行显存，KV 缓存、计算缓冲和桌面占用还需实测。
+
+| 候选 | Q4_K_M | Q5_K_M | Q8_0 | 拟测试用途 |
+| --- | --- | --- | --- | --- |
+| [Qwen3.5-4B-GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF) | 2.74 GB | 3.14 GB | 4.48 GB | 主测 Q5_K_M；Q4_K_M 检查更低成本，Q8_0 检查量化影响 |
+| [Qwen3-4B-Instruct-2507-GGUF](https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF) | 2.50 GB | 2.89 GB | 4.28 GB | 非思考 Q5_K_M 对照 |
+
+主测文件 `Qwen3.5-4B-Q5_K_M.gguf` 的仓库 revision 为 `e87f176479d0855a907a41277aca2f8ee7a09523`，文件 SHA256 为 `8814232b85594dcd46c50e5b8b29324a7efe9e746edbe8a3d1df3d3fce7aad39`。对照文件 `Qwen3-4B-Instruct-2507-Q5_K_M.gguf` 的 revision 为 `a06e946bb6b655725eafa393f4a9745d460374c9`，SHA256 为 `5bde5e9d883622acb02bf77fe7dcbc56a8b9a9ad4be78a72ca23a532658b4ecb`。实际下载时须核验摘要，并固定运行时版本、模板、采样参数、上下文和输出预算；思考与非思考分别报告。量化影响必须通过相同模型不同量化实测，不能预设 Q5 无损。
+
+后续拟复用原集与扩展集的证据、标签、逐次重复和 Wiki 全断言通过规则，以错误放行、正确通过率、动作稳定性、格式/超时失败、显存和耗时衡量部署效果。生成模型自报置信度不等同于 Jev 的支持分，需定义单独的输出与决策适配，不直接沿用自报 0.9 放行。Jev 已知数值反例保留为回归；另固定未参与提示词调整的留出集，验证组合流程。知识库自动接受和未完成验收项保持原状态。
+
+
 ### Laya 真实数据验收入口
 
 [评测脚本](../../scripts/evaluate-laya.py)支持 --dataset、--dataset-kind annotated、--policy 及 --validate-only。输入采用现有 JSON 样例结构：id、source、scenario、language、split、content、evidence、related、labels；labels 按 retention/kind/support/duplicate/supersede/conflict 顺序，除 kind 是 fact/preference/decision/procedure，其余为布尔值。真实脱敏样本须附 annotation.origin=redacted-real、reviewer 和带时区的 reviewedAt。标注元数据只记录来源声明，不能证明标签正确；不能把合成样例改元数据后当作真实验收。
