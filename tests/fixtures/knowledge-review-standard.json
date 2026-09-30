@@ -1,0 +1,41 @@
+{
+  "id": "knowledge-evidence-review-v1",
+  "origin": "assistant-authored-synthetic",
+  "scope": "Evidence fidelity only. Not complete admission, wiki completeness, or independent human acceptance.",
+  "developmentDataset": "tests/fixtures/laya-knowledge-admission.json",
+  "threshold": 0.9,
+  "sensitivityThresholds": [0.5, 0.7, 0.8, 0.9, 0.95, 0.99],
+  "repetitions": 3,
+  "threads": 4,
+  "batchSize": 1,
+  "maxPairTokens": 512,
+  "layaQuestion": "Does the evidence directly support the candidate, including its subject and any negation?",
+  "models": {
+    "mdeberta": {"repo": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli", "revision": "8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c", "files": ["config.json", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "added_tokens.json", "spm.model", "model.safetensors", "onnx/model_quantized.onnx"]},
+    "minilm": {"repo": "MoritzLaurer/multilingual-MiniLMv2-L6-mnli-xnli", "revision": "0a71e92a985b6e1ad1828cf67ce9c459639c1dca", "files": ["config.json", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "sentencepiece.bpe.model", "model.safetensors"]}
+  },
+  "entries": [
+    {"id":"entry-cache-supported","group":"cache","evidence":"Orion 生产环境已固定采用 Redis 作为缓存。","claim":"Orion 生产环境的缓存是 Redis。","supported":true},
+    {"id":"entry-cache-wrong-project","group":"cache","evidence":"Orion 生产环境已固定采用 Redis 作为缓存。","claim":"Nova 生产环境的缓存是 Redis。","supported":false},
+    {"id":"entry-memory-supported","group":"memory","evidence":"用户本人明确要求：以后回复代码时，请保留完整的函数签名。","claim":"用户希望代码回答保留完整函数签名。","supported":true},
+    {"id":"entry-memory-quote","group":"memory","evidence":"用户说：同事小林要求代码回答保留完整函数签名，我没有这个偏好。","claim":"用户希望代码回答保留完整函数签名。","supported":false},
+    {"id":"entry-decision-supported","group":"decision","evidence":"团队已经决定使用本地文件存储，以便断网时继续工作。","claim":"团队选择本地文件存储，是为了断网可用。","supported":true},
+    {"id":"entry-decision-pending","group":"decision","evidence":"团队正在讨论使用本地文件存储以支持断网工作，目前还没有决定。","claim":"团队已经选择本地文件存储。","supported":false},
+    {"id":"entry-retry-supported","group":"retry","evidence":"接口仅在收到 HTTP 503 时自动重试，其他错误不自动重试。","claim":"HTTP 503 会触发接口自动重试。","supported":true},
+    {"id":"entry-retry-overgeneralized","group":"retry","evidence":"接口仅在收到 HTTP 503 时自动重试，其他错误不自动重试。","claim":"所有 HTTP 错误都会触发接口自动重试。","supported":false},
+    {"id":"entry-limit-supported","group":"limit","evidence":"生产上传上限为 32 MB，测试环境上传上限为 8 MB。","claim":"生产环境允许的上传上限是 32 MB。","supported":true},
+    {"id":"entry-limit-swapped","group":"limit","evidence":"生产上传上限为 32 MB，测试环境上传上限为 8 MB。","claim":"生产环境允许的上传上限是 8 MB。","supported":false},
+    {"id":"entry-update-supported","group":"update","evidence":"今天正式废止旧的 yarn build 命令，发布构建以后必须使用 pnpm build。","claim":"当前发布构建命令是 pnpm build。","supported":true},
+    {"id":"entry-update-stale","group":"update","evidence":"今天正式废止旧的 yarn build 命令，发布构建以后必须使用 pnpm build。","claim":"当前发布构建命令是 yarn build。","supported":false}
+  ],
+  "wikiPages": [
+    {"id":"wiki-release-correct","group":"release","evidence":"发布规范：先备份数据库，再执行迁移。迁移失败时必须恢复备份。","claims":[{"text":"执行迁移之前需要备份数据库。","supported":true},{"text":"迁移失败时必须恢复备份。","supported":true}]},
+    {"id":"wiki-release-order-error","group":"release","evidence":"发布规范：先备份数据库，再执行迁移。迁移失败时必须恢复备份。","claims":[{"text":"应先执行迁移，再备份数据库。","supported":false},{"text":"迁移失败时必须恢复备份。","supported":true}]},
+    {"id":"wiki-config-correct","group":"config","evidence":"Orion 生产端口为 7443，测试端口为 7000。两个环境都使用 PostgreSQL。","claims":[{"text":"Orion 生产端口是 7443。","supported":true},{"text":"两个环境都使用 PostgreSQL。","supported":true}]},
+    {"id":"wiki-config-number-error","group":"config","evidence":"Orion 生产端口为 7443，测试端口为 7000。两个环境都使用 PostgreSQL。","claims":[{"text":"Orion 生产端口是 7000。","supported":false},{"text":"两个环境都使用 PostgreSQL。","supported":true}]},
+    {"id":"wiki-access-correct","group":"access","evidence":"权限规范：只有管理员可以删除项目，访客禁止删除项目。所有删除操作均记入历史。","claims":[{"text":"访客不能删除项目。","supported":true},{"text":"删除项目的操作会进入历史记录。","supported":true}]},
+    {"id":"wiki-access-negation-error","group":"access","evidence":"权限规范：只有管理员可以删除项目，访客禁止删除项目。所有删除操作均记入历史。","claims":[{"text":"访客可以删除项目。","supported":false},{"text":"删除项目的操作会进入历史记录。","supported":true}]},
+    {"id":"wiki-backup-correct","group":"backup","evidence":"备份策略：每天进行一次完整备份，备份保留七天。没有规定备份加密方式。","claims":[{"text":"系统每天进行完整备份。","supported":true},{"text":"备份保留七天。","supported":true}]},
+    {"id":"wiki-backup-invented-detail","group":"backup","evidence":"备份策略：每天进行一次完整备份，备份保留七天。没有规定备份加密方式。","claims":[{"text":"系统每天进行完整备份。","supported":true},{"text":"备份必须使用 AES-256 加密。","supported":false}]}
+  ]
+}

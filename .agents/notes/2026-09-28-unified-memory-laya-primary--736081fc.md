@@ -375,6 +375,35 @@ Laya 拟位于候选提取与正式知识提交之间，比较候选、证据与
 
 本次仅验证本地语义评分与模拟策略；来源校验假定通过，模型输入是已经整理好的候选，未执行真实提取、宿主事务、历史展示、搜索交付或 Wiki 生成。后续还需从原始记录验证候选完整性、限定条件、证据归因，并验证重复合证据、冲突暂存、版本替代、来源失效和实际检索；Wiki 的模板组织与自由长文生成需分别定义验收。现阶段保留模型可替换的判断接口，Laya 可继续用于辅助分析和针对性验证，不能将当前失败结果作为启用自动批准的依据。AC-20、AC-21、AC-22 保持未完成。
 
+### 三模型统一证据核验标准（2026-09-30）
+
+用户要求保留统一测试标准，实测 mDeBERTa、MiniLM 并与 Laya 比较部署效果。[标准文件](../../tests/fixtures/knowledge-review-standard.json)固定 `knowledge-evidence-review-v1`、模型 revision、中文样例、0.9 放行门槛、0.5/0.7/0.8/0.9/0.95/0.99 敏感性门槛及执行预算。24 条既有样例属于开发诊断；新增 12 条条目和 8 篇双陈述 Wiki（16 条陈述）组成 28 条固定验证样例，均在读取新模型推理结果前编写。标签为助手编写的合成预期，相关变体及重复 Wiki 陈述不是独立样本，不作为真实数据验收或生产精度保证。
+
+[统一比较脚本](../../scripts/benchmark-knowledge-reviewers.py)以相同证据和候选比较支持与不支持。NLI 取 P(entailment)，其他两类合为不支持；Laya 使用现有 support 问题的 noul，不携带额外旧知识，并只运行这一项。三者都采用单次 512-token 上限，超限不截断而报告不可用。该比较评估证据核验职责，不等同于 Laya 生产六题分流、完整候选准入或 Wiki 全面质量。原始判断以 0.5 分界，模拟门控以 P(support)≥0.9 放行、≤0.1 阻止，其余暂存；相同数值门槛不表示不同模型已校准到相同可信度，敏感性表仅用于分析，不能用验证结果回调后声称通过独立验收。
+
+结果同时报告准确率、平衡准确率、错误放行、放行精度、正确陈述自动放行覆盖率、不可用及遗漏的正确陈述。零放行精度为 null，不可用保留在分母。Wiki 只有全部陈述通过才通过，不能以平均分抵消关键错误；页面及陈述分别计量。这些 Wiki 是固定短草稿，不覆盖自动断言抽取、漏重要内容或完整指南的所有步骤约束，也不执行真实发布。
+
+CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 及 mDeBERTa 量化 ONNX，各 4 个计算线程、单条 batch、一次预热、每样例连续三次计时。准确率每样例仅计一次，重复只检查稳定性并测 P50/P95。内存为每 20ms 采样的进程 RSS 峰值，包括运行时、加载和推理；不是显存或纯权重大小。加载时间包含导入与校验，不保证磁盘冷缓存；ONNX 版仍通过 Python/Transformers 分词，不能把其测量当成最小原生运行时成本。
+
+权重保存在 `artifacts/knowledge-review-models`，Laya 复用原评测目录，均不提交仓库。下载固定 revision，检查文件大小及 LFS SHA-256 或 Git blob 身份，再记录每个文件 SHA-256；推理离线且重新核验所需文件。环境扩展由[依赖文件](../../scripts/requirements-reviewer-benchmark.txt)固定，下载失败可有限重试。执行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-knowledge-reviewers.py --prepare` 准备资源，`--validate-only` 检查数据，去掉这两个参数运行完整对照。[指标测试](../../tests/laya/test_reviewer_benchmark.py)覆盖概率方向、非法值、零放行、不可用、漏放与误放分离，以及 Wiki 单处错误不可被平均分掩盖。
+
+[Windows 对照报告](../../tests/fixtures/knowledge-review-benchmark-windows.json)在 Ryzen 9 7945HX、16 核/32 线程、约 32 GiB 内存机器上完成，所有推理限制为 CPU 4 线程。4 种部署各 52 条样例、每条 3 次，共 624 次计时推理，另有每部署一次预热；无不可用或重复不稳定结果。以下质量数据仅取 28 条新验证陈述（18 条支持、10 条不支持），耗时取全部 52 条的重复测量：
+
+| 部署 | 支持判断准确率 | 0.9 门槛错误放行/10 条不支持 | 正确陈述放行覆盖率 | 放行精度 | P50/P95 毫秒 | 峰值 RSS MiB | 模型资源文件 MB |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Laya 单项 support | 42.9% | 0 | 0% | 不可计算 | 145.81 / 168.79 | 2168.7 | 678.2 |
+| mDeBERTa FP32 / PyTorch | 82.1% | 5 | 100% | 78.3% | 138.32 / 164.31 | 1924.7 | 578.3 |
+| MiniLM FP32 / PyTorch | 71.4% | 5 | 83.3% | 75.0% | 6.93 / 9.84 | 576.4 | 450.2 |
+| mDeBERTa 量化 / ONNX | 75.0% | 4 | 77.8% | 77.8% | 14.32 / 21.49 | 791.3 | 359.3 |
+
+模型资源文件包括实际使用的权重、配置和分词资源，不包括 Python 环境；FP32 指推理精度，mDeBERTa 下载的 safetensors 本身为 FP16。加载加文件校验分别约 17.73、13.25、10.22、12.53 秒，仅一次启动测量，不用于保证冷启动 SLA。量化 ONNX 与 FP32 PyTorch 同时改变精度和执行后端，本次未测 FP32 ONNX 控制组，不能把所有差异单独归因于量化。
+
+8 篇 Wiki 中有 4 篇正确、4 篇含单处错误。Laya 没有放行任何页面；mDeBERTa FP32 放行 4 篇正确和 2 篇错误；MiniLM 放行 3 篇正确和 2 篇错误；量化 mDeBERTa 放行 2 篇正确和 1 篇错误。错误集中在主体归因、生产/测试数值混淆、旧命令有效性和先后步骤。mDeBERTa FP32 对“把同事偏好归给用户”给出 99.38% 支持，对“先迁移再备份”的颠倒顺序给出 99.33% 支持。固定敏感性表显示 0.99 门槛下原精度 mDeBERTa 与 MiniLM 仍各误放 2 条；量化版本虽然本组零误放，却只放行 3/18 条正确陈述。不能据此选出新门槛并声称生产质量达标。
+
+相对结论：mDeBERTa FP32 在当前统一样例的支持判断质量最好，适合继续作为证据核验效果基线；MiniLM 的 CPU 时延与内存成本最低，适合评估初筛用途；量化 mDeBERTa 文件最小且推理较快，但判断发生变化，不能直接替代原精度模型。Laya 在这项共同职责上成本较高且几乎不放行正确内容。三者均未达到独立自动入库或自动发布 Wiki 的要求，现有观察不支持启用任何一个模型的自动通过。后续应优先补主体、环境、明确数值和版本/顺序约束，并以新增独立案例验证，再讨论训练或更强本地模型，而不是只调高阈值。
+
+`-m unittest discover -s tests/laya` 通过 37 项测试；标准校验、Python 编译和报告摘要与当前脚本/标准 SHA-256 对照通过。脚本成功运行仅表示测量完成，报告 `qualityGate` 保持 `not-evaluated-synthetic`。AC-8、AC-20、AC-21、AC-22 继续未完成；本轮不修改应用中的审核模型、设置或正式知识。
+
 ### Laya 真实数据验收入口
 
 [评测脚本](../../scripts/evaluate-laya.py)支持 --dataset、--dataset-kind annotated、--policy 及 --validate-only。输入采用现有 JSON 样例结构：id、source、scenario、language、split、content、evidence、related、labels；labels 按 retention/kind/support/duplicate/supersede/conflict 顺序，除 kind 是 fact/preference/decision/procedure，其余为布尔值。真实脱敏样本须附 annotation.origin=redacted-real、reviewer 和带时区的 reviewedAt。标注元数据只记录来源声明，不能证明标签正确；不能把合成样例改元数据后当作真实验收。
