@@ -84,11 +84,11 @@ describe('theme registry (M1 unified structure)', () => {
   })
 
   it('generates the checked-in CSS byte-identically (run npm run theme:css after editing definitions)', () => {
-    const generated = renderThemeCss()
+    const generated = renderThemeCss().replace(/\r\n/g, '\n')
     const checkedIn = readFileSync(
       resolve(__dirname, '../../src/renderer/src/styles/themes.generated.css'),
       'utf8',
-    )
+    ).replace(/\r\n/g, '\n')
     expect(generated).toBe(checkedIn)
   })
 
