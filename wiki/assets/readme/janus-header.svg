@@ -5,18 +5,30 @@
 <style>
 text{letter-spacing:0}
 text{font-family:"Cascadia Code","SFMono-Regular",Consolas,"Liberation Mono","PingFang SC","Hiragino Sans GB","Microsoft YaHei",monospace}
-.janus-pixels{transform:translate(8px,35px) scale(10)}
-.sqf{visibility:hidden;animation-duration:6000ms;animation-timing-function:step-end;animation-iteration-count:infinite}
-.sq0{animation-name:sq0}.sq1{animation-name:sq1}.sq2{animation-name:sq2}.sq3{animation-name:sq3}.sq4{animation-name:sq4}
-.sq4{animation-name:sq4,happyJitter;animation-duration:6000ms,420ms;animation-timing-function:step-end,steps(2,end);animation-iteration-count:infinite,infinite}
-@keyframes happyJitter{0%,100%{transform:translate(0,0)}20%{transform:translate(.2px,-.1px)}40%{transform:translate(-.2px,0)}60%{transform:translate(.2px,.1px)}80%{transform:translate(-.2px,-.1px)}}
-@keyframes sq0{0%,16.67%,33.33%{visibility:visible}8.33%,25%,41.67%,46%,50%,54%,58.33%,66.67%,75%,83.33%,91.67%,100%{visibility:hidden}}@keyframes sq1{8.33%,41.67%{visibility:visible}0%,16.67%,25%,33.33%,46%,50%,54%,58.33%,66.67%,75%,83.33%,91.67%,100%{visibility:hidden}}@keyframes sq2{25%{visibility:visible}0%,8.33%,16.67%,33.33%,41.67%,46%,50%,54%,58.33%,66.67%,75%,83.33%,91.67%,100%{visibility:hidden}}@keyframes sq3{46%,50%{visibility:visible}0%,8.33%,16.67%,25%,33.33%,41.67%,54%,58.33%,66.67%,75%,83.33%,91.67%,100%{visibility:hidden}}@keyframes sq4{54%,58.33%,66.67%,75%,83.33%,91.67%{visibility:visible}0%,8.33%,16.67%,25%,33.33%,41.67%,46%,50%,100%{visibility:hidden}}
-.fx{opacity:0;animation-duration:6000ms;animation-timing-function:ease-in-out;animation-iteration-count:infinite}
-.fx-hearts{animation-name:fxHearts}
-@keyframes fxHearts{0%,54%{opacity:0}58%,95%{opacity:1}100%{opacity:0}}
-.float{animation:floatUp 1600ms ease-in-out infinite}
-.float.d2{animation-delay:800ms}
-@keyframes floatUp{0%,100%{transform:translateY(0)}50%{transform:translateY(-.4px)}}
+/* Janus is drawn in display pixels; only eyes and celebration marks move. */
+.janus-rim,.janus-eye{fill:#1C343B}
+.janus-face{fill:#EFE4C5}
+.janus-edge-light{fill:#FFF4D2}
+.janus-edge-shade{fill:#D4C7A5}
+.janus-normal{visibility:visible;animation:janusNormal 5200ms step-end infinite}
+.janus-happy{visibility:hidden;animation:janusHappy 5200ms step-end infinite}
+.janus-gaze{animation:janusGaze 5200ms ease-in-out infinite}
+.janus-blink{transform-box:fill-box;transform-origin:center;animation:janusBlink 5200ms linear infinite}
+.janus-happy-eye{animation:janusWiggle 5200ms steps(1,end) infinite}
+.janus-happy-eye-right{animation-delay:100ms}
+.janus-cheer{opacity:0;animation:janusCheer 5200ms ease-in-out infinite}
+.janus-heart-rise{animation:janusFloat 1400ms ease-in-out infinite}
+.janus-heart-rise-late{animation-delay:-700ms}
+@keyframes janusNormal{0%{visibility:visible}52%{visibility:hidden}96%,100%{visibility:visible}}
+@keyframes janusHappy{0%{visibility:hidden}52%{visibility:visible}96%,100%{visibility:hidden}}
+@keyframes janusGaze{0%,12%,30%,35%,49%,100%{transform:translateX(0)}18%,24%{transform:translateX(-4px)}40%,45%{transform:translateX(4px)}}
+@keyframes janusBlink{0%,8%,12%,43%,47%,100%{transform:scaleY(1)}10%,45%{transform:scaleY(.14)}}
+@keyframes janusWiggle{0%,54%,65%,78%,89%,100%{transform:translate(0,0)}55%,59%,79%,83%{transform:translate(1px,-1px)}57%,61%,81%,85%{transform:translate(-1px,1px)}63%,87%{transform:translate(0,-1px)}}
+@keyframes janusCheer{0%,52%,100%{opacity:0}58%,90%{opacity:1}96%{opacity:0}}
+@keyframes janusFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@media (prefers-reduced-motion:reduce){
+  #janus-mascot *{animation:none!important}
+}
 .loop{opacity:0;animation-duration:5200ms;animation-timing-function:ease-in-out;animation-iteration-count:infinite}
 .t-tag{animation-name:tTag}.t-ask{animation-name:tAsk}.t-thanks{animation-name:tThanks}
 .s-idle{animation-name:sIdle}.s-lit{animation-name:sLit}
@@ -26,21 +38,15 @@ text{font-family:"Cascadia Code","SFMono-Regular",Consolas,"Liberation Mono","Pi
 @keyframes sIdle{0%,25%{opacity:0;transform:translateY(6px)}31%,44%{opacity:1;transform:translateY(0)}50%,100%{opacity:0}}
 @keyframes sLit{0%,75%{opacity:0;transform:translateY(6px)}81%,94%{opacity:1;transform:translateY(0)}100%{opacity:0}}
 .word{fill:#1C343B}.desc{fill:#5A6B6E}.rule{stroke:#C9BFA4}
-.ln{fill:#1C343B}
 .bubble{fill:#1B2F35}.bubble-t{fill:#F1E7CB}
 .star-idle{fill:#FFFFFF;stroke:#1C343B;stroke-width:2}.star-idle-t{fill:#1C343B}
 .star-lit{fill:#E3B341}.star-lit-t{fill:#1F2328}
 .xc2{fill:#1C343B}
-.caps{fill:#EFE4C5}.ceye{fill:#1C343B}
-.jx-hi{fill:#FFF4D2}.jx-shadow{fill:#A99F89}
 @media (prefers-color-scheme:dark){
 .word{fill:#F1E7CB}.desc{fill:#9AA4AD}.rule{stroke:#3A4A4F}
-.ln{fill:#F1E7CB}
 .bubble{stroke:#F1E7CB;stroke-width:1.5}
 .star-idle{fill:none;stroke:#F1E7CB}.star-idle-t{fill:#F1E7CB}
 .xc2{fill:#F1E7CB}
-.caps{fill:#1B2F35}.ceye{fill:#F1E7CB}
-.jx-hi{fill:#FFF4D2}.jx-shadow{fill:#101D21}
 }
 </style>
 <g transform="translate(214,22)"><rect x="20" y="0" width="20" height="10" class="word"/><rect x="30" y="10" width="10" height="10" class="word"/><rect x="30" y="20" width="10" height="10" class="word"/><rect x="0" y="30" width="10" height="10" class="word"/><rect x="30" y="30" width="10" height="10" class="word"/><rect x="10" y="40" width="20" height="10" class="word"/><rect x="60" y="0" width="20" height="10" class="word"/><rect x="50" y="10" width="10" height="10" class="word"/><rect x="80" y="10" width="10" height="10" class="word"/><rect x="50" y="20" width="40" height="10" class="word"/><rect x="50" y="30" width="10" height="10" class="word"/><rect x="80" y="30" width="10" height="10" class="word"/><rect x="50" y="40" width="10" height="10" class="word"/><rect x="80" y="40" width="10" height="10" class="word"/><rect x="100" y="0" width="10" height="10" class="word"/><rect x="130" y="0" width="10" height="10" class="word"/><rect x="100" y="10" width="20" height="10" class="word"/><rect x="130" y="10" width="10" height="10" class="word"/><rect x="100" y="20" width="10" height="10" class="word"/><rect x="120" y="20" width="20" height="10" class="word"/><rect x="100" y="30" width="10" height="10" class="word"/><rect x="130" y="30" width="10" height="10" class="word"/><rect x="100" y="40" width="10" height="10" class="word"/><rect x="130" y="40" width="10" height="10" class="word"/><rect x="150" y="0" width="10" height="10" class="word"/><rect x="180" y="0" width="10" height="10" class="word"/><rect x="150" y="10" width="10" height="10" class="word"/><rect x="180" y="10" width="10" height="10" class="word"/><rect x="150" y="20" width="10" height="10" class="word"/><rect x="180" y="20" width="10" height="10" class="word"/><rect x="150" y="30" width="10" height="10" class="word"/><rect x="180" y="30" width="10" height="10" class="word"/><rect x="160" y="40" width="20" height="10" class="word"/><rect x="210" y="0" width="30" height="10" class="word"/><rect x="200" y="10" width="10" height="10" class="word"/><rect x="210" y="20" width="20" height="10" class="word"/><rect x="230" y="30" width="10" height="10" class="word"/><rect x="200" y="40" width="30" height="10" class="word"/><rect x="250" y="0" width="10" height="10" class="xc1" fill="#D43D2A"/><rect x="290" y="0" width="10" height="10" class="xc2" fill="#1C343B"/><rect x="260" y="10" width="10" height="10" class="xc1" fill="#D43D2A"/><rect x="280" y="10" width="10" height="10" class="xc2" fill="#1C343B"/><rect x="270" y="20" width="10" height="10" class="xc1" fill="#D43D2A"/><rect x="260" y="30" width="10" height="10" class="xc2" fill="#1C343B"/><rect x="280" y="30" width="10" height="10" class="xc1" fill="#D43D2A"/><rect x="250" y="40" width="10" height="10" class="xc2" fill="#1C343B"/><rect x="290" y="40" width="10" height="10" class="xc1" fill="#D43D2A"/></g>
@@ -57,21 +63,43 @@ text{font-family:"Cascadia Code","SFMono-Regular",Consolas,"Liberation Mono","Pi
 <g class="loop s-idle"><rect class="star-idle" x="492" y="111" width="250" height="38" rx="9"/><path d="M511 117l3.6 7.3 8.1 1.2-5.9 5.7 1.4 8.1-7.2-3.8-7.2 3.8 1.4-8.1-5.9-5.7 8.1-1.2z" fill="none" stroke="#5A6B6E" stroke-width="1.8"/><text class="star-idle-t" x="625" y="130" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="Cascadia Code,SFMono-Regular,Consolas,Liberation Mono,monospace">STAR JANUSX</text></g>
 <g class="loop s-lit"><rect class="star-lit" x="492" y="111" width="250" height="38" rx="9"/><path d="M511 117l3.6 7.3 8.1 1.2-5.9 5.7 1.4 8.1-7.2-3.8-7.2 3.8 1.4-8.1-5.9-5.7 8.1-1.2z" fill="#D43D2A" stroke="#A92E20" stroke-width="1"/><text class="star-lit-t" x="625" y="130" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="Cascadia Code,SFMono-Regular,Consolas,Liberation Mono,monospace">STARRED +1</text></g>
 </g></a>
-<g shape-rendering="crispEdges" class="janus-pixels fx fx-hearts" aria-hidden="true">
-  <g class="float"><rect x="3" y="-3" width="1" height="1" fill="#D43D2A"/><rect x="5" y="-3" width="1" height="1" fill="#D43D2A"/><rect x="2" y="-2" width="5" height="1" fill="#D43D2A"/><rect x="3" y="-1" width="3" height="1" fill="#D43D2A"/><rect x="4" y="0" width="1" height="1" fill="#D43D2A"/></g>
-  <g class="float d2"><rect x="9" y="-3" width="1" height="1" fill="#D43D2A"/><rect x="11" y="-3" width="1" height="1" fill="#D43D2A"/><rect x="8" y="-2" width="5" height="1" fill="#D43D2A"/><rect x="9" y="-1" width="3" height="1" fill="#D43D2A"/><rect x="10" y="0" width="1" height="1" fill="#D43D2A"/></g>
-</g>
-<g id="janus-body" class="janus-pixels" shape-rendering="crispEdges" aria-hidden="true">
-  <path id="janus-frame" class="ln" d="M.4 2H15.6V2.2H15.8V2.4H16V12.6H15.8V12.8H15.6V13H.4V12.8H.2V12.6H0V2.4H.2V2.2H.4Z"/>
-  <rect x="2" y="4" width="12" height="7" class="caps"/>
-  <rect x="3" y="4" width="10" height="1" class="jx-hi"/>
-  <rect x="3" y="10" width="10" height="1" class="jx-shadow"/>
-</g>
-<g id="janus-eyes" class="janus-pixels" shape-rendering="crispEdges" aria-hidden="true">
-  <g class="sqf sq0"><rect x="5" y="6" width="2" height="3" class="ceye"/><rect x="9" y="6" width="2" height="3" class="ceye"/></g>
-  <g class="sqf sq1"><rect x="4" y="6" width="2" height="3" class="ceye"/><rect x="8" y="6" width="2" height="3" class="ceye"/></g>
-  <g class="sqf sq2"><rect x="6" y="6" width="2" height="3" class="ceye"/><rect x="10" y="6" width="2" height="3" class="ceye"/></g>
-  <g class="sqf sq3"><rect x="5" y="7" width="2" height="1" class="ceye"/><rect x="9" y="7" width="2" height="1" class="ceye"/></g>
-  <g class="sqf sq4"><rect x="5" y="6" width="2" height="1" class="ceye"/><rect x="9" y="6" width="2" height="1" class="ceye"/></g>
+<g id="janus-mascot" shape-rendering="crispEdges" aria-hidden="true">
+  <g id="janus-shell">
+    <rect id="janus-frame" class="janus-rim" x="8" y="55" width="160" height="110"/>
+    <rect class="janus-face" x="16" y="63" width="144" height="94"/>
+    <path class="janus-edge-light" d="M18 65H158V67H20V153H18Z"/>
+    <path class="janus-edge-shade" d="M158 67H160V157H18V155H158Z"/>
+  </g>
+  <g id="janus-eyes-normal" class="janus-normal">
+    <g class="janus-gaze">
+      <g class="janus-blink janus-eye">
+        <path d="M60 94H72V96H74V120H72V122H60V120H58V96H60Z"/>
+        <path d="M104 94H116V96H118V120H116V122H104V120H102V96H104Z"/>
+      </g>
+    </g>
+  </g>
+  <g id="janus-eyes-happy" class="janus-happy janus-eye">
+    <g class="janus-happy-eye">
+      <path d="M56 112V106H58V104H60V102H72V104H74V106H76V112H72V108H70V106H62V108H60V112Z"/>
+    </g>
+    <g class="janus-happy-eye janus-happy-eye-right">
+      <path d="M100 112V106H102V104H104V102H116V104H118V106H120V112H116V108H114V106H106V108H104V112Z"/>
+    </g>
+  </g>
+  <g id="janus-celebration" class="janus-cheer">
+    <g transform="translate(44 26)">
+      <g class="janus-heart-rise">
+        <path fill="#D43D2A" d="M4 0H10V2H12V0H18V2H20V4H22V10H20V12H18V14H16V16H14V18H12V20H10V18H8V16H6V14H4V12H2V10H0V4H2V2H4Z"/>
+        <path fill="#F28B75" d="M4 4H8V6H4ZM2 6H4V8H2Z"/>
+      </g>
+    </g>
+    <g transform="translate(110 20)">
+      <g class="janus-heart-rise janus-heart-rise-late">
+        <path fill="#D43D2A" d="M4 0H10V2H12V0H18V2H20V4H22V10H20V12H18V14H16V16H14V18H12V20H10V18H8V16H6V14H4V12H2V10H0V4H2V2H4Z"/>
+        <path fill="#F28B75" d="M4 4H8V6H4ZM2 6H4V8H2Z"/>
+      </g>
+    </g>
+    <path fill="#E3B341" d="M32 32H34V34H36V36H34V38H32V36H30V34H32ZM146 24H148V26H150V28H148V30H146V28H144V26H146Z"/>
+  </g>
 </g>
 </svg>
