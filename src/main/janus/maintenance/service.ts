@@ -38,23 +38,38 @@ import type {
   BlueprintMaintenanceUndoPrepareInput,
   BlueprintMaintenanceUndoPrepareResult,
   BlueprintChangeSet,
+  BlueprintDispatchBriefResult,
   BlueprintOperation,
 } from '../../../shared/janus/maintenance-types'
 import {
   blueprintProposalSchema,
   createJanusBlueprintTools,
 } from './blueprint-tools'
+import {
+  authorizedNoteRefs,
+  dispatchAnchorNodeId,
+  dispatchBriefSchema,
+  renderDispatchBrief,
+  type DispatchBrief,
+} from './dispatch-brief'
 
 const CLOSED_STATUSES = new Set(['completed', 'cancelled'])
 const MAINTENANCE_TOOL_TRACE_MAX_ENTRIES = 24
 const MAINTENANCE_RECALL_MAX_ITEMS = 5
 const MAINTENANCE_RECALL_MAX_CHARS = 3_000
+/** Dispatch briefs are short by nature; the node dump only needs to orient the model. */
+const DISPATCH_CONTEXT_MAX_CHARS = 24_000
 const MAINTENANCE_KNOWLEDGE_CONTEXT_OPEN = '<janus-knowledge-context trust="untrusted" usage="reference-only">'
 const MAINTENANCE_KNOWLEDGE_CONTEXT_CLOSE = '</janus-knowledge-context>'
 
 const generateStructuredObject = generateObject as unknown as (
   options: unknown,
 ) => Promise<{ object: z.infer<typeof blueprintProposalSchema> }>
+
+/** Same generator, narrowed per schema at the call site. */
+const generateDispatchBrief = generateObject as unknown as (
+  options: unknown,
+) => Promise<{ object: DispatchBrief }>
 
 function publicTask(task: BlueprintMaintenanceTask): BlueprintMaintenanceTask {
   return structuredClone(task)
@@ -357,19 +372,117 @@ class BlueprintMaintenanceService {
     providerId: string; modelId?: string; signal: AbortSignal; chatSession: ChatSessionRuntime; workspaceIds: string[]
     workspaceRoots: Record<string, string>
   }): Promise<string> {
-    const task = this.requireActive(input.taskId)
-    if (task.conversationId !== input.conversationId) throw new Error('PERMISSION_DENIED: proposal belongs to another conversation')
-    if (taskWorkspaces(task).some((workspace) => !input.workspaceIds.includes(workspace.workspaceId))) throw new Error('PERMISSION_DENIED: proposal workspace is detached')
-    for (const workspace of taskWorkspaces(task)) {
-      const registered = await resolveAuthorizedWorkspace(workspace.workspaceId, workspace.workspacePath)
-      const attached = input.workspaceRoots[workspace.workspaceId]
-      if (!attached || !samePath(attached, registered)) throw new Error('PERMISSION_DENIED: proposal workspace root does not match attached session')
-    }
+    const task = await this.authorizeTurn(input)
     if (task.status === 'analyzing' || task.status === 'applying') throw new Error('BUSY: proposal is already active')
     await this.generateProposal(task.id, input.providerId, input.modelId, input)
     if (input.signal.aborted) return ''
     if (task.error) throw new Error(task.error)
     return task.changeSet ? [task.changeSet.reason, task.changeSet.digest].filter(Boolean).join('\n\n') : task.phase
+  }
+
+  /**
+   * Dispatch brief: the conversation's hand-off text for a work terminal.
+   * Same authorization as a proposal turn, but no content write and no change
+   * set — the Agent produces prose, the host performs the launch.
+   */
+  async composeDispatchBrief(input: {
+    taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
+    providerId: string; modelId?: string; signal: AbortSignal; chatSession?: ChatSessionRuntime; workspaceIds: string[]
+    workspaceRoots: Record<string, string>
+  }): Promise<BlueprintDispatchBriefResult> {
+    const task = await this.authorizeTurn(input)
+    if (input.signal.aborted) throw new Error('NOT_READY: dispatch aborted')
+    const blueprint = await this.loadTaskBlueprint(task)
+    if (!blueprint) throw new Error(task.error ?? 'NOT_READY: blueprint unavailable')
+    const allowed = scopeNodeIds(blueprint, task.nodeScope)
+    // Only Notes the task scope can actually reach may ground the brief.
+    const authorized = new Set<string>()
+    const notePaths = new Map<string, string>()
+    for (const nodeId of allowed) {
+      const node = blueprint.nodes[nodeId]
+      if (!node?.sourceUri) continue
+      authorized.add(node.sourceUri)
+      if (node.sourceRelPath) notePaths.set(node.sourceUri, node.sourceRelPath)
+    }
+    if (!authorized.size) throw new Error('NOT_READY: dispatch scope has no readable Note')
+
+    const selected = input.providerId
+      ? { provider: { id: input.providerId }, modelId: input.modelId ?? '' }
+      : await llmService.getDefaultModel()
+    if (!selected) throw new Error('尚未配置默认 AI 模型')
+    const model = await llmService.getLanguageModel('janus', selected.provider.id, input.modelId || selected.modelId)
+    const tools = createJanusBlueprintTools({ blueprint, allowedNodeIds: allowed })
+    const read = tools.find((tool) => tool.name === 'janus.blueprint.read')!
+    const nodes = (await read.execute({
+      id: 'read-dispatch-scope', name: read.name, arguments: {},
+    }, input.signal)).content
+    const conversation = input.messages
+    const draft = [
+      `Blueprint: ${blueprint.name}\nGoal: ${task.goal}\nConversation:\n${conversation.map((message) => `${message.role}: ${message.content}`).join('\n')}\nNodes:\n${nodes.length > DISPATCH_CONTEXT_MAX_CHARS ? `${nodes.slice(0, DISPATCH_CONTEXT_MAX_CHARS)}\n[节点证据已按预算截断]` : nodes}`,
+    ].join('\n\n')
+    let prompt = draft
+    let budgetNote = ''
+    if (input.chatSession) {
+      try {
+        const budgeted = input.chatSession.buildContext([{ role: 'user', content: draft }], {})
+        const trimmed = [...budgeted].at(-1)?.content
+        if (trimmed && trimmed.length < draft.length) {
+          prompt = trimmed
+          budgetNote = '\n[注意：对话与节点证据已按预算裁剪，请只依据可见内容撰写简报。]'
+        }
+      } catch {
+        prompt = conversation.slice(-10).map((message) => `${message.role}: ${message.content}`).join('\n')
+        budgetNote = '\n[注意：证据过长已压缩，本次简报以对话结论为准。]'
+      }
+    }
+    let object: z.infer<typeof dispatchBriefSchema> | null = null
+    let lastError: unknown
+    for (let attempt = 0; attempt < 2 && !object; attempt += 1) {
+      try {
+        const result = await generateDispatchBrief({
+          model: model as any, schema: dispatchBriefSchema, mode: 'json', name: 'blueprintDispatchBrief', abortSignal: input.signal,
+          system: [
+            'You are JanusX dispatch. Write the hand-off brief an AI coding agent will implement from — prose only, no file writes.',
+            'Ground every step in the conversation and the supplied nodes. Do not invent requirements the conversation did not settle.',
+            'noteRefs must contain only Note URIs that appear verbatim in the supplied node JSON.',
+            'constraints must forbid editing Note content: requirement changes go through the Janus proposal flow.',
+            'The terminal agent reads the referenced Notes itself; do not paste their bodies.',
+          ].join('\n'),
+          messages: [{ role: 'user', content: `${prompt}${budgetNote}` }],
+          temperature: 0.2,
+        })
+        object = result.object
+      } catch (error) { lastError = error }
+    }
+    if (!object) throw lastError
+    const brief: DispatchBrief = { ...object, noteRefs: authorizedNoteRefs(object, authorized) }
+    return {
+      brief,
+      text: renderDispatchBrief({ brief, blueprintName: blueprint.name, workspaceName: task.workspaceName, workspacePath: task.workspacePath, notePaths }),
+      anchorNodeId: dispatchAnchorNodeId(blueprint, task.nodeScope, allowed, authorized),
+      workspaceId: task.workspaceId,
+      workspaceName: task.workspaceName,
+      workspacePath: task.workspacePath,
+    }
+  }
+
+  /**
+   * One authorization gate for every host-driven turn on a maintenance task:
+   * the conversation must own the task and every authorized checkout must still
+   * match a live attached agent session root.
+   */
+  private async authorizeTurn(input: {
+    taskId: string; conversationId: string; workspaceIds: string[]; workspaceRoots: Record<string, string>
+  }): Promise<BlueprintMaintenanceTask> {
+    const task = this.requireActive(input.taskId)
+    if (task.conversationId !== input.conversationId) throw new Error('PERMISSION_DENIED: task belongs to another conversation')
+    if (taskWorkspaces(task).some((workspace) => !input.workspaceIds.includes(workspace.workspaceId))) throw new Error('PERMISSION_DENIED: task workspace is detached')
+    for (const workspace of taskWorkspaces(task)) {
+      const registered = await resolveAuthorizedWorkspace(workspace.workspaceId, workspace.workspacePath)
+      const attached = input.workspaceRoots[workspace.workspaceId]
+      if (!attached || !samePath(attached, registered)) throw new Error('PERMISSION_DENIED: task workspace root does not match attached session')
+    }
+    return task
   }
 
   async apply(input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult> {

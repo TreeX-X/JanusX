@@ -48,17 +48,17 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
     }
     void reloadTab(activeTab.tabId)
   }
-  if (!workspaceId) return <div className="flex h-full items-center justify-center text-xs text-[#666]">{t('editor:product.selectWorkspace')}</div>
+  if (!workspaceId) return <div className="flex h-full items-center justify-center text-xs text-[var(--shell-dim)]">{t('editor:product.selectWorkspace')}</div>
 
   return <div className="product-panel-enter relative flex h-full min-h-0 flex-col bg-[var(--bg-deep)]">
-    <div className="flex h-9 shrink-0 items-center justify-between border-b border-white/[0.08] px-3">
+    <div className="flex h-9 shrink-0 items-center justify-between border-b border-[var(--shell-border)] px-3">
       <div className="min-w-0">
-        <span className="text-[10px] font-semibold tracking-[0.14em] text-[#ff7830]">{t('editor:product.panelTitle')}</span>
+        <span className="text-[10px] font-semibold tracking-[0.14em] text-[var(--shell-accent)]">{t('editor:product.panelTitle')}</span>
       </div>
       <button
         type="button"
         aria-label={t('editor:product.closeAria')}
-        className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-visible text-[#777] hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#ff7830]"
+        className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-visible text-[var(--shell-dim)] hover:text-[var(--shell-text)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--shell-accent)]"
         onClick={onClose}
       >
         <span aria-hidden="true" className="relative block h-3 w-3">
@@ -67,29 +67,29 @@ export function ProductWorkspacePanel({ workspaceId, workspacePath, onClose }: {
         </span>
       </button>
     </div>
-    {workspaceTabs.length > 0 && <div className="flex items-center gap-1 overflow-x-auto border-b border-white/[0.06] p-1.5">
+    {workspaceTabs.length > 0 && <div className="flex items-center gap-1 overflow-x-auto border-b border-[var(--shell-border-soft)] bg-[var(--shell-pane-chrome)] p-1.5">
       {workspaceTabs.map((tab) => {
         const isActive = tab.tabId === activeTab?.tabId
         return (
-          <button key={tab.tabId} type="button" className={`flex min-w-0 shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] ${isActive ? 'border-[rgba(255,120,48,0.35)] bg-[rgba(255,120,48,0.08)]' : 'border-transparent hover:bg-white/[0.05]'}`} style={{ color: isActive ? '#eee' : '#777' }} onClick={() => activateTab(workspaceId, tab.tabId)}>
+          <button key={tab.tabId} type="button" aria-selected={isActive} className={`flex min-w-0 shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[10px] ${isActive ? 'border-[var(--shell-accent-border)] bg-[var(--shell-accent-soft)] font-semibold' : 'border-transparent hover:bg-[color-mix(in_srgb,var(--shell-text)_7%,transparent)]'}`} style={{ color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)' }} onClick={() => activateTab(workspaceId, tab.tabId)}>
             <span className="max-w-32 truncate">{tab.relPath}</span>
-            <span role="button" aria-label={t('editor:product.closeTabAria', { relPath: tab.relPath })} className="rounded px-1 text-[#666] hover:text-white" onClick={(event) => { event.stopPropagation(); void closeTab(tab.tabId) }}>×</span>
+            <span role="button" aria-label={t('editor:product.closeTabAria', { relPath: tab.relPath })} className="rounded px-1 text-[var(--shell-muted)] hover:text-[var(--shell-text)]" onClick={(event) => { event.stopPropagation(); void closeTab(tab.tabId) }}>×</span>
           </button>
         )
       })}
     </div>}
     {activeTab ? <>
-      <div className="flex items-center justify-end gap-2 border-b border-white/[0.06] px-2 py-1">
-        <button className="text-[10px] text-[#888] hover:text-white disabled:opacity-30" disabled={activeTab.status === 'reloading'} onClick={() => void reloadTab(activeTab.tabId)}>{t('editor:product.reloadFromDisk')}</button>
+      <div className="flex items-center justify-end gap-2 border-b border-[var(--shell-border-soft)] px-2 py-1">
+        <button className="text-[10px] text-[var(--shell-muted)] hover:text-[var(--shell-text)] disabled:opacity-30" disabled={activeTab.status === 'reloading'} onClick={() => void reloadTab(activeTab.tabId)}>{t('editor:product.reloadFromDisk')}</button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">
         {activeTab.kind === 'office'
           ? <OfficePreviewFrame port={activeTab.port} status={activeTab.status} errorCode={activeTab.errorCode} onRetry={retryActiveTab} onClose={() => void closeTab(activeTab.tabId)} />
           : activeTab.kind === 'unsupported' || !workspacePath
-            ? <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[#666]">{t('editor:product.unsupportedKind')}</div>
+            ? <div className="flex h-full items-center justify-center px-4 text-center text-xs text-[var(--shell-dim)]">{t('editor:product.unsupportedKind')}</div>
             : <LocalFileStage workspacePath={workspacePath} relPath={activeTab.relPath} kind={activeTab.kind} revision={activeTab.revision} />}
       </div>
-    </> : <div className="flex min-h-32 flex-1 items-center justify-center px-4 text-center text-xs text-[#666]">{t('editor:product.emptyStage')}</div>}
+    </> : <div className="flex min-h-32 flex-1 items-center justify-center px-4 text-center text-xs text-[var(--shell-dim)]">{t('editor:product.emptyStage')}</div>}
   </div>
 }
 

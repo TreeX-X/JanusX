@@ -115,6 +115,14 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* 选项图标：与文字同一行内联，字形颜色继承选项的 color（单色图标因此跨主题可读）。 */
+.optionIcon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  vertical-align: -3px;
+}
+
 .optionSelected {
   background: rgba(255, 255, 255, 0.06);
   font-weight: 600;

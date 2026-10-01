@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Download } from 'lucide-react'
 import { useAppStore } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
@@ -44,6 +44,32 @@ const ROUNDTABLE_CARD_STATUS_KEYS: Record<AgentWorkState, string> = {
   cancelled: 'janus:roundtable.cardDetail.status.cancelled',
 }
 import { faceClass } from './janusIslandRuntime'
+import { clampIslandDragOffset, shouldSuppressIslandDismiss } from './islandInteraction'
+
+const ISLAND_PINNED_STORAGE_KEY = 'janus:island-chat-pinned'
+const DRAG_OFFSET_STORAGE_KEY = 'janus:island-drag-offset'
+
+function loadIslandPinned(): boolean {
+  try {
+    return window.localStorage.getItem(ISLAND_PINNED_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function loadDragOffset(): { x: number; y: number } {
+  try {
+    const raw = window.localStorage.getItem(DRAG_OFFSET_STORAGE_KEY)
+    if (!raw) return { x: 0, y: 0 }
+    const parsed = JSON.parse(raw) as { x?: unknown; y?: unknown }
+    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+      return clampIslandDragOffset({ x: parsed.x, y: parsed.y }, { width: window.innerWidth, height: window.innerHeight })
+    }
+  } catch {
+    /* corrupted offset falls back to centered */
+  }
+  return { x: 0, y: 0 }
+}
 import { nudgeRunOrb } from '@/stores/running'
 import { useRightToolStore } from '@/stores/right-tools'
 import { useExperimentalStore } from '@/stores/experimental'
@@ -89,13 +115,119 @@ export function JanusIsland({
   productNotice = null,
   productFiles = [],
   onOpenProductFile,
+  onIslandPinnedChange,
 }: JanusIslandProps) {
   const { t } = useI18n('janus')
   const { mode, isSwitching, activeWorkspace, eyeContainerRef, hasRunning } = useJanusState()
   const { janusRunning, startActiveOnce } = useProjectRunning(activeWorkspace)
   const shellRef = useRef<HTMLDivElement | null>(null)
-  const conversationStartedRef = useRef(false)
   const [view, setView] = useState<JanusExpandedView>('monitor')
+
+  /* Island window persistence + drag (expanded stage, all views).
+   * Pin survives implicit dismiss (outside click / Esc / terminal switch);
+   * explicit double-activate still collapses back to the capsule. The drag
+   * offset applies to the expanded panel only — the capsule always stays
+   * centered, and streaming never blocks the collapse. */
+  const [islandPinned, setIslandPinned] = useState<boolean>(() => loadIslandPinned())
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>(() => loadDragOffset())
+  const [isDraggingIsland, setIsDraggingIsland] = useState(false)
+  const dragStartRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; panelW: number; panelH: number } | null>(null)
+  const pendingOffsetRef = useRef<{ x: number; y: number } | null>(null)
+  const chatLoading = isStreaming || pendingContent.length > 0
+
+  const updateIslandPinned = useCallback((next: boolean) => {
+    setIslandPinned(next)
+    try {
+      window.localStorage.setItem(ISLAND_PINNED_STORAGE_KEY, next ? '1' : '0')
+    } catch {
+      /* persistence is best-effort */
+    }
+    onIslandPinnedChange?.(next)
+  }, [onIslandPinnedChange])
+
+  const toggleIslandPinned = useCallback(() => {
+    updateIslandPinned(!islandPinned)
+  }, [islandPinned, updateIslandPinned])
+
+  const applyDragTransform = useCallback((offset: { x: number; y: number }) => {
+    const shell = shellRef.current
+    if (!shell) return
+    shell.style.transform = offset.x === 0 && offset.y === 0
+      ? ''
+      : `translate(calc(-50% + ${offset.x}px), ${offset.y}px)`
+  }, [])
+
+  const handleIslandTopbarPointerDown = useCallback((event: ReactPointerEvent) => {
+    if (stage !== 'expanded' || event.button !== 0) return
+    const target = event.target as HTMLElement | null
+    if (target?.closest('button, input, textarea, select, a, [contenteditable="true"]')) return
+    // Keep the island gesture layer out: a topbar drag is a window move,
+    // never a tap/double-tap on the island body.
+    event.preventDefault()
+    event.stopPropagation()
+    // Measure once per gesture: reading offsetWidth mid-drag would thrash
+    // layout against the direct transform writes below.
+    const shell = shellRef.current
+    dragStartRef.current = {
+      startX: event.clientX, startY: event.clientY, baseX: dragOffset.x, baseY: dragOffset.y,
+      panelW: shell?.offsetWidth ?? 0, panelH: shell?.offsetHeight ?? 0,
+    }
+    pendingOffsetRef.current = null
+    setIsDraggingIsland(true)
+  }, [stage, dragOffset])
+
+  useEffect(() => {
+    if (!isDraggingIsland) return
+    const handleMove = (event: PointerEvent) => {
+      const start = dragStartRef.current
+      if (!start) return
+      const next = clampIslandDragOffset(
+        { x: start.baseX + (event.clientX - start.startX), y: start.baseY + (event.clientY - start.startY) },
+        { width: window.innerWidth, height: window.innerHeight },
+        { width: start.panelW, height: start.panelH },
+      )
+      pendingOffsetRef.current = next
+      // Direct DOM write: dragging must not re-render the chat subtree.
+      const shell = shellRef.current
+      if (shell) {
+        shell.style.transform = next.x === 0 && next.y === 0
+          ? ''
+          : `translate(calc(-50% + ${next.x}px), ${next.y}px)`
+      }
+    }
+    const handleUp = () => {
+      const next = pendingOffsetRef.current
+      pendingOffsetRef.current = null
+      dragStartRef.current = null
+      setIsDraggingIsland(false)
+      if (next) {
+        setDragOffset(next)
+        try {
+          window.localStorage.setItem(DRAG_OFFSET_STORAGE_KEY, JSON.stringify(next))
+        } catch {
+          /* persistence is best-effort */
+        }
+      }
+    }
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
+    }
+  }, [isDraggingIsland])
+
+  // Re-apply the persisted offset whenever the expanded panel (re)mounts;
+  // collapsing always clears the transform so the capsule stays centered.
+  useEffect(() => {
+    if (stage !== 'expanded') {
+      if (shellRef.current) shellRef.current.style.transform = ''
+      return
+    }
+    applyDragTransform(dragOffset)
+  }, [stage, dragOffset, applyDragTransform])
   const [parchmentOpen, setParchmentOpen] = useState(false)
   const [auxiliaryModule, setAuxiliaryModule] = useState<JanusAuxiliaryModuleType | null>(null)
   const [activeAgentCard, setActiveAgentCard] = useState<import('../../../../shared/roundtable/events').AgentResultCard | null>(null)
@@ -212,8 +344,11 @@ export function JanusIsland({
   }, [startActiveOnce, activeWorkspace?.id, flashHint, t])
 
   const handleDoubleTap = useCallback(() => {
+    // Explicit collapse always wins: a pinned island window still returns to
+    // the capsule in one gesture and drops the pin on the way.
+    if (islandPinned) updateIslandPinned(false)
     onDoubleActivate()
-  }, [onDoubleActivate])
+  }, [islandPinned, onDoubleActivate, updateIslandPinned])
   const handleSingleTap = useCallback(() => {
     onSingleActivate()
   }, [onSingleActivate])
@@ -424,7 +559,8 @@ export function JanusIsland({
   const modeColor = activeVisual?.color ?? (mode === 'running' ? '#00ff88' : '#ff7830')
   const activeNodeTitle = activeNode?.title || t('janus:island.activeNodeFallback')
   const workspaceLabel = activeSession?.workspaceName ?? activeWorkspace?.name ?? t('janus:island.workspaceFallback')
-  const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
+  const messageCount = messages.length
+  const prevMessageCountRef = useRef(messageCount)
 
   useEffect(() => {
     if (stage === 'peek') setView('monitor')
@@ -458,17 +594,28 @@ export function JanusIsland({
     return () => document.removeEventListener('keydown', handleAuxiliaryEscape, true)
   }, [auxiliaryModule, auxiliaryClosing, requestCloseAuxiliary])
 
+  // A newly arrived user turn follows into the chat view from the monitor
+  // overview. Streaming/thinking ticks (isStreaming, pendingContent) never
+  // steal the view, so loading never yanks the island around — and the
+  // roundtable keeps its own discussion while the main chat streams.
   useEffect(() => {
-    const hadConversation = conversationStartedRef.current
-    conversationStartedRef.current = hasConversation
-    if (stage === 'expanded' && hasConversation && !hadConversation) {
+    const grew = messageCount > prevMessageCountRef.current
+    prevMessageCountRef.current = messageCount
+    if (!grew) return
+    if (stage === 'expanded' && view === 'monitor') {
       setView('chat')
     }
-  }, [hasConversation, stage])
+  }, [messageCount, stage, view])
+
+  // Implicit dismiss is suppressed while the island window is pinned; the
+  // stream lifecycle lives in useJanusChat, so collapsing mid-stream is
+  // always safe and the capsule keeps a loading dot until it settles.
+  const islandDismissSuppressed = shouldSuppressIslandDismiss({ stage, islandPinned })
 
   useEffect(() => {
     if (stage === 'collapsed') return
     const handlePointerDown = (event: PointerEvent) => {
+      if (islandDismissSuppressed) return
       const target = event.target as Node | null
       const targetElement = target instanceof Element ? target : target?.parentElement
       const shell = shellRef.current
@@ -481,6 +628,7 @@ export function JanusIsland({
         setTrayOpen(false)
         return
       }
+      if (islandDismissSuppressed) return
       onDismiss()
     }
     document.addEventListener('pointerdown', handlePointerDown, true)
@@ -489,7 +637,7 @@ export function JanusIsland({
       document.removeEventListener('pointerdown', handlePointerDown, true)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [onDismiss, stage, trayOpen])
+  }, [islandDismissSuppressed, onDismiss, stage, trayOpen])
 
   const auxiliaryDescriptor: JanusAuxiliaryModuleDescriptor | null = auxiliaryModule === 'roundtable-parchment'
     ? {
@@ -531,6 +679,9 @@ export function JanusIsland({
       data-peek-kind={splitCapsule ? 'split' : capsuleTopNotification?.kind ?? 'empty'}
       data-peek-layout={splitCapsule ? 'split' : 'single'}
       data-capsule-tier={capsuleTierValue}
+      data-pinned={islandPinned ? 'true' : 'false'}
+      data-loading={chatLoading ? 'true' : 'false'}
+      data-dragging={isDraggingIsland ? 'true' : 'false'}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
@@ -679,6 +830,10 @@ export function JanusIsland({
           conversationController={conversationController}
           resourceController={resourceController}
           toolTraces={toolTraces}
+          islandPinned={islandPinned}
+          onToggleIslandPin={toggleIslandPinned}
+          onTopbarPointerDown={handleIslandTopbarPointerDown}
+          isDraggingIsland={isDraggingIsland}
         />
       </div>
       {stage === 'expanded' && auxiliaryDescriptor ? (

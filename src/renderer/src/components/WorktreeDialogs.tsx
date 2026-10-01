@@ -5,6 +5,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { refreshScopeFileTree } from '@/features/workspace/actions'
 import { useI18n } from '@/i18n/useI18n'
 import { ModalCloseButton } from './ModalCloseButton'
+import { ModalFrame } from './shared/ModalFrame'
+import styles from './WorktreeDialogs.module.css'
 import type { BranchDiff } from '../../../shared/ipc/worktree'
 import type { FailedCheckLog, HostedCheck, HostedComment, HostedIssue, HostedReview } from '../../../shared/ipc/hosted'
 import type { WorktreeInfo } from '../../../shared/ipc/worktree'
@@ -55,8 +57,9 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
   const [linkedIssue, setLinkedIssue] = useState<string | null>(null)
 
   // Orca pattern: submit closes immediately; progress, cancel, and retry
-  // live on the sidebar row while creation runs in the background.
-  const submit = async () => {
+  // live on the sidebar row while creation runs in the background. The close
+  // goes through the frame so it descends rather than cutting out.
+  const submit = async (requestClose: () => void) => {
     if (!name.trim() || busy) return
     setBusy(true)
     const payload = {
@@ -65,7 +68,7 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
       startFrom: startFrom.trim() || undefined,
       linkedIssue: linkedIssue ?? undefined,
     }
-    onClose()
+    requestClose()
     try {
       const result = await createWorktree(workspace.id, workspace.path, payload)
       if (useWorkspaceStore.getState().activeWorkspaceId === workspace.id) {
@@ -95,160 +98,153 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
     setShowIssues(false)
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 flex items-center justify-center"
-      style={{ background: 'rgba(8,8,10,0.62)', backdropFilter: 'blur(10px)', zIndex: 1000 }}
-      onPointerDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
-      }}
-    >
-      <div
-        className="overflow-hidden"
-        style={{ width: 420, background: 'var(--shell-chrome)', border: '1px solid var(--shell-border)', borderRadius: 8 }}
-      >
-        <div
-          className="flex justify-between items-center"
-          style={{ padding: '12px 16px', borderBottom: '1px solid var(--control-border)' }}
-        >
-          <div className="font-semibold" style={{ fontSize: 13, color: 'var(--shell-text)' }}>
-            {t('terminal:worktree.composerTitle')}
+  const title = t('terminal:worktree.composerTitle')
+
+  return (
+    <ModalFrame label={title} onClose={onClose} panelClassName={styles.composerPanel}>
+      {({ requestClose }) => (
+        <>
+          <div
+            className="flex justify-between items-center"
+            style={{ padding: '12px 16px', borderBottom: '1px solid var(--control-border)' }}
+          >
+            <div className="font-semibold" style={{ fontSize: 13, color: 'var(--shell-text)' }}>
+              {title}
+            </div>
+            <ModalCloseButton onClose={requestClose} />
           </div>
-          <ModalCloseButton onClose={onClose} />
-        </div>
-        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <label style={labelStyle}>{t('terminal:worktree.nameLabel')}</label>
-            <input
-              autoFocus
-              value={name}
-              placeholder={t('terminal:worktree.namePlaceholder')}
-              onChange={(event) => {
-                setName(event.target.value)
-                if (!branchTouched) setBranch(slugify(event.target.value))
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void submit()
-                if (event.key === 'Escape') onClose()
-              }}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>{t('terminal:worktree.branchLabel')}</label>
-            <input
-              value={branch}
-              onChange={(event) => {
-                setBranch(event.target.value)
-                setBranchTouched(true)
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void submit()
-              }}
-              style={{ ...inputStyle, fontFamily: "'SF Mono', monospace" }}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>{t('terminal:worktree.startFromLabel')}</label>
-            <input
-              value={startFrom}
-              onChange={(event) => setStartFrom(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') void submit()
-              }}
-              style={{ ...inputStyle, fontFamily: "'SF Mono', monospace" }}
-            />
-          </div>
-          <div>
-            <button
-              type="button"
-              onClick={() => {
-                const next = !showIssues
-                setShowIssues(next)
-                if (next && issues.length === 0 && !issuesBusy) void searchIssues()
-              }}
-              className="cursor-pointer"
-              style={{ fontSize: 11, color: 'var(--shell-muted)', background: 'none', border: 'none', padding: 0 }}
-            >
-              {t('terminal:worktree.issueSection')}{linkedIssue ? ` · ${linkedIssue}` : ''} {showIssues ? '▴' : '▾'}
-            </button>
-            {linkedIssue && !showIssues && (
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <label style={labelStyle}>{t('terminal:worktree.nameLabel')}</label>
+              <input
+                autoFocus
+                value={name}
+                placeholder={t('terminal:worktree.namePlaceholder')}
+                onChange={(event) => {
+                  setName(event.target.value)
+                  if (!branchTouched) setBranch(slugify(event.target.value))
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void submit(requestClose)
+                }}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>{t('terminal:worktree.branchLabel')}</label>
+              <input
+                value={branch}
+                onChange={(event) => {
+                  setBranch(event.target.value)
+                  setBranchTouched(true)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void submit(requestClose)
+                }}
+                style={{ ...inputStyle, fontFamily: "'SF Mono', monospace" }}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>{t('terminal:worktree.startFromLabel')}</label>
+              <input
+                value={startFrom}
+                onChange={(event) => setStartFrom(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void submit(requestClose)
+                }}
+                style={{ ...inputStyle, fontFamily: "'SF Mono', monospace" }}
+              />
+            </div>
+            <div>
               <button
                 type="button"
-                onClick={() => setLinkedIssue(null)}
+                onClick={() => {
+                  const next = !showIssues
+                  setShowIssues(next)
+                  if (next && issues.length === 0 && !issuesBusy) void searchIssues()
+                }}
                 className="cursor-pointer"
-                style={{ fontSize: 10, color: 'var(--shell-dim)', background: 'none', border: 'none', padding: 0, marginLeft: 8 }}
+                style={{ fontSize: 11, color: 'var(--shell-muted)', background: 'none', border: 'none', padding: 0 }}
               >
-                ✕
+                {t('terminal:worktree.issueSection')}{linkedIssue ? ` · ${linkedIssue}` : ''} {showIssues ? '▴' : '▾'}
               </button>
-            )}
-            {showIssues && (
-              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div className="flex" style={{ gap: 6 }}>
-                  <input
-                    value={issueQuery}
-                    placeholder={t('terminal:worktree.issueSearchPh')}
-                    onChange={(event) => setIssueQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') void searchIssues()
-                    }}
-                    style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 11 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void searchIssues()}
-                    disabled={issuesBusy}
-                    className="rounded cursor-pointer"
-                    style={{ height: 30, padding: '0 12px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
-                  >
-                    {t('terminal:worktree.issueSearch')}
-                  </button>
-                </div>
-                {issues.map((issue) => (
-                  <div key={issue.number} className="flex items-center" style={{ gap: 8, fontSize: 11 }}>
-                    <span style={{ fontFamily: "'SF Mono', monospace", color: 'var(--shell-dim)', flexShrink: 0 }}>
-                      #{issue.number}
-                    </span>
-                    <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: 'var(--shell-text)' }}>
-                      {issue.title}
-                    </span>
+              {linkedIssue && !showIssues && (
+                <button
+                  type="button"
+                  onClick={() => setLinkedIssue(null)}
+                  className="cursor-pointer"
+                  style={{ fontSize: 10, color: 'var(--shell-dim)', background: 'none', border: 'none', padding: 0, marginLeft: 8 }}
+                >
+                  ✕
+                </button>
+              )}
+              {showIssues && (
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="flex" style={{ gap: 6 }}>
+                    <input
+                      value={issueQuery}
+                      placeholder={t('terminal:worktree.issueSearchPh')}
+                      onChange={(event) => setIssueQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') void searchIssues()
+                      }}
+                      style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 11 }}
+                    />
                     <button
                       type="button"
-                      onClick={() => applyIssue(issue)}
-                      className="cursor-pointer"
-                      style={{ fontSize: 10, color: 'var(--shell-muted)', background: 'none', border: 'none', padding: 0, flexShrink: 0 }}
+                      onClick={() => void searchIssues()}
+                      disabled={issuesBusy}
+                      className="rounded cursor-pointer"
+                      style={{ height: 30, padding: '0 12px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
                     >
-                      {t('terminal:worktree.issueUse')}
+                      {t('terminal:worktree.issueSearch')}
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                  {issues.map((issue) => (
+                    <div key={issue.number} className="flex items-center" style={{ gap: 8, fontSize: 11 }}>
+                      <span style={{ fontFamily: "'SF Mono', monospace", color: 'var(--shell-dim)', flexShrink: 0 }}>
+                        #{issue.number}
+                      </span>
+                      <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap" style={{ color: 'var(--shell-text)' }}>
+                        {issue.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => applyIssue(issue)}
+                        className="cursor-pointer"
+                        style={{ fontSize: 10, color: 'var(--shell-muted)', background: 'none', border: 'none', padding: 0, flexShrink: 0 }}
+                      >
+                        {t('terminal:worktree.issueUse')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        <div
-          className="flex justify-end"
-          style={{ padding: '12px 16px', borderTop: '1px solid var(--control-border)', gap: 8 }}
-        >
-          <button
-            onClick={onClose}
-            className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)' }}
+          <div
+            className="flex justify-end"
+            style={{ padding: '12px 16px', borderTop: '1px solid var(--control-border)', gap: 8 }}
           >
-            {t('terminal:worktree.cancel')}
-          </button>
-          <button
-            onClick={() => void submit()}
-            disabled={!name.trim() || busy}
-            className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', opacity: !name.trim() || busy ? 0.45 : 1 }}
-          >
-            {t('terminal:worktree.create')}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+            <button
+              onClick={requestClose}
+              className="rounded cursor-pointer"
+              style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)' }}
+            >
+              {t('terminal:worktree.cancel')}
+            </button>
+            <button
+              onClick={() => void submit(requestClose)}
+              disabled={!name.trim() || busy}
+              className="rounded cursor-pointer"
+              style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', opacity: !name.trim() || busy ? 0.45 : 1 }}
+            >
+              {t('terminal:worktree.create')}
+            </button>
+          </div>
+        </>
+      )}
+    </ModalFrame>
   )
 }
 

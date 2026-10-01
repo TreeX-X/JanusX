@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, type CSSProperties } from 'react'
+import { useThemeStore } from '@/stores/theme'
 
 interface FloatingPanelProps {
   visible: boolean
@@ -37,6 +38,9 @@ export function FloatingPanel({
   const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0, width: 0, height: 0 })
   const restoreBounds = useRef({ x: 0, y: 0, width: initialWidth, height: initialHeight })
   const panelRef = useRef<HTMLDivElement>(null)
+  // Hooks 必须在 early-return 之前调用：之前 planche 判断写在 `if (!visible) return null`
+  // 之后，浮动/嵌入切换时 hook 顺序漂移，主题切换后顶栏可能停留在旧配色。
+  const isDark = useThemeStore((s) => s.theme) === 'dark'
 
   useEffect(() => {
     if (visible && !initialized) {
@@ -147,6 +151,8 @@ export function FloatingPanel({
 
   if (!visible) return null
   const interactiveTitlebar = { WebkitAppRegion: 'no-drag', position: 'relative', zIndex: 1 } as CSSProperties
+  // 顶栏与面板统一走 shell 语义令牌：planche / dark 都由 [data-theme] 提供，
+  // 浮动与嵌入共用同一套，避免一端写死深灰黑导致新主题漂移。
 
   return (
     <div
@@ -160,11 +166,14 @@ export function FloatingPanel({
         bottom: embedded ? 0 : undefined,
         width: embedded ? '100%' : size.width,
         height: embedded ? '100%' : size.height,
-        background: 'rgba(22, 22, 22, 0.97)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'var(--shell-chrome)',
+        border: '1px solid var(--shell-border)',
         borderRadius: embedded ? 0 : 12,
-        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.5)',
+        boxShadow: embedded
+          ? 'none'
+          : isDark
+            ? '0 16px 40px rgba(0, 0, 0, 0.5)'
+            : '3px 3px 0 rgba(28, 52, 59, 0.22)',
         animation: embedded ? 'none' : 'file-panel-in 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
         display: 'flex',
         flexDirection: 'column',
@@ -175,8 +184,8 @@ export function FloatingPanel({
         className="flex items-center gap-3 px-3 shrink-0"
         style={{
           height: 38,
-          background: 'rgba(16, 16, 16, 0.95)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          background: 'var(--shell-pane-chrome)',
+          borderBottom: '1px solid var(--shell-border)',
           cursor: isMaximized || embedded ? 'default' : 'move',
         }}
         onMouseDown={handleDragStart}
@@ -211,7 +220,7 @@ export function FloatingPanel({
           {titlebarContent ?? (
             <span
               className="block overflow-hidden text-ellipsis whitespace-nowrap font-mono"
-              style={{ fontSize: 12, color: '#d4d4d4' }}
+              style={{ fontSize: 12, color: 'var(--shell-text)' }}
             >
               {title}
             </span>

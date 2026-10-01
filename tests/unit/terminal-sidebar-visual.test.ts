@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Terminal } from '../../src/renderer/src/types'
-import { getTerminalStatusVisual, summarizeTerminalActivity } from '../../src/renderer/src/lib/terminal-sidebar-visual'
+import { getTerminalStatusVisual, summarizeTerminalActivity, terminalStatusRingClass } from '../../src/renderer/src/lib/terminal-sidebar-visual'
 
 function terminal(id: string, status: Terminal['status']): Terminal {
   return {
@@ -32,6 +32,16 @@ describe('terminal sidebar visuals', () => {
       degraded: 1,
       needsAction: 3,
     })
+  })
+
+  it('maps every status to one shared ring shape (sidebar rows and middle tabs read one language)', () => {
+    // running 淡环+走圈光弧、待处理共用呼吸、degraded 虚线环、error 实心盘、wait 降透明度
+    expect(terminalStatusRingClass('running')).toBe('term-status-ring--running')
+    expect(terminalStatusRingClass('needs-approval')).toBe('term-status-pulse')
+    expect(terminalStatusRingClass('needs-input')).toBe('term-status-pulse')
+    expect(terminalStatusRingClass('degraded')).toBe('term-status-ring--degraded')
+    expect(terminalStatusRingClass('error')).toBe('term-status-ring--error')
+    expect(terminalStatusRingClass('wait')).toBe('term-status-ring--idle')
   })
 
   it('uses localized labels with a unified attention visual', () => {

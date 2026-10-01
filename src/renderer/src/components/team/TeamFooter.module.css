@@ -32,14 +32,14 @@
 }
 
 .row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--shell-hover);
   color: var(--shell-text);
 }
 
 .row:focus-visible {
-  outline: 1px solid rgba(255, 120, 48, 0.38);
+  outline: 1px solid var(--shell-accent-border);
   outline-offset: -1px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--shell-hover);
   color: var(--shell-text);
 }
 
@@ -74,14 +74,14 @@
 }
 
 .row:hover .avatarGhost {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--shell-hover);
+  border-color: var(--shell-border);
   color: var(--shell-muted);
 }
 
 .row:focus-visible .avatarGhost {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--shell-hover);
+  border-color: var(--shell-border);
   color: var(--shell-muted);
 }
 
@@ -189,7 +189,7 @@
 }
 
 .popItem:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--shell-hover);
   color: var(--shell-text);
 }
 
@@ -261,7 +261,7 @@
 }
 
 .popSettings:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--shell-hover);
   color: var(--shell-text);
 }
 
@@ -331,7 +331,7 @@
 
 .collapsedButton:hover,
 .collapsedButton:focus-visible {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--shell-hover);
   color: var(--shell-accent-strong);
   outline: none;
 }
@@ -343,7 +343,7 @@
 }
 
 .collapsedButton:focus-visible {
-  box-shadow: inset 0 0 0 1px rgba(255, 120, 48, 0.38);
+  box-shadow: inset 0 0 0 1px var(--shell-accent-border);
 }
 
 /* 组织角标：叠在本人头像右下，收起态也能一眼看出当前组织。 */
@@ -376,4 +376,10 @@
     transition: none;
     animation: none;
   }
+}
+
+/* ── planche：纸面团队行（加法层，dark 原样不动）──
+    悬浮底已由 --shell-hover 自动换成纸深；黑硬影换套印偏移影。 */
+:global([data-theme='planche']) .popover {
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
 }

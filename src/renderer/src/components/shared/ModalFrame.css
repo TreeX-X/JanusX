@@ -1,0 +1,129 @@
+/**
+ * Shared modal frame chrome (src/renderer/src/components/shared/ModalFrame.css)
+ *
+ * One motion source for every dialog in the shell. Settings, the worktree
+ * composer, and the workspace run-configuration modal all portal-mount the same
+ * way, so they enter, hold, and leave on the same beat instead of each surface
+ * inventing a keyframe.
+ *
+ * The three pieces that make the entrance read as a summon rather than a flash:
+ *   1. a backdrop that fades in, so the panel has ground to rise from;
+ *   2. a perspective rise (translateZ + scale) on a raised surface, so the panel
+ *      gains distance as it arrives;
+ *   3. a reveal gate — `[data-reveal-ready]` is unset for exactly one frame, and
+ *      the panel stays hidden until it flips. Without it the browser paints the
+ *      final computed state before the animation starts and then skips the
+ *      animation entirely, which is the "it just flashed" failure.
+ *
+ * Geometry is deliberately gentler than the full-screen workbenches
+ * (translateZ(-56px) scale(0.94)): modals are 420-1180px wide, and the
+ * workbench depth shrinks them past 0.90, which reads as collapse rather than
+ * arrival. Every surface shares this one geometry on purpose — a dialog that
+ * opens one way and another one that opens differently is what made the shell
+ * feel unbuilt.
+ *
+ * Specificity contract. The panel's default look is written through `:where()`,
+ * which contributes zero specificity, so a surface's own class (box-shadow,
+ * radius, colors) always wins no matter which stylesheet loads first. The
+ * reveal gate and the closing rule keep real specificity — they must outrank
+ * that default to do their job.
+ */
+
+:where(.modal-frame-backdrop) {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 8, 10, 0.62);
+  backdrop-filter: blur(10px);
+  perspective: 1200px;
+  perspective-origin: center;
+  animation: modal-frame-backdrop-in 0.3s ease-out;
+}
+
+.modal-frame-backdrop[data-closing='true'] {
+  animation: modal-frame-backdrop-out var(--workbench-exit-duration, 300ms) ease-in forwards;
+  pointer-events: none;
+}
+
+/* Hold the first frame so the panel always starts from the entrance keyframe
+   instead of painting its final state first. */
+.modal-frame-backdrop:not([data-reveal-ready='true']) :where(.modal-frame-panel) {
+  opacity: 0;
+  animation: none;
+}
+
+:where(.modal-frame-panel) {
+  /* 抬升投影 + 顶部内高光：升起动效靠这层阴影读出高度，缺了就像贴图在放大。
+     主题可用自己的类覆盖（planche 走硬阴影）。 */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 48px rgba(0, 0, 0, 0.5);
+  transform-origin: center;
+  will-change: transform, opacity;
+  outline: none;
+  animation: modal-frame-card-rise var(--card-enter-duration, 240ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.modal-frame-backdrop[data-closing='true'] :where(.modal-frame-panel) {
+  animation-name: modal-frame-card-descend;
+  animation-duration: var(--card-enter-duration, 240ms);
+  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
+  animation-fill-mode: both;
+  pointer-events: none;
+}
+
+@keyframes modal-frame-card-rise {
+  from {
+    opacity: 0;
+    transform: translateZ(-28px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0) scale(1);
+  }
+}
+
+@keyframes modal-frame-card-descend {
+  from {
+    opacity: 1;
+    transform: translateZ(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateZ(-28px) scale(0.96);
+  }
+}
+
+@keyframes modal-frame-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-frame-backdrop-out {
+  from {
+    opacity: 1;
+  }
+  /* Hold full opacity while the panel descends, then drop the backdrop. */
+  82% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-frame-backdrop,
+  .modal-frame-backdrop[data-closing='true'],
+  :where(.modal-frame-panel),
+  .modal-frame-backdrop[data-closing='true'] :where(.modal-frame-panel) {
+    animation: none;
+    transition: none;
+  }
+}

@@ -142,11 +142,22 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
   const summary = change
     ? `${t('terminal:turnChanges.files', { count: change.fileCount })} · +${change.additions} −${change.deletions}`
     : t('terminal:turnChanges.empty')
+  // 收缩态只讲一件事：文件数。增减数与轮数收进 tooltip（展开态里本来就有），
+  // 26px 竖条里不再堆三种数字三种颜色。
+  const dockTitle = !change
+    ? t('terminal:turnChanges.empty')
+    : narrow
+      ? t('terminal:turnChanges.narrowHint')
+      : history.length > 1
+        ? `${t('terminal:turnChanges.files', { count: change.fileCount })} · ${t('terminal:turnChanges.turns', { count: history.length })} · ${t('terminal:turnChanges.hint')}`
+        : `${t('terminal:turnChanges.files', { count: change.fileCount })} · ${t('terminal:turnChanges.hint')}`
   const visibleFiles = change?.files.slice(0, MAX_VISIBLE_FILES) ?? []
   const hiddenCount = (change?.fileCount ?? 0) - visibleFiles.length
 
   // 灵动岛式两档展开：latest 窄、history 宽高更大，靠宽高差驱动壳形变过渡。
-  const expandedWidth = view === 'history' ? 'min(368px, 68%)' : 'min(300px, 55%)'
+  // 收缩态与 latest 同宽（history 除外），收起/展开只长高度，不断宽度。
+  const latestWidth = 'min(300px, 55%)'
+  const expandedWidth = view === 'history' ? 'min(368px, 68%)' : latestWidth
   const expandedMaxHeight = view === 'history' ? '80%' : '60%'
 
   const openPreview = (relPath: string, status: string) => {
@@ -194,7 +205,6 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
       data-turn-island=""
       data-stage={expanded ? 'expanded' : 'collapsed'}
       data-view={expanded ? view : undefined}
-      data-empty={!hasChange ? 'true' : undefined}
       onMouseDown={(event) => {
         // The chrome never steals xterm focus; only controls focus themselves.
         event.preventDefault()
@@ -208,24 +218,33 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
         right: 0,
         top: '50%',
         transform: 'translateY(-50%)',
-        width: expanded ? expandedWidth : 26,
+        width: expanded ? expandedWidth : 30,
         maxHeight: expanded ? expandedMaxHeight : 'none',
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'flex-start',
         overflow: 'hidden',
-        background: 'var(--shell-drawer)',
-        border: planche ? '1px solid #1C343B' : '1px solid rgba(255,255,255,0.12)',
+        // 收缩/展开同色：底色统一吃 chrome/纸面（不再用 drawer 区分层级），
+        // 全程灰色发丝线 + 收缩零阴影/展开保留阴影。
+        background: planche ? 'var(--paper, #EFE4C5)' : 'var(--shell-chrome)',
+        border: expanded
+          ? (planche
+            ? '1px solid var(--line-soft, rgba(28, 52, 59, 0.22))'
+            : '1px solid var(--shell-border)')
+          : planche
+            ? '1px solid var(--line-soft, rgba(28, 52, 59, 0.22))'
+            : '1px solid var(--shell-border-soft)',
         borderRight: 'none',
-        borderRadius: '12px 0 0 12px',
-        boxShadow: planche ? 'none' : '-8px 0 24px rgba(0,0,0,0.5)',
+        borderRadius: expanded ? '12px 0 0 12px' : '8px 0 0 8px',
       }}
     >
       {!expanded ? (
-        hasChange ? (
+        change ? (
           <button
             type="button"
-            title={t('terminal:turnChanges.hint')}
-            aria-label={summary}
+            title={dockTitle}
+            aria-label={dockTitle}
+            aria-disabled={narrow ? 'true' : undefined}
             onClick={handleDockClick}
             onDoubleClick={handleDockDoubleClick}
             onMouseDown={(event) => event.stopPropagation()}
@@ -233,27 +252,26 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
             style={{
               background: 'none',
               border: 'none',
-              padding: '10px 0',
+              borderRadius: '8px 0 0 8px',
+              padding: '12px 0',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 6,
-              minHeight: 72,
               justifyContent: 'center',
+              gap: 6,
               fontFamily: "'SF Mono', monospace",
               lineHeight: 1.2,
+              whiteSpace: 'nowrap',
+              cursor: narrow ? 'default' : 'pointer',
+              opacity: narrow ? 0.45 : 1,
             }}
           >
-            <span style={{ color: 'var(--shell-text)', fontSize: 12, fontWeight: 700 }}>{change!.fileCount}</span>
-            {(change!.additions > 0 || change!.deletions > 0) && (
-              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, fontSize: 9 }}>
-                {change!.additions > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{change!.additions}</span>}
-                {change!.deletions > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{change!.deletions}</span>}
-              </span>
-            )}
-            {history.length > 1 && (
-              <span style={{ color: 'var(--shell-dim)', fontSize: 9 }}>×{history.length}</span>
-            )}
+            <span aria-hidden="true" style={{ color: 'var(--shell-dim)', display: 'flex', lineHeight: 0 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 6l-6 6 6 6" />
+              </svg>
+            </span>
+            <span style={{ color: 'var(--shell-text)', fontSize: 12, fontWeight: 700 }}>{change.fileCount}</span>
           </button>
         ) : (
           <div
@@ -264,12 +282,19 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 8,
-              minHeight: 64,
               justifyContent: 'center',
+              gap: 6,
+              fontFamily: "'SF Mono', monospace",
+              lineHeight: 1.2,
+              whiteSpace: 'nowrap',
             }}
           >
-            <span style={{ color: 'var(--shell-dim)', fontSize: 10, fontFamily: "'SF Mono', monospace" }}>0</span>
+            <span aria-hidden="true" style={{ color: 'var(--shell-dim)', display: 'flex', lineHeight: 0, opacity: 0.6 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 6l-6 6 6 6" />
+              </svg>
+            </span>
+            <span style={{ color: 'var(--shell-dim)', fontSize: 12 }}>0</span>
           </div>
         )
       ) : (

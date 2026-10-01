@@ -321,6 +321,7 @@
   "turnChanges": {
     "files": "{{count}} files",
     "more": "+{{count}} more in Sessions",
+    "narrowHint": "Pane too narrow to expand — widen to view changes",
     "empty": "No file changes this turn",
     "latest": "Latest",
     "latestHint": "Show the latest turn",

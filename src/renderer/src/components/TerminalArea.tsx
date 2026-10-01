@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { Globe, SquareTerminal, X } from 'lucide-react'
+import { Globe, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
@@ -62,6 +62,8 @@ import { useTerminalLifecycle } from '@/features/terminal/useTerminalLifecycle'
 import { useTurnChangesStore } from '@/stores/turn-changes'
 import { useThemeStore } from '@/stores/theme'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
+import { TerminalStatusLight } from '@/components/ui/TerminalStatusLight'
+import { TerminalPresetIcon } from '@/components/ui/TerminalPresetIcon'
 import { getThemeDefinition } from '../../../shared/theme/registry'
 import {
   buildWorkspaceTerminalSurfaces,
@@ -70,26 +72,10 @@ import {
   touchWorkspaceSurfaceRecency,
 } from '@/lib/workspace-front-surface'
 
-import terminalIcon from '@/assets/icons/terminal.svg'
-import claudeIcon from '@/assets/icons/claude.svg'
-import codexIcon from '@/assets/icons/codex.svg'
-import opencodeIcon from '@/assets/icons/opencode.svg'
-import janusIcon from '@/assets/icons/janus.svg'
-import piIcon from '@/assets/icons/pi.svg'
-
-const PRESET_ICONS: Record<TerminalPreset, string> = {
-  shell: terminalIcon,
-  claude: claudeIcon,
-  codex: codexIcon,
-  opencode: opencodeIcon,
-  janus: janusIcon,
-  'pi': piIcon,
-}
-
-type TerminalPresetOption = { type: TerminalPreset; name: string; icon: string }
+type TerminalPresetOption = { type: TerminalPreset; name: string }
 
 function createPreset(type: TerminalPreset): TerminalPresetOption {
-  return { type, name: getTerminalPresetMeta(type).label, icon: PRESET_ICONS[type] }
+  return { type, name: getTerminalPresetMeta(type).label }
 }
 
 const PRESETS: TerminalPresetOption[] = [
@@ -832,7 +818,7 @@ function TerminalPresetCapsule({
                     onSelect(preset)
                   }}
                 >
-                  <img src={preset.icon} alt="" aria-hidden="true" className="h-4 w-4 shrink-0" />
+                  <TerminalPresetIcon preset={preset.type} className="h-4 w-4 shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{preset.name}</span>
                 </button>
                 </ThemedTooltip>
@@ -1004,19 +990,27 @@ function LeafPane({
         </div>
       )}
       <div
-        className="flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto px-1"
+        /*-- 左侧贴边：首 tab 直接顶住条底左缘（只留右侧 pr-1 给动作按钮呼吸），
+             左缘不留 4px chrome 缝，圆角由首 tab 自己的左上倒角一次成型。 --*/
+        className="flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto pl-0 pr-1"
         style={{
-          background: showFocus ? 'rgba(244, 125, 67, 0.035)' : 'rgba(255, 255, 255, 0.018)',
+          /*-- tab 条吃实色 pane-chrome：与下方 canvas 内容床拉开一阶，
+               两主题下选中 tab（canvas 底）与未选中（chrome 底）都有明确明度差；
+               之前半透明白叠加在纸面主题下近乎不可见。focus 不再单独洗色，
+               焦点态由外层 pane 边框统一表达。
+               顶边圆角跟随外层 section（radius - 1px 边框），否则方形条底会顶出圆角容器。 --*/
+          background: 'var(--shell-pane-chrome)',
           borderBottom: '1px solid var(--shell-border)',
+          borderTopLeftRadius: showFocusChrome ? 10 : 7,
+          borderTopRightRadius: showFocusChrome ? 10 : 7,
           scrollbarWidth: 'none',
         }}
       >
-        {leaf.tabs.map((tab) => {
+        {leaf.tabs.map((tab, index) => {
           const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
           const isActive = tab.id === activeTabId
           const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
           const tabStatusLabel = tabVisual ? t(tabVisual.labelKey) : undefined
-          const tabAttentionPulse = !!terminal && !isActive && terminal.status !== 'running' && terminal.status !== 'wait'
           return (
             <ThemedTooltip
               key={tab.id}
@@ -1047,38 +1041,31 @@ function LeafPane({
                 event.preventDefault()
                 onTabSelect(leaf.id, tab.id)
               }}
-              className="group/tab relative flex h-8 min-w-0 basis-[144px] shrink grow-0 cursor-pointer select-none items-center gap-1.5 border-0 border-r border-white/[0.06] px-2.5 text-left font-mono text-[11px] leading-none transition-colors hover:bg-white/[0.035]"
+              className="pane-tab group/tab relative flex h-8 min-w-0 basis-[144px] shrink grow-0 cursor-pointer select-none items-center gap-1.5 border-0 px-2.5 text-left font-mono text-[11px] leading-none transition-colors"
+              data-active={isActive ? 'true' : 'false'}
               style={{
                 color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
                 /*-- 选中态与下方内容床同色，让 tab 与画布连成一体；不再是压在浅色条上的黑块。
                      未选中态刻意不写 inline background —— 内联样式会盖过 hover 类，
                      写死 transparent 等于让 hover 失效（Tailwind preflight 已把 button 置为透明）。 --*/
                 background: isActive ? 'var(--shell-canvas)' : undefined,
-                boxShadow: isActive ? 'inset 0 1px 0 rgba(255,255,255,0.045)' : 'none',
+                borderRight: '1px solid var(--shell-border-soft)',
+                boxShadow: isActive ? 'inset 0 1px 0 var(--shell-border-soft)' : 'none',
+                fontWeight: isActive ? 600 : 400,
+                /*-- 首个 tab 左上倒角 = 条底圆角（贴边后两者同缘，必须等值才同心）：
+                     多 pane 10 / 单 pane 7，与上方 borderTopLeftRadius 呼应。
+                     底边不倒角：选中态底边要与内容床连成一体。 --*/
+                borderTopLeftRadius: index === 0 ? (showFocusChrome ? 10 : 7) : 0,
               }}
             >
-              {/*-- tab 左侧状态点（独立占位）：128px 时 opencode（8 字符 ≈53px）会被截断，
-                   固定宽度放到 144px，多出的 16px 正好覆盖圆点 6px + 1 个 gap + 呼吸余量。 --*/}
-              {tabVisual && (
-                <span
-                  aria-hidden="true"
-                  className={tabAttentionPulse ? 'term-status-pulse h-1.5 w-1.5 shrink-0 rounded-full' : 'h-1.5 w-1.5 shrink-0 rounded-full'}
-                  style={{ background: tabVisual.color }}
-                />
+              {/*-- tab 左侧状态灯：与左侧工作区同一盏灯（TerminalStatusLight 紧凑环），
+                   色/形/动效三编码；8px 环比原来 6px 点宽 2px，仍在 144px 预算余量内。 --*/}
+              {terminal && (
+                <TerminalStatusLight status={terminal.status} compact />
               )}
-              {terminal?.preset === 'shell' && (
-                <SquareTerminal
-                  size={14}
-                  strokeWidth={1.65}
-                  aria-hidden="true"
-                  style={{ opacity: isActive ? 0.95 : 0.55 }}
-                />
-              )}
-              {terminal && terminal.preset !== 'shell' && (
-                <img
-                  src={PRESET_ICONS[terminal.preset]}
-                  alt=""
-                  aria-hidden="true"
+              {terminal && (
+                <TerminalPresetIcon
+                  preset={terminal.preset}
                   className="h-3.5 w-3.5 shrink-0"
                   style={{ opacity: isActive ? 0.95 : 0.55 }}
                 />
@@ -1094,7 +1081,7 @@ function LeafPane({
                 <HoldToConfirm
                   as="span"
                   label={t('terminal:tab.closeTerminal')}
-                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
+                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
                   style={{ color: 'var(--shell-diff-del)' }}
                   onConfirm={() => {
                     onKillTerminalFromTab(tab.terminalId)
@@ -1106,7 +1093,7 @@ function LeafPane({
                 <ThemedTooltip label={t('terminal:tab.closeBrowser')}>
                 <span
                   tabIndex={-1}
-                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[rgba(255,255,255,0.1)]"
+                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
                   style={{ color: 'var(--shell-muted)' }}
                   onClick={(event) => {
                     event.stopPropagation()
@@ -1116,14 +1103,6 @@ function LeafPane({
                   <X size={12} strokeWidth={1.8} aria-hidden="true" />
                 </span>
                 </ThemedTooltip>
-              )}
-              {isActive && (
-                <span
-                  aria-hidden="true"
-                  /*-- 强调条移到顶边：底边要留给 tab 与画布的无缝衔接，画一条线就等于把它们切开。 --*/
-                  className="hidden"
-                  style={{ background: 'var(--shell-accent)' }}
-                />
               )}
             </div>
             </ThemedTooltip>
@@ -1813,6 +1792,24 @@ export function TerminalArea() {
             </button>
             {activeTerminal ? (
               <span className="flex min-w-0 items-center gap-1.5">
+                {/*-- 抽屉左端补一枚 preset 图标：抽屉条本身是"当前终端"的入口，
+                     收起时也要能一眼认出是哪个 CLI，展开时与中部 tab / 左侧栏同一套图标语言。 --*/}
+                <ThemedTooltip label={`${providerLabel(activeTerminal.preset, t)} · ${activeTerminal.cwd}`}>
+                <span
+                  className="inline-flex h-5 min-w-0 max-w-[140px] shrink-0 items-center gap-1.5 rounded border px-1.5 font-mono"
+                  style={{
+                    borderColor: 'rgba(255,255,255,0.055)',
+                    background: 'rgba(255,255,255,0.014)',
+                    color: 'var(--shell-muted)',
+                  }}
+                >
+                  <TerminalPresetIcon
+                    preset={activeTerminal.preset}
+                    className="h-3.5 w-3.5 shrink-0"
+                  />
+                  <span className="truncate">{providerLabel(activeTerminal.preset, t)}</span>
+                </span>
+                </ThemedTooltip>
                 {focusedTerminalWorkspace && (
                   <ThemedTooltip label={t('terminal:tab.focusWorkspaceTitle', { name: focusedTerminalWorkspace.name, path: focusedTerminalWorkspace.path })}>
                   <span
@@ -1861,7 +1858,8 @@ export function TerminalArea() {
           </div>
           <div className="flex h-full shrink-0 items-center gap-2 text-[10px]">
             <div className="hidden h-full items-center gap-1.5 md:flex">
-              {otherTerminals.slice(0, 3).map((terminal) => (
+              {otherTerminals.slice(0, 3).map((terminal) => {
+                return (
                 <ThemedTooltip key={terminal.id} label={`${providerLabel(terminal.preset, t)} · ${modelLabel(terminal, t)} · ${contextLabel(terminal, t)}`}>
                 <span
                   className="inline-flex h-5 max-w-[126px] items-center gap-1.5 overflow-hidden rounded border px-1.5 font-mono"
@@ -1871,14 +1869,16 @@ export function TerminalArea() {
                     color: 'var(--shell-dim)',
                   }}
                 >
-                  <span
-                    className="h-[5px] w-[5px] shrink-0 rounded-full"
-                    style={{ background: getTerminalStatusVisual(terminal.status).color }}
+                  <TerminalStatusLight status={terminal.status} compact />
+                  <TerminalPresetIcon
+                    preset={terminal.preset}
+                    className="h-3.5 w-3.5 shrink-0"
                   />
                   <span className="truncate">{providerLabel(terminal.preset, t)}</span>
                 </span>
                 </ThemedTooltip>
-              ))}
+                )
+              })}
               {otherTerminals.length > 3 && (
                 <span className="inline-flex h-5 items-center rounded border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[var(--shell-dim)]">
                   +{otherTerminals.length - 3}
@@ -1947,12 +1947,12 @@ export function TerminalArea() {
                         >
                           <span className="flex min-w-0 items-center justify-between gap-2">
                             <span className="flex min-w-0 items-center gap-1.5 text-[var(--shell-text)]">
-                              <span
-                                className="h-[6px] w-[6px] shrink-0 rounded-full"
-                                style={{
-                                  background: getTerminalStatusVisual(terminal.status).color,
-                                  boxShadow: `0 0 8px ${getTerminalStatusVisual(terminal.status).color}66`,
-                                }}
+                              <TerminalStatusLight status={terminal.status} compact />
+                              {/*-- 与抽屉条左端 / 中部 tab 同一枚 preset 图标：卡片只给名称时
+                                   分不清 codex 与 opencode，图标是唯一稳定的身份锚点。 --*/}
+                              <TerminalPresetIcon
+                                preset={terminal.preset}
+                                className="h-3.5 w-3.5 shrink-0"
                               />
                               <span className="truncate">{providerLabel(terminal.preset, t)}</span>
                             </span>

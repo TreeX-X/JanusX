@@ -1,10 +1,11 @@
 /**
  * TeamSetupGate.module.css
  *
- * 团队登录挡板：黑橙扁平语言，与 island composer 同源。
- * 规则：控件黑底（#08080a）白字，悬浮/聚焦橙边；
- * 中性提示灰字，操作反馈黑底橙字，错误暗红底 + 左红条；
- * 唯一 primary（登录/注册/创建组织）保持橙底黑字。
+ * 团队登录挡板：与 WorktreeDialog / 设置中心同源的对话框语言。
+ * 规则：表面只吃 --shell-* / --control-* 令牌（dark 与 planche 自动跟随
+ * data-theme），强调只做 1px 边框与文字（--shell-accent-*），不做填充色块；
+ * 中性提示走 --shell-dim，错误走 --shell-diff-del + accent 柔底。
+ * planche 加法层在文件末尾（纸面遮罩去模糊 + 套印偏移影）。
  */
 
 .backdrop {
@@ -14,24 +15,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(8, 8, 10, 0.86);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(8, 8, 10, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .panel {
   width: 380px;
   max-width: calc(100vw - 48px);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  background: #111113;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  background: var(--shell-chrome);
+  color: var(--shell-text);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 }
 
 .header {
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--shell-border-soft);
 }
 
 .headerRow {
@@ -43,12 +45,12 @@
 .title {
   font-size: 15px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--shell-text);
 }
 
 .subtitle {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--shell-dim);
   margin-top: 4px;
   line-height: 1.5;
 }
@@ -63,14 +65,14 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--shell-dim);
   font-size: 16px;
   cursor: pointer;
 }
 
 .close:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  background: var(--shell-hover);
+  color: var(--shell-text);
 }
 
 .body {
@@ -86,10 +88,10 @@
 .tab {
   height: 28px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--control-border);
   border-radius: 4px;
-  background: #08080a;
-  color: rgba(255, 255, 255, 0.5);
+  background: var(--shell-canvas);
+  color: var(--shell-muted);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -97,25 +99,25 @@
 }
 
 .tab:hover {
-  border-color: rgba(255, 120, 48, 0.4);
-  color: rgba(255, 255, 255, 0.8);
+  border-color: var(--shell-accent-border);
+  color: var(--shell-text);
 }
 
 .tab:focus-visible {
-  outline: 1px solid rgba(255, 120, 48, 0.64);
+  outline: 1px solid var(--shell-accent-border);
   outline-offset: 1px;
 }
 
 .tabActive {
-  border-color: rgba(255, 120, 48, 0.4);
-  background: rgba(255, 120, 48, 0.08);
-  color: #ff8a2e;
+  border-color: var(--shell-accent-border);
+  background: var(--shell-accent-soft);
+  color: var(--shell-accent-strong);
 }
 
 .field {
   display: block;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--shell-muted);
   margin-top: 10px;
 }
 
@@ -128,23 +130,23 @@
   padding: 7px 10px;
   font: inherit;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.9);
-  background: #08080a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--shell-text);
+  background: var(--shell-canvas);
+  border: 1px solid var(--control-border);
   border-radius: 4px;
   outline: none;
 }
 
 .input::placeholder {
-  color: rgba(255, 255, 255, 0.26);
+  color: var(--shell-dim);
 }
 
 .input:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--shell-muted);
 }
 
 .input:focus {
-  border-color: rgba(255, 120, 48, 0.64);
+  border-color: var(--shell-accent-border);
 }
 
 .inputUpper {
@@ -170,18 +172,18 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--shell-dim);
   cursor: pointer;
   line-height: 0;
 }
 
 .eyeButton:hover {
-  color: #fff;
+  color: var(--shell-text);
 }
 
 .hint {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.38);
+  color: var(--shell-dim);
   margin-top: 4px;
 }
 
@@ -190,10 +192,10 @@
   padding: 8px 10px 8px 12px;
   font-size: 12px;
   line-height: 1.5;
-  color: rgba(255, 154, 154, 0.9);
-  background: rgba(80, 22, 18, 0.22);
-  border: 1px solid rgba(255, 120, 90, 0.18);
-  border-left: 2px solid rgba(255, 120, 90, 0.76);
+  color: var(--shell-diff-del);
+  background: var(--shell-accent-soft);
+  border: 1px solid var(--shell-accent-border);
+  border-left: 2px solid var(--shell-diff-del);
   border-radius: 4px;
   overflow-wrap: anywhere;
 }
@@ -202,10 +204,10 @@
   width: 100%;
   margin-top: 14px;
   padding: 8px 0;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--shell-border);
   border-radius: 4px;
-  background: #17171b;
-  color: #8a8f98;
+  background: transparent;
+  color: var(--shell-dim);
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -214,25 +216,23 @@
 }
 
 .primary:not(:disabled) {
-  border-color: rgba(255, 122, 26, 0.4);
-  color: #ff8a2e;
+  border-color: var(--shell-accent-border);
+  color: var(--shell-accent-strong);
 }
 
 .primary:hover:not(:disabled) {
-  background: #202027;
-  border-color: rgba(255, 122, 26, 0.6);
-  color: #ffa25e;
+  background: var(--shell-hover);
+  border-color: var(--shell-accent-strong);
+  color: var(--shell-accent-strong);
 }
 
 .primary:focus-visible {
-  outline: 1px solid rgba(255, 120, 48, 0.8);
+  outline: 1px solid var(--shell-accent-border);
   outline-offset: 2px;
 }
 
 .primary:disabled {
-  background: #101013;
-  border-color: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.2);
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -243,7 +243,7 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--shell-dim);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -251,8 +251,8 @@
 }
 
 .skip:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: var(--shell-hover);
+  color: var(--shell-text);
 }
 
 .orgRow {
@@ -272,4 +272,16 @@
   width: auto;
   padding: 0 12px;
   font-size: 12px;
+}
+
+/* ── planche：纸面挡板（加法层，dark 原样不动）──
+    遮罩不做主题覆写：与设置中心、「新建任务盘」共用 rgba(8,8,10,0.62)+blur(10px)，
+    纸面主题下曾经换成 0.18 淡墨罩，挡板背后等于没盖。
+    面板黑硬影换套印偏移影，主按钮悬浮换纸深底（令牌已自动把强调换成朱红）。 */
+:global([data-theme='planche']) .panel {
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+}
+
+:global([data-theme='planche']) .primary:hover:not(:disabled) {
+  background: var(--paper-deep, #DCCFA8);
 }

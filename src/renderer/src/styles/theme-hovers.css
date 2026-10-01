@@ -17,3 +17,8 @@
 /* 文件 tab 关闭钮：平时只显形，悬浮转删除色 */
 .filetab-close { color: var(--shell-muted); }
 .filetab-close:hover { color: var(--shell-diff-del); opacity: 1 !important; }
+/* ── 中部 pane tab：未选中悬浮只提亮底（文字色不变，避免闪烁），选中态不响应 hover ──
+   color-mix 吃 --shell-text，两主题自适应：dark 提亮白、planche 加深墨；
+   选中 tab 背景已是 canvas（与内容床同色），hover 不再叠加，保持“连成一体”。 */
+.pane-tab[data-active='false']:hover { background: color-mix(in srgb, var(--shell-text) 7%, transparent); }
+.pane-tab[data-active='false']:hover { color: var(--shell-text); }

@@ -11,33 +11,13 @@
  *      旧版把选中项、provider 卡片、badge、notice 全做成带边框的橙色/白色填充块，
  *      叠在一起就是"大量色块"的来源。
  *   3. 分组靠发丝线和留白，不靠嵌套的圆角容器。
+ *
+ * 遮罩与进出场动效不在这里：它们由 shared/ModalFrame.css 统一提供，
+ * 本文件只保留设置中心自己的安全边距与主题覆写。
  */
 
 .backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 24px;
-  background: rgba(8, 8, 10, 0.62);
-  backdrop-filter: blur(10px);
-  perspective: 1200px;
-  perspective-origin: center;
-  animation: settings-backdrop-in 0.3s ease-out;
-}
-
-.backdrop[data-closing='true'] {
-  animation: settings-backdrop-out var(--workbench-exit-duration, 320ms) ease-in forwards;
-  pointer-events: none;
-}
-
-/* Hold the panel invisible for one frame so lazy opens always start the
-   entrance from the keyframe instead of painting the final state first. */
-.backdrop:not([data-reveal-ready='true']) .panel {
-  opacity: 0;
-  animation: none;
 }
 
 .panel {
@@ -54,12 +34,6 @@
   color: var(--shell-text);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  /* Shared card-frame beat (§9.1): blueprint-aligned rise/descend so the
-     settings modal opens and closes on the same timing as the workbenches. */
-  animation: settings-card-rise var(--card-enter-duration, 260ms) cubic-bezier(0.16, 1, 0.3, 1) both;
-  transform-origin: center;
-  will-change: transform, opacity;
-  outline: none;
 
   /* Settings-scoped accent: a lighter amber than the brand orange, so it stays
      legible as 1px/2px detail on these surfaces. Panels below read these. */
@@ -83,65 +57,7 @@
   --so-body-pad-y: 22px;
 }
 
-.backdrop[data-closing='true'] .panel {
-  animation-name: settings-card-descend;
-  animation-duration: 260ms;
-  animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
-  animation-fill-mode: both;
-  pointer-events: none;
-}
-
-@keyframes settings-card-rise {
-  from {
-    opacity: 0;
-    transform: translateZ(-56px) scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: translateZ(0) scale(1);
-  }
-}
-
-@keyframes settings-card-descend {
-  from {
-    opacity: 1;
-    transform: translateZ(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateZ(-56px) scale(0.94);
-  }
-}
-
-@keyframes settings-backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes settings-backdrop-out {
-  from {
-    opacity: 1;
-  }
-  82% {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .backdrop,
-  .backdrop[data-closing='true'],
-  .panel,
-  .backdrop[data-closing='true'] .panel {
-    animation: none;
-    transition: none;
-  }
   .tabBadge {
     animation: none;
   }
@@ -752,11 +668,10 @@
   --janus-order: var(--planche-red, #D43D2A);
 }
 
-:global([data-theme='planche']) .backdrop {
-  background: rgba(28, 52, 59, 0.18);
-  backdrop-filter: none;
-}
-
+/* 遮罩刻意不做主题覆写。planche 曾把它换成 0.18 的淡墨罩并去掉模糊，
+   在纸面主题下等于全透明——设置中心背后的工作台直接透出来，而「新建任务盘」
+   走的是 shared/ModalFrame.css 的 rgba(8,8,10,0.62)+blur(10px)，两者一比就露馅。
+   现在设置中心与所有同源弹窗共用这一层近黑压暗，主题只翻面板自己的表面。 */
 :global([data-theme='planche']) .panel {
   box-shadow: 3px 3px 0 var(--line, #1C343B);
 }

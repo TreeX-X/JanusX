@@ -258,6 +258,33 @@ export interface BlueprintMaintenanceStartInput {
   modelId?: string
 }
 
+/**
+ * Dispatch hand-off, produced from a maintenance conversation and prefilled
+ * into a work terminal. Never submitted automatically.
+ *
+ * Note: intentionally not a BlueprintOperation — the change set is content-only
+ * and reversing a terminal launch has no meaning.
+ */
+export interface BlueprintDispatchBrief {
+  goal: string
+  steps: string[]
+  acceptance: string[]
+  constraints: string[]
+  /** Intersected with the task scope by the host; never model-invented. */
+  noteRefs: string[]
+}
+
+export interface BlueprintDispatchBriefResult {
+  brief: BlueprintDispatchBrief
+  /** Exact text prefilled into the terminal. */
+  text: string
+  /** Node the dispatched terminal binds to, for terminal-close analysis. */
+  anchorNodeId: string | null
+  workspaceId: string
+  workspaceName: string
+  workspacePath: string
+}
+
 export interface BlueprintMaintenanceApplyInput {
   taskId: string
   changeSetId: string

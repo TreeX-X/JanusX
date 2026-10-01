@@ -21,7 +21,7 @@ JanusX 的 observation → candidate → review → truth → BM25 管线承载�
 
 [queue 管线](./2026-09-03-knowledge-pipeline--dcc5e8a0.md)继续拥有结算、游标、失败记录与恢复。[个人与工程分离](./2026-09-15-personal-vs-engineering-memory--4515fa0e.md)及[首片落地](./2026-09-18-personal-engineering-separation--296ddf52.md)提供视图与共享边界。本提案拟替换[旧 Laya 提案](./2026-09-22-laya-decision-model-knowledge-confidence--673865a1.md)中“LLM 默认主路、Laya 仅作补充”的方向；旧文的模型资料只作背景，具体实施与验收以本篇为依据。本文保持 draft，完成状态以文末 AC 为准；运行时可用不等于真实数据质量验收通过。
 
-当前验收（2026-09-29）：功能完成范围以各 AC、实际验证及本文边界为准。跨批次事实合证据、普通候选来源复核、画像到期过滤、待审读取报错、长证据分块和校准产物接入有对应实现；AC-8 仍缺真实脱敏人工标注数据、事先固定的质量策略及独立留出实测。自动接受保持关闭。
+当前验收（2026-09-30）：功能完成范围以各 AC、实际验证及本文边界为准。跨批次事实合证据、普通候选来源复核、画像到期过滤、待审读取报错、长证据分块和校准产物接入有对应实现；Laya 设置页提供主题适配、路径提示、明确的运行操作及状态反馈。AC-8 仍缺真实脱敏人工标注数据、事先固定的质量策略及独立留出实测。自动接受保持关闭。
 
 ## Expected behavior
 
@@ -96,7 +96,6 @@ Qwen 官方已发布比4B更大的 [9B](https://huggingface.co/Qwen/Qwen3.5-9B)�
 | [Qwen3.5-35B-A3B](https://huggingface.co/unsloth/Qwen3.5-35B-A3B-GGUF) | 22.02GB | 26.25GB | A3B指每token约3B激活参数，仍要存放35B总权重；不适合当作3B小模型部署 |
 
 122B-A10B和397B-A17B也不能按激活参数量估算权重内存，不属于这台8GB显卡、32GB RAM电脑的合理常驻选择。更大模型可能改善生成和理解，但不是对审核准确率的保证；9B与4B也需固定量化、题目和模式后比较。若继续测试，拟优先验证 `nimble:9b-q4_K_M` 的本机加载与中文审核收益，再评估 Qwen3.5-9B Q4 对通用生成的增益；维持4B为已验证的本地基线，Jev保留，尚不采纳Nimble为自动放行策略。新模型并未改变知识库重构及真实质量验收未完成的状态。
-
 
 ### Nimble Q4 本机试验（2026-09-30）
 
@@ -314,7 +313,11 @@ Profile 按“人工 override → 已确认事实账本 → 有效近期事件�
 
 首期使用 Python 本地 sidecar 加固定多语 checkpoint，通过父子进程 stdin/stdout 的 NDJSON 协议调用 Agent.predict，不开放 HTTP 监听端口。延迟加载单个本地模型，限制六个问题、1024 token、单次并发和五分钟空闲驻留；截断或选项合并返回 unavailable。预热最多等待 120 秒，下载最多 900 秒，单条评分最多 30 秒；每批最多 20 条，极端超时仍会占用队列时间。运行中失联、繁忙、超时或协议错误保留规则候选。直接固定模型，避免 Router 在英文输入时另行下载英文 checkpoint。
 
-应用仅携带 sidecar.py、model-manifest.json 和 requirements.txt，Python/torch 环境与权重按需安装，默认模型目录为 userData/laya-weights/ 下的固定 revision。设置页提供开关、Python 绝对路径、模型目录、下载校验、预热和卸载。安装、下载、校验、预热与 ready 是不同状态，禁用或未 ready 时不能进入模型决策；自动精炼任务也必须检查运行时仍 ready。固定 SDK 0.3.21 和全部模型文件的 SHA-256；运行阶段设置离线模式，不临时联网拉取模型。
+应用仅携带 sidecar.py、model-manifest.json 和 requirements.txt，Python/torch 环境与权重按需安装，默认模型目录为 userData/laya-weights/ 下的固定 revision。设置页提供开关、Python 绝对路径、模型目录、下载校验、加载使用和释放内存。安装、下载、校验、预热与 ready 是不同状态，禁用或未 ready 时不能进入模型决策；自动精炼任务也必须检查运行时仍 ready。固定 SDK 0.3.21 和全部模型文件的 SHA-256；运行阶段设置离线模式，不临时联网拉取模型。
+
+[Laya 设置面板](../../src/renderer/src/components/LayaSettingsPanel.tsx)位于知识库总开关之后，复用设置页的主题和控件，专用样式负责路径、操作及运行详情。关闭时收起环境字段；总开关关闭时禁止编辑和启动，运行中的取消或释放仍可用。Python 要求绝对路径，模型目录可留空并支持系统目录选择。下载和加载会保存当前知识库设置，失败保存不能启动进程；操作期间禁用总开关、处理模式与保存/重置，取消可以抢占尚未完成的保存或启动。释放内存保留已下载文件。
+
+面板明确说明 Python 及依赖需另行安装，已有知识和人工标注集不是使用前提。状态及已知故障提示使用中英文文案，模型版本、内部原因码和真实测得的耗时位于折叠详情；没有推理记录时不显示零毫秒。轮询按请求和操作代次过滤过期结果，读取失败显示未知并允许重试，不以旧状态表示成功。浅色、深色及窄窗口保持字段可读和操作可达。直接显示全部诊断成本较低，但会掩盖正常配置步骤；独立安装向导能够进一步简化环境准备，却需要额外的安装和恢复机制，因此本面板复用现有受控运行时，不承担 Python 安装。
 
 Windows 验证环境采用 Python 3.12、torch 2.6.0+cpu、transformers 4.57.6，其余版本见 [requirements.txt](../../resources/laya/requirements.txt)。安装示例为 `uv venv --python 3.12 <环境目录>`，然后 `uv pip install --python <环境目录>/Scripts/python.exe -r resources/laya/requirements.txt`；把该 Python 绝对路径填入设置，再下载并预热。该文件固定版本但没有依赖包哈希，不等同于模型文件的摘要校验。环境和权重未写入仓库，也未修改用户现有 Janus 配置。
 
@@ -554,7 +557,6 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 验证命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe -m unittest discover -s tests/laya`，48 项通过；运行适配器使用 `--standard tests/fixtures/knowledge-review-expanded-standard.json --max-requests 408 --run`，诊断脚本使用同一 `--standard` 与上述原始结果路径。报告保存标准、脚本和来源摘要，不保存密钥。仓库 Note 检查仍有 4 个既有错误，位于 debug-mode-plan、worktree-composer-entry-motion、dsh-integration，不属于本项变更。
 
-
 ### Qwen 本地审核部署候选（2026-09-30）
 
 根据 [Qwen3.5-4B 官方模型卡](https://huggingface.co/Qwen/Qwen3.5-4B)、[Qwen3-4B-Instruct-2507 官方模型卡](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507)和 [Thinking-2507 官方模型卡](https://huggingface.co/Qwen/Qwen3-4B-Thinking-2507)，拟主测 Qwen3.5-4B，使用 Qwen3-4B-Instruct-2507 作低延迟对照。两者均为 Apache-2.0 模型，可本地运行；Qwen3.5 支持开启/关闭思考，Instruct-2507 仅支持非思考模式。Thinking-2507 专注较长推理，先不作为后台常驻审核首选。Reranker、Embedding 和 Guard 的目标分别是相关性、向量表示和安全审核，不能直接替代知识证据判断。保留 Jev 云端路径可节省本地算力，但已有高置信度数值误判且依赖外部服务；Qwen 的实际质量仍待同集测试，官方通用榜单不能证明其优于 Jev。
@@ -571,7 +573,6 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 主测文件 `Qwen3.5-4B-Q5_K_M.gguf` 的仓库 revision 为 `e87f176479d0855a907a41277aca2f8ee7a09523`，文件 SHA256 为 `8814232b85594dcd46c50e5b8b29324a7efe9e746edbe8a3d1df3d3fce7aad39`。对照文件 `Qwen3-4B-Instruct-2507-Q5_K_M.gguf` 的 revision 为 `a06e946bb6b655725eafa393f4a9745d460374c9`，SHA256 为 `5bde5e9d883622acb02bf77fe7dcbc56a8b9a9ad4be78a72ca23a532658b4ecb`。实际下载时须核验摘要，并固定运行时版本、模板、采样参数、上下文和输出预算；思考与非思考分别报告。量化影响必须通过相同模型不同量化实测，不能预设 Q5 无损。
 
 后续拟复用原集与扩展集的证据、标签、逐次重复和 Wiki 全断言通过规则，以错误放行、正确通过率、动作稳定性、格式/超时失败、显存和耗时衡量部署效果。生成模型自报置信度不等同于 Jev 的支持分，需定义单独的输出与决策适配，不直接沿用自报 0.9 放行。Jev 已知数值反例保留为回归；另固定未参与提示词调整的留出集，验证组合流程。知识库自动接受和未完成验收项保持原状态。
-
 
 ### Qwen 本机量化实测（2026-09-30）
 
@@ -607,7 +608,6 @@ Qwen3.5 三次均正确拦截 Jev 的“98.5% 到 99.5% 提高10个百分点”�
 
 完整报告：[Qwen3.5](../../tests/fixtures/qwen35-review-benchmark-live.json)、[Qwen3-Instruct](../../tests/fixtures/qwen3-instruct-review-benchmark-live.json)，包含各次答案与理由、耗时、资源采样、模型/脚本/运行时/数据摘要。复验命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-qwen-reviewer.py --server artifacts/qwen-review/vulkan/llama-server.exe --model artifacts/qwen-review/Qwen3.5-4B-Q5_K_M.gguf --output artifacts/qwen-review/qwen35-full.json`；对照模型替换模型名和输出路径。`--limit 3 --max-seconds 240` 用于试跑。单元验证命令 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe -m unittest discover -s tests/laya` 实跑 51 项通过。
 
-
 ### Laya 真实数据验收入口
 
 [评测脚本](../../scripts/evaluate-laya.py)支持 --dataset、--dataset-kind annotated、--policy 及 --validate-only。输入采用现有 JSON 样例结构：id、source、scenario、language、split、content、evidence、related、labels；labels 按 retention/kind/support/duplicate/supersede/conflict 顺序，除 kind 是 fact/preference/decision/procedure，其余为布尔值。真实脱敏样本须附 annotation.origin=redacted-real、reviewer 和带时区的 reviewedAt。标注元数据只记录来源声明，不能证明标签正确；不能把合成样例改元数据后当作真实验收。
@@ -620,7 +620,13 @@ source 按会话或原始来源分组，翻译及同事件变体共用 scenario�
 
 [校准加载器](../../src/main/knowledge/laya-calibration.ts)从设置中的模型目录读取可选 `calibration.json`。只有真实标注声明、独立验收 passed、完整质量策略摘要和匹配模型/模板/sidecar 摘要的产物可用于评分；损坏、不匹配、合成或验收失败的文件使当前评分不可用，不回用旧校准。不存在产物时原始概率继续作为人工审核的辅助信息。载入后逐题归一化分布、被选答案概率和 noul，保持答案方向；产物变更使旧身份失效。真实标注声明和 passed 报告仍依赖数据作者如实提供，不是来源真实性的密码学证明。这个机制不启用自动批准，也不能证明超出留出集语言和场景的质量。
 
-### 当前验证（2026-09-29）
+### 设置界面验证（2026-09-30）
+
+`npx vitest run tests/unit/laya-settings-ui.test.ts --reporter=verbose` 通过 8 项 Chromium 测试，加载实际知识库父面板与 CSS，覆盖保存期间取消、绝对路径与默认目录、目录选择、过期状态响应、读取失败重试、失败保存禁止启动、总开关联动、操作期间禁用父面板和下载/加载/释放完整操作。浅色 planche 与深色 dark 在 760/390 像素窗口通过中文文案和控件边界检查；设置 `LAYA_UI_SCREENSHOTS=artifacts/laya-settings-20260930` 可输出四张截图，人工检查通过。运行时与目录选择使用桥接替身，不下载模型、不访问真实知识数据。
+
+`npx vitest run tests/unit/knowledge/laya-process.test.ts tests/unit/knowledge/laya-calibration.test.ts tests/unit/knowledge/decision-scorer.test.ts tests/unit/knowledge-ipc-contract.test.ts --reporter=dot` 通过 4 个文件、41 项测试。`npm run typecheck:strict-unused`、`npm run build`、本次修改的生产组件 ESLint 和 `npm run i18n:check` 通过。全库 Note 检查报告其他四篇文档的 5 个错误：debug-mode-plan 缺少 Proposal/Risks，blueprint-maintenance-approval-gap 和 dsh-integration 的路径层级不符合其格式，worktree-composer-entry-motion 的 scope/reason 关系字段不合法；本篇零错误。此次未重新进行真实模型推理、安装器打包或真实数据迁移，不将界面回归视为 AC-8 的质量证据。
+
+### 内核验证（2026-09-29）
 
 相关测试全部使用临时 JANUSX_KNOWLEDGE_ROOT，未修改真实知识库。真实 Laya Windows CPU 的固定版本性能及合成集质量见上文实测报告；此次普通回归显式跳过真实权重用例，不将替身结果当作模型质量。
 
@@ -677,6 +683,7 @@ source 按会话或原始来源分组，翻译及同事件变体共用 scenario�
 - [x] AC-16: 工程事实的 Janus 交付强度 — 直接交付的工程事实按 workspace 与快照绑定增强，复用衰减、冷却、去重与上限；缓存命中仍按当前时间衰减和过滤到期事实，访问落盘影响后续排名，私有事实与跨项目同 ID 不串写。普通搜索保持只读，Wiki/图边不按引用增强，不据强度归档或删除 truth。
 - [x] AC-17: 显式来源撤回 — 观察详情预览当前正文并绑定 hash 二次确认；原子屏障使来源与已有显式派生链退出候选、truth、画像、近期事件和召回，阻止旧来源重放及运行中精修提交；严格读取和失败写入保留原文件。保留独立来源与跨 workspace 同 ID，不提供语义派生推断或恢复授权。
 - [x] AC-18: 撤回记录可管理 — 审计页分页展示撤回回执与历史影响数量，来源缺失、变化和歧义分别可见；当前正文预览有上限，失败不显示假空列表，刷新忽略旧响应；浏览不写数据、不解除撤回，不加入 MCP 共享面。
+- [x] AC-19: Laya 设置可用性 — 总开关与运行操作联动，路径有明确校验及默认目录说明，下载/加载/释放语义清楚，保存失败和状态读取失败可见；旧响应不能覆盖新操作结果，中英文及浅深色窄窗口可用，启动无需人工标注集。
 
 - [ ] AC-20: 可配置模型自动审核 — 明确范围内的后续候选由该环节所选的本地Qwen、Jev或用户外部LLM结合宿主策略完成入库，无需逐条人工批准；本地路径可独立于云端运行，外部路径不依赖本地部署。默认知识条目审核使用Qwen3.5-4B非思考模式，保留来源/版本核验及可追溯的模型审核记录；失败与暂存、旧数据处理和生产自动入库尚待实施与验收。
 - [ ] AC-21: 自动审核质量验收 — 用固定版本、明确知识范围和独立评估样本同时核验自动接受准确率、错误接受率、覆盖率和不确定候选处理；质量门槛待定，原有分流测试及零次接受结果不能替代该验收。

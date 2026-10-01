@@ -348,6 +348,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
         aria-label={t('knowledge:aria.engine')}
       >
         <header className={styles.header} style={cardStyle(0)}>
+          <button type="button" className={styles.closeButton} onClick={requestClose} title={t('knowledge:action.close')} aria-label={t('knowledge:aria.close')}><span aria-hidden="true" /></button>
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <span className={styles.bcCurrent}>{t('knowledge:breadcrumb.engine')}</span>
             <span className={styles.bcSep} aria-hidden="true">/</span>
@@ -361,7 +362,6 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               loading={loadState === 'loading'}
               onClick={() => void refresh()}
             />
-            <button type="button" className={styles.closeButton} onClick={requestClose} title={t('knowledge:action.close')} aria-label={t('knowledge:aria.close')}><span aria-hidden="true" /></button>
           </div>
         </header>
         <div className={styles.statusCard} style={cardStyle(1)}>

@@ -24,6 +24,7 @@ export function KnowledgeSettingsPanel() {
   const [mcpBusy, setMcpBusy] = useState(false)
   const [mcpMsg, setMcpMsg] = useState('')
   const [mcpOk, setMcpOk] = useState(true)
+  const [layaBusy, setLayaBusy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -140,7 +141,7 @@ export function KnowledgeSettingsPanel() {
     }
   }
 
-  const isBusy = status === 'loading' || status === 'saving'
+  const isBusy = status === 'loading' || status === 'saving' || layaBusy
   const modeOptions = [
     { value: 'auto', label: t('settings:knowledge.row.mode.auto') },
     { value: 'deterministic-only', label: t('settings:knowledge.row.mode.deterministicOnly') },
@@ -155,7 +156,6 @@ export function KnowledgeSettingsPanel() {
 
   return (
     <div className={styles.panel}>
-      <LayaSettingsPanel value={draft.laya} onChange={laya => setDraft(current => ({ ...current, laya }))} onSave={handleSave} disabled={isBusy} />
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.capture')}</h3>
         <SettingSwitch
@@ -182,6 +182,7 @@ export function KnowledgeSettingsPanel() {
           </div>
           <Select
             value={draft.mode}
+            disabled={isBusy}
             onChange={(value) => updateModeDraft(normalizeMode(value))}
             options={modeOptions}
             ariaLabel={t('settings:knowledge.row.mode.label')}
@@ -189,6 +190,10 @@ export function KnowledgeSettingsPanel() {
         </div>
       </section>
 
+      <LayaSettingsPanel value={draft.laya} knowledgeEnabled={draft.enabled} onChange={laya => {
+        setDraft(current => ({ ...current, laya }))
+        if (status === 'saved' || status === 'error') { setStatus('idle'); setError('') }
+      }} onSave={handleSave} disabled={isBusy} onBusyChange={setLayaBusy} />
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.externalMcp')}</h3>
         <div className={styles.row}>
@@ -291,6 +296,7 @@ function SettingSwitch({  label,
       <label className={styles.switch}>
         <input
           type="checkbox"
+          aria-label={label}
           checked={checked}
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}

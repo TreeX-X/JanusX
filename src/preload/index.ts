@@ -244,6 +244,7 @@ const janusAPI: JanusAPI = {
   dismissMaintenanceProposal: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceDismiss, input),
   prepareMaintenanceUndo: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceUndoPrepare, input),
   applyMaintenanceUndo: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.maintenanceUndoApply, input),
+  composeDispatchBrief: (input) => ipcRenderer.invoke(JANUS_COMMAND_CHANNELS.dispatchComposeBrief, input),
   onAnalysisResult: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.analysis, callback),
   onDiscovered: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.discovered, callback),
   onMaintenanceTask: (callback) => subscribeIpcEvent(JANUS_EVENT_CHANNELS.maintenance, callback),

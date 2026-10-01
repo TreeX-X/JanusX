@@ -1085,6 +1085,20 @@
   color: #ddd;
 }
 
+/* 详情卡（左侧卡片）的关闭键钉在卡片右上角。header 左侧信息块是 eyebrow + 标题 +
+   标签三行，align-items: center 会把 28px 的关闭键顶到标题行正中，看起来像标题的
+   附属物而不是"关掉整张卡"；绝对定位后它与右侧 Janus 面板的关闭键落在同一基线。
+   .bp-node-detail__heading 的右内边距为这个角留位，长标题不会压到按钮下面。 */
+.bp-node-detail__header .bp-panel-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
+.bp-node-detail__heading {
+  padding-right: 34px;
+}
+
 .bp-node-detail__section {
   display: flex;
   flex-direction: column;
@@ -1672,8 +1686,8 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(5, 5, 7, 0.55);
-  backdrop-filter: blur(6px);
+  background: rgba(8, 8, 10, 0.62);
+  backdrop-filter: blur(10px);
   animation: none;
 }
 
@@ -4185,13 +4199,10 @@
   color: var(--planche-red, #D43D2A);
 }
 
-/* ── 工作台：纸面三件套（顶栏 / 统一栏 / 卡片），去毛玻璃黑影 ── */
-[data-theme='planche'] .blueprint-workbench-backdrop {
-  background: rgba(28, 52, 59, 0.18);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
+/* ── 工作台：纸面三件套（顶栏 / 统一栏 / 卡片），去毛玻璃黑影 ──
+   遮罩不做主题覆写：与设置中心 / 共享 ModalFrame 同为 rgba(8,8,10,0.62)+blur(10px)。
+   纸面主题下曾换成 0.18 淡墨罩并去模糊，工作台背后等于没盖。卡片式逐步唤出
+   （--card-index 错峰）留在 .blueprint-workbench-shell 那一层，不受遮罩影响。 */
 [data-theme='planche'] .blueprint-workbench-topbar,
 [data-theme='planche'] .blueprint-workbench-toolbar,
 [data-theme='planche'] .blueprint-workbench-card {
@@ -4802,6 +4813,43 @@
 
 [data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-message-content {
   color: var(--ink, #1C343B);
+}
+
+/* 停靠面板的提示行：时间戳 / 行内按钮 / 作者行仍是 05 的白字与橙字 */
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-message-time {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-message-edit,
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-clear-button {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-message-edit:hover:not(:disabled),
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-clear-button:hover:not(:disabled) {
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-message-author {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-message.assistant .janus-chat-message-author {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-streaming-cursor {
+  background: var(--janus-current, var(--planche-red, #D43D2A));
+  box-shadow: none;
+}
+
+[data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-inline-editor {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+  caret-color: var(--planche-red, #D43D2A);
 }
 
 [data-theme='planche'] .janus-chat[data-compact-navigation] .janus-chat-input-wrapper {

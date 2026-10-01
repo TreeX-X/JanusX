@@ -32,13 +32,14 @@
   min-width: 0;
   grid-template-columns: minmax(0, 1fr) 36px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--shell-border);
   border-radius: 8px;
-  /* 实色卡片：透明窗口内 backdrop-filter 在 Windows 下回退成灰晕，0.95 透明度的 blur 视觉收益为零 */
-  background: #141416;
+  /* 实色卡片：透明窗口内 backdrop-filter 在 Windows 下回退成灰晕，0.95 透明度的 blur 视觉收益为零；
+     颜色走主题统一令牌（默认 planche 纸面、dark 经典黑），禁止硬编码色。 */
+  background: var(--shell-card);
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.65),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 16px 48px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 var(--shell-border-soft);
   animation: toast-in 180ms ease-out;
   transition:
     transform 250ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -48,11 +49,24 @@
 
 .toast:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 120, 48, 0.25);
+  border-color: var(--shell-accent-border);
   box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.65),
-    0 0 12px rgba(255, 120, 48, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 16px 48px rgba(0, 0, 0, 0.35),
+    0 0 12px var(--accent-soft),
+    inset 0 1px 0 var(--shell-border-soft);
+}
+
+/* 纸面浅色基底下重黑阴影过脏：降强度、走墨色 */
+:global([data-theme='planche']) .toast {
+  box-shadow:
+    0 12px 32px rgba(28, 52, 59, 0.25),
+    inset 0 1px 0 rgba(28, 52, 59, 0.08);
+}
+
+:global([data-theme='planche']) .toast:hover {
+  box-shadow:
+    0 12px 32px rgba(28, 52, 59, 0.25),
+    0 0 12px var(--accent-soft);
 }
 
 .filamentSpine {
@@ -62,26 +76,27 @@
   left: 0;
   width: 3px;
   border-radius: 0 99px 99px 0;
-  background: #ff7830;
-  box-shadow: 0 0 6px rgba(255, 120, 48, 0.2);
+  /* 类型色与应用内通知同口径：attention 走 primary，completed/failed 走 diff 加减色 */
+  background: var(--primary);
+  box-shadow: 0 0 6px var(--accent-soft);
   transition: background 250ms ease, box-shadow 250ms ease;
 }
 
 .toast:hover .filamentSpine {
-  background: #ff9254;
-  box-shadow: 0 0 8px rgba(255, 120, 48, 0.4);
+  background: var(--shell-accent-strong);
+  box-shadow: 0 0 8px var(--accent-mid);
 }
 
 .completed .filamentSpine {
-  background: #ff8a42;
+  background: var(--shell-diff-add);
 }
 
 .failed .filamentSpine {
-  background: #ff6d47;
+  background: var(--shell-diff-del);
 }
 
 .attention .filamentSpine {
-  background: #ff7830;
+  background: var(--primary);
 }
 
 .closing {
@@ -103,7 +118,7 @@
 
 .kicker {
   overflow: hidden;
-  color: #ff7830;
+  color: var(--primary);
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   font-size: 9px;
   font-weight: 600;
@@ -114,9 +129,17 @@
   white-space: nowrap;
 }
 
+.completed .kicker {
+  color: var(--shell-diff-add);
+}
+
+.failed .kicker {
+  color: var(--shell-diff-del);
+}
+
 .title {
   overflow: hidden;
-  color: #fff;
+  color: var(--shell-text);
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.3;
@@ -127,7 +150,7 @@
 .body {
   display: -webkit-box;
   overflow: hidden;
-  color: #a0a0a5;
+  color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.5;
   -webkit-box-orient: vertical;

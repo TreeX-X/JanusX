@@ -13,6 +13,8 @@ const getControlStatus = vi.fn()
 
 vi.mock('electron', () => ({
   ipcMain: { handle: (channel: string, handler: (...args: unknown[]) => unknown) => handlers.set(channel, handler) },
+  BrowserWindow: { getAllWindows: () => [] as unknown[] },
+  app: { isPackaged: false, getAppPath: () => process.cwd(), getPath: () => process.cwd(), getVersion: () => '0.0.0-test' },
 }))
 vi.mock('../../src/main/config/service', () => ({
   configService: { getNotificationSettings, getRemoteNotificationSettings, updateNotificationSettings },

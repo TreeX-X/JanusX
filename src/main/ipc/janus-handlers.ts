@@ -115,6 +115,17 @@ export function registerJanusHandlers(): void {
     JANUS_COMMAND_CHANNELS.maintenanceUndoApply,
     async (_event, input: BlueprintMaintenanceUndoApplyInput) => blueprintMaintenanceService.applyUndo(input)
   )
+  // 派发简报：一次性生成，不写 Note、不产生 changeSet，宿主负责启动终端。
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.dispatchComposeBrief,
+    async (_event, input: {
+      taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
+      providerId: string; modelId?: string; workspaceIds: string[]; workspaceRoots: Record<string, string>
+    }) => blueprintMaintenanceService.composeDispatchBrief({
+      ...input,
+      signal: new AbortController().signal,
+    })
+  )
 
   // ───────────── 节点操作（§6.2） ─────────────
   ipcMain.handle(

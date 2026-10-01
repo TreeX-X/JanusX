@@ -6,8 +6,9 @@ import {
 } from '../../src/shared/ipc/experimental'
 
 describe('experimental feature flags', () => {
-  it('defaults all five entries to off (hidden by default)', () => {
+  it('defaults all six entries to off (hidden by default)', () => {
     expect(DEFAULT_EXPERIMENTAL_FEATURES).toEqual({
+      blueprint: false,
       knowledge: false,
       roundtable: false,
       persona: false,
@@ -29,7 +30,16 @@ describe('experimental feature flags', () => {
   })
 
   it('keeps each flag independent and coerces to strict boolean', () => {
+    expect(normalizeExperimentalFeatures({ blueprint: true })).toEqual({
+      blueprint: true,
+      knowledge: false,
+      roundtable: false,
+      persona: false,
+      remoteControl: false,
+      teamCollab: false,
+    })
     expect(normalizeExperimentalFeatures({ knowledge: true })).toEqual({
+      blueprint: false,
       knowledge: true,
       roundtable: false,
       persona: false,
@@ -37,6 +47,7 @@ describe('experimental feature flags', () => {
       teamCollab: false,
     })
     expect(normalizeExperimentalFeatures({ roundtable: 1, persona: 'true' })).toEqual({
+      blueprint: false,
       knowledge: false,
       roundtable: false,
       persona: false,
@@ -44,6 +55,7 @@ describe('experimental feature flags', () => {
       teamCollab: false,
     })
     expect(normalizeExperimentalFeatures({ remoteControl: true })).toEqual({
+      blueprint: false,
       knowledge: false,
       roundtable: false,
       persona: false,
@@ -51,6 +63,7 @@ describe('experimental feature flags', () => {
       teamCollab: false,
     })
     expect(normalizeExperimentalFeatures({ remoteControl: 1 })).toEqual({
+      blueprint: false,
       knowledge: false,
       roundtable: false,
       persona: false,
@@ -58,6 +71,7 @@ describe('experimental feature flags', () => {
       teamCollab: false,
     })
     expect(normalizeExperimentalFeatures({ teamCollab: true })).toEqual({
+      blueprint: false,
       knowledge: false,
       roundtable: false,
       persona: false,
@@ -65,6 +79,7 @@ describe('experimental feature flags', () => {
       teamCollab: true,
     })
     expect(normalizeExperimentalFeatures({ teamCollab: 1 })).toEqual({
+      blueprint: false,
       knowledge: false,
       roundtable: false,
       persona: false,

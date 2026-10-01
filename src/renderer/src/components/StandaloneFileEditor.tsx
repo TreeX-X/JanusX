@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
+import { useThemeStore } from '@/stores/theme'
 import { Maximize2, PanelRightOpen, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
 import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
@@ -72,6 +73,11 @@ export function StandaloneFileEditor() {
   const [baselineFileId, setBaselineFileId] = useState<string | null>(null)
   const [isPinned, setIsPinned] = useState(false)
   const unwatchFindControlsRef = useRef<(() => void) | null>(null)
+  // 独立窗口不经过 App 根的 theme store，自行拉取持久化主题并挂载 [data-theme]，
+  // 顶栏走 shell 语义令牌，与嵌入版保持一致；MonacoViewer 内的 load 仅覆盖编辑区。
+  useEffect(() => {
+    void useThemeStore.getState().load()
+  }, [])
   const handleEditorMount = useCallback((editor: FindableEditor | null) => {
     findEditorRef.current = editor
     unwatchFindControlsRef.current?.()
@@ -227,14 +233,13 @@ export function StandaloneFileEditor() {
   const canFind = activeFile?.viewType === 'code' || activeFile?.viewType === 'markdown' || activeFile?.viewType === 'html'
 
   return (
-    <div data-editor-window-state="ready" className="h-screen flex flex-col overflow-hidden" style={{ background: '#151517', color: '#d4d4d4' }}>
+    <div data-editor-window-state="ready" className="h-screen flex flex-col overflow-hidden" style={{ background: 'var(--shell-canvas)', color: 'var(--shell-text)' }}>
       <div
         className="relative h-[38px] shrink-0 flex items-center gap-3 px-3 select-none"
         style={{
           ...titlebarDrag,
-          background: 'rgba(6, 6, 6, 0.96)',
-          backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          background: 'var(--shell-pane-chrome)',
+          borderBottom: '1px solid var(--shell-border)',
         }}
       >
         <div
@@ -257,14 +262,15 @@ export function StandaloneFileEditor() {
                 data-editor-tab={file.absolutePath}
                 data-active={isActive ? 'true' : 'false'}
                 className="relative flex h-[31px] max-w-[180px] shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md px-3 font-mono text-[11px]"
-                style={{ ...noDrag, color: isActive ? '#ddd' : '#777', background: isActive ? '#151517' : 'transparent' }}
+                style={{ ...noDrag, color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)', background: isActive ? 'var(--shell-canvas)' : 'transparent' }}
                 onClick={() => setActiveFile(file.id)}
               >
-                {file.isDirty ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#ff7830]" /> : null}
+                {file.isDirty ? <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--shell-accent)' }} /> : null}
                 {file.externalChanged ? (
                   <button
                     type="button"
-                    className="shrink-0 border-0 bg-transparent p-0 text-[#4fc3f7] hover:text-[#7fdcff]"
+                    className="shrink-0 border-0 bg-transparent p-0 hover:opacity-80"
+                    style={{ color: 'var(--shell-accent-strong)' }}
                     title="Disk version changed ? click to reload"
                     onClick={(event) => { event.stopPropagation(); void reloadOpenFile(file.absolutePath) }}
                   >
@@ -275,7 +281,8 @@ export function StandaloneFileEditor() {
                 <button
                   type="button"
                   aria-label={t('editor:fileEditor.closeTab', { name: file.name })}
-                  className="ml-1 shrink-0 border-0 bg-transparent p-0 text-[#666] hover:text-[#ff7474]"
+                  className="ml-1 shrink-0 border-0 bg-transparent p-0 hover:opacity-100"
+                  style={{ color: 'var(--shell-dim)', opacity: 0.7 }}
                   onClick={async (event) => {
                     event.stopPropagation()
                     if (file.isDirty && file.viewType !== 'image' && file.viewType !== 'binary') {
@@ -295,7 +302,7 @@ export function StandaloneFileEditor() {
                 >
                   ×
                 </button>
-                {isActive ? <span className="absolute inset-x-2 bottom-0 h-px bg-[#ff7830]" /> : null}
+                {isActive ? <span className="absolute inset-x-2 bottom-0 h-px" style={{ background: 'var(--shell-accent)' }} /> : null}
               </div>
             )
           })}
@@ -308,7 +315,7 @@ export function StandaloneFileEditor() {
               title={t('editor:fileEditor.findTitle')}
               onClick={() => void openEditorFind(findEditorRef.current)}
               onMouseDown={(event) => event.stopPropagation()}
-              className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#888] transition-colors hover:border-white/[0.14] hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors hover:border-[var(--shell-accent-border)] hover:text-[var(--shell-text)]"
             >
               <Search size={14} strokeWidth={1.8} />
             </button>
@@ -322,9 +329,9 @@ export function StandaloneFileEditor() {
             onMouseDown={(event) => event.stopPropagation()}
             className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors"
             style={{
-              background: isPinned ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
-              border: isPinned ? '1px solid rgba(255, 120, 48, 0.28)' : '1px solid rgba(255, 255, 255, 0.08)',
-              color: isPinned ? '#ff9b64' : '#888',
+              background: isPinned ? 'var(--shell-accent-soft)' : 'transparent',
+              border: isPinned ? '1px solid var(--shell-accent-border)' : '1px solid var(--control-border)',
+              color: isPinned ? 'var(--shell-accent-strong)' : 'var(--shell-muted)',
             }}
           >
             {isPinned ? <PinOff size={14} strokeWidth={1.8} /> : <Pin size={14} strokeWidth={1.8} />}
@@ -335,7 +342,7 @@ export function StandaloneFileEditor() {
             title={t('editor:fileEditor.maximizeWindow')}
             onClick={() => void window.electron.window.maximize()}
             onMouseDown={(event) => event.stopPropagation()}
-            className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors hover:border-white/[0.14] hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors hover:border-[var(--shell-accent-border)] hover:text-[var(--shell-text)]"
           >
             <Maximize2 size={14} strokeWidth={1.8} />
           </button>
@@ -346,7 +353,7 @@ export function StandaloneFileEditor() {
             disabled={!activeFile || !editorParams}
             onClick={() => void embedInWorkspace()}
             onMouseDown={(event) => event.stopPropagation()}
-            className="flex h-7 w-7 items-center justify-center rounded border border-white/[0.08] bg-white/[0.04] text-[#999] transition-colors enabled:hover:border-white/[0.14] enabled:hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+            className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors enabled:hover:border-[var(--shell-accent-border)] enabled:hover:text-[var(--shell-text)] disabled:cursor-not-allowed disabled:opacity-35"
           >
             <PanelRightOpen size={14} strokeWidth={1.8} />
           </button>
@@ -361,9 +368,9 @@ export function StandaloneFileEditor() {
             className="flex h-7 w-7 items-center justify-center rounded transition-colors"
             style={{
               ...noDrag,
-              background: activeFile?.isDirty ? 'rgba(255, 120, 48, 0.14)' : 'rgba(255, 255, 255, 0.04)',
-              border: activeFile?.isDirty ? '1px solid rgba(255, 120, 48, 0.24)' : '1px solid rgba(255, 255, 255, 0.08)',
-              color: activeFile?.isDirty ? '#ffb084' : '#777',
+              background: activeFile?.isDirty ? 'var(--shell-accent-soft)' : 'transparent',
+              border: activeFile?.isDirty ? '1px solid var(--shell-accent-border)' : '1px solid var(--control-border)',
+              color: activeFile?.isDirty ? 'var(--shell-accent-strong)' : 'var(--shell-dim)',
             }}
           >
             <Save size={14} strokeWidth={1.8} />
@@ -386,9 +393,9 @@ export function StandaloneFileEditor() {
             onEditorMount={handleEditorMount}
           />
         ) : activeFile ? (
-          <div className="flex h-full items-center justify-center text-xs text-[#666]">Loading</div>
+          <div className="flex h-full items-center justify-center text-xs" style={{ color: 'var(--shell-dim)' }}>Loading</div>
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-[#666]">
+          <div className="flex h-full items-center justify-center text-xs" style={{ color: 'var(--shell-dim)' }}>
             {t('editor:fileEditor.missingFileInfo')}
           </div>
         )}

@@ -507,6 +507,131 @@ test('dragging does not leave a stale single activation', async ({ page }) => {
   await expect(harness(page)).toHaveAttribute('data-double-count', '0')
 })
 
+test('pinned chat survives outside click and still collapses explicitly', async ({ page }) => {
+  const island = page.locator('.janus-island')
+  const shell = page.locator('.janus-island-shell')
+  await tap(island)
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
+  await islandExpandedChatButton(page).click()
+  await expect(shell).toHaveAttribute('data-view', 'chat')
+
+  await island.getByRole('button', { name: 'Pin', exact: true }).click()
+  await expect(shell).toHaveAttribute('data-pinned', 'true')
+
+  // Implicit dismiss is suppressed while pinned.
+  await page.mouse.click(30, 500)
+  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
+  await page.keyboard.press('Escape')
+  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
+
+  // Explicit double activation still returns to the capsule and drops the pin.
+  await tap(island, { x: 110, y: 25 })
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 114, y: 27, pointerId: 3 })
+  await pointer(island, 'pointerup', { x: 114, y: 27, pointerId: 3 })
+  await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
+  await expect(shell).toHaveAttribute('data-pinned', 'false')
+})
+
+test('chat topbar drag moves the expanded panel without moving the capsule', async ({ page }) => {
+  const island = page.locator('.janus-island')
+  const shell = page.locator('.janus-island-shell')
+  // The harness boots streaming: the collapsed capsule must already expose
+  // the loading state without leaving the capsule stage.
+  await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
+  await expect(shell).toHaveAttribute('data-loading', 'true')
+
+  await tap(island)
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
+  await islandExpandedChatButton(page).click()
+
+  const topbar = island.locator('.janus-expanded-topbar')
+  const anchor = await topbar.boundingBox()
+  expect(anchor).not.toBeNull()
+  // Grab the brand text just right of the top-left pin control: buttons and
+  // inputs opt out of the drag handle by design.
+  const pinGrabBox = await island.getByRole('button', { name: 'Pin', exact: true }).boundingBox()
+  expect(pinGrabBox).not.toBeNull()
+  const startX = pinGrabBox!.x + pinGrabBox!.width + 10
+  const startY = pinGrabBox!.y + pinGrabBox!.height / 2
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+  await page.mouse.move(startX + 120, startY + 80, { steps: 8 })
+  await page.mouse.up()
+
+  const transform = await shell.evaluate((element) => (element as HTMLElement).style.transform)
+  expect(transform).toContain('120px')
+  expect(transform).toContain('80px')
+
+  // Expanded corners paint nothing outside the rounded panel and never
+  // intercept clicks: the outer island body is fully pass-through.
+  await expect.poll(async () => island.evaluate((element) => getComputedStyle(element).pointerEvents))
+    .toBe('none')
+  await expect.poll(async () => island.evaluate((element) => getComputedStyle(element).boxShadow))
+    .toBe('none')
+
+  // Collapsing clears the offset: the capsule always stays centered.
+  await tap(island, { x: 110, y: 25 })
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 114, y: 27, pointerId: 3 })
+  await pointer(island, 'pointerup', { x: 114, y: 27, pointerId: 3 })
+  await expect(harness(page)).toHaveAttribute('data-stage', 'collapsed')
+  await expect(shell).toHaveAttribute('data-loading', 'true')
+  await shell.evaluate((element) => {
+    if ((element as HTMLElement).style.transform !== '') throw new Error('capsule must stay centered')
+  })
+})
+
+test('island pin covers every view and the session rail collapses', async ({ page }) => {
+  const island = page.locator('.janus-island')
+  const shell = page.locator('.janus-island-shell')
+  await tap(island)
+  await page.waitForTimeout(50)
+  await pointer(island, 'pointerdown', { x: 104, y: 22, pointerId: 2 })
+  await pointer(island, 'pointerup', { x: 104, y: 22, pointerId: 2 })
+  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
+  // Default view is monitor: the pin control is present without entering chat.
+  await expect(shell).toHaveAttribute('data-view', 'monitor')
+  const pinButton = island.getByRole('button', { name: 'Pin', exact: true })
+  const brandBox = await island.locator('.janus-expanded-brand').boundingBox()
+  const pinBox = await pinButton.boundingBox()
+  expect(brandBox).not.toBeNull()
+  expect(pinBox).not.toBeNull()
+  // Pin lives top-left, ahead of the brand mark.
+  expect(pinBox!.x + pinBox!.width).toBeLessThanOrEqual(brandBox!.x + 1)
+  await pinButton.click()
+  await expect(shell).toHaveAttribute('data-pinned', 'true')
+  await page.keyboard.press('Escape')
+  await expect(harness(page)).toHaveAttribute('data-stage', 'expanded')
+  await island.getByRole('button', { name: 'Unpin', exact: true }).click()
+  await expect(shell).toHaveAttribute('data-pinned', 'false')
+
+  // Session rail collapse frees the discussion width and restores on expand.
+  await islandExpandedChatButton(page).click()
+  const chat = island.locator('.janus-chat')
+  await expect(chat).toHaveClass(/janus-chat--with-sidebar/)
+  await expect.poll(async () => chat.evaluate((element) => getComputedStyle(element).transitionProperty))
+    .toContain('grid-template-columns')
+  await chat.getByRole('button', { name: 'Collapse conversation list' }).click()
+  // The rail visibly slides shut instead of jumping: mid-flight width sits
+  // strictly between the open (208px) and shut (34px) tracks.
+  await expect.poll(async () => chat.locator('.janus-chat-sidebar').boundingBox().then((box) => box!.width))
+    .toBeLessThan(200)
+  const midWidth = await chat.locator('.janus-chat-sidebar').boundingBox().then((box) => box!.width)
+  expect(midWidth).toBeGreaterThan(30)
+  await expect(chat).toHaveClass(/janus-chat--sidebar-collapsed/)
+  await expect(chat.locator('.janus-chat-sidebar--collapsed')).toBeVisible()
+  await chat.getByRole('button', { name: 'Expand conversation list' }).click()
+  await expect(chat).not.toHaveClass(/janus-chat--sidebar-collapsed/)
+  await expect(chat.locator('.janus-chat-sidebar-list')).toBeVisible()
+})
+
 test('peek and expanded geometry stay inside desktop and compact viewports', async ({ page }) => {
   for (const viewport of [{ width: 1280, height: 720 }, { width: 720, height: 540 }]) {
     await page.setViewportSize(viewport)

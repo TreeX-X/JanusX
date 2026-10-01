@@ -20,6 +20,9 @@ import {
 } from '../../src/shared/terminalColorQuery'
 import { getThemeDefinition } from '../../src/shared/theme/registry'
 
+// 声明扫描用：注释里允许引用旧色值做说明，声明里不许再出现。
+const stripCssComments = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '')
+
 describe('planche theme contract', () => {
   it('keeps planche (slate) as default and passes open theme ids through (read-side fallback)', () => {
     expect(DEFAULT_APP_THEME).toBe('planche')
@@ -63,7 +66,7 @@ describe('planche theme contract', () => {
 
   it('pins planche overrides to additive selectors (dark stays untouched)', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
-    const read = (p: string) => readFileSync(resolve(root, p), 'utf8')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n').replace(/\r\n/g, '\n')
     const island = read('components/janus/styles/13-janus-planche.css')
     // 全态覆盖：折叠纸胶囊墨眼 / 一级 capsule / 二级 tray-banner / 展开大眼 / 运行球
     for (const selector of [
@@ -149,11 +152,11 @@ describe('planche theme contract', () => {
     expect(canvas).not.toContain('STATUS_VISUALS[')
     const edge = read('components/blueprint/BlueprintAdaptiveEdge.tsx')
     expect(edge).toContain('var(--shell-accent-strong)')
-    // 右缘 TurnChange 浮岛：壳走 drawer 令牌，文字走 shell 令牌，增减数走 diff 令牌
+    // 右缘 TurnChange 浮岛：收缩/展开同色走 chrome 底，文字走 shell 令牌，增减数走 diff 令牌
     const turn = read('components/TurnChangeIsland.tsx')
     expect(turn).toContain('var(--shell-diff-add)')
     expect(turn).toContain('var(--shell-diff-del)')
-    expect(turn).toContain('var(--shell-drawer)')
+    expect(turn).toContain('var(--shell-chrome)')
     expect(turn).not.toContain("background: '#000'")
     expect(turn).not.toContain("color: '#fff'")
     // diff 令牌双主题都有定义（M1 后唯一事实源为 definition.ts，CSS 由脚本生成）
@@ -181,6 +184,30 @@ describe('planche theme contract', () => {
     }
     expect(session).toContain('var(--shell-diff-add)')
     expect(session).toContain('var(--shell-diff-del)')
+    // 会话表面（列表卡片、详情 turn 卡片、轮播栏、diff 面板、checkpoint 条、输入框）
+    // 全部由 --shell-chrome 朝 --shell-text 混出的三档承担，弹窗遮罩与红绿灯除外。
+    // plankhe 的 --shell-void/canvas/pane/chrome/card 全是 #EFE4C5，纸面里没有更深的
+    // 台阶：写死 rgba(0,0,0,.2x) 是冷灰油渍，写死 rgba(255,255,255,.0x) 等于没画，
+    // 硬编码的 #8ab4ff 蓝在朱红纸面上完全跑调。三条都不许回来。
+    expect(session).toContain(
+      "const SURFACE_CARD = 'color-mix(in srgb, var(--shell-chrome) 94%, var(--shell-text))'",
+    )
+    expect(session).toContain(
+      "const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 90%, var(--shell-text))'",
+    )
+    expect(session).toContain(
+      "const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'",
+    )
+    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(3)
+    expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(10)
+    expect(session.match(/background: SURFACE_DEEP/g) ?? []).toHaveLength(2)
+    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(3)
+    expect(session).not.toMatch(/background: 'rgba\(255,\s*255,\s*255/)
+    expect(session).not.toMatch(/background: 'rgba\(0,\s*0,\s*0,\s*0\.[1-5]\d\)'/)
+    expect(session).not.toMatch(/(solid|dashed) rgba\(255,\s*255,\s*255/)
+    expect(session).not.toMatch(/rgba\(138,\s*180,\s*255/)
+    expect(session).not.toContain('#8ab4ff')
+    expect(session).not.toContain("background: 'var(--shell-card)'")
     // 设置面板白字标签收敛到墨字（:global 加法层，吃令牌）
     for (const mod of [
       'components/LlmConfigModal.module.css',
@@ -202,6 +229,20 @@ describe('planche theme contract', () => {
     expect(notif).toContain(":global([data-theme='planche']) .labelText")
     const project = read('components/ProjectSettings.module.css')
     expect(project).toContain(":global([data-theme='planche']) .promptBox textarea")
+    // 设置底栏不再写死 dark 的 canvas 色值。#151517 只在 dark 成立，留在声明里
+    // 会让默认的 planche 纸面主题在内容底部压一条近黑横条，并永久盖住尾部内容。
+    for (const mod of [
+      'components/LlmConfigModal.module.css',
+      'components/ModelCatalogPanel.module.css',
+      'components/NotificationSettingsPanel.module.css',
+      'components/ProjectSettings.module.css',
+      'components/AppSettingsModal.module.css',
+    ]) {
+      const declared = stripCssComments(read(mod))
+      expect(declared, mod).not.toMatch(/#151517|rgba\(\s*21\s*,\s*21\s*,\s*23/)
+    }
+    expect(notif).toContain("background: color-mix(in srgb, var(--shell-canvas) 90%, transparent);")
+    expect(stripCssComments(notif)).toContain(":global([data-theme='planche']) .footer")
     // 文件树 CSS 同样收敛到令牌
     const fileTree = read('components/file-tree/file-tree.module.css')
     expect(fileTree).toContain('color: var(--shell-text)')
@@ -210,7 +251,7 @@ describe('planche theme contract', () => {
 
   it('covers expanded deep surfaces (brand/tabs/chat/monitor/roundtable/auxiliary)', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
-    const read = (p: string) => readFileSync(resolve(root, p), 'utf8')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n').replace(/\r\n/g, '\n')
     const island = read('components/janus/styles/13-janus-planche.css')
     // 第二轮：压过 05/06/07/09/10 的 (0,5,0)+ 黑底/白字，特异性逐条到位
     for (const selector of [
@@ -236,7 +277,7 @@ describe('planche theme contract', () => {
 
   it('keeps close controls X-free on hover and papers menus/selects', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
-    const read = (p: string) => readFileSync(resolve(root, p), 'utf8')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
     // 红灯关闭：悬浮不冒叉（双主题统一交互），命中判定保留
     const globals = read('styles/globals.css')
     expect(globals).toContain('.modal-close-light::after,')
@@ -271,7 +312,7 @@ describe('planche theme contract', () => {
 
   it('routes the workspace ⋯ menu through theme tokens', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
-    const read = (p: string) => readFileSync(resolve(root, p), 'utf8')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
     // 左侧工作区 ⋯ 菜单：底座吃令牌，纸面点睛走 plancheMenu 分支（与终端菜单同构）
     const sidebar = read('components/Sidebar.tsx')
     expect(sidebar).toContain('plancheMenu')
@@ -287,7 +328,7 @@ describe('planche theme contract', () => {
 
   it('routes knowledge surfaces through the theme (graph JS + workbench CSS)', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
-    const read = (p: string) => readFileSync(resolve(root, p), 'utf8')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
     // 图谱 JS 颜色：仿 getBlueprintStatusVisual，dark 快照 + 纸面映射 + 令牌边线
     const canvas = read('components/knowledge/KnowledgeGraphCanvas.tsx')
     expect(canvas).toContain('PLANCHE_KIND_DOT_COLORS')
@@ -331,9 +372,100 @@ describe('planche theme contract', () => {
     expect(islandCss).toContain("[data-theme='planche'] .pull-hint {")
   })
 
+  it('routes team entry surfaces through theme tokens (gate + footer)', () => {
+    const root = resolve(__dirname, '../../src/renderer/src')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
+    // 进入界面（挡板）：基底走 --shell-* 令牌，纸面加法层只翻投影。
+    // 遮罩刻意不在加法层里，见下方 "keeps one shared modal scrim" 一条。
+    const gate = read('components/team/TeamSetupGate.module.css')
+    expect(gate).toContain(":global([data-theme='planche']) .panel")
+    expect(gate).toContain('var(--shell-accent-strong)')
+    expect(gate).toContain('var(--shell-accent-soft)')
+    expect(gate).toContain('var(--shell-diff-del)')
+    expect(gate).not.toMatch(/#08080a|#111113|#17171b|#ff8a2e/i)
+    expect(gate).not.toMatch(/rgba\(255,\s*255,\s*255/)
+    expect(gate).not.toMatch(/rgba\(255,\s*12\d,\s*\d+/)
+    // 侧栏团队行：悬浮/聚焦走令牌，纸面只换浮层套印影
+    const footer = read('components/team/TeamFooter.module.css')
+    expect(footer).toContain(":global([data-theme='planche']) .popover")
+    expect(footer).toContain('var(--shell-hover)')
+    expect(footer).toContain('var(--shell-accent-border)')
+    expect(footer).not.toMatch(/rgba\(255,\s*255,\s*255,\s*0\.0[345]/)
+    expect(footer).not.toMatch(/rgba\(255,\s*120,\s*48/)
+    // 设置 team 页复用通知面板样式（已有 planche 层），入口提示走自绘 ThemedTooltip
+    const notif = read('components/NotificationSettingsPanel.module.css')
+    expect(notif).toContain(":global([data-theme='planche']) .labelText")
+    const teamFooter = read('components/team/TeamFooter.tsx')
+    expect(teamFooter).toContain('ThemedTooltip')
+  })
+
+  it('keeps one shared modal scrim, un-themed (every full-screen surface)', () => {
+    const root = resolve(__dirname, '../../src/renderer/src')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
+    // 「新建任务盘」是参照实现：它不碰遮罩，所以吃 shared/ModalFrame.css 的
+    // rgba(8,8,10,0.62) + blur(10px)。设置中心、蓝图、知识库等曾各自把遮罩翻成
+    // 0.18 淡墨罩 + backdrop-filter:none，纸面主题下等于全透明，工作台直接透
+    // 出来——同一层遮罩两种结果。这里锁死共享。
+    const SHARED_SCRIM = 'rgba(8, 8, 10, 0.62)'
+    const frame = read('components/shared/ModalFrame.css')
+    expect(frame).toContain(`background: ${SHARED_SCRIM};`)
+    expect(frame).toContain('backdrop-filter: blur(10px)')
+    for (const mod of [
+      'components/AppSettingsModal.module.css',
+      'components/LlmConfigModal.module.css',
+      'components/team/TeamSetupGate.module.css',
+      // 参照实现：任何一方都不得在自己的加法层里翻遮罩
+      'components/WorktreeDialogs.module.css',
+    ]) {
+      const source = read(mod)
+      expect(source, mod).not.toMatch(
+        /\[data-theme='planche'\][^{]*\.(backdrop|modalBackdrop|blueprint-workbench-backdrop)\s*\{[^}]*background/,
+      )
+      expect(source, mod).not.toMatch(/rgba\(28,\s*52,\s*59,\s*0\.18\)/)
+    }
+    // 不自带遮罩的表面照旧继承共享层；自带遮罩的表面必须逐字复制共享参数
+    expect(read('components/LlmConfigModal.module.css')).toContain(`background: ${SHARED_SCRIM};`)
+    expect(read('components/team/TeamSetupGate.module.css')).toContain(`background: ${SHARED_SCRIM};`)
+    expect(read('components/WorktreeDialogs.module.css')).not.toContain('backdrop')
+    // 蓝图 / 知识库不走 ModalFrame（各有各的 scrim 类与卡片式逐步唤出），
+    // 但全屏遮罩必须与共享层逐字一致，且不得在加法层里被翻淡。
+    // 注意：只管全屏遮罩——蓝图内的 prompt-dialog__overlay 是嵌在已压暗父遮罩之上的
+    // 次级弹窗，浓度本就该比父层轻，不在此约束内。
+    const blueprint = read('components/blueprint/blueprint.css')
+    expect(blueprint).toMatch(
+      /\.blueprint-workbench-backdrop \{[^}]*background: rgba\(8, 8, 10, 0\.62\);[^}]*backdrop-filter: blur\(10px\);/,
+    )
+    expect(blueprint).not.toMatch(/\[data-theme='planche'\] \.blueprint-workbench-backdrop/)
+    expect(blueprint).not.toContain('modal-frame-backdrop')
+    const knowledge = read('components/knowledge/KnowledgeWorkbench.module.css')
+    expect(knowledge).toMatch(
+      /\.backdrop \{[^}]*background: rgba\(8, 8, 10, 0\.62\);[^}]*backdrop-filter: blur\(10px\);/,
+    )
+    expect(knowledge).not.toMatch(/:global\(\[data-theme='planche'\]\) \.backdrop/)
+    expect(knowledge).not.toContain('modal-frame-backdrop')
+  })
+
+  it('puts the knowledge workbench close light at the top-left, like blueprint', () => {
+    const root = resolve(__dirname, '../../src/renderer/src')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
+    const tsx = read('components/knowledge/KnowledgeWorkbench.tsx')
+    const css = read('components/knowledge/KnowledgeWorkbench.module.css')
+    // 红灯必须是 .header 的第一个子节点（标题之前），不是右侧动作组的末位
+    const header = tsx.slice(tsx.indexOf('<header className={styles.header}'), tsx.indexOf('</header>'))
+    expect(header.indexOf('styles.closeButton')).toBeGreaterThan(-1)
+    expect(header.indexOf('styles.closeButton')).toBeLessThan(header.indexOf('styles.breadcrumb'))
+    // 关闭从动作组里移走，那一组只剩刷新一类动作
+    const actions = header.slice(header.indexOf('styles.headerActions'))
+    expect(actions).not.toContain('styles.closeButton')
+    // 与蓝图同位：14px 圆点不参与收缩，靠 .header 的左内边距留出 ::before 的 8px 外扩余量
+    expect(css).toMatch(/\.closeButton \{[^}]*flex: 0 0 auto;/)
+    expect(css).toMatch(/\.header \{[^}]*padding: 0 12px 0 14px;/)
+    expect(css).toMatch(/\.closeButton::before \{[^}]*inset: -8px;/)
+  })
+
   it('serves left-rail hover hints from ThemedTooltip, not native title', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
-    const read = (p: string) => readFileSync(resolve(root, p), 'utf8')
+    const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
     // 自绘提示走 portal + 令牌 + planche 加法层（display:contents 锚点不改布局）
     const tip = read('components/ui/ThemedTooltip.tsx')
     expect(tip).toContain('createPortal')

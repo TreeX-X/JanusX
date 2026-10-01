@@ -33,6 +33,8 @@ export interface JanusIslandProps {
   productNotice?: (ProductFileEntry & { noticeKind?: 'added' | 'modified' }) | null
   productFiles?: ProductFileEntry[]
   onOpenProductFile?: (relPath: string) => void
+  /** Fires when the expanded island window pin state changes (persistence owner). */
+  onIslandPinnedChange?: (pinned: boolean) => void
 }
 
 export type JanusParticle = { id: number; left: number; size: number; duration: number }

@@ -16,7 +16,6 @@ import type { Blueprint, BlueprintNodeStatus } from '@/services/blueprint'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
 import { groupRootsByConnectivity, ISOLATED_HIDE_THRESHOLD } from '@/features/blueprint/canvas-navigation'
 import { useBlueprintStore } from '@/stores/blueprint'
-import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
 import { Select } from '../ui/Select'
 import { STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, type NoteKindFilter, getBlueprintStatusVisual } from './blueprintStatus'
@@ -149,12 +148,11 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
     statusFilter, setStatusFilter,
     kindFilter, setKindFilter,
     hideIsolated, setHideIsolated, isolatedCount,
-    selectedId, fitRef, saveStatus, toggleDetailRef, restoreLayoutRef, undoLayoutRef, detailOpen, canUndoLayout,
+    fitRef, saveStatus, toggleDetailRef, restoreLayoutRef, undoLayoutRef, detailOpen, canUndoLayout,
   } = useRequiredBlueprintToolbar()
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
-  const requestMaintenanceOpen = useBlueprintMaintenanceStore((s) => s.requestOpen)
 
   const statusFilterOptions = useMemo(
     () => [
@@ -232,16 +230,7 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
         {t('blueprint:action.restoreDefaultLayout')}
       </button>
       {canUndoLayout && <button className="blueprint-btn" onClick={() => undoLayoutRef.current?.()}>{t('blueprint:action.undoRestore')}</button>}
-      <button
-        className="blueprint-btn blueprint-btn--primary-ghost"
-        onClick={() => {
-          if (!currentBlueprint) return
-          requestMaintenanceOpen(selectedId ? { blueprintId: currentBlueprint.id, nodeId: selectedId } : { blueprintId: currentBlueprint.id })
-        }}
-        title={t('blueprint:action.editInChat')}
-      >
-        {t('blueprint:action.editInChat')}
-      </button>
+      {/* 面板常驻且自带上下文，这里不再需要「把节点带进对话」的中转按钮。 */}
       <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${saveStatus === 'clean' ? 'saved' : saveStatus}`}>
         {saveStatus === 'saving' ? '保存中…' : saveStatus === 'pending' ? '待保存' : saveStatus === 'failed' ? '保存失败' : '布局已保存（本机）'}
       </span>

@@ -20,10 +20,7 @@ export function BlueprintFocusView() {
   const activeSession = useBlueprintStore((s) => s.activeSession)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const terminals = useWorkspaceStore((s) => s.terminals)
-  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
-  const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
   const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
-  const setLoadState = useAppStore((s) => s.setLoadState)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
 
   const activeNode =
@@ -40,13 +37,6 @@ export function BlueprintFocusView() {
 
   const openWorkbench = () => setActiveWorkbench('blueprint')
   const exitFocus = () => setBlueprintMode(false)
-  const openBoundTerminal = () => {
-    if (!activeNode?.workspaceId || !boundTerminal) return
-    setActiveWorkspace(activeNode.workspaceId)
-    setActiveTerminal(boundTerminal.id)
-    setLoadState('terminal-active')
-    setBlueprintMode(false)
-  }
 
   if (!activeNode) {
     return (
@@ -100,9 +90,6 @@ export function BlueprintFocusView() {
           <div className="blueprint-focus-actions">
             <button type="button" className="blueprint-btn blueprint-btn--primary" onClick={openWorkbench}>
               Open Workbench
-            </button>
-            <button type="button" className="blueprint-btn" onClick={openBoundTerminal} disabled={!boundTerminal}>
-              {boundTerminal ? 'Open Terminal' : 'No Terminal'}
             </button>
             <button type="button" className="blueprint-btn" onClick={exitFocus}>
               Back to Terminal

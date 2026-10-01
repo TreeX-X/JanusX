@@ -45,20 +45,21 @@ function EditorWindowLoading() {
   return (
     <div
       data-editor-window-state="loading"
-      className="flex h-screen flex-col overflow-hidden bg-[#151517] text-[#d4d4d4]"
+      className="flex h-screen flex-col overflow-hidden"
+      style={{ background: 'var(--shell-canvas)', color: 'var(--shell-text)' }}
       role="status"
       aria-label="Loading editor"
     >
-      <div className="h-[38px] shrink-0 border-b border-white/[0.06] bg-[#060606] px-3">
+      <div className="h-[38px] shrink-0 px-3" style={{ borderBottom: '1px solid var(--shell-border)', background: 'var(--shell-pane-chrome)' }}>
         <div className="flex h-full items-center gap-2" aria-hidden="true">
           <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
           <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
           <span className="h-3 w-3 rounded-full bg-[#28c840]" />
         </div>
       </div>
-      <div className="flex flex-1 items-center justify-center gap-2 text-xs text-[#666]">
+      <div className="flex flex-1 items-center justify-center gap-2 text-xs" style={{ color: 'var(--shell-dim)' }}>
         <span>Loading editor</span>
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#ff7830]" aria-hidden="true" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: 'var(--shell-accent)' }} aria-hidden="true" />
       </div>
     </div>
   )
@@ -84,25 +85,28 @@ class EditorWindowErrorBoundary extends React.Component<
     return (
       <div
         data-editor-window-state="error"
-        className="flex h-screen items-center justify-center bg-[#151517] px-8 text-[#d4d4d4]"
+        className="flex h-screen items-center justify-center px-8"
+        style={{ background: 'var(--shell-canvas)', color: 'var(--shell-text)' }}
         role="alert"
       >
-        <div className="w-full max-w-md border border-white/[0.08] bg-[#191919] p-5">
-          <div className="text-sm text-[#eee]">Editor failed to open</div>
-          <div className="mt-2 break-words font-mono text-[11px] leading-5 text-[#777]">
+        <div className="w-full max-w-md p-5" style={{ border: '1px solid var(--shell-border)', background: 'var(--shell-card)' }}>
+          <div className="text-sm" style={{ color: 'var(--shell-text)' }}>Editor failed to open</div>
+          <div className="mt-2 break-words font-mono text-[11px] leading-5" style={{ color: 'var(--shell-muted)' }}>
             {this.state.error.message || 'The editor renderer could not be loaded.'}
           </div>
           <div className="mt-4 flex gap-2">
             <button
               type="button"
-              className="h-8 border border-[#ff7830]/40 bg-[#ff7830]/10 px-3 text-xs text-[#ff9b64] hover:bg-[#ff7830]/15"
+              className="h-8 px-3 text-xs"
+              style={{ border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-accent-strong)' }}
               onClick={() => window.location.reload()}
             >
               Retry
             </button>
             <button
               type="button"
-              className="h-8 border border-white/[0.08] bg-white/[0.04] px-3 text-xs text-[#999] hover:text-white"
+              className="h-8 px-3 text-xs"
+              style={{ border: '1px solid var(--control-border)', color: 'var(--shell-muted)' }}
               onClick={() => window.electron.window.close()}
             >
               Close

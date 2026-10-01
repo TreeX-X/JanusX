@@ -24,6 +24,7 @@ import type {
   BlueprintSummary,
 } from '../../../shared/ipc/janus'
 import type {
+  BlueprintDispatchBriefResult,
   BlueprintMaintenanceApplyInput,
   BlueprintMaintenanceApplyResult,
   BlueprintMaintenanceAuditListInput,
@@ -99,6 +100,8 @@ export type {
   BlueprintMaintenanceUndoPrepareResult,
   BlueprintOperation,
 } from '../../../shared/janus/maintenance-types'
+
+export type { BlueprintDispatchBriefResult } from '../../../shared/janus/maintenance-types'
 
 export function listBlueprints(cwd: string): Promise<Blueprint[] | null> {
   return window.electron.janus.listBlueprints(cwd)
@@ -263,5 +266,10 @@ export const prepareMaintenanceUndo = (input: BlueprintMaintenanceUndoPrepareInp
   window.electron.janus.prepareMaintenanceUndo(input)
 export const applyMaintenanceUndo = (input: BlueprintMaintenanceUndoApplyInput): Promise<BlueprintMaintenanceUndoApplyResult> =>
   window.electron.janus.applyMaintenanceUndo(input)
+export const composeDispatchBrief = (input: {
+  taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
+  providerId: string; modelId?: string; workspaceIds: string[]; workspaceRoots: Record<string, string>
+}): Promise<BlueprintDispatchBriefResult> =>
+  window.electron.janus.composeDispatchBrief(input)
 export const onMaintenanceTask = (callback: (event: BlueprintMaintenanceEvent) => void): (() => void) =>
   window.electron.janus.onMaintenanceTask(callback)

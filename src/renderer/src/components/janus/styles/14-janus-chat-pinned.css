@@ -1,0 +1,210 @@
+/* Expanded single-frame: the outer island body goes transparent so no skin
+ * ring sits between the border and the content; the inner shell owns the one
+ * panel background + border + radius. Collapsed/peek stages untouched. */
+.janus-island-shell[data-stage="expanded"] .janus-island {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  /* The outer body is a plain rectangle: let clicks pass through everywhere
+   * the rounded panel does not paint, so its four corner cutouts never form
+   * a click barrier. Real pointer targets live on the inner shell; gesture
+   * events still bubble through this layer untouched. */
+  pointer-events: none;
+}
+
+.janus-island-shell[data-stage="expanded"] .janus-expanded-shell {
+  inset: 0;
+  box-sizing: border-box;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,0.045), transparent 30%),
+    #030303;
+  border: 1px solid rgba(255,255,255,0.075);
+  border-radius: 26px;
+  /* Tight radius-conformant drop shadow: a single downward soft shadow so no
+   * blocky translucent halo reads as squares at the four corners. */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.045),
+    0 24px 64px rgba(0,0,0,0.6),
+    0 4px 18px rgba(0,0,0,0.5);
+}
+
+.janus-island-shell.mode-running[data-stage="expanded"] .janus-expanded-shell {
+  border-color: rgba(0,255,136,0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 24px 64px rgba(0,0,0,0.6),
+    0 0 18px rgba(0,255,136,0.1);
+}
+
+.janus-island-shell.mode-analytics[data-stage="expanded"] .janus-expanded-shell,
+.janus-island-shell.mode-order[data-stage="expanded"] .janus-expanded-shell {
+  border-color: rgba(255,255,255,0.075);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.045),
+    0 24px 64px rgba(0,0,0,0.6),
+    0 0 16px rgba(255,120,48,0.06);
+}
+
+@media (max-width: 900px) {
+  .janus-island-shell[data-stage="expanded"] .janus-expanded-shell {
+    padding: 14px;
+  }
+}
+
+/* Conversation sidebar collapse: a slim icon rail keeps expand + new-thread
+ * reachable while the discussion takes the freed width. The !important
+ * answers 09-janus-roundtable-final.css, which pins the open track. */
+.janus-island-shell[data-stage="expanded"][data-view="chat"] .janus-chat--with-sidebar.janus-chat--sidebar-collapsed {
+  grid-template-columns: 34px minmax(0, 1fr) !important;
+}
+
+.janus-chat--with-sidebar .janus-chat-sidebar--collapsed {
+  align-items: center;
+  padding: 10px 0;
+  gap: 6px;
+}
+
+.janus-chat-sidebar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+/* Conversation sidebar horizontal expand/collapse: the grid column itself
+ * animates so the discussion visibly yields/takes the width instead of
+ * jumping between layouts. Specificity beats the shared expanded-panel
+ * transition without dropping its view-switch properties. */
+.janus-island-shell[data-stage="expanded"] .janus-chat--with-sidebar {
+  transition:
+    grid-template-columns 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease,
+    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    flex-basis 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.janus-chat--with-sidebar .janus-chat-sidebar {
+  overflow: hidden;
+}
+
+.janus-chat--with-sidebar .janus-chat-sidebar-header,
+.janus-chat--with-sidebar .janus-chat-sidebar-list {
+  transition: opacity 0.18s ease;
+}
+
+.janus-chat-sidebar--collapsed > *,
+.janus-chat--with-sidebar:not(.janus-chat--sidebar-collapsed) .janus-chat-sidebar-header,
+.janus-chat--with-sidebar:not(.janus-chat--sidebar-collapsed) .janus-chat-sidebar-list {
+  animation: janus-rail-in 0.22s ease;
+}
+
+@keyframes janus-rail-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .janus-island-shell[data-stage="expanded"] .janus-chat--with-sidebar {
+    transition: none;
+  }
+  .janus-chat-sidebar--collapsed > *,
+  .janus-chat--with-sidebar:not(.janus-chat--sidebar-collapsed) .janus-chat-sidebar-header,
+  .janus-chat--with-sidebar:not(.janus-chat--sidebar-collapsed) .janus-chat-sidebar-list {
+    animation: none;
+  }
+}
+
+/* Island window persistence + drag + capsule loading indicator.
+ * Rules here are additive only: no layout property may key on
+ * data-loading, so streaming visuals can never shift the capsule morph. */
+
+.janus-expanded-topbar--draggable {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.janus-expanded-topbar--draggable[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.janus-expanded-topbar--draggable button,
+.janus-expanded-topbar--draggable input,
+.janus-expanded-topbar--draggable textarea,
+.janus-expanded-topbar--draggable select,
+.janus-expanded-topbar--draggable a {
+  cursor: pointer;
+}
+
+.janus-expanded-topbar--draggable .janus-chat-tool-button {
+  cursor: pointer;
+}
+
+/* Top-left cluster: pin control ahead of the brand mark. */
+.janus-expanded-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Pin toggle: quiet by default, accent-tinted while pinned. */
+.janus-pin-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.janus-pin-button[data-pinned="true"] {
+  border-color: rgba(255, 120, 48, 0.42);
+  background: rgba(255, 120, 48, 0.12);
+  color: #ffb27d;
+}
+
+.janus-pin-button[data-pinned="true"]:hover:not(:disabled) {
+  border-color: rgba(255, 120, 48, 0.55);
+  background: rgba(255, 120, 48, 0.16);
+  color: #ffd1b5;
+}
+
+.janus-island-shell[data-pinned="true"] .janus-expanded-topbar--draggable {
+  border-bottom: 1px dashed rgba(255, 120, 48, 0.22);
+  border-radius: 6px 6px 0 0;
+}
+
+/* Capsule loading dot: absolute overlay on the collapsed face, zero layout
+ * impact, so collapsing mid-stream never reflows the island morph. */
+.janus-island-shell[data-loading="true"][data-stage="collapsed"] .janus-face-mini {
+  position: relative;
+}
+
+.janus-island-shell[data-loading="true"][data-stage="collapsed"] .janus-face-mini::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--janus-current);
+  box-shadow: 0 0 6px var(--janus-current-glow);
+  pointer-events: none;
+  animation: janus-capsule-loading-dot 1.1s ease-in-out infinite;
+}
+
+@keyframes janus-capsule-loading-dot {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .janus-island-shell[data-loading="true"][data-stage="collapsed"] .janus-face-mini::after {
+    animation: none;
+    opacity: 0.9;
+  }
+}

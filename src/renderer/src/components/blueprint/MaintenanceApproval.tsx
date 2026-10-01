@@ -32,6 +32,7 @@ export function MaintenanceApproval({ changeSet, busy, onApply, undo = false }: 
   const { t } = useI18n('blueprint')
   const [requested, setRequested] = useState<string[]>([])
   const [confirmed, setConfirmed] = useState<string[]>([])
+  const [deleteAll, setDeleteAll] = useState(false)
   let selected: BlueprintOperation[] = []
   let error = ''
   try { selected = maintenanceSelection(changeSet, requested) } catch (reason) { error = String(reason) }
@@ -42,13 +43,17 @@ export function MaintenanceApproval({ changeSet, busy, onApply, undo = false }: 
     setConfirmed([])
   }
   const bulkIds = changeSet.operations.filter(op => op.type !== 'delete-node').map(op => op.operationId)
-  const unconfirmed = selected.some(op => op.type === 'delete-node' && !confirmed.includes(op.operationId))
+  const selectedDeletes = selected.filter(op => op.type === 'delete-node')
+  // One irreversible acknowledgement covers the whole delete set; per-operation
+  // checkboxes made bulk approval a three-step ritual.
+  const bulkConfirmed = deleteAll && selectedDeletes.length > 0
+  const unconfirmed = selectedDeletes.length > 0 && !bulkConfirmed && !selectedDeletes.every(op => confirmed.includes(op.operationId))
+  const apply = () => onApply(selected.map(op => op.operationId), bulkConfirmed ? selectedDeletes.map(op => op.operationId) : confirmed)
   return <section className="bp-maintenance-approval" aria-label={undo ? t('blueprint:maintenance.undoTitle') : t('blueprint:maintenance.pendingProposal', { version: changeSet.version })}>
     <p>{changeSet.reason}</p>
     <small>{t('blueprint:maintenance.proposalSelection', { selected: selected.length, total: changeSet.operations.length })}</small>
     <fieldset disabled={busy}>
       <label><input type="checkbox" checked={bulkIds.length > 0 && bulkIds.every(id => requested.includes(id))} onChange={event => change(bulkIds, event.target.checked)} />{t('blueprint:maintenance.selectAll')}</label>
-      <p>{t('blueprint:maintenance.deleteBulkExcluded')}</p>
       {groups.map(group => <div className="bp-maintenance-approval-group" key={group.id}>
         <label><input type="checkbox" aria-label={group.title} checked={group.operationIds.every(id => selectedIds.has(id))}
           ref={element => { if (element) element.indeterminate = group.operationIds.some(id => selectedIds.has(id)) && !group.operationIds.every(id => selectedIds.has(id)) }}
@@ -64,13 +69,18 @@ export function MaintenanceApproval({ changeSet, busy, onApply, undo = false }: 
           </div>
         })}
       </div>)}
-      {selected.filter(op => op.type === 'delete-node').map(op => <label className="bp-maintenance-delete-confirm" key={op.operationId}>
-        <input type="checkbox" checked={confirmed.includes(op.operationId)} onChange={event => setConfirmed(current => event.target.checked ? [...current, op.operationId] : current.filter(id => id !== op.operationId))} />
-        {t('blueprint:maintenance.deleteConfirm')} · {op.operationId}
-      </label>)}
+      {selectedDeletes.length > 0 && <div className="bp-maintenance-delete-confirm">
+        {selectedDeletes.length > 1 && <label>
+          <input type="checkbox" checked={deleteAll || selectedDeletes.every(op => confirmed.includes(op.operationId))}
+            ref={element => { if (element) element.indeterminate = !deleteAll && selectedDeletes.some(op => confirmed.includes(op.operationId)) && !selectedDeletes.every(op => confirmed.includes(op.operationId)) }}
+            onChange={event => { setDeleteAll(event.target.checked); setConfirmed([]) }} />
+          {t('blueprint:maintenance.deleteConfirmAll', { count: selectedDeletes.length })}
+        </label>}
+        {selectedDeletes.map(op => <small key={op.operationId}>{op.operationId} · {op.impact.title}</small>)}
+      </div>}
     </fieldset>
     {error && <p role="alert">{error}</p>}
-    <button type="button" disabled={busy || !!error || !selected.length || unconfirmed} onClick={() => void onApply(selected.map(op => op.operationId), confirmed)}>
+    <button type="button" disabled={busy || !!error || !selected.length || unconfirmed} onClick={() => void apply()}>
       {t(undo ? 'blueprint:maintenance.undoApply' : 'blueprint:maintenance.approveSelected')}
     </button>
   </section>

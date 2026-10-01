@@ -71,7 +71,9 @@ export class EditorWindowManager {
       minWidth: 820,
       minHeight: 520,
       title: 'JanusX Editor',
-      backgroundColor: '#0a0a0a',
+      // 默认主题为 planche 纸面：首漆底色用纸色，避免纸面主题下闪黑；
+      // 渲染侧挂载后仍以 [data-theme] 语义令牌为准，dark 用户切主题即跟随。
+      backgroundColor: '#EFE4C5',
       frame: false,
       autoHideMenuBar: true,
       webPreferences: {

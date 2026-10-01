@@ -38,9 +38,10 @@
   min-width: 0;
   padding: 0 6px;
   border: 0;
-  border-radius: 5px;
+  border-bottom: 2px solid transparent;
+  border-radius: 5px 5px 0 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--shell-dim);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -48,12 +49,15 @@
 }
 
 .tab:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--shell-text) 7%, transparent);
+  color: var(--shell-text);
 }
 
 .tab[data-active='true'] {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffb27d;
+  background: var(--shell-accent-soft);
+  border-bottom-color: var(--shell-accent);
+  color: var(--shell-text);
+  font-weight: 600;
 }
 
 .tabTitle {
@@ -70,13 +74,13 @@
   height: 14px;
   flex-shrink: 0;
   border-radius: 3px;
-  color: #777;
+  color: var(--shell-muted);
   opacity: 0.55;
 }
 
 .tabClose:hover {
-  background: rgba(255, 88, 88, 0.14);
-  color: #ff8585;
+  background: color-mix(in srgb, var(--shell-diff-del) 14%, transparent);
+  color: var(--shell-diff-del);
   opacity: 1;
 }
 
@@ -87,18 +91,18 @@
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--control-border);
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.03);
-  color: #999;
+  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
+  color: var(--shell-muted);
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
 .iconBtn:hover:not(:disabled) {
-  background: rgba(255, 120, 48, 0.1);
-  border-color: rgba(255, 120, 48, 0.3);
-  color: #ffb27d;
+  background: var(--shell-accent-soft);
+  border-color: var(--shell-accent-border);
+  color: var(--shell-accent);
 }
 
 .iconBtn:disabled {
@@ -111,22 +115,22 @@
   min-width: 60px;
   height: 24px;
   padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--control-border);
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.03);
-  color: #d4d4d4;
+  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
+  color: var(--shell-text);
   font: inherit;
   font-size: 11px;
   outline: none;
 }
 
 .address:focus {
-  border-color: rgba(255, 120, 48, 0.42);
-  background: rgba(255, 120, 48, 0.05);
+  border-color: var(--shell-accent-border);
+  background: var(--shell-accent-soft);
 }
 
 .address::placeholder {
-  color: #555;
+  color: var(--shell-dim);
 }
 
 .agentDot {
@@ -138,7 +142,7 @@
   height: 18px;
   border-radius: 9px;
   font-size: 10px;
-  color: #555;
+  color: var(--shell-dim);
   border: 1px solid transparent;
 }
 
@@ -147,18 +151,20 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #3a3a3a;
+  background: var(--shell-dim);
+  opacity: 0.5;
 }
 
 .agentDot[data-active='true'] {
-  color: #ffb27d;
-  border-color: rgba(255, 120, 48, 0.32);
-  background: rgba(255, 120, 48, 0.08);
+  color: var(--shell-accent);
+  border-color: var(--shell-accent-border);
+  background: var(--shell-accent-soft);
 }
 
 .agentDot[data-active='true']::before {
-  background: #ff7830;
-  box-shadow: 0 0 6px rgba(255, 120, 48, 0.8);
+  background: var(--shell-accent);
+  opacity: 1;
+  box-shadow: 0 0 6px var(--shell-accent-soft);
 }
 
 .body {
@@ -176,24 +182,24 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #555;
+  color: var(--shell-dim);
   font-family: var(--font-mono, monospace);
   font-size: 12px;
 }
 
 .empty button {
   padding: 6px 14px;
-  border: 1px solid rgba(255, 120, 48, 0.24);
+  border: 1px solid var(--shell-accent-border);
   border-radius: 5px;
   background: transparent;
-  color: #ffb27d;
+  color: var(--shell-accent);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
 }
 
 .empty button:hover {
-  background: rgba(255, 120, 48, 0.08);
+  background: var(--shell-accent-soft);
 }
 
 .missing {
@@ -201,7 +207,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #666;
+  color: var(--shell-dim);
   font-family: var(--font-mono, monospace);
   font-size: 12px;
 }

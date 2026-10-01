@@ -10,6 +10,8 @@ export interface SelectOption {
   label: string
   disabled?: boolean
   depth?: number
+  /** 选项前的图标节点（如终端 preset 图标）。省略即纯文字选项。 */
+  icon?: ReactNode
 }
 
 export interface SelectProps {
@@ -193,6 +195,7 @@ export function Select({
                   style={o.depth ? { paddingLeft: `${10 + o.depth * 14}px` } : undefined}
                   onClick={() => handleSelect(o)}
                 >
+                  {o.icon && <span className={styles.optionIcon}>{o.icon}</span>}
                   {o.label}
                 </div>
               )

@@ -19,7 +19,11 @@
       "renameTitle": "Rename conversation",
       "deleteAria": "Delete {{title}}",
       "deleteTitle": "Delete conversation",
-      "deleteConfirm": "Delete conversation \"{{title}}\"?"
+      "deleteConfirm": "Delete conversation \"{{title}}\"?",
+      "collapseAria": "Collapse conversation list",
+      "collapseTitle": "Collapse conversation list",
+      "expandAria": "Expand conversation list",
+      "expandTitle": "Expand conversation list"
     },
     "model": {
       "noneConfigured": "No model configured",
@@ -252,6 +256,10 @@
         "roundtable": "Roundtable"
       },
       "dismissHint": "Esc / double-click to collapse",
+      "pinChat": "Pin",
+      "unpinChat": "Unpin",
+      "pinnedHint": "Pinned — drag to move, double-click to collapse",
+      "dragHint": "Drag to move the chat window",
       "coreVisualization": "Core visualization",
       "missionOverview": "mission overview",
       "roleSelected": "{{role}} selected",

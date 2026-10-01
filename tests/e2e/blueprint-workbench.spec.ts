@@ -55,6 +55,35 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
         return ['127.0.0.1', 'localhost'].includes(url.hostname) ? route.continue() : route.abort('blockedbyclient')
       })
     })
+    // Note: the canvas is inspection-only; writing and dispatching both live in
+    // the Janus panel — see .agents/notes/2026-09-30-blueprint-dispatch-panel--5d2a6f31.md
+    test('the canvas carries no work, terminal or dispatch control', async ({ page }) => {
+      await open(page)
+      await node(page, childId).click()
+      const nodeDetail = page.locator('.bp-node-detail')
+      await expect(nodeDetail).toBeVisible()
+      for (const label of ['Start Work', 'Open Terminal', 'Copy implement prompt', 'Maintain Node']) {
+        await expect(page.getByRole('button', { name: label, exact: true })).toHaveCount(0)
+      }
+      await expect(toolbar(page).getByRole('button', { name: 'Edit in chat', exact: true })).toHaveCount(0)
+      // The terminal row survives as read-only state with no control of its own.
+      const terminalRow = nodeDetail.locator('.bp-node-detail__terminal-footer')
+      await expect(terminalRow).toBeVisible()
+      await expect(terminalRow.getByRole('button')).toHaveCount(0)
+      // Dispatch lives in the panel, not the canvas.
+      const bar = chat(page).getByRole('toolbar', { name: '蓝图操作' })
+      await expect(bar).toBeVisible()
+      // Exactly three deliberate verbs, and the read scope is a quiet chip.
+      await expect(bar.getByRole('button')).toHaveCount(4)
+      await expect(bar.getByRole('button', { name: '整理 Note', exact: true })).toBeVisible()
+      await expect(bar.getByRole('button', { name: '目标终端' })).toBeVisible()
+      await expect(bar.getByRole('button', { name: '派发', exact: true })).toBeVisible()
+      // Selecting the child narrows the chip to that subtree.
+      await expect(bar).toContainText('读 1 篇')
+      // Nothing is expanded until a decision demands it.
+      await expect(chat(page).locator('.bp-maintenance-approval')).toHaveCount(0)
+    })
+
     test('two compact bars and three ordered panels keep the composer in the viewport', async ({ page }) => {
       const errors: string[] = []
       page.on('pageerror', error => errors.push(error.message))
@@ -83,7 +112,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       await insideViewport(page, chat(page).locator('.janus-chat textarea'))
       await expect(chat(page).locator('.bp-maintenance-controls')).toHaveCount(0)
       await expect(chat(page).locator('.bp-maintenance-context')).toHaveCount(0)
-      await expect(chat(page).getByRole('region', { name: '蓝图变更' })).toBeVisible()
+      await expect(chat(page).getByRole('toolbar', { name: '蓝图操作' })).toBeVisible()
       const bodyScroll = await chat(page).locator('.janus-chat-messages').evaluate(element => getComputedStyle(element).overflowY)
       expect(['auto', 'scroll']).toContain(bodyScroll)
       expect(errors).toEqual([])

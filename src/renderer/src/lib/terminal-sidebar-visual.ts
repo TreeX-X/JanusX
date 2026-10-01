@@ -42,6 +42,29 @@ export const TERMINAL_ATTENTION_ORDER: Record<Terminal['status'], number> = {
   wait: 5,
 }
 
+/**
+ * 状态灯形状映射（与 TerminalStatusLight 共享）：颜色走 getTerminalStatusVisual，
+ * 形状走 term-status-ring--* 修饰类，动效走共享 animation。色盲读者仅凭形状/动效
+ * 也能区分 running（淡环+走圈光弧）/ 待处理（呼吸）/ degraded（虚线环）/
+ * error（实心盘）/ wait（降透明度空心环）。
+ */
+export function terminalStatusRingClass(status: Terminal['status']): string {
+  switch (status) {
+    case 'running':
+      return 'term-status-ring--running'
+    case 'needs-approval':
+    case 'needs-input':
+      return 'term-status-pulse'
+    case 'degraded':
+      return 'term-status-ring--degraded'
+    case 'error':
+      return 'term-status-ring--error'
+    case 'wait':
+    default:
+      return 'term-status-ring--idle'
+  }
+}
+
 export function summarizeTerminalActivity(terminals: readonly Terminal[]) {
   const needsApproval = terminals.filter((terminal) => terminal.status === 'needs-approval').length
   const needsInput = terminals.filter((terminal) => terminal.status === 'needs-input').length

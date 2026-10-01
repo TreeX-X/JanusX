@@ -380,8 +380,9 @@
   margin: 16px calc(var(--so-body-pad-x, 22px) * -1) calc(var(--so-body-pad-y, 22px) * -1);
   padding: 13px var(--so-body-pad-x, 22px);
   backdrop-filter: blur(16px);
-  /* Matches --shell-canvas (#151517) with alpha so scrolled content shows through. */
-  background: rgba(21, 21, 23, 0.9);
+  /* 吃 --shell-canvas 令牌，不写死 #151517 — 见
+     .agents/notes/2026-09-29-settings-footer-scrim-token--16ff77a0.md */
+  background: color-mix(in srgb, var(--shell-canvas) 90%, transparent);
 }
 
 .testStatus {
@@ -569,8 +570,6 @@
   --so-accent-hover: var(--planche-red, #D43D2A);
   --so-accent-rgb: 212, 61, 42;
   --janus-order: var(--planche-red, #D43D2A);
-  background: rgba(28, 52, 59, 0.18);
-  backdrop-filter: none;
 }
 
 :global([data-theme='planche']) .llmConfigPanel {
@@ -619,4 +618,10 @@
 
 :global([data-theme='planche']) .terminalFile {
   background: var(--paper-deep, #DCCFA8);
+}
+
+/* 内嵌底栏与通知/知识库设置同源：纸面下压成实心纸色，不吃毛玻璃。 */
+:global([data-theme='planche']) .embeddedPanel .configFooter {
+  background: var(--paper, #EFE4C5);
+  backdrop-filter: none;
 }

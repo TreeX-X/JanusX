@@ -1,0 +1,14 @@
+/**
+ * src/renderer/src/components/WorktreeDialogs.module.css
+ *
+ * 任务盘弹窗的几何。进出场动效、遮罩、透视升起全部来自
+ * shared/ModalFrame.css —— 本文件只描述这个面板自己的尺寸和表面。
+ */
+
+.composerPanel {
+  width: 420px;
+  background: var(--shell-chrome);
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  overflow: hidden;
+}

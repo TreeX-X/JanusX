@@ -12,6 +12,8 @@ export const EXPERIMENTAL_CHANNELS = {
 export type ExperimentalChannel = (typeof EXPERIMENTAL_CHANNELS)[keyof typeof EXPERIMENTAL_CHANNELS]
 
 export interface ExperimentalFeatures {
+  /** 蓝图工作台入口（标题栏切换器 + 工作台本体 + 相关跳转）。 */
+  blueprint: boolean
   /** 知识库工作台入口（标题栏切换器 + 工作台本体 + 相关跳转）。 */
   knowledge: boolean
   /** 圆桌视图（灵动岛二级展开的 roundtable 页）。 */
@@ -25,6 +27,7 @@ export interface ExperimentalFeatures {
 }
 
 export const DEFAULT_EXPERIMENTAL_FEATURES: ExperimentalFeatures = {
+  blueprint: false,
   knowledge: false,
   roundtable: false,
   persona: false,
@@ -34,6 +37,7 @@ export const DEFAULT_EXPERIMENTAL_FEATURES: ExperimentalFeatures = {
 
 /** 无 IPC 环境（浏览器预览 / 用例 harness）下的降级：全部可见，避免旧用例误杀。 */
 export const EXPERIMENTAL_ENABLED_ALL: ExperimentalFeatures = {
+  blueprint: true,
   knowledge: true,
   roundtable: true,
   persona: true,
@@ -45,6 +49,7 @@ export function normalizeExperimentalFeatures(value: unknown): ExperimentalFeatu
   if (!value || typeof value !== 'object') return { ...DEFAULT_EXPERIMENTAL_FEATURES }
   const record = value as Partial<Record<keyof ExperimentalFeatures, unknown>>
   return {
+    blueprint: record.blueprint === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.blueprint : record.blueprint === true,
     knowledge: record.knowledge === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.knowledge : record.knowledge === true,
     roundtable: record.roundtable === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.roundtable : record.roundtable === true,
     persona: record.persona === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.persona : record.persona === true,

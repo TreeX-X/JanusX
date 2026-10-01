@@ -19,7 +19,11 @@
       "renameTitle": "重命名对话",
       "deleteAria": "删除 {{title}}",
       "deleteTitle": "删除对话",
-      "deleteConfirm": "确认删除对话 \"{{title}}\"？"
+      "deleteConfirm": "确认删除对话 \"{{title}}\"？",
+      "collapseAria": "收起会话列表",
+      "collapseTitle": "收起会话列表",
+      "expandAria": "展开会话列表",
+      "expandTitle": "展开会话列表"
     },
     "model": {
       "noneConfigured": "未配置模型",
@@ -252,6 +256,10 @@
         "roundtable": "圆桌"
       },
       "dismissHint": "Esc / 双击收起",
+      "pinChat": "固定",
+      "unpinChat": "取消固定",
+      "pinnedHint": "已固定 — 可拖动，双击收回胶囊",
+      "dragHint": "拖动移动对话窗口",
       "coreVisualization": "核心可视化",
       "missionOverview": "任务概览",
       "roleSelected": "{{role}} 已选中",

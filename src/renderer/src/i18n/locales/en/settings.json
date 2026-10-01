@@ -63,29 +63,46 @@
     "warning": "Experimental features may contain bugs or be partially unavailable. Turning a switch off hides its entry immediately.",
     "unavailable": "Unavailable in this environment (browser preview).",
     "section": {
-      "features": "Experimental Features"
+      "preview": "Preview · Preview Features",
+      "dev": "In Development"
     },
     "toggle": {
+      "blueprint": {
+        "label": "Blueprint",
+        "hint": "Show the blueprint workbench entry. Turning off hides the title-bar switcher and the workbench.",
+        "note": "Must use WorkflowX Agent to output correct note format"
+      },
       "knowledge": {
         "label": "Knowledge",
-        "hint": "Show the knowledge workbench entry. Turning off hides the title-bar switcher and the workbench."
+        "hint": "Show the knowledge workbench entry. Turning off hides the title-bar switcher and the workbench.",
+        "note": "Requires Laya engine support, please ensure it is installed and configured"
       },
       "roundtable": {
         "label": "Roundtable",
-        "hint": "Show the roundtable view in the island expanded stage. Turning off hides the entry; ongoing discussions are unaffected."
+        "hint": "Show the roundtable view in the island expanded stage. Turning off hides the entry; ongoing discussions are unaffected.",
+        "note": "Feature in development, may be unstable"
       },
       "persona": {
         "label": "Persona",
-        "hint": "Show the persona tool in the right dock plus island memory reminders. Turning off hides the entries."
+        "hint": "Show the persona tool in the right dock plus island memory reminders. Turning off hides the entries.",
+        "note": "Feature in development, may be unstable"
       },
       "remoteControl": {
         "label": "Remote collaboration",
-        "hint": "Show the status-bar remote entry and remote dialog (pairing, terminal tail, controlled submit, host service). Turning off hides the entry, disconnects, and stops the host service."
+        "hint": "Show the status-bar remote entry and remote dialog (pairing, terminal tail, controlled submit, host service). Turning off hides the entry, disconnects, and stops the host service.",
+        "note": "Feature in development, may be unstable"
       },
       "teamCollab": {
         "label": "Team collaboration",
-        "hint": "Show the sidebar team row, the first-run login gate, and the team page in Settings. Turning off hides the entries; login state and org data are kept and restored on re-enable."
+        "hint": "Show the sidebar team row, the first-run login gate, and the team page in Settings. Turning off hides the entries; login state and org data are kept and restored on re-enable.",
+        "note": "Feature in development, may be unstable"
       }
+    },
+    "blueprintConfirm": {
+      "title": "Enable Blueprint",
+      "description": "Blueprint must use WorkflowX Agent to output correct note format.\n\nPlease confirm you understand this requirement.",
+      "confirm": "I understand, confirm",
+      "cancel": "Cancel"
     },
     "error": {
       "save": "Failed to save experimental feature toggles"

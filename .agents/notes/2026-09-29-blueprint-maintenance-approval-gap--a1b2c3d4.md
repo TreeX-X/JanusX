@@ -16,7 +16,7 @@ tags: [blueprint, maintenance, approval, janus-chat]
 
 ## Decision
 
-[维护动作](../../src/renderer/src/components/blueprint/BlueprintMaintenanceActions.tsx)作为宿主内容位于聊天消息末尾，普通发送继续走只读项目聊天。用户点击“整理为提案”后，界面通过现有 startMaintenanceTask 创建绑定会话、工作区和节点范围的任务，再由共享聊天控制器携带 maintenanceTaskId 发起结构化提案。模型回复本身不能触发写入。
+[维护动作](../../src/renderer/src/components/blueprint/BlueprintActionBar.tsx)作为宿主内容位于聊天消息末尾，普通发送继续走只读项目聊天。用户点击“整理为提案”后，界面通过现有 startMaintenanceTask 创建绑定会话、工作区和节点范围的任务，再由共享聊天控制器携带 maintenanceTaskId 发起结构化提案。模型回复本身不能触发写入。
 
 “维护此节点”和工具栏入口将 Note URI、当前 sourceHash 与 checkoutPath 交给同一个项目会话。节点范围通过来源 checkout 的 projectGraph 回源解析，组合图中的显示 ID 不冒充本地 Note ID。来源过期、缺失或歧义阻止提案；目标在另一个已登记工作区时，用户可点击切换。切换沿用单会话的清空及重新绑定规则，下一次请求只携带目标工作区的运行会话。未结束的其他范围或会话任务必须先结束，不能挪用其权限继续生成。
 

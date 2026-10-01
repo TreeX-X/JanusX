@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { Pin, PinOff, X } from 'lucide-react'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'
 import type { SubAgentRun } from '../../../../shared/subAgentRun'
 import type { ProductFileEntry } from '../../../../shared/product'
@@ -72,6 +72,12 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   onTrayClear: () => void
   productFiles: ProductFileEntry[]
   onOpenProductFile?: (relPath: string) => void
+  /** Island window persistence: a pinned window survives outside click / Esc. */
+  islandPinned?: boolean
+  onToggleIslandPin?: () => void
+  /** Drag handle: pointerdown on the topbar chrome moves the panel. */
+  onTopbarPointerDown?: (event: ReactPointerEvent) => void
+  isDraggingIsland?: boolean
 }
 
 export function JanusIslandExpandedShell({
@@ -90,6 +96,8 @@ export function JanusIslandExpandedShell({
   onChatSelectModel, onChatSend, onChatRewrite, onChatStop, onChatRetry,
   onChatClear, conversationController,
   resourceController, toolTraces = [],
+  islandPinned = false, onToggleIslandPin,
+  onTopbarPointerDown, isDraggingIsland = false,
 }: JanusIslandExpandedShellProps) {
   const { t } = useI18n('janus')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -202,9 +210,32 @@ export function JanusIslandExpandedShell({
 
   return (
             <div className="janus-expanded-shell">
-              <div className="janus-expanded-topbar">
-                <div className="janus-expanded-brand island-title">
-                  <span>*</span> {t('janus:island.expanded.brand')}
+              <div
+                className="janus-expanded-topbar janus-expanded-topbar--draggable"
+                data-dragging={isDraggingIsland ? 'true' : 'false'}
+                onPointerDown={onTopbarPointerDown}
+                title={t('janus:island.expanded.dragHint')}
+              >
+                <div className="janus-expanded-left">
+                  {onToggleIslandPin ? (
+                    <button
+                      type="button"
+                      className="janus-chat-tool-button janus-pin-button"
+                      data-pinned={islandPinned ? 'true' : 'false'}
+                      aria-pressed={islandPinned}
+                      aria-label={islandPinned ? t('janus:island.expanded.unpinChat') : t('janus:island.expanded.pinChat')}
+                      title={islandPinned ? t('janus:island.expanded.unpinChat') : t('janus:island.expanded.pinChat')}
+                      onClick={(event) => { event.stopPropagation(); onToggleIslandPin() }}
+                    >
+                      {islandPinned
+                        ? <PinOff size={12} strokeWidth={1.7} aria-hidden="true" />
+                        : <Pin size={12} strokeWidth={1.7} aria-hidden="true" />}
+                      <span>{islandPinned ? t('janus:island.expanded.unpinChat') : t('janus:island.expanded.pinChat')}</span>
+                    </button>
+                  ) : null}
+                  <div className="janus-expanded-brand island-title">
+                    <span>*</span> {t('janus:island.expanded.brand')}
+                  </div>
                 </div>
                 <div className="janus-expanded-view-switch" aria-label={t('janus:island.expanded.viewSwitchAria')}>
                   {visibleViews.map((item) => (
@@ -286,7 +317,7 @@ export function JanusIslandExpandedShell({
                   ) : null}
                 </div>
                 <div className="janus-expanded-meta">
-                  <span className="janus-expanded-meta-text">{t('janus:island.expanded.dismissHint')}</span>
+                  <span className="janus-expanded-meta-text">{islandPinned ? t('janus:island.expanded.pinnedHint') : t('janus:island.expanded.dismissHint')}</span>
                 </div>
               </div>
 

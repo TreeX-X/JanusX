@@ -38,6 +38,11 @@ export function Titlebar() {
   useGlobalRunning()
   const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const { stage: islandStage, knowledge: knowledgePeek } = island
+  // Pinned island window (owned by JanusIsland): while pinned, a terminal
+  // switch must not collapse the conversation back to the capsule.
+  const [islandPinned, setIslandPinned] = useState(false)
+  const islandPinnedRef = useRef(islandPinned)
+  islandPinnedRef.current = islandPinned
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
@@ -78,6 +83,7 @@ export function Titlebar() {
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
   const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
+  const blueprintEnabled = useExperimentalStore((s) => s.blueprint)
   const loadExperimental = useExperimentalStore((s) => s.load)
 
   useEffect(() => {
@@ -204,6 +210,7 @@ export function Titlebar() {
   useEffect(() => {
     if (previousActiveTerminalId.current !== activeTerminalId) {
       previousActiveTerminalId.current = activeTerminalId
+      if (islandPinnedRef.current) return
       dispatchIsland({ type: 'terminal-changed' })
     }
   }, [activeTerminalId])
@@ -328,7 +335,7 @@ export function Titlebar() {
 
       <Suspense fallback={null}>
         <BlueprintWorkbench
-          isOpen={activeWorkbench === 'blueprint'}
+          isOpen={blueprintEnabled && activeWorkbench === 'blueprint'}
           onClose={() => setActiveWorkbench(null)}
         />
       </Suspense>
@@ -369,6 +376,7 @@ export function Titlebar() {
           productNotice={productNotice?.workspaceId === activeWorkspaceId ? { ...productNotice.entry, noticeKind: productNotice.kind } : null}
           productFiles={workspaceProducts}
           onOpenProductFile={openProductFile}
+          onIslandPinnedChange={setIslandPinned}
         />
         <JanusRunOrbs />
       </div>

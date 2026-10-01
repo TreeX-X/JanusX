@@ -216,7 +216,7 @@ const PLANCHE_TOKENS = {
   'shell-border-soft': 'rgba(28, 52, 59, 0.14)',
   'shell-text': '#1C343B',
   'shell-muted': 'rgba(28, 52, 59, 0.62)',
-  'shell-dim': 'rgba(28, 52, 59, 0.62)',
+  'shell-dim': 'rgba(28, 52, 59, 0.42)',
   'shell-diff-add': '#2E6B5E',
   'shell-diff-del': '#D43D2A',
   'shell-accent': '#D43D2A',

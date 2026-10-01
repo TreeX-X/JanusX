@@ -3,6 +3,8 @@
 import { BrowserWindow, app, ipcMain, screen, type IpcMainEvent } from 'electron'
 import { join } from 'node:path'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
+import { THEME_CHANNELS } from '../../shared/ipc/theme'
+import { configService } from '../config/service'
 import { loadRendererWindow } from '../windows/renderer-loader'
 
 export interface DesktopToastPayload {
@@ -167,6 +169,7 @@ class DesktopToastWindow {
     }
 
     win.webContents.send(SYSTEM_CHANNELS.toastShow, this.currentPayload)
+    this.pushTheme(win)
     this.positionWindow(win)
     // DWM 可能在 show 时重铺系统材质：show 前后重申无材质/全透明/无阴影，
     // 否则外圈透明带回退成灰色玻璃壳
@@ -182,6 +185,19 @@ class DesktopToastWindow {
     const timeoutMs = this.currentOptions?.timeoutMs ?? DEFAULT_TIMEOUT_MS
     this.hideTimer = setTimeout(() => this.hide(), timeoutMs)
     this.hideTimer.unref?.()
+  }
+
+  /**
+   * 主题统一控制：Toast 窗口短命且后创建，易错过 settings 的 theme:changed 广播。
+   * show 前主动推送一次缓存主题（同步读，无 IO），渲染侧订阅后 applyThemeToDocument。
+   */
+  private pushTheme(win: BrowserWindow): void {
+    try {
+      if (win.isDestroyed() || win.webContents.isDestroyed()) return
+      win.webContents.send(THEME_CHANNELS.changed, configService.getCachedTheme())
+    } catch {
+      // 主题推送失败不阻断通知本身
+    }
   }
 
   private hide(): void {

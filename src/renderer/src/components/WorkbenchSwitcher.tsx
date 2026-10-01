@@ -21,6 +21,7 @@ export function WorkbenchSwitcher() {
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const activeSession = useBlueprintStore((s) => s.activeSession)
   const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
+  const blueprintEnabled = useExperimentalStore((s) => s.blueprint)
   const loadExperimental = useExperimentalStore((s) => s.load)
 
   useEffect(() => {
@@ -33,6 +34,13 @@ export function WorkbenchSwitcher() {
       useAppStore.getState().setActiveWorkbench(null)
     }
   }, [knowledgeEnabled])
+
+  // 创新开关关闭蓝图时，若工作台正开着则收起，避免悬空态。
+  useEffect(() => {
+    if (!blueprintEnabled && useAppStore.getState().activeWorkbench === 'blueprint') {
+      useAppStore.getState().setActiveWorkbench(null)
+    }
+  }, [blueprintEnabled])
 
   const pendingCandidateCount =
     currentBlueprint?.requirementCandidates?.filter((candidate) => candidate.status === 'pending').length ?? 0
@@ -52,7 +60,11 @@ export function WorkbenchSwitcher() {
     return t('common:workbench.titleAction', { action, label })
   }
 
-  const visibleWorkbenches = WORKBENCHES.filter((item) => item.id !== 'knowledge' || knowledgeEnabled)
+  const visibleWorkbenches = WORKBENCHES.filter((item) => {
+    if (item.id === 'knowledge' && !knowledgeEnabled) return false
+    if (item.id === 'blueprint' && !blueprintEnabled) return false
+    return true
+  })
 
   return (
     <div className={styles.switcher} data-open={activeWorkbench ?? 'none'} aria-label={t('common:workbench.switcherAria')}>

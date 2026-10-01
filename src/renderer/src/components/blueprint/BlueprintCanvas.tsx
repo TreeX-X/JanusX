@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file 蓝图画布（React Flow）— MVP
  * @description
  *  - 从 store 加载蓝图，把 Blueprint.nodes（Record）转成 React Flow nodes + edges。
@@ -25,15 +25,11 @@ import { X } from 'lucide-react'
 
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useAppStore } from '@/stores/app'
-import type { TerminalPreset } from '@/types'
 import {
-  bindTerminal as bindTerminalIPC,
   updateBlueprint as updateBlueprintIPC,
   type BlueprintFeatureItem,
   type BlueprintIssueSeverity,
-  type BlueprintIssueStatus,
-  type BlueprintNode
+  type BlueprintIssueStatus
 } from '@/services/blueprint'
 import { BlueprintNodeCard, BlueprintCardActionsContext, type BlueprintNodeData } from './BlueprintNodeCard'
 import { BlueprintAdaptiveEdge } from './BlueprintAdaptiveEdge'
@@ -43,61 +39,25 @@ import { useThemeStore } from '@/stores/theme'
 import { useOptionalBlueprintToolbar, type ToolbarKindFilter, type ToolbarStatusFilter, useHideIsolatedState } from './BlueprintToolbar'
 import { PromptDialog } from './PromptDialog'
 import { Select } from '../ui/Select'
-import terminalIcon from '@/assets/icons/terminal.svg'
-import claudeIcon from '@/assets/icons/claude.svg'
-import codexIcon from '@/assets/icons/codex.svg'
-import opencodeIcon from '@/assets/icons/opencode.svg'
-import janusIcon from '@/assets/icons/janus.svg'
-import piIcon from '@/assets/icons/pi.svg'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 import { useBlueprintDetailPortal } from './blueprintDetailPortal'
 import { useAnimatedOpen } from '@/components/shared/CardFrame'
-import { getTerminalPresetMeta } from '../../../../shared/terminalLaunch'
-import { launchTerminalPreset, warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
 import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
-import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { collectLocalHierarchyIds, computeInitialCollapsedIds, groupRootsByConnectivity, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
-import { nodeCheckoutPath, resolveNodeWorkspace } from '@/features/blueprint/resolveNodeWorkspace'
+import { buildNodeSearchText, nodeMatchesFocus, normalizeSearchText } from '@/features/blueprint/blueprint-focus'
 import { useI18n } from '@/i18n/useI18n'
 import { NoteWikiPanel } from './NoteWikiPanel'
 import { BlueprintCompositionPanel } from './BlueprintCompositionPanel'
 import { nodeNoteSnapshot, resolveCompositionNote } from '@/features/blueprint/composition-view'
 
-const DEFAULT_NODE_TERMINAL_PRESET: TerminalPreset = 'codex'
 const EMPTY_NODE_IDS: ReadonlySet<string> = new Set()
 const ANALYSIS_COMMIT_LIMIT_MIN = 1
 const ANALYSIS_COMMIT_LIMIT_MAX = 50
 const NODE_W = 240
 const NODE_H = 110
-const TERMINAL_PRESETS: {
-  type: TerminalPreset
-  label: string
-  name: string
-}[] = [
-  createTerminalPreset('shell'),
-  createTerminalPreset('janus'),
-  createTerminalPreset('claude'),
-  createTerminalPreset('codex'),
-  createTerminalPreset('opencode'),
-  createTerminalPreset('pi')
-]
 
-function createTerminalPreset(type: TerminalPreset): { type: TerminalPreset; label: string; name: string } {
-  const meta = getTerminalPresetMeta(type)
-  return { type, label: meta.label, name: meta.name }
-}
-
-/** 终端预设官方图标（与 TerminalSelector 共用同一套 assets，V2 左列图标语言） */
-const TERMINAL_PRESET_ICONS: Record<TerminalPreset, string> = {
-  shell: terminalIcon,
-  janus: janusIcon,
-  claude: claudeIcon,
-  codex: codexIcon,
-  opencode: opencodeIcon,
-  pi: piIcon,
-}
 type StatusFilter = ToolbarStatusFilter
 type KindFilter = ToolbarKindFilter
 const ISSUE_SEVERITY_LABEL_KEY: Record<BlueprintIssueSeverity, string> = {
@@ -132,74 +92,6 @@ function splitLines(value: string): string[] {
     .filter(Boolean)
 }
 
-/** Goal/AC 实施 prompt（左列"在终端中实施"与"复制"共用；只预填不提交） */
-function buildImplementPrompt(node: BlueprintNode): string {
-  const lines = [`# ${node.title || node.id}`, '', '按蓝图节点实施：']
-  const goal = node.positioning || node.description
-  if (goal) lines.push(`Goal: ${goal}`)
-  if (node.features?.length) {
-    lines.push('AC:')
-    for (const feature of node.features) lines.push(`- [ ] ${feature.title}`)
-  }
-  lines.push('', '约束：只改实现，不改 note；验收回执另行提交。')
-  return lines.join('\n')
-}
-
-function normalizeSearchText(value: string): string {
-  return value.trim().toLowerCase()
-}
-
-function buildNodeSearchText(node: BlueprintNode): string {
-  return [
-    node.title,
-    node.kind,
-    node.lifecycle,
-    node.type,
-    node.status,
-    getBlueprintStatusVisual(node.status)?.label,
-    node.positioning,
-    node.techSolution,
-    node.description,
-    ...(node.tags ?? []),
-    ...(node.features ?? []).flatMap((feature) => [
-      feature.title,
-      feature.description,
-      feature.status,
-      ...(feature.requirementNotes ?? [])
-    ]),
-    ...(node.issues ?? []).flatMap((issue) => [
-      issue.title,
-      issue.description,
-      issue.severity,
-      issue.status
-    ])
-  ]
-    .filter(Boolean)
-    .join('\n')
-    .toLowerCase()
-}
-
-function nodeMatchesFocus(
-  node: BlueprintNode,
-  query: string,
-  statusFilter: StatusFilter,
-  kindFilter: KindFilter,
-  searchText?: string,
-): boolean {
-  const statusMatches = statusFilter === 'all' || node.status === statusFilter
-  const kindMatches = kindFilter === 'all' || noteKindOf(node) === kindFilter
-  const queryMatches = !query || (searchText ?? buildNodeSearchText(node)).includes(query)
-  return statusMatches && kindMatches && queryMatches
-}
-
-function getTerminalPreset(preset: TerminalPreset) {
-  return (
-    TERMINAL_PRESETS.find((item) => item.type === preset) ??
-    TERMINAL_PRESETS.find((item) => item.type === DEFAULT_NODE_TERMINAL_PRESET) ??
-    TERMINAL_PRESETS[0]
-  )
-}
-
 /* Context menu */
 interface ContextMenu {
   x: number
@@ -227,14 +119,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const error = useBlueprintStore((s) => s.error)
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
   const mergeCanvasLayout = useBlueprintStore((s) => s.mergeCanvasLayout)
-  const focusNodeSession = useBlueprintStore((s) => s.focusNode)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
-  const setActiveTerminal = useWorkspaceStore((s) => s.setActiveTerminal)
-  const setLoadState = useAppStore((s) => s.setLoadState)
   const plancheCanvas = useThemeStore((s) => s.theme) === 'planche'
-  const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
-  const requestMaintenanceOpen = useBlueprintMaintenanceStore((s) => s.requestOpen)
 
   // 工作台开启时由 BlueprintWorkbench 通过 Context 注入专属承载层节点；
   // embedded 模式下为 null，Select 回退到 document.body，行为不变。
@@ -244,12 +130,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
 
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  useEffect(() => {
-    if (selectedId) useBlueprintMaintenanceStore.getState().selectContext({ blueprintId, nodeId: selectedId })
-  }, [blueprintId, selectedId])
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
   const [wikiAnchor, setWikiAnchor] = useState<{ uri: string; value?: string } | null>(null)
-  const [terminalPreset, setTerminalPreset] = useState<TerminalPreset>(DEFAULT_NODE_TERMINAL_PRESET)
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   // 统一顶栏（workbench）存在时过滤走 provider 受控；embedded 无 provider 时走本地态。
   const toolbarState = useOptionalBlueprintToolbar()
@@ -290,8 +172,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     normalizeAnalysisCommitLimit,
   } = useBlueprintAnalysisActions({ blueprintId, selectedId, detailNodeId, setActionError })
   const [restoreLayoutConfirmOpen, setRestoreLayoutConfirmOpen] = useState(false)
-  const [promptCopied, setPromptCopied] = useState(false)
-  const [terminalLaunching, setTerminalLaunching] = useState(false)
 
   const rfInstanceRef = useRef<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>(null)
   const canvasMainRef = useRef<HTMLDivElement | null>(null)
@@ -590,136 +470,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     }
   }, [contextMenu])
 
-  /* 操作（只读：内容变更走对话 + Agent 事务，本画布不直写节点字段） */
-  const activateWorkSession = useCallback(
-    async (node: BlueprintNode) => {
-      setActionError(null)
-      // E0-4 discounted: projected nodes resolve by checkout path, not registry id.
-      const ownerCwd = useBlueprintStore.getState().workspacePathFor(blueprintId)
-      const workspace = resolveNodeWorkspace(node, ownerCwd, workspaces)
-      if (!workspace) {
-        // No registry entry: a node without any checkout identity was never
-        // bound; a node with checkout identity just isn't registered locally.
-        setActionError(t(nodeCheckoutPath(node, ownerCwd) ? 'blueprint:error.workspaceMissing' : 'blueprint:error.bindWorkspaceFirst'))
-        return
-      }
-
-      setActiveWorkspace(workspace.id)
-      const focused = await focusNodeSession({
-        blueprintId,
-        nodeId: node.id,
-        workspaceId: workspace.id,
-        workspaceName: workspace.name,
-        workspacePath: workspace.path
-      })
-      if (focused) {
-        setSelectedId(node.id)
-      }
-    },
-    [blueprintId, focusNodeSession, setActiveWorkspace, workspaces, t]
-  )
-
-  const copyImplementPrompt = useCallback(async (node: BlueprintNode) => {
-    try {
-      await navigator.clipboard.writeText(buildImplementPrompt(node))
-      setPromptCopied(true)
-      setTimeout(() => setPromptCopied(false), 1500)
-    } catch {
-      /* clipboard unavailable */
-    }
-  }, [])
-
-  const warmTerminalPreset = useCallback((preset: TerminalPreset) => {
-    if (preset === 'shell') {
-      warmDefaultShellCache()
-      return
-    }
-    warmTerminalCreatePath([preset])
-  }, [])
-
-  const focusOrCreateTerminal = useCallback(
-    async (node: BlueprintNode, requestedPreset: TerminalPreset = terminalPreset) => {
-      if (terminalLaunching) return
-      setActionError(null)
-      // E0-4 discounted: projected nodes resolve by checkout path, not registry id.
-      const ownerCwd = useBlueprintStore.getState().workspacePathFor(blueprintId)
-      const workspace = resolveNodeWorkspace(node, ownerCwd, workspaces)
-      if (!workspace) {
-        // No registry entry: a node without any checkout identity was never
-        // bound; a node with checkout identity just isn't registered locally.
-        setActionError(t(nodeCheckoutPath(node, ownerCwd) ? 'blueprint:error.workspaceMissing' : 'blueprint:error.bindWorkspaceFirst'))
-        return
-      }
-
-      setTerminalLaunching(true)
-      try {
-        setActiveWorkspace(workspace.id)
-        const afterSwitch = useWorkspaceStore.getState()
-        const existing = node.boundTerminalId
-          ? afterSwitch.terminals.find((t) => t.id === node.boundTerminalId)
-          : null
-
-        setBlueprintMode(false)
-        setLoadState(existing ? 'terminal-active' : afterSwitch.terminals.length > 0 ? 'terminal-active' : 'no-terminal')
-
-        if (existing) {
-          setActiveTerminal(existing.id)
-          await bindTerminalIPC(workspace.path, node.id, existing.id)
-          await loadBlueprint(blueprintId)
-          return
-        }
-
-        const preset = getTerminalPreset(requestedPreset)
-        const launched = await launchTerminalPreset({
-          preset: preset.type,
-          workspaceId: workspace.id,
-          workspacePath: workspace.path,
-          name: preset.name,
-          initialInput: buildImplementPrompt(node),
-        })
-
-        if (!launched) {
-          setActionError(t('blueprint:error.terminalCreateFailed'))
-          return
-        }
-
-        if (!launched.ok) {
-          setActionError(t('blueprint:error.terminalCreateFailedReason', { error: launched.error }))
-          return
-        }
-
-        try {
-          await bindTerminalIPC(workspace.path, node.id, launched.terminalId)
-          if (!launched.prefilled) {
-            // 预填失败时退回剪贴板（静默）：用户去终端粘贴即可。
-            try {
-              await navigator.clipboard.writeText(buildImplementPrompt(node))
-            } catch {
-              /* clipboard unavailable */
-            }
-          }
-          await loadBlueprint(blueprintId)
-        } catch (err) {
-          setActionError(t('blueprint:error.terminalBindFailed', { message: (err as Error).message }))
-        }
-      } finally {
-        setTerminalLaunching(false)
-      }
-    },
-    [
-      workspaces,
-      setActiveWorkspace,
-      setBlueprintMode,
-      setLoadState,
-      setActiveTerminal,
-      loadBlueprint,
-      blueprintId,
-      terminalPreset,
-      terminalLaunching,
-      t
-    ]
-  )
-
   /* 详情只读：内容变更走对话 + Agent 事务，本文件不再直写节点字段 */
   const fitView = useCallback(() => {
     fitViewWhenReady(200)
@@ -829,16 +579,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               <button className="blueprint-btn" onClick={() => selectedId && setDetailNodeId(selectedId)} disabled={!selectedId}>
                 {t('blueprint:action.nodeDetail')}
               </button>
-              <button className="blueprint-btn" onClick={() => selectedNode && void activateWorkSession(selectedNode)} disabled={!selectedNode} aria-label={t('blueprint:ariaLabel.enterWorkSession')}>
-                {t('blueprint:action.startWork')}
-              </button>
               <button className={`blueprint-btn${localFocusActive ? ' blueprint-btn--active' : ''}`} onClick={() => setLocalFocusActive((value) => !value)} disabled={!selectedId} aria-pressed={localFocusActive}>
                 {localFocusActive ? t('blueprint:action.exitLocalFocus') : t('blueprint:action.focusHierarchy')}
               </button>
             </div>
 
             <div className="blueprint-toolbar__group blueprint-toolbar__group--utility" role="group" aria-label={t('blueprint:ariaLabel.utility')}>
-              {/* 高保真主行：适应画布 / 重放加载 / 在对话中变更 + 本机布局保存态 */}
+              {/* 画布只做检视：内容变更与派发都走右侧对话，不再有主行动按钮 */}
               <button className="blueprint-btn" onClick={fitView} title={t('blueprint:action.fitCanvas')}>
                 {t('blueprint:action.fitCanvas')}
               </button>
@@ -854,13 +601,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               )}
               <button className="blueprint-btn" onClick={() => loadBlueprint(blueprintId)} title={t('blueprint:action.replayLoading')}>
                 {t('blueprint:action.replayLoading')}
-              </button>
-              <button
-                className="blueprint-btn blueprint-btn--primary"
-                onClick={() => requestMaintenanceOpen(selectedId ? { blueprintId, nodeId: selectedId } : { blueprintId })}
-                title={t('blueprint:action.editInChat')}
-              >
-                {t('blueprint:action.editInChat')}
               </button>
               {layoutSaveStatus !== 'clean' ? (
                 <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${layoutSaveStatus}`}>
@@ -1019,7 +759,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       </BlueprintCardActionsContext.Provider>
       </div>
 
-      {/* 右键菜单 */}
+      {/* 右键菜单只保留检视入口：写内容与派发都在右侧对话里 */}
       {contextMenu ? (
         <div
           className="bp-context-menu"
@@ -1029,26 +769,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         >
           <button className="bp-context-menu__item" onClick={() => { setDetailNodeId(contextMenu.nodeId); setContextMenu(null) }}>
             {t('blueprint:contextMenu.nodeDetail')}
-          </button>
-          <button
-            className="bp-context-menu__item"
-            onClick={() => {
-              const node = currentBlueprint?.nodes[contextMenu.nodeId]
-              if (node) void activateWorkSession(node)
-              setContextMenu(null)
-            }}
-          >
-            {t('blueprint:contextMenu.startWork')}
-          </button>
-          <button
-            className="bp-context-menu__item"
-            onClick={() => {
-              const node = currentBlueprint?.nodes[contextMenu.nodeId]
-              if (node) focusOrCreateTerminal(node)
-              setContextMenu(null)
-            }}
-          >
-            {t('blueprint:contextMenu.enterTerminal')}
           </button>
         </div>
       ) : null}
@@ -1063,7 +783,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           aria-hidden={detailAnim.visible ? undefined : 'true'}
         >
           <div className="bp-node-detail__header">
-            <div>
+            <div className="bp-node-detail__heading">
               <div className="bp-node-detail__eyebrow">{detailKind} · {detailNode.lifecycle ?? t(getBlueprintStatusVisual(detailNode.status)?.labelKey ?? `blueprint:status.${detailNode.status}`)}</div>
               <div className="bp-node-detail__title">{detailNode.title || <span className="bp-node-detail__title--empty">{t('blueprint:detailPanel.untitled')}</span>}</div>
               <div className="bp-node-detail__summary">
@@ -1075,21 +795,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
             <button className="bp-panel-close" onClick={() => setDetailNodeId(null)} aria-label={t('blueprint:ariaLabel.closeNodeDetail')} title={t('common:action.close')}>
               <X size={16} aria-hidden="true" />
             </button>
-            <div className="bp-node-detail__actions">
-              <button
-                className="blueprint-btn blueprint-btn--primary"
-                onClick={() => requestMaintenanceOpen({ blueprintId, nodeId: detailNode.id })}
-              >
-                {t('blueprint:action.maintainNode')}
-              </button>
-              <button
-                className="blueprint-btn"
-                onClick={() => activateWorkSession(detailNode)}
-                disabled={!detailNode.workspaceId || detailWorkspaceMissing}
-              >
-                {t('blueprint:action.startWork')}
-              </button>
-            </div>
           </div>
 
           {currentBlueprint && <BlueprintCompositionPanel blueprint={currentBlueprint} nodeId={detailNode.id} onSelect={selectCompositionNode} />}
@@ -1415,41 +1120,14 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
             <div className="bp-node-detail__section-head">
               <label className="bp-node-detail__label">{t('blueprint:detailPanel.terminal')}</label>
             </div>
-            <span onMouseEnter={() => warmTerminalPreset(terminalPreset)}>
-              <Select
-                value={terminalPreset}
-                onChange={(value) => setTerminalPreset(value as TerminalPreset)}
-                options={TERMINAL_PRESETS.map((preset) => ({ value: preset.type, label: preset.label }))}
-                prefix={<img src={TERMINAL_PRESET_ICONS[terminalPreset]} alt="" aria-hidden="true" width={16} height={16} />}
-                getPortalContainer={getSelectPortalContainer}
-              />
-            </span>
+            {/* 只读状态：终端由右侧对话派发，这里不再提供任何点击入口。 */}
             <div className="bp-node-detail__terminal-meta">
-              <span className={`bp-node-detail__terminal-dot${terminalLaunching ? ' bp-node-detail__terminal-dot--busy' : detailNode.boundTerminalId ? ' bp-node-detail__terminal-dot--bound' : ''}`} />
+              <span className={`bp-node-detail__terminal-dot${detailNode.boundTerminalId ? ' bp-node-detail__terminal-dot--bound' : ''}`} />
               <span>
-                {terminalLaunching
-                  ? t('blueprint:detailPanel.terminalStarting')
-                  : detailNode.boundTerminalId
-                    ? t('blueprint:detailPanel.terminalBound', { id: detailNode.boundTerminalId.slice(0, 8) })
-                    : t('blueprint:detailPanel.terminalUnbound')}
+                {detailNode.boundTerminalId
+                  ? t('blueprint:detailPanel.terminalBound', { id: detailNode.boundTerminalId.slice(0, 8) })
+                  : t('blueprint:detailPanel.terminalDispatchHint')}
               </span>
-            </div>
-            <div className="bp-node-detail__terminal-actions">
-              <button
-                className="blueprint-btn blueprint-btn--primary"
-                onClick={() => focusOrCreateTerminal(detailNode, terminalPreset)}
-                disabled={!detailNode.workspaceId || detailWorkspaceMissing || terminalLaunching}
-              >
-                {t('blueprint:action.enterTerminal')}
-              </button>
-              <button
-                className="blueprint-btn"
-                onClick={() => void copyImplementPrompt(detailNode)}
-                disabled={promptCopied}
-                title={t('blueprint:action.copyPrompt')}
-              >
-                {promptCopied ? t('blueprint:action.copied') : t('blueprint:action.copyPrompt')}
-              </button>
             </div>
           </div>
         </aside>

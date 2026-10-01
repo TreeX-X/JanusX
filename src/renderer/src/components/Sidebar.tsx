@@ -10,7 +10,10 @@ import { useI18n } from '@/i18n/useI18n'
 import { ProjectLauncher } from './ProjectLauncher'
 import { WorktreeComposer, WorktreeDeleteDialog, WorktreeShipDialog } from './WorktreeDialogs'
 import { ModalCloseButton } from './ModalCloseButton'
+import { ModalFrame } from './shared/ModalFrame'
 import { ThemedTooltip } from './ui/ThemedTooltip'
+import { TerminalStatusLight } from './ui/TerminalStatusLight'
+import { TerminalPresetIcon } from './ui/TerminalPresetIcon'
 import { TeamFooter, TeamFooterCollapsed } from './team/TeamFooter'
 import type { Workspace, WorkspaceSidebarGroup, Terminal } from '@/types'
 import type { WorktreeInfo } from '../../../shared/ipc/worktree'
@@ -18,12 +21,6 @@ import { clearTerminalDragData, setTerminalDragData } from '@/lib/terminal-file-
 import { chooseAndCreateWorkspace, getActiveScopePath, getScopePathForWorkspace, loadWorkspaceFileTree, refreshScopeFileTree, switchActiveWorktree } from '@/features/workspace/actions'
 import { invalidateEditorFileCache } from '@/stores/editor'
 import { TERMINAL_ATTENTION_ORDER, getTerminalStatusVisual, summarizeTerminalActivity } from '@/lib/terminal-sidebar-visual'
-import terminalIcon from '@/assets/icons/terminal.svg'
-import claudeIcon from '@/assets/icons/claude.svg'
-import codexIcon from '@/assets/icons/codex.svg'
-import opencodeIcon from '@/assets/icons/opencode.svg'
-import janusIcon from '@/assets/icons/janus.svg'
-import piIcon from '@/assets/icons/pi.svg'
 import {
   clearWorkspaceSidebarGroup,
   groupWorkspaceInSidebar,
@@ -190,26 +187,13 @@ function terminalPresetLabel(preset: Terminal['preset'], t: (key: string) => str
   }
 }
 
-const TERMINAL_PRESET_ICONS: Record<Terminal['preset'], string> = {
-  shell: terminalIcon,
-  claude: claudeIcon,
-  codex: codexIcon,
-  opencode: opencodeIcon,
-  janus: janusIcon,
-  'pi': piIcon,
-}
-
+// Note: preset 图标走共享 TerminalPresetIcon（单色字形 mask + currentColor，跨主题可读）——见 src/renderer/src/components/ui/TerminalPresetIcon.tsx
 // Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/2026-09-19-terminal-status-ring--fc9a87e5.md
+// 形态走共享 TerminalStatusLight（与中部 tab 同一盏灯），此处只保留 tooltip 与 20px 点击区。
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
   const { t } = useI18n('terminal')
   const visual = getTerminalStatusVisual(status)
   const title = t('common:workspace.terminalStatusTitle', { label: t(visual.labelKey) })
-  const ringClass =
-    status === 'running' ? 'term-status-ring--running'
-    : status === 'needs-approval' || status === 'needs-input' ? 'term-status-pulse'
-    : status === 'degraded' ? 'term-status-ring--degraded'
-    : status === 'error' ? 'term-status-ring--error'
-    : 'term-status-ring--idle'
 
   return (
     <ThemedTooltip label={title}>
@@ -217,11 +201,8 @@ function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
         role="img"
         aria-label={title}
         className="flex h-5 w-5 shrink-0 items-center justify-center"
-        style={{ color: visual.color }}
       >
-        <span className={`term-status-ring ${ringClass}`} aria-hidden="true">
-          {status === 'running' && <span className="term-status-orbit" />}
-        </span>
+        <TerminalStatusLight status={status} />
       </span>
     </ThemedTooltip>
   )
@@ -358,10 +339,10 @@ function TerminalRow({
       <span
         className="flex h-[18px] w-[18px] items-center justify-center"
       >
-        <img
-          src={TERMINAL_PRESET_ICONS[terminal.preset]}
+        <TerminalPresetIcon
+          preset={terminal.preset}
           alt={t('common:workspace.presetIconAlt', { preset: presetLabel })}
-          className="h-3.5 w-3.5 object-contain"
+          className="h-3.5 w-3.5 shrink-0"
         />
       </span>
       <span className="min-w-0">
@@ -1709,48 +1690,46 @@ export function Sidebar() {
         document.body,
       )}
       {/* 工作区启动配置弹窗 */}
-      {configTarget && createPortal(
-        <div
-          className="fixed inset-0 flex items-center justify-center"
-          style={{
-            background: 'rgba(8,8,10,0.62)',
-            backdropFilter: 'blur(10px)',
-            zIndex: 1000,
-          }}
+      {configTarget && (
+        <ModalFrame
+          label={t('common:workspace.launcherTitle')}
+          onClose={() => { setConfigTarget(null); setProjectCandidate(null) }}
+          panelClassName="ws-config-modal"
         >
-          <div className="ws-config-modal">
-            {/* Header */}
-            <div
-              className="flex justify-between items-center"
-              style={{
-                padding: '12px 16px',
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
-              }}
-            >
+          {({ requestClose }) => (
+            <>
+              {/* Header */}
               <div
-                className="font-semibold flex items-center"
-                style={{ fontSize: 13, color: 'var(--shell-text)', gap: 8 }}
+                className="flex justify-between items-center"
+                style={{
+                  padding: '12px 16px',
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                }}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" strokeWidth="2" style={{ stroke: 'var(--shell-text)' }}>
-                  <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                </svg>
-                <span>{t('common:workspace.launcherTitle')}</span>
+                <div
+                  className="font-semibold flex items-center"
+                  style={{ fontSize: 13, color: 'var(--shell-text)', gap: 8 }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" strokeWidth="2" style={{ stroke: 'var(--shell-text)' }}>
+                    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                  </svg>
+                  <span>{t('common:workspace.launcherTitle')}</span>
+                </div>
+                <ModalCloseButton onClose={requestClose} />
               </div>
-              <ModalCloseButton onClose={() => { setConfigTarget(null); setProjectCandidate(null) }} />
-            </div>
-            {/* Body */}
-            <div style={{ padding: '0', overflow: 'hidden', flex: 1 }}>
-              <ProjectLauncher
-                projectPath={projectCandidate?.projectPath ?? configTarget.path}
-                workspaceId={configTarget.id}
-                workspaceRoot={configTarget.path}
-                projectRelativePath={projectCandidate?.relativePath ?? ''}
-                candidateConfig={projectCandidate?.config ?? null}
-              />
-            </div>
-          </div>
-        </div>,
-        document.body,
+              {/* Body */}
+              <div style={{ padding: '0', overflow: 'hidden', flex: 1 }}>
+                <ProjectLauncher
+                  projectPath={projectCandidate?.projectPath ?? configTarget.path}
+                  workspaceId={configTarget.id}
+                  workspaceRoot={configTarget.path}
+                  projectRelativePath={projectCandidate?.relativePath ?? ''}
+                  candidateConfig={projectCandidate?.config ?? null}
+                />
+              </div>
+            </>
+          )}
+        </ModalFrame>
       )}
     </aside>
   )

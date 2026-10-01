@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import styles from './DesktopToastApp.module.css'
+import { applyThemeToDocument, getAppTheme } from '@/services/theme'
 
 interface DesktopToastPayload {
   id?: string
@@ -54,6 +55,12 @@ export function DesktopToastApp() {
 
   useEffect(() => {
     document.body.classList.add('desktop-toast-body')
+    // 主题统一控制：独立 Toast 窗口不经过 App 根的 theme store，自行拉取持久化主题
+    // 并订阅 theme:changed（主进程 show 前也会主动推送一次，补齐后创建窗口错过广播的缺口）。
+    void getAppTheme().then((theme) => applyThemeToDocument(theme))
+    const unsubscribeTheme = window.electron?.theme?.onChanged
+      ? window.electron.theme.onChanged((next) => applyThemeToDocument(next))
+      : undefined
     const unsubscribeShow = window.electron.desktopToast.onShow((payload) => {
       const nextToast = normalizePayload(payload)
       if (!nextToast) return
@@ -69,6 +76,7 @@ export function DesktopToastApp() {
 
     return () => {
       document.body.classList.remove('desktop-toast-body')
+      unsubscribeTheme?.()
       unsubscribeShow()
       unsubscribeHide()
     }

@@ -14,7 +14,8 @@ export function createMainWindow(onClosed: () => void): BrowserWindow {
     title: 'JanusX',
     icon: appIcon,
     frame: false,
-    backgroundColor: '#121212',
+    // 默认主题为 planche 纸面：首漆底色用纸色，避免纸面主题下闪黑。
+    backgroundColor: '#EFE4C5',
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../../preload/index.mjs'),

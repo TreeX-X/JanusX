@@ -11,6 +11,7 @@ import type {
   DiscoveredRequirement,
 } from '../janus/types'
 import type {
+  BlueprintDispatchBriefResult,
   BlueprintMaintenanceApplyInput,
   BlueprintMaintenanceApplyResult,
   BlueprintMaintenanceAuditListInput,
@@ -58,6 +59,7 @@ export const JANUS_COMMAND_CHANNELS = {
   maintenanceDismiss: 'blueprint:maintenance:dismiss',
   maintenanceUndoPrepare: 'blueprint:maintenance:undo:prepare',
   maintenanceUndoApply: 'blueprint:maintenance:undo:apply',
+  dispatchComposeBrief: 'blueprint:dispatch:compose-brief',
 } as const
 
 export interface BlueprintSummary {
@@ -224,5 +226,15 @@ export interface JanusAPI {
   dismissMaintenanceProposal(input: BlueprintMaintenanceDismissInput): Promise<BlueprintMaintenanceTask>
   prepareMaintenanceUndo(input: BlueprintMaintenanceUndoPrepareInput): Promise<BlueprintMaintenanceUndoPrepareResult>
   applyMaintenanceUndo(input: BlueprintMaintenanceUndoApplyInput): Promise<BlueprintMaintenanceUndoApplyResult>
+  /** One-shot brief for handing this conversation to a work terminal. */
+  composeDispatchBrief(input: {
+    taskId: string
+    conversationId: string
+    messages: Array<{ role: string; content: string }>
+    providerId: string
+    modelId?: string
+    workspaceIds: string[]
+    workspaceRoots: Record<string, string>
+  }): Promise<BlueprintDispatchBriefResult>
   onMaintenanceTask(callback: (event: BlueprintMaintenanceEvent) => void): () => void
 }

@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
   },
 }))
 
-const { AgentHookConfigManager, JANUSX_HOOK_COMMAND_MARKER } = await import(
+const { AgentHookConfigManager, JANUSX_HOOK_COMMAND_MARKER, buildHookRunnerSource } = await import(
   '../../src/main/notifications/agent-hook-config'
 )
 const electronApp = (await import('electron')).app as unknown as {
@@ -27,6 +27,8 @@ type ManagerOverrides = {
   userDataDir?: string
   executablePath?: string
   platform?: 'win32' | 'linux' | 'darwin'
+  windowsHookRunnerPath?: string | null
+  compileHookRunner?: boolean
 }
 
 function makeManager(homeDir: string, overrides: ManagerOverrides = {}) {
@@ -35,6 +37,9 @@ function makeManager(homeDir: string, overrides: ManagerOverrides = {}) {
     userDataDir: overrides.userDataDir ?? join(homeDir, 'userData'),
     executablePath: overrides.executablePath ?? '/usr/local/bin/janusx',
     platform: overrides.platform ?? 'linux',
+    // Deterministic legacy form by default: no runner compile, no runner path.
+    windowsHookRunnerPath: overrides.windowsHookRunnerPath ?? null,
+    compileHookRunner: overrides.compileHookRunner ?? false,
   })
 }
 
@@ -230,6 +235,15 @@ describe('AgentHookConfigManager', () => {
       expect(script).toContain('Invoke-RestMethod')
       expect(script).toContain('JANUSX_HOOK_PORT')
       expect(script).toContain('janusx-agent-hook-last.json')
+      // Slim + fast hook sender: bounded POST, filtered raw, shallow JSON.
+      expect(script).toContain('-TimeoutSec 2')
+      expect(script).toContain('rawFiltered')
+      expect(script).toContain('transcript_path')
+      expect(script).toContain('Substring(0, 2000)')
+      expect(script).not.toContain('-Depth 32')
+      expect(script).toContain('-Depth 10')
+      // Backticks would terminate the TS template literal that bakes this script.
+      expect(script).not.toContain('`')
     } finally {
       electronApp.isPackaged = true
     }
@@ -318,5 +332,67 @@ describe('AgentHookConfigManager', () => {
     expect(await manager.isInstalled('janus')).toBe(true)
     const uninstalled = await manager.uninstall('janus')
     expect(uninstalled.installed).toBe(false)
+  })
+
+  it('emits hidden-runner hook commands on Windows when a runner path is configured', async () => {
+    const homeDir = await createTempDir()
+    const runnerPath = join(homeDir, '.janusx', 'hooks', 'janusx-hook-runner.exe')
+    await mkdir(join(homeDir, '.janusx', 'hooks'), { recursive: true })
+    await writeFile(runnerPath, '', 'utf8')
+    const manager = makeManager(homeDir, {
+      executablePath: 'C:/Program Files/JanusX/JanusX.exe',
+      platform: 'win32',
+      windowsHookRunnerPath: runnerPath,
+    })
+
+    await manager.ensureInstalled('codex')
+    const parsed = JSON.parse(await readFile(manager.getCodexHooksPath(), 'utf8')) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>
+    }
+
+    for (const event of ['UserPromptSubmit', 'PermissionRequest', 'Stop']) {
+      const command = parsed.hooks[event][0].hooks[0].command
+      expect(command).toContain('janusx-hook-runner.exe')
+      expect(command).toContain('janusx-agent-hook.ps1')
+      expect(command).toContain(JANUSX_HOOK_COMMAND_MARKER)
+      expect(command).toContain(`"${event}"`)
+      expect(command).not.toContain('powershell')
+      expect(command).not.toContain('-Command')
+      expect(command).not.toContain('$')
+    }
+    expect(await manager.isInstalled('codex')).toBe(true)
+  })
+
+  it('falls back to powershell commands when the auto runner is missing and compile is off', async () => {
+    const homeDir = await createTempDir()
+    const manager = new AgentHookConfigManager({
+      homeDir,
+      userDataDir: join(homeDir, 'userData'),
+      executablePath: 'C:/Program Files/JanusX/JanusX.exe',
+      platform: 'win32',
+      compileHookRunner: false,
+    })
+
+    expect(manager.getHookRunnerPath()).toBe(join(homeDir, '.janusx', 'hooks', 'janusx-hook-runner.exe'))
+
+    await manager.ensureInstalled('codex')
+    const hooksJson = await readFile(manager.getCodexHooksPath(), 'utf8')
+
+    expect(hooksJson).toContain('-Command')
+    expect(hooksJson).toContain('Test-Path -LiteralPath')
+    expect(hooksJson).not.toContain('janusx-hook-runner.exe')
+    expect(await manager.isInstalled('codex')).toBe(true)
+  })
+
+  it('builds a GUI-subsystem runner that hides powershell and never blocks', () => {
+    const source = buildHookRunnerSource()
+
+    expect(source).toContain('CreateNoWindow = true')
+    expect(source).toContain('powershell.exe')
+    expect(source).toContain('WaitForExit')
+    expect(source).toContain('return 0')
+    // TS-template safety: no ${ interpolation or backticks that would corrupt the C#.
+    expect(source).not.toContain('${')
+    expect(source).not.toContain('`')
   })
 })

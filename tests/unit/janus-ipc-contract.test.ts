@@ -142,9 +142,9 @@ describe('Janus IPC contract', () => {
     const commands = Object.values(JANUS_COMMAND_CHANNELS)
     const events = Object.values(JANUS_EVENT_CHANNELS)
 
-    expect(commands).toHaveLength(32)
-    expect(events).toHaveLength(3)
-    expect(new Set([...commands, ...events]).size).toBe(35)
+expect(commands).toHaveLength(33)
+expect(events).toHaveLength(3)
+expect(new Set([...commands, ...events]).size).toBe(36)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining(commands)
     )

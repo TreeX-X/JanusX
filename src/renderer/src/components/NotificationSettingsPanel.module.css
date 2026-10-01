@@ -70,6 +70,13 @@
   max-width: 560px;
 }
 
+.note {
+  color: #d78b92;
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 560px;
+}
+
 .switch {
   position: relative;
   width: 40px;
@@ -210,8 +217,12 @@
   font-size: 12px;
 }
 
+/* Note: 底栏底色必须吃 --shell-canvas 令牌，写死 rgba(21,21,23,.9) 会在默认的
+   planche 纸面主题上压出近黑横条 — 见 .agents/notes/2026-09-29-settings-footer-scrim-token--16ff77a0.md */
 .footer {
   position: sticky;
+  /* 负的 bottom 抵掉 .body 的 padding-bottom，让底栏的出血边与滚动视口底边齐平；
+     改成 0 会在底栏下方留一条 22px 裸带，滚动内容从那里直接漏过去。 */
   bottom: calc(var(--so-body-pad-y, 22px) * -1);
   display: flex;
   justify-content: space-between;
@@ -220,11 +231,12 @@
   margin-top: auto;
   margin-right: calc(var(--so-body-pad-x, 22px) * -1);
   margin-bottom: calc(var(--so-body-pad-y, 22px) * -1);
-  margin-left: calc(var(--so-body-pad-x, 22px) * -1);
+  margin-left:  calc(var(--so-body-pad-x, 22px) * -1);
   padding: 13px var(--so-body-pad-x, 22px);
   border-top: 1px solid var(--so-rule);
-  /* Matches --shell-canvas (#151517) with alpha so scrolled content shows through. */
-  background: rgba(21, 21, 23, 0.9);
+  /* 半透明 + 模糊：暗色下滚动内容从底栏下透出。色值跟 --shell-canvas 走，
+     两个主题共用这一条规则——#151517 只是 dark 的 canvas，planche 是纸色 #EFE4C5。 */
+  background: color-mix(in srgb, var(--shell-canvas) 90%, transparent);
   backdrop-filter: blur(16px);
 }
 
@@ -316,6 +328,13 @@
 }
 
 /* ── planche：通知设置纸面化（加法层，dark 原样不动）── */
+/* 底栏在纸面下不吃毛玻璃：压成实心纸色，只靠顶部发丝线分界。
+   否则 blur(16px) 会把滚过的纸面糊成一块脏影，横条读起来像浮在内容上的遮罩。 */
+:global([data-theme='planche']) .footer {
+  background: var(--paper, #EFE4C5);
+  backdrop-filter: none;
+}
+
 :global([data-theme='planche']) .labelText {
   color: var(--ink, #1C343B);
 }

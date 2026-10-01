@@ -12,6 +12,11 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
     graphReads: [] as string[], refreshes: [] as string[], mutations: 0,
     checkoutViews: {} as Record<string, Blueprint>,
     tasks: [] as BlueprintMaintenanceTask[], audits: [] as BlueprintMaintenanceAuditRecord[],
+    dispatchBriefs: [] as Array<{ taskId: string; conversationId: string; messages: Array<{ role: string; content: string }> }>,
+    binds: [] as Array<{ cwd: string; nodeId: string; terminalId: string }>,
+    terminalCreates: [] as Array<{ id: string; preset: string; cwd?: string }>,
+    terminalInputs: [] as Array<{ terminalId: string; data: string }>,
+    failDispatch: false,
     gateStart: false, finishStart: null as (() => void) | null,
     failList: false,
     changeSourceHash(hash: string) { graph.nodes[nodeId].sourceHash = hash },
@@ -109,5 +114,40 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
     const source = cwd === workspace.path ? graph : state.checkoutViews[cwd]
     return source ? { blueprint: structuredClone(source), rev: 1, repoId: source.nodes[source.rootNodeId].sourceUri!.split('/')[2], repoName: source.name, invalid: [], adapterVersion: 'fixture' } : null
   } })
+  // Note: dispatch is a host action — brief over IPC, terminal through the real
+  // renderer launch path so the prefill/bind sequence is exercised.
+  Object.assign(window.electron.janus, {
+    composeDispatchBrief: async (input: { taskId: string; conversationId: string; messages: Array<{ role: string; content: string }> }) => {
+      state.dispatchBriefs.push(structuredClone(input))
+      if (state.failDispatch) throw new Error('Fixture brief unavailable')
+      const noteUri = graph.nodes[nodeId].sourceUri!
+      const brief = { goal: 'Implement the clarified title', steps: ['update the heading', 'keep the body intact'], acceptance: ['heading matches the clarified title'], constraints: ['no Note rewrite'], noteRefs: [noteUri, 'note://ghost/not-authorized'] }
+      return { brief, text: [
+        `# ${graph.name} · 派发实施简报`, '', `工作区：${workspace.name}（${workspace.path}）`, '',
+        '## 目标', brief.goal, '', '## 需求依据（Note 已在同一 checkout 内，直接按路径读取）', `- ${noteUri}`, '',
+        '## 实施步骤', ...brief.steps.map((step, index) => `${index + 1}. ${step}`), '',
+        '## 验收要点', ...brief.acceptance.map((item) => `- ${item}`), '', '## 约束', ...brief.constraints.map((item) => `- ${item}`),
+      ].join('\n'), anchorNodeId: nodeId, workspaceId: workspace.id, workspaceName: workspace.name, workspacePath: workspace.path }
+    },
+    bindTerminal: async (cwd: string, targetNodeId: string, terminalId: string) => {
+      state.binds.push({ cwd, nodeId: targetNodeId, terminalId })
+      const target = graph.nodes[targetNodeId]
+      if (!target) throw new Error('NOT_FOUND: node missing')
+      target.boundTerminalId = terminalId
+      return structuredClone(target)
+    },
+    focusNode: async (_payload: { workspacePath: string; nodeId: string }) => structuredClone(graph.nodes[_payload.nodeId]),
+  })
+  const created = new Set<(event: { id: string; preset: string }) => void>()
+  Object.assign(window.electron.terminal, {
+    create: async (input: { id: string; preset: string; cwd?: string }) => {
+      state.terminalCreates.push({ id: input.id, preset: input.preset, cwd: input.cwd })
+      // The renderer gates its prefill on this event, keyed by `id`.
+      for (const listener of created) listener({ id: input.id, preset: input.preset })
+      return { pid: 4242 }
+    },
+    input: (terminalId: string, data: string) => { state.terminalInputs.push({ terminalId, data }) },
+    onCreated: (listener: (event: { id: string; preset: string }) => void) => { created.add(listener); return () => created.delete(listener) },
+  })
   return state
 }

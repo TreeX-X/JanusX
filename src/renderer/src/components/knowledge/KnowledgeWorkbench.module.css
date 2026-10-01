@@ -6,8 +6,8 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(5, 5, 7, 0.55);
-  backdrop-filter: blur(6px);
+  background: rgba(8, 8, 10, 0.62);
+  backdrop-filter: blur(10px);
   animation: workbench-backdrop-in 0.3s ease-out;
 }
 
@@ -70,7 +70,8 @@
   to { opacity: 0; }
 }
 
-/* §9.1: blueprint-style pure-text topbar — an independent card, no logo/badge. */
+/* §9.1: blueprint-style pure-text topbar — an independent card, no logo/badge.
+   首位是关闭红灯（左上），随后面包屑，右侧只留刷新。 */
 .header {
   min-height: 44px;
   display: flex;
@@ -120,7 +121,7 @@
 .bcSep { color: #4b4b52; }
 .bcCurrent { color: #fff; font-weight: 600; }
 
-/* Blueprint parity: action group hugs the right edge, controls share one center. */
+/* 关闭红灯已移到顶栏首位，这里只留刷新一类动作，贴右边缘。 */
 .headerActions {
   display: flex;
   justify-content: flex-end;
@@ -447,11 +448,14 @@
 }
 
 /* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/2026-09-21-workbench-close-hit-slop--8688b5ab.md */
-/* 交互约定（与 modal-close-light 统一）：红灯本身即关闭，悬浮不冒叉，直接点即可。 */
+/* 交互约定（与 modal-close-light 统一）：红灯本身即关闭，悬浮不冒叉，直接点即可。
+   位置：顶栏首位（左上），与蓝图工作台同位。左边距靠 .header 的 padding-left 14px
+   留出，比 ::before 的 8px 命中外扩多 6px 余量，贴边点击不会溢出卡片。 */
 .closeButton {
   position: relative;
   width: 14px;
   height: 14px;
+  flex: 0 0 auto;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1339,12 +1343,10 @@
 /* ── planche：知识库纸面化（加法层，dark 原样不动）
    色值只吃语义令牌（一键配置：definition.ts → themes.generated.css）。
    知识库蓝是独立功能色，纸上映射为墨蓝 #2F5D8A / 朱红点睛，
-   与蓝图信号色同源；动效与布局不动。 */
-:global([data-theme='planche']) .backdrop {
-  background: rgba(28, 52, 59, 0.18);
-  backdrop-filter: none;
-}
-
+   与蓝图信号色同源；动效与布局不动。
+   遮罩不做主题覆写：与设置中心 / 共享 ModalFrame 同为 rgba(8,8,10,0.62)+blur(10px)。
+   纸面主题下曾换成 0.18 淡墨罩并去模糊，工作台背后等于没盖。卡片式逐步唤出
+   （--card-index 错峰）留在 .shell 那一层，不受遮罩影响。 */
 :global([data-theme='planche']) .shell {
   color: var(--ink, #1C343B);
 }

@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
-import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, Pencil, Plus, RotateCcw, Send, ShieldX, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RotateCcw, Send, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 import type { ChatQuestionAnswer, ChatTodoItem, ChatToolTraceEntry } from '../../../../shared/ipc/llm'
 import type { AgentApprovalMode } from '../../../../shared/ipc/agent-runtime'
@@ -82,6 +82,11 @@ interface JanusChatProps {
   minimalComposer?: boolean
   /** Host-owned actions rendered after the discussion, inside its scroll area. */
   discussionFooter?: React.ReactNode
+  /**
+   * Host-owned actions pinned directly above the composer, outside the message
+   * scroll area — for anything that must stay reachable while discussing.
+   */
+  aboveComposer?: React.ReactNode
   /** Only the focused presentation owns input focus and global shortcuts. */
   focused?: boolean
   /** 当前模式颜色 */
@@ -366,6 +371,7 @@ function TurnStatusRow({ status, startedAt }: { status: JanusChatStatus; started
 const EMPTY_REASONING_SNAPSHOT: ReasoningSnapshot = { text: '', chars: 0, truncated: false }
 const EMPTY_REASONING_BY_TURN: Record<string, ReasoningSnapshot> = {}
 const FALLBACK_TURN_STATUS: JanusChatStatus = { kind: 'thinking' }
+const CHAT_SIDEBAR_STORAGE_KEY = 'janus:chat-sidebar-collapsed'
 
 export function JanusChat({
   visible,
@@ -374,6 +380,7 @@ export function JanusChat({
   discussionOnly = false,
   minimalComposer = false,
   discussionFooter,
+  aboveComposer,
   focused = true,
   modeColor,
   messages,
@@ -419,6 +426,13 @@ export function JanusChat({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
   const [threadMenuOpen, setThreadMenuOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(CHAT_SIDEBAR_STORAGE_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null)
   const [renamingTitle, setRenamingTitle] = useState('')
   const [pendingDeleteConversation, setPendingDeleteConversation] = useState<{ id: string; title: string } | null>(null)
@@ -459,6 +473,19 @@ export function JanusChat({
   const activePendingQuestions = pendingQuestionsProp ?? conversations?.pendingQuestions ?? []
   const answerQuestion = onAnswerQuestionProp ?? conversations?.answerQuestion
 
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((current) => {
+      const next = !current
+      try {
+        window.localStorage.setItem(CHAT_SIDEBAR_STORAGE_KEY, next ? '1' : '0')
+      } catch {
+        /* persistence is best-effort */
+      }
+      return next
+    })
+  }, [])
+
+  const showConversationSidebar = !!docked && !!conversations && !discussionOnly && !compactNavigation
   const copyMessage = useCallback((content: string) => {
     if (!navigator.clipboard) return
     void navigator.clipboard.writeText(content).catch(() => undefined)
@@ -824,6 +851,13 @@ export function JanusChat({
   }, [handleMenuKey, openSelectionMenu, selectionMenu])
 
   const handleChatPointerDownCapture = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    // A user press takes focus ownership: cancel the pending mount-time
+    // composer autofocus so typing after clicking message text never lands
+    // in the composer.
+    if (focusTimerRef.current !== null) {
+      window.clearTimeout(focusTimerRef.current)
+      focusTimerRef.current = null
+    }
     const target = e.target as HTMLElement
     if (target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return
     chatRootRef.current?.focus({ preventScroll: true })
@@ -1003,30 +1037,65 @@ export function JanusChat({
         data-compact-navigation={compactNavigation || undefined}
         data-minimal-composer={minimalComposer || undefined}
       tabIndex={-1}
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${docked && conversations && !discussionOnly && !compactNavigation ? ' janus-chat--with-sidebar' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
+      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${showConversationSidebar ? ' janus-chat--with-sidebar' : ''}${showConversationSidebar && sidebarCollapsed ? ' janus-chat--sidebar-collapsed' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
       onKeyDownCapture={handleChatKeyDownCapture}
       onPointerDownCapture={handleChatPointerDownCapture}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {docked && conversations && !discussionOnly && !compactNavigation && (
+      {showConversationSidebar && conversations && (sidebarCollapsed ? (
+        <aside className="janus-chat-sidebar janus-chat-sidebar--collapsed" aria-label={t('janus:chat.thread.menuHeader')}>
+          <button
+            type="button"
+            className="janus-chat-new-thread"
+            aria-label={t('janus:chat.thread.expandAria')}
+            title={t('janus:chat.thread.expandTitle')}
+            onClick={toggleSidebarCollapsed}
+          >
+            <PanelLeftOpen size={14} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className="janus-chat-new-thread"
+            aria-label={t('janus:chat.thread.newAria')}
+            title={t('janus:chat.thread.newTitle')}
+            onClick={() => {
+              conversations.createConversation()
+              setRenamingConversationId(null)
+            }}
+          >
+            <Plus size={14} aria-hidden="true" />
+          </button>
+        </aside>
+      ) : (
         <aside className="janus-chat-sidebar" aria-label={t('janus:chat.thread.menuHeader')}>
           <div className="janus-chat-sidebar-header">
             <div>
               <span className="janus-chat-sidebar-kicker">{t('janus:chat.thread.kicker')}</span>
               <strong>{t('janus:chat.thread.menuHeader')}</strong>
             </div>
-            <button
-              type="button"
-              className="janus-chat-new-thread"
-              aria-label={t('janus:chat.thread.newAria')}
-              title={t('janus:chat.thread.newTitle')}
-              onClick={() => {
-                conversations.createConversation()
-                setRenamingConversationId(null)
-              }}
-            >
-              <Plus size={14} aria-hidden="true" />
-            </button>
+            <div className="janus-chat-sidebar-header-actions">
+              <button
+                type="button"
+                className="janus-chat-new-thread"
+                aria-label={t('janus:chat.thread.collapseAria')}
+                title={t('janus:chat.thread.collapseTitle')}
+                onClick={toggleSidebarCollapsed}
+              >
+                <PanelLeftClose size={14} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="janus-chat-new-thread"
+                aria-label={t('janus:chat.thread.newAria')}
+                title={t('janus:chat.thread.newTitle')}
+                onClick={() => {
+                  conversations.createConversation()
+                  setRenamingConversationId(null)
+                }}
+              >
+                <Plus size={14} aria-hidden="true" />
+              </button>
+            </div>
           </div>
           <div className="janus-chat-sidebar-list">
             {conversations.conversations.map((conversation) => (
@@ -1090,7 +1159,7 @@ export function JanusChat({
             ))}
           </div>
         </aside>
-      )}
+      ))}
       <div className="janus-chat-main">
       {!discussionOnly && !minimalComposer && <div className="janus-chat-toolbar">
         <div ref={threadSelectorRef} className="janus-chat-thread-selector">
@@ -1517,6 +1586,8 @@ export function JanusChat({
       {answerQuestion && activePendingQuestions.map((gate) => (
         <QuestionGate key={gate.callId} gate={gate} onAnswer={(answer) => answerQuestion(gate.callId, answer)} />
       ))}
+
+      {aboveComposer}
 
       {/* 输入区域：opencode 风格方框 composer；minimal 下加 › 前缀（对齐蓝图高保真） */}
       <div className="janus-chat-input-wrapper" data-has-input={input.length > 0}>

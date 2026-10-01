@@ -351,6 +351,8 @@ body.desktop-toast-body {
 
 /* ════════════════════════════════════════════════════════════
    工作区配置 / 项目启动弹窗 shell
+   进出场动效与遮罩由 shared/ModalFrame.css 统一提供（ModalFrame），
+   这里只留面板几何；island-expand-modal 的 overshoot 弹入属于旧读法。
    ════════════════════════════════════════════════════════════ */
 .ws-config-modal {
   width: min(1180px, calc(100vw - 56px));
@@ -363,7 +365,6 @@ body.desktop-toast-body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: island-expand-modal 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .ws-config-modal .ws-config-body {
@@ -520,8 +521,17 @@ body.desktop-toast-body {
   display: block;
   width: 12px;
   height: 12px;
+  flex: none;
   border-radius: 9999px;
   border: var(--term-ring-width) solid currentColor;
+}
+
+/* 紧凑版（中部 tab / 溢出 chips）：8px 环与 12px 同语言；光弧厚度跟随
+   --term-ring-width；虚线环在小尺寸下 dash 需目检（Chromium 按圆周拟合）。 */
+.term-status-ring--compact {
+  --term-ring-width: 1.5px;
+  width: 8px;
+  height: 8px;
 }
 
 /* 运行中：淡底环 + 亮弧走圈（弧由 .term-status-orbit 绘制） */
@@ -601,6 +611,8 @@ body.desktop-toast-body {
   transition:
     width 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275),
     max-height 0.38s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+    right 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 0.32s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.25s ease,
     background 0.2s ease;
 }
@@ -609,12 +621,23 @@ body.desktop-toast-body {
   transition:
     width 0.28s cubic-bezier(0.16, 1, 0.3, 1),
     max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    right 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 0.28s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.25s ease,
     background 0.2s ease;
+  /* 半丸标签无任何阴影：存在感只靠底色与发丝线 */
+  box-shadow: none;
 }
 
+/* 收缩半丸 hover：同样无阴影，反馈只留 dock 按钮自身的底色变化。 */
 [data-turn-island][data-stage="collapsed"]:hover {
-  box-shadow: -10px 0 28px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+/* 展开态才是卡片：常驻投影走这里（壳行内不再写死 box-shadow，
+   否则会盖掉 hover 态）。 */
+[data-turn-island][data-stage="expanded"] {
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
 }
 
 [data-turn-island][data-stage="expanded"]:hover {
@@ -627,9 +650,9 @@ body.desktop-toast-body {
   transform-origin: center;
 }
 
+/* hover 只抬底色：brightness(1.25) 在纸面主题上会把整条洗白，已去掉。 */
 .turn-island-dock:hover {
-  background: rgba(255, 255, 255, 0.06);
-  filter: brightness(1.25);
+  background: var(--shell-hover);
 }
 
 .turn-island-dock:active {
@@ -719,6 +742,43 @@ body.desktop-toast-body {
 
 [data-turn-island] .turn-island-file:focus-visible .turn-island-file-path {
   color: var(--shell-text);
+}
+
+/* ── TurnChange island 纸面分支：展开卡片用墨色淡影，行 hover 用纸深，
+ *    focus 圈用朱红。白 overlay / 白光晕在纸上发粉，一律不用。
+ *    收缩半丸和 dark 一样零阴影。 */
+[data-theme='planche'] [data-turn-island][data-stage="collapsed"] {
+  box-shadow: none;
+}
+
+[data-theme='planche'] [data-turn-island][data-stage="collapsed"]:hover {
+  box-shadow: none;
+}
+[data-theme='planche'] [data-turn-island][data-stage="expanded"] {
+  box-shadow: -8px 0 20px rgba(28, 52, 59, 0.25);
+}
+
+[data-theme='planche'] [data-turn-island][data-stage="expanded"]:hover {
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+  box-shadow: -8px 0 24px rgba(28, 52, 59, 0.32);
+}
+
+[data-theme='planche'] [data-turn-island] .turn-island-viewtab:hover,
+[data-theme='planche'] [data-turn-island] .turn-island-viewtab:focus-visible {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] [data-turn-island] .turn-island-viewtab:focus-visible {
+  outline: 1px solid var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] [data-turn-island] .turn-island-file:not([data-disabled="true"]):hover,
+[data-theme='planche'] [data-turn-island] .turn-island-file:focus-visible {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+[data-theme='planche'] [data-turn-island] .turn-island-file:focus-visible {
+  outline: 1px solid var(--planche-red, #D43D2A);
 }
 
 /*-- 长按工作区视觉反馈：径向渐变波纹从中心扩散 --*/
@@ -819,12 +879,13 @@ body.desktop-toast-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 32px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--shell-border);
   border-radius: 8px;
   /* 实色卡片：去掉毛玻璃，半透底 + blur 在主窗口上就是灰色玻璃壳，与桌面 Toast 同口径
-     Note: solid card without backdrop-filter — see .agents/notes/2026-07-05-desktop-toast--671574ba.md */
-  background: #141416;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+     Note: solid card without backdrop-filter — see .agents/notes/2026-07-05-desktop-toast--671574ba.md
+     颜色走主题统一令牌（默认 planche 纸面、dark 经典黑），禁止硬编码色。 */
+  background: var(--shell-card);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35), inset 0 1px 0 var(--shell-border-soft);
   pointer-events: auto;
   transition:
     transform 200ms cubic-bezier(0.25, 1, 0.4, 1),
@@ -834,35 +895,50 @@ body.desktop-toast-body {
 
 .agent-notification:hover {
   transform: translateY(-2px) scale(1.01);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 255, 255, 0.05);
+  border-color: color-mix(in srgb, var(--shell-text) 25%, transparent);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35), 0 0 12px var(--accent-soft);
+}
+
+/* 纸面浅色基底下重黑阴影过脏：降强度、走墨色 */
+[data-theme='planche'] .agent-notification,
+[data-theme='planche'] .agent-notification--completed,
+[data-theme='planche'] .agent-notification--failed,
+[data-theme='planche'] .agent-notification--attention {
+  box-shadow: 0 12px 32px rgba(28, 52, 59, 0.22), inset 0 1px 0 rgba(28, 52, 59, 0.08);
+}
+
+[data-theme='planche'] .agent-notification:hover,
+[data-theme='planche'] .agent-notification--completed:hover,
+[data-theme='planche'] .agent-notification--failed:hover,
+[data-theme='planche'] .agent-notification--attention:hover {
+  box-shadow: 0 12px 32px rgba(28, 52, 59, 0.22), 0 0 12px var(--accent-soft);
 }
 
 .agent-notification--completed {
-  border-color: rgba(78, 201, 176, 0.25);
+  border-color: color-mix(in srgb, var(--shell-diff-add) 35%, transparent);
 }
 
 .agent-notification--completed:hover {
-  border-color: #4ec9b0;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), 0 0 12px rgba(78, 201, 176, 0.2);
+  border-color: var(--shell-diff-add);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35), 0 0 12px color-mix(in srgb, var(--shell-diff-add) 25%, transparent);
 }
 
 .agent-notification--failed {
-  border-color: rgba(224, 108, 117, 0.25);
+  border-color: color-mix(in srgb, var(--shell-diff-del) 35%, transparent);
 }
 
 .agent-notification--failed:hover {
-  border-color: #e06c75;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), 0 0 12px rgba(224, 108, 117, 0.2);
+  border-color: var(--shell-diff-del);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35), 0 0 12px color-mix(in srgb, var(--shell-diff-del) 25%, transparent);
 }
 
 .agent-notification--attention {
-  border-color: rgba(255, 120, 48, 0.3);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
 }
 
 .agent-notification--attention:hover {
-  border-color: #ff7830;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.6), 0 0 12px rgba(255, 120, 48, 0.25);
+  border-color: var(--primary);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35), 0 0 12px var(--accent-soft);
 }
 
 .agent-notification__content {
@@ -878,7 +954,7 @@ body.desktop-toast-body {
 }
 
 .agent-notification__content:hover {
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
 }
 
 .agent-notification__meta {
@@ -892,11 +968,11 @@ body.desktop-toast-body {
   height: 6px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: #555;
+  background: var(--shell-dim);
 }
 
 .agent-notification__kicker {
-  color: #888;
+  color: var(--text-secondary);
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   font-size: 9px;
   font-weight: 600;
@@ -905,28 +981,28 @@ body.desktop-toast-body {
 }
 
 .agent-notification--attention .agent-notification__led {
-  background: #ff7830;
-  box-shadow: 0 0 6px rgba(255, 120, 48, 0.25);
+  background: var(--primary);
+  box-shadow: 0 0 6px var(--accent-soft);
   animation: pulse-dot 2s infinite;
 }
 
 .agent-notification--attention .agent-notification__kicker {
-  color: #ff7830;
+  color: var(--primary);
 }
 
 .agent-notification--completed .agent-notification__led {
-  background: #4ec9b0;
-  box-shadow: 0 0 6px rgba(78, 201, 176, 0.5);
+  background: var(--shell-diff-add);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--shell-diff-add) 50%, transparent);
 }
 
 .agent-notification--failed .agent-notification__led {
-  background: #e06c75;
-  box-shadow: 0 0 6px rgba(224, 108, 117, 0.5);
+  background: var(--shell-diff-del);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--shell-diff-del) 50%, transparent);
 }
 
 .agent-notification__title {
   overflow: hidden;
-  color: #fff;
+  color: var(--shell-text);
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -936,7 +1012,7 @@ body.desktop-toast-body {
 .agent-notification__body {
   display: -webkit-box;
   overflow: hidden;
-  color: #888;
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.5;
   -webkit-box-orient: vertical;
@@ -945,9 +1021,9 @@ body.desktop-toast-body {
 
 .agent-notification__body code {
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--shell-text) 6%, transparent);
   padding: 1px 4px;
-  color: #eee;
+  color: var(--shell-text);
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
 }
 
@@ -957,22 +1033,22 @@ body.desktop-toast-body {
   justify-content: center;
   cursor: pointer;
   border: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid var(--shell-border-soft);
   background: transparent;
-  color: #555;
+  color: var(--shell-dim);
   font-size: 14px;
   font-weight: 300;
   transition: all 150ms ease;
 }
 
 .agent-notification:hover .agent-notification__close {
-  color: #888;
-  background: rgba(255, 255, 255, 0.02);
+  color: var(--shell-muted);
+  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
 }
 
 .agent-notification__close:hover {
-  color: #fff !important;
-  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--shell-text) !important;
+  background: color-mix(in srgb, var(--shell-text) 8%, transparent) !important;
 }
 
 /* Keep both sidebar presentations mounted so width and content animate as one surface. */

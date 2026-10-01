@@ -321,6 +321,7 @@
   "turnChanges": {
     "files": "{{count}} 个文件",
     "more": "其余 {{count}} 个见会话面板",
+    "narrowHint": "面板太窄无法展开，加宽后可查看变更",
     "empty": "本回合无文件变更",
     "latest": "最新",
     "latestHint": "查看最新一轮",

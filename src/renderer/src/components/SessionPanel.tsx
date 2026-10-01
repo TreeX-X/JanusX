@@ -3,24 +3,19 @@ import { createPortal } from 'react-dom'
 import { useSessionStore, type AgentSessionDetail, type AgentSessionSummary } from '@/stores/session'
 import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary, type ConflictInfo } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useThemeStore } from '@/stores/theme'
 import { EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { buildProviderResumeCommand, type TranscriptDetail } from '../../../shared/ipc/session'
-import terminalIcon from '@/assets/icons/terminal.svg'
-import claudeIcon from '@/assets/icons/claude.svg'
-import codexIcon from '@/assets/icons/codex.svg'
-import opencodeIcon from '@/assets/icons/opencode.svg'
-import janusIcon from '@/assets/icons/janus.svg'
-import piIcon from '@/assets/icons/pi.svg'
+import { TerminalPresetIcon } from './ui/TerminalPresetIcon'
+import type { TerminalPreset } from '@/types'
 
-const ENGINE_ICONS: Record<string, string> = {
-  shell: terminalIcon,
-  claude: claudeIcon,
-  codex: codexIcon,
-  opencode: opencodeIcon,
-  janus: janusIcon,
-  'pi': piIcon,
+/** 会话 engine 与终端 preset 同名；未知 engine 落到 shell 字形（与旧 fallback 一致）。 */
+function sessionEnginePreset(engine: string): TerminalPreset {
+  return engine === 'claude' || engine === 'codex' || engine === 'opencode' || engine === 'janus' || engine === 'pi'
+    ? engine
+    : 'shell'
 }
 
 type Scope = 'workspace' | 'project' | 'all' | 'archived'
@@ -58,6 +53,22 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
+// Note: 会话表面一律由 --shell-chrome 朝 --shell-text 混出，右栏列表卡片、详情页
+// turn 卡片、diff 面板共用同一套档位 — 见
+// .agents/notes/2026-09-29-session-card-surface--764d5d26.md
+//
+// 为什么不能直接用 --shell-card / --shell-chrome：planche 的 --shell-void /
+// --shell-canvas / --shell-pane / --shell-chrome / --shell-card 全是 #EFE4C5，纸面里
+// 没有更深的台阶，拿它们当卡片底色等于和底色同值；写死 rgba(0,0,0,.28) / rgba(255,255,255,.03)
+// 落在纸面上分别是冷灰油渍和几乎透明的亮斑，两个主题都只能各对一半。朝文字色混出
+// 3 档是唯一在两主题都能拉出可见台阶的写法：planche 得到偏暖的深纸色，dark 得到
+// 逐级浮起的卡片。板面之间的分界交给发丝线，不靠更深的底色。
+const SURFACE_CARD = 'color-mix(in srgb, var(--shell-chrome) 94%, var(--shell-text))'
+const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 90%, var(--shell-text))'
+const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'
+const CARD_BORDER = '1px solid var(--shell-border)'
+const CARD_BORDER_SOFT = '1px solid var(--shell-border-soft)'
+
 // Note: windowed session reading with orca-aligned preview layers — internal
 // turns keep scoped checkpoints with inline diff, external rows stay
 // transcript-only — see
@@ -86,7 +97,7 @@ function CopyButton({ text, label, grow }: { text: string; label?: string; grow?
         })
       }}
       className="rounded cursor-pointer"
-      style={{ height: grow ? 24 : 20, padding: '0 8px', fontSize: grow ? 10.5 : 10, border: '1px solid rgba(255,255,255,0.1)', background: 'transparent', color: 'var(--shell-muted)', fontFamily: "'SF Mono', monospace", flexShrink: 0, flex: grow ? 1 : undefined }}
+      style={{ height: grow ? 24 : 20, padding: '0 8px', fontSize: grow ? 10.5 : 10, border: '1px solid var(--shell-border)', background: 'transparent', color: 'var(--shell-muted)', fontFamily: "'SF Mono', monospace", flexShrink: 0, flex: grow ? 1 : undefined }}
     >
       {copied ? t('terminal:agentSession.copied') : (label ?? t('terminal:agentSession.copy'))}
     </button>
@@ -218,7 +229,7 @@ export function SessionPanel() {
             aria-label={t('terminal:agentSession.searchPlaceholder')}
             style={{
               width: '100%', height: 26, fontSize: 11.5, color: 'var(--shell-text)',
-              background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+              background: SURFACE_INSET, border: '1px solid var(--shell-border)',
               borderRadius: 6, padding: '0 9px', outline: 'none', fontFamily: 'inherit',
             }}
           />
@@ -250,7 +261,7 @@ export function SessionPanel() {
                 fontFamily: "'SF Mono', monospace",
                 fontSize: 10,
                 color: 'var(--shell-dim)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid var(--shell-border)',
                 borderRadius: 4,
                 padding: '2px 8px',
                 whiteSpace: 'nowrap',
@@ -341,8 +352,8 @@ export function SessionPanel() {
                 style={{
                   marginTop: 10,
                   padding: '8px 10px',
-                  background: 'rgba(255,255,255,0.025)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  background: SURFACE_INSET,
+                  border: '1px solid var(--shell-border-soft)',
                   borderRadius: 6,
                   color: 'var(--shell-text)',
                   whiteSpace: 'pre-wrap',
@@ -353,12 +364,12 @@ export function SessionPanel() {
             </div>
             <div
               className="flex justify-end"
-              style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', gap: 8 }}
+              style={{ padding: '12px 16px', borderTop: '1px solid var(--shell-border-soft)', gap: 8 }}
             >
               <button
                 onClick={() => setContinueTarget(null)}
                 className="rounded cursor-pointer"
-                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)' }}
+                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-border-soft)', background: SURFACE_INSET, color: 'var(--shell-muted)' }}
               >
                 {t('common:action.cancel')}
               </button>
@@ -416,6 +427,8 @@ function baseNameOf(path: string): string {
  */
 function TrafficBar({ heading, onClose }: { heading: ReactNode; onClose: () => void }) {
   const { t } = useI18n('common')
+  // planche 纸面主题：标题栏走 shell 语义令牌，不再是写死的近黑色
+  const planche = useThemeStore((s) => s.theme) === 'planche'
   const light = (background: string): CSSProperties => ({
     width: 12,
     height: 12,
@@ -434,8 +447,8 @@ function TrafficBar({ heading, onClose }: { heading: ReactNode; onClose: () => v
         flexShrink: 0,
         padding: '0 12px',
         userSelect: 'none',
-        background: 'rgba(6, 6, 6, 0.96)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: planche ? 'var(--shell-pane-chrome)' : 'rgba(6, 6, 6, 0.96)',
+        borderBottom: planche ? '1px solid var(--shell-border)' : '1px solid var(--shell-border-soft)',
       }}
     >
       <div className="flex" style={{ gap: 8, flexShrink: 0 }}>
@@ -521,9 +534,9 @@ function CheckpointStrip({
       data-cp-strip={cp.id}
       style={{
         marginTop: 8,
-        border: '1px solid rgba(255,255,255,0.07)',
+        border: '1px solid var(--shell-border-soft)',
         borderRadius: 6,
-        background: 'rgba(255,255,255,0.02)',
+        background: SURFACE_INSET,
         padding: '8px 10px',
       }}
     >
@@ -533,7 +546,7 @@ function CheckpointStrip({
         style={{ gap: 7, fontSize: 11, color: 'var(--shell-text)', cursor: 'pointer', userSelect: 'none' }}
         onClick={onToggleFiles}
       >
-        <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: '#8ab4ff' }}>
+        <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-accent)' }}>
           #{cp.conversationIndex}
         </span>
         <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', whiteSpace: 'nowrap' }}>
@@ -549,7 +562,7 @@ function CheckpointStrip({
           {' '}{filesOpen ? '▴' : '▾'}
         </span>
         {turnKind && (
-          <span style={{ fontSize: 9.5, color: turnKind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: turnKind === 'done' ? '1px solid rgba(255,255,255,0.12)' : '1px solid rgba(224,108,117,0.25)', borderRadius: 3, padding: '0 5px' }}>
+          <span style={{ fontSize: 9.5, color: turnKind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: turnKind === 'done' ? '1px solid var(--shell-border)' : '1px solid color-mix(in srgb, var(--shell-diff-del) 30%, transparent)', borderRadius: 3, padding: '0 5px' }}>
             {turnKindLabel(turnKind, t)}
           </span>
         )}
@@ -602,9 +615,9 @@ function CheckpointStrip({
         </button>
       </div>
       {reviewOpen && (
-        <div style={{ marginTop: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+        <div style={{ marginTop: 8, padding: '10px 12px', background: SURFACE_INSET, border: '1px solid var(--shell-border-soft)', borderRadius: 6 }}>
           {pruneCount > 0 ? (
-            <div style={{ padding: '8px 10px', background: 'rgba(255,120,48,0.03)', border: '1px solid rgba(255,120,48,0.18)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', marginBottom: 8, lineHeight: 1.6 }}>
+            <div style={{ padding: '8px 10px', background: 'var(--shell-accent-soft)', border: '1px solid var(--shell-accent-border)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', marginBottom: 8, lineHeight: 1.6 }}>
               {t('terminal:checkpoint.pruneWarn', { count: pruneCount })}
             </div>
           ) : (
@@ -638,7 +651,7 @@ function CheckpointStrip({
         </div>
       )}
       {conflicts && conflicts.length > 0 && (
-        <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(224,108,117,0.02)', border: '1px solid rgba(224,108,117,0.3)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
+        <div style={{ marginTop: 8, padding: '8px 10px', background: 'color-mix(in srgb, var(--shell-diff-del) 8%, transparent)', border: '1px solid var(--shell-diff-del)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
           <div>{t('terminal:checkpoint.conflictFiles', { count: conflicts.length })} · {t('terminal:checkpoint.conflictBadge')}</div>
           {conflicts.map((conflict) => (
             <div key={conflict.filePath} style={{ fontFamily: "'SF Mono', monospace", marginTop: 4 }}>
@@ -706,10 +719,10 @@ function DiffSidePanel({
   return (
     <div
       className="flex flex-col"
-      style={{ width: 520, maxWidth: '45%', flexShrink: 0, minHeight: 0, borderLeft: '1px solid rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.25)' }}
+      style={{ width: 520, maxWidth: '45%', flexShrink: 0, minHeight: 0, borderLeft: '1px solid var(--shell-border-soft)', background: SURFACE_INSET }}
       aria-label={t('terminal:checkpoint.diffPreview')}
     >
-      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--shell-border-soft)', flexShrink: 0 }}>
         <div className="flex items-center" style={{ gap: 8 }}>
           <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: 'var(--shell-text)' }}>
             #{cp.conversationIndex} · {t('terminal:checkpoint.diffPreview')}
@@ -717,7 +730,7 @@ function DiffSidePanel({
           <button
             onClick={onClose}
             className="rounded cursor-pointer"
-            style={{ marginLeft: 'auto', height: 22, padding: '0 10px', fontSize: 10, fontFamily: "'SF Mono', monospace", border: '1px solid rgba(255,255,255,0.12)', background: 'transparent', color: 'var(--shell-muted)', flexShrink: 0 }}
+            style={{ marginLeft: 'auto', height: 22, padding: '0 10px', fontSize: 10, fontFamily: "'SF Mono', monospace", border: '1px solid var(--shell-border)', background: 'transparent', color: 'var(--shell-muted)', flexShrink: 0 }}
           >
             {t('terminal:agentSession.diffCollapse')} ⟶
           </button>
@@ -726,7 +739,7 @@ function DiffSidePanel({
           …/{baseNameOf(cwd)} · {formatDate(cp.createdAt, t)}
         </div>
       </div>
-      <div style={{ maxHeight: 150, overflowY: 'auto', padding: 6, borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+      <div style={{ maxHeight: 150, overflowY: 'auto', padding: 6, borderBottom: '1px solid var(--shell-border-soft)', flexShrink: 0 }}>
         {recs.length === 0 && (
           <div style={{ fontSize: 11, color: 'var(--shell-dim)', padding: '7px 9px' }}>{t('terminal:checkpoint.diffEmpty')}</div>
         )}
@@ -744,7 +757,7 @@ function DiffSidePanel({
                 borderRadius: 4,
                 cursor: isText ? 'pointer' : 'default',
                 opacity: isText ? 1 : 0.55,
-                background: active ? 'rgba(138,180,255,0.08)' : 'transparent',
+                background: active ? 'var(--shell-accent-soft)' : 'transparent',
                 color: active ? 'var(--shell-text)' : 'var(--shell-muted)',
                 fontFamily: "'SF Mono', monospace",
                 fontSize: 10.5,
@@ -764,9 +777,9 @@ function DiffSidePanel({
           )
         })}
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.65, background: 'rgba(0,0,0,0.35)' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.65, background: SURFACE_DEEP }}>
         {activePath && (
-          <div style={{ position: 'sticky', top: -10, background: 'var(--shell-card)', color: 'var(--shell-muted)', padding: '6px 8px', margin: '0 -12px 6px', paddingLeft: 12, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <div style={{ position: 'sticky', top: -10, background: SURFACE_DEEP, color: 'var(--shell-muted)', padding: '6px 8px', margin: '0 -12px 6px', paddingLeft: 12, borderBottom: '1px solid var(--shell-border-soft)' }}>
             {activePath}
           </div>
         )}
@@ -781,9 +794,9 @@ function DiffSidePanel({
       </div>
       <div
         className="flex items-center"
-        style={{ gap: 8, padding: '9px 12px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}
+        style={{ gap: 8, padding: '9px 12px', borderTop: '1px solid var(--shell-border-soft)', flexShrink: 0 }}
       >
-        <span style={{ fontSize: 10, fontFamily: "'SF Mono', monospace", color: pruneCount > 0 ? '#c98a5e' : '#999', flex: 1 }}>
+        <span style={{ fontSize: 10, fontFamily: "'SF Mono', monospace", color: pruneCount > 0 ? 'var(--shell-accent)' : 'var(--shell-dim)', flex: 1 }}>
           {pruneCount > 0
             ? t('terminal:checkpoint.pruneWarn', { count: pruneCount })
             : t('terminal:checkpoint.pruneOk')}
@@ -855,7 +868,7 @@ function SessionCard({
 
   const recentTurns = useMemo(() => (detail?.turns ?? []).slice(-2), [detail])
   const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
-  const icon = ENGINE_ICONS[session.engine] ?? terminalIcon
+  const iconPreset = sessionEnginePreset(session.engine)
 
   // Checkpoint strips, diffs, reviews, and restore state live in
   // SessionDetailWindow below; the dock keeps only the L2 preview.
@@ -864,8 +877,8 @@ function SessionCard({
     <div
       className="transition-colors"
       style={{
-        background: 'var(--shell-card)',
-        border: '1px solid var(--shell-border)',
+        background: SURFACE_CARD,
+        border: CARD_BORDER,
         borderRadius: 6,
         padding: 10,
         opacity: session.archived ? 0.62 : 1,
@@ -877,13 +890,13 @@ function SessionCard({
         style={{ gap: 7, cursor: 'pointer' }}
         onClick={onToggle}
       >
-        <img src={icon} alt={session.engine} style={{ width: 14, height: 14, objectFit: 'contain' }} />
+        <TerminalPresetIcon preset={iconPreset} alt={session.engine} style={{ width: 14, height: 14 }} />
         {session.external === true && (
           <span
             style={{
               fontSize: 9.5,
-              color: '#8ab4ff',
-              border: '1px solid rgba(138,180,255,0.3)',
+              color: 'var(--shell-accent)',
+              border: '1px solid var(--shell-accent-border)',
               borderRadius: 3,
               padding: '0 5px',
               whiteSpace: 'nowrap',
@@ -915,7 +928,7 @@ function SessionCard({
       </ThemedTooltip>
 
       {expanded && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: CARD_BORDER_SOFT }}>
           <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', lineHeight: 1.8 }}>
             <div>
               {session.engine} · {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)} ·{' '}
@@ -928,7 +941,7 @@ function SessionCard({
             <div>…/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''}</div>
           </div>
           {session.firstPrompt && (
-            <div style={{ marginTop: 8, background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '9px 10px' }}>
+            <div style={{ marginTop: 8, background: SURFACE_INSET, border: '1px solid var(--shell-border-soft)', borderRadius: 6, padding: '9px 10px' }}>
               <div className="flex items-center" style={{ gap: 8, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginBottom: 6 }}>
                 <span>{t('terminal:agentSession.firstPrompt')}</span>
                 <span style={{ marginLeft: 'auto' }}>
@@ -940,7 +953,7 @@ function SessionCard({
               </div>
             </div>
           )}
-          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.30)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6, padding: '2px 10px' }}>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', background: SURFACE_INSET, border: '1px solid var(--shell-border-soft)', borderRadius: 6, padding: '2px 10px' }}>
             <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', padding: '8px 0 0' }}>
               {t('terminal:agentSession.recentTurns')}
             </div>
@@ -952,10 +965,10 @@ function SessionCard({
               recentTurns.map((turn) => {
                 const question = turn.prompt
                 return (
-                  <div key={turn.id} style={{ padding: '8px 0', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div key={turn.id} style={{ padding: '8px 0', borderTop: '1px solid var(--shell-border-soft)' }}>
                     <div className="flex items-center" style={{ gap: 6, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginBottom: 4 }}>
                       <span>turn · {formatDate(turn.startedAt, t)}</span>
-                      <span style={{ color: turn.kind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, padding: '0 5px' }}>
+                      <span style={{ color: turn.kind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: '1px solid var(--shell-border)', borderRadius: 3, padding: '0 5px' }}>
                         {turnKindLabel(turn.kind, t)}
                       </span>
                     </div>
@@ -978,7 +991,7 @@ function SessionCard({
             <button
               onClick={onDetail}
               className="flex-1 rounded cursor-pointer"
-              style={{ height: 24, fontSize: 10.5, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: 'var(--shell-text)' }}
+              style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)' }}
             >
               {t('terminal:agentSession.viewDetail')}
             </button>
@@ -992,7 +1005,7 @@ function SessionCard({
                   }}
                   disabled={resuming}
                   className="flex-1 rounded cursor-pointer"
-                  style={{ height: 24, fontSize: 10.5, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1 }}
+                  style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1 }}
                 >
                   {t('terminal:agentSession.resume')}
                 </button>
@@ -1024,7 +1037,7 @@ function SessionCard({
             <div
               style={{
                 fontSize: 10.5, color: 'var(--shell-dim)', marginTop: 8, padding: '7px 9px',
-                border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 4, lineHeight: 1.6,
+                border: '1px dashed var(--shell-border)', borderRadius: 4, lineHeight: 1.6,
               }}
             >
               {t('terminal:agentSession.archivedHint')}
@@ -1324,7 +1337,7 @@ function SessionDetailWindow({
     )
   }
 
-  const icon = ENGINE_ICONS[session.engine] ?? terminalIcon
+  const iconPreset = sessionEnginePreset(session.engine)
 
   return (
     <div
@@ -1353,13 +1366,13 @@ function SessionDetailWindow({
         <TrafficBar
           heading={
             <>
-              <img src={icon} alt={session.engine} style={{ width: 12, height: 12, objectFit: 'contain', display: 'inline-block', verticalAlign: -1, marginRight: 6 }} />
+              <TerminalPresetIcon preset={iconPreset} alt={session.engine} style={{ width: 12, height: 12, display: 'inline-block', verticalAlign: -1, marginRight: 6 }} />
               {session.firstPrompt || session.engine}
             </>
           }
           onClose={onClose}
         />
-        <div style={{ padding: '9px 16px', borderBottom: '1px solid rgba(255,255,255,0.05)', flexShrink: 0 }}>
+        <div style={{ padding: '9px 16px', borderBottom: '1px solid var(--shell-border-soft)', flexShrink: 0 }}>
           <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: 'var(--shell-muted)', lineHeight: 1.7 }}>
             …/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''} · {session.engine} ·{' '}
             {t('terminal:agentSession.turns', { count: session.turnCount })}
@@ -1381,17 +1394,17 @@ function SessionDetailWindow({
           </div>
         </div>
         {session.external === true && !session.archived && (
-          <div style={{ margin: '10px 16px 0', padding: '8px 11px', border: '1px dashed rgba(138,180,255,0.35)', borderRadius: 6, fontSize: 11, color: '#8ab4ff', lineHeight: 1.6, flexShrink: 0 }}>
+          <div style={{ margin: '10px 16px 0', padding: '8px 11px', border: '1px dashed var(--shell-accent-border)', borderRadius: 6, fontSize: 11, color: 'var(--shell-accent)', lineHeight: 1.6, flexShrink: 0 }}>
             {t('terminal:agentSession.detailExternalBanner')}
           </div>
         )}
         {session.archived && (
-          <div style={{ margin: '10px 16px 0', padding: '8px 11px', border: '1px dashed rgba(255,255,255,0.14)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', lineHeight: 1.6, flexShrink: 0 }}>
+          <div style={{ margin: '10px 16px 0', padding: '8px 11px', border: '1px dashed var(--shell-border)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', lineHeight: 1.6, flexShrink: 0 }}>
             {t('terminal:agentSession.archivedHint')}
           </div>
         )}
         <div className="flex" style={{ flex: 1, minHeight: 0 }}>
-          <div ref={navPaneRef} style={{ width: 168, flexShrink: 0, borderRight: '1px solid rgba(255,255,255,0.06)', overflowY: 'auto', padding: '10px 8px', background: 'rgba(0,0,0,0.18)' }}>
+          <div ref={navPaneRef} style={{ width: 168, flexShrink: 0, borderRight: '1px solid var(--shell-border-soft)', overflowY: 'auto', padding: '10px 8px', background: SURFACE_INSET }}>
             <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', padding: '0 6px 6px' }}>
               {t('terminal:agentSession.turns', { count: displayTurns.length })}
             </div>
@@ -1407,12 +1420,12 @@ function SessionDetailWindow({
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, width: '100%',
                     padding: '5px 6px', borderRadius: 4, border: 0, cursor: 'pointer',
-                    background: active ? 'rgba(138,180,255,0.10)' : 'transparent',
+                    background: active ? 'var(--shell-accent-soft)' : 'transparent',
                     color: active ? 'var(--shell-text)' : 'var(--shell-muted)',
                     fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.5, textAlign: 'left',
                   }}
                 >
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: turn.kind === 'done' ? 'transparent' : turn.kind === 'failed' ? 'var(--shell-diff-del)' : '#f0a35e' }} />
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, background: turn.kind === 'done' ? 'transparent' : turn.kind === 'failed' ? 'var(--shell-diff-del)' : 'var(--shell-accent)' }} />
                   <span style={{ color: 'var(--shell-dim)', flexShrink: 0 }}>{index + 1}</span>
                   <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">{label}</span>
                 </button>
@@ -1435,8 +1448,8 @@ function SessionDetailWindow({
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, width: '100%',
                     padding: '5px 6px', borderRadius: 4, border: 0, cursor: 'pointer',
-                    background: active ? 'rgba(138,180,255,0.10)' : 'transparent',
-                    color: active ? 'var(--shell-text)' : '#8ab4ff',
+                    background: active ? 'var(--shell-accent-soft)' : 'transparent',
+                    color: active ? 'var(--shell-text)' : 'var(--shell-accent)',
                     fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.5, textAlign: 'left',
                   }}
                 >
@@ -1465,8 +1478,8 @@ function SessionDetailWindow({
                       key={turn.id}
                       ref={(node) => { turnRefs.set(turn.id, node) }}
                       style={{
-                        background: 'rgba(0,0,0,0.28)',
-                        border: activeTurnId === turn.id ? '1px solid rgba(138,180,255,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                        background: SURFACE_CARD,
+                        border: activeTurnId === turn.id ? '1px solid var(--shell-accent-border)' : CARD_BORDER,
                         borderRadius: 8, padding: '11px 12px', marginBottom: 10,
                       }}
                     >
@@ -1482,10 +1495,10 @@ function SessionDetailWindow({
                       )}
                       <div className="flex items-center" style={{ gap: 6, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)' }}>
                         <span>{session.engine}</span>
-                        <span style={{ color: turn.kind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 3, padding: '0 5px' }}>
+                        <span style={{ color: turn.kind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: '1px solid var(--shell-border)', borderRadius: 3, padding: '0 5px' }}>
                           {turnKindLabel(turn.kind, t)}
                         </span>
-                        {linked && <span style={{ color: '#8ab4ff' }}>#{linked.conversationIndex}</span>}
+                        {linked && <span style={{ color: 'var(--shell-accent)' }}>#{linked.conversationIndex}</span>}
                         {!question && <span>turn {index + 1} · {formatDate(turn.startedAt, t)}</span>}
                       </div>
                       {turn.excerpt && (
@@ -1495,7 +1508,7 @@ function SessionDetailWindow({
                       )}
                       {linked && renderStrip(linked)}
                       {!readableOnly && !linked && !turn.checkpointId && cpLoaded && (
-                        <div style={{ marginTop: 8, border: '1px dashed rgba(255,255,255,0.07)', borderRadius: 6, padding: '8px 10px', opacity: 0.75 }}>
+                        <div style={{ marginTop: 8, border: '1px dashed var(--shell-border)', borderRadius: 6, padding: '8px 10px', opacity: 0.75 }}>
                           <div className="flex items-center" style={{ gap: 7, fontSize: 11, color: 'var(--shell-text)' }}>
                             <span>{t('terminal:checkpoint.noCheckpoint')}</span>
                             <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-muted)' }}>
@@ -1518,8 +1531,8 @@ function SessionDetailWindow({
                     key={cp.id}
                     ref={(node) => { turnRefs.set(`orphan-${cp.id}`, node) }}
                     style={{
-                      background: 'rgba(0,0,0,0.28)',
-                      border: activeTurnId === `orphan-${cp.id}` ? '1px solid rgba(138,180,255,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                      background: SURFACE_CARD,
+                      border: activeTurnId === `orphan-${cp.id}` ? '1px solid var(--shell-accent-border)' : CARD_BORDER,
                       borderRadius: 8, padding: '11px 12px', marginBottom: 10,
                     }}
                   >
@@ -1555,7 +1568,7 @@ function SessionDetailWindow({
         </div>
         <div
           className="flex items-center"
-          style={{ gap: 8, padding: '10px 14px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}
+          style={{ gap: 8, padding: '10px 14px', borderTop: '1px solid var(--shell-border-soft)', flexShrink: 0 }}
         >
           <span style={{ fontSize: 11, color: 'var(--shell-muted)', flex: 1 }}>
             {readableOnly
@@ -1565,7 +1578,7 @@ function SessionDetailWindow({
           <button
             onClick={onClose}
             className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)', color: 'var(--shell-muted)', flexShrink: 0 }}
+            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-border-soft)', background: SURFACE_INSET, color: 'var(--shell-muted)', flexShrink: 0 }}
           >
             {t('common:action.close')}
           </button>
@@ -1574,7 +1587,7 @@ function SessionDetailWindow({
               <button
                 onClick={onContinue}
                 className="rounded cursor-pointer"
-                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid rgba(244,125,67,0.4)', background: 'rgba(244,125,67,0.08)', color: 'var(--shell-text)', flexShrink: 0 }}
+                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', flexShrink: 0 }}
               >
                 {t('terminal:agentSession.resume')}
               </button>
@@ -1606,7 +1619,7 @@ function SessionDetailWindow({
 
 function FileCounts({ record }: { record: ChangedFileRecord }) {
   if (record.status === 'binary' || record.status === 'oversized') {
-    return <span style={{ color: '#8ab4ff' }}>{recordCounts(record)}</span>
+    return <span style={{ color: 'var(--shell-accent)' }}>{recordCounts(record)}</span>
   }
   return (
     <span>

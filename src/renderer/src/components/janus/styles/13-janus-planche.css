@@ -1940,3 +1940,79 @@ body.is-running[data-theme='planche'] {
   box-shadow: 3px 3px 0 var(--line, #1C343B);
   color: var(--ink, #1C343B);
 }
+
+/* ════════════════════════════════════════════════════════════
+   15 · 消息行提示层补齐（流式字样 / 左右提示字体）
+   05 把提示行钉在裸类名上，且全部不带 data-view：时间戳 (0,1,0)
+   rgba(255,255,255,.3)、行内按钮 (0,1,0) .42、内联编辑器三件套
+   rgba(255,255,255,.065/.2/.95)，以及 chat view 的流式光标
+   #ff7830 (0,6,0)。纸面层此前只覆盖消息正文（13 节 643/978）与
+   chat view 的作者行，于是纸面上提示文字仍是白字、几乎不可读。
+   本节用 [data-theme] + shell + stage 限定，逐条压过 05；dark 原样不动。
+   ════════════════════════════════════════════════════════════ */
+
+/* 时间戳：左右两侧提示行最弱的一层墨 */
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-message-time {
+  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+/* 复制 / 编辑 / 重试 等行内图标按钮 */
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-message-edit,
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-clear-button {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-message-edit:hover:not(:disabled),
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-clear-button:hover:not(:disabled) {
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+  background: var(--paper-deep, #DCCFA8);
+  color: var(--ink, #1C343B);
+}
+
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-clear-button:hover:not(:disabled) {
+  color: var(--planche-red, #D43D2A);
+}
+
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-message-edit:focus-visible,
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-clear-button:focus-visible {
+  outline: 1px solid var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+/* 行内重写编辑器：纸面方框，与输入坞同构 */
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-inline-editor {
+  background: var(--paper, #EFE4C5);
+  border: 1px solid var(--line, #1C343B);
+  color: var(--ink, #1C343B);
+  caret-color: var(--planche-red, #D43D2A);
+  box-shadow: none;
+}
+
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-inline-editor:focus {
+  border-color: var(--line, #1C343B);
+  background: var(--paper, #EFE4C5);
+  box-shadow: 3px 3px 0 var(--line, #1C343B);
+}
+
+/* 流式光标：跟 --janus-current（纸面已重映射为 --planche-red），
+   压过 05 chat view 的 #ff7830 (0,6,0) */
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-streaming-cursor,
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'][data-view='chat'] .janus-chat-streaming-cursor {
+  background: var(--janus-current, var(--planche-red, #D43D2A));
+  box-shadow: none;
+}
+
+/* 作者行：补 roundtable / monitor（此前只有 chat view 有纸面规则，13 节 1876/1880） */
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'][data-view='roundtable'] .janus-chat-message-author,
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'][data-view='monitor'] .janus-chat-message-author {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'][data-view='roundtable'] .janus-chat-message.assistant .janus-chat-message-author,
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'][data-view='monitor'] .janus-chat-message.assistant .janus-chat-message-author {
+  color: var(--planche-red, #D43D2A);
+}
+
+/* Markdown 表格斑马纹：05 用 rgba(255,255,255,.025)，纸面上等于没有 */
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-chat-message-content .md-tr:nth-child(even) td {
+  background: var(--paper-deep, #DCCFA8);
+}

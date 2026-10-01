@@ -1,7 +1,8 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { PanelRightOpen } from 'lucide-react'
 import { BrowserSurface } from './BrowserSurface'
 import { embedBrowserSurface } from '@/services/browser'
+import { useThemeStore } from '@/stores/theme'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './StandaloneBrowser.module.css'
 
@@ -12,6 +13,10 @@ import styles from './StandaloneBrowser.module.css'
 export function StandaloneBrowser() {
   const { t } = useI18n('common')
   const surfaceId = useMemo(() => new URLSearchParams(window.location.search).get('surfaceId'), [])
+
+  useEffect(() => {
+    void useThemeStore.getState().load()
+  }, [])
 
   const handleEmbed = useCallback(() => {
     if (!surfaceId) return

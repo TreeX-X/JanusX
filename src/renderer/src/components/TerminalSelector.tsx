@@ -9,23 +9,8 @@ import {
   warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
 import { useI18n } from '@/i18n/useI18n'
-
-import terminalIcon from '@/assets/icons/terminal.svg'
-import claudeIcon from '@/assets/icons/claude.svg'
-import codexIcon from '@/assets/icons/codex.svg'
-import opencodeIcon from '@/assets/icons/opencode.svg'
-import janusIcon from '@/assets/icons/janus.svg'
-import piIcon from '@/assets/icons/pi.svg'
+import { TerminalPresetIcon } from './ui/TerminalPresetIcon'
 import styles from './TerminalSelector.module.css'
-
-const ICONS: Record<TerminalPreset, string> = {
-  shell: terminalIcon,
-  claude: claudeIcon,
-  codex: codexIcon,
-  opencode: opencodeIcon,
-  janus: janusIcon,
-  'pi': piIcon,
-}
 
 interface TerminalOptionProps {
   preset: TerminalPreset
@@ -47,7 +32,7 @@ function TerminalOption({ preset, name, busy, onClick, onHover }: TerminalOption
       className={`${styles.card}${busy ? ` ${styles.cardBusy}` : ''}`}
     >
       <span className={styles.iconWrap}>
-        <img src={ICONS[preset]} alt="" aria-hidden="true" className={styles.icon} />
+        <TerminalPresetIcon preset={preset} className={styles.icon} />
       </span>
       <span className={styles.label}>
         {busy ? t('terminal:selector.starting') : name}
