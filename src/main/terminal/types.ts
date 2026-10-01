@@ -1,6 +1,6 @@
 import type { IPty } from 'node-pty'
 
-export type TerminalPreset = 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
+export type TerminalPreset = 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
 
 export interface TerminalConfig {
   id: string

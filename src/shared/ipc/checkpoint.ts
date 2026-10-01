@@ -14,7 +14,7 @@ export const CHECKPOINT_CHANNELS = {
   ready: 'checkpoint:ready',
 } as const
 
-export type CheckpointEngine = AgentEngine | 'shell' | 'manual' | 'janus' | 'pi'
+export type CheckpointEngine = AgentEngine | 'shell' | 'manual' | 'janus' | 'pi' | 'dsh'
 
 export interface CheckpointSummary {
   id: string

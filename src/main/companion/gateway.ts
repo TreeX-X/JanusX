@@ -149,7 +149,7 @@ export class CompanionGateway {
     }
     if (request.command.type === 'create-terminal') {
       if (!this.options.createTerminal) return denied('execution-failed', 'Terminal creation is unavailable')
-      // Remote creation stays claude/codex/opencode-only: janus/pi hook
+      // Remote creation stays claude/codex/opencode-only: janus/pi/dsh hook
       // coverage is local-terminal status only, never remote control.
       const engine = request.command.engine
       if (engine !== 'claude' && engine !== 'codex' && engine !== 'opencode') {

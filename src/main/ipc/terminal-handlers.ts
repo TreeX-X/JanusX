@@ -351,7 +351,7 @@ function processCheckpointQueue(id: string): void {
   })
 }
 
-const AGENT_CLI_COMMANDS = ['claude', 'codex', 'opencode', 'janus', 'pi'] as const
+const AGENT_CLI_COMMANDS = ['claude', 'codex', 'opencode', 'janus', 'pi', 'dsh'] as const
 type WarmupEngine = (typeof AGENT_CLI_COMMANDS)[number]
 
 function isWarmupEngine(value: string): value is WarmupEngine {

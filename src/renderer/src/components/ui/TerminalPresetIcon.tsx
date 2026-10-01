@@ -6,6 +6,7 @@ import codexIcon from '@/assets/icons/codex.svg'
 import opencodeIcon from '@/assets/icons/opencode.svg'
 import janusIcon from '@/assets/icons/janus.svg'
 import piIcon from '@/assets/icons/pi.svg'
+import dshIcon from '@/assets/icons/dsh.svg'
 
 // Note: shell 字形改走 currentColor 线性图标，shell 之外的 preset 保持品牌静态资源 —— see
 // .agents/notes/2026-09-30-terminal-preset-icon-shell-currentcolor--0b4c1f77.md
@@ -20,6 +21,7 @@ const BRAND_ICON_SOURCES: Partial<Record<TerminalPreset, string>> = {
   opencode: opencodeIcon,
   janus: janusIcon,
   pi: piIcon,
+  dsh: dshIcon,
 }
 
 export interface TerminalPresetIconProps {

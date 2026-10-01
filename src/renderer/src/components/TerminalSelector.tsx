@@ -95,7 +95,7 @@ export function TerminalSelector() {
         </div>
       </div>
       <div className={styles.grid}>
-        {(['shell', 'janus', 'claude', 'codex', 'opencode', 'pi'] as TerminalPreset[]).map((preset) => (
+        {(['shell', 'janus', 'claude', 'codex', 'opencode', 'pi', 'dsh'] as TerminalPreset[]).map((preset) => (
           <TerminalOption
             key={preset}
             preset={preset}

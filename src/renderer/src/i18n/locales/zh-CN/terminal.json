@@ -131,6 +131,7 @@
     "opencode": "OpenCode",
     "janus": "Janus",
     "pi": "Pi",
+    "dsh": "DeepSeek",
     "shell": "Shell"
   },
   "selector": {

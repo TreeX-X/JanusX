@@ -57,7 +57,6 @@ const ANALYSIS_COMMIT_LIMIT_MIN = 1
 const ANALYSIS_COMMIT_LIMIT_MAX = 50
 const NODE_W = 240
 const NODE_H = 110
-
 type StatusFilter = ToolbarStatusFilter
 type KindFilter = ToolbarKindFilter
 const ISSUE_SEVERITY_LABEL_KEY: Record<BlueprintIssueSeverity, string> = {

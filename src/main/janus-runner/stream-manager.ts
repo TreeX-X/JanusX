@@ -163,9 +163,14 @@ export class AgentStreamManager {
         args.push('--', prompt)
         return args
       }
+      case 'dsh':
+        // Headless profile owns the model and approval policy; the subprocess
+        // inherits cwd unattended. `--json` selects the NDJSON run-event
+        // protocol parsed by DshParser (verified against dsh 0.2.0-rc.2).
+        return ['--profile', 'headless', '--json', prompt]
       default:
-        // Headless subprocess runner stays claude/codex/opencode-only: janus/pi
-        // run as interactive terminals with hook extensions, never here.
+        // Headless subprocess runner stays claude/codex/opencode/dsh-only:
+        // janus/pi run as interactive terminals with hook extensions, never here.
         throw new Error(`Unsupported headless engine: ${engine}`)
     }
   }

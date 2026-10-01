@@ -13,7 +13,7 @@ import type { TerminalPreset } from '@/types'
 
 /** 会话 engine 与终端 preset 同名；未知 engine 落到 shell 字形（与旧 fallback 一致）。 */
 function sessionEnginePreset(engine: string): TerminalPreset {
-  return engine === 'claude' || engine === 'codex' || engine === 'opencode' || engine === 'janus' || engine === 'pi'
+  return engine === 'claude' || engine === 'codex' || engine === 'opencode' || engine === 'janus' || engine === 'pi' || engine === 'dsh'
     ? engine
     : 'shell'
 }

@@ -182,6 +182,8 @@ function terminalPresetLabel(preset: Terminal['preset'], t: (key: string) => str
       return t('terminal:provider.janus')
     case 'pi':
       return t('terminal:provider.pi')
+    case 'dsh':
+      return t('terminal:provider.dsh')
     default:
       return t('terminal:provider.shell')
   }

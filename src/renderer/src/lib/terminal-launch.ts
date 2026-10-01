@@ -112,6 +112,8 @@ export function terminalBootLabel(preset: TerminalPreset): string {
       return 'Starting Janus…'
     case 'pi':
       return 'Starting Pi…'
+    case 'dsh':
+      return 'Starting DeepSeek…'
     case 'shell':
       return 'Starting shell…'
   }

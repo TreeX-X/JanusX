@@ -91,7 +91,7 @@ export interface OfficeStopPreviewRequest extends OfficeFileRequest {
 export interface OfficeReloadPreviewRequest extends OfficeStopPreviewRequest {}
 
 export interface OfficeBuildPromptRequest extends OfficeFileRequest {
-  terminalPreset: 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
+  terminalPreset: 'shell' | 'claude' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
   skillId?: OfficeSkillId
 }
 
@@ -140,7 +140,7 @@ export type OfficeInvokeResultMap = {
 type ValidationResult<T> = { ok: true; value: T } | { ok: false }
 
 const WORKSPACE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
-const TERMINAL_PRESETS = new Set(['shell', 'claude', 'codex', 'opencode', 'janus', 'pi'])
+const TERMINAL_PRESETS = new Set(['shell', 'claude', 'codex', 'opencode', 'janus', 'pi', 'dsh'])
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

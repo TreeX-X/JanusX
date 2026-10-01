@@ -66,6 +66,14 @@ const MODEL_FLAG_PATTERN = /(?:^|\s)(?:--model|-m|\/model)\s+["'`]?([a-z0-9][a-z
 /** Janus TUI banner: `janus · workspace <root> · model <id> · effort …`. The
  * `janus` anchor keeps the loose space-separated form from matching prose. */
 const JANUS_STATUS_MODEL_PATTERN = /\bjanus\b[^\r\n]{0,160}\bmodel\s+([a-z0-9][a-z0-9_.:/+-]{1,80})/i
+/** dsh-TUI (ccch1mneyyy) status bar: `<model> · Max effort · <cwd>`. The `· effort`
+ * anchor keeps it from matching prose; the id still goes through plausibility. */
+const DSH_STATUS_MODEL_PATTERN = /\b([a-z0-9][a-z0-9_.:/+-]{1,80})\s*·\s*(?:max|high|low|off|auto)\s*(?:effort)?/i
+/** dsh-TUI live turn header (`🌑 模型醒了… · 12s · 3.2k tokens · esc 中断`) and
+ * turn failure (`turn error · <reason>`). Success-end has no observed marker yet
+ * (needs a keyed session), so the parser only asserts working/failed, never idle. */
+const DSH_WORKING_PATTERN = /模型醒了/
+const DSH_TURN_ERROR_PATTERN = /turn error/i
 /** Janus TUI footer totals: `12 in / 8 out` (compact `12.3k`/`1.2M` above 1k). */
 const JANUS_FOOTER_USAGE_PATTERN = /(\d+(?:\.\d+)?\s*[kKmM]?)\s*in\s*\/\s*(\d+(?:\.\d+)?\s*[kKmM]?)\s*out/i
 const STREAM_BUFFER_LIMIT = 64 * 1024
@@ -83,16 +91,37 @@ const MODEL_PATTERNS: RegExp[] = [
 export function detectModelFromText(text: string): string | undefined {
   const normalized = stripAnsi(text)
   const explicit = normalized.match(MODEL_FIELD_PATTERN) ?? normalized.match(MODEL_FLAG_PATTERN)
-  if (explicit?.[1]) return normalizeModelName(explicit[1])
+  // Prose false-positive guard: `model: the behavior` captures "the" without
+  // this check — see .agents/notes/dsh-integration.md (用量统计修复). Real ids
+  // are single tokens with a version/separator hint (isPlausibleModelId).
+  if (explicit?.[1] && isPlausibleModelId(explicit[1])) return normalizeModelName(explicit[1])
   // Note: janus/pi emit no hook events, so PTY text is the live model source —
   // see .agents/notes/2026-09-11-janus-pi-context-recognition--e34329c5.md
   const janusStatus = normalized.match(JANUS_STATUS_MODEL_PATTERN)
   if (janusStatus?.[1] && isPlausibleModelId(janusStatus[1])) return normalizeModelName(janusStatus[1])
+  // dsh-TUI status bar carries the live model id next to the effort segment.
+  const dshStatus = normalized.match(DSH_STATUS_MODEL_PATTERN)
+  if (dshStatus?.[1] && isPlausibleModelId(dshStatus[1])) return normalizeModelName(dshStatus[1])
 
   for (const pattern of MODEL_PATTERNS) {
     const match = normalized.match(pattern)
-    if (match?.[0]) return normalizeModelName(match[0])
+    // Loose vendor patterns (bare "opus"/"codex"/"o1" in prose) must pass the
+    // same plausibility gate, otherwise chat prose becomes a model declaration.
+    if (match?.[0] && isPlausibleModelId(match[0])) return normalizeModelName(match[0])
   }
+  return undefined
+}
+
+/**
+ * dsh-TUI turn lifecycle from PTY text. Emits only positive assertions:
+ * 'running' while the live turn header paints, 'degraded' on a turn error.
+ * Idle is never inferred (a successful turn end has no observed marker yet),
+ * so callers must not treat undefined as a transition back to wait.
+ */
+export function extractDshTurnStatus(text: string): 'running' | 'degraded' | undefined {
+  const normalized = stripAnsi(text)
+  if (DSH_TURN_ERROR_PATTERN.test(normalized)) return 'degraded'
+  if (DSH_WORKING_PATTERN.test(normalized)) return 'running'
   return undefined
 }
 
@@ -122,6 +151,8 @@ export function getEstimatedContextWindow(preset: TerminalPreset, model?: string
     case 'janus':
       return 128_000
     case 'pi':
+      return 128_000
+    case 'dsh':
       return 128_000
     case 'shell':
       return undefined
@@ -424,16 +455,26 @@ function extractExplicitContext(text: string): Pick<RuntimeTelemetryPatch, 'cont
   )
 
   if (fraction?.[1] && fraction[2]) {
-    return {
-      contextTokens: parseTokenAmount(fraction[1]),
-      contextWindowTokens: parseTokenAmount(fraction[2]),
+    const used = parseTokenAmount(fraction[1])
+    const window = parseTokenAmount(fraction[2])
+    // Prose guard (see .agents/notes/dsh-integration.md): help text like
+    // "tokens 5/10" must not become telemetry. Real windows are k-scale and
+    // bound the used count.
+    if (used !== undefined && isPlausibleContextWindow(window) && used <= window) {
+      return { contextTokens: used, contextWindowTokens: window }
     }
+    return {}
   }
 
   const usedOnly = normalized.match(/\b(?:ctx|context)\b[^\d]{0,24}(\d+(?:\.\d+)?\s*[kKmM]?)\s*(?:tokens?)?\b/i)
   return {
     contextTokens: usedOnly?.[1] ? parseTokenAmount(usedOnly[1]) : undefined,
   }
+}
+
+/** Real context windows are k-scale (4k..10M); prose fractions like 5/10 are not. */
+function isPlausibleContextWindow(value: number | undefined): value is number {
+  return value !== undefined && value >= 4_000 && value <= 10_000_000
 }
 
 function mergeTelemetryPatch(target: RuntimeTelemetryPatch, source: RuntimeTelemetryPatch): void {

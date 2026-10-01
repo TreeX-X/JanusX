@@ -85,6 +85,7 @@ const PRESETS: TerminalPresetOption[] = [
   createPreset('codex'),
   createPreset('opencode'),
   createPreset('pi'),
+  createPreset('dsh'),
 ]
 
 // 收起态 24×24 圆角 4,与工具栏相邻 h-6 w-6 rounded 按钮对齐
@@ -110,6 +111,8 @@ function providerLabel(preset: TerminalPreset, t: (key: string) => string): stri
       return t('terminal:provider.janus')
     case 'pi':
       return t('terminal:provider.pi')
+    case 'dsh':
+      return t('terminal:provider.dsh')
     case 'shell':
       return t('terminal:provider.shell')
   }

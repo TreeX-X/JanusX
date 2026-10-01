@@ -94,6 +94,13 @@ export const AGENT_ENGINE_CAPABILITIES: Record<AgentHookSource, AgentEngineCapab
     sentinel: false,
     sessionStore: 'opencode-sqlite',
   },
+  dsh: {
+    ...NATIVE_TURNS,
+    ...NATIVE_ATTENTION,
+    transcript: null,
+    sentinel: false,
+    sessionStore: null,
+  },
 }
 
 /**

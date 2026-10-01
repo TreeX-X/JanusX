@@ -23,7 +23,7 @@ export const TERMINAL_EVENT_CHANNELS = {
   turnChanges: 'terminal:turn-changes',
 } as const
 
-export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi'
+export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
 
 // Note: six internal states route hooks and sort order; approval and input share one attention visual — see .agents/notes/2026-09-12-terminal-status-display--27891818.md
 // Sidebar display status of a terminal entry.
@@ -36,7 +36,7 @@ export type TerminalAgentEngine = 'claude' | 'codex' | 'opencode' | 'janus' | 'p
 export type TerminalStatus = 'wait' | 'running' | 'needs-input' | 'needs-approval' | 'degraded' | 'error'
 
 export interface TerminalWarmupRequest {
-  engines?: Array<TerminalAgentEngine | 'janus' | 'pi'>
+  engines?: Array<TerminalAgentEngine | 'janus' | 'pi' | 'dsh'>
 }
 
 export interface TerminalCreateRequest {
@@ -96,7 +96,7 @@ export interface TerminalCreatedEvent {
   id: string
   workspaceId: string
   cwd: string
-  preset: TerminalAgentEngine | 'janus' | 'pi'
+  preset: TerminalAgentEngine | 'janus' | 'pi' | 'dsh'
   shell: string
   pid: number
 }

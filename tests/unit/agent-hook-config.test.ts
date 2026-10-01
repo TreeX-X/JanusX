@@ -334,6 +334,18 @@ describe('AgentHookConfigManager', () => {
     expect(uninstalled.installed).toBe(false)
   })
 
+  it('treats dsh as hook-less: no-op without touching the opencode plugin dir', async () => {
+    const homeDir = await createTempDir()
+    const userDataDir = join(homeDir, 'userData')
+    const manager = makeManager(homeDir, { userDataDir })
+
+    const installed = await manager.ensureInstalled('dsh')
+    expect(installed).toEqual({ engine: 'dsh', installed: true, path: manager.getHooksRootDir() })
+    expect(await manager.isInstalled('dsh')).toBe(true)
+    const uninstalled = await manager.uninstall('dsh')
+    expect(uninstalled.installed).toBe(false)
+  })
+
   it('emits hidden-runner hook commands on Windows when a runner path is configured', async () => {
     const homeDir = await createTempDir()
     const runnerPath = join(homeDir, '.janusx', 'hooks', 'janusx-hook-runner.exe')

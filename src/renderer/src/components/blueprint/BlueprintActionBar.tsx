@@ -24,7 +24,7 @@ import type { UseJanusChatReturn } from '../janus/useJanusChat'
 import styles from './BlueprintActionBar.module.css'
 
 const DEFAULT_DISPATCH_PRESET: TerminalPreset = 'codex'
-const DISPATCH_PRESETS: TerminalPreset[] = ['janus', 'claude', 'codex', 'opencode', 'pi', 'shell']
+const DISPATCH_PRESETS: TerminalPreset[] = ['janus', 'claude', 'codex', 'opencode', 'pi', 'dsh', 'shell']
 
 const closed = (status: string) => status === 'completed' || status === 'cancelled'
 

@@ -58,6 +58,15 @@ export async function getRuntimeTelemetrySnapshot(
       ? scanPiHistory(cwd, startedAt, sessionId)
       : readPiBootstrapTelemetry(cwd)
   }
+  // Note: dsh has no hook pipeline, so (like janus/pi) only the declared
+  // model is terminal-safe without an exact session id — see
+  // .agents/notes/dsh-integration.md (phase 3). Session logs are
+  // zstd-compressed, so the scan binds id/path/recency without usage numbers.
+  if (preset === 'dsh') {
+    return sessionId
+      ? scanDshHistory(cwd, startedAt, sessionId)
+      : readDshBootstrapTelemetry()
+  }
   return null
 }
 
@@ -802,14 +811,141 @@ function readOnlyConfiguredOpenCodeModel(config: JsonRecord): string | undefined
   return models.length === 1 ? models[0] : undefined
 }
 
-function inferDeclaredContextWindow(model: string, preset: 'claude' | 'opencode' | 'janus' | 'pi'): number | undefined {
+function inferDeclaredContextWindow(model: string, preset: 'claude' | 'opencode' | 'janus' | 'pi' | 'dsh'): number | undefined {
   const normalized = model.toLowerCase()
   if (/\[1m\]|\b1m\b/.test(normalized)) return 1_000_000
   if (preset === 'claude') return 200_000
   return undefined
 }
 
+/**
+ * DSH (0.2.0 line, dsh-TUI) layout, verified on disk 2026-09-30:
+ * - `~/.dsh/sessions/<workspace-key>/<uuid>/session.v4.jsonl.zstd` — the log
+ *   itself is zstd-compressed (no decoder in this repo), so the scan only
+ *   binds id/path/recency, never usage numbers.
+ * - `~/.dsh-tui/model-recents.json` — the user's switched models (first entry
+ *   wins); absent until the first `/model` switch.
+ * - Composed profile default is `deepseek-flash` (`agent-default-model` row;
+ *   verify with `dsh --dump-config --profile dsh-tui`).
+ */
+function toDshWorkspaceKey(cwd: string): string {
+  const body = normalizePath(cwd).replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '')
+  return `--${body}--`
+}
+
+/**
+ * DSH workspace keys preserve the original drive/case spelling
+ * (`--C-Users-…--`); Windows checkouts may differ in case, so fall back to a
+ * case-insensitive directory match before giving up.
+ */
+async function resolveDshWorkspaceDir(cwd: string): Promise<string | null> {
+  const sessionsRoot = join(os.homedir(), '.dsh', 'sessions')
+  const exact = join(sessionsRoot, toDshWorkspaceKey(cwd))
+  try {
+    const info = await stat(exact)
+    if (info.isDirectory()) return exact
+  } catch {
+    // Fall through to the case-insensitive scan below.
+  }
+  try {
+    const entries = await readdir(sessionsRoot, { withFileTypes: true })
+    const want = toDshWorkspaceKey(cwd).toLowerCase()
+    const hit = entries.find((entry) => entry.isDirectory() && entry.name.toLowerCase() === want)
+    return hit ? join(sessionsRoot, hit.name) : null
+  } catch {
+    return null
+  }
+}
+
+async function readDshDeclaredModel(): Promise<string | undefined> {
+  // model-recents.json may be a top-level array (readJsonConfig only accepts
+  // objects), so parse the raw file and accept array-first or known object keys.
+  let raw: unknown
+  try {
+    raw = JSON.parse(await readFile(join(os.homedir(), '.dsh-tui', 'model-recents.json'), 'utf8')) as unknown
+  } catch {
+    raw = undefined
+  }
+  if (Array.isArray(raw)) {
+    const first = raw.map(readString).find((model): model is string => !!model)
+    if (first) return first
+  }
+  const record = asRecord(raw) ?? await readJsonConfig(join(os.homedir(), '.dsh-tui', 'model-recents.json'))
+  const fromObject = readString(record?.models) ?? readString(record?.recent) ?? readString(record?.current) ?? readString(record?.model)
+  if (fromObject) return fromObject
+  const nested = Array.isArray(record?.models)
+    ? (record?.models as unknown[]).map(readString).find((model): model is string => !!model)
+    : undefined
+  return nested ?? 'deepseek-flash'
+}
+
+async function readDshBootstrapTelemetry(): Promise<RuntimeTelemetrySnapshot | null> {
+  const model = await readDshDeclaredModel()
+  if (!model) return null
+  const window = model.toLowerCase().includes('deepseek') ? 128_000 : undefined
+  return createBootstrapSnapshot(model, window)
+}
+
+async function scanDshHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<RuntimeTelemetrySnapshot | null> {
+  if (!sessionId) return readDshBootstrapTelemetry()
+  const workspaceDir = await resolveDshWorkspaceDir(cwd)
+  if (!workspaceDir) return null
+  let entries
+  try {
+    entries = await readdir(workspaceDir, { withFileTypes: true })
+  } catch {
+    return null
+  }
+  const needle = sessionId.toLowerCase()
+  const candidates: SessionFileRef[] = []
+  const exact: SessionFileRef[] = []
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const name = entry.name.toLowerCase()
+    if (name !== needle && !name.includes(needle)) continue
+    const dirPath = join(workspaceDir, entry.name)
+    try {
+      const info = await stat(dirPath)
+      const ref = { path: dirPath, updatedAt: info.mtimeMs }
+      if (!isFileAfterStartedAt(ref, startedAt)) continue
+      // Exact UUID wins over prefix/substring: a short prefix can collide
+      // across sessions, the newest mtime alone is not terminal-specific.
+      if (name === needle) exact.push(ref)
+      else candidates.push(ref)
+    } catch {
+      continue
+    }
+  }
+  const pool = exact.length > 0 ? exact : candidates
+  pool.sort((a, b) => b.updatedAt - a.updatedAt)
+  const match = pool[0]
+  if (!match) return null
+  const sessionUuid = match.path.split(/[\\/]/).pop() ?? sessionId
+  let filePath = match.path
+  try {
+    const inner = await readdir(match.path)
+    const log = inner.find((name) => name.endsWith('.jsonl.zstd') || name.endsWith('.jsonl'))
+    if (log) filePath = join(match.path, log)
+  } catch {
+    // Keep the session dir: still a stable, terminal-specific pointer.
+  }
+  const snapshot: RuntimeTelemetrySnapshot = {
+    sessionId: sessionUuid,
+    filePath,
+    observedAt: match.updatedAt,
+    source: 'history',
+    confidence: 'derived',
+  }
+  if (startedAt !== undefined) {
+    snapshot.contextTokens = 0
+    snapshot.inputTokens = 0
+    snapshot.outputTokens = 0
+  }
+  return snapshot
+}
+
 function readNonNegativeNumber(value: unknown): number | undefined {
+
   const numeric = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
   if (!Number.isFinite(numeric) || numeric < 0) return undefined
   return Math.round(numeric)

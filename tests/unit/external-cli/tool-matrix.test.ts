@@ -11,6 +11,7 @@ const VERSIONS: Record<ExternalCliToolId, string> = {
   codex: '0.30.0',
   opencode: '0.5.5',
   pi: '0.9.1',
+  dsh: '0.1.0',
 }
 
 function detectorFor(toolId: ExternalCliToolId, files: string[], version: string, exitCode = 0) {
