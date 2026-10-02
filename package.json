@@ -18,8 +18,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run build:llm-core && electron-vite dev",
+    "dev": "npm run build:llm-core && electron-vite dev --outDir .cache --entry scripts/dev-entry.mjs",
     "build": "npm run build:llm-core && electron-vite build",
+    "build:check": "npm run build:llm-core && electron-vite build --outDir artifacts/build-check",
     "build:llm-core": "npm run build --workspace=@janusx/llm-core",
     "preview": "electron-vite preview",
     "mcp:knowledge": "node out/main/knowledge-mcp.js",

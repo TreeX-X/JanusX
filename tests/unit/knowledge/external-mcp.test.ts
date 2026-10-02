@@ -1,14 +1,31 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
   clientConfigPath,
+  defaultExternalMcpDirs,
   EXTERNAL_MCP_SERVER_KEY,
   getExternalMcpStatus,
   registerExternalMcpClient,
   type ExternalMcpDirs,
 } from '../../../src/main/knowledge/external-mcp'
+
+vi.mock('electron', () => ({ app: { isPackaged: false, getAppPath: () => '/fixture' } }))
+
+describe('external MCP build selection', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('uses the current isolated dev build for client registration', () => {
+    vi.stubEnv('JANUSX_DEV_BUILD_ROOT', '/fixture/.cache')
+    expect(defaultExternalMcpDirs().serverEntry).toBe(join('/fixture/.cache', 'main', 'knowledge-mcp.js'))
+  })
+
+  it('keeps production preview on the standard output', () => {
+    vi.stubEnv('JANUSX_DEV_BUILD_ROOT', undefined)
+    expect(defaultExternalMcpDirs().serverEntry).toBe(join('/fixture', 'out', 'main', 'knowledge-mcp.js'))
+  })
+})
 
 describe('external MCP client registration', () => {
   let root: string
