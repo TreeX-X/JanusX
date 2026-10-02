@@ -61,6 +61,12 @@ work:
 
 ## Verification
 
+2026-10-02 未知窗口检查：下列五文件命令共 71 项通过。proposal-context 按反馈的 143、2354、2、91、8917 tokens 和 4096 格式预留复现未知 Gemini 别名输入，检查完整内容获准、已知 16K 仍拒绝、未知模型应用上限准确标识。harness-routing 使用约 9K 中文原文、2.3K 对话及 240KB 辅助证据，经真实预算器、临时 Note 预览和批准写入，断言正文完整保留；模型生成仍为替身。真实供应商容量和生成质量未验证。本次未重跑浏览器测试，已有浏览器证据见下文。
+
+`npx vitest run tests/unit/blueprint-proposal-context.test.ts tests/unit/blueprint-maintenance-harness-routing.test.ts tests/unit/blueprint-maintenance-service.test.ts tests/unit/blueprint-maintenance-changeset.test.ts tests/unit/maintenance-harness-apply.test.ts`
+
+严格类型检查、生产构建与 proposal-context.ts 的 ESLint 通过；测试文件被项目 ESLint 配置排除。全库 Note 校验检查 221 文件，仅 dsh-integration.md 的 6 项既有错误，未计为全库通过。
+
 2026-10-02 预算修复：下列 5 个文件累计 70 个不同用例通过；全套 69 项通过后，新增临界窗口用例并复验 proposal-context 和 harness-routing 共 37 项通过。proposal-context 使用真实 ChatSessionRuntime 复现“小中文 Note + 240 KB 代码”超限，检查辅助材料取舍、完整原文和早期约束保留、已知自定义模型窗口回填、系统与 schema 预算、真实超限诊断及非预算异常透传。harness-routing 从真实临时 Note 原文经过预算、结构化提案、文件预览与批准写入，验证超大辅助证据不会阻断闭环。先前将 buildContext 直接 mock 为抛错，只验证拒绝分支，未覆盖真实消息布局，是该回归遗漏的测试原因。
 
 ```text

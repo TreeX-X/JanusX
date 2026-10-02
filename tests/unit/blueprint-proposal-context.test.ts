@@ -29,7 +29,7 @@ describe('proposal context admission', () => {
     expect(result.content).toContain('Its contents were NOT read')
     expect(() => new ChatSessionRuntime().buildContext([
       { role: 'system', content: input.system }, { role: 'user', content: result.content },
-    ], { model: input.model, toolTokens: input.schemaTokens })).not.toThrow()
+    ], { model: { contextWindow: 65536 }, toolTokens: input.schemaTokens })).not.toThrow()
   })
 
   it('uses reliable registry metadata for a custom provider alias absent from its short model list', () => {
@@ -43,14 +43,26 @@ describe('proposal context admission', () => {
   })
 
   it('refuses genuinely oversized necessary source with component sizes instead of truncating it', () => {
-    const content = '中文'.repeat(12000)
+    const content = '中文'.repeat(40000)
     expect(() => buildProposalContext({ ...base(), required: [{ label: 'Note source', content }] }))
       .toThrow(`Note source ≈ ${estimateContextTokens(content)} tokens`)
   })
 
   it('counts the actual system and schema rather than only checking user content', () => {
-    expect(() => buildProposalContext({ ...base(), system: '中'.repeat(14000) })).toThrow('必要上下文')
-    expect(() => buildProposalContext({ ...base(), schemaTokens: 14000 })).toThrow('必要上下文')
+    expect(() => buildProposalContext({ ...base(), model: { contextWindow: 16384 }, system: '中'.repeat(14000) })).toThrow('必要上下文')
+    expect(() => buildProposalContext({ ...base(), model: { contextWindow: 16384 }, schemaTokens: 14000 })).toThrow('必要上下文')
+  })
+
+  it('admits the reported unknown Gemini input intact without imposing a 16K model window', () => {
+    const required = [143, 2354, 2, 91, 8917].map((size, index) => ({ label: `Section ${index}`, content: '中'.repeat(size) }))
+    const input = { ...base(), modelId: 'gemini-3.8-flash', system: 'System instructions '.repeat(100), schemaTokens: 4096, required,
+      optional: [{ label: 'Repository', content: 'x'.repeat(240 * 1024) }] }
+    const result = buildProposalContext(input)
+    for (const section of required) expect(result.content).toContain(section.content)
+    expect(result.omitted).toEqual(['Repository'])
+    expect(() => buildProposalContext({ ...input, model: { contextWindow: 16384 } })).toThrow('窗口 16384')
+    expect(() => buildProposalContext({ ...input, required: [{ label: 'Large source', content: '中'.repeat(70000) }] }))
+      .toThrow('应用单次请求上限 65536 tokens（不是模型窗口）')
   })
 
   it('keeps all auxiliary evidence when it fits', () => {

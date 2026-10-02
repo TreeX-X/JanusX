@@ -643,12 +643,14 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
       expect(mocks.generateObject).not.toHaveBeenCalled()
       expect(task.changeSet).toBeNull()
       await fs.writeFile(notePath(), REQUIREMENT_MD)
-      await expect(blueprintMaintenanceService.proposeForConversation({ ...input, projectContext: '完整中文需求'.repeat(6000) })).rejects.toThrow('必要上下文')
+      await expect(blueprintMaintenanceService.proposeForConversation({ ...input, projectContext: '完整中文需求'.repeat(14000) })).rejects.toThrow('必要上下文')
       expect(mocks.generateObject).not.toHaveBeenCalled()
       expect(await fs.readFile(notePath(), 'utf8')).toBe(REQUIREMENT_MD)
     })
 
     it('organizes and applies a real Note with oversized repository evidence while preserving full source and discussion', async () => {
+      const fullSource = REQUIREMENT_MD + '\n' + '完整需求'.repeat(2230)
+      await fs.writeFile(notePath(), fullSource)
       const task = await blueprintMaintenanceService.start({ blueprintId: PROJECT_ID, workspaceId: 'ws-1', workspaceName: 'W', workspacePath: checkoutDir,
         nodeScope: { type: 'blueprint' }, goal: 'Retitle only', conversationId: 'budget-conversation' })
       const snapshot = await harness.readNote(checkoutDir, REQ)
@@ -662,22 +664,23 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
       const session = new ChatSessionRuntime()
       // The one-shot proposal already carries its own full history; a chat-only summary must not consume its budget.
       vi.spyOn(session, 'buildContext').mockImplementation(() => { throw new Error('Unrelated conversation summary') })
-      await blueprintMaintenanceService.proposeForConversation({ taskId: task.id, conversationId: 'budget-conversation', providerId: 'p', modelId: 'm',
-        messages: [{ role: 'user', content: 'Preserve the entire body' }, { role: 'user', content: 'Only change the title' }],
+      await blueprintMaintenanceService.proposeForConversation({ taskId: task.id, conversationId: 'budget-conversation', providerId: 'p', modelId: 'gemini-3.8-flash',
+        messages: [{ role: 'user', content: 'Preserve the entire body' + '讨论'.repeat(1177) }, { role: 'user', content: 'Only change the title' }],
         projectContext: context, noteRefs: refs, signal: new AbortController().signal, chatSession: session,
         workspaceIds: ['ws-1'], workspaceRoots: { 'ws-1': checkoutDir } })
       const prompt = mocks.generateObject.mock.calls.at(-1)![0].messages[0].content
-      expect(prompt).toContain(REQUIREMENT_MD)
+      expect(prompt).toContain(fullSource)
       expect(prompt).toContain('Preserve the entire body')
       expect(prompt).toContain('Only change the title')
       expect(prompt).toContain('Auxiliary context omitted')
       expect(prompt).not.toContain('x'.repeat(1000))
-      expect(await fs.readFile(notePath(), 'utf8')).toBe(REQUIREMENT_MD)
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(fullSource)
       const pending = serviceOf().tasks.get(task.id)!
       await applyReviewed({ taskId: task.id, changeSetId: pending.changeSet!.id, operationIds: ['retitle'] })
       const after = await fs.readFile(notePath(), 'utf8')
       expect(after).toContain('# Budgeted title')
       expect(after).toContain('The widget fails.')
+      expect(after).toContain('完整需求'.repeat(2230))
     })
 
     it('captures proposal-time hashes and rejects later source bytes despite equal revision', async () => {
