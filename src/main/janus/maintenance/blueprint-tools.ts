@@ -34,6 +34,7 @@ export const blueprintProposalSchema = z.object({
       status: z.enum(['not-started', 'in-progress', 'testing', 'done', 'blocked']).optional(), progress: z.number().min(0).max(100).optional(),
       positioning: z.string().optional(), description: z.string().optional(), techSolution: z.string().optional(), notes: z.string().optional(), tags: z.array(z.string()).optional(),
       features: z.array(proposedFeature).max(40).optional(),
+      sections: z.record(z.string().min(1).regex(/^[^\r\n#]+$/), z.string()).optional(),
     }) }),
     z.object({ ...operationBase, type: z.literal('move-node'), nodeId: z.string().min(1), afterParentId: z.string().min(1) }),
     z.object({ ...operationBase, type: z.literal('add-relation'), tempRelationId: z.string().min(1), after: z.object({

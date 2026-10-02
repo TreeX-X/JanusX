@@ -80,8 +80,8 @@ describe('chat turn guard (S6-a)', () => {
     let release!: () => void
     proposeForConversation.mockReset().mockImplementationOnce(async () => {
       await new Promise<void>((resolve) => { release = resolve })
-      return 'first proposal'
-    }).mockResolvedValue('revised proposal')
+      return { id: 'task', phase: 'first proposal' }
+    }).mockResolvedValue({ id: 'task', phase: 'revised proposal' })
     const reply = vi.fn()
     const request = { requestId: 'proposal-1', conversationId: 'project-proposal', providerId: 'p', domain: 'project' as const, messages: userMessages, maintenanceTaskId: 'task' }
     const turn = handleChatStream({ reply } as never, request)
@@ -100,7 +100,9 @@ describe('chat turn guard (S6-a)', () => {
     await turn
     expect(proposeForConversation).toHaveBeenCalledTimes(2)
     expect(proposeForConversation.mock.calls[1][0].messages.at(-1).content).toBe('Use the revised scope')
-    expect(reply).toHaveBeenCalledWith('llm:chat:agent-event', expect.objectContaining({ type: 'text_delta', delta: 'revised proposal' }))
+    expect(reply).toHaveBeenCalledWith('llm:chat:agent-event', expect.objectContaining({ type: 'maintenance_result', task: { id: 'task', phase: 'revised proposal' } }))
+    const types = reply.mock.calls.filter(call => call[0] === 'llm:chat:agent-event').map(call => call[1].type)
+    expect(types.indexOf('maintenance_result')).toBeLessThan(types.indexOf('stream_end'))
   })
 
   it('cancels a proposal through the ordinary chat stop route and releases its turn', async () => {

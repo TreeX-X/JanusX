@@ -114,8 +114,12 @@ Object.assign(window.electron.llm, {
       if (request.maintenanceTaskId) {
         const finish = () => {
           maintenance.completeProposal(request.maintenanceTaskId!)
-          if (maintenance.proposalOutcome === 'failed') emit({ type: 'stream_error', requestId: request.requestId, error: 'Fixture proposal unavailable' })
-          else emit({ type: 'stream_end', requestId: request.requestId, cancelled: false })
+          const task = maintenance.tasks.find(item => item.id === request.maintenanceTaskId)!
+          if (task.error) emit({ type: 'stream_error', requestId: request.requestId, error: task.error })
+          else {
+            if (!maintenance.dropResult) emit({ type: 'maintenance_result', requestId: request.requestId, task: structuredClone(task) })
+            emit({ type: 'stream_end', requestId: request.requestId, cancelled: false })
+          }
         }
         if (maintenance.gateProposal) maintenance.finishProposal = finish
         else finish()

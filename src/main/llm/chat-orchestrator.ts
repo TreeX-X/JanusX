@@ -462,19 +462,19 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       if (domain !== 'project' || !conversationId) throw new Error('NOT_READY: maintenance requires a project conversation')
       const { blueprintMaintenanceService } = await import('../janus/maintenance/service')
       const history = [...messages]
-      let text: string
+      let result: Awaited<ReturnType<typeof blueprintMaintenanceService.proposeForConversation>>
       do {
         const steered = steeringPort.take()
         history.push(...steered.map((entry) => ({ role: 'user' as const, content: entry.message.content })))
         if (steered.length) sendAgentEvent({ type: 'steering_consumed', requestId, keys: steered.map((entry) => entry.key) })
-        text = await blueprintMaintenanceService.proposeForConversation({
+        result = await blueprintMaintenanceService.proposeForConversation({
           taskId: request.maintenanceTaskId, conversationId, messages: history, providerId, modelId,
           signal: controller.signal, chatSession, projectContext, noteRefs: request.noteRefs,
           workspaceIds: (workspaceResources ?? []).map((item) => item.workspaceId),
           workspaceRoots: Object.fromEntries((workspaceResources ?? []).map(item => [item.workspaceId, item.workspacePath])),
         })
       } while (!controller.signal.aborted && steeringPort.size > 0)
-      if (!controller.signal.aborted) sendAgentEvent({ type: 'text_delta', requestId, delta: text })
+      if (!controller.signal.aborted) sendAgentEvent({ type: 'maintenance_result', requestId, task: result })
       sendAgentEvent({ type: 'stream_end', requestId, cancelled: controller.signal.aborted })
       sendEvent(LLM_CHANNELS.done, { requestId })
       return

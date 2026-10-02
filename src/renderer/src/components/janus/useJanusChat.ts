@@ -607,8 +607,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       agent: EMPTY_JANUS_RUNTIME_STATE,
     }))
 
+    let proposalReceived = false
     const chatMessages: ChatMessage[] = [
-      ...history.slice(-HISTORY_MESSAGE_LIMIT).map((message) => ({
+      ...(maintenanceTaskId ? history : history.slice(-HISTORY_MESSAGE_LIMIT)).map((message) => ({
         role: message.role,
         content: message.content,
       })),
@@ -643,7 +644,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             ? Math.max(0, Date.now() - (runtimesRef.current[id]?.turnStartedAt ?? Date.now()))
             : undefined
           // R6-full：在途 steering badge 清除；文本早已在历史中保留。
-          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [] }))
+          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [],
+            ...(maintenanceTaskId && !proposalReceived ? { error: '整理请求已结束，但未收到可审核文件。请重新整理；若持续出现，请重启应用后重试。' } : {}),
+          }))
+          if (maintenanceTaskId && !proposalReceived) handles.proposalRetry = { message: userMessage, taskId: maintenanceTaskId }
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
           snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0, durationMs)
           handles.assistantMessageId = null
@@ -717,6 +721,12 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           },
           onAgentEvent: (agentEvent) => {
             if (handles.generation === generation) {
+              if (agentEvent.type === 'maintenance_result' && agentEvent.task.id === maintenanceTaskId
+                && agentEvent.task.conversationId === id && agentEvent.task.status === 'proposal-ready'
+                && agentEvent.task.changeSet?.operations.length) {
+                proposalReceived = true
+                useBlueprintMaintenanceStore.getState().receiveTask(agentEvent.task)
+              }
               if (agentEvent.type === 'reasoning_delta') {
                 appendReasoning(id, agentEvent.delta)
               }

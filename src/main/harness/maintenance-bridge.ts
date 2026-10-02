@@ -494,7 +494,7 @@ function translateUpdate(
   if (op.after.notes !== undefined) patch.notes = op.after.notes
   if (op.after.tags !== undefined) patch.tags = [...op.after.tags]
   if (op.after.status !== undefined) patch.status = op.after.status
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0 && !Object.keys(op.after.sections ?? {}).length) {
     h.refuse(op.operationId, 'no writable fields')
     return
   }
@@ -510,6 +510,7 @@ function translateUpdate(
     h.refuse(op.operationId, `${produced.code}: ${produced.message}`)
     return
   }
+  if (op.after.sections) Object.assign(produced.edit.sections, op.after.sections)
   try {
     const out = mergeNoteEdit(parsed.note, file.markdown, produced.edit, op.reason)
     h.setMarkdown(file, op.operationId, out)

@@ -145,13 +145,14 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
   useEffect(() => { setReceipt(null); setConfirmBulkDelete(false); setApprovalWanted(false) },
     [chat.conversationId, target?.graphId, scopeType, scopeNodeId])
 
-  const bulk = useMemo(() => {
-    if (!proposal) return null
+  const bulkResult = useMemo(() => {
+    if (!proposal) return { selection: null, error: null }
     try {
       const selection = bulkApproval(proposal)
-      return confirmBulkDelete ? { ...selection, operations: maintenanceSelection(proposal, proposal.operations.map(op => op.operationId)), blockedDeletes: [] } : selection
-    } catch { return null }
+      return { selection: confirmBulkDelete ? { ...selection, operations: maintenanceSelection(proposal, proposal.operations.map(op => op.operationId)), blockedDeletes: [] } : selection, error: null }
+    } catch (reason) { return { selection: null, error: reason instanceof Error ? reason.message : String(reason) } }
   }, [proposal, confirmBulkDelete])
+  const bulk = bulkResult.selection
   // A proposal nothing can approve in bulk is a dead end, so a blocked deletion
   // forces the detail view open; otherwise it stays collapsed behind a button.
   const detailForced = !!proposal && !!bulk?.blockedDeletes.length
@@ -355,6 +356,7 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
       {droppedCount > 0 ? t('blueprint:maintenance.scopeDropped', { count: droppedCount }) : ''}
     </p>}
     {error && <p className={styles.warn} role="alert">{error}</p>}
+    {bulkResult.error && <p className={styles.warn} role="alert">{bulkResult.error}</p>}
     {/* A failed source read leaves the verbs dead; refresh is the way back. */}
     {(store.error || (!target && error)) && <div className={styles.row}>
       <button type="button" disabled={working} onClick={() => void run(async () => {

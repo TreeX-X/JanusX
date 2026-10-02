@@ -359,20 +359,20 @@ class BlueprintMaintenanceService {
     }
   }
 
-  // Note: proposals run inside the shared chat turn - see .agents/notes/2026-09-18-project-conversation-controller--4ffa1606.md
+  // Note: completion returns a file-translatable proposal to the requesting turn — see .agents/notes/2026-09-29-blueprint-maintenance-approval-gap--a1b2c3d4.md
   async proposeForConversation(input: {
     taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
     providerId: string; modelId?: string; signal: AbortSignal; chatSession: ChatSessionRuntime; workspaceIds: string[]
     workspaceRoots: Record<string, string>
     projectContext?: string
     noteRefs?: Array<{ uri: string; expectedHash?: string }>
-  }): Promise<string> {
+  }): Promise<BlueprintMaintenanceTask> {
     const task = await this.authorizeTurn(input)
     if (task.status === 'analyzing' || task.status === 'applying') throw new Error('BUSY: proposal is already active')
     await this.generateProposal(task.id, input.providerId, input.modelId, input)
-    if (input.signal.aborted) return ''
+    if (input.signal.aborted) return publicTask(task)
     if (task.error) throw new Error(task.error)
-    return task.changeSet ? [task.changeSet.reason, task.changeSet.digest].filter(Boolean).join('\n\n') : task.phase
+    return publicTask(task)
   }
 
   /**
@@ -1003,7 +1003,8 @@ class BlueprintMaintenanceService {
         'delete-node is high risk: children must be moved or deleted first and touching relations removed first, all as dependsOn prerequisites in the same proposal.',
         'Every target and parent must be inside the supplied node scope. Relations may reach out-of-scope endpoints only when at least one endpoint is in scope. Use exact existing IDs.',
         'Use temp IDs for newly created nodes/relations and dependsOn when another operation relies on them.',
-        'For update-node, use features when the user asks to add, revise, remove, or organize structured requirement items. Return the complete desired feature list; preserve an existing feature id when revising it and omit id for a new item.',
+        'For Note update-node operations, use after.sections to revise Markdown sections, keyed by the exact heading without ## (for example Expected behavior or Acceptance criteria). Supply the complete replacement body for each changed section, preserving existing AC IDs and unrelated requirements. Do not use features, progress or type: the Note writer cannot apply them.',
+        'The user clicked Organize to request reviewable Note edits. Produce concrete operations from the settled discussion, not a chat reply. If no justified edit is possible, return an empty operations list and explain the specific blocker in summary. Never invent changes merely to fill the list.',
         'Put the workspace file paths that justify each operation into its evidenceRefs. If the user rejected a group (e.g. dismissed vN), do not reintroduce the same change without new justification.',
         'If the conversation contains an explicit group rejection (“第 N 组去掉”), honor it: drop that group and regenerate the rest.',
         'Use only decisions supported by the conversation. Do not turn unresolved brainstorming into operations.',
@@ -1052,6 +1053,7 @@ class BlueprintMaintenanceService {
         arguments: object,
       }, controller.signal)
       const operations = (validated.details as { operations: BlueprintOperation[] }).operations
+      if (!operations.length) throw new Error(`未生成可审核的文件：${object.summary}。请补充需要修改的内容后重新整理。`)
       const now = nowIso()
       const evidence = workspaceContexts.flatMap((item) => item.result.ok ? [item.result.value.manifest] : [])
       // Files cited by any operation become critical evidence; the rest stay
@@ -1070,24 +1072,30 @@ class BlueprintMaintenanceService {
       }))
       const latestVersion = previousChangeSet?.version ?? task.changeSetHistory.at(-1)?.version ?? 0
       const version = latestVersion + 1
+      if (blueprint.source === 'harness') {
+        task.phase = '正在校验待审核文件'; task.progress = 85; this.emit(task)
+        const checkout = await resolveProjectCheckout(harnessNoteService, task.blueprintId, task.workspacePath)
+        if (checkout.rev !== task.baseRevision) throw new Error('HARNESS_CONFLICT: blueprint changed; regenerate and confirm')
+        const prepared = await prepareMaintenanceSelection(harnessNoteService, {
+          root: checkout.root, repoId: checkout.repoId, operations, sourceHashes: sourceHashes(blueprint),
+          taskId, changeSetVersion: version, reason: object.summary,
+        })
+        if (!prepared.files.some(file => file.before !== file.after)) throw new Error(`未生成文件差异：${object.summary}`)
+      }
+      if (controller.signal.aborted || this.controllers.get(taskId) !== controller) return
       const groups = groupMaintenanceOperations(operations, blueprint)
       const digest = buildGroupDigest(groups, version)
-      const nextChangeSet: BlueprintChangeSet | null = operations.length ? {
+      const nextChangeSet: BlueprintChangeSet = {
         id: randomUUID(), taskId, blueprintId: task.blueprintId, baseRevision: task.baseRevision, version,
         status: 'ready' as const, reason: object.summary, evidence, operations, groups, digest, createdAt: now,
         sourceHashes: blueprint.source === 'harness' ? sourceHashes(blueprint) : undefined,
-      } : null
-      if (nextChangeSet) {
-        if (previousChangeSet) task.changeSetHistory.push(structuredClone(previousChangeSet))
-        task.changeSet = nextChangeSet
       }
-      if (nextChangeSet) {
-        this.captureKnowledge(task, 'maintenance-proposal', `提案 v${version}：${object.summary}\n${digest.slice(0, 2000)}`, `维护提案 v${version}：${blueprint.name}`)
-      }
-      task.status = task.changeSet ? 'proposal-ready' : 'active'
+      if (previousChangeSet) task.changeSetHistory.push(structuredClone(previousChangeSet))
+      task.changeSet = nextChangeSet
+      this.captureKnowledge(task, 'maintenance-proposal', `提案 v${version}：${object.summary}\n${digest.slice(0, 2000)}`, `维护提案 v${version}：${blueprint.name}`)
+      task.status = 'proposal-ready'
       task.progress = 100
-      task.phase = nextChangeSet ? (context.omitted.length ? '等待审批（已省略超预算辅助证据）' : '等待审批')
-        : previousChangeSet ? '未生成新变更，保留当前提案' : '未发现需要变更的内容'
+      task.phase = context.omitted.length ? '等待审批（已省略超预算辅助证据）' : '等待审批'
       this.emit(task)
     } catch (error) {
       if (controller.signal.aborted) return

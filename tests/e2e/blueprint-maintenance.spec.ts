@@ -328,7 +328,7 @@ test('empty and cancelled generations preserve discussion and allow organizing a
   await discuss(page)
   await page.evaluate(() => { (window as any).projectFixture.maintenance.proposalOutcome = 'empty' })
   await organize(page).click()
-  await expect(bar(page)).toContainText('No changes needed')
+  await expect(panel(page).locator('.janus-chat-error-card')).toContainText('No reviewable file')
   await expect(approveAll(page)).toHaveCount(0)
   await expect(panel(page)).toContainText('Clarify the Note title')
   await page.evaluate(() => {
@@ -358,4 +358,54 @@ test('switching workspace with a closed panel cancels its pending proposal', asy
   await expect(panel(page).locator('textarea')).toBeVisible()
   await expect(approveAll(page)).toHaveCount(0)
   await expect(panel(page)).not.toContainText('Clarify the Note title')
+})
+
+test('request result opens the review even if maintenance broadcasts are lost', async ({ page }) => {
+  await discuss(page)
+  await page.evaluate(() => { (window as any).projectFixture.maintenance.dropTaskEvents = true })
+  await propose(page)
+  await expect(bar(page)).toContainText('# Reviewed rename')
+  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(0)
+  await approveAll(page).click()
+  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(1)
+})
+
+test('an invalid approval dependency shows an error instead of hiding the result silently', async ({ page }) => {
+  await discuss(page)
+  await propose(page)
+  await page.evaluate(() => {
+    const m = (window as any).projectFixture.maintenance
+    m.tasks[0].changeSet.operations[0].dependsOn = ['missing-operation']
+    m.replaceProposal()
+  })
+  await expect(bar(page).getByRole('alert')).toContainText('Missing operation dependency')
+  await expect(approveAll(page)).toHaveCount(0)
+  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(0)
+})
+
+test('a proposal taking longer than one minute stays active and then opens the document', async ({ page }) => {
+  await discuss(page)
+  await page.clock.install()
+  await page.evaluate(() => { (window as any).projectFixture.maintenance.gateProposal = true })
+  await organize(page).click()
+  await page.clock.fastForward(61_000)
+  await expect(bar(page)).toContainText('Organizing…')
+  await expect(approveAll(page)).toHaveCount(0)
+  await page.evaluate(() => (window as any).projectFixture.maintenance.finishProposal())
+  await expect(approveAll(page)).toBeEnabled()
+  await expect(bar(page)).toContainText('# Reviewed rename')
+})
+
+test('a completion without a review result remains a visible retriable error', async ({ page }) => {
+  await discuss(page)
+  await page.evaluate(() => {
+    const m = (window as any).projectFixture.maintenance
+    m.dropTaskEvents = true; m.dropResult = true
+  })
+  await organize(page).click()
+  await expect(panel(page).locator('.janus-chat-error-card')).toContainText('未收到可审核文件')
+  await expect(approveAll(page)).toHaveCount(0)
+  await page.evaluate(() => { (window as any).projectFixture.maintenance.dropResult = false })
+  await panel(page).locator('.janus-chat-error-card .janus-chat-retry').click()
+  await expect(approveAll(page)).toBeEnabled()
 })

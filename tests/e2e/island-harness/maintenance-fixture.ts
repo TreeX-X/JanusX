@@ -22,6 +22,7 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
     gateStart: false, finishStart: null as (() => void) | null,
     failList: false,
     longPreview: false,
+    dropTaskEvents: false, dropResult: false,
     proposalOutcome: 'ready' as 'ready' | 'empty' | 'failed',
     gateProposal: false, finishProposal: null as (() => void) | null,
     beginProposal(taskId: string) {
@@ -38,9 +39,9 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
       const task = state.tasks.find(item => item.id === taskId)!
       if (task.status !== 'analyzing') return
       if (state.proposalOutcome !== 'ready') {
-        task.status = state.proposalOutcome === 'failed' ? 'failed' : 'active'
+        task.status = 'failed'
         task.phase = state.proposalOutcome === 'failed' ? 'Proposal generation failed' : 'No changes needed'
-        task.error = state.proposalOutcome === 'failed' ? 'Fixture proposal unavailable' : undefined
+        task.error = state.proposalOutcome === 'failed' ? 'Fixture proposal unavailable' : 'No reviewable file: no justified changes'
         publish(task)
         return
       }
@@ -54,7 +55,7 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
     },
     graph: () => structuredClone(graph),
   }
-  const publish = (task: BlueprintMaintenanceTask) => listeners.forEach(listener => listener({ task: structuredClone(task) }))
+  const publish = (task: BlueprintMaintenanceTask) => { if (!state.dropTaskEvents) listeners.forEach(listener => listener({ task: structuredClone(task) })) }
   const proposal = (taskId: string): BlueprintChangeSet => ({
     id: 'proposal-1', taskId, blueprintId: graph.id, baseRevision: 1, version: 1, status: 'ready', createdAt: '2026-09-25T00:00:00Z', reason: 'Update selected note and clean obsolete nodes',
     sourceHashes: { [nodeId]: graph.nodes[nodeId].sourceHash! },

@@ -32,6 +32,7 @@ interface BlueprintMaintenanceStore {
   initialized: boolean
   error: string | null
   initialize: () => Promise<void>
+  receiveTask: (task: BlueprintMaintenanceTask) => void
   loadAudits: (blueprintId: string, taskId?: string) => Promise<void>
   requestOpen: (request: Exclude<MaintenanceOpenRequest, null>) => void
   clearOpenRequest: () => void
@@ -62,6 +63,7 @@ async function refreshComposedView(): Promise<void> {
 export const useBlueprintMaintenanceStore = create<BlueprintMaintenanceStore>((set, get) => ({
   tasks: [], audits: {}, pendingUndo: null, openRequest: null, contextSelection: null, initialized: false, error: null,
   selectContext: (contextSelection) => set({ contextSelection }),
+  receiveTask: (task) => set(state => ({ tasks: upsert(state.tasks, task) })),
   initialize: async () => {
     const request = ++initializeRequest
     const initialTasks = get().tasks

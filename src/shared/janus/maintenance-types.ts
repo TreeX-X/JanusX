@@ -84,7 +84,7 @@ export interface BlueprintUpdateNodeOperation extends BlueprintOperationBase {
   before: Partial<BlueprintNode>
   after: Partial<Pick<BlueprintNode,
     'title' | 'type' | 'status' | 'progress' | 'positioning' | 'description' |
-    'techSolution' | 'notes' | 'tags'>> & { features?: BlueprintProposedFeature[] }
+    'techSolution' | 'notes' | 'tags'>> & { features?: BlueprintProposedFeature[]; sections?: Record<string, string> }
 }
 
 export interface BlueprintMoveNodeOperation extends BlueprintOperationBase {

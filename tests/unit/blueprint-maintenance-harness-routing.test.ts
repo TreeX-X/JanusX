@@ -240,8 +240,8 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
     await expect(blueprintMaintenanceService.proposeForConversation({ ...input, workspaceRoots: { 'ws-1': recordsDir } })).rejects.toThrow('root does not match')
     mocks.getLanguageModel.mockResolvedValue({})
     mocks.generateObject.mockResolvedValue({ object: { summary: 'Shared proposal', operations: [updateOp('shared-op', REQ, 'Revised requirement')] } })
-    const text = await blueprintMaintenanceService.proposeForConversation(input)
-    expect(text).toContain('Shared proposal')
+    const result = await blueprintMaintenanceService.proposeForConversation(input)
+    expect(result.changeSet?.reason).toBe('Shared proposal')
     expect(serviceOf().tasks.get(task.id)?.changeSet?.operations[0]).toMatchObject({ after: { title: 'Revised requirement' } })
     expect(mocks.generateObject.mock.calls.at(-1)?.[0].messages[0].content).toContain('Preserve the exact selected scope')
     expect(serviceOf().tasks.get(task.id)?.messages).toEqual([])
@@ -587,6 +587,32 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
         workspaceIds: ['ws-1'], workspaceRoots: { 'ws-1': checkoutDir } })
       return serviceOf().tasks.get(task.id)!
     }
+
+    it('returns an explicit failure for empty output and for fields the Note writer cannot apply', async () => {
+      await expect(propose([])).rejects.toThrow('未生成可审核的文件：Real proposal')
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(REQUIREMENT_MD)
+      for (const task of serviceOf().tasks.values()) await blueprintMaintenanceService.cancel(task.id)
+      const op = updateOp('bad', REQ, 'New title')
+      if (op.type === 'update-node') op.after.features = [{ title: 'Unsupported', description: '', status: 'planned', progress: 0, requirementNotes: [] }]
+      await expect(propose([op])).rejects.toThrow('HARNESS_MANAGED')
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(REQUIREMENT_MD)
+      expect(blueprintMaintenanceService.list().some(task => task.status === 'proposal-ready')).toBe(false)
+    })
+
+    it('produces reviewable Acceptance criteria section edits and only writes the approved document', async () => {
+      const op = updateOp('section', REQ, 'Requirement one')
+      const ac = '- [ ] AC-1: Keep the full source and review before writing.\n'
+      if (op.type === 'update-node') op.after = { sections: { 'Acceptance criteria': ac } }
+      const task = await propose([op])
+      const input = { taskId: task.id, changeSetId: task.changeSet!.id, operationIds: ['section'],
+        conversationId: 'real-conversation', workspaceId: 'ws-1', workspacePath: checkoutDir }
+      const preview = await blueprintMaintenanceService.preview(input)
+      expect(preview.files[0].after).toContain(ac.trim())
+      expect(preview.files[0].after).toContain('The widget fails.')
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(REQUIREMENT_MD)
+      await blueprintMaintenanceService.apply({ ...input, previewId: preview.id })
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(preview.files[0].after)
+    })
 
     it('revises after discussion then applies two reviewed rounds against fresh Note bytes', async () => {
       const task = await propose([updateOp('first', REQ, 'First draft')])

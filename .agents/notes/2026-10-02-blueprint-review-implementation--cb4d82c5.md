@@ -13,7 +13,7 @@ relations:
 work:
   scope:
     - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
-      paths: [src/main/janus/maintenance/, src/main/llm/chat-orchestrator.ts, src/renderer/src/components/blueprint/, src/renderer/src/components/janus/, src/renderer/src/i18n/, tests/e2e/, tests/unit/blueprint-maintenance-harness-routing.test.ts, tests/unit/blueprint-proposal-context.test.ts, .agents/notes/]
+      paths: [src/main/janus/maintenance/, src/main/llm/chat-orchestrator.ts, src/main/harness/maintenance-bridge.ts, src/shared/ipc/llm.ts, src/shared/janus/maintenance-types.ts, src/renderer/src/stores/blueprint-maintenance.ts, src/renderer/src/components/blueprint/, src/renderer/src/components/janus/, src/renderer/src/i18n/, tests/e2e/, tests/unit/llm/chat-turn-guard.test.ts, tests/unit/blueprint-maintenance-harness-routing.test.ts, tests/unit/blueprint-proposal-context.test.ts, .agents/notes/]
   acceptanceRefs:
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/9c426f18-8b3e-49d7-96d1-36acbe174802
       criterionId: AC-1
@@ -53,13 +53,21 @@ work:
 
 ## Acceptance criteria
 
-验收引用为 work.acceptanceRefs 中的 AC-1 至 AC-8。初始实现冻结的需求文件原始字节 SHA-256 为 d657cd997c47f0b6241566c2da4e66f07d6f089faa358876269122f1e989ae2d；预算修复扩展 AC-8，AC-1 至 AC-7 的编号及含义保持不变。
+验收引用为 work.acceptanceRefs 中的 AC-1 至 AC-8。2026-10-02 整理交付契约明确 AC-2 的请求内结果与缺失错误处理，需求文件原始字节 SHA-256 为 388841a6acd53cf402c1722f98e64367fc53d8219153063214349bc1019830cf；AC 编号保持稳定。
 
 ## Alternatives considered
 
 直接保留聊天结果能减少修改，但不能交付突出的审核文档。独立聊天引擎会复制流式、模型和错误处理；实现复用控制器传输，并将审核显示状态与讨论历史分开。具体交互取舍由上述两篇决策持有。
 
 ## Verification
+
+2026-10-02 整理结果交付：6 文件 87 项单元测试通过，命令为 `npx vitest run tests/unit/blueprint-maintenance-harness-routing.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/blueprint-maintenance-changeset.test.ts tests/unit/maintenance-bridge.test.ts tests/unit/maintenance-harness-apply.test.ts tests/unit/blueprint-maintenance-service.test.ts`。覆盖请求结果先于结束事件、空结果携带原因、不可写字段提前拒绝，以及真实临时 Note 的 Acceptance criteria 修改、预览零写入与批准后字节一致。严格类型检查、8 个变更源码文件 ESLint 通过。
+
+故障分析确认传输缺少请求内提案交付凭据、空结果解释被丢弃、features 生成要求与 Note 写入层冲突。未取得用户那次模型响应，不能断言其实际返回空列表；测试通过故障注入验证上述缺陷，不代表真实供应商已复现。
+
+浏览器 `blueprint-maintenance.spec.ts` 首轮 20 项通过，新增的等待 61 秒和审核依赖异常两项分别单独通过，累计 22 项。测试覆盖独立广播丢失仍展示文件、结束事件缺少结果时显示错误并重试成功、超过一分钟仍等待并最终展示、依赖解析异常可见，以及持续讨论和两轮审批。IPC 与模型采用替身，文件写入真实性由上述临时 Note 集成用例验证。
+
+最终严格类型检查、生产构建、9 个变更源码的 ESLint 与差异空白检查通过。Note 检查遍历 221 文件，仅 dsh-integration.md 的 6 项既有错误，未将全库检查记为通过。
 
 2026-10-02 未知窗口检查：下列五文件命令共 71 项通过。proposal-context 按反馈的 143、2354、2、91、8917 tokens 和 4096 格式预留复现未知 Gemini 别名输入，检查完整内容获准、已知 16K 仍拒绝、未知模型应用上限准确标识。harness-routing 使用约 9K 中文原文、2.3K 对话及 240KB 辅助证据，经真实预算器、临时 Note 预览和批准写入，断言正文完整保留；模型生成仍为替身。真实供应商容量和生成质量未验证。本次未重跑浏览器测试，已有浏览器证据见下文。
 
