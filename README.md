@@ -25,6 +25,8 @@
 
 [下载安装](https://treex-x.github.io/JanusX/) · [版本发布](https://github.com/TreeX-X/JanusX/releases) · [使用与架构文档](wiki/README.md) · [反馈问题](https://github.com/TreeX-X/JanusX/issues)
 
+> Public preview Oct 8 (not v1.0 stable) · 10.8 公开预览版（非正式版）
+
 </div>
 
 ---
