@@ -18,6 +18,11 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "node scripts/patch-agent-note-tools.mjs",
+    "predev": "node scripts/patch-agent-note-tools.mjs",
+    "prebuild": "node scripts/patch-agent-note-tools.mjs",
+    "prebuild:check": "node scripts/patch-agent-note-tools.mjs",
+    "pretest:unit": "node scripts/patch-agent-note-tools.mjs",
     "dev": "npm run build:llm-core && electron-vite dev --outDir .cache --entry scripts/dev-entry.mjs",
     "build": "npm run build:llm-core && electron-vite build",
     "build:check": "npm run build:llm-core && electron-vite build --outDir artifacts/build-check",

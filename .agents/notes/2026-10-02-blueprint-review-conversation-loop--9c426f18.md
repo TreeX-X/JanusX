@@ -28,6 +28,8 @@ tags: [blueprint, janus-chat, maintenance, approval, ux]
 
 ## Scope
 
+后续产品方向见[蓝图连续对话与直接编辑的三阶段交付](./2026-10-02-blueprint-conversation-development--3efc89cf.md)。该需求将分阶段接入直接读写、自动聚焦与多 Note 范围、派发实施和圆桌；本篇保留原审核链路的验收记录，不代表后续设计已实现。
+
 “待编辑审核文档”在本需求中明确指待应用的 Note 修改稿。是否允许用户在审核区直接手工编辑正文尚未确认，不作为已确认范围；当前明确支持通过继续对话提出修改意见，再次整理生成新稿。
 
 ## Alternatives considered

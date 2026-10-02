@@ -269,6 +269,14 @@
     "acceptFailed": "Accept failed: candidate not found or target parent invalid",
     "rejectFailed": "Reject failed: candidate not found"
   },
+  "noteChat": {
+    "hint": "Tell Janus what to read or change. Saved Note changes appear on the blueprint.",
+    "applied": "Updated {{count}} Notes",
+    "reverted": "Change reverted",
+    "viewChanges": "View changes",
+    "fullText": "View full text",
+    "undoConflict": "Notes have changed since this edit. Ask Janus to read the latest content before adjusting it."
+  },
   "maintenance": {
     "consoleAria": "Janus Copilot Console",
     "engineLabel": "JANUS // BLUEPRINT ENGINE",

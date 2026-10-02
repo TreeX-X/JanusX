@@ -1,0 +1,105 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
+import { afterEach, describe, expect, it } from 'vitest'
+import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
+import { createToolManifests, createWorkspaceChatTools } from '@janus-agent/agent-core'
+import { NoteChatEditor, NOTE_CHAT_TOOLS, hasNoteMutationIntent, listNoteChatChanges } from '../../src/main/harness/note-chat'
+import { HarnessNoteService } from '../../src/main/harness/service'
+import { applyUndo } from '../../src/main/harness/undo'
+import { runChatTurn, type ChatTurnPorts } from '@janus-agent/janus-agent'
+import { attachNoteChatTools } from '../../src/main/harness/note-chat'
+
+const roots: string[] = []
+afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), 'note-chat-'))
+  roots.push(root)
+  await mkdir(join(root, '.agents', 'notes'), { recursive: true })
+  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: '8fa19f17-c717-43a8-93a7-810a5e0cbc91', name: 'Test', profile: SUPPORTED_HARNESS_PROFILE }))
+  const service = new HarnessNoteService()
+  const editor = new NoteChatEditor(service)
+  const signal = new AbortController().signal
+  const input = { reason: 'Record decisions', operations: ['First', 'Second'].map(title => ({ type: 'create', kind: 'idea', title, sections: { 'Idea': 'A concrete idea.' } })) }
+  return { root, service, editor, signal, input }
+}
+
+describe('direct Note conversation', () => {
+  it('runs a model Note call through the facade, host session and real transaction', async () => {
+    const { root, signal, input, editor } = await fixture()
+    let turns = 0
+    const changes: unknown[] = []
+    const ports: ChatTurnPorts = {
+      model: { resolve: async () => ({ model: {}, modelId: 'fixture' }), getMaxTurns: async () => 3 },
+      sessions: { getSession: () => ({ sessionId: 'session', workspaceId: 'ws', workspaceRoot: root, status: 'running' }) },
+      tools: { registry: { list: () => [] }, executeFunctionCall: async () => { throw new Error('Unexpected generic tool') } },
+      streamTextFn: async options => {
+        expect(Object.keys(options.tools as object)).toContain('note_write')
+        const first = turns++ === 0
+        return { textStream: (async function* () { if (!first) yield 'Recorded.' })(), toolCalls: Promise.resolve(first ? [{ toolCallId: 'write-1', toolName: 'note_write', args: input }] : []) }
+      },
+    }
+    attachNoteChatTools(ports, { conversationId: 'chat', userText: 'Create two Notes', signal, resources: [{ agentSessionId: 'session', workspaceId: 'ws', workspacePath: root }], onChange: change => changes.push(change) })
+    await runChatTurn({ sourceTag: 'maintenance', requestId: 'request', conversationId: 'chat', providerId: 'fixture', messages: [{ role: 'user', content: 'Create two Notes' }], workspaceResources: [{ agentSessionId: 'session', workspaceId: 'ws', workspacePath: root, workspaceName: 'Test' }], toolAllowlist: ['note_list', 'note_read', 'note_write'] }, ports, {}, signal)
+    expect(changes).toHaveLength(1)
+    expect((await editor.list(root, '')).notes).toHaveLength(2)
+  })
+  it.each(['先分析讨论如何修改', '不要修改，解释一下', 'Analyze how to update the notes', 'do not edit', '不要更新 note', 'Do not create a Note', '不修改，只阅读'])('keeps discussion read-only: %s', text => {
+    expect(hasNoteMutationIntent(text)).toBe(false)
+  })
+  it.each(['请直接修改这两个 note', '记录到note中', 'Update the Note', '创建一个需求 Note'])('permits explicit instructions: %s', text => {
+    expect(hasNoteMutationIntent(text)).toBe(true)
+  })
+  it('offers nested Note schemas through the actual installed model adapter', () => {
+    const tools = createWorkspaceChatTools({ runtime: { executeFunctionCall: async () => { throw new Error('unused') } }, resources: new Map(), callerId: 'test', toolManifests: createToolManifests(NOTE_CHAT_TOOLS) }) as Record<string, { parameters: { parse(value: unknown): unknown } }>
+    expect(Object.keys(tools)).toEqual(expect.arrayContaining(['note_list', 'note_read', 'note_write']))
+    expect(tools.note_write.parameters.parse({ reason: 'test', operations: [{ type: 'create', kind: 'idea', sections: { Idea: 'Text' } }] })).toMatchObject({ operations: [{ sections: { Idea: 'Text' } }] })
+  })
+  it('creates multiple Notes once, discovers them, updates real bytes and restores them on undo', async () => {
+    const { root, editor, service, signal, input } = await fixture()
+    const created = await editor.write(root, 'chat', 'create', input, true, signal)
+    expect(created?.files).toHaveLength(2)
+    expect(await editor.write(root, 'chat', 'create', input, true, signal)).toEqual(created)
+    expect((await editor.list(root, '')).notes).toHaveLength(2)
+    const uri = created!.files[0].uri
+    const read = await editor.read(root, uri)
+    const changed = await editor.write(root, 'chat', 'update', { reason: 'Refine idea', operations: [{ type: 'update', uri, expectedHash: read.expectedHash, sections: { Idea: 'Refined idea.' } }] }, true, signal)
+    expect((await service.readNote(root, uri)).raw).toContain('Refined idea.')
+    expect(await listNoteChatChanges(root, 'chat')).toHaveLength(2)
+    expect((await applyUndo(root, changed!.txId)).errors).toEqual([])
+    expect((await service.readNote(root, uri)).raw).toBe(read.markdown)
+    expect((await listNoteChatChanges(root, 'chat')).find(row => row.id === changed!.id)?.reverted).toBe(true)
+  })
+  it('refuses unauthorized, unread, stale and cancelled writes without partial application', async () => {
+    const { root, editor, service, signal, input } = await fixture()
+    await expect(editor.write(root, 'chat', 'denied', input, false, signal)).rejects.toThrow('discussion')
+    const created = await editor.write(root, 'chat', 'create', input, true, signal)
+    const uri = created!.files[0].uri
+    const original = await service.readNote(root, uri)
+    const operation = { type: 'update', uri, expectedHash: original.sha256, title: 'Changed' }
+    await expect(editor.write(root, 'chat', 'unread', { reason: 'edit', operations: [operation] }, true, signal)).rejects.toThrow('Read the Note')
+    await editor.read(root, uri)
+    await writeFile(join(root, original.relPath), original.raw + '\nExternal change\n')
+    await expect(editor.write(root, 'chat', 'stale', { reason: 'edit', operations: [input.operations[0], operation] }, true, signal)).rejects.toThrow('CONFLICT')
+    expect((await editor.list(root, '')).notes).toHaveLength(2)
+    expect(await readFile(join(root, original.relPath), 'utf8')).toContain('External change')
+    const cancelled = new AbortController(); cancelled.abort()
+    await expect(editor.write(root, 'chat', 'cancelled', input, true, cancelled.signal)).rejects.toThrow('cancelled')
+  })
+  it('recovers receipts from the journal when the completion reference was lost', async () => {
+    const { root, editor, signal, input } = await fixture()
+    const change = (await editor.write(root, 'chat', 'create', input, true, signal))!
+    const file = join(root, '.agents', '.local', 'note-chat', createHash('sha256').update('chat').digest('hex'), change.id + '.json')
+    const record = JSON.parse(await readFile(file, 'utf8')); delete record.txId
+    await writeFile(file, JSON.stringify(record))
+    expect((await listNoteChatChanges(root, 'chat'))[0].txId).toBe(change.txId)
+    expect(await listNoteChatChanges(root, 'other-chat')).toEqual([])
+  })
+  it('rejects forged metadata and invalid Note structure before creating files', async () => {
+    const { root, editor, signal, input } = await fixture()
+    await expect(editor.write(root, 'chat', 'metadata', { ...input, operations: [{ ...input.operations[0], execution: { state: 'done' } }] }, true, signal)).rejects.toThrow()
+    await expect(editor.write(root, 'chat', 'heading', { ...input, operations: [{ ...input.operations[0], sections: { Idea: '# Forged second title' } }] }, true, signal)).rejects.toBeTruthy()
+    expect((await editor.list(root, '')).notes).toHaveLength(0)
+  })
+})

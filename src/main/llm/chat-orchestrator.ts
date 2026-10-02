@@ -454,7 +454,15 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         return session.workspace.workspaceRoot
       })
       const { projectChatContext } = await import('../harness/chat-context')
-      projectContext = await projectChatContext(roots, request.noteRefs ?? [])
+      projectContext = await projectChatContext(roots, request.noteRefs ?? [], !request.maintenanceTaskId)
+      if (conversationId && !request.maintenanceTaskId) {
+        const { attachNoteChatTools } = await import('../harness/note-chat')
+        attachNoteChatTools(ports, {
+          conversationId, signal: controller.signal, resources: workspaceResources ?? [],
+          userText: [...messages].reverse().find(message => message.role === 'user')?.content ?? '',
+          onChange: change => sendAgentEvent({ type: 'note_change', requestId, change }),
+        })
+      }
       if (!roots.length) ports.knowledgeCapture = undefined
     }
 
@@ -497,7 +505,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         steeringPort,
         ...(projectContext ? {
           systemPromptPrefix: projectContext,
-          toolAllowlist: ['workspace_list', 'workspace_search', 'workspace_read', 'project_detect', 'project_list_processes', 'project_process_output', 'git_status', 'git_log', 'git_diff', 'ask_user', 'todo_write'],
+          toolAllowlist: ['note_list', 'note_read', 'note_write', 'workspace_list', 'workspace_search', 'workspace_read', 'project_detect', 'project_list_processes', 'project_process_output', 'git_status', 'git_log', 'git_diff', 'ask_user', 'todo_write'],
         } : {}),
       },
       ports,

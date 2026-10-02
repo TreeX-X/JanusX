@@ -283,6 +283,7 @@ const harnessAPI: HarnessAPI = {
   runReview: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runReview, cwd, input),
   runFinish: (cwd, runId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runFinish, cwd, runId),
   runRepair: (cwd, input) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.runRepair, cwd, input),
+  noteChatChanges: (cwd, conversationId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.noteChatChanges, cwd, conversationId),
   undoPreview: (cwd, txId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.undoPreview, cwd, txId),
   undoApply: (cwd, txId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.undoApply, cwd, txId),
   migratePreview: (cwd, blueprintId) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.migratePreview, cwd, blueprintId),

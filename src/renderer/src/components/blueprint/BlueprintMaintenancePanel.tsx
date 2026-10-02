@@ -14,7 +14,8 @@ import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { EMPTY_FOCUS, resolveBlueprintContextScope } from '@/features/blueprint/blueprint-focus'
 import { useOptionalBlueprintToolbar } from './BlueprintToolbar'
-import { BlueprintActionBar } from './BlueprintActionBar'
+import { NoteChatActivity } from './NoteChatActivity'
+import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 
 /** Stable identity of the single blueprint-panel conversation. */
 export const BLUEPRINT_PANEL_VIEW_REF = { ownerRepoId: 'blueprint', viewId: 'workspace-dialog' } as const
@@ -47,7 +48,6 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const selection = useBlueprintMaintenanceStore(state => state.contextSelection)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [switchNotice, setSwitchNotice] = useState<string | null>(null)
-  const [reviewOpen, setReviewOpen] = useState(false)
   const bindingKey = useRef('')
   const configuredKey = useRef('')
   const previousRevision = useRef<number | null>(null)
@@ -72,7 +72,8 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   // A composition member whose Note lives in another checkout cannot be injected
   // here: main authorizes refs only against attached workspace roots.
   const foreignCount = contextScope?.foreignNodeIds.length ?? 0
-  const sourceUnavailable = !!contextScope && contextScope.noteRefs.length === 0 && foreignCount > 0
+  const foreignWorkspace = contextScope?.foreignCheckoutPath
+    ? workspaces.find(item => sameCheckoutPath(item.path, contextScope.foreignCheckoutPath!)) : undefined
 
   const context = useMemo<EngineeringContext>(() => ({
     domain: 'project', intent: 'discuss', scope: contextScope?.scope ?? 'view',
@@ -136,17 +137,19 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
-        messagesHidden={reviewOpen}
+        discussionFooter={<NoteChatActivity conversationId={chat.conversationId} workspacePath={activeWorkspace.path} />}
         pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
         modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
         resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}
         onSelectModel={chat.selectModel} onSend={text => { setSwitchNotice(null); chat.send(text) }} onRewrite={chat.rewrite}
-        aboveComposer={blueprint && contextScope && <BlueprintActionBar key={`${activeWorkspace.id}|${blueprint.id}|${contextScope.maintenanceScope.type}`}
-          chat={chat} blueprint={blueprint} workspace={activeWorkspace} ownerPath={ownerPath}
-          onReviewOpenChange={setReviewOpen}
-          nodeScope={contextScope.maintenanceScope} noteCount={contextScope.noteRefs.length}
-          sourceUnavailable={sourceUnavailable} switchPath={contextScope.foreignCheckoutPath}
-          foreignCount={foreignCount} droppedCount={contextScope.droppedNodeIds.length} />}
+        aboveComposer={<div className="bp-maintenance-policy-hint">
+          <p>{t('blueprint:noteChat.hint')}</p>
+          {foreignCount > 0 && <p role="status">{t('blueprint:maintenance.scopeForeign', { count: foreignCount })}
+            {foreignWorkspace && <button type="button" onClick={() => useWorkspaceStore.getState().setActiveWorkspace(foreignWorkspace.id)}>
+              {t('blueprint:maintenance.switchToSource', { name: foreignWorkspace.name })}
+            </button>}
+          </p>}
+        </div>}
         onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} minimalComposer />
     </div> : <p className="bp-maintenance-connecting" role="status">{t('blueprint:toolbar.loading')}</p>}
   </PanelFrame>

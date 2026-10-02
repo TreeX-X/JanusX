@@ -66,6 +66,8 @@ useBlueprintStore.setState({ currentBlueprint: blueprint as never, blueprintWork
 const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
 const fixture = {
+  noteChanges: [] as import('../../../src/shared/note-chat').NoteChatChange[],
+  undoConflict: false,
   runtimeSessions: [] as CreateAgentSessionInput[],
   streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0,
   prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0, reviews: 0, finishes: 0, repairs: 0, undoPreviews: 0, undoApplies: 0,
@@ -136,6 +138,7 @@ Object.assign(window.electron.llm, {
 })
 let draft: HarnessTaskDraft = { uri, hash: 'a'.repeat(64), lifecycle: 'draft', repoId, hasExecution: false, contract: { scope: 'Implement the value.', criteria: [{ id: 'AC-1', text: 'TBD' }], work: { scope: [{ repoId, paths: [] }], acceptanceRefs: [], verification: [] } } }
 Object.assign(window.electron.harness, {
+  noteChatChanges: async () => structuredClone(fixture.noteChanges),
   taskRead: async () => draft,
   taskAdopt: async (_cwd: string, _uri: string, _hash: string, contract: HarnessTaskDraft['contract']) => {
     fixture.adoptions++
@@ -232,10 +235,12 @@ Object.assign(window.electron.harness, {
   },
   undoPreview: async () => {
     fixture.undoPreviews++
+    if (fixture.undoConflict) return { reversible: false, files: [] }
     return { txId: 'tx-1', changeSetId: 'cs-1', revision: 1, files: [{ operationId: 'op-1', relPath: '.agents/notes/a.md', status: 'reversible', beforeHash: 'b', afterHash: 'a' }], reversible: true }
   },
   undoApply: async () => {
     fixture.undoApplies++
+    fixture.noteChanges.forEach(change => { change.reverted = true })
     return { txId: 'tx-2', reverted: ['.agents/notes/a.md'] }
   },
   runThreads: async () => fixture.runs.map((run) => {

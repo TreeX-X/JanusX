@@ -92,6 +92,7 @@ export interface ChatAnswerQuestionPayload {
  * Note: alignment trade-offs live with the contract — see .agents/notes/2026-09-12-janus-agent-chat-alignment--6813a52b.md
  */
 export type ChatAgentEvent =
+  | { type: 'note_change'; requestId: string; change: import('../note-chat').NoteChatChange }
   | { type: 'maintenance_result'; requestId: string; task: BlueprintMaintenanceTask }
   | { type: 'agent_start'; requestId: string }
   | { type: 'text_delta'; requestId: string; delta: string }

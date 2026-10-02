@@ -269,6 +269,14 @@
     "acceptFailed": "接受失败：候选需求不存在或目标父节点无效",
     "rejectFailed": "拒绝失败：候选需求不存在"
   },
+  "noteChat": {
+    "hint": "直接告诉 Janus 要读取或修改哪些内容；修改后会同步到蓝图。",
+    "applied": "已更新 {{count}} 篇 Note",
+    "reverted": "已撤销此次修改",
+    "viewChanges": "查看修改",
+    "fullText": "查看完整正文",
+    "undoConflict": "Note 已有后续修改，无法直接撤销；请让 Janus 读取最新内容后调整。"
+  },
   "maintenance": {
     "consoleAria": "Janus Copilot 控制台",
     "engineLabel": "JANUS // 蓝图引擎",

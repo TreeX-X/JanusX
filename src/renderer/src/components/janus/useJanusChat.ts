@@ -11,6 +11,7 @@ import {
 } from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
+import { useNoteChatStore } from '@/stores/note-chat'
 import type { Workspace } from '@/types'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, type ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
@@ -720,6 +721,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             }))
           },
           onAgentEvent: (agentEvent) => {
+            if (agentEvent.type === 'note_change') {
+              if (agentEvent.change.conversationId === id) useNoteChatStore.getState().receive(agentEvent.change)
+              return
+            }
             if (handles.generation === generation) {
               if (agentEvent.type === 'maintenance_result' && agentEvent.task.id === maintenanceTaskId
                 && agentEvent.task.conversationId === id && agentEvent.task.status === 'proposal-ready'
