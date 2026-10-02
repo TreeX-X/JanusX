@@ -60,6 +60,8 @@ Janus 应能够按主题、正文和关系查找 Note，使用稳定 Note URI �
 
 第二阶段的 `note_scope` 设置当前关注范围，`note_focus` 仅展示指定 Note。宿主逐篇解析完整 URI、当前会话工作区和真实正文；一项无法解析即拒绝整次展示请求。`note_list` 的 `relatedTo` 返回原有关系和 Markdown 引用及其方向、类型与解析状态，不将引用推断为实施依赖。范围最多 32 篇，每篇包含目标、参考或依赖角色以及选入原因；这些角色不授权编辑或执行。用户固定的条目保持角色和理由，移除的条目不会被后续助手范围重新加入，直到用户重置范围。当前范围和排除项随下一轮对话传给模型，正文仍须从真实 Note 读取。
 
+读取或更新成功后，宿主直接发送当前请求已访问 Note 的展示事件，不依赖模型额外调用定位工具。读取标为参考，实际修改标为目标；最多展示同一工作区的 32 篇，普通访问不移动视野、不改变工作范围。模型显式调用 `note_scope` 或 `note_focus` 后，本请求的普通访问不覆盖其展示；用户固定与移除优先于自动访问高亮。仅靠提示词要求模型主动定位的方式无法保证高亮出现，因此保留专用工具用于语义范围，并由宿主保证实际访问可见。
+
 右侧没有常驻的“直接告诉 Janus”说明；范围为空时不显示范围卡，有范围时显示可展开的“当前关注”，提供定位、固定、移除与重置。画布用实线、虚线和点线区分目标、参考和依赖，并强调所选范围内原有连线。助手高亮独立于鼠标选择与左侧详情。进入新主要目标可自动适应共同视野，相同目标的后续范围更新和普通读取不移动视野；用户拖动、滚轮操作或详情编辑期间跳过自动移动，不排队补跳。显式定位可展开目标的祖先和放开孤立节点折叠，保留其他折叠状态。
 
 历史定位仅恢复当时的高亮，不改写当前范围。无投影、重名身份或不属于当前工作区的节点保留不可用提示；不能按标题替代。范围和最近 100 条定位记录属于当前进程会话，清空对话或切换项目时清理，应用重启不恢复；这避免维护第二套持久 Note 索引。用户可在定位被跳过后主动点击定位。后续若需要跨重启的工作范围，应接入正式会话持久化，而不是再存一份 Note 关系图。
@@ -92,6 +94,8 @@ Janus 应能够按主题、正文和关系查找 Note，使用稳定 Note URI �
 直接写入需要可靠的事务、来源校验和撤销冲突处理。多 Note 的参考、编辑与执行范围容易混淆，工具和界面必须区分。圆桌与普通对话共享展示位置时，应避免错误复用项目、会议和取消目标。终端预填、多任务调度及正式验收必须按实际能力显示。
 
 ## Verification
+
+工具访问高亮回归：`npm run test:unit -- --run tests/unit/google-tool-pairing.test.ts tests/unit/janus-tool-pairing.test.ts tests/unit/note-chat.test.ts tests/unit/note-focus.test.ts tests/unit/project-chat-context.test.ts` 共 37 项通过，覆盖真实 Note 读取/写入后的自动展示、专用范围优先、用户固定与移除。`npm run test:e2e -- tests/e2e/blueprint-chat-recovery.spec.ts tests/e2e/blueprint-note-focus.spec.ts tests/e2e/blueprint-maintenance.spec.ts tests/e2e/project-conversation.spec.ts --workers=1` 共 21 项通过，包含浏览器实线/虚线轮廓样式和视野不移动的断言。Google 工具结果分组原因见[配对错误与恢复](./2026-09-25-blueprint-dialog-separation--2ec6c79b.md)。
 
 2026-10-02 机器验证：`npm run test:unit -- --run tests/unit/note-chat.test.ts` 的 17 项通过，覆盖实际 facade 工具调用、临时目录多 Note 事务、读取基线、冲突拒绝、撤销、丢失回执恢复与非法结构拒绝。模型响应由测试替身提供，未调用真实供应商。关联回归命令 `npm run test:unit -- --run tests/unit/note-chat.test.ts tests/unit/project-chat-context.test.ts tests/unit/harness-undo.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/blueprint-maintenance tests/unit/maintenance-harness-apply.test.ts tests/unit/blueprint-store.test.ts` 在增加最后五项回执、结构与否定指令测试前为 131 项通过。
 

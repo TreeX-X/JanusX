@@ -746,6 +746,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
               const status = chatStatusForEvent(agentEvent)
               setRuntime(id, (current) => ({
                 ...current,
+                ...(recovery && ['text_delta', 'reasoning_delta', 'tool_call_ready', 'tool_execution_start'].includes(agentEvent.type) ? { error: null } : {}),
                 agent: reduceChatAgentEvent(current.agent, agentEvent),
                 ...(status ? { turnStatus: status } : {}),
               }))

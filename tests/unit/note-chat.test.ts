@@ -27,6 +27,30 @@ async function fixture() {
 }
 
 describe('direct Note conversation', () => {
+  it('highlights successful reads and writes without requiring a model focus call', async () => {
+    const { root, editor, signal, input } = await fixture()
+    const created = (await editor.write(root, 'chat', 'create', input, true, signal))!
+    const focused: import('../../src/shared/note-chat').NoteFocusEvent[] = []
+    const ports = {
+      sessions: { getSession: () => ({ sessionId: 'session', workspaceId: 'ws', workspaceRoot: root, status: 'running' }) },
+      tools: { registry: { list: () => [] }, executeFunctionCall: async () => { throw new Error('Unexpected tool') } },
+    } as unknown as ChatTurnPorts
+    attachNoteChatTools(ports, { conversationId: 'chat', userText: 'Update the Note', signal, resources: [{ agentSessionId: 'session', workspaceId: 'ws', workspacePath: root }], onChange: () => {}, onFocus: event => focused.push(event) })
+    const invoke = (name: string, args: object) => ports.tools.executeFunctionCall({ sessionId: 'session', call: { toolName: name, input: args } } as never, 'test')
+    const first = await invoke('note.read', { uri: created.files[0].uri })
+    await invoke('note.read', { uri: created.files[1].uri })
+    expect(focused.at(-1)?.notes.map(note => note.role)).toEqual(['reference', 'reference'])
+    expect(focused.at(-1)?.focus).toBe('none')
+    const read = first.output as { expectedHash: string }
+    const result = await invoke('note.write', { reason: 'Update', operations: [{ type: 'update', uri: created.files[0].uri, expectedHash: read.expectedHash, title: 'Updated' }] })
+    expect(result.status).toBe('completed')
+    expect(focused.at(-1)?.notes[0]).toMatchObject({ title: 'Updated', role: 'target' })
+    await invoke('note.scope', { reason: 'Specific scope', notes: [{ uri: created.files[1].uri, role: 'dependency', reason: 'Needed' }] })
+    const count = focused.length
+    await invoke('note.read', { uri: created.files[0].uri })
+    expect(focused).toHaveLength(count)
+    expect(focused.at(-1)?.mode).toBe('scope')
+  })
   it('delivers a model scope call through the real facade without writing in an analysis turn', async () => {
     const { root, editor, signal, input } = await fixture()
     const created = (await editor.write(root, 'chat', 'create', input, true, signal))!

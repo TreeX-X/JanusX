@@ -29,7 +29,7 @@ const elapsed = async (page: Page) => parseFloat((await chat(page).locator('.jan
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', error => { throw error })
-  await page.goto('/project.html?workbench')
+  await page.goto('/project.html?workbench&manual-stream')
   await send(page)
 })
 
@@ -41,6 +41,12 @@ test('one recovery preserves elapsed time and tools; second failure stays visibl
   await fail(page)
   await expect.poll(() => count(page)).toBe(2)
   await expect(chat(page).locator('.janus-chat-error-card')).toContainText('1/1')
+  await page.evaluate(() => {
+    const fixture = (window as any).projectFixture
+    fixture.emitAgentEvent({ type: 'text_delta', requestId: fixture.streams.at(-1).requestId, delta: 'Recovered analysis' })
+  })
+  await expect(chat(page).locator('.janus-chat-error-card')).toHaveCount(0)
+  await expect(chat(page)).toContainText('Recovered analysis')
   expect(await elapsed(page)).toBeGreaterThanOrEqual(before)
   await expect(chat(page).locator('.janus-tool-card')).toHaveCount(1)
   await fail(page)

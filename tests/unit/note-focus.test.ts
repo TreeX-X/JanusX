@@ -7,6 +7,16 @@ import type { Blueprint } from '../../src/shared/janus/types'
 const event = (id: string, uris = ['note://repo/a', 'note://repo/b']): NoteFocusEvent => ({ id, conversationId: 'chat', workspacePath: 'C:/project', mode: 'scope', focus: 'auto', reason: 'Related work', notes: uris.map((uri, i) => ({ uri, title: uri, role: i ? 'reference' : 'target', reason: 'Relevant' })) })
 beforeEach(() => useNoteFocusStore.setState({ scopes: {}, history: [], display: null }))
 describe('assistant visual scope', () => {
+  it('automatic access highlights respect pins and exclusions without replacing scope', () => {
+    const state = useNoteFocusStore.getState()
+    state.receive(event('one'))
+    state.pin('chat', 'note://repo/a')
+    state.remove('chat', 'note://repo/b')
+    const scope = useNoteFocusStore.getState().scopes.chat
+    state.receive({ ...event('access', ['note://repo/b', 'note://repo/c']), mode: 'display', focus: 'none' })
+    expect(useNoteFocusStore.getState().display?.notes.map(note => note.uri)).toEqual(['note://repo/a', 'note://repo/c'])
+    expect(useNoteFocusStore.getState().scopes.chat).toBe(scope)
+  })
   it('retains user pins and exclusions across assistant updates', () => {
     const state = useNoteFocusStore.getState()
     state.receive(event('one'))

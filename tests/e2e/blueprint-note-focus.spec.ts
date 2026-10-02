@@ -44,6 +44,17 @@ test('multi-Note highlight, connected edges and scope controls leave mouse selec
   await page.screenshot({ path: test.info().outputPath('working-note-scope.png'), animations: 'disabled' })
 })
 
+test('automatic Note access visibly outlines nodes without moving the canvas', async ({ page }) => {
+  const before = await transform(page)
+  const detail = await page.locator('.bp-node-detail').textContent()
+  await focus(page, { mode: 'display', focus: 'none' })
+  await expect(page.locator('.bp-assistant-target .bp-node-card')).toHaveCSS('outline-style', 'solid')
+  await expect(page.locator('.bp-assistant-target .bp-node-card')).toHaveCSS('outline-width', '3px')
+  await expect(page.locator('.bp-assistant-reference .bp-node-card')).toHaveCSS('outline-style', 'dashed')
+  expect(await transform(page)).toBe(before)
+  expect(await page.locator('.bp-node-detail').textContent()).toBe(detail)
+})
+
 test('a repeated scope does not move the viewport; historical locate changes only the highlight', async ({ page }) => {
   await focus(page, { id: 'first' })
   await expect(page.locator('.bp-assistant-target')).toHaveCount(1)

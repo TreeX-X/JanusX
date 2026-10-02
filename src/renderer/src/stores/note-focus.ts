@@ -19,7 +19,7 @@ export const useNoteFocusStore = create<{
     const old = previous?.workspacePath === event.workspacePath ? previous : undefined
     const excluded = old?.excluded ?? []
     const pins = old?.notes.filter(note => note.pinned) ?? []
-    const notes = event.mode === 'scope' ? [...pins, ...event.notes.filter(note => !excluded.includes(note.uri) && !pins.some(pin => pin.uri === note.uri))].slice(0, 32) : event.notes
+    const notes = event.mode === 'scope' || event.focus === 'none' ? [...pins, ...event.notes.filter(note => !excluded.includes(note.uri) && !pins.some(pin => pin.uri === note.uri))].slice(0, 32) : event.notes
     const effective = { ...event, notes }
     const primary = (items: NoteScopeItem[]) => items.filter(item => item.role === 'target').map(item => item.uri).sort().join('|')
     const sameTarget = primary(notes) === primary(old?.notes ?? [])

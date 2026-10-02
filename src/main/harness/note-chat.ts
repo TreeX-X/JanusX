@@ -1,4 +1,4 @@
-// Note: direct conversational writes preserve Note transactions — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
+// Note: conversational Note tools preserve transactions and highlight actual access — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
@@ -179,6 +179,20 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
   const original = ports.tools
   const editor = new NoteChatEditor()
   const authorized = hasNoteMutationIntent(options.userText)
+  // Successful Note access remains visible even when the model omits a display tool.
+  const accessed = new Map<string, { uri: string; title: string; role: 'target' | 'reference'; reason: string }>()
+  let explicitScope = false
+  const highlight = (root: string, notes: Array<{ uri: string; title: string }>, role: 'target' | 'reference') => {
+    if (!options.onFocus || explicitScope || options.signal.aborted) return
+    const reason = role === 'target' ? 'Updated in this conversation' : 'Read for this conversation'
+    for (const note of notes) {
+      const key = `${rootKey(root)}:${note.uri}`
+      const previous = accessed.get(key)
+      accessed.set(key, { ...note, role: previous?.role === 'target' ? 'target' : role, reason: previous?.role === 'target' ? previous.reason : reason })
+    }
+    const visible = [...accessed.entries()].filter(([key]) => key.startsWith(`${rootKey(root)}:note://`)).map(([, note]) => note).slice(-32)
+    options.onFocus({ id: randomUUID(), conversationId: options.conversationId, workspacePath: root, mode: 'display', focus: 'none', reason, notes: visible })
+  }
   const definitions = NOTE_CHAT_TOOLS.filter(tool => authorized || tool.actionRisk === 'read')
   ports.tools = {
     registry: { list: () => [...original.registry.list(), ...definitions],
@@ -195,17 +209,25 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
         if (options.signal.aborted) throw new Error('Note operation cancelled')
         let output: unknown
         if (input.call.toolName === 'note.list') output = await editor.list(resource.workspacePath, z.string().max(1000).parse(input.call.input.query ?? ''), z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.relatedTo))
-        else if (input.call.toolName === 'note.read') output = await editor.read(resource.workspacePath, z.string().parse(input.call.input.uri))
+        else if (input.call.toolName === 'note.read') {
+          const read = await editor.read(resource.workspacePath, z.string().parse(input.call.input.uri))
+          output = read
+          highlight(resource.workspacePath, [{ uri: read.uri, title: /^#\s+(.+)$/m.exec(read.markdown)?.[1] ?? read.uri }], 'reference')
+        }
         else if (input.call.toolName === 'note.focus' || input.call.toolName === 'note.scope') {
           const { workspaceId: _workspaceId, ...args } = input.call.input
           const event = await resolveNoteFocus(harnessNoteService, resource.workspacePath, options.conversationId, input.call.toolName === 'note.scope' ? 'scope' : 'display', args, options.userText)
           if (options.signal.aborted) throw new Error('Note operation cancelled')
+          explicitScope = true
           options.onFocus?.(event)
           output = { status: 'validated', notes: event.notes, message: 'Display requested. Hidden or unavailable canvas nodes are reported by the UI; this does not edit or execute Notes.' }
         } else if (input.call.toolName === 'note.write') {
           const { workspaceId: _workspaceId, ...args } = input.call.input
           const change = await editor.write(resource.workspacePath, options.conversationId, correlationId, args, authorized, options.signal)
-          if (change) options.onChange(change)
+          if (change) {
+            options.onChange(change)
+            highlight(resource.workspacePath, change.files, 'target')
+          }
           output = change ? { status: 'applied', id: change.id, txId: change.txId, files: change.files.map(({ uri, title }) => ({ uri, title })) } : { status: 'unchanged' }
         } else throw new Error('Unknown Note tool')
         return { ...result, status: 'completed', completedAt: new Date().toISOString(), durationMs: Date.now() - Date.parse(startedAt), summary: 'Note operation completed', output }

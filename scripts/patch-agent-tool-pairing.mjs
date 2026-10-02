@@ -1,4 +1,4 @@
-// Note: preserve pairing across parallel steering — see .agents/notes/2026-09-25-blueprint-dialog-separation--2ec6c79b.md
+// Note: preserve call/result pairing and provider turn grouping — see .agents/notes/2026-09-25-blueprint-dialog-separation--2ec6c79b.md
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -19,4 +19,23 @@ if (!source.includes(marker)) {
                     toolResults.push(toolMessage(skipped, result));
                 }
             }`))
+}
+
+const streamFile = join(dirname(file), 'vercel-stream-adapter.js')
+const streamSource = readFileSync(streamFile, 'utf8')
+const streamMarker = '// JanusX group adjacent tool results into one provider turn'
+if (!streamSource.includes(streamMarker)) {
+  const needle = 'export function toVercelMessages(messages) {'
+  if (streamSource.split(needle).length !== 2) throw new Error('Agent stream adapter changed; review the tool result grouping patch')
+  writeFileSync(streamFile, streamSource.replace(needle, `${streamMarker}
+export function toVercelMessages(messages) {
+    const grouped = [];
+    for (const message of ungroupedVercelMessages(messages)) {
+        const previous = grouped.at(-1);
+        if (message.role === 'tool' && previous?.role === 'tool') previous.content.push(...message.content);
+        else grouped.push(message);
+    }
+    return grouped;
+}
+function ungroupedVercelMessages(messages) {`))
 }
