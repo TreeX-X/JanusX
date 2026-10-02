@@ -3,6 +3,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import './patch-agent-tool-pairing.mjs'
 
 const file = join(dirname(fileURLToPath(import.meta.resolve('@janus-agent/agent-core'))), 'main/agent/chat-tools/workspace-chat-tools.js')
 const marker = '// JanusX host Note tools'

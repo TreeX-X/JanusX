@@ -1535,7 +1535,7 @@ export function JanusChat({
           </div>
         )})() )}
 
-        {(isStreaming || pendingContent) && (
+        {(isStreaming || pendingContent || (error && liveToolTraces.length > 0)) && (
           <div className="janus-chat-message assistant streaming">
             <div className="janus-chat-message-author">{t('janus:chat.author.assistant')}</div>
             <div className="janus-chat-message-content">
@@ -1559,9 +1559,10 @@ export function JanusChat({
 
         {error && (
           <div className="janus-chat-error-card">
+            {isStreaming && <div role="status">{t('janus:chat.recoveringTools')}</div>}
             <div className="janus-chat-error-text">{error}</div>
             <div className="janus-chat-error-actions">
-              <button className="janus-chat-retry" onClick={handleRetry}>
+              <button className="janus-chat-retry" onClick={handleRetry} disabled={isStreaming}>
                 {t('common:action.retry')}
               </button>
             </div>

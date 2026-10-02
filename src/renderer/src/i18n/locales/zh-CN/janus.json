@@ -1,5 +1,6 @@
 {
   "chat": {
+    "recoveringTools": "工具上下文异常，正在重试（1/1）…",
     "author": {
       "user": "你",
       "assistant": "JANUSX"

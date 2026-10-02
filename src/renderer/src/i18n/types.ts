@@ -897,6 +897,7 @@ export type TypedI18nKey =
   | 'janus:chat.queue.inputPlaceholder'
   | 'janus:chat.queue.sendAria'
   | 'janus:chat.queue.sendTitle'
+  | 'janus:chat.recoveringTools'
   | 'janus:chat.resource.attachAria'
   | 'janus:chat.resource.attachPlaceholder'
   | 'janus:chat.resource.attachTitle'

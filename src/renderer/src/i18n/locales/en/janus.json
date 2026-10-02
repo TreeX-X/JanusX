@@ -1,5 +1,6 @@
 {
   "chat": {
+    "recoveringTools": "Tool context error. Retrying once (1/1)…",
     "author": {
       "user": "You",
       "assistant": "JANUSX"

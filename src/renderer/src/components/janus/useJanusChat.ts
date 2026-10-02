@@ -182,8 +182,6 @@ interface ConversationRuntime {
 
 interface RuntimeHandles {
   proposalRetry?: { message: Message; taskId: string }
-  /** Pairing-400 auto-retry guard: at most one recovery turn per generation. */
-  pairRetryAttempted?: boolean
   generation: number
   active: boolean
   abort: (() => void) | null
@@ -572,13 +570,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     })
   }, [updateConversation])
 
-  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string) => {
+  // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/2026-09-25-blueprint-dialog-separation--2ec6c79b.md
+  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }) => {
     const runtime = runtimesRef.current[id]
     const conversation = conversationsRef.current.find((item) => item.id === id)
     const handles = getHandles(id)
-    if (!conversation || runtime?.isStreaming || handles.active) return
+    if (!conversation || (!recovery && runtime?.isStreaming) || handles.active) return
     handles.proposalRetry = maintenanceTaskId ? { message: userMessage, taskId: maintenanceTaskId } : undefined
-    handles.pairRetryAttempted = false
     const generation = handles.generation + 1
     handles.generation = generation
     handles.active = true
@@ -591,7 +589,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
 
     // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/2026-10-02-blueprint-review-conversation-loop--9c426f18.md
     const nextMessages = maintenanceTaskId ? history : ephemeralIdsRef.current.has(id) ? [...history, userMessage] : capChatMessages([...history, userMessage])
-    updateConversation(id, (current) => ({
+    if (!recovery) updateConversation(id, (current) => ({
       ...current,
       title: current.title === NEW_CONVERSATION_TITLE ? titleFromMessages(nextMessages) : current.title,
       messages: nextMessages,
@@ -602,14 +600,16 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       pendingContent: '',
       pendingReasoning: emptyReasoning(),
       isStreaming: true,
-      turnStartedAt: Date.now(),
+      turnStartedAt: recovery?.startedAt ?? Date.now(),
       turnStatus: INITIAL_JANUS_CHAT_STATUS,
-      error: null,
+      error: recovery?.error ?? null,
       latestRecallTrace: null,
-      agent: EMPTY_JANUS_RUNTIME_STATE,
+      agent: recovery ? { ...EMPTY_JANUS_RUNTIME_STATE, activities: current.agent.activities } : EMPTY_JANUS_RUNTIME_STATE,
     }))
 
     let proposalReceived = false
+    // Only these host tools are known to be safe to replay. Unknown tools fail closed.
+    let replaySafe = true
     const chatMessages: ChatMessage[] = [
       ...(maintenanceTaskId ? history : history.slice(-HISTORY_MESSAGE_LIMIT)).map((message) => ({
         role: message.role,
@@ -646,7 +646,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             ? Math.max(0, Date.now() - (runtimesRef.current[id]?.turnStartedAt ?? Date.now()))
             : undefined
           // R6-full：在途 steering badge 清除；文本早已在历史中保留。
-          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [],
+          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [], error: null,
             ...(maintenanceTaskId && !proposalReceived ? { error: '整理请求已结束，但未收到可审核文件。请重新整理；若持续出现，请重启应用后重试。' } : {}),
           }))
           if (maintenanceTaskId && !proposalReceived) handles.proposalRetry = { message: userMessage, taskId: maintenanceTaskId }
@@ -658,6 +658,11 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           if (handles.generation !== generation) return
           handles.active = false
           handles.abort = null
+          const startedAt = runtimesRef.current[id]?.turnStartedAt ?? Date.now()
+          const latestUser = conversationsRef.current.find(item => item.id === id)?.messages.filter(message => message.role === 'user').at(-1)
+          const canRecover = !maintenanceTaskId && !recovery && replaySafe
+            && latestUser?.id === userMessage.id
+            && /function response parts|function call parts/i.test(error)
           const final = flushPending(id)
           handles.pendingBuffer = ''
           const durationMs = runtimesRef.current[id]?.turnStartedAt
@@ -675,21 +680,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           commitAssistant(id, final, handles.assistantMessageId ?? undefined)
           snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0, durationMs)
           handles.assistantMessageId = null
-          // Pairing 400 (tool calls vs responses out of balance, e.g. after a
-          // steered turn): the persisted history is plain text, so exactly one
-          // fresh turn recovers. Never auto-retry anything else, never twice.
-          if (!maintenanceTaskId && !handles.pairRetryAttempted && /function response parts|function call parts/i.test(error)) {
-            handles.pairRetryAttempted = true
-            window.setTimeout(() => {
-              if (handles.generation !== generation) return
-              if (runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) return
-              const latest = conversationsRef.current.find((item) => item.id === id)
-              if (!latest) return
-              const turn = getRetryTurn(latest.messages)
-              if (!turn) return
-              updateConversation(id, (current) => ({ ...current, toolTraces: [] }))
-              startRequest(id, turn.history, turn.userMessage)
-            }, 0)
+          if (canRecover) {
+            startRequest(id, history, userMessage, undefined, { startedAt, error })
           }
         },
         {
@@ -728,10 +720,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
               return
             }
             if (agentEvent.type === 'note_change') {
+              if (handles.generation === generation) replaySafe = false
               if (agentEvent.change.conversationId === id) useNoteChatStore.getState().receive(agentEvent.change)
               return
             }
             if (handles.generation === generation) {
+              if ((agentEvent.type === 'tool_execution_start' || agentEvent.type === 'tool_execution_end')
+                && !['note.list', 'note.read', 'note.focus', 'note.scope', 'note_list', 'note_read', 'note_focus', 'note_scope'].includes(agentEvent.toolName)) replaySafe = false
               if (agentEvent.type === 'maintenance_result' && agentEvent.task.id === maintenanceTaskId
                 && agentEvent.task.conversationId === id && agentEvent.task.status === 'proposal-ready'
                 && agentEvent.task.changeSet?.operations.length) {
