@@ -51,13 +51,13 @@ export const blueprintProposalSchema = z.object({
   ])).max(60),
 })
 
-export function blueprintNodeContext(blueprint: Blueprint, allowed: Set<string>): string {
+export function blueprintNodeContext(blueprint: Blueprint, allowed: Set<string>, includeContent = true): string {
   const nodes = [...allowed].map((id) => {
     const node = blueprint.nodes[id]
     return node && {
       id: node.id, title: node.title, type: node.type, status: node.status, progress: node.progress,
-      positioning: node.positioning, description: node.description, techSolution: node.techSolution,
-      notes: node.notes, tags: node.tags, parentId: node.parentId, children: node.children,
+      ...(includeContent ? { positioning: node.positioning, description: node.description, techSolution: node.techSolution, notes: node.notes } : {}),
+      sourceUri: node.sourceUri, tags: node.tags, parentId: node.parentId, children: node.children,
       primaryWorkspaceId: node.primaryWorkspaceId, linkedWorkspaceIds: node.linkedWorkspaceIds,
     }
   }).filter(Boolean)
@@ -72,7 +72,7 @@ export function blueprintNodeContext(blueprint: Blueprint, allowed: Set<string>)
       sourceInScope: allowed.has(relation.sourceNodeId),
       targetInScope: allowed.has(relation.targetNodeId),
     }))
-  return JSON.stringify({ nodes, relations }, null, 2)
+  return JSON.stringify({ nodes, relations }, null, includeContent ? 2 : undefined)
 }
 
 /**

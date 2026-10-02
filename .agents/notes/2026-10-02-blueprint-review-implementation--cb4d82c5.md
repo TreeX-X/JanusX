@@ -9,11 +9,11 @@ tags: [blueprint, janus-chat, approval, testing]
 relations:
   - type: implements
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/9c426f18-8b3e-49d7-96d1-36acbe174802
-    criteria: [AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7]
+    criteria: [AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7, AC-8]
 work:
   scope:
     - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
-      paths: [src/main/janus/maintenance/service.ts, src/main/llm/chat-orchestrator.ts, src/renderer/src/components/blueprint/, src/renderer/src/components/janus/, src/renderer/src/i18n/, tests/e2e/, tests/unit/blueprint-maintenance-harness-routing.test.ts, .agents/notes/]
+      paths: [src/main/janus/maintenance/, src/main/llm/chat-orchestrator.ts, src/renderer/src/components/blueprint/, src/renderer/src/components/janus/, src/renderer/src/i18n/, tests/e2e/, tests/unit/blueprint-maintenance-harness-routing.test.ts, tests/unit/blueprint-proposal-context.test.ts, .agents/notes/]
   acceptanceRefs:
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/9c426f18-8b3e-49d7-96d1-36acbe174802
       criterionId: AC-1
@@ -29,6 +29,8 @@ work:
       criterionId: AC-6
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/9c426f18-8b3e-49d7-96d1-36acbe174802
       criterionId: AC-7
+    - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/9c426f18-8b3e-49d7-96d1-36acbe174802
+      criterionId: AC-8
   verification:
     - id: V-1
       kind: command
@@ -43,7 +45,7 @@ work:
 
 ## Goal
 
-落实[持续讨论需求](./2026-10-02-blueprint-review-conversation-loop--9c426f18.md)的 AC-1 至 AC-7，并通过浏览器和真实临时 Note 事务验证闭环。
+落实[持续讨论需求](./2026-10-02-blueprint-review-conversation-loop--9c426f18.md)的 AC-1 至 AC-8，并通过浏览器和真实临时 Note 事务验证闭环。
 
 ## Scope
 
@@ -51,13 +53,21 @@ work:
 
 ## Acceptance criteria
 
-验收引用为 work.acceptanceRefs 中的 AC-1 至 AC-7；实现时冻结的需求文件原始字节 SHA-256 为 d657cd997c47f0b6241566c2da4e66f07d6f089faa358876269122f1e989ae2d，条款编号及含义保持不变。
+验收引用为 work.acceptanceRefs 中的 AC-1 至 AC-8。初始实现冻结的需求文件原始字节 SHA-256 为 d657cd997c47f0b6241566c2da4e66f07d6f089faa358876269122f1e989ae2d；预算修复扩展 AC-8，AC-1 至 AC-7 的编号及含义保持不变。
 
 ## Alternatives considered
 
 直接保留聊天结果能减少修改，但不能交付突出的审核文档。独立聊天引擎会复制流式、模型和错误处理；实现复用控制器传输，并将审核显示状态与讨论历史分开。具体交互取舍由上述两篇决策持有。
 
 ## Verification
+
+2026-10-02 预算修复：下列 5 个文件累计 70 个不同用例通过；全套 69 项通过后，新增临界窗口用例并复验 proposal-context 和 harness-routing 共 37 项通过。proposal-context 使用真实 ChatSessionRuntime 复现“小中文 Note + 240 KB 代码”超限，检查辅助材料取舍、完整原文和早期约束保留、已知自定义模型窗口回填、系统与 schema 预算、真实超限诊断及非预算异常透传。harness-routing 从真实临时 Note 原文经过预算、结构化提案、文件预览与批准写入，验证超大辅助证据不会阻断闭环。先前将 buildContext 直接 mock 为抛错，只验证拒绝分支，未覆盖真实消息布局，是该回归遗漏的测试原因。
+
+```text
+npx vitest run tests/unit/blueprint-proposal-context.test.ts tests/unit/blueprint-maintenance-harness-routing.test.ts tests/unit/blueprint-maintenance-service.test.ts tests/unit/blueprint-maintenance-changeset.test.ts tests/unit/maintenance-harness-apply.test.ts --silent
+```
+
+预算修复同时复验 blueprint-maintenance.spec.ts 的 18 项浏览器流程，全部通过，包含继续讨论、重新整理、两轮应用、取消和重试。最终 typecheck:strict-unused、build、三个变更源码文件的 ESLint 和 git diff --check 通过。全库 Note 校验仍仅报 dsh-integration.md 的 6 项既有错误。浏览器仍使用 IPC 与模型替身；预算与文件事务由上述真实运行时集成测试覆盖，真实供应商尚未调用。
 
 2026-10-02：相关单元测试累计 72 个不同用例通过。六文件首轮 71 项通过；新增原文竞态和预算用例后，maintenance-harness-routing 与 chat-turn-guard 共 39 项复验通过。真实临时 Note 测试覆盖旧预览失效、再次生成、连续两轮预览与批准、写入字节一致、第二轮原文和哈希更新，以及上下文读取后源漂移与预算失败零写入。
 
