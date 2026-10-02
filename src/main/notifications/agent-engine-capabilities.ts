@@ -87,7 +87,7 @@ export const AGENT_ENGINE_CAPABILITIES: Record<AgentHookSource, AgentEngineCapab
     complete: [{ event: 'session.idle' }],
     fail: [{ event: 'session.error' }],
     approval: ['permission.asked'],
-    attention: ['permission.asked'],
+    attention: ['permission.asked', 'question.asked', 'question.v2.asked'],
     // Sessions persist in sqlite with a list/detail driver in
     // sessions/opencode-sessions; turn-end excerpts stay status-only.
     transcript: null,
@@ -143,7 +143,14 @@ export function extractHookRawStatus(raw: unknown): string | undefined {
       ? (properties as Record<string, unknown>).status
       : undefined,
   ]
-  return candidates.find((value): value is string => typeof value === 'string')
+  // OpenCode SDK statuses are tagged objects, including properties.status.
+  for (const value of candidates) {
+    if (typeof value === 'string') return value
+    if (value && typeof value === 'object' && 'type' in value && typeof value.type === 'string') {
+      return value.type
+    }
+  }
+  return undefined
 }
 
 /** opencode posts canonical names; every other source trims. */

@@ -13,7 +13,7 @@ import type { SubAgentRunEngine } from '../../shared/subAgentRun'
 import { AgentHookBridge } from '../notifications/agent-hook-bridge'
 import { AgentHookConfigManager } from '../notifications/agent-hook-config'
 import { AgentHookCoordinator, getHookMatcher, getRawString } from '../notifications/agent-hook-coordinator'
-import { AGENT_ENGINE_CAPABILITIES, resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
+import { AGENT_ENGINE_CAPABILITIES, matchesEngineEvents, resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
 import { AgentTurnSentinel } from '../notifications/agent-turn-sentinel'
 import {
   JANUSX_SYNTHETIC_HOOK_EVENTS,
@@ -102,7 +102,10 @@ function isHookApprovalRequest(payload: AgentHookPayload, lowerEvent: string): b
 }
 
 function isHookInputRequest(payload: AgentHookPayload, lowerEvent: string): boolean {
-  if (payload.source === 'opencode') return false
+  if (payload.source === 'opencode') {
+    return matchesEngineEvents('opencode', 'attention', payload.event) &&
+      !matchesEngineEvents('opencode', 'approval', payload.event)
+  }
   if (lowerEvent !== 'notification') return false
   return getHookRawMatcher(payload) !== 'permission_prompt'
 }
@@ -468,14 +471,11 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     onResolvedPayload: async (payload, terminal) => {
       const state = terminalStates.get(terminal.terminalId)
       const event = payload.event.toLowerCase()
-      const rawStatus = JSON.stringify(payload.raw ?? '')
       const syntheticFails =
         event === JANUSX_SYNTHETIC_HOOK_EVENTS.apiError || event === JANUSX_SYNTHETIC_HOOK_EVENTS.orphaned
       const syntheticCompletes =
         event === JANUSX_SYNTHETIC_HOOK_EVENTS.interrupted || event === 'sessionend'
-      const startsTurn = payload.source === 'opencode'
-        ? event === 'session.status' && /busy|running/i.test(rawStatus)
-        : event === 'userpromptsubmit'
+      const startsTurn = matchesEngineEvents(payload.source, 'start', payload.event, payload.raw)
       const completesTurn = syntheticCompletes || (payload.source === 'opencode'
         ? event === 'session.idle'
         : event === 'stop')

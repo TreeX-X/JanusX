@@ -164,7 +164,7 @@ describe('AgentHookCoordinator', () => {
       source: 'opencode',
       event: 'session.status',
       terminalId: 'term-opencode',
-      raw: { status: 'busy' },
+      raw: { properties: { sessionID: 'session-1', status: { type: 'busy' } } },
     })
     now = 12_000
     coordinator.handleHookPayload({
@@ -181,6 +181,15 @@ describe('AgentHookCoordinator', () => {
       failed: false,
     })
     expect(lifecycleTypes(events)).toEqual(['started', 'completed'])
+  })
+
+  it.each(['question.asked', 'question.v2.asked'])('delivers OpenCode %s input requests', async (event) => {
+    const { coordinator, attentionPayloads, resolvedPayloads } = createCoordinator(() => 1_000)
+    coordinator.registerTerminal({ terminalId: 'term-opencode', engine: 'opencode', cwd: 'C:/repo' })
+    coordinator.handleHookPayload({ source: 'opencode', event, terminalId: 'term-opencode' })
+    await Promise.resolve()
+    expect(attentionPayloads).toHaveLength(1)
+    expect(resolvedPayloads[0]).toMatchObject({ source: 'opencode', event })
   })
 
   it('tracks pi agent_start/agent_settled as a turn', async () => {

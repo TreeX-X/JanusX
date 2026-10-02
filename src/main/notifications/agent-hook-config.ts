@@ -20,6 +20,7 @@ const JANUSX_LEGACY_HOOK_COMMAND_MARKERS = [
 ]
 
 type HookableEngine = AgentEngine
+type JsonHookEngine = Extract<HookableEngine, 'claude' | 'codex'>
 type JsonObject = Record<string, unknown>
 
 interface HookCommandSpec {
@@ -265,16 +266,12 @@ public static class JanusxHookRunner {
 `
 }
 
-/** Double-quote for CreateProcess/bash command lines; hook argv never legitimately contains quotes. */
-function quoteWindowsArg(value: string): string {
-  return `"${value.replace(/"/g, '')}"`
-}
-
+// Note: hook commands follow each CLI's shell contract — see .agents/notes/2026-10-02-terminal-hook-adapters--493e1f10.md
 function buildHookCommand(
   platform: NodeJS.Platform,
   executablePath: string,
   appEntryArg: string | undefined,
-  source: HookableEngine,
+  source: JsonHookEngine,
   event: string,
   windowsHookScriptPath?: string,
   matcher?: string,
@@ -282,19 +279,13 @@ function buildHookCommand(
 ): string {
   if (platform === 'win32' && windowsHookScriptPath) {
     if (windowsHookRunnerPath) {
-      // GUI-subsystem launcher: no console is allocated for the runner
-      // itself and the powershell child runs with CREATE_NO_WINDOW, so hook
-      // events no longer flash a terminal window. Argv carries the marker so
-      // managed-hook detection keeps working. No $vars: hook commands may run
-      // through bash, which would expand them before spawn.
-      return [
-        quoteWindowsArg(windowsHookRunnerPath),
-        quoteWindowsArg(windowsHookScriptPath),
-        quoteWindowsArg(source),
-        quoteWindowsArg(event),
-        quoteWindowsArg(JANUSX_HOOK_COMMAND_MARKER),
-        ...(matcher ? [quoteWindowsArg(matcher)] : []),
-      ].join(' ')
+      // Codex invokes PowerShell; Claude invokes Git Bash even on Windows.
+      // Keep the GUI runner, but quote argv for the shell that launches it.
+      const args = [windowsHookRunnerPath, windowsHookScriptPath, source, event,
+        JANUSX_HOOK_COMMAND_MARKER, ...(matcher ? [matcher] : [])]
+      return source === 'codex'
+        ? ['&', ...args.map(quotePowerShell)].join(' ')
+        : args.map(quotePosix).join(' ')
     }
     const command = [
       '&',
@@ -308,10 +299,6 @@ function buildHookCommand(
       ...(matcher ? ['-Matcher', quotePowerShell(matcher)] : []),
     ].join(' ')
 
-    // The hook script sets its own UTF-8 encoding internally, so the guard only
-    // needs the Test-Path check. Avoid inline PowerShell variables ($utf8 etc.)
-    // here: Claude Code/Codex run hook commands through bash, which expands $var
-    // before powershell sees it, corrupting the command.
     const guardedCommand = [
       `if (-not (Test-Path -LiteralPath ${quotePowerShell(windowsHookScriptPath)})) { exit 0 }`,
       command,
@@ -323,7 +310,7 @@ function buildHookCommand(
       '-ExecutionPolicy',
       'Bypass',
       '-Command',
-      `"${guardedCommand.replace(/"/g, '`"')}"`,
+      source === 'codex' ? quotePowerShell(guardedCommand) : quotePosix(guardedCommand),
     ].join(' ')
   }
 
@@ -341,7 +328,8 @@ function buildHookCommand(
 
   if (platform === 'win32') {
     const command = ['&', quotePowerShell(executablePath), ...args.map(quotePowerShell)].join(' ')
-    return `powershell -NoProfile -ExecutionPolicy Bypass -Command "${command.replace(/"/g, '`"')}"`
+    const quoted = source === 'codex' ? quotePowerShell(command) : quotePosix(command)
+    return `powershell -NoProfile -ExecutionPolicy Bypass -Command ${quoted}`
   }
 
   return [executablePath, ...args].map(quotePosix).join(' ')
@@ -371,7 +359,7 @@ async function installJsonHooks(
   platform: NodeJS.Platform,
   executablePath: string,
   appEntryArg: string | undefined,
-  source: HookableEngine,
+  source: JsonHookEngine,
   windowsHookScriptPath?: string,
   windowsHookRunnerPath?: string,
 ): Promise<HookInstallResult> {
@@ -407,7 +395,7 @@ function mergeWslenv(existing: string | undefined, keys: string[]): string {
 }
 
 function buildOpencodePlugin(): string {
-  return `const TARGET_EVENTS = new Set(["session.created", "session.updated", "session.status", "session.idle", "session.error", "permission.asked"]);
+  return `const TARGET_EVENTS = new Set(["session.created", "session.updated", "session.status", "session.idle", "session.error", "permission.asked", "question.asked", "question.v2.asked"]);
 
 function env(name) {
   const value = process.env[name];
@@ -425,7 +413,8 @@ function extractSessionId(event) {
   if (!event || typeof event !== "object") return undefined;
   const properties = event.properties && typeof event.properties === "object" ? event.properties : {};
   const session = properties.session && typeof properties.session === "object" ? properties.session : {};
-  const candidates = [event.sessionID, event.sessionId, event.session_id, properties.sessionID, properties.sessionId, properties.session_id, session.id, session.sessionID, session.sessionId];
+  const info = properties.info && typeof properties.info === "object" ? properties.info : {};
+  const candidates = [event.sessionID, event.sessionId, event.session_id, properties.sessionID, properties.sessionId, properties.session_id, session.id, session.sessionID, session.sessionId, info.id];
   return candidates.find((value) => typeof value === "string" && value.trim());
 }
 
@@ -435,6 +424,7 @@ async function postToJanusX(event, directory) {
   if (!port || !token || !event || !TARGET_EVENTS.has(event.type)) return;
 
   await fetch("http://127.0.0.1:" + port + "/api/agent-hook", {
+    signal: AbortSignal.timeout(2000),
     method: "POST",
     headers: {
       "Authorization": "Bearer " + token,
@@ -475,6 +465,7 @@ async function postToJanusX(eventType, fields) {
   if (!port || !token || !eventType) return;
 
   await fetch("http://127.0.0.1:" + port + "/api/agent-hook", {
+    signal: AbortSignal.timeout(2000),
     method: "POST",
     headers: {
       "Authorization": "Bearer " + token,
@@ -829,6 +820,7 @@ export class AgentHookConfigManager {
       return Promise.all([
         access(join(this.getOpencodeConfigDir(), 'opencode.json')),
         access(join(this.getOpencodeConfigDir(), 'janusx-agent-hook-marker.json')),
+        access(join(this.getOpencodeConfigDir(), 'plugins', 'janusx-notify.js')),
       ]).then(() => true, () => false)
     }
 

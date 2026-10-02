@@ -132,7 +132,7 @@ export function getRawString(raw: unknown, keys: string[]): string | undefined {
 function isAttentionEvent(payload: AgentHookPayload): boolean {
   // opencode never consults the matcher contract; native sources layer it on.
   if (payload.source === 'opencode') {
-    return matchesEngineEvents(payload.source, 'approval', payload.event, payload.raw)
+    return matchesEngineEvents(payload.source, 'attention', payload.event, payload.raw)
   }
   return (
     matchesEngineEvents(payload.source, 'approval', payload.event, payload.raw) ||

@@ -80,6 +80,12 @@ describe('agent engine capabilities', () => {
     expect(matchesEngineEvents('opencode', 'start', 'session.status', running)).toBe(true)
     expect(matchesEngineEvents('opencode', 'start', 'session.status', idle)).toBe(false)
     expect(matchesEngineEvents('opencode', 'start', 'session.status')).toBe(false)
+    expect(matchesEngineEvents('opencode', 'start', 'session.status', {
+      properties: { sessionID: 'session-1', status: { type: 'busy' } },
+    })).toBe(true)
+    expect(matchesEngineEvents('opencode', 'start', 'session.status', {
+      properties: { status: { type: 'retry', message: 'server busy' } },
+    })).toBe(false)
     expect(matchesEngineEvents('opencode', 'complete', 'session.idle')).toBe(true)
     expect(matchesEngineEvents('opencode', 'fail', 'session.error')).toBe(true)
     expect(matchesEngineEvents('opencode', 'approval', 'permission.asked')).toBe(true)
@@ -93,6 +99,7 @@ describe('agent engine capabilities', () => {
     expect(extractHookRawStatus({ status: 'busy' })).toBe('busy')
     expect(extractHookRawStatus({ state: 'running' })).toBe('running')
     expect(extractHookRawStatus({ properties: { status: 'idle' } })).toBe('idle')
+    expect(extractHookRawStatus({ properties: { status: { type: 'busy' } } })).toBe('busy')
     expect(extractHookRawStatus({})).toBeUndefined()
     expect(extractHookRawStatus(null)).toBeUndefined()
   })
