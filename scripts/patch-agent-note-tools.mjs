@@ -6,7 +6,14 @@ import { dirname, join } from 'node:path'
 
 const file = join(dirname(fileURLToPath(import.meta.resolve('@janus-agent/agent-core'))), 'main/agent/chat-tools/workspace-chat-tools.js')
 const marker = '// JanusX host Note tools'
-const source = readFileSync(file, 'utf8')
+let source = readFileSync(file, 'utf8')
+// Upgrade the first-stage patch in existing installs as well as fresh installs.
+const oldNames = "['note.list', 'note.read', 'note.write']"
+const names = "['note.list', 'note.read', 'note.write', 'note.focus', 'note.scope']"
+if (source.includes(marker) && source.includes(oldNames)) {
+  source = source.replace(oldNames, names)
+  writeFileSync(file, source)
+}
 if (!source.includes(marker)) {
   const needle = 'return withManifestDescriptions(tools, options.toolManifests);'
   if (source.split(needle).length !== 2) throw new Error('Agent tool catalog changed; review the Note tools compatibility patch')
@@ -24,7 +31,7 @@ if (!source.includes(marker)) {
       throw new Error('Unsupported host Note tool schema');
     };
     for (const manifest of options.toolManifests || []) {
-      if (!['note.list', 'note.read', 'note.write'].includes(manifest.canonicalName)) continue;
+      if (!['note.list', 'note.read', 'note.write', 'note.focus', 'note.scope'].includes(manifest.canonicalName)) continue;
       tools[manifest.providerName] = {
         description: manifest.description,
         parameters: schema(manifest.inputSchema).extend({ workspaceId }),

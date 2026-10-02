@@ -270,7 +270,6 @@
     "rejectFailed": "Reject failed: candidate not found"
   },
   "noteChat": {
-    "hint": "Tell Janus what to read or change. Saved Note changes appear on the blueprint.",
     "applied": "Updated {{count}} Notes",
     "reverted": "Change reverted",
     "viewChanges": "View changes",
@@ -490,5 +489,16 @@
     "conflictTitle": "Save conflict",
     "conflictReload": "External change won the save. Reload to continue.",
     "invalidKept": "{{count}} invalid files kept, not executed"
+  },
+  "noteFocus": {
+    "scope": "Working Notes",
+    "locate": "Locate",
+    "clear": "Reset scope",
+    "target": "Target",
+    "reference": "Reference",
+    "dependency": "Dependency",
+    "pin": "Pin",
+    "remove": "Remove",
+    "unavailable": "Not available in this canvas: {{names}}"
   }
 }

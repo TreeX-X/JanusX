@@ -41,6 +41,7 @@ export interface ChatRequest {
   domain?: 'personal' | 'project'
   /** Renderer selection request only; the host resolves URIs and never trusts paths/grants from here. */
   noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
+  noteWorkingSet?: string
   maintenanceTaskId?: string
 }
 export interface ChatStreamRequest extends ChatRequest { requestId: string }
@@ -93,6 +94,7 @@ export interface ChatAnswerQuestionPayload {
  */
 export type ChatAgentEvent =
   | { type: 'note_change'; requestId: string; change: import('../note-chat').NoteChatChange }
+  | { type: 'note_focus'; requestId: string; focus: import('../note-chat').NoteFocusEvent }
   | { type: 'maintenance_result'; requestId: string; task: BlueprintMaintenanceTask }
   | { type: 'agent_start'; requestId: string }
   | { type: 'text_delta'; requestId: string; delta: string }

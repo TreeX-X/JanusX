@@ -70,7 +70,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       const terminalRow = nodeDetail.locator('.bp-node-detail__terminal-footer')
       await expect(terminalRow).toBeVisible()
       await expect(terminalRow.getByRole('button')).toHaveCount(0)
-      await expect(chat(page).locator('.bp-maintenance-policy-hint')).toBeVisible()
+      await expect(chat(page).locator('.bp-maintenance-policy-hint')).toHaveCount(0)
       await expect(chat(page).getByRole('toolbar')).toHaveCount(0)
       // Nothing is expanded until a decision demands it.
       await expect(chat(page).locator('.bp-maintenance-approval')).toHaveCount(0)
@@ -104,7 +104,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       await insideViewport(page, chat(page).locator('.janus-chat textarea'))
       await expect(chat(page).locator('.bp-maintenance-controls')).toHaveCount(0)
       await expect(chat(page).locator('.bp-maintenance-context')).toHaveCount(0)
-      await expect(chat(page).locator('.bp-maintenance-policy-hint')).toBeVisible()
+      await expect(chat(page).locator('.bp-maintenance-policy-hint')).toHaveCount(0)
       const bodyScroll = await chat(page).locator('.janus-chat-messages').evaluate(element => getComputedStyle(element).overflowY)
       expect(['auto', 'scroll']).toContain(bodyScroll)
       expect(errors).toEqual([])

@@ -83,6 +83,7 @@ export async function projectChatContext(
       ? 'Use note_list and note_read to find and read related Notes in the attached project. On explicit change instructions, use note_write to apply edits directly; do not ask for a separate organize/proposal approval step. Analysis requests stay read-only. Read each Note before updating and preserve unrelated content. Report only actual tool results; never claim a task is verified without formal evidence.'
       : 'Discuss changes using these exact Note identities. Proposals require explicit application. Never claim a proposal is applied or a task is verified without formal evidence.',
     'Do not write task execution, formal receipts, leases or local run ledgers through workspace tools. Task execution belongs to the Harness host.',
+    ...(directEditing ? ['For a new topic, find and read related Notes, then use note_scope to explain the primary target, references and dependencies. Use note_focus for a display-only or historical location request. These tools never grant editing or execution authority. Keep user-pinned Notes and respect user-removed Notes. Ordinary reads do not need focus calls.'] : []),
     blocks.join('\n\n') + overflow,
   ].join('\n\n')
 }

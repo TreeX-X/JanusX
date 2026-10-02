@@ -1,0 +1,17 @@
+.bp-note-scope { margin: 4px 10px; padding: 7px 9px; border: 1px solid var(--shell-border); border-radius: 6px; font-size: 11px; color: var(--shell-text); }
+.bp-note-scope header { display: flex; align-items: center; gap: 8px; }
+.bp-note-scope header span { margin-right: auto; }
+.bp-note-scope button,.bp-note-locations button { background: transparent; color: inherit; border: 0; cursor: pointer; font: inherit; padding: 3px; }
+.bp-note-scope summary { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 5px; }
+.bp-note-scope ul { list-style: none; padding: 0; margin: 4px 0; max-height: 170px; overflow: auto; }
+.bp-note-scope li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 0; }
+.bp-note-scope li p { flex-basis: 100%; margin: 0; opacity: .7; overflow-wrap: anywhere; }
+.bp-note-scope .bp-note-title { flex: 1; text-align: left; overflow-wrap: anywhere; }
+.bp-note-scope button:focus-visible,.bp-note-locations button:focus-visible { outline: 2px solid var(--shell-accent); }
+.bp-note-role-target { color: var(--shell-accent); }
+.bp-note-role-reference,.bp-note-role-dependency { opacity: .7; }
+.bp-note-locations details { font-size: 12px; padding: 8px 0; border-bottom: 1px solid var(--shell-border); }
+.bp-assistant-target .bp-node-card { outline: 3px solid var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-reference .bp-node-card { outline: 2px dashed var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-dependency .bp-node-card { outline: 2px dotted var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-edge path { stroke: var(--shell-accent) !important; stroke-width: 3px !important; }

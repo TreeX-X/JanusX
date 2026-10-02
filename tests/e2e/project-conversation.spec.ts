@@ -68,7 +68,7 @@ test('island and blueprint entries stay independent across panel remounts', asyn
   await expect(blueprint.locator('.bp-maintenance-context')).toHaveCount(0)
   await expect(blueprint.locator('.bp-maintenance-controls')).toHaveCount(0)
   await expect(blueprint.getByRole('button', { name: 'Organize Notes', exact: true })).toHaveCount(0)
-  await expect(blueprint.locator('.bp-maintenance-policy-hint')).toBeVisible()
+  await expect(blueprint.locator('.bp-maintenance-policy-hint')).toHaveCount(0)
   await page.reload()
   await expect(page.getByTestId('controller')).toHaveAttribute('data-id', id!)
   await expect(page.getByTestId('main-chat')).toContainText('Inspect this task')

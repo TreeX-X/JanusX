@@ -44,8 +44,9 @@ import { useBlueprintDetailPortal } from './blueprintDetailPortal'
 import { useAnimatedOpen } from '@/components/shared/CardFrame'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
 import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
+import { useNoteCanvasFocus } from '@/features/blueprint/useNoteCanvasFocus'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
-import { collectLocalHierarchyIds, computeInitialCollapsedIds, groupRootsByConnectivity, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
+import { buildEffectiveHierarchy, collectLocalHierarchyIds, computeInitialCollapsedIds, groupRootsByConnectivity, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 import { buildNodeSearchText, nodeMatchesFocus, normalizeSearchText } from '@/features/blueprint/blueprint-focus'
 import { useI18n } from '@/i18n/useI18n'
 import { NoteWikiPanel } from './NoteWikiPanel'
@@ -360,6 +361,22 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     return () => onRegisterFlush?.(() => Promise.resolve(true))
   }, [flushLayoutSave, onRegisterFlush])
   const graphReady = !currentBlueprint || currentBlueprint.nodeIds.length === 0 || rfNodes.length > 0
+  const ownerPath = useBlueprintStore(state => state.blueprintWorkspace[blueprintId] ?? null)
+  const revealAssistantNodes = useCallback((ids: string[]) => {
+    if (!currentBlueprint) return
+    const { parentById } = buildEffectiveHierarchy(currentBlueprint.nodes)
+    setCollapsedNodeIds(previous => {
+      const next = new Set(previous)
+      for (const id of ids) {
+        let parent = parentById.get(id)
+        const seen = new Set<string>()
+        while (parent && !seen.has(parent)) { seen.add(parent); next.delete(parent); parent = parentById.get(parent) }
+      }
+      return next
+    })
+    if (ids.some(id => isolatedIds.has(id))) setHideIsolated(false)
+  }, [currentBlueprint, isolatedIds, setHideIsolated])
+  const assistantCanvas = useNoteCanvasFocus(currentBlueprint, ownerPath, rfNodes, rfEdges, rfInstanceRef, revealAssistantNodes)
 
   useEffect(() => {
     if (!canvasLoadPlan || !rfInstanceRef.current || !rfNodes.length) return
@@ -510,7 +527,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   )
   return (
     <div className={`blueprint-canvas-wrapper${detailInCanvas ? ' blueprint-canvas-wrapper--detail-open' : ''}`}>
-      <div ref={canvasMainRef} className="blueprint-canvas-main" data-graph-ready={graphReady ? 'true' : 'false'}>
+      <div ref={canvasMainRef} className="blueprint-canvas-main" data-graph-ready={graphReady ? 'true' : 'false'} onPointerDownCapture={assistantCanvas.onPointerDown} onWheelCapture={assistantCanvas.onWheel}>
       {/* 画布操作工具栏（embedded 保留；workbench 已收敛到顶栏统一栏，此处不再渲染） */}
       {toolbarState ? null : (
       <div className="blueprint-toolbar blueprint-toolbar--canvas">
@@ -697,8 +714,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       {!graphReady ? <div className="blueprint-canvas-loading" aria-live="polite" aria-label={t('blueprint:toolbar.loading')} /> : null}
       <BlueprintCardActionsContext.Provider value={cardActions}>
       <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
+        nodes={assistantCanvas.nodes}
+        edges={assistantCanvas.edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}

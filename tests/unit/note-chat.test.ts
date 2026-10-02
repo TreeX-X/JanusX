@@ -10,6 +10,7 @@ import { HarnessNoteService } from '../../src/main/harness/service'
 import { applyUndo } from '../../src/main/harness/undo'
 import { runChatTurn, type ChatTurnPorts } from '@janus-agent/janus-agent'
 import { attachNoteChatTools } from '../../src/main/harness/note-chat'
+import { resolveNoteFocus } from '../../src/main/harness/note-focus'
 
 const roots: string[] = []
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
@@ -26,6 +27,49 @@ async function fixture() {
 }
 
 describe('direct Note conversation', () => {
+  it('delivers a model scope call through the real facade without writing in an analysis turn', async () => {
+    const { root, editor, signal, input } = await fixture()
+    const created = (await editor.write(root, 'chat', 'create', input, true, signal))!
+    const focused: unknown[] = []
+    let turns = 0
+    const ports: ChatTurnPorts = {
+      model: { resolve: async () => ({ model: {}, modelId: 'fixture' }), getMaxTurns: async () => 3 },
+      sessions: { getSession: () => ({ sessionId: 'session', workspaceId: 'ws', workspaceRoot: root, status: 'running' }) },
+      tools: { registry: { list: () => [] }, executeFunctionCall: async () => { throw new Error('Unexpected generic tool') } },
+      streamTextFn: async options => {
+        expect(Object.keys(options.tools as object)).toContain('note_scope')
+        expect(Object.keys(options.tools as object)).not.toContain('note_write')
+        const first = turns++ === 0
+        return { textStream: (async function* () { if (!first) yield 'Relevant Notes located.' })(), toolCalls: Promise.resolve(first ? [{ toolCallId: 'scope-1', toolName: 'note_scope', args: { reason: 'Analysis scope', notes: created.files.map(file => ({ uri: file.uri, role: 'reference', reason: 'Background' })) } }] : []) }
+      },
+    }
+    attachNoteChatTools(ports, { conversationId: 'chat', userText: 'Analyze the Notes', signal, resources: [{ agentSessionId: 'session', workspaceId: 'ws', workspacePath: root }], onChange: () => { throw new Error('Unexpected write') }, onFocus: event => focused.push(event) })
+    await runChatTurn({ sourceTag: 'maintenance', requestId: 'request', providerId: 'fixture', messages: [{ role: 'user', content: 'Analyze the Notes' }], workspaceResources: [{ agentSessionId: 'session', workspaceId: 'ws', workspacePath: root, workspaceName: 'Test' }], toolAllowlist: ['note_scope', 'note_focus', 'note_write'] }, ports, {}, signal)
+    expect(focused).toHaveLength(1)
+    expect((await listNoteChatChanges(root, 'chat'))).toHaveLength(1)
+  })
+  it('finds incoming Markdown references without converting them to execution dependencies', async () => {
+    const { root, editor, signal, input } = await fixture()
+    const created = (await editor.write(root, 'chat', 'create', input, true, signal))!
+    const [a, b] = created.files
+    const read = await editor.read(root, a.uri)
+    await editor.write(root, 'chat', 'link', { reason: 'Link related Note', operations: [{ type: 'update', uri: a.uri, expectedHash: read.expectedHash, sections: { Idea: `[Reference](${b.uri})` } }] }, true, signal)
+    const found = await editor.list(root, '', b.uri)
+    expect(found.notes.map(note => note.uri)).toEqual(expect.arrayContaining([a.uri, b.uri]))
+    expect(found.mentions).toHaveLength(1)
+    expect(found.relations).toEqual([])
+  })
+  it('validates multiple real focus targets and refuses missing or foreign identities atomically', async () => {
+    const { root, editor, service, signal, input } = await fixture()
+    const created = (await editor.write(root, 'chat', 'create', input, true, signal))!
+    const args = { reason: 'Related Notes', focus: 'explicit', notes: created.files.map(file => ({ uri: file.uri, role: 'target', reason: 'Goal' })) }
+    const focused = await resolveNoteFocus(service, root, 'chat', 'scope', args, 'Locate these Notes')
+    expect(focused.focus).toBe('explicit')
+    expect(focused.notes.map(note => note.title)).toEqual(['First', 'Second'])
+    expect((await resolveNoteFocus(service, root, 'chat', 'display', args, 'Read these Notes')).focus).toBe('auto')
+    await expect(resolveNoteFocus(service, root, 'chat', 'scope', { ...args, notes: [...args.notes, { uri: 'note://00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000001', role: 'target', reason: 'Missing' }] }, 'Locate')).rejects.toBeTruthy()
+    expect((await editor.list(root, '')).notes).toHaveLength(2)
+  })
   it('runs a model Note call through the facade, host session and real transaction', async () => {
     const { root, signal, input, editor } = await fixture()
     let turns = 0
@@ -53,7 +97,7 @@ describe('direct Note conversation', () => {
   })
   it('offers nested Note schemas through the actual installed model adapter', () => {
     const tools = createWorkspaceChatTools({ runtime: { executeFunctionCall: async () => { throw new Error('unused') } }, resources: new Map(), callerId: 'test', toolManifests: createToolManifests(NOTE_CHAT_TOOLS) }) as Record<string, { parameters: { parse(value: unknown): unknown } }>
-    expect(Object.keys(tools)).toEqual(expect.arrayContaining(['note_list', 'note_read', 'note_write']))
+    expect(Object.keys(tools)).toEqual(expect.arrayContaining(['note_list', 'note_read', 'note_write', 'note_scope', 'note_focus']))
     expect(tools.note_write.parameters.parse({ reason: 'test', operations: [{ type: 'create', kind: 'idea', sections: { Idea: 'Text' } }] })).toMatchObject({ operations: [{ sections: { Idea: 'Text' } }] })
   })
   it('creates multiple Notes once, discovers them, updates real bytes and restores them on undo', async () => {

@@ -15,6 +15,7 @@ import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { EMPTY_FOCUS, resolveBlueprintContextScope } from '@/features/blueprint/blueprint-focus'
 import { useOptionalBlueprintToolbar } from './BlueprintToolbar'
 import { NoteChatActivity } from './NoteChatActivity'
+import { NoteWorkingScope } from './NoteWorkingScope'
 import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 
 /** Stable identity of the single blueprint-panel conversation. */
@@ -137,19 +138,19 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
-        discussionFooter={<NoteChatActivity conversationId={chat.conversationId} workspacePath={activeWorkspace.path} />}
+        discussionFooter={<><NoteWorkingScope conversationId={chat.conversationId} workspacePath={activeWorkspace.path} history /><NoteChatActivity conversationId={chat.conversationId} workspacePath={activeWorkspace.path} /></>}
         pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
         modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
         resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}
         onSelectModel={chat.selectModel} onSend={text => { setSwitchNotice(null); chat.send(text) }} onRewrite={chat.rewrite}
-        aboveComposer={<div className="bp-maintenance-policy-hint">
-          <p>{t('blueprint:noteChat.hint')}</p>
+        aboveComposer={<>
+          <NoteWorkingScope conversationId={chat.conversationId} workspacePath={activeWorkspace.path} />
           {foreignCount > 0 && <p role="status">{t('blueprint:maintenance.scopeForeign', { count: foreignCount })}
             {foreignWorkspace && <button type="button" onClick={() => useWorkspaceStore.getState().setActiveWorkspace(foreignWorkspace.id)}>
               {t('blueprint:maintenance.switchToSource', { name: foreignWorkspace.name })}
             </button>}
           </p>}
-        </div>}
+        </>}
         onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} minimalComposer />
     </div> : <p className="bp-maintenance-connecting" role="status">{t('blueprint:toolbar.loading')}</p>}
   </PanelFrame>

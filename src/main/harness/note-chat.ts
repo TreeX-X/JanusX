@@ -11,6 +11,8 @@ import type { NoteChatChange } from '../../shared/note-chat'
 import { HarnessNoteService, harnessNoteService } from './service'
 import { createNoteOp, mergeNoteEdit } from './artifact-producer'
 import { previewUndo } from './undo'
+import { NOTE_FOCUS_SCHEMA, resolveNoteFocus } from './note-focus'
+import type { NoteFocusEvent } from '../../shared/note-chat'
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex')
 const rootKey = (root: string) => process.platform === 'win32' ? resolve(root).toLowerCase() : resolve(root)
@@ -79,10 +81,14 @@ export class NoteChatEditor {
   private writes = new Map<string, Promise<NoteChatChange | null>>()
   constructor(private readonly service: HarnessNoteService = harnessNoteService) {}
 
-  async list(root: string, query: string) {
+  async list(root: string, query: string, relatedTo?: string) {
     const snapshot = await this.service.readSnapshot(root)
+    if (relatedTo) await this.service.readNote(root, relatedTo)
+    const relations = relatedTo ? snapshot.relations.filter(edge => edge.sourceUri === relatedTo || edge.targetUri === relatedTo) : []
+    const mentions = relatedTo ? snapshot.mentions.filter(edge => edge.sourceUri === relatedTo || edge.targetUri === relatedTo) : []
+    const related = new Set([relatedTo, ...relations.flatMap(edge => [edge.sourceUri, edge.targetUri]), ...mentions.flatMap(edge => [edge.sourceUri, edge.targetUri])])
     const search = query.trim().toLowerCase()
-    return { repoId: snapshot.repoId, notes: snapshot.entries.filter(entry => entry.doc && (!search
+    return { repoId: snapshot.repoId, coverage: snapshot.coverage, relations, mentions, notes: snapshot.entries.filter(entry => entry.doc && (!relatedTo || related.has(entry.uri)) && (!search
       || [entry.doc.title, entry.doc.body, ...entry.doc.tags].join('\n').toLowerCase().includes(search)))
       .slice(0, 100).map(entry => ({ uri: entry.uri, title: entry.doc!.title, kind: entry.doc!.kind, path: entry.relPath })),
       diagnostics: snapshot.diagnostics }
@@ -152,7 +158,9 @@ export class NoteChatEditor {
 }
 
 export const NOTE_CHAT_TOOLS = [
-  { name: 'note.list', actionRisk: 'read', description: 'Find project Notes by title or content. Use before reading related Notes; no manual canvas selection is needed.', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, additionalProperties: false } },
+  { name: 'note.focus', actionRisk: 'read', description: 'Highlight existing Notes without changing the working scope or the user selection. Use explicit focus only when the user asks to locate/show Notes; ordinary background reads never move the canvas. No execution is started.', inputSchema: NOTE_FOCUS_SCHEMA },
+  { name: 'note.scope', actionRisk: 'read', description: 'Set the current multi-Note working scope. Find and read relevant Notes first. Give each a target/reference/dependency role and a reason. Reference and dependency Notes are not edit or execution targets. User pins and removals take precedence. Auto focus only when entering a new primary target.', inputSchema: NOTE_FOCUS_SCHEMA },
+  { name: 'note.list', actionRisk: 'read', description: 'Find project Notes by title or content. Optional relatedTo Note URI returns explicit relations and Markdown mentions in either direction, preserving their types and unresolved references. No manual canvas selection is needed.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, relatedTo: { type: 'string' } }, additionalProperties: false } },
   { name: 'note.read', actionRisk: 'read', description: 'Read the complete Note source and its expectedHash. Required before updating that Note.', inputSchema: { type: 'object', properties: { uri: { type: 'string' } }, required: ['uri'], additionalProperties: false } },
   { name: 'note.write', actionRisk: 'write', description: 'Apply requested Note changes directly in one transaction. Only use for explicit user change instructions, never analysis. Create with kind/title/sections; update with uri/expectedHash and changed title/sections/tags/parent/lifecycle. Preserve unrelated sections. No execution metadata, code writes, or task completion claims.',
     inputSchema: { type: 'object', properties: { reason: { type: 'string' }, operations: { type: 'array', items: { type: 'object', properties: {
@@ -166,6 +174,7 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
   conversationId: string; userText: string; signal: AbortSignal
   resources: Array<{ agentSessionId: string; workspaceId: string; workspacePath: string }>
   onChange: (change: NoteChatChange) => void
+  onFocus?: (event: NoteFocusEvent) => void
 }) {
   const original = ports.tools
   const editor = new NoteChatEditor()
@@ -185,9 +194,15 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
         if (!resource || !live || live.status !== 'running' || live.workspaceId !== resource.workspaceId || live.workspaceRoot !== resource.workspacePath) throw new Error('PERMISSION_DENIED: Note workspace session unavailable')
         if (options.signal.aborted) throw new Error('Note operation cancelled')
         let output: unknown
-        if (input.call.toolName === 'note.list') output = await editor.list(resource.workspacePath, z.string().max(1000).parse(input.call.input.query ?? ''))
+        if (input.call.toolName === 'note.list') output = await editor.list(resource.workspacePath, z.string().max(1000).parse(input.call.input.query ?? ''), z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.relatedTo))
         else if (input.call.toolName === 'note.read') output = await editor.read(resource.workspacePath, z.string().parse(input.call.input.uri))
-        else if (input.call.toolName === 'note.write') {
+        else if (input.call.toolName === 'note.focus' || input.call.toolName === 'note.scope') {
+          const { workspaceId: _workspaceId, ...args } = input.call.input
+          const event = await resolveNoteFocus(harnessNoteService, resource.workspacePath, options.conversationId, input.call.toolName === 'note.scope' ? 'scope' : 'display', args, options.userText)
+          if (options.signal.aborted) throw new Error('Note operation cancelled')
+          options.onFocus?.(event)
+          output = { status: 'validated', notes: event.notes, message: 'Display requested. Hidden or unavailable canvas nodes are reported by the UI; this does not edit or execute Notes.' }
+        } else if (input.call.toolName === 'note.write') {
           const { workspaceId: _workspaceId, ...args } = input.call.input
           const change = await editor.write(resource.workspacePath, options.conversationId, correlationId, args, authorized, options.signal)
           if (change) options.onChange(change)

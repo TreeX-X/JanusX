@@ -142,6 +142,7 @@ export function chatStream(
     toolTraces?: ChatToolTraceEntry[]
     domain?: 'personal' | 'project'
     noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
+    noteWorkingSet?: string
     maintenanceTaskId?: string
     onAgentEvent?: (event: ChatAgentEvent) => void
     onRecallTrace?: (trace: KnowledgeRecallTrace) => void
@@ -268,6 +269,7 @@ export function chatStream(
         toolTraces: options?.toolTraces,
         ...(options?.domain ? { domain: options.domain } : {}),
         ...(options?.noteRefs ? { noteRefs: options.noteRefs } : {}),
+        ...(options?.noteWorkingSet ? { noteWorkingSet: options.noteWorkingSet } : {}),
         ...(options?.maintenanceTaskId ? { maintenanceTaskId: options.maintenanceTaskId } : {}),
       })
     })

@@ -270,7 +270,6 @@
     "rejectFailed": "拒绝失败：候选需求不存在"
   },
   "noteChat": {
-    "hint": "直接告诉 Janus 要读取或修改哪些内容；修改后会同步到蓝图。",
     "applied": "已更新 {{count}} 篇 Note",
     "reverted": "已撤销此次修改",
     "viewChanges": "查看修改",
@@ -490,5 +489,16 @@
     "conflictTitle": "保存冲突",
     "conflictReload": "外部修改已先行保存，请重新加载后继续。",
     "invalidKept": "{{count}} 个无效文件已保留，不执行"
+  },
+  "noteFocus": {
+    "scope": "当前关注",
+    "locate": "定位",
+    "clear": "重置范围",
+    "target": "目标",
+    "reference": "参考",
+    "dependency": "依赖",
+    "pin": "固定",
+    "remove": "移除",
+    "unavailable": "当前画布不可用：{{names}}"
   }
 }

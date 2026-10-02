@@ -12,6 +12,7 @@ import {
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useNoteChatStore } from '@/stores/note-chat'
+import { useNoteFocusStore } from '@/stores/note-focus'
 import type { Workspace } from '@/types'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, type ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
@@ -698,6 +699,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           ...(maintenanceTaskId ? { maintenanceTaskId } : {}),
           workspaceResources: agentResources,
           toolTraces: latest.toolTraces,
+          noteWorkingSet: JSON.stringify(useNoteFocusStore.getState().scopes[id] ?? null),
           // S6: explicit domain; missing = legacy personal. Project never falls back to personal memory.
           ...(latest.engineeringContext?.domain ? { domain: latest.engineeringContext.domain } : {}),
           ...(latest.engineeringContext?.noteRefs?.length
@@ -721,6 +723,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             }))
           },
           onAgentEvent: (agentEvent) => {
+            if (agentEvent.type === 'note_focus') {
+              if (handles.generation === generation && agentEvent.focus.conversationId === id) useNoteFocusStore.getState().receive(agentEvent.focus)
+              return
+            }
             if (agentEvent.type === 'note_change') {
               if (agentEvent.change.conversationId === id) useNoteChatStore.getState().receive(agentEvent.change)
               return
@@ -920,6 +926,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   }, [startRequest, updateConversation])
 
   const clear = useCallback((id: string) => {
+    useNoteFocusStore.getState().clear(id, true)
     const panel = ephemeralIdsRef.current.has(id)
     invalidateRuntime(id, panel)
     if (panel) {
