@@ -491,6 +491,7 @@
     "invalidKept": "{{count}} invalid files kept, not executed"
   },
   "noteFocus": {
+    "read": "Accessed Notes", "addScope": "Add to working Notes", "hidden": "{{count}} highlighted Notes are hidden. Locate to reveal them.",
     "scope": "Working Notes",
     "locate": "Locate",
     "clear": "Reset scope",

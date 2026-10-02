@@ -55,6 +55,20 @@ test('automatic Note access visibly outlines nodes without moving the canvas', a
   expect(await page.locator('.bp-node-detail').textContent()).toBe(detail)
 })
 
+test('access is visible after scope selection and a folded read can be located', async ({ page }) => {
+  await focus(page, { ids: [root], focus: 'none' })
+  await page.locator(`.react-flow__node[data-id="${root}"] .bp-node-card__collapse`).click()
+  await expect(page.locator(`.react-flow__node[data-id="${child}"]`)).toHaveCount(0)
+  await focus(page, { ids: [child], mode: 'access', focus: 'none' })
+  await expect(chat(page).locator('.bp-note-access')).toBeVisible()
+  await expect(chat(page).locator('.bp-note-access')).toContainText(/hidden|隐藏/)
+  await chat(page).locator('.bp-note-access').getByRole('button', { name: /^(Locate|定位)$/ }).click()
+  await expect(page.locator(`.react-flow__node[data-id="${child}"]`)).toBeVisible()
+  await expect(chat(page).locator('.bp-note-scope:not(.bp-note-access)')).toBeVisible()
+  await chat(page).locator('.bp-note-access').getByRole('button', { name: /加入关注|Add to scope/ }).click()
+  await expect(chat(page).locator('.bp-note-scope:not(.bp-note-access) header')).toContainText('2')
+})
+
 test('a repeated scope does not move the viewport; historical locate changes only the highlight', async ({ page }) => {
   await focus(page, { id: 'first' })
   await expect(page.locator('.bp-assistant-target')).toHaveCount(1)

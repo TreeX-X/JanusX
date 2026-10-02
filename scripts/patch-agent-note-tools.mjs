@@ -22,6 +22,8 @@ if (!source.includes(marker)) {
     const schema = (value) => {
       if (Array.isArray(value.type)) return z.union(value.type.map(type => schema({ ...value, type })));
       if (value.enum) return z.enum(value.enum);
+      if (value.type === 'integer') return z.number().int();
+      if (value.type === 'number') return z.number();
       if (value.type === 'string') return z.string();
       if (value.type === 'null') return z.null();
       if (value.type === 'array') return z.array(schema(value.items));
@@ -41,4 +43,12 @@ if (!source.includes(marker)) {
     }
     ${needle}`
   writeFileSync(file, source.replace(needle, extension))
+}
+
+// Existing installations also need paged Note-read numeric parameters.
+source = readFileSync(file, 'utf8')
+if (!source.includes("if (value.type === 'integer')")) {
+  const needle = "if (value.type === 'string') return z.string();"
+  if (source.split(needle).length !== 2) throw new Error('Host Note schema converter changed')
+  writeFileSync(file, source.replace(needle, "if (value.type === 'integer') return z.number().int();\n      if (value.type === 'number') return z.number();\n      " + needle))
 }

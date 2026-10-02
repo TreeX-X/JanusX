@@ -14,6 +14,7 @@ import type {
 import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import type { KnowledgeSource, ObservationType, StructuredCloneValue } from '../../shared/knowledge'
 import { USER_MEMORY_WORKSPACE_ID, USER_MEMORY_WORKSPACE_PATH } from '../knowledge/constants'
+import { resolveChatModelBudget } from './chat-model-budget'
 
 export interface JanusAgentSessionShape {
   id: string
@@ -47,7 +48,7 @@ export interface JanusCaptureInput {
 
 export interface JanusChatTurnPortsDeps {
   callerId: string
-  getProviderSettings: (providerId: string) => Promise<{ modelId?: string } | null>
+  getProviderSettings: (providerId: string) => Promise<{ modelId?: string; extra?: Record<string, unknown> } | null>
   getLanguageModel: (providerId: string, modelId: string) => Promise<unknown>
   /** Optional: older LlmService shapes lack a catalog; the gate is then skipped. */
   listModels?: (providerId: string) => Promise<JanusModelInfoShape[]>
@@ -102,8 +103,7 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
           model,
           modelId: actualModelId,
           supportsFunctionCalling: info?.supportsFunctionCalling,
-          contextWindow: info?.contextWindow,
-          maxOutputTokens: info?.maxOutputTokens,
+          ...resolveChatModelBudget(actualModelId, info, settings.extra),
         }
       },
       getMaxTurns: () => deps.getMaxTurns(),

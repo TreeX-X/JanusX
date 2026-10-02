@@ -5,6 +5,7 @@ import {
   getTerminalDefault,
   getTerminalProviders,
   listModels,
+  saveTerminalProvider,
   cancelSteerChat,
   steerChat,
   type ChatMessage,
@@ -31,7 +32,6 @@ import {
   NEW_CONVERSATION_TITLE,
   capChatMessages,
   bindProjectConversation,
-  compactJanusConversation,
   createJanusConversation,
   getRetryTurn,
   createInitialSnapshot,
@@ -95,6 +95,8 @@ export interface JanusResourceController {
 }
 
 export interface UseJanusChatReturn {
+  contextStatus?: import('../../../../shared/chat-context').ChatContextStatus
+  setContextWindow?: (tokens: number) => Promise<void>
   engineeringContext?: EngineeringContext
   setEngineeringContext: (context: EngineeringContext) => void
   proposeMaintenance: (taskId: string, text: string) => void
@@ -163,6 +165,7 @@ export interface UseJanusChatRegistryReturn {
 }
 
 interface ConversationRuntime {
+  contextStatus?: import('../../../../shared/chat-context').ChatContextStatus
   pendingContent: string
   pendingReasoning: ReasoningSnapshot
   reasoningByTurn: Record<string, ReasoningSnapshot>
@@ -193,7 +196,6 @@ interface RuntimeHandles {
   sessions: Map<string, AgentSession>
 }
 
-const HISTORY_MESSAGE_LIMIT = 24
 
 function emptyRuntime(approvalMode: AgentApprovalMode = 'per-action'): ConversationRuntime {
   return {
@@ -571,7 +573,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   }, [updateConversation])
 
   // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/2026-09-25-blueprint-dialog-separation--2ec6c79b.md
-  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }) => {
+  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }, compact?: { keepRecentUnits: number }) => {
     const runtime = runtimesRef.current[id]
     const conversation = conversationsRef.current.find((item) => item.id === id)
     const handles = getHandles(id)
@@ -588,7 +590,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.reasoning = emptyReasoning()
 
     // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/2026-10-02-blueprint-review-conversation-loop--9c426f18.md
-    const nextMessages = maintenanceTaskId ? history : ephemeralIdsRef.current.has(id) ? [...history, userMessage] : capChatMessages([...history, userMessage])
+    const nextMessages = maintenanceTaskId || compact ? history : [...history, userMessage]
     if (!recovery) updateConversation(id, (current) => ({
       ...current,
       title: current.title === NEW_CONVERSATION_TITLE ? titleFromMessages(nextMessages) : current.title,
@@ -611,11 +613,11 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     // Only these host tools are known to be safe to replay. Unknown tools fail closed.
     let replaySafe = true
     const chatMessages: ChatMessage[] = [
-      ...(maintenanceTaskId ? history : history.slice(-HISTORY_MESSAGE_LIMIT)).map((message) => ({
+      ...history.map((message) => ({
         role: message.role,
         content: message.content,
       })),
-      { role: 'user', content: userMessage.content },
+      ...(!compact ? [{ role: 'user' as const, content: userMessage.content }] : []),
     ]
 
     void (async () => {
@@ -688,6 +690,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
           sourceTag: 'janus-chat',
           conversationId: id,
+          contextCheckpoint: latest.contextCheckpoint,
+          contextEpoch: latest.contextEpoch,
+          compact,
           ...(maintenanceTaskId ? { maintenanceTaskId } : {}),
           workspaceResources: agentResources,
           toolTraces: latest.toolTraces,
@@ -715,6 +720,12 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             }))
           },
           onAgentEvent: (agentEvent) => {
+            if (agentEvent.type === 'context_state') {
+              if (handles.generation !== generation) return
+              setRuntime(id, current => ({ ...current, contextStatus: agentEvent.state }))
+              if (agentEvent.state.checkpoint) updateConversation(id, current => ({ ...current, contextCheckpoint: agentEvent.state.checkpoint }))
+              return
+            }
             if (agentEvent.type === 'note_focus') {
               if (handles.generation === generation && agentEvent.focus.conversationId === id) useNoteFocusStore.getState().receive(agentEvent.focus)
               return
@@ -795,7 +806,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const trimmed = text.trim()
     const conversation = conversationsRef.current.find((item) => item.id === id)
     if (!trimmed || !conversation) return
-    // R7：手动 /compact —— 本地确定性折叠旧消息，不发模型。
+    // Manual compaction uses the host summary checkpoint and preserves the transcript.
     const compact = parseCompactCommand(trimmed)
     if (compact) {
       const flashNotice = (modelNotice: string) => {
@@ -811,18 +822,11 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
         flashNotice('Cannot compact while a response is streaming')
         return
       }
-      const result = compactJanusConversation(conversation.messages, conversation.toolTraces, compact.keepLast)
-      if (result.compactedCount === 0) {
+      if (conversation.messages.length < 3) {
         flashNotice('Conversation is already compact — nothing to collapse')
         return
       }
-      updateConversation(id, (current) => ({
-        ...current,
-        messages: capChatMessages(result.messages),
-        toolTraces: result.toolTraces,
-        updatedAt: Date.now(),
-      }))
-      flashNotice(`Compacted ${result.compactedCount} messages into a summary; kept last ${result.keptCount}`)
+      startRequest(id, conversation.messages, { id: crypto.randomUUID(), role: 'user', content: trimmed, timestamp: Date.now() }, undefined, undefined, { keepRecentUnits: compact.keepLast })
       return
     }
     if (runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) {
@@ -904,6 +908,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     if (index < 0) return
     const target = conversation.messages[index]
     updateConversation(id, (current) => ({ ...current, toolTraces: [] }))
+    updateConversation(id, current => ({ ...current, contextCheckpoint: undefined, contextEpoch: (current.contextEpoch ?? 0) + 1 }))
     startRequest(id, conversation.messages.slice(0, index), { ...target, content: trimmed })
   }, [startRequest, updateConversation])
 
@@ -936,6 +941,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       ...conversation,
       messages: [],
       toolTraces: [],
+      contextCheckpoint: undefined,
+      contextEpoch: (conversation.contextEpoch ?? 0) + 1,
       updatedAt: Date.now(),
     }))
     setRuntime(id, () => ({ ...emptyRuntime(), ...(panel ? { approvalMode: 'plan' as const } : {}) }))
@@ -1023,7 +1030,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     }))
     const handles = getHandles(id)
     if (handles.noticeTimer !== null) window.clearTimeout(handles.noticeTimer)
-    setRuntime(id, (current) => ({ ...current, modelNotice: `Model switched: ${model.modelId}` }))
+    setRuntime(id, (current) => ({ ...current, contextStatus: undefined, modelNotice: `Model switched: ${model.modelId}` }))
     handles.noticeTimer = window.setTimeout(() => {
       handles.noticeTimer = null
       setRuntime(id, (current) => ({ ...current, modelNotice: null }))
@@ -1135,6 +1142,19 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       ?? null
 
     return {
+      contextStatus: runtime.contextStatus,
+      setContextWindow: async (tokens) => {
+        if (!Number.isSafeInteger(tokens) || tokens < 1024 || tokens > 10_000_000 || !activeModel) throw new Error('Invalid context window')
+        const providers = await getTerminalProviders('janus')
+        const provider = providers.find(item => item.id === activeModel.providerId)
+        if (!provider) throw new Error('Provider unavailable')
+        const limits = provider.extra?.chatModelLimits as Record<string, unknown> | undefined
+        const saved = await saveTerminalProvider('janus', { ...provider, extra: { ...provider.extra,
+          chatModelLimits: { ...limits, [activeModel.modelId]: { contextWindow: tokens } } } })
+        if (!saved.success) throw new Error(saved.error ?? 'Failed to save model window')
+        setRuntime(id, current => ({ ...current, contextStatus: { phase: 'ready', usedTokens: current.contextStatus?.usedTokens ?? 0,
+          windowTokens: tokens, source: 'configured', checkpoint: current.contextStatus?.checkpoint } }))
+      },
       engineeringContext: conversation?.engineeringContext,
       setEngineeringContext: (context) => updateConversation(id, (current) => ({ ...current, engineeringContext: context, updatedAt: Date.now() })),
       proposeMaintenance: (taskId, text) => {
@@ -1204,6 +1224,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     retry,
     rewrite,
     runtimeStates,
+    setRuntime,
     selectConversation,
     selectModel,
     send,

@@ -63,7 +63,9 @@ export async function projectChatContext(
   const omitted: string[] = []
   let used = 0
   for (const [index, entry] of ordered.entries()) {
-    const block = `Note: ${entry.uri}\nSHA256: ${entry.hash}\n${entry.raw}`
+    const block = directEditing
+      ? `Note: ${entry.uri}\nTitle: ${/^#\s+(.+)$/m.exec(entry.raw)?.[1] ?? entry.uri}\nBody not loaded. Use note_read to read this Note.`
+      : `Note: ${entry.uri}\nSHA256: ${entry.hash}\n${entry.raw}`
     const size = Buffer.byteLength(block, 'utf8')
     // Always admit the first Note; otherwise a single oversized Note would
     // leave the conversation with an empty repository view.

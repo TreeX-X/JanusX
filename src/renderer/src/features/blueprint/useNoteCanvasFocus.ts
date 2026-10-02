@@ -16,6 +16,10 @@ export function useNoteCanvasFocus(blueprint: Blueprint | null, ownerPath: strin
   const revealing = useRef<string | null>(null)
   const interaction = useRef({ busy: false, last: 0 })
   useEffect(() => {
+    if (event) useNoteFocusStore.getState().reportHidden(event.conversationId,
+      [...resolved.roles.keys()].filter(id => !nodes.some(node => node.id === id && !node.hidden)))
+  }, [event, resolved, nodes])
+  useEffect(() => {
     const release = () => { if (interaction.current.busy) { interaction.current.busy = false; interaction.current.last = Date.now() } }
     window.addEventListener('pointerup', release)
     window.addEventListener('pointercancel', release)

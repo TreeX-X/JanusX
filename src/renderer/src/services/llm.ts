@@ -143,6 +143,9 @@ export function chatStream(
     domain?: 'personal' | 'project'
     noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
     noteWorkingSet?: string
+    contextCheckpoint?: import('../../../shared/chat-context').ChatContextCheckpoint
+    contextEpoch?: number
+    compact?: { keepRecentUnits: number }
     maintenanceTaskId?: string
     onAgentEvent?: (event: ChatAgentEvent) => void
     onRecallTrace?: (trace: KnowledgeRecallTrace) => void
@@ -270,6 +273,9 @@ export function chatStream(
         ...(options?.domain ? { domain: options.domain } : {}),
         ...(options?.noteRefs ? { noteRefs: options.noteRefs } : {}),
         ...(options?.noteWorkingSet ? { noteWorkingSet: options.noteWorkingSet } : {}),
+        contextCheckpoint: options?.contextCheckpoint,
+        contextEpoch: options?.contextEpoch,
+        compact: options?.compact,
         ...(options?.maintenanceTaskId ? { maintenanceTaskId: options.maintenanceTaskId } : {}),
       })
     })

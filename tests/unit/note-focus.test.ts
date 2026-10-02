@@ -5,8 +5,25 @@ import type { NoteFocusEvent } from '../../src/shared/note-chat'
 import type { Blueprint } from '../../src/shared/janus/types'
 
 const event = (id: string, uris = ['note://repo/a', 'note://repo/b']): NoteFocusEvent => ({ id, conversationId: 'chat', workspacePath: 'C:/project', mode: 'scope', focus: 'auto', reason: 'Related work', notes: uris.map((uri, i) => ({ uri, title: uri, role: i ? 'reference' : 'target', reason: 'Relevant' })) })
-beforeEach(() => useNoteFocusStore.setState({ scopes: {}, history: [], display: null }))
+beforeEach(() => useNoteFocusStore.setState({ scopes: {}, history: [], display: null, displays: {}, hidden: {}, activeConversationId: 'chat' }))
 describe('assistant visual scope', () => {
+  it('preserves semantic scope while recording later reads and isolates same-checkout conversations', () => {
+    const state = useNoteFocusStore.getState()
+    state.activate('chat')
+    state.receive(event('scope', ['note://repo/a']))
+    state.receive({ ...event('read', ['note://repo/b']), mode: 'access', focus: 'none' })
+    expect(useNoteFocusStore.getState().scopes.chat.notes.map(note => note.uri)).toEqual(['note://repo/a'])
+    expect(useNoteFocusStore.getState().display?.notes.map(note => note.uri)).toEqual(['note://repo/a', 'note://repo/b'])
+    state.receive({ ...event('background', ['note://repo/z']), conversationId: 'other' })
+    expect(useNoteFocusStore.getState().display?.conversationId).toBe('chat')
+    state.activate('other')
+    expect(useNoteFocusStore.getState().display?.notes[0].uri).toBe('note://repo/z')
+    state.activate('chat')
+    expect(useNoteFocusStore.getState().display?.notes).toHaveLength(2)
+    state.activate(null)
+    state.receive(event('closed'))
+    expect(useNoteFocusStore.getState().display).toBeNull()
+  })
   it('automatic access highlights respect pins and exclusions without replacing scope', () => {
     const state = useNoteFocusStore.getState()
     state.receive(event('one'))

@@ -1079,3 +1079,8 @@
 }
 .janus-chat[data-compact-navigation] .janus-chat-shortcuts kbd { display: none; }
 .janus-chat[data-compact-navigation] .janus-question-gate { flex-shrink: 0; max-height: 240px; overflow-y: auto; }
+.janus-context-indicator { margin: 4px 12px; font-size: 11px; color: var(--shell-text); opacity: .85; }
+.janus-context-indicator summary { cursor: pointer; }
+.janus-context-indicator form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; }
+.janus-context-indicator input { width: 110px; color: inherit; background: var(--shell-bg); border: 1px solid var(--shell-border); }
+.janus-context-indicator button,.janus-chat-load-history { color: inherit; background: transparent; border: 1px solid var(--shell-border); border-radius: 4px; cursor: pointer; padding: 3px 6px; }

@@ -49,11 +49,11 @@ describe('Janus Chat conversation domain', () => {
     ])).toBe('explain this repository')
   })
 
-  it('caps history without mixing or reordering messages', () => {
+  it('preserves complete history without mixing or reordering messages', () => {
     const messages = Array.from({ length: 205 }, (_, index) => message(String(index), 'user'))
     const capped = capChatMessages(messages)
-    expect(capped).toHaveLength(200)
-    expect(capped[0].id).toBe('5')
+    expect(capped).toHaveLength(205)
+    expect(capped[0].id).toBe('0')
     expect(capped.at(-1)?.id).toBe('204')
   })
 
@@ -103,7 +103,7 @@ describe('Janus Chat conversation domain', () => {
     expect(snapshot?.activeConversationId).toBe('valid')
     expect(snapshot?.conversations).toHaveLength(1)
     expect(snapshot?.conversations[0].title).toHaveLength(80)
-    expect(snapshot?.conversations[0].messages).toHaveLength(200)
+    expect(snapshot?.conversations[0].messages).toHaveLength(205)
     expect(snapshot?.conversations[0].toolTraces).toHaveLength(48)
   })
 

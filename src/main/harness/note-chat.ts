@@ -1,7 +1,7 @@
 // Note: conversational Note tools preserve transactions and highlight actual access — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { join, resolve, relative } from 'node:path'
 import { z } from 'zod'
 import { parseNote, NOTE_URI_RE } from '@janus-agent/harness-core'
 import { listPendingTx, readCommitted, readJournal } from '@janus-agent/harness-node'
@@ -99,7 +99,7 @@ export class NoteChatEditor {
     await this.service.readSnapshot(root)
     const result = await this.service.readNote(root, uri)
     this.reads.set(`${root}:${uri}`, result.sha256)
-    return { uri, markdown: result.raw, expectedHash: result.sha256, path: result.relPath }
+    return { uri, markdown: result.raw, expectedHash: result.sha256, path: result.relPath, workspacePath: root }
   }
 
   write(root: string, conversationId: string, callId: string, input: unknown, authorized: boolean, signal: AbortSignal): Promise<NoteChatChange | null> {
@@ -161,7 +161,7 @@ export const NOTE_CHAT_TOOLS = [
   { name: 'note.focus', actionRisk: 'read', description: 'Highlight existing Notes without changing the working scope or the user selection. Use explicit focus only when the user asks to locate/show Notes; ordinary background reads never move the canvas. No execution is started.', inputSchema: NOTE_FOCUS_SCHEMA },
   { name: 'note.scope', actionRisk: 'read', description: 'Set the current multi-Note working scope. Find and read relevant Notes first. Give each a target/reference/dependency role and a reason. Reference and dependency Notes are not edit or execution targets. User pins and removals take precedence. Auto focus only when entering a new primary target.', inputSchema: NOTE_FOCUS_SCHEMA },
   { name: 'note.list', actionRisk: 'read', description: 'Find project Notes by title or content. Optional relatedTo Note URI returns explicit relations and Markdown mentions in either direction, preserving their types and unresolved references. No manual canvas selection is needed.', inputSchema: { type: 'object', properties: { query: { type: 'string' }, relatedTo: { type: 'string' } }, additionalProperties: false } },
-  { name: 'note.read', actionRisk: 'read', description: 'Read the complete Note source and its expectedHash. Required before updating that Note.', inputSchema: { type: 'object', properties: { uri: { type: 'string' } }, required: ['uri'], additionalProperties: false } },
+  { name: 'note.read', actionRisk: 'read', description: 'Read Note source with its exact expectedHash. Large Notes are paged: follow nextOffset with offset to continue. Read required sections before editing.', inputSchema: { type: 'object', properties: { uri: { type: 'string' }, offset: { type: 'integer' }, maxChars: { type: 'integer' } }, required: ['uri'], additionalProperties: false } },
   { name: 'note.write', actionRisk: 'write', description: 'Apply requested Note changes directly in one transaction. Only use for explicit user change instructions, never analysis. Create with kind/title/sections; update with uri/expectedHash and changed title/sections/tags/parent/lifecycle. Preserve unrelated sections. No execution metadata, code writes, or task completion claims.',
     inputSchema: { type: 'object', properties: { reason: { type: 'string' }, operations: { type: 'array', items: { type: 'object', properties: {
       type: { type: 'string', enum: ['create', 'update'] }, uri: { type: 'string' }, expectedHash: { type: 'string' }, kind: { type: 'string', enum: ['idea', 'initiative', 'requirement', 'decision', 'task'] }, title: { type: 'string' },
@@ -181,9 +181,8 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
   const authorized = hasNoteMutationIntent(options.userText)
   // Successful Note access remains visible even when the model omits a display tool.
   const accessed = new Map<string, { uri: string; title: string; role: 'target' | 'reference'; reason: string }>()
-  let explicitScope = false
   const highlight = (root: string, notes: Array<{ uri: string; title: string }>, role: 'target' | 'reference') => {
-    if (!options.onFocus || explicitScope || options.signal.aborted) return
+    if (!options.onFocus || options.signal.aborted) return
     const reason = role === 'target' ? 'Updated in this conversation' : 'Read for this conversation'
     for (const note of notes) {
       const key = `${rootKey(root)}:${note.uri}`
@@ -191,14 +190,34 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
       accessed.set(key, { ...note, role: previous?.role === 'target' ? 'target' : role, reason: previous?.role === 'target' ? previous.reason : reason })
     }
     const visible = [...accessed.entries()].filter(([key]) => key.startsWith(`${rootKey(root)}:note://`)).map(([, note]) => note).slice(-32)
-    options.onFocus({ id: randomUUID(), conversationId: options.conversationId, workspacePath: root, mode: 'display', focus: 'none', reason, notes: visible })
+    options.onFocus({ id: randomUUID(), conversationId: options.conversationId, workspacePath: root, mode: 'access', focus: 'none', reason, notes: visible })
   }
   const definitions = NOTE_CHAT_TOOLS.filter(tool => authorized || tool.actionRisk === 'read')
   ports.tools = {
     registry: { list: () => [...original.registry.list(), ...definitions],
       listManifests: () => [...(original.registry.listManifests?.() ?? createToolManifests(original.registry.list())), ...createToolManifests(definitions)] },
     executeFunctionCall: async (input, callerId): Promise<ToolResult> => {
-      if (!input.call.toolName.startsWith('note.')) return original.executeFunctionCall(input, callerId)
+      if (!input.call.toolName.startsWith('note.')) {
+        const result = await original.executeFunctionCall(input, callerId)
+        if (input.call.toolName !== 'workspace.read' || result.status !== 'completed' || options.signal.aborted) return result
+        const resource = options.resources.find(item => item.agentSessionId === input.sessionId)
+        const output = result.output as { path?: string; content?: string; sha256?: string; truncated?: boolean } | undefined
+        if (!resource || typeof output?.path !== 'string') return result
+        const outputPath = output.path
+        try {
+          const path = relative(resource.workspacePath, resolve(resource.workspacePath, outputPath)).replace(/\\/g, '/')
+          if (!path.startsWith('.agents/notes/') || !path.endsWith('.md')) return result
+          const snapshot = await harnessNoteService.readSnapshot(resource.workspacePath)
+          const entry = snapshot.entries.find(item => item.relPath.replace(/\\/g, '/') === path && item.doc)
+          if (!entry) return result
+          if (!entry.uri) return result
+          const read = await editor.read(resource.workspacePath, entry.uri)
+          highlight(resource.workspacePath, [{ uri: read.uri, title: entry.doc!.title }], 'reference')
+          return { ...result, output: { ...output, uri: read.uri, expectedHash: output.sha256 ?? read.expectedHash, workspacePath: resource.workspacePath,
+            stale: output.sha256 !== read.expectedHash,
+            markdown: `Workspace read excerpt (re-read with note_read for complete source):\n${output.content ?? ''}` } }
+        } catch { return result } // A display lookup must not turn a successful file read into failure.
+      }
       const startedAt = new Date().toISOString()
       const correlationId = input.call.correlationId ?? randomUUID()
       const resource = options.resources.find(item => item.agentSessionId === input.sessionId)
@@ -211,14 +230,17 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
         if (input.call.toolName === 'note.list') output = await editor.list(resource.workspacePath, z.string().max(1000).parse(input.call.input.query ?? ''), z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.relatedTo))
         else if (input.call.toolName === 'note.read') {
           const read = await editor.read(resource.workspacePath, z.string().parse(input.call.input.uri))
-          output = read
+          const offset = z.number().int().min(0).parse(input.call.input.offset ?? 0)
+          const maxChars = z.number().int().min(500).max(12000).parse(input.call.input.maxChars ?? 6000)
+          if (offset > read.markdown.length) throw new Error('Offset is beyond the Note source')
+          output = { ...read, markdown: read.markdown.slice(offset, offset + maxChars), offset, totalChars: read.markdown.length,
+            ...(offset + maxChars < read.markdown.length ? { nextOffset: offset + maxChars, truncated: true } : {}) }
           highlight(resource.workspacePath, [{ uri: read.uri, title: /^#\s+(.+)$/m.exec(read.markdown)?.[1] ?? read.uri }], 'reference')
         }
         else if (input.call.toolName === 'note.focus' || input.call.toolName === 'note.scope') {
           const { workspaceId: _workspaceId, ...args } = input.call.input
           const event = await resolveNoteFocus(harnessNoteService, resource.workspacePath, options.conversationId, input.call.toolName === 'note.scope' ? 'scope' : 'display', args, options.userText)
           if (options.signal.aborted) throw new Error('Note operation cancelled')
-          explicitScope = true
           options.onFocus?.(event)
           output = { status: 'validated', notes: event.notes, message: 'Display requested. Hidden or unavailable canvas nodes are reported by the UI; this does not edit or execute Notes.' }
         } else if (input.call.toolName === 'note.write') {

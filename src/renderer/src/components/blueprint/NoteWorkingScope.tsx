@@ -18,10 +18,21 @@ export function NoteWorkingScope({ conversationId, workspacePath, history = fals
     <button type="button" onClick={() => state.locate(event)}>{t('blueprint:noteFocus.locate')}</button>
   </details>)}</div>
   const scope = state.scopes[conversationId]
-  if (!scope || (!scope.notes.length && !scope.excluded.length) || !sameCheckoutPath(scope.workspacePath, workspacePath)) return null
+  const access = [...state.history].reverse().find(event => event.mode === 'access' && event.conversationId === conversationId && sameCheckoutPath(event.workspacePath, workspacePath))
+  const accessCard = access && <section className="bp-note-scope bp-note-access" aria-label={t('blueprint:noteFocus.read')}>
+    <header><span>{t('blueprint:noteFocus.read')} · {access.notes.length}</span>
+      <button type="button" onClick={() => state.locate(access)}>{t('blueprint:noteFocus.locate')}</button>
+      <button type="button" onClick={() => state.receive({ ...access, id: crypto.randomUUID(), mode: 'scope', focus: 'none',
+        notes: [...(scope?.notes ?? []), ...access.notes.filter(note => !scope?.notes.some(current => current.uri === note.uri))] })}>{t('blueprint:noteFocus.addScope')}</button>
+    </header>
+    <p>{access.notes.map(note => note.title).join(' · ')}</p>
+    {!!state.hidden[conversationId]?.length && <p role="status">{t('blueprint:noteFocus.hidden', { count: state.hidden[conversationId].length })}</p>}
+    {!!resolveFocusNodes(blueprint, owner, access).missing.length && <p role="status">{t('blueprint:noteFocus.unavailable', { names: resolveFocusNodes(blueprint, owner, access).missing.join(' · ') })}</p>}
+  </section>
+  if (!scope || (!scope.notes.length && !scope.excluded.length) || !sameCheckoutPath(scope.workspacePath, workspacePath)) return accessCard ?? null
   const event: NoteFocusEvent = { id: 'current', conversationId, workspacePath, mode: 'display', focus: 'explicit', reason: '', notes: scope.notes }
   const { missing } = resolveFocusNodes(blueprint, owner, event)
-  return <section className="bp-note-scope" aria-label={t('blueprint:noteFocus.scope')}>
+  return <>{accessCard}<section className="bp-note-scope" aria-label={t('blueprint:noteFocus.scope')}>
     <header><span>{t('blueprint:noteFocus.scope')} · {scope.notes.length}</span>
       <button type="button" onClick={() => state.locate(event)}>{t('blueprint:noteFocus.locate')}</button>
       <button type="button" onClick={() => state.clear(conversationId)}>{t('blueprint:noteFocus.clear')}</button>
@@ -36,5 +47,5 @@ export function NoteWorkingScope({ conversationId, workspacePath, history = fals
       </li>)}</ul>
     </details>
     {missing.length > 0 && <p role="status">{t('blueprint:noteFocus.unavailable', { names: missing.join(' · ') })}</p>}
-  </section>
+  </section></>
 }

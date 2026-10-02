@@ -16,6 +16,7 @@ import { EMPTY_FOCUS, resolveBlueprintContextScope } from '@/features/blueprint/
 import { useOptionalBlueprintToolbar } from './BlueprintToolbar'
 import { NoteChatActivity } from './NoteChatActivity'
 import { NoteWorkingScope } from './NoteWorkingScope'
+import { useNoteFocusStore } from '@/stores/note-focus'
 import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 
 /** Stable identity of the single blueprint-panel conversation. */
@@ -86,6 +87,10 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   }), [contextScope?.scope, contextScope?.noteRefs])
 
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
+  useEffect(() => {
+    useNoteFocusStore.getState().activate(conversationId ?? null)
+    return () => useNoteFocusStore.getState().activate(null)
+  }, [conversationId])
 
   useEffect(() => {
     if (!registry.persistenceReady || !activeWorkspace) return

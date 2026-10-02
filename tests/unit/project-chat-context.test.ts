@@ -51,6 +51,14 @@ describe('project chat checkout selection', () => {
 // Note: batch selection degrades at the byte budget instead of failing the turn —
 // see .agents/notes/2026-09-30-blueprint-batch-context--7c1e4a92.md
 describe('project chat context budget', () => {
+  it('provides an index for direct conversation so background Notes cannot crowd out its history', async () => {
+    const a = await checkout('Index title', 'UNIQUE_SOURCE_BODY'.repeat(5000))
+    const context = await projectChatContext([a.root], [{ uri, checkoutPath: a.root }], true)
+    expect(context).toContain('Index title')
+    expect(context).toContain(uri)
+    expect(context).toContain('Body not loaded')
+    expect(context).not.toContain('UNIQUE_SOURCE_BODY')
+  })
   /** One Note whose body alone exceeds the per-turn budget. */
   it('always admits the first Note even when it alone overflows', async () => {
     const a = await checkout('Oversized', 'x'.repeat(150_000))

@@ -1,5 +1,10 @@
 {
   "chat": {
+    "context": {
+      "usage": "Context ≈ {{used}} / {{limit}} tokens", "configured": "Configured", "catalog": "Model catalog", "registry": "Model registry", "estimated": "Estimated window",
+      "compacting": "Summarizing earlier conversation…", "compacted": "Summarized; original history retained", "failed": "Summary failed; history retained",
+      "configure": "Model context window (tokens)", "save": "Save", "compact": "Compact now", "older": "Show earlier messages"
+    },
     "recoveringTools": "Tool context error. Retrying once (1/1)…",
     "author": {
       "user": "You",

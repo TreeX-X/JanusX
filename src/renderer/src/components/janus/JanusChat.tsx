@@ -19,6 +19,7 @@ import { ThinkingRegion } from './ThinkingRegion'
 import { formatThinkingDuration, type ReasoningSnapshot } from './janusReasoning'
 import type { JanusChatStatus, JanusPendingQuestion } from './janusRuntimeState'
 import { Select } from '../ui/Select'
+import { ChatContextIndicator } from './ChatContextIndicator'
 
 type SelectionMenu = 'provider' | 'model' | 'permission'
 type PermissionOption = { value: AgentApprovalMode; label: string }
@@ -419,6 +420,7 @@ export function JanusChat({
 }: JanusChatProps) {
   const { t } = useI18n('janus')
   const [input, setInput] = useState('')
+  const [historyPageSize, setHistoryPageSize] = useState(100)
   // Composer auto-grows from content (including soft-wrapped long lines) up to
   // MAX_COMPOSER_HEIGHT, then scrolls internally. Counting '\n' is not enough:
   // a single long line without newlines would stay one row high and overflow.
@@ -1395,7 +1397,8 @@ export function JanusChat({
           </div>
         )}
 
-        {[...messages.map((msg) => ({ kind: 'message' as const, timestamp: msg.timestamp, msg })), ...roundtableCards.map((card) => ({ kind: 'card' as const, timestamp: Date.parse(card.updatedAt || card.createdAt) || 0, card })), ...roundtableQuestions.map((block) => ({ kind: 'questions' as const, timestamp: block.timestamp, block}))]
+        {messages.length > historyPageSize && <button type="button" className="janus-chat-load-history" onClick={() => setHistoryPageSize(size => size + 100)}>{t('janus:chat.context.older')}</button>}
+        {[...messages.slice(-historyPageSize).map((msg) => ({ kind: 'message' as const, timestamp: msg.timestamp, msg })), ...roundtableCards.map((card) => ({ kind: 'card' as const, timestamp: Date.parse(card.updatedAt || card.createdAt) || 0, card })), ...roundtableQuestions.map((block) => ({ kind: 'questions' as const, timestamp: block.timestamp, block}))]
           .sort((a, b) => a.timestamp - b.timestamp)
           .map((entry) => entry.kind === 'card' ? (
           <div key={entry.card.id} className="janus-chat-message assistant janus-chat-agent-card-message">
@@ -1593,6 +1596,7 @@ export function JanusChat({
       ))}
 
       {aboveComposer}
+      <ChatContextIndicator controller={conversations} />
 
       {/* 输入区域：opencode 风格方框 composer；minimal 下加 › 前缀（对齐蓝图高保真） */}
       <div className="janus-chat-input-wrapper" data-has-input={input.length > 0}>

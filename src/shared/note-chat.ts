@@ -21,7 +21,7 @@ export interface NoteFocusEvent {
   id: string
   conversationId: string
   workspacePath: string
-  mode: 'display' | 'scope'
+  mode: 'display' | 'scope' | 'access'
   focus: 'auto' | 'explicit' | 'none'
   reason: string
   notes: NoteScopeItem[]

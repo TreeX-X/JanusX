@@ -27,6 +27,43 @@ async function fixture() {
 }
 
 describe('direct Note conversation', () => {
+  it.each([false, true])('recognizes generic Note reads and preserves source hash when changed=%s', async changed => {
+    const { root, editor, signal, input } = await fixture()
+    const created = (await editor.write(root, 'chat', 'create', input, true, signal))!
+    const read = await editor.read(root, created.files[0].uri)
+    const events: import('../../src/shared/note-chat').NoteFocusEvent[] = []
+    const ports = {
+      sessions: { getSession: () => ({ sessionId: 'session', workspaceId: 'ws', workspaceRoot: root, status: 'running' }) },
+      tools: { registry: { list: () => [] }, executeFunctionCall: async () => {
+        if (changed) await writeFile(join(root, read.path), read.markdown + '\nExternal change\n')
+        return { status: 'completed', output: { path: read.path, content: read.markdown, sha256: read.expectedHash } }
+      } },
+    } as unknown as ChatTurnPorts
+    attachNoteChatTools(ports, { conversationId: 'chat', userText: 'Read', signal, resources: [{ agentSessionId: 'session', workspaceId: 'ws', workspacePath: root }], onChange: () => {}, onFocus: event => events.push(event) })
+    const result = await ports.tools.executeFunctionCall({ sessionId: 'session', call: { toolName: 'workspace.read', input: {} } } as never, 'test')
+    expect(result.output).toMatchObject({ uri: read.uri, expectedHash: read.expectedHash, workspacePath: root, stale: changed })
+    expect(events[0]).toMatchObject({ mode: 'access', focus: 'none', notes: [{ uri: read.uri, role: 'reference' }] })
+  })
+
+  it('pages a large Note with an exact next offset and source hash', async () => {
+    const { root, editor, signal, input } = await fixture()
+    input.operations[0].sections.Idea = 'Large source '.repeat(2000)
+    const created = (await editor.write(root, 'chat', 'create', input, true, signal))!
+    const expected = await editor.read(root, created.files[0].uri)
+    const ports = { sessions: { getSession: () => ({ sessionId: 'session', workspaceId: 'ws', workspaceRoot: root, status: 'running' }) }, tools: { registry: { list: () => [] }, executeFunctionCall: async () => { throw new Error('unexpected') } } } as unknown as ChatTurnPorts
+    attachNoteChatTools(ports, { conversationId: 'chat', userText: 'Read', signal, resources: [{ agentSessionId: 'session', workspaceId: 'ws', workspacePath: root }], onChange: () => {} })
+    let offset = 0, markdown = ''
+    do {
+      const result = await ports.tools.executeFunctionCall({ sessionId: 'session', call: { toolName: 'note.read', input: { uri: expected.uri, offset } } } as never, 'test')
+      expect(result.status).toBe('completed')
+      const page = result.output as { markdown: string; expectedHash: string; nextOffset?: number }
+      expect(page.expectedHash).toBe(expected.expectedHash)
+      expect(page.markdown.length).toBeLessThanOrEqual(6000)
+      markdown += page.markdown
+      offset = page.nextOffset ?? 0
+    } while (offset)
+    expect(markdown).toBe(expected.markdown)
+  })
   it('highlights successful reads and writes without requiring a model focus call', async () => {
     const { root, editor, signal, input } = await fixture()
     const created = (await editor.write(root, 'chat', 'create', input, true, signal))!
@@ -48,8 +85,9 @@ describe('direct Note conversation', () => {
     await invoke('note.scope', { reason: 'Specific scope', notes: [{ uri: created.files[1].uri, role: 'dependency', reason: 'Needed' }] })
     const count = focused.length
     await invoke('note.read', { uri: created.files[0].uri })
-    expect(focused).toHaveLength(count)
-    expect(focused.at(-1)?.mode).toBe('scope')
+    expect(focused).toHaveLength(count + 1)
+    expect(focused.at(-1)?.mode).toBe('access')
+    expect(focused[count - 1].mode).toBe('scope')
   })
   it('delivers a model scope call through the real facade without writing in an analysis turn', async () => {
     const { root, editor, signal, input } = await fixture()

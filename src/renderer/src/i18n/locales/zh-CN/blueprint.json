@@ -491,6 +491,7 @@
     "invalidKept": "{{count}} 个无效文件已保留，不执行"
   },
   "noteFocus": {
+    "read": "已访问 Note", "addScope": "加入关注", "hidden": "{{count}} 篇已高亮的 Note 当前隐藏，可点击定位展开。",
     "scope": "当前关注",
     "locate": "定位",
     "clear": "重置范围",
