@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { AuthType } from '../../../packages/llm-core/src/core/types'
 import type { ApprovalRequest } from '../../../src/shared/ipc/agent-runtime'
 import type { ChatStreamEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
+import { DEFAULT_APP_THEME } from '../../../src/shared/ipc/theme'
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
 import { JanusRunOrbs } from '../../../src/renderer/src/components/janus/JanusRunOrbs'
 import { useGlobalRunning } from '../../../src/renderer/src/components/janus/useGlobalRunning'
@@ -17,9 +18,11 @@ import { createTerminalPaneContent, getLeafPanes } from '../../../src/renderer/s
 import { ProjectType, type RunningProjectSummary } from '../../../src/shared/ipc/project'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import '../../../src/renderer/src/styles/globals.css'
+import '../../../src/renderer/src/styles/themes.generated.css'
 import '../../../src/renderer/src/components/janus/janus-island.css'
 
 installElectronApiFallback()
+document.documentElement.dataset.theme = DEFAULT_APP_THEME
 
 const streamListeners = {
   delta: new Set<(payload: ChatStreamEvent) => void>(),

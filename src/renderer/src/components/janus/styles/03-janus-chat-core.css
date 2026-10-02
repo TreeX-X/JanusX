@@ -166,13 +166,13 @@
   word-break: break-word;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  color: var(--shell-text);
 }
 
 .janus-chat-message.user .janus-chat-message-content {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-right-color: transparent;
-  color: #e0e0e0;
 }
 
 /* R6-full：在途 steering 只用徽标标记（文本已是正常用户气泡），不另起层级。 */
@@ -190,7 +190,6 @@
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-left-color: transparent;
-  color: #aaa;
 }
 
 .janus-chat-streaming-text {
@@ -205,8 +204,7 @@
   height: 1.15em;
   margin-left: 1px;
   vertical-align: -0.18em;
-  background: var(--accent-color, var(--janus-current));
-  box-shadow: 0 0 8px var(--janus-current-glow);
+  background: var(--shell-accent);
   animation: janus-stream-cursor 0.95s steps(2, start) infinite;
 }
 
@@ -226,7 +224,7 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--janus-current);
+  background: var(--shell-accent);
   opacity: 0.6;
   animation: dot-pulse 1.4s ease-in-out infinite;
 }
@@ -272,11 +270,12 @@
 
 .janus-chat-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--shell-pane);
+  border: 1px solid var(--shell-border);
   border-radius: 14px;
   font-size: 11px;
-  color: #ccc;
+  color: var(--shell-text);
+  caret-color: var(--shell-accent);
   outline: none;
   transition: all 0.3s;
   backdrop-filter: blur(4px);
@@ -290,7 +289,7 @@
 }
 
 .janus-chat-input::placeholder {
-  color: #555;
+  color: var(--shell-dim);
 }
 
 .janus-chat-input:disabled {
@@ -448,7 +447,7 @@
   display: block;
   font-family: 'SF Mono', monospace;
   font-size: 10px;
-  color: #d4d4d4;
+  color: var(--shell-text);
   white-space: pre-wrap;
   word-break: break-word;
   padding-right: 36px;
@@ -485,19 +484,19 @@
   padding: 4px 0;
 }
 
-/* agentX Activity parity：流式状态行（状态文案 + 实时耗时，替代纯三点） */
+/* Note: all JanusChat hosts share themed streaming feedback — see .agents/notes/2026-09-26-janus-chat-feedback-parity--54b1046a.md */
 .janus-chat-turn-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin: 2px 0 4px;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.4;
 }
 
 .janus-chat-turn-elapsed {
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--shell-dim);
   font-variant-numeric: tabular-nums;
 }
 
@@ -507,7 +506,7 @@
   flex-direction: column;
   gap: 2px;
   margin: 2px 0 4px;
-  border-left: 2px solid rgba(255, 255, 255, 0.14);
+  border-left: 2px solid var(--shell-accent);
   padding-left: 8px;
 }
 
@@ -519,20 +518,20 @@
   border: none;
   padding: 2px 0;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.4;
 }
 
 .janus-chat-thinking-toggle:hover {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--shell-accent);
 }
 
 .janus-chat-thinking-body {
   max-height: 120px;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--shell-border) transparent;
 }
 
 .janus-chat-thinking-body pre {
@@ -540,7 +539,7 @@
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.5;
   font-family: inherit;
@@ -553,7 +552,7 @@
   gap: 2px;
   max-width: 100%;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -581,7 +580,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: var(--shell-border) transparent;
 }
 
 .janus-chat-input::-webkit-scrollbar {
@@ -589,7 +588,7 @@
 }
 
 .janus-chat-input::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--shell-border);
   border-radius: 3px;
 }
 
@@ -602,9 +601,9 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: rgba(255, 100, 100, 0.12);
-  border: 1px solid rgba(255, 100, 100, 0.3);
-  color: #ff6b6b;
+  background: color-mix(in srgb, var(--shell-diff-del) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--shell-diff-del) 30%, transparent);
+  color: var(--shell-diff-del);
   font-size: 10px;
   cursor: pointer;
   display: flex;
@@ -614,8 +613,8 @@
 }
 
 .janus-chat-stop:hover {
-  background: rgba(255, 100, 100, 0.2);
-  box-shadow: 0 0 10px rgba(255, 107, 107, 0.25);
+  background: color-mix(in srgb, var(--shell-diff-del) 12%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--shell-diff-del) 15%, transparent);
 }
 
 /* 閿欒鍗＄墖 */
@@ -849,3 +848,234 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Shared message metadata. */
+.janus-chat-message-author {
+  color: var(--shell-muted);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 1px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.janus-chat-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.janus-chat-message-time {
+  color: var(--shell-dim);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.janus-chat-message.user .janus-chat-message-meta {
+  justify-content: flex-end;
+}
+
+.janus-chat-message-edit-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.janus-chat-inline-editor {
+  width: min(520px, 70vw);
+  max-width: 100%;
+  min-width: min(240px, 70vw);
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid var(--shell-border);
+  border-radius: 7px;
+  outline: none;
+  background: var(--shell-pane);
+  color: var(--shell-text);
+  caret-color: var(--shell-accent);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.62;
+}
+
+.janus-chat-inline-editor:focus {
+  border-color: var(--shell-accent);
+  background: var(--shell-pane);
+}
+
+.janus-chat-message-edit,
+.janus-chat-clear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-muted);
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.janus-chat-message-edit {
+  opacity: 0.48;
+}
+
+.janus-chat-message.user:hover .janus-chat-message-edit,
+.janus-chat-message.user:focus-within .janus-chat-message-edit,
+.janus-chat-message.assistant:hover .janus-chat-message-edit,
+.janus-chat-message.assistant:focus-within .janus-chat-message-edit {
+  opacity: 1;
+}
+
+.janus-chat-message-edit:hover:not(:disabled),
+.janus-chat-clear-button:hover:not(:disabled) {
+  border-color: var(--shell-accent);
+  background: var(--shell-hover);
+  color: var(--shell-text);
+}
+
+.janus-chat-clear-button:hover:not(:disabled) {
+  color: var(--shell-diff-del);
+}
+
+.janus-chat-message-edit:focus-visible,
+.janus-chat-clear-button:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--shell-muted);
+  outline-offset: 1px;
+}
+
+.janus-chat-message-edit:disabled,
+.janus-chat-clear-button:disabled {
+  opacity: 0.24;
+  cursor: not-allowed;
+}
+
+.janus-chat-message.user .janus-chat-message-author {
+  text-align: right;
+}
+
+.janus-chat-message.assistant .janus-chat-message-author {
+  color: var(--shell-accent);
+}
+
+
+.janus-chat[data-compact-navigation] { border-radius: 0; }
+.janus-chat[data-compact-navigation] .janus-chat-main { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.janus-chat[data-compact-navigation] .janus-chat-messages { min-height: 80px; }
+.janus-chat[data-compact-navigation] .janus-chat-message { opacity: 1; filter: none; }
+.janus-chat[data-compact-navigation] .janus-chat-input-wrapper { display: flex; flex-direction: column; flex-shrink: 0; padding: 8px; gap: 6px; background: var(--shell-pane); border: 1px solid var(--shell-border); border-radius: 6px; }
+.janus-chat[data-compact-navigation] .janus-chat-composer-row { display: flex; align-items: flex-end; gap: 6px; min-width: 0; }
+.janus-chat[data-compact-navigation] .janus-chat-input { flex: 1; min-width: 0; border-radius: 4px; }
+.janus-chat[data-compact-navigation] .janus-chat-status-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; min-width: 0; font-size: 11px; }
+.janus-chat[data-compact-navigation] .janus-chat-model-tag { display: flex; gap: 4px; min-width: 0; max-width: 100%; }
+.janus-chat[data-compact-navigation] .janus-chat-model-tag strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.janus-chat[data-compact-navigation] .janus-chat-status-actions, .janus-chat[data-compact-navigation] .janus-chat-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Compact navigation and minimal composer are shared JanusChat variants. */
+.janus-chat[data-minimal-composer] .janus-chat-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--shell-border);
+  border-radius: 4px;
+  background: var(--shell-pane);
+  box-shadow: none;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.janus-chat[data-minimal-composer] .janus-chat-input-wrapper:focus-within {
+  border-color: var(--shell-accent-border);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+.janus-chat[data-minimal-composer] .janus-chat-composer-row {
+  order: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  min-height: 46px;
+  padding: 0;
+}
+.janus-chat-prompt-prefix {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 10px 0 12px;
+  border-right: 1px solid var(--shell-border-soft);
+  color: var(--shell-accent);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+.janus-chat[data-minimal-composer] .janus-chat-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: none;
+  min-height: 46px;
+  max-height: 150px;
+  padding: 14px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  outline: none;
+  box-shadow: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow-y: auto;
+}
+.janus-chat[data-minimal-composer] .janus-chat-input:focus { outline: 0; border: 0; }
+.janus-chat[data-minimal-composer] .janus-chat-send {
+  flex: 0 0 auto;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  margin: 4px 6px 4px 0;
+  padding: 0;
+  border: 1px solid var(--shell-border);
+  border-radius: 4px;
+  background: var(--shell-hover);
+  color: var(--shell-muted);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.janus-chat[data-minimal-composer] .janus-chat-send:not(:disabled) {
+  color: var(--shell-void);
+  background: var(--shell-accent);
+  border-color: var(--shell-accent-border);
+}
+.janus-chat[data-minimal-composer] .janus-chat-send:hover:not(:disabled) { background: var(--shell-accent-strong); }
+.janus-chat[data-minimal-composer] .janus-chat-send:disabled {
+  color: var(--shell-dim);
+  background: var(--shell-hover);
+  cursor: not-allowed;
+}
+.janus-chat[data-minimal-composer] .janus-chat-stop {
+  flex: 0 0 auto;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  margin: 4px 6px 4px 0;
+  border-radius: 4px;
+}
+.janus-chat[data-compact-navigation] .janus-chat-shortcuts kbd { display: none; }
+.janus-chat[data-compact-navigation] .janus-question-gate { flex-shrink: 0; max-height: 240px; overflow-y: auto; }

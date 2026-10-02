@@ -13,13 +13,16 @@ import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import type { ChatAgentEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
+import { DEFAULT_APP_THEME } from '../../../src/shared/ipc/theme'
 import type { HarnessTaskDraft, HarnessTranscript } from '../../../src/shared/ipc/harness'
 import type { CreateAgentSessionInput } from '../../../src/shared/ipc/agent-runtime'
 import '../../../src/renderer/src/styles/globals.css'
+import '../../../src/renderer/src/styles/themes.generated.css'
 import '../../../src/renderer/src/components/janus/janus-island.css'
 import '../../../src/renderer/src/components/blueprint/blueprint.css'
 
 installElectronApiFallback()
+document.documentElement.dataset.theme = DEFAULT_APP_THEME
 const workbench = new URLSearchParams(location.search).has('workbench')
 Object.assign(window.electron.system, { getLanguage: async () => 'en', setLanguage: async () => undefined })
 const repoId = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
@@ -105,6 +108,7 @@ Object.assign(window.electron.llm, {
       if (task) void window.electron.janus.dismissMaintenanceProposal({ taskId: task.id })
     }
     queueMicrotask(() => {
+      if (new URLSearchParams(location.search).has('manual-stream') && !request.maintenanceTaskId) return
       emit({ type: 'text_delta', requestId: request.requestId, delta: 'Project reply in progress' })
       if (request.maintenanceTaskId) {
         maintenance.completeProposal(request.maintenanceTaskId)
@@ -247,6 +251,7 @@ if (twoCheckouts) maintenance.checkoutViews[secondWorkspace.path] = {
   ...blueprint, id: blueprint.id + ':checkout-b', nodeIds: [id], nodes: { [id]: { ...blueprint.nodes[id], title: 'Task checkout B', sourceHash: 'd'.repeat(64) } }, composition: undefined,
 } as never
 Object.assign(fixture, { maintenance,
+  emitAgentEvent: emit,
   switchWorkspace: (id: string) => useWorkspaceStore.getState().setActiveWorkspace(id),
   selectMaintenanceNode: (nodeId?: string) => useBlueprintMaintenanceStore.getState().requestOpen({ blueprintId: blueprint.id, nodeId }),
   finishStream: () => emit({ type: 'stream_end', requestId: fixture.streams.at(-1)!.requestId, cancelled: false }),
