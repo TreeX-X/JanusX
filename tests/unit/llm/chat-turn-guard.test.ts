@@ -14,8 +14,8 @@ const { search, searchWithUser, recordAccess, recordProjectAccess, capture, stre
   capturePersonTurn: vi.fn(),
   capturePersonEpisode: vi.fn(),
 }))
-const { proposeForConversation } = vi.hoisted(() => ({ proposeForConversation: vi.fn() }))
-vi.mock('../../../src/main/janus/maintenance/service', () => ({ blueprintMaintenanceService: { proposeForConversation } }))
+const { proposeForConversation, invalidateConversationProposal } = vi.hoisted(() => ({ proposeForConversation: vi.fn(), invalidateConversationProposal: vi.fn() }))
+vi.mock('../../../src/main/janus/maintenance/service', () => ({ blueprintMaintenanceService: { proposeForConversation, invalidateConversationProposal } }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/janusx-test' } }))
 vi.mock('../../../src/main/knowledge/context-service', () => ({

@@ -37,6 +37,7 @@ import {
 } from '../../shared/ipc/janus'
 import type {
   BlueprintMaintenanceApplyInput,
+  BlueprintMaintenancePreviewInput,
   BlueprintMaintenanceAuditListInput,
   BlueprintMaintenanceDismissInput,
   BlueprintMaintenanceStartInput,
@@ -94,6 +95,10 @@ export function registerJanusHandlers(): void {
   ipcMain.handle(
     JANUS_COMMAND_CHANNELS.maintenanceApply,
     async (_event, input: BlueprintMaintenanceApplyInput) => blueprintMaintenanceService.apply(input)
+  )
+  ipcMain.handle(
+    JANUS_COMMAND_CHANNELS.maintenancePreview,
+    async (_event, input: BlueprintMaintenancePreviewInput) => blueprintMaintenanceService.preview(input)
   )
   ipcMain.handle(
     JANUS_COMMAND_CHANNELS.maintenanceCancel,

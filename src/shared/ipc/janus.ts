@@ -14,6 +14,8 @@ import type {
   BlueprintDispatchBriefResult,
   BlueprintMaintenanceApplyInput,
   BlueprintMaintenanceApplyResult,
+  BlueprintMaintenancePreviewInput,
+  BlueprintMaintenancePreview,
   BlueprintMaintenanceAuditListInput,
   BlueprintMaintenanceAuditRecord,
   BlueprintMaintenanceDismissInput,
@@ -54,6 +56,7 @@ export const JANUS_COMMAND_CHANNELS = {
   maintenanceAuditList: 'blueprint:maintenance:audit:list',
   maintenanceStart: 'blueprint:maintenance:start',
   maintenanceApply: 'blueprint:maintenance:apply',
+  maintenancePreview: 'blueprint:maintenance:preview',
   maintenanceCancel: 'blueprint:maintenance:cancel',
   maintenanceComplete: 'blueprint:maintenance:complete',
   maintenanceDismiss: 'blueprint:maintenance:dismiss',
@@ -221,6 +224,7 @@ export interface JanusAPI {
   listMaintenanceAudits(input: BlueprintMaintenanceAuditListInput): Promise<BlueprintMaintenanceAuditRecord[]>
   startMaintenanceTask(input: BlueprintMaintenanceStartInput): Promise<BlueprintMaintenanceTask>
   applyMaintenanceChangeSet(input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult>
+  previewMaintenanceChangeSet(input: BlueprintMaintenancePreviewInput): Promise<BlueprintMaintenancePreview>
   cancelMaintenanceTask(taskId: string): Promise<BlueprintMaintenanceTask>
   completeMaintenanceTask(taskId: string): Promise<BlueprintMaintenanceTask>
   dismissMaintenanceProposal(input: BlueprintMaintenanceDismissInput): Promise<BlueprintMaintenanceTask>

@@ -100,6 +100,10 @@ Object.assign(window.electron.llm, {
   onAgentEvent: (listener: (event: ChatAgentEvent) => void) => { events.add(listener); return () => events.delete(listener) },
   startChatStream: (request: ChatStreamRequest) => {
     fixture.streams.push(request)
+    if (!request.maintenanceTaskId) {
+      const task = maintenance.tasks.find(item => item.conversationId === request.conversationId && item.status === 'proposal-ready')
+      if (task) void window.electron.janus.dismissMaintenanceProposal({ taskId: task.id })
+    }
     queueMicrotask(() => {
       emit({ type: 'text_delta', requestId: request.requestId, delta: 'Project reply in progress' })
       if (request.maintenanceTaskId) {
@@ -243,6 +247,7 @@ if (twoCheckouts) maintenance.checkoutViews[secondWorkspace.path] = {
   ...blueprint, id: blueprint.id + ':checkout-b', nodeIds: [id], nodes: { [id]: { ...blueprint.nodes[id], title: 'Task checkout B', sourceHash: 'd'.repeat(64) } }, composition: undefined,
 } as never
 Object.assign(fixture, { maintenance,
+  switchWorkspace: (id: string) => useWorkspaceStore.getState().setActiveWorkspace(id),
   selectMaintenanceNode: (nodeId?: string) => useBlueprintMaintenanceStore.getState().requestOpen({ blueprintId: blueprint.id, nodeId }),
   finishStream: () => emit({ type: 'stream_end', requestId: fixture.streams.at(-1)!.requestId, cancelled: false }),
   failStream: () => emit({ type: 'stream_error', requestId: fixture.streams.at(-1)!.requestId, error: 'Fixture provider unavailable' }),

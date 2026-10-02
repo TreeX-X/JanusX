@@ -49,7 +49,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const [switchNotice, setSwitchNotice] = useState<string | null>(null)
   const bindingKey = useRef('')
   const configuredKey = useRef('')
-  const prevWorkspaceId = useRef<string | null>(null)
+  const previousRevision = useRef<number | null>(null)
   const noticeTimer = useRef(0)
 
   // Context follows the canvas. The toolbar owns search/status/kind/selection in
@@ -74,7 +74,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const sourceUnavailable = !!contextScope && contextScope.noteRefs.length === 0 && foreignCount > 0
 
   const context = useMemo<EngineeringContext>(() => ({
-    domain: 'project', intent: 'maintain', scope: contextScope?.scope ?? 'view',
+    domain: 'project', intent: 'discuss', scope: contextScope?.scope ?? 'view',
     repoIds: [...new Set((contextScope?.noteRefs ?? [])
       .map(ref => ref.uri.split('/')[2])
       .filter((id): id is string => !!id))],
@@ -106,16 +106,16 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     const key = `${conversationId}|${activeWorkspace.id}|${JSON.stringify(context)}`
     if (configuredKey.current === key) return
     configuredKey.current = key
-    const switched = prevWorkspaceId.current !== null && prevWorkspaceId.current !== activeWorkspace.id
-    prevWorkspaceId.current = activeWorkspace.id
-    chat.setEngineeringContext(context)
+    const revision = chat.engineeringContext?.contextRevision ?? 0
+    const switched = revision > 0 && previousRevision.current !== revision
+    previousRevision.current = revision
+    chat.setEngineeringContext({ ...context, contextRevision: revision })
     chat.setApprovalMode('plan')
     for (const resource of chat.resourceController.resources) {
       if (resource.workspaceId !== activeWorkspace.id) chat.resourceController.detachWorkspace(resource.workspaceId)
     }
     chat.resourceController.attachWorkspace(activeWorkspace.id)
     if (switched) {
-      chat.clear()
       setSwitchNotice(t('blueprint:maintenance.workspaceSwitched', { name: activeWorkspace.name }))
       window.clearTimeout(noticeTimer.current)
       noticeTimer.current = window.setTimeout(() => setSwitchNotice(null), SWITCH_NOTICE_MS)

@@ -27,6 +27,8 @@ import type {
   BlueprintDispatchBriefResult,
   BlueprintMaintenanceApplyInput,
   BlueprintMaintenanceApplyResult,
+  BlueprintMaintenancePreviewInput,
+  BlueprintMaintenancePreview,
   BlueprintMaintenanceAuditListInput,
   BlueprintMaintenanceAuditRecord,
   BlueprintMaintenanceDismissInput,
@@ -256,6 +258,8 @@ export const startMaintenanceTask = (input: BlueprintMaintenanceStartInput): Pro
   window.electron.janus.startMaintenanceTask(input)
 export const applyMaintenanceChangeSet = (input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult> =>
   window.electron.janus.applyMaintenanceChangeSet(input)
+export const previewMaintenanceChangeSet = (input: BlueprintMaintenancePreviewInput): Promise<BlueprintMaintenancePreview> =>
+  window.electron.janus.previewMaintenanceChangeSet(input)
 export const cancelMaintenanceTask = (taskId: string): Promise<BlueprintMaintenanceTask> =>
   window.electron.janus.cancelMaintenanceTask(taskId)
 export const completeMaintenanceTask = (taskId: string): Promise<BlueprintMaintenanceTask> =>

@@ -443,6 +443,10 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
     let projectContext: string | undefined
     if (domain === 'project') {
+      if (conversationId && !request.maintenanceTaskId) {
+        const { blueprintMaintenanceService } = await import('../janus/maintenance/service')
+        blueprintMaintenanceService.invalidateConversationProposal(conversationId)
+      }
       const roots = (workspaceResources ?? []).map((resource) => {
         const session = workspaceAgentRuntime.getSession(resource.agentSessionId)
         if (!session || session.status !== 'running' || session.workspace.workspaceId !== resource.workspaceId

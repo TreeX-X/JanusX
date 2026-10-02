@@ -75,7 +75,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       await expect(bar).toBeVisible()
       // Exactly three deliberate verbs, and the read scope is a quiet chip.
       await expect(bar.getByRole('button')).toHaveCount(4)
-      await expect(bar.getByRole('button', { name: '整理 Note', exact: true })).toBeVisible()
+      await expect(bar.getByRole('button', { name: '整理修改', exact: true })).toBeVisible()
       await expect(bar.getByRole('button', { name: '目标终端' })).toBeVisible()
       await expect(bar.getByRole('button', { name: '派发', exact: true })).toBeVisible()
       // Selecting the child narrows the chip to that subtree.
@@ -219,6 +219,27 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       expect(request.domain).toBe('project')
       expect(request.workspaceResources).toEqual([{ workspaceId: 'ws', workspacePath: 'C:/fixture', workspaceName: 'Project', agentSessionId: 'session' }])
       expect(request.maintenanceTaskId).toBeUndefined()
+    })
+
+    test('file review fits the workbench and leaves the discussion input available', async ({ page }) => {
+      await open(page, '?workbench')
+      const input = chat(page).locator('.janus-chat textarea')
+      await input.fill('整理已讨论的标题修改')
+      await input.press('Enter')
+      await expect(chat(page)).toContainText('Project reply in progress')
+      await page.evaluate(() => (window as any).projectFixture.finishStream())
+      await chat(page).getByRole('button', { name: '整理修改', exact: true }).click()
+      const review = chat(page).getByRole('region', { name: '待修改文件' })
+      await expect(review).toContainText('.agents/notes/rename.md')
+      await review.locator('summary').first().click()
+      await expect(review).toContainText('# Reviewed rename')
+      const apply = review.getByRole('button', { name: '全部批准并应用 2 项', exact: true })
+      await expect(apply).toBeEnabled()
+      await apply.scrollIntoViewIfNeeded()
+      await insideViewport(page, input)
+      await insideViewport(page, apply)
+      expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(0)
+      await page.screenshot({ path: test.info().outputPath('workbench-file-review.png'), animations: 'disabled' })
     })
 
     test('switching workspace notifies once, resets context and stays in one session', async ({ page }) => {

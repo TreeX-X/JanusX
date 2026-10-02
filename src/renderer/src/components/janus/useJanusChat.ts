@@ -10,6 +10,7 @@ import {
   type ChatMessage,
 } from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import type { Workspace } from '@/types'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, type ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
@@ -256,6 +257,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   const modelOptionsRef = useRef(modelOptions)
   /** Blueprint panel conversation ids: island-independent, never persisted. */
   const ephemeralIdsRef = useRef<Set<string>>(new Set())
+  const panelWorkspaceRef = useRef<string | null>(null)
   const handlesRef = useRef(new Map<string, RuntimeHandles>())
   const legacyResourcesRef = useRef(parseJanusResourcePreferences(
     typeof localStorage === 'undefined' ? null : localStorage.getItem(JANUS_RESOURCE_STORAGE_KEY),
@@ -401,17 +403,15 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     }
     void persistence.load().then((snapshot) => {
       if (cancelled || !snapshot?.conversations.length) return
-      // Pre-separation snapshots may carry the panel conversation as a plain
-      // entry: re-mark it ephemeral so it never surfaces in island lists.
-      for (const item of snapshot.conversations) {
-        if (item.engineeringContext?.viewRef?.viewId === 'workspace-dialog') ephemeralIdsRef.current.add(item.id)
-      }
-      const visible = snapshot.conversations.filter((item) => !ephemeralIdsRef.current.has(item.id))
+      // Discard old panel snapshots on restart and always retain a personal
+      // fallback; an ephemeral panel must never become the island controller.
+      const visible = snapshot.conversations.filter((item) => item.engineeringContext?.viewRef?.viewId !== 'workspace-dialog')
+      if (!visible.length) visible.push(createJanusConversation())
       const activeId = visible.some((item) => item.id === snapshot.activeConversationId)
         ? snapshot.activeConversationId
-        : visible[0]?.id ?? snapshot.conversations[0].id
-      conversationsRef.current = snapshot.conversations
-      setConversations(snapshot.conversations)
+        : visible[0].id
+      conversationsRef.current = visible
+      setConversations(visible)
       setIslandConversationId(activeId)
     }).catch(() => undefined).finally(() => {
       if (!cancelled) setPersistenceReady(true)
@@ -559,12 +559,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     if (!content.trim()) return
     const assistantMessageId = messageId ?? crypto.randomUUID()
     updateConversation(id, (conversation) => {
-      const messages = capChatMessages([...conversation.messages, {
+      const appended = [...conversation.messages, {
         id: assistantMessageId,
         role: 'assistant' as const,
         content,
         timestamp: Date.now(),
-      }])
+      }]
+      const messages = ephemeralIdsRef.current.has(id) ? appended : capChatMessages(appended)
       return { ...conversation, messages, updatedAt: Date.now() }
     })
   }, [updateConversation])
@@ -586,7 +587,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.pendingBuffer = ''
     handles.reasoning = emptyReasoning()
 
-    const nextMessages = capChatMessages([...history, userMessage])
+    const nextMessages = ephemeralIdsRef.current.has(id) ? [...history, userMessage] : capChatMessages([...history, userMessage])
     updateConversation(id, (current) => ({
       ...current,
       title: current.title === NEW_CONVERSATION_TITLE ? titleFromMessages(nextMessages) : current.title,
@@ -898,15 +899,44 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   }, [startRequest, updateConversation])
 
   const clear = useCallback((id: string) => {
-    invalidateRuntime(id)
+    const panel = ephemeralIdsRef.current.has(id)
+    invalidateRuntime(id, panel)
+    if (panel) {
+      const maintenance = useBlueprintMaintenanceStore.getState()
+      for (const task of maintenance.tasks) {
+        if (task.conversationId === id && !['completed', 'cancelled'].includes(task.status)) void maintenance.cancel(task.id)
+      }
+      maintenance.clearPendingUndo()
+    }
     updateConversation(id, (conversation) => ({
       ...conversation,
       messages: [],
       toolTraces: [],
       updatedAt: Date.now(),
     }))
-    setRuntime(id, () => emptyRuntime())
+    setRuntime(id, () => ({ ...emptyRuntime(), ...(panel ? { approvalMode: 'plan' as const } : {}) }))
   }, [invalidateRuntime, setRuntime, updateConversation])
+
+  // Note: workspace lifetime survives panel unmounts — see .agents/notes/2026-09-25-blueprint-workspace-dialog--5480ef6d.md
+  useEffect(() => useWorkspaceStore.subscribe((state) => {
+    if (panelWorkspaceRef.current === null) return
+    const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId)
+    const key = workspace ? `${workspace.id}|${workspace.path}` : ''
+    if (panelWorkspaceRef.current === key) return
+    panelWorkspaceRef.current = key
+    for (const id of ephemeralIdsRef.current) {
+      clear(id)
+      updateConversation(id, conversation => ({
+        ...conversation,
+        title: workspace?.name ?? NEW_CONVERSATION_TITLE,
+        attachedWorkspaceIds: workspace ? [workspace.id] : [],
+        engineeringContext: conversation.engineeringContext ? {
+          ...conversation.engineeringContext, intent: 'discuss', noteRefs: [], repoIds: [],
+          contextRevision: (conversation.engineeringContext.contextRevision ?? 0) + 1,
+        } : undefined,
+      }))
+    }
+  }), [clear, updateConversation])
 
   const attachWorkspace = useCallback((id: string, workspaceId: string) => {
     if (!workspacesRef.current.some((workspace) => workspace.id === workspaceId)) return
@@ -1005,6 +1035,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   }, [updateConversations])
 
   const bindPanelProject = useCallback((context: EngineeringContext, workspaceIds: string[], title: string) => {
+    const workspace = workspacesRef.current.find(item => item.id === workspaceIds[0])
+    panelWorkspaceRef.current = workspace ? `${workspace.id}|${workspace.path}` : ''
     const bound = bindProjectConversation(conversationsRef.current, context, workspaceIds, title)
     ephemeralIdsRef.current.add(bound.id)
     updateConversations(() => bound.conversations)

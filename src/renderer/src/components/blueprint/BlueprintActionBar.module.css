@@ -47,6 +47,16 @@
 .proposal { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--shell-border); }
 .proposalHead { margin: 0; font-weight: 600; }
 
+.files { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.file { padding: 6px 0; border-bottom: 1px solid var(--shell-border); overflow-wrap: anywhere; }
+.file summary { cursor: pointer; }
+.file summary span { color: var(--shell-muted); }
+.file p { margin: 4px 0; color: var(--shell-muted); }
+.fileDiff { display: grid; gap: 8px; margin-top: 8px; }
+.fileDiff pre { margin: 3px 0; padding: 6px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; font-size: 11px; }
+.fileDiff > :first-child pre { border-left: 2px solid var(--shell-diff-del); }
+.fileDiff > :last-child pre { border-left: 2px solid var(--shell-accent); }
+
 /* 删除是唯一需要在批量路径上二次确认的风险面。 */
 .danger { display: inline-flex; align-items: center; gap: 5px; color: var(--shell-diff-del); cursor: pointer; }
 .danger input { margin: 0; }

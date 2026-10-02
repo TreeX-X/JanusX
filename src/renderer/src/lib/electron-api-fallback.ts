@@ -170,6 +170,7 @@ export function installElectronApiFallback(): void {
       listMaintenanceAudits: () => unavailableJanus(),
       startMaintenanceTask: () => unavailableJanus(),
       applyMaintenanceChangeSet: () => unavailableJanus(),
+      previewMaintenanceChangeSet: () => unavailableJanus(),
       cancelMaintenanceTask: () => unavailableJanus(),
       completeMaintenanceTask: () => unavailableJanus(),
       dismissMaintenanceProposal: () => unavailableJanus(),

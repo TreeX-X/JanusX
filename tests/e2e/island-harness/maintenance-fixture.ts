@@ -1,4 +1,5 @@
 import type { Blueprint } from '../../../src/shared/janus/types'
+import type { BlueprintMaintenancePreviewInput, BlueprintMaintenancePreview } from '../../../src/shared/janus/maintenance-types'
 import type { BlueprintChangeSet, BlueprintMaintenanceTask, BlueprintMaintenanceStartInput, BlueprintMaintenanceApplyInput, BlueprintMaintenanceAuditRecord, BlueprintMaintenanceUndoApplyInput, BlueprintMaintenanceEvent } from '../../../src/shared/janus/maintenance-types'
 
 /** IPC boundary double only. Selection, approval, chat and refresh use production code. */
@@ -8,6 +9,7 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
   const listeners = new Set<(event: BlueprintMaintenanceEvent) => void>()
   const state = {
     starts: [] as BlueprintMaintenanceStartInput[], applies: [] as BlueprintMaintenanceApplyInput[],
+    previews: [] as BlueprintMaintenancePreviewInput[], failPreview: false,
     undoPrepares: [] as Array<{ blueprintId: string; auditId: string }>, undoApplies: [] as BlueprintMaintenanceUndoApplyInput[],
     graphReads: [] as string[], refreshes: [] as string[], mutations: 0,
     checkoutViews: {} as Record<string, Blueprint>,
@@ -48,6 +50,7 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
     ],
   })
   let reverse: BlueprintChangeSet | null = null
+  let preview: { id: string; signature: string; operations: string[] } | null = null
   Object.assign(window.electron.janus, {
     listMaintenanceTasks: async () => { if (state.failList) throw new Error('Task list unavailable'); return structuredClone(state.tasks) },
     listMaintenanceAudits: async () => structuredClone(state.audits),
@@ -58,10 +61,23 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
       const task: BlueprintMaintenanceTask = { ...input, id: 'maintenance-1', blueprintName: graph.name, baseRevision: 1, status: 'draft', progress: 0, phase: 'Created', messages: [], changeSet: null, changeSetHistory: [], createdAt: '2026-09-25T00:00:00Z', updatedAt: '2026-09-25T00:00:00Z' }
       state.tasks = [task]; publish(task); return structuredClone(task)
     },
+    previewMaintenanceChangeSet: async (input: BlueprintMaintenancePreviewInput): Promise<BlueprintMaintenancePreview> => {
+      state.previews.push(structuredClone(input))
+      if (state.failPreview) throw new Error('Fixture preview unavailable')
+      const task = state.tasks.find(item => item.id === input.taskId)!
+      if (task.conversationId !== input.conversationId || task.workspaceId !== input.workspaceId || task.status !== 'proposal-ready') throw new Error('STALE_PREVIEW')
+      preview = { id: `preview-${state.previews.length}`, signature: JSON.stringify(task.changeSet), operations: input.operationIds }
+      return { id: preview.id, changeSetId: input.changeSetId, files: input.operationIds.map(operationId => ({
+        uri: `note://fixture/${operationId}`, path: `.agents/notes/${operationId}.md`, kind: 'replace',
+        reason: 'Review this Note change', operationIds: [operationId], before: '# Original Note', after: `# Reviewed ${operationId}`,
+      })) }
+    },
     applyMaintenanceChangeSet: async (input: BlueprintMaintenanceApplyInput) => {
       state.applies.push(structuredClone(input))
       const task = state.tasks.find(item => item.id === input.taskId)!
       const changeSet = task.changeSet!
+      if (!preview || preview.id !== input.previewId || preview.signature !== JSON.stringify(changeSet)
+        || JSON.stringify(preview.operations) !== JSON.stringify(input.operationIds)) throw new Error('STALE_PREVIEW')
       if (changeSet.sourceHashes?.[nodeId] !== graph.nodes[nodeId].sourceHash) {
         task.status = 'stale'; task.error = 'STALE_SOURCE_HASH: selected note changed; refresh and propose again'; publish(task)
         throw new Error(task.error)

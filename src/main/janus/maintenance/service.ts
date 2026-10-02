@@ -8,7 +8,7 @@ import { generateObject } from '../../llm/ai-runtime'
 import { llmService } from '../../llm/LlmService'
 import { blueprintStore, isProjectGraphId } from '../blueprint-store'
 import { harnessNoteService } from '../../harness/service'
-import { applyMaintenanceSelection, assertHarnessScope, resolveProjectCheckout } from '../../harness/maintenance-apply'
+import { applyMaintenanceSelection, applyPreparedMaintenanceSelection, prepareMaintenanceSelection, assertHarnessScope, resolveProjectCheckout, type PreparedMaintenanceSelection } from '../../harness/maintenance-apply'
 import type { Blueprint } from '../../../shared/janus/types'
 import { nowIso } from '../blueprint-factory'
 import { writeJson } from '../blueprint-persistence'
@@ -27,6 +27,8 @@ import type {
   BlueprintMaintenanceAgentEvent,
   BlueprintMaintenanceApplyInput,
   BlueprintMaintenanceApplyResult,
+  BlueprintMaintenancePreviewInput,
+  BlueprintMaintenancePreview,
   BlueprintMaintenanceAuditListInput,
   BlueprintMaintenanceAuditRecord,
   BlueprintMaintenanceStartInput,
@@ -301,6 +303,8 @@ function harnessErrorMessage(error: unknown): string {
 
 class BlueprintMaintenanceService {
   private tasks = new Map<string, BlueprintMaintenanceTask>()
+  private previews = new Map<string, { id: string; changeSet: string; prepared: PreparedMaintenanceSelection }>()
+  private previewRequests = new Map<string, symbol>()
   private startingBlueprints = new Set<string>()
   private controllers = new Map<string, AbortController>()
   /** Runtime-only reverse ChangeSets prepared from audit records, keyed by id. */
@@ -485,12 +489,59 @@ class BlueprintMaintenanceService {
     return task
   }
 
+  async preview(input: BlueprintMaintenancePreviewInput): Promise<BlueprintMaintenancePreview> {
+    const task = this.requireActive(input.taskId)
+    const changeSet = task.changeSet
+    if (!changeSet || changeSet.id !== input.changeSetId || task.status !== 'proposal-ready') throw new Error('没有可预览的当前提案')
+    if (task.conversationId !== input.conversationId || task.workspaceId !== input.workspaceId || !samePath(task.workspacePath, input.workspacePath)) {
+      throw new Error('PERMISSION_DENIED: preview belongs to another conversation or workspace')
+    }
+    const request = Symbol()
+    this.previewRequests.set(task.id, request)
+    this.previews.delete(task.id)
+    const signature = JSON.stringify(changeSet)
+    const root = await resolveAuthorizedWorkspace(task.workspaceId, task.workspacePath)
+    const checkout = await resolveProjectCheckout(harnessNoteService, task.blueprintId, root)
+    if (checkout.rev !== task.baseRevision) throw new Error('HARNESS_CONFLICT: blueprint changed; regenerate and confirm')
+    const operations = expandGroupSelection(changeSet, input)
+    if (!operations.length) throw new Error('至少选择一项变更')
+    assertHarnessScope(operations, scopeNodeIds(checkout.blueprint, task.nodeScope), checkout.blueprint)
+    const prepared = await prepareMaintenanceSelection(harnessNoteService, {
+      root: checkout.root, repoId: checkout.repoId, operations, sourceHashes: changeSet.sourceHashes ?? {},
+      taskId: task.id, changeSetVersion: changeSet.version, reason: changeSet.reason,
+    })
+    if (this.previewRequests.get(task.id) !== request || task.status !== 'proposal-ready' || JSON.stringify(task.changeSet) !== signature) {
+      throw new Error('STALE_PREVIEW: proposal changed while preparing files')
+    }
+    const preview = { id: randomUUID(), changeSet: signature, prepared }
+    this.previews.set(task.id, preview)
+    return { id: preview.id, changeSetId: changeSet.id, files: structuredClone(prepared.files) }
+  }
+
+  /** New discussion invalidates a previous proposal without generating another. */
+  invalidateConversationProposal(conversationId: string): void {
+    for (const task of this.tasks.values()) {
+      if (task.conversationId !== conversationId) continue
+      this.previews.delete(task.id)
+      this.previewRequests.delete(task.id)
+      if (task.status === 'proposal-ready') this.dismissProposal(task.id)
+    }
+  }
+
   async apply(input: BlueprintMaintenanceApplyInput): Promise<BlueprintMaintenanceApplyResult> {
     const task = this.requireActive(input.taskId)
     const changeSet = task.changeSet
     if (!changeSet || changeSet.id !== input.changeSetId || task.status !== 'proposal-ready') throw new Error('没有可应用的当前提案')
     const operations = expandGroupSelection(changeSet, { operationIds: input.operationIds, groupIds: input.groupIds })
     if (!operations.length) throw new Error('至少选择一项变更')
+    const preview = this.previews.get(task.id)
+    if (input.previewId || (isProjectGraphId(task.blueprintId) && task.conversationId)) {
+      const ids = (items: BlueprintOperation[]) => items.map(op => op.operationId).sort().join('\n')
+      if (!preview || preview.id !== input.previewId || preview.changeSet !== JSON.stringify(changeSet)
+        || ids(preview.prepared.request.operations) !== ids(operations)) {
+        throw new Error('STALE_PREVIEW: review the selected files before applying')
+      }
+    }
     const confirmedDeletes = new Set(input.confirmedDeleteOperationIds ?? [])
     const unconfirmedDeletes = operations
       .filter((operation) => operation.type === 'delete-node' && !confirmedDeletes.has(operation.operationId))
@@ -502,9 +553,11 @@ class BlueprintMaintenanceService {
     try {
       blueprint = (await loadMaintenanceBlueprint(task.blueprintId, task.workspacePath, () => this.listHarnessWorkspacePaths())).blueprint
     } catch (error) {
+      if (CLOSED_STATUSES.has(task.status)) throw error
       task.status = 'stale'; task.phase = '项目目录不可用'; task.error = harnessErrorMessage(error); this.emit(task)
       throw new Error(task.error)
     }
+    if (task.status !== 'applying' || task.changeSet !== changeSet) throw new Error('STALE_PREVIEW: task changed before application')
     if (!blueprint || blueprint.contentRevision !== task.baseRevision) {
       task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化，请重新创建提案'; this.emit(task)
       throw new Error(task.error)
@@ -526,6 +579,7 @@ class BlueprintMaintenanceService {
     } catch {
       evidenceMismatches = ['工程证据扫描失败']
     }
+    if (task.status !== 'applying' || task.changeSet !== changeSet) throw new Error('STALE_PREVIEW: task changed before application')
     if (evidenceMismatches.length) {
       task.status = 'stale'; task.phase = '工程证据已变化'
       task.error = `工程证据已变化（${evidenceMismatches.slice(0, 3).join('；')}${evidenceMismatches.length > 3 ? ` 等 ${evidenceMismatches.length} 项` : ''}），请重新创建提案`
@@ -533,8 +587,9 @@ class BlueprintMaintenanceService {
       throw new Error(task.error)
     }
     const allowed = scopeNodeIds(blueprint, task.nodeScope)
+    if (task.status !== 'applying' || task.changeSet !== changeSet) throw new Error('STALE_PREVIEW: task changed before application')
     if (isProjectGraphId(task.blueprintId)) {
-      return this.applyHarness(task, changeSet, operations, confirmedDeletes, allowed)
+      return this.applyHarness(task, changeSet, operations, confirmedDeletes, allowed, input.previewId ? preview?.prepared : undefined)
     }
     try {
       const selectedIds = new Set(operations.map((item) => item.operationId))
@@ -604,6 +659,8 @@ class BlueprintMaintenanceService {
     if (!task.changeSet || task.status !== 'proposal-ready') throw new Error('当前没有可驳回的提案')
     this.controllers.get(taskId)?.abort()
     this.controllers.delete(taskId)
+    this.previews.delete(taskId)
+    this.previewRequests.delete(taskId)
     const rejected = structuredClone(task.changeSet)
     rejected.status = 'rejected'
     task.changeSetHistory.push(rejected)
@@ -775,6 +832,7 @@ class BlueprintMaintenanceService {
     operations: BlueprintOperation[],
     confirmedDeletes: Set<string>,
     allowed: Set<string>,
+    prepared?: PreparedMaintenanceSelection,
   ): Promise<BlueprintMaintenanceApplyResult> {
     try {
       const checkout = await resolveProjectCheckout(harnessNoteService, task.blueprintId, task.workspacePath, () => this.listHarnessWorkspacePaths())
@@ -783,6 +841,7 @@ class BlueprintMaintenanceService {
         task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化，请重新创建提案'; this.emit(task)
         throw new Error(task.error)
       }
+      if (task.status !== 'applying' || task.changeSet !== changeSet) throw new Error('STALE_PREVIEW: task changed before application')
       const rejectedOperationIds = changeSet.operations
         .filter((item) => !operations.some((selected) => selected.operationId === item.operationId)).map((item) => item.operationId)
       const audit: BlueprintMaintenanceAuditRecord = {
@@ -795,7 +854,11 @@ class BlueprintMaintenanceService {
         harnessRoot: checkout.root, beforeSnapshot: checkout.blueprint, createdAt: nowIso(),
       }
       await this.writeAudit(audit)
-      const result = await applyMaintenanceSelection(harnessNoteService, {
+      const result = prepared ? await applyPreparedMaintenanceSelection(harnessNoteService, prepared, () => {
+        if (task.status !== 'applying' || task.changeSet !== changeSet || this.previews.get(task.id)?.prepared !== prepared) {
+          throw new Error('STALE_PREVIEW: task changed before application')
+        }
+      }) : await applyMaintenanceSelection(harnessNoteService, {
         root: checkout.root, repoId: checkout.repoId, operations, sourceHashes: changeSet.sourceHashes ?? {},
         taskId: task.id, changeSetVersion: changeSet.version, reason: changeSet.reason,
       })
@@ -803,7 +866,10 @@ class BlueprintMaintenanceService {
       changeSet.status = rejectedOperationIds.length ? 'partially-approved' : 'applied'
       task.changeSetHistory.push(structuredClone(changeSet))
       task.baseRevision = fresh.rev
-      task.status = 'active'; task.progress = 100; task.phase = '已应用，等待下一轮需求'; task.changeSet = null; task.error = undefined
+      if (!CLOSED_STATUSES.has(task.status)) { task.status = 'active'; task.phase = '已应用，等待下一轮需求' }
+      task.progress = 100; task.changeSet = null; task.error = undefined
+      this.previews.delete(task.id)
+      this.previewRequests.delete(task.id)
       task.messages.push({ id: randomUUID(), role: 'assistant', content: `已应用 ${result.appliedMaintenanceIds.length} 项项目 Note 变更。`, createdAt: nowIso() })
       try {
         await this.writeAudit({
@@ -821,6 +887,7 @@ class BlueprintMaintenanceService {
       this.emit(task)
       return { task: publicTask(task), blueprintRevision: fresh.rev, appliedOperationIds: result.appliedMaintenanceIds }
     } catch (error) {
+      if (CLOSED_STATUSES.has(task.status)) throw error
       task.status = 'failed'; task.phase = '应用失败'; task.error = harnessErrorMessage(error); this.emit(task)
       throw error instanceof Error ? error : new Error(task.error)
     }
@@ -1060,6 +1127,8 @@ class BlueprintMaintenanceService {
   }
   private clearRuntime(taskId: string): void {
     this.controllers.delete(taskId)
+    this.previews.delete(taskId)
+    this.previewRequests.delete(taskId)
   }
   private emit(task: BlueprintMaintenanceTask): void {
     task.updatedAt = nowIso()

@@ -24,7 +24,7 @@ async function discuss(page: Page, query = '') {
 async function propose(page: Page, partial = false) {
   await organize(page).click()
   if (partial) await bar(page).getByRole('button', { name: 'Approve some…', exact: true }).click()
-  await expect(bar(page).getByRole('button', { name: 'Approve and apply all 2', exact: true })).toBeVisible()
+  await expect(partial ? approve(page) : approveAll(page)).toBeVisible()
 }
 
 test('discussion, partial approval, refreshed graph, audit and selected undo form one reachable flow', async ({ page }) => {
@@ -216,4 +216,52 @@ test('partial approval still expands to the per-operation picker', async ({ page
   await approve(page).click()
   await expect(panel(page).locator('.bp-maintenance-approval')).toHaveCount(0)
   expect((await page.evaluate(() => (window as any).projectFixture.maintenance.applies[0])).operationIds).toEqual(['rename'])
+})
+
+test('file previews are visible before confirmation and a failed preview cannot apply', async ({ page }) => {
+  await discuss(page)
+  await page.evaluate(() => { (window as any).projectFixture.maintenance.failPreview = true })
+  await propose(page)
+  await expect(bar(page).getByRole('alert')).toContainText('Fixture preview unavailable')
+  await expect(approveAll(page)).toBeDisabled()
+  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.applies.length)).toBe(0)
+  await page.evaluate(() => { (window as any).projectFixture.maintenance.failPreview = false })
+  await bar(page).getByRole('button', { name: 'Preview files again' }).click()
+  const review = bar(page).getByRole('region', { name: 'Files to change' })
+  await expect(review).toContainText('.agents/notes/rename.md')
+  await review.locator('summary').first().click()
+  await expect(review).toContainText('# Original Note')
+  await expect(review).toContainText('# Reviewed rename')
+  await expect(approveAll(page)).toBeEnabled()
+  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(0)
+  await page.screenshot({ path: test.info().outputPath('file-review.png'), fullPage: true })
+  await approveAll(page).click()
+  expect((await page.evaluate(() => (window as any).projectFixture.maintenance.applies[0])).previewId).toMatch(/^preview-/)
+})
+
+test('further discussion invalidates the proposal without organizing or applying automatically', async ({ page }) => {
+  await discuss(page)
+  await propose(page)
+  await expect(approveAll(page)).toBeEnabled()
+  await panel(page).locator('textarea').fill('Let us reconsider this change')
+  await panel(page).locator('textarea').press('Enter')
+  await expect(approveAll(page)).toHaveCount(0)
+  await page.evaluate(() => (window as any).projectFixture.finishStream())
+  const state = await page.evaluate(() => ({ streams: (window as any).projectFixture.streams, maintenance: (window as any).projectFixture.maintenance }))
+  expect(state.streams.at(-1).maintenanceTaskId).toBeUndefined()
+  expect(state.maintenance.applies).toHaveLength(0)
+  expect(state.maintenance.starts).toHaveLength(1)
+})
+
+test('switching workspace with a closed panel cancels its pending proposal', async ({ page }) => {
+  await discuss(page, '?switch-workspace')
+  await propose(page)
+  await expect(approveAll(page)).toBeEnabled()
+  await page.getByRole('button', { name: 'Toggle blueprint', exact: true }).click()
+  await page.evaluate(() => (window as any).projectFixture.switchWorkspace('ws-b'))
+  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.tasks[0].status)).toBe('cancelled')
+  await page.getByRole('button', { name: 'Toggle blueprint', exact: true }).click()
+  await expect(panel(page).locator('textarea')).toBeVisible()
+  await expect(approveAll(page)).toHaveCount(0)
+  await expect(panel(page)).not.toContainText('Clarify the Note title')
 })

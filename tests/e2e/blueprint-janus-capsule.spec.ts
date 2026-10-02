@@ -100,7 +100,7 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await expect(conversation).toBeVisible()
     // 单会话工作区对话：面板头为 Janus 标识（旧 COPILOT CONTROL 标题已随 chrome 精简移除）。
     await expect(conversation.getByText('Janus', { exact: true })).toBeVisible()
-    await expect(conversation.getByRole('button', { name: '整理 Note', exact: true })).toBeDisabled()
+    await expect(conversation.getByRole('button', { name: '整理修改', exact: true })).toBeDisabled()
     const conversationBoxBeforeDetail = await conversation.boundingBox()
 
     await page.locator('.react-flow__node').first().dblclick()
