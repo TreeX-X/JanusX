@@ -1152,6 +1152,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
         const saved = await saveTerminalProvider('janus', { ...provider, extra: { ...provider.extra,
           chatModelLimits: { ...limits, [activeModel.modelId]: { contextWindow: tokens } } } })
         if (!saved.success) throw new Error(saved.error ?? 'Failed to save model window')
+        const latest = conversationsRef.current.find(item => item.id === id)
+        if (!latest || (latest.providerId && latest.providerId !== activeModel.providerId)
+          || (latest.modelId && latest.modelId !== activeModel.modelId)) return
         setRuntime(id, current => ({ ...current, contextStatus: { phase: 'ready', usedTokens: current.contextStatus?.usedTokens ?? 0,
           windowTokens: tokens, source: 'configured', checkpoint: current.contextStatus?.checkpoint } }))
       },

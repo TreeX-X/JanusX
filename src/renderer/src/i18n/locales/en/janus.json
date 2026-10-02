@@ -3,7 +3,10 @@
     "context": {
       "usage": "Context ≈ {{used}} / {{limit}} tokens", "configured": "Configured", "catalog": "Model catalog", "registry": "Model registry", "estimated": "Estimated window",
       "compacting": "Summarizing earlier conversation…", "compacted": "Summarized; original history retained", "failed": "Summary failed; history retained",
-      "configure": "Model context window (tokens)", "save": "Save", "compact": "Compact now", "older": "Show earlier messages"
+      "configure": "Model context window (tokens)", "save": "Save", "compact": "Compact now", "older": "Show earlier messages",
+      "hint": "Applies to this model and provider starting with the next request.",
+      "estimatedHint": "Model capacity is unavailable, so 16k is estimated. If your provider supports 1M, enter 1000000 and save.",
+      "saving": "Saving…", "saved": "Saved. The next request uses the new capacity."
     },
     "recoveringTools": "Tool context error. Retrying once (1/1)…",
     "author": {

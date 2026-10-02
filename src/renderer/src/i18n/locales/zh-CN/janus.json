@@ -3,7 +3,10 @@
     "context": {
       "usage": "上下文 ≈ {{used}} / {{limit}} tokens", "configured": "手动配置", "catalog": "模型目录", "registry": "模型资料", "estimated": "窗口为估算值",
       "compacting": "正在压缩早期对话…", "compacted": "已压缩，原始记录保留", "failed": "压缩失败，原始记录保留",
-      "configure": "模型上下文窗口（tokens）", "save": "保存", "compact": "立即压缩", "older": "查看更早消息"
+      "configure": "模型上下文窗口（tokens）", "save": "保存", "compact": "立即压缩", "older": "查看更早消息",
+      "hint": "设置仅用于当前供应商的此模型，下一次请求生效。",
+      "estimatedHint": "未取得该模型的容量资料，当前按 16k 估算。若供应商支持 1M，可输入 1000000 并保存。",
+      "saving": "保存中…", "saved": "已保存，下一次请求使用新容量。"
     },
     "recoveringTools": "工具上下文异常，正在重试（1/1）…",
     "author": {
