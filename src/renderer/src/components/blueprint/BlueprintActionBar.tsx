@@ -53,6 +53,7 @@ export interface BlueprintActionBarProps {
   foreignCount: number
   /** Matched Notes cut by the per-turn ref cap. */
   droppedCount: number
+  onReviewOpenChange: (open: boolean) => void
 }
 
 /**
@@ -79,6 +80,7 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
   const [expanded, setExpanded] = useState(false)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [approvalWanted, setApprovalWanted] = useState(false)
+  const [hiddenReview, setHiddenReview] = useState<string | null>(null)
   const actionLock = useRef(false)
   const alive = useRef(true)
   const latestChat = useRef(chat)
@@ -96,6 +98,13 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
     ?? store.tasks.find(item => item.blueprintId === target?.graphId && !closed(item.status))
   const working = busy || chat.isStreaming || task?.status === 'analyzing' || task?.status === 'applying'
   const proposal = task?.status === 'proposal-ready' ? task.changeSet : null
+  const reviewKey = proposal ? JSON.stringify(proposal) : null
+  const reviewOpen = !sourceUnavailable && !!reviewKey && hiddenReview !== reviewKey
+  const { onReviewOpenChange } = props
+  useEffect(() => {
+    onReviewOpenChange(reviewOpen)
+    return () => onReviewOpenChange(false)
+  }, [reviewOpen, onReviewOpenChange])
   const pendingUndo = store.pendingUndo?.changeSet.blueprintId === target?.graphId ? store.pendingUndo : null
   const audits = target ? store.audits[target.graphId] ?? [] : []
   const taskMatches = !!target && (!task || (task.conversationId === chat.conversationId && task.blueprintId === target.graphId
@@ -187,6 +196,7 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
   }, [target, taskMatches, chat, task, store, workspace, checkResult, t])
 
   const organize = useCallback(async () => {
+    setHiddenReview(null)
     const id = await ensureTask()
     if (!id || !alive.current) return
     chat.proposeMaintenance(id, t('blueprint:maintenance.proposalPrompt'))
@@ -306,12 +316,16 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
   } : undefined
 
   return <div className={styles.bar} role="toolbar" aria-label={t('blueprint:maintenance.actionsAria')}
+    data-review-open={reviewOpen}
     data-state={proposal ? 'proposal' : dispatching ? 'dispatching' : 'idle'}>
     <div className={styles.row}>
       <button type="button" className={styles.primary} disabled={working || stale || !hasUserMessage || !taskMatches}
         onClick={() => void run(organize)} title={t('blueprint:maintenance.organizeHint')}>
         {task?.status === 'analyzing' ? t('blueprint:maintenance.organizing') : t('blueprint:maintenance.organize')}
       </button>
+      {proposal && <button type="button" aria-pressed={reviewOpen} onClick={() => setHiddenReview(reviewOpen ? reviewKey : null)}>
+        {t(reviewOpen ? 'blueprint:maintenance.reviewDiscussion' : 'blueprint:maintenance.reviewDocument')}
+      </button>}
       <span onMouseEnter={() => warm(preset)}>
         <Select
           value={preset}
@@ -353,17 +367,23 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
       </button>
     </div>}
     {task && <p className={styles.status} role="status">{task.phase}</p>}
+    {task?.error && !error && <p className={styles.warn} role="alert">{task.error}</p>}
+    {task?.status === 'active' && task.changeSetHistory.at(-1)?.status === 'rejected' && <p className={styles.hint} role="status">
+      {t('blueprint:maintenance.reviewOutdated')}
+    </p>}
     {receipt && <p className={styles.status} role="status">
       {t('blueprint:maintenance.dispatch.receipt', { preset: getTerminalPresetMeta(receipt.preset).label, count: receipt.noteCount })}
       {' · '}
       {t('blueprint:maintenance.dispatch.prefillOnly')}
     </p>}
 
-    {proposal && bulk && reviewContext && <div className={styles.proposal}>
+    {proposal && bulk && reviewContext && <div className={styles.proposal} hidden={!reviewOpen}>
       <p className={styles.proposalHead}>
         {t('blueprint:maintenance.pendingProposal', { version: proposal.version })}
         {!confirmBulkDelete && bulk.excludedDeletes.length > 0 && ` · ${t('blueprint:maintenance.deleteBulkExcluded', { count: bulk.excludedDeletes.length })}`}
       </p>
+      <p>{proposal.reason}</p>
+      <p className={styles.hint}>{t('blueprint:maintenance.reviewHint')}</p>
       {bulk.blockedDeletes.length > 0 && <p className={styles.warn}>
         {t('blueprint:maintenance.deleteBlocked', { count: bulk.blockedDeletes.length })}
       </p>}

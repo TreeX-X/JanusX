@@ -82,6 +82,7 @@ vi.mock('@janus-agent/agent-core', () => ({
 }))
 
 import { blueprintMaintenanceService } from '../../src/main/janus/maintenance/service'
+import { projectChatContext } from '../../src/main/harness/chat-context'
 import { ChatSessionRuntime } from '@janus-agent/chat-core'
 import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
 
@@ -586,6 +587,68 @@ describe('maintenance harness routing (S6-c slice 2b)', () => {
         workspaceIds: ['ws-1'], workspaceRoots: { 'ws-1': checkoutDir } })
       return serviceOf().tasks.get(task.id)!
     }
+
+    it('revises after discussion then applies two reviewed rounds against fresh Note bytes', async () => {
+      const task = await propose([updateOp('first', REQ, 'First draft')])
+      const previewInput = () => ({ taskId: task.id, changeSetId: task.changeSet!.id,
+        conversationId: 'real-conversation', workspaceId: 'ws-1', workspacePath: checkoutDir,
+        operationIds: task.changeSet!.operations.map(op => op.operationId) })
+      const oldInput = previewInput()
+      const oldPreview = await blueprintMaintenanceService.preview(oldInput)
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(REQUIREMENT_MD)
+      blueprintMaintenanceService.invalidateConversationProposal('real-conversation')
+      await expect(blueprintMaintenanceService.apply({ ...oldInput, previewId: oldPreview.id })).rejects.toThrow()
+      const messages = [{ role: 'user', content: 'Use the revised title and preserve all other content' }]
+      for (const title of ['Reviewed first round', 'Reviewed second round']) {
+        const before = await fs.readFile(notePath(), 'utf8')
+        const snapshot = await harness.readNote(checkoutDir, REQ)
+        const context = await projectChatContext([checkoutDir], [{ uri: `note://${REPO}/${REQ}`, expectedHash: snapshot.sha256, checkoutPath: checkoutDir }])
+        const op = updateOp(title, REQ, title)
+        if (op.type === 'update-node') op.before = { title: (await harness.projectView(checkoutDir)).blueprint.nodes[REQ].title }
+        mocks.generateObject.mockResolvedValue({ object: { summary: title, operations: [op] } })
+        await blueprintMaintenanceService.proposeForConversation({ taskId: task.id, conversationId: 'real-conversation', providerId: 'p', modelId: 'm',
+          messages, projectContext: context, noteRefs: [{ uri: `note://${REPO}/${REQ}`, expectedHash: snapshot.sha256 }],
+          signal: new AbortController().signal, chatSession: new ChatSessionRuntime(),
+          workspaceIds: ['ws-1'], workspaceRoots: { 'ws-1': checkoutDir } })
+        const prompt = mocks.generateObject.mock.calls.at(-1)![0].messages[0].content
+        expect(prompt).toContain(before)
+        expect(prompt).toContain(messages.at(-1)!.content)
+        expect(task.changeSet!.sourceHashes![REQ]).toBe(snapshot.sha256)
+        const input = previewInput()
+        const preview = await blueprintMaintenanceService.preview(input)
+        expect(preview.files[0].before).toBe(before)
+        expect(await fs.readFile(notePath(), 'utf8')).toBe(before)
+        await blueprintMaintenanceService.apply({ ...input, previewId: preview.id })
+        expect(await fs.readFile(notePath(), 'utf8')).toBe(preview.files[0].after)
+        expect(await fs.readFile(notePath(), 'utf8')).toContain(`# ${title}`)
+        expect(task.status).toBe('active')
+        expect(task.changeSet).toBeNull()
+        messages.push({ role: 'user', content: 'Refine the applied first round into the second round' })
+      }
+      expect(task.changeSetHistory.map(change => change.status)).toEqual(['rejected', 'applied', 'applied'])
+    })
+
+    it('rejects source drift between context and projection, and refuses a Note context budget overflow', async () => {
+      const task = await propose([updateOp('first', REQ, 'First draft')])
+      blueprintMaintenanceService.invalidateConversationProposal('real-conversation')
+      const snapshot = await harness.readNote(checkoutDir, REQ)
+      const refs = [{ uri: `note://${REPO}/${REQ}`, expectedHash: snapshot.sha256, checkoutPath: checkoutDir }]
+      const context = await projectChatContext([checkoutDir], refs)
+      const input = { taskId: task.id, conversationId: 'real-conversation', providerId: 'p', modelId: 'm',
+        messages: [{ role: 'user', content: 'Revise the title' }], projectContext: context, noteRefs: refs,
+        signal: new AbortController().signal, chatSession: new ChatSessionRuntime(), workspaceIds: ['ws-1'], workspaceRoots: { 'ws-1': checkoutDir } }
+      await fs.appendFile(notePath(), '\nExternal edit\n')
+      mocks.generateObject.mockClear()
+      await expect(blueprintMaintenanceService.proposeForConversation(input)).rejects.toThrow('STALE_BASELINE')
+      expect(mocks.generateObject).not.toHaveBeenCalled()
+      expect(task.changeSet).toBeNull()
+      await fs.writeFile(notePath(), REQUIREMENT_MD)
+      const budget = vi.spyOn(input.chatSession, 'buildContext').mockImplementation(() => { throw new Error('budget exceeded') })
+      await expect(blueprintMaintenanceService.proposeForConversation(input)).rejects.toThrow('Note context exceeds')
+      budget.mockRestore()
+      expect(mocks.generateObject).not.toHaveBeenCalled()
+      expect(await fs.readFile(notePath(), 'utf8')).toBe(REQUIREMENT_MD)
+    })
 
     it('captures proposal-time hashes and rejects later source bytes despite equal revision', async () => {
       const task = await propose([updateOp('retitle', REQ, 'Approved title')])

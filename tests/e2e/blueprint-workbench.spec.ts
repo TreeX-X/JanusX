@@ -231,6 +231,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       await chat(page).getByRole('button', { name: '整理修改', exact: true }).click()
       const review = chat(page).getByRole('region', { name: '待修改文件' })
       await expect(review).toContainText('.agents/notes/rename.md')
+      await expect(chat(page).locator('.janus-chat-messages')).toBeHidden()
+      await expect(review.getByText('# Reviewed rename', { exact: true }).first()).toBeVisible()
       await review.locator('summary').first().click()
       await expect(review).toContainText('# Reviewed rename')
       const apply = review.getByRole('button', { name: '全部批准并应用 2 项', exact: true })
@@ -240,6 +242,30 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       await insideViewport(page, apply)
       expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(0)
       await page.screenshot({ path: test.info().outputPath('workbench-file-review.png'), animations: 'disabled' })
+    })
+
+    test('long review retains the conversation switch and input while scrolling', async ({ page }) => {
+      await open(page)
+      const input = chat(page).locator('.janus-chat textarea')
+      await input.fill('Review the complete long Note')
+      await input.press('Enter')
+      await expect(chat(page)).toContainText('Project reply in progress')
+      await page.evaluate(() => {
+        (window as any).projectFixture.finishStream()
+        ;(window as any).projectFixture.maintenance.longPreview = true
+      })
+      await chat(page).getByRole('button', { name: '整理修改', exact: true }).click()
+      const review = chat(page).getByRole('region', { name: '待修改文件' })
+      await expect(review).toContainText('End of reviewed document.')
+      const apply = review.getByRole('button', { name: '全部批准并应用 2 项', exact: true })
+      await apply.scrollIntoViewIfNeeded()
+      await insideViewport(page, apply)
+      await insideViewport(page, input)
+      const switchView = chat(page).getByRole('button', { name: '查看对话', exact: true })
+      await insideViewport(page, switchView)
+      await switchView.click()
+      await expect(chat(page).locator('.janus-chat-messages')).toBeVisible()
+      await expect(chat(page)).toContainText('Review the complete long Note')
     })
 
     test('switching workspace notifies once, resets context and stays in one session', async ({ page }) => {

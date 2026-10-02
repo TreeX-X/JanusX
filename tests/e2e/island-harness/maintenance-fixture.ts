@@ -21,9 +21,29 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
     failDispatch: false,
     gateStart: false, finishStart: null as (() => void) | null,
     failList: false,
+    longPreview: false,
+    proposalOutcome: 'ready' as 'ready' | 'empty' | 'failed',
+    gateProposal: false, finishProposal: null as (() => void) | null,
+    beginProposal(taskId: string) {
+      const task = state.tasks.find(item => item.id === taskId)!
+      task.status = 'analyzing'; task.error = undefined; task.phase = 'Organizing…'; publish(task)
+    },
+    stopProposal(taskId: string) {
+      const task = state.tasks.find(item => item.id === taskId)!
+      if (task.status !== 'analyzing') return
+      task.status = task.changeSet ? 'proposal-ready' : 'active'; task.phase = 'Organization stopped'; publish(task)
+    },
     changeSourceHash(hash: string) { graph.nodes[nodeId].sourceHash = hash },
     completeProposal(taskId: string) {
       const task = state.tasks.find(item => item.id === taskId)!
+      if (task.status !== 'analyzing') return
+      if (state.proposalOutcome !== 'ready') {
+        task.status = state.proposalOutcome === 'failed' ? 'failed' : 'active'
+        task.phase = state.proposalOutcome === 'failed' ? 'Proposal generation failed' : 'No changes needed'
+        task.error = state.proposalOutcome === 'failed' ? 'Fixture proposal unavailable' : undefined
+        publish(task)
+        return
+      }
       task.changeSet = proposal(task.id); task.status = 'proposal-ready'; task.progress = 100; task.phase = 'Ready'; publish(task)
     },
     replaceProposal() {
@@ -69,7 +89,7 @@ export function installMaintenanceFixture(initial: Blueprint, workspace: { id: s
       preview = { id: `preview-${state.previews.length}`, signature: JSON.stringify(task.changeSet), operations: input.operationIds }
       return { id: preview.id, changeSetId: input.changeSetId, files: input.operationIds.map(operationId => ({
         uri: `note://fixture/${operationId}`, path: `.agents/notes/${operationId}.md`, kind: 'replace',
-        reason: 'Review this Note change', operationIds: [operationId], before: '# Original Note', after: `# Reviewed ${operationId}`,
+        reason: 'Review this Note change', operationIds: [operationId], before: '# Original Note', after: `# Reviewed ${operationId}${state.longPreview ? '\n\n' + 'Detailed acceptance evidence.\n'.repeat(100) + 'End of reviewed document.' : ''}`,
       })) }
     },
     applyMaintenanceChangeSet: async (input: BlueprintMaintenanceApplyInput) => {

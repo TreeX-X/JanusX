@@ -47,6 +47,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const selection = useBlueprintMaintenanceStore(state => state.contextSelection)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [switchNotice, setSwitchNotice] = useState<string | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
   const bindingKey = useRef('')
   const configuredKey = useRef('')
   const previousRevision = useRef<number | null>(null)
@@ -135,12 +136,14 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
+        messagesHidden={reviewOpen}
         pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
         modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
         resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}
         onSelectModel={chat.selectModel} onSend={text => { setSwitchNotice(null); chat.send(text) }} onRewrite={chat.rewrite}
         aboveComposer={blueprint && contextScope && <BlueprintActionBar key={`${activeWorkspace.id}|${blueprint.id}|${contextScope.maintenanceScope.type}`}
           chat={chat} blueprint={blueprint} workspace={activeWorkspace} ownerPath={ownerPath}
+          onReviewOpenChange={setReviewOpen}
           nodeScope={contextScope.maintenanceScope} noteCount={contextScope.noteRefs.length}
           sourceUnavailable={sourceUnavailable} switchPath={contextScope.foreignCheckoutPath}
           foreignCount={foreignCount} droppedCount={contextScope.droppedNodeIds.length} />}

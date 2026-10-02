@@ -103,6 +103,7 @@ Object.assign(window.electron.llm, {
   onAgentEvent: (listener: (event: ChatAgentEvent) => void) => { events.add(listener); return () => events.delete(listener) },
   startChatStream: (request: ChatStreamRequest) => {
     fixture.streams.push(request)
+    if (request.maintenanceTaskId) maintenance.beginProposal(request.maintenanceTaskId)
     if (!request.maintenanceTaskId) {
       const task = maintenance.tasks.find(item => item.conversationId === request.conversationId && item.status === 'proposal-ready')
       if (task) void window.electron.janus.dismissMaintenanceProposal({ taskId: task.id })
@@ -111,12 +112,21 @@ Object.assign(window.electron.llm, {
       if (new URLSearchParams(location.search).has('manual-stream') && !request.maintenanceTaskId) return
       emit({ type: 'text_delta', requestId: request.requestId, delta: 'Project reply in progress' })
       if (request.maintenanceTaskId) {
-        maintenance.completeProposal(request.maintenanceTaskId)
-        emit({ type: 'stream_end', requestId: request.requestId, cancelled: false })
+        const finish = () => {
+          maintenance.completeProposal(request.maintenanceTaskId!)
+          if (maintenance.proposalOutcome === 'failed') emit({ type: 'stream_error', requestId: request.requestId, error: 'Fixture proposal unavailable' })
+          else emit({ type: 'stream_end', requestId: request.requestId, cancelled: false })
+        }
+        if (maintenance.gateProposal) maintenance.finishProposal = finish
+        else finish()
       }
     })
   },
-  abortChat: async () => { fixture.aborts++ },
+  abortChat: async () => {
+    fixture.aborts++
+    const request = fixture.streams.at(-1)
+    if (request?.maintenanceTaskId) maintenance.stopProposal(request.maintenanceTaskId)
+  },
   steerChat: async () => { fixture.steers++; return { accepted: true } },
   answerQuestion: async ({ requestId, callId }: { requestId: string; callId: string }) => { fixture.answers++; emit({ type: 'question_resolved', requestId, callId, status: 'answered' }); return { accepted: true } },
 })

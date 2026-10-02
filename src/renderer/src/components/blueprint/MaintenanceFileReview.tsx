@@ -39,8 +39,10 @@ export function MaintenanceFileReview({ input, disabled, label, onApply }: {
       <button type="button" disabled={disabled} onClick={() => setRetry(value => value + 1)}>{t('blueprint:maintenance.filesRetry')}</button>
     </div>}
     {preview?.files.map(file => <div className={styles.file} key={file.uri}>
+      <p><span>{t(file.kind === 'create' ? 'blueprint:maintenance.fileCreate' : 'blueprint:maintenance.fileReplace')}</span> <code>{file.path}</code></p>
+      <div className={styles.document}><strong>{t('blueprint:maintenance.auditAfter')}</strong><pre>{file.after}</pre></div>
       <details>
-        <summary><span>{t(file.kind === 'create' ? 'blueprint:maintenance.fileCreate' : 'blueprint:maintenance.fileReplace')}</span> <code>{file.path}</code></summary>
+        <summary>{t('blueprint:maintenance.reviewDiff')}</summary>
         <div className={styles.fileDiff}>
           <div><strong>{t('blueprint:maintenance.auditBefore')}</strong><pre>{file.before || '∅'}</pre></div>
           <div><strong>{t('blueprint:maintenance.auditAfter')}</strong><pre>{file.after}</pre></div>

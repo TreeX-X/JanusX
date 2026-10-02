@@ -14,6 +14,10 @@
   overflow-y: auto;
 }
 .bar[data-state='proposal'] { border-top-color: var(--shell-accent); }
+.bar[data-review-open='true'] { flex: 1 1 0; min-height: 0; max-height: none; }
+.bar[data-review-open='true'] > .row:first-child { position: sticky; top: -8px; z-index: 1; padding: 8px 0; background: var(--shell-chrome-raised); }
+.proposal[hidden] { display: none; }
+.document pre { margin: 6px 0; padding: 10px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; background: var(--shell-card); border-left: 2px solid var(--shell-accent); }
 
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 

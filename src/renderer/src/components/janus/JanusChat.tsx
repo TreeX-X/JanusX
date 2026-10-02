@@ -87,6 +87,8 @@ interface JanusChatProps {
    * scroll area — for anything that must stay reachable while discussing.
    */
   aboveComposer?: React.ReactNode
+  /** Keep the transcript mounted while a host document occupies its space. */
+  messagesHidden?: boolean
   /** Only the focused presentation owns input focus and global shortcuts. */
   focused?: boolean
   /** 当前模式颜色 */
@@ -381,6 +383,7 @@ export function JanusChat({
   minimalComposer = false,
   discussionFooter,
   aboveComposer,
+  messagesHidden = false,
   focused = true,
   modeColor,
   messages,
@@ -1383,6 +1386,7 @@ export function JanusChat({
       <div
         ref={messagesContainerRef}
         className="janus-chat-messages"
+        style={messagesHidden ? { display: 'none' } : undefined}
         onScroll={handleScroll}
       >
         {messages.length === 0 && (

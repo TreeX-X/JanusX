@@ -179,7 +179,7 @@ interface ConversationRuntime {
 }
 
 interface RuntimeHandles {
-  proposalRetry?: { messageId: string; taskId: string }
+  proposalRetry?: { message: Message; taskId: string }
   /** Pairing-400 auto-retry guard: at most one recovery turn per generation. */
   pairRetryAttempted?: boolean
   generation: number
@@ -575,7 +575,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const conversation = conversationsRef.current.find((item) => item.id === id)
     const handles = getHandles(id)
     if (!conversation || runtime?.isStreaming || handles.active) return
-    handles.proposalRetry = maintenanceTaskId ? { messageId: userMessage.id, taskId: maintenanceTaskId } : undefined
+    handles.proposalRetry = maintenanceTaskId ? { message: userMessage, taskId: maintenanceTaskId } : undefined
     handles.pairRetryAttempted = false
     const generation = handles.generation + 1
     handles.generation = generation
@@ -587,7 +587,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.pendingBuffer = ''
     handles.reasoning = emptyReasoning()
 
-    const nextMessages = ephemeralIdsRef.current.has(id) ? [...history, userMessage] : capChatMessages([...history, userMessage])
+    // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/2026-10-02-blueprint-review-conversation-loop--9c426f18.md
+    const nextMessages = maintenanceTaskId ? history : ephemeralIdsRef.current.has(id) ? [...history, userMessage] : capChatMessages([...history, userMessage])
     updateConversation(id, (current) => ({
       ...current,
       title: current.title === NEW_CONVERSATION_TITLE ? titleFromMessages(nextMessages) : current.title,
@@ -629,11 +630,12 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       const stream = chatStream(
         chatMessages,
         (delta) => {
-          if (handles.generation === generation) appendPending(id, delta)
+          if (handles.generation === generation && !maintenanceTaskId) appendPending(id, delta)
         },
         () => {
           if (handles.generation !== generation) return
           handles.active = false
+          handles.proposalRetry = undefined
           handles.abort = null
           const final = flushPending(id)
           handles.pendingBuffer = ''
@@ -670,7 +672,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           // Pairing 400 (tool calls vs responses out of balance, e.g. after a
           // steered turn): the persisted history is plain text, so exactly one
           // fresh turn recovers. Never auto-retry anything else, never twice.
-          if (!handles.pairRetryAttempted && /function response parts|function call parts/i.test(error)) {
+          if (!maintenanceTaskId && !handles.pairRetryAttempted && /function response parts|function call parts/i.test(error)) {
             handles.pairRetryAttempted = true
             window.setTimeout(() => {
               if (handles.generation !== generation) return
@@ -891,11 +893,15 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   const retry = useCallback((id: string) => {
     const conversation = conversationsRef.current.find((item) => item.id === id)
     if (!conversation || runtimesRef.current[id]?.isStreaming || handlesRef.current.get(id)?.active) return
+    const proposal = handlesRef.current.get(id)?.proposalRetry
+    if (proposal) {
+      startRequest(id, conversation.messages, proposal.message, proposal.taskId)
+      return
+    }
     const turn = getRetryTurn(conversation.messages)
     if (!turn) return
     updateConversation(id, (current) => ({ ...current, toolTraces: [] }))
-    const proposal = handlesRef.current.get(id)?.proposalRetry
-    startRequest(id, turn.history, turn.userMessage, proposal?.messageId === turn.userMessage.id ? proposal.taskId : undefined)
+    startRequest(id, turn.history, turn.userMessage)
   }, [startRequest, updateConversation])
 
   const clear = useCallback((id: string) => {

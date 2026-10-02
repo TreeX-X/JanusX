@@ -375,6 +375,8 @@ class BlueprintMaintenanceService {
     taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
     providerId: string; modelId?: string; signal: AbortSignal; chatSession: ChatSessionRuntime; workspaceIds: string[]
     workspaceRoots: Record<string, string>
+    projectContext?: string
+    noteRefs?: Array<{ uri: string; expectedHash?: string }>
   }): Promise<string> {
     const task = await this.authorizeTurn(input)
     if (task.status === 'analyzing' || task.status === 'applying') throw new Error('BUSY: proposal is already active')
@@ -953,6 +955,8 @@ class BlueprintMaintenanceService {
 
   private async generateProposal(taskId: string, providerId: string, modelId: string | undefined, shared: {
     messages: Array<{ role: string; content: string }>; signal: AbortSignal; chatSession: ChatSessionRuntime
+    projectContext?: string
+    noteRefs?: Array<{ uri: string; expectedHash?: string }>
   }): Promise<void> {
     const task = this.requireActive(taskId)
     const previousChangeSet = task.changeSet
@@ -967,6 +971,16 @@ class BlueprintMaintenanceService {
     try {
       const blueprint = await this.loadTaskBlueprint(task)
       if (!blueprint) return
+      // The raw context was read before this projection; do not bind old prose
+      // to a newer source hash if the Note changed between the two reads.
+      if (shared.projectContext && shared.noteRefs?.length) {
+        const hashes = new Map(Object.values(blueprint.nodes).map(node => [node.sourceUri, node.sourceHash]))
+        for (const ref of shared.noteRefs) {
+          if (ref.expectedHash && hashes.get(ref.uri) !== ref.expectedHash) {
+            throw new Error(`STALE_BASELINE: refresh selected Note ${ref.uri}`)
+          }
+        }
+      }
       if (blueprint.contentRevision !== task.baseRevision) {
         task.status = 'stale'; task.phase = '蓝图已变化'; task.error = '蓝图版本已变化'; this.emit(task); return
       }
@@ -1013,6 +1027,7 @@ class BlueprintMaintenanceService {
         ...(traceHistory ? [traceHistory] : []),
         { role: 'user', content: `Blueprint: ${blueprint.name}\nGoal: ${task.goal}\nConversation:\n${conversation.map((message) => `${message.role}: ${message.content}`).join('\n')}\nCurrent pending proposal:\n${changeSetContext(task)}\nNodes:\n${blueprintNodes}\nAuthorized workspace evidence:${workspace || '\n(no readable evidence files)'}` },
       ]
+      if (shared.projectContext) proposalDraft[proposalDraft.length - 1].content += `\n\nAuthorized Note source:\n${shared.projectContext}`
       let budgetedEvidenceNote = ''
       try {
         const budgeted = chatSession.buildContext(proposalDraft, { model: modelInfo })
@@ -1021,6 +1036,7 @@ class BlueprintMaintenanceService {
           budgetedEvidenceNote = '\n[注意：工作区证据已按预算裁剪为摘要，引用文件时以摘要中的路径与哈希为准。]'
         }
       } catch {
+        if (shared.projectContext) throw new Error('Note context exceeds the model budget; narrow the selection and organize again.')
         // Budget overflow on the current turn alone: fall back to a compact
         // goal+conversation prompt rather than failing the whole proposal.
         proposalDraft[proposalDraft.length - 1] = {

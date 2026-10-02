@@ -469,7 +469,8 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         if (steered.length) sendAgentEvent({ type: 'steering_consumed', requestId, keys: steered.map((entry) => entry.key) })
         text = await blueprintMaintenanceService.proposeForConversation({
           taskId: request.maintenanceTaskId, conversationId, messages: history, providerId, modelId,
-          signal: controller.signal, chatSession, workspaceIds: (workspaceResources ?? []).map((item) => item.workspaceId),
+          signal: controller.signal, chatSession, projectContext, noteRefs: request.noteRefs,
+          workspaceIds: (workspaceResources ?? []).map((item) => item.workspaceId),
           workspaceRoots: Object.fromEntries((workspaceResources ?? []).map(item => [item.workspaceId, item.workspacePath])),
         })
       } while (!controller.signal.aborted && steeringPort.size > 0)
