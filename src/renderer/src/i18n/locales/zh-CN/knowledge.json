@@ -422,11 +422,11 @@
     "thinking": "启用思考",
     "externalHint": "复用应用已配置的提供方和密钥。推理模式由该提供方与模型决定，不启动本地服务。",
     "localTitle": "本地服务",
-    "localHint": "由 JanusX 启动 Qwen：同时填写 llama-server 程序和 Qwen3.5 GGUF 权重的绝对路径，再检测并启用。两项均留空表示连接你已自行启动的本机服务，不会自动寻找或启动模型。启用与关闭立即保存；托管模型按需加载，空闲 3 分钟释放，修改路径或上下文前请先关闭。",
+    "localHint": "首次使用可下载并校验 Qwen 及 GPU 运行程序，完成后自动填入路径；也可手动指定已有文件。检测通过后才能启用，按可用显存推荐上下文，不自动改用 CPU。模型按需加载，空闲 3 分钟释放。两项路径均留空时仅连接自行启动的本机服务，其 GPU 配置由该服务管理。",
     "localEnabled": "已启用 · 按需加载",
     "localDisabled": "已关闭",
     "localContext": "上下文上限",
-    "localContextAuto": "自动推荐（按可用资源）",
+    "localContextAuto": "自动推荐（按可用显存）",
     "localEnable": "检测并启用",
     "localChecking": "正在检测环境…",
     "localCancel": "取消检测并关闭",
@@ -435,7 +435,6 @@
     "localStopFailed": "关闭未完整完成。请重试，确认配置已保存且托管进程已退出。",
     "localPassed": "检测通过，已启用 · {{tokens}}K tokens",
     "localResources": "可用内存 {{memory}} GB · {{device}}",
-    "localCpu": "CPU 运行，速度较慢",
     "localService": "连接已有本机服务",
     "localRecommendation": "推荐 {{tokens}}K tokens。资源预算为估算，实际加载失败会停止并报告，不会降低手动上限。",
     "localErrors": {
@@ -446,10 +445,19 @@
       "local-runtime-unavailable": "llama-server 无法运行，请检查版本、系统架构和依赖库。",
       "local-port-unavailable": "服务端口已被占用，请关闭占用进程或修改端口。",
       "local-context-unsupported": "所选上下文超出模型或当前资源预算，请选择自动推荐或更小档位。",
-      "local-service-unavailable": "无法连接本机服务 {{endpoint}}，尚未进行硬件适配检测。若要由 JanusX 启动 Qwen，请同时填写程序与权重路径；若连接已有服务，请先启动该服务并核对地址。",
+      "local-service-unavailable": "无法连接本机服务 {{endpoint}}，尚未评估硬件。可先下载本地资源并检测启用；如需连接已有服务，请先启动该服务并检查地址。",
       "local-service-context-unknown": "无法确认服务上下文，或服务低于 32K。请检查 /props 中的 n_ctx。",
       "local-memory-insufficient": "当前可用资源不足以运行 32K 上下文，请释放内存或显存后重试。",
-      "local-environment-failed": "环境检测未通过，请检查本机服务、程序及权重。"
+      "local-environment-failed": "环境检测未通过，请检查本机服务、程序及权重。",
+      "local-gpu-unavailable": "未检测到可用 GPU。请检查显卡与驱动；不会自动改用 CPU。",
+      "local-vram-unknown": "无法确认可用显存。请检查显卡驱动和检测工具后重试。",
+      "local-vram-insufficient": "可用显存不足以运行最低 32K 上下文。请关闭占用显存的程序后重试；不会改用 CPU。",
+      "local-download-failed": "下载或安装失败。请检查网络、系统代理和目录权限后重试；已校验文件会复用。",
+      "local-download-unsupported": "自动下载目前支持 Windows x64；此平台可手动配置程序与权重。",
+      "local-download-size-mismatch": "下载文件大小不符，未安装。请重试。",
+      "local-download-hash-mismatch": "下载文件校验失败，未安装。请重试。",
+      "local-disk-insufficient": "磁盘空间不足。请至少留出约 3.7 GB 空间后重试。",
+      "local-runtime-extract-failed": "运行程序解压失败。请检查磁盘、目录权限及安全软件后重试。"
     },
     "local": {
       "endpoint": "接口地址",
@@ -482,6 +490,22 @@
       "needs-review": "需要人工处理",
       "failed": "失败",
       "cancelled": "来源或版本已变化"
+    },
+    "localGpuUnavailable": "未检测到可用 GPU",
+    "localDownload": "下载或复用本地资源",
+    "localDownloadRetry": "重试准备本地资源",
+    "localDownloadHint": "首次约 3.18 GB 下载；后续校验复用，关闭部署保留文件。",
+    "localDownloadCancel": "取消下载并关闭",
+    "localDownloadProgress": "本地资源下载进度",
+    "localDownloadRuntime": "GPU 运行程序",
+    "localDownloadModel": "Qwen 模型权重",
+    "localDownloadPhases": {
+      "checking": "正在检查 GPU 环境…",
+      "downloading": "正在下载，可随时取消。",
+      "verifying": "正在校验文件完整性…",
+      "extracting": "正在安装 GPU 运行程序…",
+      "ready": "资源已就绪。点击“检测并启用”后，流程中才可选择本地模型。",
+      "cancelled": "已取消，保留已校验的完整文件；重试时复用。"
     }
   }
 }

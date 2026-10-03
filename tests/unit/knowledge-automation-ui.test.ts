@@ -15,13 +15,14 @@ beforeAll(async () => {
     import {defaultKnowledgeAutomation} from './src/shared/knowledge-automation'
     const counts={pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0}
     window.calls=[];window.config={enabled:true,mode:'deterministic-only',autoAcceptDeterministicFacts:false,automation:defaultKnowledgeAutomation()}
-    window.localResult='pass'
+    window.localResult='pass';window.resources={supported:true,phase:'idle',receivedBytes:0,totalBytes:0}
     const disabledLocal=()=>{window.config.automation.local.enabled=false;Object.values(window.config.automation.stages).forEach(stage=>{if(stage.provider==='local')stage.provider='off'})}
     const status=()=>({enabled:window.config.automation.enabled,running:false,counts,total:0,tasks:[]})
     window.electron={llm:{getTerminalProviders:async()=>[{id:'external',name:'My provider',modelId:'chosen-reviewer',enabled:true}]},knowledge:{
       getSettings:async()=>window.config,updateSettings:async(value)=>{window.calls.push('save');value.automation.local=window.config.automation.local;window.config=value;return structuredClone(value)},externalMcpStatus:async()=>null,
       automationStatus:async()=>status(),automationRun:async()=>{window.calls.push('run');return status()},automationRetry:async()=>{},
-      jevCredentialStatus:async()=>({configured:false}),setJevCredential:async()=>{},stopLocalModel:async()=>{window.calls.push('stop');disabledLocal()},
+      localResourcesStatus:async()=>structuredClone(window.resources),installLocalResources:async()=>{window.calls.push('install');window.resources.phase='downloading';window.resources.totalBytes=100;return structuredClone(window.resources)},
+      jevCredentialStatus:async()=>({configured:false}),setJevCredential:async()=>{},stopLocalModel:async()=>{window.calls.push('stop');disabledLocal();if(['checking','downloading','verifying','extracting'].includes(window.resources.phase))window.resources.phase='cancelled'},
       configureLocalModel:async(local)=>{window.calls.push('check');if(window.localResult==='wait')await new Promise(resolve=>window.finishCheck=resolve);const ok=window.localResult!=='fail';if(ok)window.config.automation.local=local;return {settings:structuredClone(window.config),report:{ok,reason:ok?undefined:'local-memory-insufficient',mode:'gpu',availableMemoryMiB:16000,availableVramMiB:6000,modelContextTokens:262144,recommendedContextTokens:32768,selectedContextTokens:32768,supportedContextTokens:[32768]}}}
     }}
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true,load:async()=>{}})
@@ -42,7 +43,7 @@ beforeAll(async () => {
 })
 afterAll(async () => { await browser?.close() })
 async function mount(page: Page, gates = false) {
-  page.setDefaultTimeout(4000); await page.setContent('<div id="root"></div>'); await page.addStyleTag({ content: css + '\n:root{--shell-accent:#ff7830}*{box-sizing:border-box}body{margin:0;padding:16px}#root{max-width:800px}' })
+  page.setDefaultTimeout(4000); await page.setContent('<div id="root"></div>'); await page.addStyleTag({ content: css + '\n:root{--shell-accent:#ff7830;--so-body-pad-x:16px;--so-body-pad-y:16px}*{box-sizing:border-box}body{margin:0;padding:16px}#root{max-width:800px}' })
   await page.evaluate(value => { (window as any).gates = value }, gates); await page.addScriptTag({ content: script })
   await page.getByRole('heading', { name: 'Knowledge automation', exact: true }).waitFor()
 }
@@ -148,5 +149,35 @@ it('ignores a late check completion after cancellation', async () => {
     expect(await page.getByText('Checks passed, enabled · 32K tokens', { exact: true }).count()).toBe(0)
     await page.getByRole('button', { name: 'Entry review', exact: true }).click()
     expect(await page.getByRole('option', { name: 'Local model', exact: true }).count()).toBe(0)
+  } finally { await page.close() }
+})
+
+it('downloads only on request, allows cancellation and fills verified paths without enabling', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page)
+    await page.getByText('Local service', { exact: true }).click()
+    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+    await page.getByRole('button', { name: 'Download or reuse local resources', exact: true }).click()
+    await page.getByRole('progressbar', { name: 'Local resource download progress' }).waitFor()
+    expect(await page.getByRole('button', { name: 'Check and enable', exact: true }).isDisabled()).toBe(true)
+    await page.getByRole('button', { name: 'Cancel download and disable', exact: true }).click()
+    await page.getByText('Cancelled. Complete verified files are kept for reuse on retry.', { exact: true }).waitFor()
+    await page.getByRole('button', { name: 'Retry local resource setup', exact: true }).click()
+    await page.evaluate(() => Object.assign((window as any).resources, { phase: 'ready', serverPath: 'C:\\cache\\llama-server.exe', modelPath: 'C:\\cache\\qwen.gguf' }))
+    await expect.poll(() => page.getByLabel('llama-server path', { exact: true }).inputValue()).toBe('C:\\cache\\llama-server.exe')
+    expect(await page.getByLabel('GGUF weights path', { exact: true }).inputValue()).toBe('C:\\cache\\qwen.gguf')
+    expect(await page.evaluate(() => (window as any).config.automation.local.enabled)).toBe(false)
+    expect(await page.evaluate(() => (window as any).calls)).toEqual(['install', 'stop', 'install'])
+    await page.getByRole('button', { name: 'Check and enable', exact: true }).click()
+    await page.getByText('Checks passed, enabled · 32K tokens', { exact: true }).waitFor()
+    expect(await page.evaluate(() => (window as any).config.automation.local.serverPath)).toBe('C:\\cache\\llama-server.exe')
+    await page.getByRole('button', { name: 'Disable local deployment', exact: true }).click()
+    await page.getByLabel('llama-server path', { exact: true }).fill('')
+    await page.getByLabel('GGUF weights path', { exact: true }).fill('')
+    await page.waitForTimeout(1000)
+    expect(await page.getByLabel('llama-server path', { exact: true }).inputValue()).toBe('')
+    await page.setViewportSize({ width: 640, height: 720 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   } finally { await page.close() }
 })

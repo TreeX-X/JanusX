@@ -18,6 +18,7 @@ import { knowledgeReviewService, proposeFactCandidates, proposeDerivedCandidates
 import { factScope, observationScope, isActiveObservation, sourceEvidence } from './memory-evidence'
 import { validateFactEvidence } from './fact-evidence-review'
 import { knowledgeModelJson, reviewKnowledge, stopKnowledgeLocalModel, type KnowledgeModelRequest } from './knowledge-models'
+import { cancelKnowledgeLocalSetup } from './knowledge-local-settings'
 import { wikiFactHash, wikiFreshness } from './wiki-freshness'
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -117,7 +118,7 @@ export class KnowledgeAutomationService {
   }
   private write(ledger: Ledger) { return writeFileAtomic(this.path(), JSON.stringify(ledgerSchema.parse(ledger)) + '\n') }
   stop(): void { this.controller?.abort(); stopKnowledgeLocalModel() }
-  shutdown(): Promise<void> { this.closed = true; this.stop(); return stopKnowledgeLocalModel() }
+  async shutdown(): Promise<void> { this.closed = true; this.stop(); await Promise.all([stopKnowledgeLocalModel(), cancelKnowledgeLocalSetup()]) }
   async status(): Promise<KnowledgeAutomationStatus> {
     const [ledger, settings] = await Promise.all([this.read(), this.deps.settings()])
     const counts: KnowledgeAutomationStatus['counts'] = { pending: 0, running: 0, succeeded: 0, 'needs-review': 0, failed: 0, cancelled: 0 }

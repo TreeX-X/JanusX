@@ -54,10 +54,11 @@ export async function withKnowledgeLocalModel<T>(settings: KnowledgeAutomationSe
       if (blocked) throw new Error('local-model-disabled')
       contextTokens = report.selectedContextTokens
       if (report.mode !== 'service') {
+        if (report.mode !== 'gpu' || !report.device) throw new Error('local-gpu-unavailable')
         const url = localEndpoint(settings.local.endpoint)
         const child = spawn(settings.local.serverPath, ['-m', settings.local.modelPath, '--alias', model.model,
           '--host', url.hostname.replace(/[[\]]/g, ''), '--port', url.port || '80', '-c', String(contextTokens),
-          '-np', '1', '-ngl', report.mode === 'gpu' ? 'all' : '0', '--device', report.device ?? 'none',
+          '-np', '1', '-ngl', 'all', '--device', report.device,
           '--fit', 'off', '--jinja', '--no-context-shift', '--cache-ram', '0'], { shell: false, windowsHide: true, stdio: 'ignore' })
         process = child; identity = nextIdentity
         const clear = () => { if (process === child) { process = undefined; identity = ''; contextTokens = 0 } }

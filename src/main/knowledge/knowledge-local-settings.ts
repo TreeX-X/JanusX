@@ -5,6 +5,7 @@ import { configService } from '../config/service'
 import { SerialQueue } from '../lib/atomic-file'
 import { detectLocalEnvironment } from './knowledge-local-environment'
 import { setKnowledgeLocalEnabled, stopKnowledgeLocalModel } from './knowledge-local-runtime'
+import { knowledgeLocalResources } from './knowledge-local-resources'
 
 const writes = new SerialQueue()
 let detection: AbortController | undefined
@@ -22,6 +23,7 @@ export function updateKnowledgeSettingsFromRenderer(partial: Partial<KnowledgeSe
 
 export async function configureKnowledgeLocalModel(input: unknown): Promise<{ settings: KnowledgeSettings; report: KnowledgeLocalEnvironment }> {
   const local = localInput.parse(input)
+  if (['checking', 'downloading', 'verifying', 'extracting'].includes(knowledgeLocalResources.status().phase)) throw new Error('local-install-busy')
   detection?.abort()
   const controller = new AbortController(); detection = controller
   if ((await configService.getKnowledgeSettings()).automation?.local.enabled) throw new Error('local-model-already-enabled')
@@ -43,12 +45,26 @@ export async function configureKnowledgeLocalModel(input: unknown): Promise<{ se
 }
 
 export async function disableKnowledgeLocalModel(): Promise<void> {
-  detection?.abort(); detection = undefined
+  const cancelled = cancelKnowledgeLocalSetup()
   setKnowledgeLocalEnabled(false)
   const stopped = stopKnowledgeLocalModel()
   const saved = writes.run(async () => {
     const current = await configService.getKnowledgeSettings(), automation = current.automation ?? defaultKnowledgeAutomation()
     await configService.updateKnowledgeSettings({ automation: { ...automation, local: { ...automation.local, enabled: false } } })
   })
-  await Promise.all([stopped, saved])
+  await Promise.all([stopped, saved, cancelled])
+}
+
+export async function startKnowledgeLocalResources() {
+  detection?.abort()
+  const controller = new AbortController(); detection = controller
+  if (!(await configService.getExperimentalFeatures()).knowledge) throw new Error('knowledge-disabled')
+  if ((await configService.getKnowledgeSettings()).automation?.local.enabled) throw new Error('local-model-already-enabled')
+  controller.signal.throwIfAborted()
+  return knowledgeLocalResources.start()
+}
+
+export function cancelKnowledgeLocalSetup(): Promise<void> {
+  detection?.abort(); detection = undefined
+  return knowledgeLocalResources.cancel()
 }

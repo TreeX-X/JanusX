@@ -6,14 +6,15 @@ import { knowledgeModelJson, reviewKnowledge, stopKnowledgeLocalModel } from '..
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 it.runIf(process.env.JANUSX_QWEN_SMOKE === '1')('generates and reviews a small handbook section with local Qwen', async () => {
   const settings = defaultKnowledgeAutomation()
-  settings.local.serverPath = resolve('artifacts/qwen-review/vulkan/llama-server.exe')
-  settings.local.modelPath = resolve('artifacts/qwen-review/Qwen3.5-4B-Q5_K_M.gguf')
+  settings.local.serverPath = resolve(process.env.JANUSX_QWEN_SERVER ?? 'artifacts/qwen-review/vulkan/llama-server.exe')
+  settings.local.modelPath = resolve(process.env.JANUSX_QWEN_MODEL ?? 'artifacts/qwen-review/Qwen3.5-4B-Q5_K_M.gguf')
   settings.local.endpoint = 'http://127.0.0.1:18793/v1'
   settings.local.enabled = true
   settings.stages.wikiGeneration.provider = 'local'; settings.stages.wikiReview.provider = 'local'
   const environment = await detectLocalEnvironment(settings.local, new AbortController().signal)
   console.info(JSON.stringify({ environment }))
   expect(environment.ok).toBe(true)
+  expect(environment.mode).toBe('gpu')
   expect(environment.selectedContextTokens).toBeGreaterThanOrEqual(32768)
   const knowledge = [{ id: 'backup', content: '项目每日凌晨 02:00 备份数据库，保留最近 7 天备份。恢复前必须验证备份校验和。' }]
   const started = Date.now()

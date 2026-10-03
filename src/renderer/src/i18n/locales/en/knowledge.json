@@ -422,11 +422,11 @@
     "thinking": "Enable thinking",
     "externalHint": "Reuse the configured provider and credentials. Reasoning follows the provider and model; no local service starts.",
     "localTitle": "Local service",
-    "localHint": "For JanusX to start Qwen, supply both absolute paths: llama-server and Qwen3.5 GGUF weights, then check and enable. Leaving both empty connects to a service you already started; it does not find or launch a model. Enable/disable saves immediately. Managed models load on demand and unload after 3 idle minutes. Disable before editing paths or context.",
+    "localHint": "Download and verify Qwen and its GPU runtime on first use, or supply existing file paths. Enable only after checks pass. Context follows free VRAM; managed deployment never falls back to CPU. Models load on demand and unload after 3 idle minutes. Empty paths connect to an existing local service, whose GPU configuration is managed externally.",
     "localEnabled": "Enabled · on demand",
     "localDisabled": "Disabled",
     "localContext": "Context limit",
-    "localContextAuto": "Automatic (available resources)",
+    "localContextAuto": "Automatic (available VRAM)",
     "localEnable": "Check and enable",
     "localChecking": "Checking environment…",
     "localCancel": "Cancel check and disable",
@@ -435,7 +435,6 @@
     "localStopFailed": "Disable did not fully complete. Retry to confirm settings are saved and the managed process exits.",
     "localPassed": "Checks passed, enabled · {{tokens}}K tokens",
     "localResources": "Available RAM {{memory}} GB · {{device}}",
-    "localCpu": "CPU mode, slower",
     "localService": "Connect to an existing local service",
     "localRecommendation": "Recommended: {{tokens}}K tokens. Budgets are estimates; load failures stop and report, without lowering a manual limit.",
     "localErrors": {
@@ -446,10 +445,19 @@
       "local-runtime-unavailable": "llama-server cannot run. Check its version, architecture and dependencies.",
       "local-port-unavailable": "The port is occupied. Stop the other process or choose another port.",
       "local-context-unsupported": "Context exceeds the model or current resource budget. Select automatic or a smaller limit.",
-      "local-service-unavailable": "Cannot connect to local service {{endpoint}}; hardware compatibility has not been assessed. To let JanusX start Qwen, supply both server and weight paths. For an existing service, start it and check the endpoint.",
+      "local-service-unavailable": "Cannot connect to local service {{endpoint}}; hardware has not been assessed. Download local resources and check to enable, or start your existing service and check its endpoint.",
       "local-service-context-unknown": "Cannot confirm context, or it is below 32K. Check n_ctx in /props.",
       "local-memory-insufficient": "Not enough available resources for 32K context. Free RAM or VRAM and retry.",
-      "local-environment-failed": "Environment checks failed. Check the local service, executable and weights."
+      "local-environment-failed": "Environment checks failed. Check the local service, executable and weights.",
+      "local-gpu-unavailable": "No usable GPU detected. Check your GPU and driver; CPU fallback is disabled.",
+      "local-vram-unknown": "Free VRAM could not be confirmed. Check GPU drivers and detection tools, then retry.",
+      "local-vram-insufficient": "Free VRAM cannot support the minimum 32K context. Close GPU-heavy applications and retry; CPU fallback is disabled.",
+      "local-download-failed": "Download or installation failed. Check network, system proxy and directory permissions, then retry; verified files will be reused.",
+      "local-download-unsupported": "Automatic download supports Windows x64. Configure existing runtime and weights manually on this platform.",
+      "local-download-size-mismatch": "Downloaded size does not match; not installed. Please retry.",
+      "local-download-hash-mismatch": "Downloaded checksum does not match; not installed. Please retry.",
+      "local-disk-insufficient": "Insufficient disk space. Allow about 3.7 GB free space and retry.",
+      "local-runtime-extract-failed": "Runtime extraction failed. Check disk space, directory permissions and security software, then retry."
     },
     "local": {
       "endpoint": "Endpoint",
@@ -482,6 +490,22 @@
       "needs-review": "Human review needed",
       "failed": "Failed",
       "cancelled": "Source or version changed"
+    },
+    "localGpuUnavailable": "No usable GPU detected",
+    "localDownload": "Download or reuse local resources",
+    "localDownloadRetry": "Retry local resource setup",
+    "localDownloadHint": "About 3.18 GB on first use; verified files are reused and kept when disabled.",
+    "localDownloadCancel": "Cancel download and disable",
+    "localDownloadProgress": "Local resource download progress",
+    "localDownloadRuntime": "GPU runtime",
+    "localDownloadModel": "Qwen model weights",
+    "localDownloadPhases": {
+      "checking": "Checking GPU environment…",
+      "downloading": "Downloading; you can cancel at any time.",
+      "verifying": "Verifying file integrity…",
+      "extracting": "Installing GPU runtime…",
+      "ready": "Resources ready. Check and enable to make the local model available in workflows.",
+      "cancelled": "Cancelled. Complete verified files are kept for reuse on retry."
     }
   }
 }

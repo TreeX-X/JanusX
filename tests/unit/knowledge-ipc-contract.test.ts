@@ -13,7 +13,8 @@ import { installElectronApiFallback } from '../../src/renderer/src/lib/electron-
 import { defaultKnowledgeAutomation } from '../../src/shared/knowledge-automation'
 import { normalizeKnowledgeSettings } from '../../src/shared/knowledge-settings'
 import * as localEnvironment from '../../src/main/knowledge/knowledge-local-environment'
-import { configureKnowledgeLocalModel, disableKnowledgeLocalModel, updateKnowledgeSettingsFromRenderer } from '../../src/main/knowledge/knowledge-local-settings'
+import { configureKnowledgeLocalModel, disableKnowledgeLocalModel, startKnowledgeLocalResources, updateKnowledgeSettingsFromRenderer } from '../../src/main/knowledge/knowledge-local-settings'
+import { knowledgeLocalResources } from '../../src/main/knowledge/knowledge-local-resources'
 import {
   getKnowledgeSettings,
   updateKnowledgeSettings,
@@ -95,7 +96,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(56)
+    expect(channels).toHaveLength(58)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -268,7 +269,7 @@ describe('Knowledge IPC contract', () => {
     mocks.getKnowledgeSettings.mockImplementation(async () => structuredClone(stored))
     mocks.updateKnowledgeSettings.mockImplementation(async partial => { stored = normalizeKnowledgeSettings({ ...stored, ...partial }); return structuredClone(stored) })
     const local = { ...defaultKnowledgeAutomation().local, enabled: true }
-    const report = { ok: true, mode: 'cpu' as const, availableMemoryMiB: 16000, modelContextTokens: 262144,
+    const report = { ok: true, mode: 'gpu' as const, availableMemoryMiB: 16000, modelContextTokens: 262144,
       recommendedContextTokens: 65536, selectedContextTokens: 65536, supportedContextTokens: [32768, 65536] }
     const detect = vi.spyOn(localEnvironment, 'detectLocalEnvironment').mockResolvedValue({ ...report, ok: false, reason: 'local-memory-insufficient' })
     expect((await configureKnowledgeLocalModel(local)).report.ok).toBe(false)
@@ -297,6 +298,27 @@ describe('Knowledge IPC contract', () => {
     await cancelled
     expect(stored.automation!.local.enabled).toBe(false)
     detect.mockRestore()
+  })
+
+  it('routes resource operations and cancels pending setup before it can start a download', async () => {
+    await knowledgeApi.installLocalResources()
+    expect(mocks.invoke).toHaveBeenLastCalledWith(KNOWLEDGE_CHANNELS.localResourcesInstall)
+    await knowledgeApi.localResourcesStatus()
+    expect(mocks.invoke).toHaveBeenLastCalledWith(KNOWLEDGE_CHANNELS.localResourcesStatus)
+    mocks.getKnowledgeSettings.mockResolvedValue(normalizeKnowledgeSettings({ automation: defaultKnowledgeAutomation() }))
+    const start = vi.spyOn(knowledgeLocalResources, 'start')
+    const cancel = vi.spyOn(knowledgeLocalResources, 'cancel')
+    try {
+      const pending = startKnowledgeLocalResources()
+      const rejected = expect(pending).rejects.toThrow()
+      await disableKnowledgeLocalModel()
+      await rejected
+      expect(start).not.toHaveBeenCalled()
+      expect(cancel).toHaveBeenCalledOnce()
+      mocks.getKnowledgeSettings.mockResolvedValue({ automation: { ...defaultKnowledgeAutomation(), local: { ...defaultKnowledgeAutomation().local, enabled: true } } })
+      await expect(startKnowledgeLocalResources()).rejects.toThrow('local-model-already-enabled')
+      expect(start).not.toHaveBeenCalled()
+    } finally { start.mockRestore(); cancel.mockRestore() }
   })
 
   it('constrains public extensible values to structured-clone-safe data', () => {
@@ -369,6 +391,8 @@ describe('Knowledge IPC contract', () => {
       () => api.setJevCredential(''),
       () => api.jevCredentialStatus(),
       () => api.stopLocalModel(),
+      () => api.installLocalResources(),
+      () => api.localResourcesStatus(),
       () => api.configureLocalModel({ enabled: true, endpoint: '', modelPath: '', serverPath: '', contextTokens: 0 }),
       () => api.wikiHistory({ workspaceId: 'w', slug: 'a' }),
       () => api.wikiRevision({ workspaceId: 'w', slug: 'a', version: 1 }),
@@ -421,8 +445,8 @@ describe('Knowledge IPC contract', () => {
     calls.push(() => api.personalProfileEditContext())
     calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
     calls.push(() => api.migrateLegacyEpisodes())
-    expect(Object.keys(api)).toHaveLength(56)
-    expect(calls).toHaveLength(56)
+    expect(Object.keys(api)).toHaveLength(58)
+    expect(calls).toHaveLength(58)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

@@ -25,7 +25,7 @@ export interface KnowledgeLocalSettings {
 export interface KnowledgeLocalEnvironment {
   ok: boolean
   reason?: string
-  mode: 'gpu' | 'cpu' | 'service'
+  mode: 'gpu' | 'unavailable' | 'service'
   device?: string
   deviceName?: string
   availableMemoryMiB: number
@@ -34,6 +34,18 @@ export interface KnowledgeLocalEnvironment {
   recommendedContextTokens: number
   selectedContextTokens: number
   supportedContextTokens: number[]
+}
+
+export interface KnowledgeLocalResources {
+  supported: boolean
+  phase: 'idle' | 'checking' | 'downloading' | 'verifying' | 'extracting' | 'ready' | 'cancelled' | 'failed'
+  component?: 'runtime' | 'model'
+  receivedBytes: number
+  totalBytes: number
+  reason?: string
+  serverPath?: string
+  modelPath?: string
+  report?: KnowledgeLocalEnvironment
 }
 export const LOCAL_CONTEXT_OPTIONS = [32768, 65536, 131072, 262144] as const
 export function defaultKnowledgeAutomation(): KnowledgeAutomationSettings {

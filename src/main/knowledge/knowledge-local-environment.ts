@@ -79,9 +79,49 @@ export async function readLocalModelMetadata(path: string): Promise<{ bytes: num
 export function recommendLocalContext(input: { memoryMiB: number; vramMiB?: number; modelBytes: number; kvBytesPerToken: number; modelContext: number }): number[] {
   // Include SSM/compute/runtime overhead and leave headroom for the app and other processes.
   const modelMiB = input.modelBytes / MiB
-  return LOCAL_CONTEXT_OPTIONS.filter(tokens => tokens <= input.modelContext && (input.vramMiB === undefined
-    ? modelMiB * 1.1 + tokens * input.kvBytesPerToken / MiB + 3584 <= input.memoryMiB
-    : modelMiB + tokens * input.kvBytesPerToken / MiB + 1280 <= input.vramMiB && input.memoryMiB >= modelMiB + 2048))
+  return LOCAL_CONTEXT_OPTIONS.filter(tokens => tokens <= input.modelContext && input.vramMiB !== undefined
+    && modelMiB + tokens * input.kvBytesPerToken / MiB + 1280 <= input.vramMiB && input.memoryMiB >= modelMiB + 2048)
+}
+
+export function selectLocalGpu(devices: string, nvidia: string, report: KnowledgeLocalEnvironment,
+  model: { bytes: number; context: number; kvBytesPerToken: number }): void {
+  const candidates = [...devices.matchAll(/^\s*(\S+):\s*(.+?)\s*\([\d.]+ MiB, ([\d.]+) MiB free\)/gm)]
+    .filter(match => !/^(CPU|RPC)/i.test(match[1]!) && !/llvmpipe|lavapipe|software/i.test(match[2]!))
+    .map(match => {
+      let free: number | undefined = Number(match[3])
+      if (/NVIDIA/i.test(match[2]!)) {
+        const readings = nvidia.split(/\r?\n/).filter(line => line.startsWith(match[2]! + ','))
+          .map(line => Number(line.split(',').at(-1))).filter(value => Number.isFinite(value) && value >= 0)
+        free = readings.length ? Math.min(free, ...readings) : undefined
+      }
+      return { device: match[1]!, name: match[2]!, free }
+    }).sort((a, b) => (b.free ?? -1) - (a.free ?? -1))
+  if (!candidates.length) throw new Error('local-gpu-unavailable')
+  const gpu = candidates[0]!
+  report.mode = 'gpu'; report.device = gpu.device; report.deviceName = gpu.name; report.availableVramMiB = gpu.free
+  if (gpu.free === undefined) throw new Error('local-vram-unknown')
+  if (report.availableMemoryMiB < model.bytes / MiB + 2048) throw new Error('local-memory-insufficient')
+  report.supportedContextTokens = recommendLocalContext({ memoryMiB: report.availableMemoryMiB,
+    modelBytes: model.bytes, kvBytesPerToken: model.kvBytesPerToken, modelContext: model.context, vramMiB: gpu.free })
+  if (!report.supportedContextTokens.length) throw new Error('local-vram-insufficient')
+}
+
+/** Also used before downloading weights, with the pinned model's known metadata. */
+export async function detectManagedGpu(serverPath: string, model: { bytes: number; context: number; kvBytesPerToken: number },
+  signal: AbortSignal): Promise<KnowledgeLocalEnvironment> {
+  const report: KnowledgeLocalEnvironment = { ok: false, mode: 'unavailable', availableMemoryMiB: Math.floor(freemem() / MiB),
+    modelContextTokens: model.context, recommendedContextTokens: 0, selectedContextTokens: 0, supportedContextTokens: [] }
+  try {
+    const devices = await command(serverPath, ['--list-devices'], signal)
+    const nvidia = /NVIDIA/i.test(devices)
+      ? await command('nvidia-smi', ['--query-gpu=name,memory.free', '--format=csv,noheader,nounits'], signal).catch(() => '') : ''
+    selectLocalGpu(devices, nvidia, report, model)
+    report.recommendedContextTokens = report.supportedContextTokens.filter(tokens => tokens <= 131072).at(-1) ?? 0
+    report.selectedContextTokens = report.recommendedContextTokens
+    report.ok = true
+  } catch (error) { report.reason = error instanceof Error ? error.message : 'local-environment-failed' }
+  signal.throwIfAborted()
+  return report
 }
 
 async function assertPortFree(url: URL): Promise<void> {
@@ -94,7 +134,7 @@ async function assertPortFree(url: URL): Promise<void> {
 }
 
 export async function detectLocalEnvironment(config: KnowledgeLocalSettings, signal: AbortSignal): Promise<KnowledgeLocalEnvironment> {
-  const report: KnowledgeLocalEnvironment = { ok: false, mode: 'cpu', availableMemoryMiB: Math.floor(freemem() / MiB),
+  const report: KnowledgeLocalEnvironment = { ok: false, mode: 'unavailable', availableMemoryMiB: Math.floor(freemem() / MiB),
     modelContextTokens: 0, recommendedContextTokens: 0, selectedContextTokens: 0, supportedContextTokens: [] }
   try {
     signal.throwIfAborted()
@@ -126,25 +166,9 @@ export async function detectLocalEnvironment(config: KnowledgeLocalSettings, sig
       const model = await readLocalModelMetadata(config.modelPath)
       report.modelContextTokens = model.context
       await assertPortFree(url)
-      const devices = await command(config.serverPath, ['--list-devices'], signal)
-      let nvidia: string = ''
-      if (/NVIDIA/i.test(devices)) nvidia = await command('nvidia-smi', ['--query-gpu=name,memory.free', '--format=csv,noheader,nounits'], signal).catch(() => '')
-      const candidates = [...devices.matchAll(/^\s*(\S+):\s*(.+?)\s*\([\d.]+ MiB, ([\d.]+) MiB free\)/gm)]
-        .map(match => {
-          let free = Number(match[3])
-          if (/NVIDIA/i.test(match[2]!)) {
-            const readings = nvidia.split(/\r?\n/).filter(line => line.startsWith(match[2]! + ',')).map(line => Number(line.split(',').at(-1))).filter(Number.isFinite)
-            // If no reliable free VRAM measurement is available, use the CPU budget.
-            free = readings.length ? Math.min(free, ...readings) : 0
-          }
-          return { device: match[1]!, name: match[2]!, free }
-        }).sort((a, b) => b.free - a.free)
-      const budget = { memoryMiB: report.availableMemoryMiB, modelBytes: model.bytes, kvBytesPerToken: model.kvBytesPerToken, modelContext: model.context }
-      const gpu = candidates.find(candidate => recommendLocalContext({ ...budget, vramMiB: candidate.free }).length > 0)
-      if (gpu) {
-        report.mode = 'gpu'; report.device = gpu.device; report.deviceName = gpu.name; report.availableVramMiB = Math.floor(gpu.free)
-      }
-      report.supportedContextTokens = recommendLocalContext({ ...budget, vramMiB: report.availableVramMiB })
+      Object.assign(report, await detectManagedGpu(config.serverPath, model, signal))
+      if (!report.ok) throw new Error(report.reason)
+      report.ok = false
     }
     const automatic = report.supportedContextTokens.filter(tokens => tokens <= 131072)
     report.recommendedContextTokens = automatic.at(-1) ?? 0
