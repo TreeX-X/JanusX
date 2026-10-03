@@ -40,6 +40,8 @@ DSH 复用外部 CLI 注册、PTY 终端及 headless 子进程入口。工具描
 
 DSH 的 hook 安装为 no-op，不能落到 OpenCode 插件分支。状态感知依赖实测 PTY 信号：`<model> · Max effort` 一类锚定状态栏提供模型，`模型醒了` 断言 running，`turn error` 断言 degraded。解析器永不据此推断 idle；`CLITerminal.writeLiveOutput` 仅对 dsh 预设更新不同的状态，不覆盖 needs-approval、needs-input 或 error。没有 hook 就不声称具备 turn 通知；本地状态接入也不扩大 CompanionGateway 的远控引擎范围。
 
+固定的 agent-core 依赖在运行时按原值保存检查点引擎，但其发布类型缺少 `dsh`。JanusX 的安装期兼容脚本精确扩展 `CheckpointEngine` 声明，并在上游声明形状不匹配时终止安装；已有补丁重复执行不改文件。只在本机修改 node_modules 无法覆盖 CI，宿主把 DSH 伪装为其他引擎则会污染检查点归属。该补丁沿用现有安装钩子，限制在类型声明，待两条工作流固定到原生支持 DSH 的上游提交时移除。
+
 无 sessionId 时，历史入口读取 `~/.dsh-tui/model-recents.json` 中的最近模型，缺失时回退声明默认 `deepseek-flash`；DeepSeek 模型窗口估计为 128,000，来源标记为 configuration/declared。有外部传入的 sessionId 时，扫描 `~/.dsh/sessions/<workspace-key>/<uuid>/`，workspace key 精确匹配失败后允许大小写不敏感回退；会话先精确 UUID，再兼容子串，并按 startedAt 与 mtime 选择。返回 id、path、recency；`session.v4.jsonl.zstd` 没有解码器，不能据此报告真实用量。带 startedAt 的零值只是启动基线。conpty 中间层 pid 与 `session-mounts.json` 内层 pid 不一致，不能据 pid 自动绑定；没有 hook 时扫描只在调用方提供 sessionId 后生效。
 
 后台执行使用 `dsh --profile headless --json <prompt>`。模型和 approval policy 由 profile 管理，宿主不透传其他引擎的 flag。DshParser 将 text 映射为 text-chunk、thinking 映射为有界 phase、tool_call/tool_result 映射为工具事件、turn_end 的 error reason 映射为错误。final 是已流式文本的重复输出，session 和未识别的成功 reason 不制造额外完成事件；进程关闭拥有 done。工作树隔离复用 activePaths 所决定的终端 cwd，不引入 DSH 专用隔离器。

@@ -5,6 +5,18 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import './patch-agent-tool-pairing.mjs'
 
+// Note: reproduce the DSH checkpoint contract in clean installs — see .agents/notes/2026-09-30-dsh-terminal-integration--b28d07a3.md
+const checkpointTypes = join(dirname(fileURLToPath(import.meta.resolve('@janus-agent/agent-core'))), 'shared/ipc/checkpoint.d.ts')
+const checkpointSource = readFileSync(checkpointTypes, 'utf8')
+const oldCheckpointEngine = "export type CheckpointEngine = 'claude' | 'codex' | 'opencode' | 'shell' | 'manual' | 'janus' | 'pi';"
+const dshCheckpointEngine = oldCheckpointEngine.replace("'pi';", "'pi' | 'dsh';")
+if (!checkpointSource.includes(dshCheckpointEngine)) {
+  if (checkpointSource.split(oldCheckpointEngine).length !== 2) {
+    throw new Error('Agent checkpoint engine declaration changed; review the DSH compatibility patch')
+  }
+  writeFileSync(checkpointTypes, checkpointSource.replace(oldCheckpointEngine, dshCheckpointEngine))
+}
+
 const file = join(dirname(fileURLToPath(import.meta.resolve('@janus-agent/agent-core'))), 'main/agent/chat-tools/workspace-chat-tools.js')
 const marker = '// JanusX host Note tools'
 let source = readFileSync(file, 'utf8')
