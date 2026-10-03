@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import type { GraphEdge, MemoryFact } from '../../../src/shared/knowledge'
 import { KnowledgeTruthService } from '../../../src/main/knowledge/truth-service'
+import { knowledgeAuditService } from '../../../src/main/knowledge/audit-service'
 
 async function write(relativePath: string, content: string): Promise<void> {
   const filePath = join(process.env.JANUSX_KNOWLEDGE_ROOT!, relativePath)
@@ -14,13 +15,18 @@ async function write(relativePath: string, content: string): Promise<void> {
 describe('KnowledgeTruthService', () => {
   let root: string
   const previousRoot = process.env.JANUSX_KNOWLEDGE_ROOT
+  const auditWrites = vi.spyOn(knowledgeAuditService, 'record')
+  afterAll(() => auditWrites.mockRestore())
 
   beforeEach(async () => {
+    auditWrites.mockClear()
     root = await mkdtemp(join(tmpdir(), 'janusx-truth-'))
     process.env.JANUSX_KNOWLEDGE_ROOT = root
   })
 
   afterEach(async () => {
+    // Note: settle real audit writes before removing their storage — see .agents/notes/2026-09-20-reproducible-verification--914a7e92.md
+    await Promise.all(auditWrites.mock.results.filter(result => result.type === 'return').map(result => result.value))
     await rm(root, { recursive: true, force: true })
     if (previousRoot === undefined) delete process.env.JANUSX_KNOWLEDGE_ROOT
     else process.env.JANUSX_KNOWLEDGE_ROOT = previousRoot
