@@ -3,25 +3,27 @@
 // Requires warehouse-external gif tools (never npm-install inside repo):
 //   npm i --prefix %TEMP%/opencode/giftools --no-save pngjs gifenc
 import { createRequire } from 'node:module';
-import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { layout, style } from './showcase-config.mjs';
 
-const req = createRequire('C:/Users/Tree/AppData/Local/Temp/opencode/giftools/package.json');
+const req = createRequire(join(process.env.SHOWCASE_GIFTOOLS ?? join(tmpdir(), 'opencode', 'giftools'), 'package.json'));
 export const { PNG } = req('pngjs');
 export const gifenc = req('gifenc');
 export const { GIFEncoder, quantize, applyPalette } = gifenc;
 
-export const FW = 1920;
-export const FH = 1080;
-export const AW = 1760;
-export const AH = 884;
-export const OX = 80;
-export const OY = 28;
-export const CAP_X = 80;
-export const CAP_Y = 952;
+export const FW = layout.width;
+export const FH = layout.height;
+export const AW = layout.appWidth;
+export const AH = layout.appHeight;
+export const OX = layout.appX;
+export const OY = layout.appY;
+export const CAP_X = layout.captionX;
+export const CAP_Y = layout.captionY;
 
-export const INK = [28, 52, 59];
-export const RED = [200, 48, 32];
-export const MISPRINT = [196, 120, 92];
+export const INK = style.ink;
+export const RED = style.accent;
+export const MISPRINT = style.misprint;
 
 /** Beige studio backdrop: vertical paper gradient, warm/cool radial glows,
  *  faint grid, vignette, caption-zone rules, corner marks, red seal accent. */
@@ -31,9 +33,9 @@ export function buildBackdrop() {
     const t = y / FH;
     for (let x = 0; x < FW; x++) {
       // paper gradient, slightly deeper than pilot beige for 1080P contrast
-      let r = 248 - 16 * t;
-      let g = 241 - 24 * t;
-      let b = 222 - 38 * t;
+      let r = style.background.top[0] * (1 - t) + style.background.bottom[0] * t;
+      let g = style.background.top[1] * (1 - t) + style.background.bottom[1] * t;
+      let b = style.background.top[2] * (1 - t) + style.background.bottom[2] * t;
       // warm glow top-left, cool shade bottom-right, faint cinnabar accent right
       const d1 = Math.hypot(x - 300, y - 60) / 1400;
       const d2 = Math.hypot(x - 1700, y - 1020) / 1300;
@@ -41,12 +43,14 @@ export function buildBackdrop() {
       const w1 = Math.max(0, 1 - d1);
       const w2 = Math.max(0, 1 - d2);
       const w3 = Math.max(0, 1 - d3);
+      if (style.background.glow) {
       r += w1 * w1 * 14 + w3 * w3 * 10;
       g += w1 * w1 * 8 - w2 * w2 * 10 + w3 * w3 * 2;
       b += -w1 * w1 * 8 - w2 * w2 * 16 - w3 * w3 * 6;
+      }
       // faint grid inside app zone only
       const inZone = x >= 40 && x < 1880 && y >= 8 && y < 940;
-      if (inZone && (x % 48 === 0 || y % 48 === 0)) {
+      if (style.background.grid && inZone && (x % 48 === 0 || y % 48 === 0)) {
         const m = Math.hypot(x - 960, y - 470) / 1100;
         const k = Math.max(0, 1 - m) * 0.06;
         r = r * (1 - k) + INK[0] * k;
@@ -55,7 +59,7 @@ export function buildBackdrop() {
       }
       // vignette
       const v = Math.min(1, Math.hypot(x - 960, y - 540) / 1150);
-      const dk = 1 - v * v * 0.12;
+      const dk = 1 - v * v * style.background.vignette;
       const i = (y * FW + x) * 4;
       buf[i] = Math.max(0, Math.min(255, r * dk));
       buf[i + 1] = Math.max(0, Math.min(255, g * dk));
@@ -168,7 +172,7 @@ function fillPoly(dst, pts, color) {
 }
 
 // Standard demo arrow, ~1.3x pilot size for 1080P legibility.
-const S = 1.3;
+const S = style.cursor.scale;
 const CURSOR = [[0, 0], [0, 27], [7, 21], [11, 29], [14, 27], [10, 19], [18, 19]].map(([x, y]) => [x * S, y * S]);
 const CURSOR_IN = [[2.5, 4], [2.5, 22], [8, 17.5], [11, 24], [12.5, 23], [9.5, 16.5], [14.5, 16.5]].map(([x, y]) => [x * S, y * S]);
 
@@ -177,8 +181,8 @@ export function drawCursor(dst, cx, cy, click) {
   if (click) {
     for (let a = 0; a < 360; a += 2) {
       for (let w = -1; w <= 1; w++) {
-        const x = Math.round(cx + 12 + Math.cos((a * Math.PI) / 180) * 24 + w);
-        const y = Math.round(cy + 16 + Math.sin((a * Math.PI) / 180) * 24 + w);
+        const x = Math.round(cx + 12 + Math.cos((a * Math.PI) / 180) * style.cursor.ringRadius + w);
+        const y = Math.round(cy + 16 + Math.sin((a * Math.PI) / 180) * style.cursor.ringRadius + w);
         if (x < 0 || y < 0 || x >= FW || y >= FH) continue;
         const i = (y * FW + x) * 4;
         dst[i] = RED[0]; dst[i + 1] = RED[1]; dst[i + 2] = RED[2];
@@ -186,8 +190,8 @@ export function drawCursor(dst, cx, cy, click) {
     }
   }
   const t = (p) => [p[0] + cx, p[1] + cy];
-  fillPoly(dst, CURSOR.map(t), INK);
-  fillPoly(dst, CURSOR_IN.map(t), [255, 255, 255]);
+  fillPoly(dst, CURSOR.map(t), style.cursor.stroke);
+  fillPoly(dst, CURSOR_IN.map(t), style.cursor.fill);
 }
 
 /** Caption chips live in the clean bottom zone, never covering the app. */
@@ -234,44 +238,4 @@ export function downscaleBilinear(src, sw, sh, dw, dh) {
     }
   }
   return out;
-}
-
-/** Shared-palette GIF with transparent unchanged pixels (keeps 1080P small). */
-export function assembleGIF(frames, W, H) {
-  const smalls = frames.map((f) =>
-    f.dst.length === W * H * 4 ? f.dst : downscaleBilinear(f.dst, FW, FH, W, H),
-  );
-  const samples = [];
-  for (let i = 0; i < smalls.length; i += 3) samples.push(smalls[i]);
-  const palette = quantize(Buffer.concat(samples), 255);
-  const gifPalette = palette.slice();
-  while (gifPalette.length < 256) gifPalette.push([0, 0, 0]);
-  const gif = GIFEncoder();
-  let previous = null;
-  frames.forEach((f, i) => {
-    const pixels = applyPalette(smalls[i], palette);
-    const opaque = pixels.slice();
-    if (previous) {
-      for (let p = 0; p < pixels.length; p++) {
-        if (pixels[p] === previous[p]) pixels[p] = 255;
-      }
-    }
-    gif.writeFrame(pixels, W, H, {
-      palette: i === 0 ? gifPalette : undefined,
-      delay: f.delay,
-      transparent: i > 0,
-      transparentIndex: 255,
-      dispose: 1,
-      repeat: 0,
-    });
-    previous = opaque;
-  });
-  gif.finish();
-  return Buffer.from(gif.bytes());
-}
-
-export function savePNG(dst, path) {
-  const png = new PNG({ width: FW, height: FH });
-  png.data = dst;
-  writeFileSync(path, PNG.sync.write(png));
 }

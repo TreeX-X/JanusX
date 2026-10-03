@@ -1,3 +1,13 @@
+import { timing } from './showcase-config.mjs';
+const captions = {
+  'sess-1': { badge: '1', text: '会话面板：卡片只露概述' },
+  'sess-2': { badge: '2', text: 'scope四档切换，搜索过滤' },
+  'sess-3': { badge: '3', text: '点开卡片看两轮时间线' },
+  'sess-4': { badge: '4', text: '查看详情读全量' },
+  'sess-5': { badge: '5', text: '还原点展开看Diff' },
+  'sess-6': { badge: '6', text: '两段式恢复防误删' },
+};
+
 // Record: session management — REAL sessions, turns and checkpoints, zero model calls.
 // Phase A (setup boot): workspace + claude terminal (session row auto-created),
 // two checkpoint:create snapshots with a real chain.ts edit between, close.
@@ -8,13 +18,13 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, writeFile, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import {
-  prepareRepo, launchApp, skipGate, ensureWorkspace, ensureSidebarExpanded,
+  prepareRepo, launchApp, skipGate, ensureSidebarExpanded,
   openWorkspace, newShell, snapper, saveManifest, sleep, closeApp,
 } from './record-lib.mjs';
 
-const STILL = 170;
+const STILL = timing.hold;
 
 const PROMPT_1 = '把登录接口接入到现有鉴权链路，给出改动方案';
 const PROMPT_2 = '按方案实现 refreshToken，跑通登录冒烟';
@@ -29,15 +39,13 @@ console.log('frames:', rawDir);
 console.log('fixture:', fixtureRoot);
 
 // ---------------- Phase A: setup ----------------
-let workspaceId;
 let sessionId;
 {
   const { application, page } = await launchApp(fixtureRoot, fixtureRoot);
   try {
     page.setDefaultTimeout(15000);
     await skipGate(page);
-    const ws = await page.evaluate((p) => window.electron.workspace.create({ name: p.name, path: p.path }), { name: 'demo-sess', path: repoPath });
-    workspaceId = ws.id;
+    await page.evaluate((p) => window.electron.workspace.create({ name: p.name, path: p.path }), { name: 'demo-sess', path: repoPath });
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForFunction(() => Boolean(window.electron?.workspace?.list), null, { timeout: 30000 });
@@ -134,11 +142,7 @@ try {
 
   const { snap, moveSnap, clickSnap, glideTo, box, center, typeSnap, rest } = snapper(page, rawDir, frames);
   // Cursor stays parked through every hold — no vanish/reappear between beats.
-  const hold = async (cap, ms = STILL) => {
-    await rest(cap, ms);
-    await sleep(400);
-    await rest(cap, ms);
-  };
+  const hold = rest;
 
   // ---- sess-1: L1 cards — open tool, establishing double still, slow pan ----
   const sessTool = page.getByRole('button', { name: /打开会话工具/ });
@@ -169,20 +173,7 @@ try {
   // hover-hold, then click. No teleporting.
   let px = 880;
   let py = 440;
-  const travelClick = async (loc, cap) => {
-    const c = center(await box(loc));
-    await glideTo(px, py, c.x, c.y, 12, cap);
-    px = c.x;
-    py = c.y;
-    await sleep(700);
-    await snap({ x: c.x, y: c.y }, false, STILL, cap);
-    await sleep(400);
-    await snap({ x: c.x, y: c.y }, false, STILL, cap);
-    await loc.click().catch(() => page.mouse.click(c.x, c.y));
-    await snap({ x: c.x, y: c.y }, true, 30, cap);
-    await sleep(1400);
-    await hold(cap);
-  };
+  const travelClick = clickSnap;
   for (const tab of ['工作区', '项目', '全部', '归档']) {
     const el = page.getByRole('button', { name: tab, exact: true });
     if (await el.count()) await travelClick(el.first(), 'sess-2');
@@ -194,7 +185,7 @@ try {
   const search = page.getByPlaceholder('按标题 / 目录 / 分支 / 模型过滤');
   if (await search.count()) {
     await search.first().click().catch(() => {});
-    await typeSnap(search.first(), '登录', 'sess-2', { delay: 130, lead: 120 });
+    await typeSnap(search.first(), '登录', 'sess-2', { delay: timing.typing, lead: timing.hover });
     await sleep(900);
     await hold('sess-2');
     await search.first().fill('');
@@ -214,7 +205,7 @@ try {
       await snap({ x: c.x, y: c.y }, false, STILL, 'sess-3');
       await sleep(400);
       await card.click().catch(() => page.mouse.click(c.x, c.y));
-      await snap({ x: c.x, y: c.y }, true, 40, 'sess-3');
+      await snap({ x: c.x, y: c.y }, true, timing.click, 'sess-3');
       await sleep(1600);
       await hold('sess-3');
     }
@@ -264,7 +255,7 @@ try {
         py = nc.y;
         await sleep(600);
         await nb.click().catch(() => page.mouse.click(nc.x, nc.y));
-        await snap({ x: nc.x, y: nc.y }, true, 30, 'sess-4');
+        await snap({ x: nc.x, y: nc.y }, true, timing.click, 'sess-4');
         await sleep(1500);
         await hold('sess-4');
       }
@@ -288,7 +279,7 @@ try {
     await sleep(700);
     if (click) {
       await loc.click().catch(() => page.mouse.click(c.x, c.y));
-      await snap({ x: c.x, y: c.y }, true, 30, cap);
+      await snap({ x: c.x, y: c.y }, true, timing.click, cap);
       await sleep(1500);
     } else {
       await hold(cap);
@@ -359,8 +350,8 @@ try {
   await hold('sess-6');
 
   await saveManifest(recordingRoot, {
-    name: 'feature-session', viewport: { width: 1760, height: 884 },
-    canvas: { FW: 1920, FH: 1080 }, count: frames.length, frames,
+    captions,
+    name: 'feature-session', count: frames.length, frames,
     createdAt: new Date().toISOString(),
   });
   console.log(`Recorded feature-session -> ${recordingRoot}`);

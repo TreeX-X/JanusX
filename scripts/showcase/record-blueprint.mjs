@@ -1,3 +1,12 @@
+import { timing } from './showcase-config.mjs';
+const captions = {
+  'bp-1': { badge: '1', text: '打开蓝图工作台' },
+  'bp-2': { badge: '2', text: '三节点轮切三列联动' },
+  'bp-3': { badge: '3', text: '焦点自动带上下文 · 底部动作栏' },
+  'bp-4': { badge: '4', text: '逐字写维护指令并发送' },
+  'bp-5': { badge: '5', text: '提案确认指引宿主应用' },
+};
+
 // Record: blueprint workbench — authored nodes, two node selections
 // (three-column linkage + relation tab), Copilot console with node context.
 // Zero model calls: the console opens, nothing is ever submitted.
@@ -22,7 +31,6 @@ import {
   openWorkspace, newShell, snapper, saveManifest, runRecord, sleep, git,
 } from './record-lib.mjs';
 
-const STILL = 170;
 
 const DEMO_NOTES = [
   ['终端与分屏', '多终端标签、拖拽分屏、调整面板比例'],
@@ -76,26 +84,11 @@ await runRecord(async (ctx) => {
   console.log('probe:', JSON.stringify(probe));
 
   const frames = [];
-  const { box, center, snap, glideTo, rest, typeSnap } = snapper(page, rawDir, frames);
-  const hold = async (cap, ms = STILL) => {
-    await rest(cap, ms);
-    await sleep(400);
-    await rest(cap, ms);
-  };
+  const { box, center, snap, glideTo, rest, clickSnap } = snapper(page, rawDir, frames);
+  const hold = rest;
   let px = 880;
   let py = 440;
-  const travelClick = async (loc, cap) => {
-    const c = center(await box(loc));
-    await glideTo(px, py, c.x, c.y, 12, cap);
-    px = c.x;
-    py = c.y;
-    await sleep(700);
-    await hold(cap);
-    await loc.click().catch(() => page.mouse.click(c.x, c.y));
-    await snap({ x: c.x, y: c.y }, true, 30, cap);
-    await sleep(800);
-    return c;
-  };
+  const travelClick = clickSnap;
 
   // ---- bp-1: open workbench, establishing on canvas + three columns ----
   const openBp = page.getByRole('button', { name: /打开蓝图工作台/ });
@@ -208,7 +201,7 @@ await runRecord(async (ctx) => {
         // TWO real rounds: instruction -> proposal -> conversational approval
         // ("同意，按提案应用") -> agent applies -> note file + canvas update.
         await send.click().catch(() => page.mouse.click(dc.x, dc.y));
-        await snap({ x: dc.x, y: dc.y }, true, 30, 'bp-4');
+        await snap({ x: dc.x, y: dc.y }, true, timing.click, 'bp-4');
         await sleep(8000);
         await hold('bp-4');
         const proposalSeen = () => page.getByText(/变更提议|变更方案|变更提案/).first().count().catch(() => 0);
@@ -269,7 +262,7 @@ await runRecord(async (ctx) => {
         px = sc2.x;
         py = sc2.y;
         await send2.click().catch(() => page.mouse.click(sc2.x, sc2.y));
-        await snap({ x: sc2.x, y: sc2.y }, true, 30, 'bp-5');
+        await snap({ x: sc2.x, y: sc2.y }, true, timing.click, 'bp-5');
         await sleep(8000);
         // the user message must echo in chat; otherwise the send missed
         const echoed = await page.getByText('同意，按提案应用到蓝图').first().count().catch(() => 0);
@@ -308,8 +301,8 @@ await runRecord(async (ctx) => {
   console.log('blueprint nodes:', nodes);
 
   await saveManifest(recordingRoot, {
-    name: 'feature-blueprint', viewport: { width: 1760, height: 884 },
-    canvas: { FW: 1920, FH: 1080 }, count: frames.length, frames,
+    captions,
+    name: 'feature-blueprint', count: frames.length, frames,
     createdAt: new Date().toISOString(),
   });
 });

@@ -1,3 +1,11 @@
+import { timing } from './showcase-config.mjs';
+const captions = {
+  'isl-1': { badge: '1', text: '顶栏小眼睛永远在线' },
+  'isl-2': { badge: '2', text: '双击展开监控大窗' },
+  'isl-3': { badge: '3', text: '切到对话，随带上下文' },
+  'isl-4': { badge: '4', text: '回到监控，双击合上' },
+};
+
 // Record: Janus Island — slow 4-act tour.
 // Act1 capsule / Act2 expand + monitor hold / Act3 switch to chat + hold /
 // Act4 back to monitor + hold, collapse, closing still.
@@ -29,9 +37,9 @@ await runRecord(async (ctx) => {
   const chatTab = page.locator('.janus-island .janus-expanded-view-button[data-view="chat"]');
 
   // ---- act 1: capsule establishing, 2 stills ----
-  await snap(null, false, 140, 'isl-1');
+  await snap(null, false, timing.hold, 'isl-1');
   await sleep(500);
-  await snap(null, false, 140, 'isl-1');
+  await snap(null, false, timing.hold, 'isl-1');
 
   // ---- act 2: glide, hover, expand, monitor hold ----
   const ibox = await box(island).catch(() => null);
@@ -42,7 +50,7 @@ await runRecord(async (ctx) => {
   await snap({ x: c.x, y: c.y }, false, 110, 'isl-2');
   async function ensureExpanded() {
     await island.dblclick();
-    await snap({ x: c.x, y: c.y }, true, 40, 'isl-2');
+    await snap({ x: c.x, y: c.y }, true, timing.click, 'isl-2');
     await sleep(1200);
     // wait for real content, not just the animating shell
     await page.locator('.janus-island').getByText('核心可视化').first()
@@ -55,9 +63,9 @@ await runRecord(async (ctx) => {
     await sleep(800);
     if (!(await ensureExpanded())) throw new Error('island did not expand');
   }
-  await snap(null, false, 150, 'isl-2');
+  await snap(null, false, timing.hold, 'isl-2');
   await sleep(600);
-  await snap(null, false, 150, 'isl-2');
+  await snap(null, false, timing.hold, 'isl-2');
 
   // ---- act 3: switch to chat tab, hold ----
   {
@@ -68,11 +76,11 @@ await runRecord(async (ctx) => {
     await sleep(600);
     await snap({ x: t.x, y: t.y }, false, 110, 'isl-3');
     await chatTab.first().click().catch(() => page.mouse.click(t.x, t.y));
-    await snap({ x: t.x, y: t.y }, true, 40, 'isl-3');
+    await snap({ x: t.x, y: t.y }, true, timing.click, 'isl-3');
     await sleep(1500);
-    await snap(null, false, 150, 'isl-3');
+    await snap(null, false, timing.hold, 'isl-3');
     await sleep(600);
-    await snap(null, false, 150, 'isl-3');
+    await snap(null, false, timing.hold, 'isl-3');
   }
 
   // ---- act 4: back to monitor, hold, collapse, closing still ----
@@ -84,9 +92,9 @@ await runRecord(async (ctx) => {
     await sleep(600);
     await snap({ x: t.x, y: t.y }, false, 110, 'isl-4');
     await monitorTab.first().click().catch(() => page.mouse.click(t.x, t.y));
-    await snap({ x: t.x, y: t.y }, true, 40, 'isl-4');
+    await snap({ x: t.x, y: t.y }, true, timing.click, 'isl-4');
     await sleep(1500);
-    await snap(null, false, 150, 'isl-4');
+    await snap(null, false, timing.hold, 'isl-4');
     await sleep(600);
     await island.dblclick();
     await sleep(1500);
@@ -94,8 +102,8 @@ await runRecord(async (ctx) => {
   }
 
   await saveManifest(recordingRoot, {
-    name: 'feature-island', viewport: { width: 1760, height: 884 },
-    canvas: { FW: 1920, FH: 1080 }, count: frames.length, frames,
+    captions,
+    name: 'feature-island', count: frames.length, frames,
     createdAt: new Date().toISOString(),
   });
 });

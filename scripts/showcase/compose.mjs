@@ -1,77 +1,121 @@
-// Compose: manifest -> beige 1080P showcase GIF/PNG with virtual cursor + caption chips.
-// Usage: node scripts/showcase/compose.mjs [--manifest <session-dir|manifest.json>] [--out terminal-split]
+// Compose one manifest; recording owns captions, shared config owns presentation.
 import { chromium } from 'playwright';
-import { readFile, readdir, mkdir } from 'node:fs/promises';
-import { join, resolve, dirname, basename } from 'node:path';
+import { readFile, mkdir, writeFile, rename, rm } from 'node:fs/promises';
+import { join, resolve, dirname, relative, isAbsolute } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { demos, style } from './showcase-config.mjs';
 import {
-  PNG, assembleGIF, savePNG, buildBackdrop, buildCardBase, pasteAppPixels,
+  PNG, GIFEncoder, quantize, applyPalette, buildBackdrop, buildCardBase, pasteAppPixels,
   drawCursor, pasteChip, downscaleBilinear, FW, FH, AW, AH, OX, OY,
 } from './showcase-lib.mjs';
 
-const argOf = (name) => {
-  const hit = process.argv.find((a) => a.startsWith(name));
-  return hit ? hit.slice(name.length) : null;
-};
-const manifestArg = argOf('--manifest=') ?? resolve('.cache/showcase-split-quad/latest.json');
-const outName = argOf('--out=') ?? 'terminal-split';
-
-let manifest;
-let sessionDir;
-if (manifestArg.endsWith('.json')) {
-  const raw = JSON.parse(await readFile(manifestArg, 'utf8'));
-  manifest = raw.frames ? raw : JSON.parse(await readFile(join(raw.dir, 'manifest.json'), 'utf8'));
-  sessionDir = raw.dir ?? dirname(manifestArg);
-} else {
-  sessionDir = manifestArg;
+function options(args) {
+  const result = {};
+  for (let i = 0; i < args.length; i++) {
+    const [key, inline] = args[i].split(/=(.*)/s);
+    if (!['--feature', '--manifest', '--out', '--tempo'].includes(key)) throw new Error(`Unknown option: ${key}`);
+    const value = inline ?? args[++i];
+    if (!value || value.startsWith('--')) throw new Error(`Missing value: ${key}`);
+    result[key.slice(2)] = value;
+  }
+  return result;
+}
+const args = options(process.argv.slice(2));
+if (args.feature && !demos[args.feature]) throw new Error(`Unknown feature: ${args.feature}`);
+if (!args.feature && !args.manifest) throw new Error('Use --feature product or --manifest <session-dir|manifest.json>');
+const tempo = Number(args.tempo ?? 1);
+if (!Number.isFinite(tempo) || tempo <= 0) throw new Error('--tempo must be a positive delay multiplier');
+const manifestArg = resolve(args.manifest ?? `.cache/showcase/${args.feature}-latest.json`);
+let sessionDir = manifestArg.endsWith('.json') ? dirname(manifestArg) : manifestArg;
+let manifest = JSON.parse(await readFile(manifestArg.endsWith('.json') ? manifestArg : join(sessionDir, 'manifest.json'), 'utf8'));
+if (!manifest.frames && manifest.dir) {
+  sessionDir = resolve(manifest.dir);
   manifest = JSON.parse(await readFile(join(sessionDir, 'manifest.json'), 'utf8'));
 }
-const rawDir = join(sessionDir, 'frames');
-console.log(`Composing ${manifest.frames.length} frames from ${rawDir}`);
+if (!manifest.frames?.length) throw new Error('Manifest has no frames');
+if (!manifest.captions) throw new Error('Manifest predates per-feature captions; re-record this feature with run.mjs record');
+if (args.feature && manifest.feature !== args.feature) throw new Error('Manifest feature does not match --feature');
+const outName = args.out ?? `showcase/${demos[manifest.feature]?.asset ?? manifest.name}`;
+const assetRoot = resolve('wiki/assets');
+const target = resolve(assetRoot, outName);
+const targetRelative = relative(assetRoot, target);
+if (!targetRelative || targetRelative.startsWith('..') || isAbsolute(targetRelative)) throw new Error('--out must stay inside wiki/assets');
+for (const frame of manifest.frames) {
+  if (!Number.isFinite(frame.delay) || frame.delay <= 0) throw new Error('Invalid frame delay');
+  if (frame.cap && !manifest.captions[frame.cap]) throw new Error(`Missing caption: ${frame.cap}`);
+}
+console.log(`Composing ${manifest.frames.length} frames from ${sessionDir}`);
 
-// caption chips c1..c5 via Chromium (crisp CJK)
-const browser = await chromium.launch();
-const capPage = await (await browser.newContext({ viewport: { width: 1000, height: 600 } })).newPage();
-await capPage.goto('file:///' + resolve('scripts/showcase/showcase-caption.html').replace(/\\/g, '/'));
 const chips = {};
-for (const id of [...new Set(manifest.frames.map((f) => f.cap).filter(Boolean))]) {
-  chips[id] = PNG.sync.read(await capPage.locator('#' + id).screenshot({ omitBackground: true }));
-}
-await browser.close();
-
-const BACKDROP = buildBackdrop();
-const CARD = buildCardBase(BACKDROP);
-const composed = [];
-for (const [i, f] of manifest.frames.entries()) {
-  const shot = PNG.sync.read(await readFile(join(rawDir, f.file)));
-  let data = shot.data;
-  if (shot.width !== AW || shot.height !== AH) {
-    console.log(`normalize frame ${i}: ${shot.width}x${shot.height} -> ${AW}x${AH}`);
-    data = downscaleBilinear(Buffer.from(shot.data), shot.width, shot.height, AW, AH);
+const browser = await chromium.launch();
+try {
+  const page = await browser.newPage({ viewport: { width: 1760, height: 200 } });
+  await page.goto(pathToFileURL(resolve('scripts/showcase/showcase-caption.html')).href);
+  const rgb = (color) => `rgb(${color.join(',')})`;
+  await page.addStyleTag({ content: `.chip{background:${rgb(style.ink)};border-color:${rgb(style.ink)}}.chip .n{background:${rgb(style.accent)}}` });
+  await page.evaluate(() => document.fonts.ready);
+  for (const id of new Set(manifest.frames.map((f) => f.cap).filter(Boolean))) {
+    await page.locator('#caption .n').evaluate((el, text) => { el.textContent = text; }, manifest.captions[id].badge);
+    await page.locator('#caption .text').evaluate((el, text) => { el.textContent = text; }, manifest.captions[id].text);
+    chips[id] = PNG.sync.read(await page.locator('#caption').screenshot({ omitBackground: true }));
   }
-  let dst = pasteAppPixels(CARD, Buffer.from(data));
-  if (f.mouse) drawCursor(dst, Math.round(f.mouse.x + OX), Math.round(f.mouse.y + OY), f.click);
-  if (f.cap && chips[f.cap]) pasteChip(dst, chips[f.cap]);
-  composed.push({ dst, delay: f.delay });
+} finally {
+  await browser.close();
 }
 
-const gif = assembleGIF(composed, FW, FH);
-const { writeFile, rename, rm: rmTmp } = await import('node:fs/promises');
-async function writeAsset(name, data) {
-  const target = resolve('wiki/assets', name);
-  await mkdir(dirname(target), { recursive: true });
-  const temporary = `${target}.${process.pid}.tmp`;
+const card = buildCardBase(buildBackdrop());
+async function composeFrame(frame) {
+  const shot = PNG.sync.read(await readFile(join(sessionDir, 'frames', frame.file)));
+  const data = shot.width === AW && shot.height === AH ? shot.data
+    : downscaleBilinear(shot.data, shot.width, shot.height, AW, AH);
+  const dst = pasteAppPixels(card, data);
+  if (frame.mouse) drawCursor(dst, Math.round(frame.mouse.x * AW / shot.width + OX), Math.round(frame.mouse.y * AH / shot.height + OY), frame.click);
+  if (frame.cap) pasteChip(dst, chips[frame.cap]);
+  return dst;
+}
+
+// Sample across the timeline, then encode one frame at a time; avoid retaining
+// hundreds of uncompressed 1080p buffers for long recordings.
+const sampleCount = Math.min(12, manifest.frames.length);
+const samples = [];
+for (let i = 0; i < sampleCount; i++) {
+  const index = Math.round(i * (manifest.frames.length - 1) / Math.max(1, sampleCount - 1));
+  samples.push(downscaleBilinear(await composeFrame(manifest.frames[index]), FW, FH, 480, 270));
+}
+const palette = quantize(Buffer.concat(samples), 255);
+const gifPalette = palette.slice();
+while (gifPalette.length < 256) gifPalette.push([0, 0, 0]);
+const gif = GIFEncoder();
+let previous = null;
+let poster;
+for (const [i, frame] of manifest.frames.entries()) {
+  const dst = await composeFrame(frame);
+  const pixels = applyPalette(dst, palette);
+  const opaque = pixels.slice();
+  if (previous) for (let p = 0; p < pixels.length; p++) if (pixels[p] === previous[p]) pixels[p] = 255;
+  gif.writeFrame(pixels, FW, FH, {
+    palette: i === 0 ? gifPalette : undefined,
+    delay: Math.max(10, Math.round(frame.delay * tempo)),
+    transparent: i > 0, transparentIndex: 255, dispose: 1, repeat: 0,
+  });
+  previous = opaque;
+  poster = dst;
+  if (i % 50 === 0) console.log(`Encoded ${i + 1}/${manifest.frames.length}`);
+}
+gif.finish();
+
+async function writeAsset(extension, data) {
+  const path = `${target}.${extension}`;
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.tmp`;
   try {
     await writeFile(temporary, data);
-    await rename(temporary, target);
+    await rename(temporary, path);
   } finally {
-    await rmTmp(temporary, { force: true }).catch(() => {});
+    await rm(temporary, { force: true });
   }
 }
-await writeAsset(`${outName}.gif`, gif);
-// PNG via tmp+rename: Windows refuses direct overwrite of existing images
-const pngTarget = resolve(`wiki/assets/${outName}.png`);
-await mkdir(dirname(pngTarget), { recursive: true });
-const pngTmp = `${pngTarget}.${process.pid}.tmp`;
-savePNG(composed[composed.length - 1].dst, pngTmp);
-await rename(pngTmp, pngTarget);
-console.log(`${outName}: ${composed.length} frames, ${FW}x${FH}, ${(gif.length / 1024 / 1024).toFixed(2)} MB`);
+const bytes = Buffer.from(gif.bytes());
+await writeAsset('gif', bytes);
+await writeAsset('png', PNG.sync.write({ width: FW, height: FH, data: poster }));
+console.log(`${outName}: ${manifest.frames.length} frames, ${FW}×${FH}, ${(bytes.length / 1024 / 1024).toFixed(2)} MB`);

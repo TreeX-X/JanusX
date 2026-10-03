@@ -1,3 +1,12 @@
+import { timing } from './showcase-config.mjs';
+const captions = {
+  'wt-1': { badge: '1', text: '左侧三级：工作区 任务盘 终端' },
+  'wt-2': { badge: '2', text: '更多操作里新建任务盘' },
+  'wt-3': { badge: '3', text: '逐字填表，提交到新分支' },
+  'wt-4': { badge: '4', text: '看清差异，一键合并回主盘' },
+  'wt-5': { badge: '5', text: '切回主盘，日志验证已合并' },
+};
+
 // Record: worktree management — three sidebar levels, real creation, real merge.
 // Act1 tour 工作区 › 任务盘 › 终端 (all three levels on screen) /
 // Act2 更多操作 → 新建任务盘 → keystroke-by-keystroke fill → 创建 /
@@ -48,18 +57,18 @@ await runRecord(async (ctx) => {
   {
     const c = await moveSnap(wsRow, 'wt-1', 120);
     await sleep(700);
-    await snap({ x: c.x, y: c.y }, false, 170, 'wt-1');
+    await snap({ x: c.x, y: c.y }, false, timing.hold, 'wt-1');
     await sleep(400);
-    await snap({ x: c.x, y: c.y }, false, 170, 'wt-1');
+    await snap({ x: c.x, y: c.y }, false, timing.hold, 'wt-1');
   }
   // level 2 — 任务盘 (branch row: branch + path; hold twice, then a close-up
   // on the branch/path line so "task disk = branch + path" is legible)
   {
     const c = await moveSnap(mainWtRow, 'wt-1', 120);
     await sleep(700);
-    await snap({ x: c.x, y: c.y }, false, 170, 'wt-1');
+    await snap({ x: c.x, y: c.y }, false, timing.hold, 'wt-1');
     await sleep(400);
-    await snap({ x: c.x, y: c.y }, false, 170, 'wt-1');
+    await snap({ x: c.x, y: c.y }, false, timing.hold, 'wt-1');
   }
   // level 3 — 终端 (terminal rows docked under their worktree)
   {
@@ -67,9 +76,9 @@ await runRecord(async (ctx) => {
     await t.waitFor({ state: 'visible', timeout: 15000 });
     const c = await moveSnap(t, 'wt-1', 120);
     await sleep(700);
-    await snap({ x: c.x, y: c.y }, false, 170, 'wt-1');
+    await snap({ x: c.x, y: c.y }, false, timing.hold, 'wt-1');
     await sleep(400);
-    await snap({ x: c.x, y: c.y }, false, 170, 'wt-1');
+    await snap({ x: c.x, y: c.y }, false, timing.hold, 'wt-1');
     // pull back so the tooltip clears and the nesting is legible in one frame
     await glideTo(c.x, c.y, c.x + 420, c.y + 120, 10, 'wt-1');
     await sleep(600);
@@ -114,7 +123,7 @@ await runRecord(async (ctx) => {
     const nameInput = dialog.locator('input').nth(0);
     await nameInput.click().catch(() => {});
     // Slow typing: one GIF frame per keystroke (~210ms), double still after.
-    await typeSnap(nameInput, WT_NAME, 'wt-3', { delay: 120, lead: 120 });
+    await typeSnap(nameInput, WT_NAME, 'wt-3', { delay: timing.typing, lead: timing.hover });
     await sleep(800);
     await rest('wt-3', 170);
     await sleep(400);
@@ -128,11 +137,11 @@ await runRecord(async (ctx) => {
     await snap({ x: bc.x, y: bc.y }, false, 110, 'wt-3');
     await branchInput.click().catch(() => {});
     await branchInput.fill('').catch(() => {});
-    await typeSnap(branchInput, WT_BRANCH, 'wt-3', { delay: 120, lead: 120 });
+    await typeSnap(branchInput, WT_BRANCH, 'wt-3', { delay: timing.typing, lead: timing.hover });
     await sleep(800);
-    await snap({ x: bc.x, y: bc.y }, false, 170, 'wt-3');
+    await snap({ x: bc.x, y: bc.y }, false, timing.hold, 'wt-3');
     await sleep(400);
-    await snap({ x: bc.x, y: bc.y }, false, 170, 'wt-3');
+    await snap({ x: bc.x, y: bc.y }, false, timing.hold, 'wt-3');
 
     // 起始点: retype origin/main so the merge base is stated, not assumed
     const startInput = dialog.locator('input').nth(2);
@@ -142,11 +151,11 @@ await runRecord(async (ctx) => {
     await snap({ x: sc.x, y: sc.y }, false, 120, 'wt-3');
     await startInput.click().catch(() => {});
     await startInput.fill('').catch(() => {});
-    await typeSnap(startInput, 'origin/main', 'wt-3', { delay: 120, lead: 120 });
+    await typeSnap(startInput, 'origin/main', 'wt-3', { delay: timing.typing, lead: timing.hover });
     await sleep(800);
-    await snap({ x: sc.x, y: sc.y }, false, 170, 'wt-3');
+    await snap({ x: sc.x, y: sc.y }, false, timing.hold, 'wt-3');
     await sleep(400);
-    await snap({ x: sc.x, y: sc.y }, false, 170, 'wt-3');
+    await snap({ x: sc.x, y: sc.y }, false, timing.hold, 'wt-3');
 
     const confirm = dialog.getByRole('button', { name: '创建', exact: true });
     await moveSnap(confirm, 'wt-3', 100);
@@ -185,9 +194,9 @@ await runRecord(async (ctx) => {
     await sleep(2600);
     await snap({ x: mc.x, y: mc.y }, false, 90, 'wt-4');
     await sleep(900);
-    await snap({ x: mc.x, y: mc.y }, false, 170, 'wt-4');
+    await snap({ x: mc.x, y: mc.y }, false, timing.hold, 'wt-4');
     await sleep(600);
-    await snap({ x: mc.x, y: mc.y }, false, 170, 'wt-4');
+    await snap({ x: mc.x, y: mc.y }, false, timing.hold, 'wt-4');
 
     // the diff readout is the point: hold on it
     const files = page.getByText(/files · /).first();
@@ -251,7 +260,7 @@ await runRecord(async (ctx) => {
       await snap({ x: mx, y: my }, false, 120, 'wt-5');
     }
     await sleep(700);
-    await snap({ x: mx, y: my }, false, 150, 'wt-5');
+    await snap({ x: mx, y: my }, false, timing.hold, 'wt-5');
     await input.press('Enter').catch(() => {});
     await sleep(2000);
     await rest('wt-5', 190);
@@ -260,8 +269,8 @@ await runRecord(async (ctx) => {
   }
 
   await saveManifest(recordingRoot, {
-    name: 'feature-worktree', viewport: { width: 1760, height: 884 },
-    canvas: { FW: 1920, FH: 1080 }, count: frames.length, frames,
+    captions,
+    name: 'feature-worktree', count: frames.length, frames,
     createdAt: new Date().toISOString(),
   });
 });
