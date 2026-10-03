@@ -1,15 +1,17 @@
 // Note: extraction, entry review, handbook generation and review have independent providers — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
 import { useEffect, useState } from 'react'
-import { Cpu, KeyRound, Workflow } from 'lucide-react'
+import { KeyRound, Workflow } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeProvider, type KnowledgeStage } from '../../../shared/knowledge-automation'
+import { KnowledgeLocalModelPanel } from './KnowledgeLocalModelPanel'
 import { Select } from './ui/Select'
 import { AutomationStatus } from './knowledge/AutomationStatus'
 import styles from './KnowledgeSettingsPanel.module.css'
 import automationStyles from './KnowledgeAutomationPanel.module.css'
 
-export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, onChange, onSave }: {
+export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, onChange, onSave, onLocalPersist }: {
   value?: KnowledgeAutomationSettings; disabled: boolean; knowledgeEnabled: boolean
+  onLocalPersist(value: KnowledgeAutomationSettings['local']): void
   onChange(value: KnowledgeAutomationSettings): void; onSave(): Promise<boolean>
 }) {
   const { t } = useI18n('knowledge')
@@ -52,7 +54,7 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
       return <fieldset className={automationStyles.stage} key={stage} disabled={disabled}>
         <legend><span className={automationStyles.step} aria-hidden>{String(index + 1).padStart(2, '0')}</span>{t(`knowledge:automation.stage.${stage}`)}</legend>
         <div className={automationStyles.stageFields}>
-          <Select className={automationStyles.provider} disabled={disabled} value={selected.provider} ariaLabel={t(`knowledge:automation.stage.${stage}`)} options={choices.map(provider => ({ value: provider, label: t(`knowledge:automation.provider.${provider}`) }))}
+          <Select className={automationStyles.provider} disabled={disabled} value={selected.provider} ariaLabel={t(`knowledge:automation.stage.${stage}`)} options={choices.filter(provider => provider !== 'local' || config.local.enabled).map(provider => ({ value: provider, label: t(`knowledge:automation.provider.${provider}`) }))}
             onChange={provider => updateStage(stage, { provider: provider as KnowledgeProvider, thinking: provider === 'local' && stage === 'wikiGeneration',
               model: provider === 'jev' ? config.jev.model : provider === 'local' && selected.provider !== 'local' ? 'Qwen3.5-4B'
                 : provider === 'external' && selected.provider !== 'external' ? '' : selected.model })} />
@@ -71,16 +73,7 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
         {selected.provider === 'external' && <p className={styles.hint}>{t('knowledge:automation.externalHint')}</p>}
       </fieldset>
     })}</div>
-    {KNOWLEDGE_STAGES.some(stage => config.stages[stage].provider === 'local') && <details className={automationStyles.connection}>
-      <summary><Cpu size={14} aria-hidden /><span>{t('knowledge:automation.localTitle')}</span><small>{config.local.endpoint}</small></summary>
-      <fieldset disabled={disabled} aria-label={t('knowledge:automation.localTitle')}>
-      <p className={styles.hint}>{t('knowledge:automation.localHint')}</p>
-      {(['endpoint', 'serverPath', 'modelPath'] as const).map(field => <label className={automationStyles.connectionField} key={field}>
-        <span>{t(`knowledge:automation.local.${field}`)}</span><input value={config.local[field]}
-          onChange={event => onChange({ ...config, local: { ...config.local, [field]: event.target.value } })} />
-      </label>)}
-      <button type="button" className={styles.button} onClick={() => void window.electron.knowledge.stopLocalModel().catch(() => setError(t('knowledge:automation.actionFailed')))}>{t('knowledge:automation.release')}</button>
-    </fieldset></details>}
+    <KnowledgeLocalModelPanel value={config.local} disabled={disabled} onPersist={onLocalPersist} />
     {KNOWLEDGE_STAGES.some(stage => config.stages[stage].provider === 'jev') && <fieldset className={automationStyles.credential} disabled={disabled || busy}>
       <legend><KeyRound size={14} aria-hidden />Jev</legend>
       <label className={automationStyles.connectionField}><span>{t('knowledge:automation.jevEndpoint')}</span><input value={config.jev.endpoint}

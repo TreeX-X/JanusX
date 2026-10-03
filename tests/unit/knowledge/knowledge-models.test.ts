@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { defaultKnowledgeAutomation, normalizeKnowledgeAutomation } from '../../../src/shared/knowledge-automation'
 import { knowledgeModelJson, reviewKnowledge, stopKnowledgeLocalModel, type KnowledgeModelRequest } from '../../../src/main/knowledge/knowledge-models'
 import { getJevKey, setJevKey } from '../../../src/main/knowledge/knowledge-credentials'
+import { detectLocalEnvironment, recommendLocalContext, readLocalModelMetadata } from '../../../src/main/knowledge/knowledge-local-environment'
+import * as localRuntime from '../../../src/main/knowledge/knowledge-local-runtime'
 const mocks = vi.hoisted(() => ({ root: '', encrypted: true, provider: vi.fn(), model: vi.fn(), generate: vi.fn() }))
 vi.mock('electron', () => ({ app: { getPath: () => mocks.root }, safeStorage: { isEncryptionAvailable: () => mocks.encrypted,
   encryptString: (text: string) => Buffer.from(text.split('').reverse().join('')), decryptString: (data: Buffer) => data.toString().split('').reverse().join('') } }))
@@ -13,19 +15,49 @@ vi.mock('../../../src/main/llm/LlmService', () => ({ llmService: { getProviderSe
 vi.mock('../../../src/main/llm/ai-runtime', () => ({ generateText: mocks.generate }))
 let server: Server | undefined
 beforeEach(async () => { mocks.root = await mkdtemp(join(tmpdir(), 'knowledge-model-')); mocks.encrypted = true; vi.clearAllMocks() })
-afterEach(async () => { stopKnowledgeLocalModel(); if (server) { server.closeAllConnections(); await new Promise<void>(resolve => server!.close(() => resolve())); server = undefined }; vi.unstubAllGlobals(); await rm(mocks.root, { recursive: true, force: true }) })
+afterEach(async () => { await stopKnowledgeLocalModel(); if (server) { server.closeAllConnections(); await new Promise<void>(resolve => server!.close(() => resolve())); server = undefined }; vi.unstubAllGlobals(); await rm(mocks.root, { recursive: true, force: true }) })
 const request = (): KnowledgeModelRequest => ({ stage: 'entryReview', settings: defaultKnowledgeAutomation(), system: 'Review supplied evidence.', input: { candidate: 'Nightly backup', evidence: 'Nightly backup' }, signal: new AbortController().signal })
 const verdict = { verdict: 'supported', reason: 'Supported', complete: true, conflict: false, coveredIds: ['a'] }
 describe('knowledge providers', () => {
+  it('keeps defaults and legacy local selections off, rejects direct local execution while disabled', async () => {
+    const input = request()
+    expect(input.settings.local.enabled).toBe(false)
+    expect(Object.values(input.settings.stages).every(stage => stage.provider === 'off')).toBe(true)
+    const legacy = normalizeKnowledgeAutomation({ stages: { entryReview: { provider: 'local' } }, local: { endpoint: 'http://127.0.0.1/v1' } })
+    expect(legacy.stages.entryReview.provider).toBe('off')
+    input.settings.stages.entryReview.provider = 'local'
+    await expect(knowledgeModelJson(input)).rejects.toThrow('local-model-disabled')
+  })
+  it('budgets model, hybrid KV and headroom, bounding context by both resources and model limits', () => {
+    const budget = { memoryMiB: 16000, modelBytes: 3143656608, kvBytesPerToken: 32768, modelContext: 262144 }
+    expect(recommendLocalContext({ ...budget, vramMiB: 6000 })).toEqual([32768])
+    expect(recommendLocalContext({ ...budget, vramMiB: 8000 })).toEqual([32768, 65536])
+    expect(recommendLocalContext({ ...budget, vramMiB: 16000 })).toEqual([32768, 65536, 131072, 262144])
+    expect(recommendLocalContext({ ...budget, memoryMiB: 3000 })).toEqual([])
+    expect(recommendLocalContext({ ...budget, modelContext: 65536 })).toEqual([32768, 65536])
+  })
+  it('fails environment checks on invalid paths, endpoints, context choices and malformed weights', async () => {
+    const local = defaultKnowledgeAutomation().local, signal = new AbortController().signal
+    expect(await detectLocalEnvironment({ ...local, endpoint: 'https://example.com/v1' }, signal)).toMatchObject({ ok: false, reason: 'invalid-model-endpoint' })
+    expect(await detectLocalEnvironment({ ...local, contextTokens: 12345 }, signal)).toMatchObject({ ok: false, reason: 'local-context-unsupported' })
+    expect(await detectLocalEnvironment({ ...local, serverPath: 'relative.exe' }, signal)).toMatchObject({ ok: false, reason: 'invalid-local-model-path' })
+    await setJevKey('test-private-credential')
+    await expect(readLocalModelMetadata(join(mocks.root, 'janusx/knowledge-jev.credential'))).rejects.toThrow()
+    const controller = new AbortController(); controller.abort()
+    await expect(detectLocalEnvironment(local, controller.signal)).rejects.toThrow()
+  })
   it('sends a real local HTTP request with separate thinking mode and rejects incomplete output', async () => {
     let body: any; let finish = 'stop'
     server = createServer(async (req, res) => {
+      if (req.url === '/health') { res.end('{}'); return }
+      if (req.url === '/props') { res.end(JSON.stringify({ default_generation_settings: { n_ctx: 65536 } })); return }
       const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk))
       body = JSON.parse(Buffer.concat(chunks).toString()); res.setHeader('Content-Type', 'application/json')
       res.end(JSON.stringify({ choices: [{ finish_reason: finish, message: { content: JSON.stringify(verdict) } }] }))
     })
     await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
     const input = request(); input.settings.local.endpoint = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`
+    input.settings.local.enabled = true; input.settings.stages.entryReview.provider = 'local'; input.settings.stages.wikiGeneration.provider = 'local'
     await expect(reviewKnowledge(input, [{ id: 'a', content: 'Nightly backup' }])).resolves.toEqual(verdict)
     expect(body.chat_template_kwargs.enable_thinking).toBe(false)
     input.stage = 'wikiGeneration'; await knowledgeModelJson(input)
@@ -44,6 +76,47 @@ describe('knowledge providers', () => {
     mocks.provider.mockResolvedValue(undefined)
     await expect(knowledgeModelJson(input)).rejects.toThrow('model-not-configured')
     expect(mocks.generate).toHaveBeenCalledTimes(1)
+  })
+  it('cancels an active local request while leaving an externally managed service running', async () => {
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    server = createServer(async (req, res) => {
+      if (req.url === '/health') { res.end('{}'); return }
+      if (req.url === '/props') { res.end(JSON.stringify({ default_generation_settings: { n_ctx: 65536 } })); return }
+      for await (const _chunk of req) { /* consume request without replying */ }
+      entered()
+    })
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
+    const input = request()
+    input.settings.local.enabled = true; input.settings.stages.entryReview.provider = 'local'
+    input.settings.local.endpoint = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`
+    const pending = knowledgeModelJson(input)
+    const cancelled = expect(pending).rejects.toThrow()
+    await started
+    await stopKnowledgeLocalModel()
+    await cancelled
+    const response = await fetch(new URL('/health', input.settings.local.endpoint)); await response.body?.cancel()
+    expect(response.ok).toBe(true)
+  })
+  it('uses actual managed token counts for long Chinese input and refuses a true overflow', async () => {
+    const runtime = vi.spyOn(localRuntime, 'withKnowledgeLocalModel').mockImplementation(async (_settings, _model, signal, run) => run(32768, signal))
+    let count = 15000, chats = 0
+    vi.stubGlobal('fetch', vi.fn(async url => {
+      if (String(url).endsWith('/apply-template')) return new Response(JSON.stringify({ prompt: 'rendered prompt' }))
+      if (String(url).endsWith('/tokenize')) return new Response(JSON.stringify({ tokens: Array(count).fill(42) }))
+      chats++
+      return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }] }))
+    }))
+    try {
+      const input = request()
+      input.settings.local.enabled = true; input.settings.local.serverPath = '/managed/llama-server'
+      input.settings.stages.entryReview.provider = 'local'; input.input = '知识内容'.repeat(4000)
+      expect(Buffer.byteLength(JSON.stringify(input.input))).toBeGreaterThan(32768)
+      expect(await knowledgeModelJson(input)).toEqual({ ok: true })
+      count = 33000
+      await expect(knowledgeModelJson(input)).rejects.toThrow('model-input-exceeds-context')
+      expect(chats).toBe(1)
+    } finally { runtime.mockRestore() }
   })
   it('requires complete Jev support, consistency and coverage answers and never generates through Jev', async () => {
     await setJevKey('test-private-credential')

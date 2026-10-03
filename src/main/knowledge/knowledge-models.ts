@@ -1,21 +1,10 @@
 // Note: per-stage providers never fall back to an unselected model — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
-import { spawn, type ChildProcess } from 'node:child_process'
-import { isAbsolute } from 'node:path'
-import { stat } from 'node:fs/promises'
-import { setTimeout as delay } from 'node:timers/promises'
+import { withKnowledgeLocalModel } from './knowledge-local-runtime'
+export { stopKnowledgeLocalModel } from './knowledge-local-runtime'
 import { z } from 'zod'
-import type { KnowledgeAutomationSettings, KnowledgeStage, KnowledgeStageModel, KnowledgeModelReview } from '../../shared/knowledge-automation'
+import type { KnowledgeAutomationSettings, KnowledgeStage, KnowledgeModelReview } from '../../shared/knowledge-automation'
 import { generateText } from '../llm/ai-runtime'
 import { getJevKey } from './knowledge-credentials'
-
-let localProcess: ChildProcess | null = null
-let localIdentity = ''
-let idleTimer: ReturnType<typeof setTimeout> | undefined
-export function stopKnowledgeLocalModel(): void {
-  if (idleTimer) clearTimeout(idleTimer)
-  localProcess?.kill()
-  localProcess = null; localIdentity = ''
-}
 
 function endpoint(value: string, local: boolean): URL {
   let url: URL
@@ -26,36 +15,7 @@ function endpoint(value: string, local: boolean): URL {
   return url
 }
 
-async function ensureLocal(settings: KnowledgeAutomationSettings, model: KnowledgeStageModel, signal: AbortSignal): Promise<void> {
-  const config = settings.local
-  const url = endpoint(config.endpoint, true)
-  if (!config.serverPath && !config.modelPath) return // User-managed OpenAI-compatible local service.
-  if (!isAbsolute(config.serverPath) || !isAbsolute(config.modelPath)
-    || !(await stat(config.serverPath)).isFile() || !(await stat(config.modelPath)).isFile()) throw new Error('invalid-local-model-path')
-  const identity = JSON.stringify([config, model.model])
-  if (localProcess && identity !== localIdentity) stopKnowledgeLocalModel()
-  if (!localProcess) {
-    const child = spawn(config.serverPath, ['-m', config.modelPath, '--alias', model.model, '--host', url.hostname.replace(/[[\]]/g, ''),
-      '--port', url.port || '80', '-c', '16384', '-np', '1', '-ngl', 'all', '--jinja', '--no-context-shift', '--cache-ram', '0'],
-    { shell: false, windowsHide: true, stdio: 'ignore' })
-    localProcess = child; localIdentity = identity
-    const clear = () => { if (localProcess === child) { localProcess = null; localIdentity = '' } }
-    child.once('error', clear); child.once('exit', clear)
-    for (let i = 0; i < 120; i++) {
-      signal.throwIfAborted()
-      if (!localProcess) throw new Error('local-model-start-failed')
-      try {
-        const response = await fetch(new URL('/health', url), { signal: AbortSignal.any([signal, AbortSignal.timeout(1000)]), redirect: 'error' })
-        if (response.ok) break
-      } catch { signal.throwIfAborted() }
-      if (i === 119) { stopKnowledgeLocalModel(); throw new Error('local-model-start-timeout') }
-      await delay(500, undefined, { signal })
-    }
-  }
-  if (idleTimer) clearTimeout(idleTimer)
-}
-
-async function jsonRequest(url: URL, body: unknown, signal: AbortSignal, key?: string): Promise<unknown> {
+async function jsonRequest(url: URL, body: unknown, signal: AbortSignal, key?: string, limit = 1024 * 1024): Promise<unknown> {
   const response = await fetch(url, { method: 'POST', redirect: 'error', signal,
     headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, body: JSON.stringify(body) })
   if (!response.ok) throw new Error(`model-http-${response.status}`)
@@ -68,7 +28,7 @@ async function jsonRequest(url: URL, body: unknown, signal: AbortSignal, key?: s
       const { done, value } = await reader.read()
       if (done) break
       length += value.length
-      if (length > 1024 * 1024) throw new Error('model-response-too-large')
+      if (length > limit) throw new Error('model-response-too-large')
       chunks.push(value)
     }
   } finally { await reader.cancel().catch(() => undefined) }
@@ -92,18 +52,27 @@ export async function knowledgeModelJson({ stage, settings, system, input, signa
   let text: string
   try {
     if (selected.provider === 'local') {
-      // UTF-8 bytes conservatively bound tokens; overflow is explicit, never truncated.
-      if (Buffer.byteLength(system + JSON.stringify(input), 'utf8') + maxTokens + 1024 > 16384) throw new Error('model-input-exceeds-context')
-      await ensureLocal(settings, selected, timeout)
-      const url = endpoint(settings.local.endpoint, true)
-      url.pathname = url.pathname.replace(/\/$/, '') + '/chat/completions'
-      const response = await jsonRequest(url, { model: selected.model,
-        messages: [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(input) }],
-        max_tokens: maxTokens, temperature: 0.2, stream: false, cache_prompt: false,
-        chat_template_kwargs: { enable_thinking: selected.thinking }, response_format: { type: 'json_object' },
-      }, timeout)
-      const parsed = z.object({ choices: z.array(z.object({ finish_reason: z.literal('stop'), message: z.object({ content: z.string() }) })).length(1) }).parse(response)
-      text = parsed.choices[0]!.message.content
+      text = await withKnowledgeLocalModel(settings, selected, timeout, async (context, localSignal) => {
+        const url = endpoint(settings.local.endpoint, true)
+        const messages = [{ role: 'system', content: system }, { role: 'user', content: JSON.stringify(input) }]
+        // Cheap bound for short requests; tokenize long managed prompts so Chinese bytes are not treated as tokens.
+        if (Buffer.byteLength(system + JSON.stringify(input), 'utf8') + maxTokens + 1024 > context) {
+          if (!settings.local.serverPath) throw new Error('model-input-exceeds-context')
+          const template = z.object({ prompt: z.string() }).parse(await jsonRequest(new URL('/apply-template', url),
+            { messages, chat_template_kwargs: { enable_thinking: selected.thinking } }, localSignal, undefined, 8 * 1024 * 1024))
+          const tokenized = z.object({ tokens: z.array(z.number().int()) }).parse(await jsonRequest(new URL('/tokenize', url),
+            { content: template.prompt, add_special: true }, localSignal, undefined, 8 * 1024 * 1024))
+          if (tokenized.tokens.length + maxTokens + 256 > context) throw new Error('model-input-exceeds-context')
+        }
+        url.pathname = url.pathname.replace(/\/$/, '') + '/chat/completions'
+        const response = await jsonRequest(url, { model: selected.model,
+          messages,
+          max_tokens: maxTokens, temperature: 0.2, stream: false, cache_prompt: false,
+          chat_template_kwargs: { enable_thinking: selected.thinking }, response_format: { type: 'json_object' },
+        }, localSignal)
+        const parsed = z.object({ choices: z.array(z.object({ finish_reason: z.literal('stop'), message: z.object({ content: z.string() }) })).length(1) }).parse(response)
+        return parsed.choices[0]!.message.content
+      })
     } else {
       if (!selected.providerId) throw new Error('model-not-configured')
       const { llmService } = await import('../llm/LlmService')
@@ -118,12 +87,9 @@ export async function knowledgeModelJson({ stage, settings, system, input, signa
     const clean = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
     return JSON.parse(clean)
   } catch (error) {
-    if (timeout.aborted) stopKnowledgeLocalModel()
-    if (signal.aborted) { stopKnowledgeLocalModel(); throw new Error('automation-stopped') }
-    if (error instanceof Error && /^(model-input-exceeds-context|model-not-configured|invalid-local-model-path|invalid-model-endpoint|local-model-start|model-http-|incomplete-model-output)/.test(error.message)) throw error
+    if (signal.aborted) throw new Error('automation-stopped')
+    if (error instanceof Error && /^(model-input-exceeds-context|model-not-configured|invalid-local|invalid-model-endpoint|local-|model-http-|incomplete-model-output)/.test(error.message)) throw error
     throw new Error(timeout.aborted ? 'model-timeout' : 'model-invalid-or-unavailable')
-  } finally {
-    if (localProcess) { idleTimer = setTimeout(stopKnowledgeLocalModel, 180000); idleTimer.unref?.() }
   }
 }
 

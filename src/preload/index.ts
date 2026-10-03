@@ -156,6 +156,7 @@ const knowledgeAPI: KnowledgeAPI = {
   setJevCredential: (key) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredential, key),
   jevCredentialStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredentialStatus),
   stopLocalModel: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localModelStop),
+  configureLocalModel: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localModelConfigure, input),
   wikiHistory: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.wikiHistory, input),
   wikiRevision: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.wikiRevision, input),
   pinWikiRevision: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.pinWikiRevision, input),

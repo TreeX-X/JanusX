@@ -6,6 +6,7 @@ import type { KnowledgeAPI } from '../../src/shared/ipc/knowledge'
 import { createDesktopTestEnv } from './desktop-test-env'
 import { createHash } from 'node:crypto'
 import { reviewCandidateSnapshot } from '../../src/shared/review-candidate-snapshot'
+import { defaultKnowledgeAutomation } from '../../src/shared/knowledge-automation'
 
 type KnowledgeWindow = Window & { electron: { knowledge: KnowledgeAPI } }
 
@@ -67,6 +68,22 @@ test('knowledge pipeline: observe → propose → review → truth → search �
       return typeof api?.knowledge?.observe === 'function' && typeof api?.knowledge?.processNow === 'function'
     })
     await expect(page.locator('body')).toBeVisible()
+
+    // Local authorization belongs to the host; ordinary saves cannot opt in.
+    const localGate = await page.evaluate(async automation => {
+      const { knowledge, experimental } = window.electron
+      const originalFlags = await experimental.get()
+      await experimental.update({ knowledge: true })
+      const saved = await knowledge.updateSettings({ automation: { ...automation, local: { ...automation.local, enabled: true } } })
+      const checked = await knowledge.configureLocalModel({ ...automation.local, enabled: true, serverPath: 'relative.exe' })
+      await knowledge.stopLocalModel()
+      const stopped = await knowledge.getSettings()
+      await experimental.update(originalFlags)
+      return { saved: saved.automation!.local.enabled, checked: checked.report, stopped: stopped.automation!.local.enabled }
+    }, defaultKnowledgeAutomation())
+    expect(localGate.saved).toBe(false)
+    expect(localGate.checked).toMatchObject({ ok: false, reason: 'invalid-local-model-path' })
+    expect(localGate.stopped).toBe(false)
 
     // 1. 采集：决策句（高精度 proposal）+ git 事实 + 普通笔记（仅索引）。
     const observed = await page.evaluate(

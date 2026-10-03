@@ -117,7 +117,7 @@ export class KnowledgeAutomationService {
   }
   private write(ledger: Ledger) { return writeFileAtomic(this.path(), JSON.stringify(ledgerSchema.parse(ledger)) + '\n') }
   stop(): void { this.controller?.abort(); stopKnowledgeLocalModel() }
-  shutdown(): void { this.closed = true; this.stop() }
+  shutdown(): Promise<void> { this.closed = true; this.stop(); return stopKnowledgeLocalModel() }
   async status(): Promise<KnowledgeAutomationStatus> {
     const [ledger, settings] = await Promise.all([this.read(), this.deps.settings()])
     const counts: KnowledgeAutomationStatus['counts'] = { pending: 0, running: 0, succeeded: 0, 'needs-review': 0, failed: 0, cancelled: 0 }

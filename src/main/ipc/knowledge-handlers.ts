@@ -2,7 +2,7 @@ import { controlLaya } from '../knowledge/laya-runtime'
 import { listWikiHistory, readWikiRevision, pinWikiRevision } from '../knowledge/wiki-history'
 import { knowledgeAutomationService } from '../knowledge/automation-service'
 import { getJevKey, setJevKey } from '../knowledge/knowledge-credentials'
-import { stopKnowledgeLocalModel } from '../knowledge/knowledge-models'
+import { configureKnowledgeLocalModel, disableKnowledgeLocalModel } from '../knowledge/knowledge-local-settings'
 import { ipcMain } from 'electron'
 import { configService } from '../config/service'
 import { noteWikiPages, prepareNoteWiki, wikiSourceStatuses } from '../knowledge/note-sources'
@@ -59,7 +59,8 @@ export function registerKnowledgeHandlers(): void {
   ipcMain.handle(KNOWLEDGE_CHANNELS.automationRetry, async (_event, id: string) => { await assertEnabled(); await knowledgeAutomationService.retry(id) })
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredential, async (_event, input: unknown) => { await assertEnabled(); knowledgeAutomationService.stop(); return setJevKey(input) })
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredentialStatus, async () => ({ configured: Boolean(await getJevKey()) }))
-  ipcMain.handle(KNOWLEDGE_CHANNELS.localModelStop, () => { knowledgeAutomationService.stop(); stopKnowledgeLocalModel() })
+  ipcMain.handle(KNOWLEDGE_CHANNELS.localModelConfigure, (_event, input: unknown) => configureKnowledgeLocalModel(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.localModelStop, () => { knowledgeAutomationService.stop(); return disableKnowledgeLocalModel() })
   ipcMain.handle(KNOWLEDGE_CHANNELS.wikiHistory, (_event, input: unknown) => listWikiHistory(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.wikiRevision, (_event, input: unknown) => readWikiRevision(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.pinWikiRevision, async (_event, input: unknown) => { await assertEnabled(); return pinWikiRevision(input) })

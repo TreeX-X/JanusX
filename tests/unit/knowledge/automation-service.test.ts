@@ -21,6 +21,8 @@ const json = vi.fn(), review = vi.fn()
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'automation-')); vi.stubEnv('JANUSX_KNOWLEDGE_ROOT', root)
   now = Date.now(); allowed = true; config = defaultKnowledgeAutomation(); config.enabled = true; config.enabledSince = '2020-01-01T00:00:00.000Z'
+  config.local.enabled = true
+  for (const stage of ['entryReview', 'wikiGeneration', 'wikiReview'] as const) config.stages[stage].provider = 'local'
   json.mockReset(); review.mockReset()
   review.mockImplementation(async (_request, required) => ({ verdict: 'supported', reason: 'evidence supported', complete: true, conflict: false, coveredIds: required.map(item => item.id) }))
   json.mockImplementation(async request => ({ markdown: request.input.knowledge.map(item => item.content).join('\n\n') }))

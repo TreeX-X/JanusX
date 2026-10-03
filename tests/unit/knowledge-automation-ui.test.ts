@@ -15,11 +15,14 @@ beforeAll(async () => {
     import {defaultKnowledgeAutomation} from './src/shared/knowledge-automation'
     const counts={pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0}
     window.calls=[];window.config={enabled:true,mode:'deterministic-only',autoAcceptDeterministicFacts:false,automation:defaultKnowledgeAutomation()}
+    window.localResult='pass'
+    const disabledLocal=()=>{window.config.automation.local.enabled=false;Object.values(window.config.automation.stages).forEach(stage=>{if(stage.provider==='local')stage.provider='off'})}
     const status=()=>({enabled:window.config.automation.enabled,running:false,counts,total:0,tasks:[]})
     window.electron={llm:{getTerminalProviders:async()=>[{id:'external',name:'My provider',modelId:'chosen-reviewer',enabled:true}]},knowledge:{
-      getSettings:async()=>window.config,updateSettings:async(value)=>{window.calls.push('save');window.config=value;return value},externalMcpStatus:async()=>null,
+      getSettings:async()=>window.config,updateSettings:async(value)=>{window.calls.push('save');value.automation.local=window.config.automation.local;window.config=value;return structuredClone(value)},externalMcpStatus:async()=>null,
       automationStatus:async()=>status(),automationRun:async()=>{window.calls.push('run');return status()},automationRetry:async()=>{},
-      jevCredentialStatus:async()=>({configured:false}),setJevCredential:async()=>{},stopLocalModel:async()=>window.calls.push('stop')
+      jevCredentialStatus:async()=>({configured:false}),setJevCredential:async()=>{},stopLocalModel:async()=>{window.calls.push('stop');disabledLocal()},
+      configureLocalModel:async(local)=>{window.calls.push('check');if(window.localResult==='wait')await new Promise(resolve=>window.finishCheck=resolve);const ok=window.localResult!=='fail';if(ok)window.config.automation.local=local;return {settings:structuredClone(window.config),report:{ok,reason:ok?undefined:'local-memory-insufficient',mode:'gpu',availableMemoryMiB:16000,availableVramMiB:6000,modelContextTokens:262144,recommendedContextTokens:32768,selectedContextTokens:32768,supportedContextTokens:[32768]}}}
     }}
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true,load:async()=>{}})
     window.features=useExperimentalStore;window.dock=useRightToolStore
@@ -57,7 +60,8 @@ it('configures all four stages, excludes Jev generation, saves before running an
       await field.getByRole('button', { name: 'External provider' }).click()
       await page.getByRole('option', { name: 'My provider', exact: true }).click()
     }
-    expect(await page.getByText('Local service', { exact: true }).count()).toBe(0)
+    expect(await page.getByText('Disabled', { exact: true }).count()).toBeGreaterThan(0)
+    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
     await page.getByRole('checkbox', { name: 'Enable automatic review and publication' }).check()
     await page.getByRole('button', { name: 'Process pending', exact: true }).click()
     await expect.poll(() => page.evaluate(() => (window as any).calls)).toEqual(['save','run'])
@@ -78,5 +82,49 @@ it('unmounts knowledge settings and review immediately, blocks programmatic reop
     expect(await page.evaluate(() => (window as any).dock.getState().openToolIds)).toEqual(['persona'])
     await page.evaluate(() => (window as any).features.getState().apply({ knowledge: true }))
     expect(await page.locator('[data-tool="review"]').count()).toBe(0)
+  } finally { await page.close() }
+})
+
+it('requires passing checks before offering local stages and disables immediately without Save', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page)
+    const stage = page.getByRole('button', { name: 'Entry review', exact: true })
+    await stage.click()
+    expect(await page.getByRole('option', { name: 'Local model', exact: true }).count()).toBe(0)
+    await page.keyboard.press('Escape')
+    await page.getByText('Local service', { exact: true }).click()
+    await page.evaluate(() => (window as any).localResult = 'fail')
+    await page.getByRole('button', { name: 'Check and enable', exact: true }).click()
+    await page.getByRole('alert').filter({ hasText: 'Not enough available resources' }).waitFor()
+    expect(await page.evaluate(() => (window as any).config.automation.local.enabled)).toBe(false)
+    await page.evaluate(() => (window as any).localResult = 'pass')
+    await page.getByRole('button', { name: 'Check and enable', exact: true }).click()
+    await page.getByText('Checks passed, enabled · 32K tokens', { exact: true }).waitFor()
+    await stage.scrollIntoViewIfNeeded(); await page.waitForTimeout(100)
+    await stage.click(); await page.getByRole('option', { name: 'Local model', exact: true }).click()
+    await page.getByRole('button', { name: 'Disable local deployment', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => (window as any).config.automation.local.enabled)).toBe(false)
+    await stage.scrollIntoViewIfNeeded(); await page.waitForTimeout(100); await stage.click()
+    expect(await page.getByRole('option', { name: 'Local model', exact: true }).count()).toBe(0)
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Reset', exact: true }).click()
+    expect(await page.getByText('Disabled', { exact: true }).count()).toBeGreaterThan(0)
+  } finally { await page.close() }
+})
+it('ignores a late check completion after cancellation', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page)
+    await page.getByText('Local service', { exact: true }).click()
+    await page.evaluate(() => (window as any).localResult = 'wait')
+    await page.getByRole('button', { name: 'Check and enable', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => typeof (window as any).finishCheck)).toBe('function')
+    await page.getByRole('button', { name: 'Cancel check and disable', exact: true }).click()
+    await page.evaluate(() => (window as any).finishCheck())
+    await page.getByRole('button', { name: 'Check and enable', exact: true }).waitFor()
+    expect(await page.getByText('Checks passed, enabled · 32K tokens', { exact: true }).count()).toBe(0)
+    await page.getByRole('button', { name: 'Entry review', exact: true }).click()
+    expect(await page.getByRole('option', { name: 'Local model', exact: true }).count()).toBe(0)
   } finally { await page.close() }
 })

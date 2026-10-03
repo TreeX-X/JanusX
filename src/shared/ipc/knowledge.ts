@@ -60,6 +60,7 @@ export const KNOWLEDGE_CHANNELS = {
   jevCredential: 'knowledge:jev:credential',
   jevCredentialStatus: 'knowledge:jev:credential-status',
   localModelStop: 'knowledge:local-model:stop',
+  localModelConfigure: 'knowledge:local-model:configure',
   wikiHistory: 'knowledge:wiki:history',
   wikiRevision: 'knowledge:wiki:revision',
   pinWikiRevision: 'knowledge:wiki:pin-revision',
@@ -316,6 +317,7 @@ export interface KnowledgeAPI {
   setJevCredential: (key: string) => Promise<void>
   jevCredentialStatus: () => Promise<{ configured: boolean }>
   stopLocalModel: () => Promise<void>
+  configureLocalModel: (input: import('../knowledge-automation').KnowledgeLocalSettings) => Promise<{ settings: KnowledgeSettings; report: import('../knowledge-automation').KnowledgeLocalEnvironment }>
   wikiHistory: (input: import('../wiki-history').WikiHistoryQuery) => Promise<import('../wiki-history').WikiHistoryPage>
   wikiRevision: (input: import('../wiki-history').WikiRevisionQuery) => Promise<import('../wiki-history').WikiRevision>
   pinWikiRevision: (input: import('../wiki-history').WikiRevisionPinInput) => Promise<void>

@@ -101,6 +101,7 @@ export function installElectronApiFallback(): void {
       setJevCredential: () => unavailableKnowledge(),
       jevCredentialStatus: () => unavailableKnowledge(),
       stopLocalModel: () => unavailableKnowledge(),
+      configureLocalModel: () => unavailableKnowledge(),
       wikiHistory: () => unavailableKnowledge(),
       wikiRevision: () => unavailableKnowledge(),
       pinWikiRevision: () => unavailableKnowledge(),

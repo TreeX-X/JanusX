@@ -1,7 +1,8 @@
 // Note: compact knowledge controls share explicit typography and theme tokens — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
 import { KnowledgeAutomationPanel } from './KnowledgeAutomationPanel'
 import { Database, Plug } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { defaultKnowledgeAutomation, normalizeKnowledgeAutomation, type KnowledgeLocalSettings } from '../../../shared/knowledge-automation'
 import {
   getKnowledgeSettings,
   updateKnowledgeSettings,
@@ -15,6 +16,8 @@ import { Select } from './ui/Select'
 import styles from './KnowledgeSettingsPanel.module.css'
 
 type StatusState = 'idle' | 'loading' | 'saving' | 'saved' | 'error'
+const applyLocal = (current: KnowledgeSettings, local: KnowledgeLocalSettings): KnowledgeSettings => ({ ...current,
+  automation: normalizeKnowledgeAutomation({ ...(current.automation ?? defaultKnowledgeAutomation()), local }) })
 
 export function KnowledgeSettingsPanel() {
   const { t } = useI18n('settings')
@@ -26,14 +29,23 @@ export function KnowledgeSettingsPanel() {
   const [mcpBusy, setMcpBusy] = useState(false)
   const [mcpMsg, setMcpMsg] = useState('')
   const [mcpOk, setMcpOk] = useState(true)
+  const localRevision = useRef(0)
+  const latestLocal = useRef<KnowledgeLocalSettings>()
+  const localPersisted = (local: KnowledgeLocalSettings) => {
+    localRevision.current++; latestLocal.current = local
+    setDraft(current => applyLocal(current, local))
+    setSettings(current => applyLocal(current, local))
+  }
 
   useEffect(() => {
     let cancelled = false
+    const revision = localRevision.current
 
     setStatus('loading')
     getKnowledgeSettings()
       .then((next) => {
         if (cancelled) return
+        if (revision !== localRevision.current && latestLocal.current) next = applyLocal(next, latestLocal.current)
         setSettings(next)
         setDraft(next)
         setStatus('idle')
@@ -127,10 +139,12 @@ export function KnowledgeSettingsPanel() {
   }
 
   const handleSave = async () => {
+    const revision = localRevision.current
     setStatus('saving')
     setError('')
     try {
-      const next = await updateKnowledgeSettings(draft)
+      let next = await updateKnowledgeSettings(draft)
+      if (revision !== localRevision.current && latestLocal.current) next = applyLocal(next, latestLocal.current)
       setSettings(next)
       setDraft(next)
       setStatus('saved')
@@ -194,7 +208,7 @@ export function KnowledgeSettingsPanel() {
       <KnowledgeAutomationPanel value={draft.automation} knowledgeEnabled={draft.enabled} onChange={automation => {
         setDraft(current => ({ ...current, automation }))
         if (status === 'saved' || status === 'error') { setStatus('idle'); setError('') }
-      }} onSave={handleSave} disabled={isBusy} />
+      }} onSave={handleSave} onLocalPersist={localPersisted} disabled={isBusy} />
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}><Plug size={14} aria-hidden />{t('settings:knowledge.section.externalMcp')}</h3>
         <div className={styles.row}>
