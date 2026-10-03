@@ -269,6 +269,13 @@
     "acceptFailed": "接受失败：候选需求不存在或目标父节点无效",
     "rejectFailed": "拒绝失败：候选需求不存在"
   },
+  "noteChat": {
+    "applied": "已更新 {{count}} 篇 Note",
+    "reverted": "已撤销此次修改",
+    "viewChanges": "查看修改",
+    "fullText": "查看完整正文",
+    "undoConflict": "Note 已有后续修改，无法直接撤销；请让 Janus 读取最新内容后调整。"
+  },
   "maintenance": {
     "consoleAria": "Janus Copilot 控制台",
     "engineLabel": "JANUS // 蓝图引擎",
@@ -290,7 +297,19 @@
     "maintenanceGoal": "维护目标",
     "maintenanceTaskFold": "维护任务",
     "goalDefault": "根据当前工作区实现情况整理蓝图节点内容和层级",
-    "policyHint": "Janus 可在本次授权范围内自由讨论；只有显式生成并批准提案后才会修改蓝图。",
+    "policyHint": "对话仅用于读取和讨论。点击整理修改，核对文件内容并确认后才会生效。",
+    "reviewDiscussion": "查看对话",
+    "reviewDocument": "查看审核文档",
+    "reviewDiff": "查看前后差异",
+    "reviewHint": "请审核待写入正文，通过后才会应用。也可在下方继续对话，再次整理修改稿。",
+    "reviewOutdated": "旧稿已失效，不能继续批准。补充讨论后请再次整理。",
+    "filesTitle": "待修改文件",
+    "filesSelect": "选择要应用的操作以预览文件。",
+    "filesLoading": "正在准备文件预览…",
+    "filesRetry": "重新预览文件",
+    "fileCreate": "新增",
+    "fileReplace": "修改",
+    "fileArchive": "此 Note 将归档，文件会保留。",
     "startConversation": "开始对话",
     "roleUser": "你",
     "roleJanus": "Janus",
@@ -406,7 +425,7 @@
     "activeScopeMismatch": "当前任务的范围或对话不同，请选择对应节点，或先完成、取消当前任务。",
     "appliedOperations": "已应用操作",
     "rejectedOperations": "未应用操作",
-    "organize": "整理 Note",
+    "organize": "整理修改",
     "organizing": "正在整理…",
     "organizeHint": "把这次对话讨论清楚的变更整理成可审批提案",
     "more": "更多",
@@ -470,5 +489,29 @@
     "conflictTitle": "保存冲突",
     "conflictReload": "外部修改已先行保存，请重新加载后继续。",
     "invalidKept": "{{count}} 个无效文件已保留，不执行"
+  },
+  "noteFocus": {
+    "read": "已访问 Note", "addScope": "加入关注", "hidden": "{{count}} 篇已高亮的 Note 当前隐藏，可点击定位展开。",
+    "scope": "当前关注",
+    "locate": "定位",
+    "clear": "重置范围",
+    "target": "目标",
+    "reference": "参考",
+    "dependency": "依赖",
+    "pin": "固定",
+    "remove": "移除",
+    "unavailable": "当前画布不可用：{{names}}"
+  },
+  "architecture": {
+    "project": "项目",
+    "module": "模块",
+    "view": "蓝图视图",
+    "structure": "系统结构",
+    "notes": "全部 Note",
+    "coverage": "检出范围",
+    "currentOnly": "仅显示已采纳的当前声明；计划、示例和历史文档可在全部 Note 中查看。",
+    "related": "决策与相关工作",
+    "noRelated": "暂无明确关联的工作。",
+    "unresolved": "目标未解析"
   }
 }

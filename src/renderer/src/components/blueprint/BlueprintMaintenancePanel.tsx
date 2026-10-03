@@ -14,7 +14,10 @@ import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { EMPTY_FOCUS, resolveBlueprintContextScope } from '@/features/blueprint/blueprint-focus'
 import { useOptionalBlueprintToolbar } from './BlueprintToolbar'
-import { BlueprintActionBar } from './BlueprintActionBar'
+import { NoteChatActivity } from './NoteChatActivity'
+import { NoteWorkingScope, NoteTurnActivity } from './NoteWorkingScope'
+import { useNoteFocusStore } from '@/stores/note-focus'
+import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 
 /** Stable identity of the single blueprint-panel conversation. */
 export const BLUEPRINT_PANEL_VIEW_REF = { ownerRepoId: 'blueprint', viewId: 'workspace-dialog' } as const
@@ -49,7 +52,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const [switchNotice, setSwitchNotice] = useState<string | null>(null)
   const bindingKey = useRef('')
   const configuredKey = useRef('')
-  const prevWorkspaceId = useRef<string | null>(null)
+  const previousRevision = useRef<number | null>(null)
   const noticeTimer = useRef(0)
 
   // Context follows the canvas. The toolbar owns search/status/kind/selection in
@@ -71,10 +74,11 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   // A composition member whose Note lives in another checkout cannot be injected
   // here: main authorizes refs only against attached workspace roots.
   const foreignCount = contextScope?.foreignNodeIds.length ?? 0
-  const sourceUnavailable = !!contextScope && contextScope.noteRefs.length === 0 && foreignCount > 0
+  const foreignWorkspace = contextScope?.foreignCheckoutPath
+    ? workspaces.find(item => sameCheckoutPath(item.path, contextScope.foreignCheckoutPath!)) : undefined
 
   const context = useMemo<EngineeringContext>(() => ({
-    domain: 'project', intent: 'maintain', scope: contextScope?.scope ?? 'view',
+    domain: 'project', intent: 'discuss', scope: contextScope?.scope ?? 'view',
     repoIds: [...new Set((contextScope?.noteRefs ?? [])
       .map(ref => ref.uri.split('/')[2])
       .filter((id): id is string => !!id))],
@@ -83,6 +87,10 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   }), [contextScope?.scope, contextScope?.noteRefs])
 
   useEffect(() => () => window.clearTimeout(noticeTimer.current), [])
+  useEffect(() => {
+    useNoteFocusStore.getState().activate(conversationId ?? null)
+    return () => useNoteFocusStore.getState().activate(null)
+  }, [conversationId])
 
   useEffect(() => {
     if (!registry.persistenceReady || !activeWorkspace) return
@@ -106,16 +114,16 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     const key = `${conversationId}|${activeWorkspace.id}|${JSON.stringify(context)}`
     if (configuredKey.current === key) return
     configuredKey.current = key
-    const switched = prevWorkspaceId.current !== null && prevWorkspaceId.current !== activeWorkspace.id
-    prevWorkspaceId.current = activeWorkspace.id
-    chat.setEngineeringContext(context)
+    const revision = chat.engineeringContext?.contextRevision ?? 0
+    const switched = revision > 0 && previousRevision.current !== revision
+    previousRevision.current = revision
+    chat.setEngineeringContext({ ...context, contextRevision: revision })
     chat.setApprovalMode('plan')
     for (const resource of chat.resourceController.resources) {
       if (resource.workspaceId !== activeWorkspace.id) chat.resourceController.detachWorkspace(resource.workspaceId)
     }
     chat.resourceController.attachWorkspace(activeWorkspace.id)
     if (switched) {
-      chat.clear()
       setSwitchNotice(t('blueprint:maintenance.workspaceSwitched', { name: activeWorkspace.name }))
       window.clearTimeout(noticeTimer.current)
       noticeTimer.current = window.setTimeout(() => setSwitchNotice(null), SWITCH_NOTICE_MS)
@@ -135,15 +143,21 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
+        renderTurnFooter={turnId => <NoteTurnActivity key={turnId ?? 'live'} conversationId={chat.conversationId}
+          workspacePath={activeWorkspace.path} turnId={turnId ?? chat.activeTurnId} live={!turnId} />}
+        discussionFooter={<NoteChatActivity conversationId={chat.conversationId} workspacePath={activeWorkspace.path} />}
         pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
         modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
         resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}
         onSelectModel={chat.selectModel} onSend={text => { setSwitchNotice(null); chat.send(text) }} onRewrite={chat.rewrite}
-        aboveComposer={blueprint && contextScope && <BlueprintActionBar key={`${activeWorkspace.id}|${blueprint.id}|${contextScope.maintenanceScope.type}`}
-          chat={chat} blueprint={blueprint} workspace={activeWorkspace} ownerPath={ownerPath}
-          nodeScope={contextScope.maintenanceScope} noteCount={contextScope.noteRefs.length}
-          sourceUnavailable={sourceUnavailable} switchPath={contextScope.foreignCheckoutPath}
-          foreignCount={foreignCount} droppedCount={contextScope.droppedNodeIds.length} />}
+        aboveComposer={<>
+          <NoteWorkingScope conversationId={chat.conversationId} workspacePath={activeWorkspace.path} />
+          {foreignCount > 0 && <p role="status">{t('blueprint:maintenance.scopeForeign', { count: foreignCount })}
+            {foreignWorkspace && <button type="button" onClick={() => useWorkspaceStore.getState().setActiveWorkspace(foreignWorkspace.id)}>
+              {t('blueprint:maintenance.switchToSource', { name: foreignWorkspace.name })}
+            </button>}
+          </p>}
+        </>}
         onStop={chat.stop} onRetry={chat.retry} onClear={chat.clear} minimalComposer />
     </div> : <p className="bp-maintenance-connecting" role="status">{t('blueprint:toolbar.loading')}</p>}
   </PanelFrame>

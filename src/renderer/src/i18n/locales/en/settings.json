@@ -38,6 +38,12 @@
       "nav": "LLM Engines",
       "navMeta": "Providers"
     },
+    "usage": {
+      "title": "Usage Statistics",
+      "subtitle": "Usage · Token usage aggregated by terminal type",
+      "nav": "Usage",
+      "navMeta": "Tokens"
+    },
     "models": {
       "title": "Model Catalog",
       "subtitle": "Model Catalog · Browse model capabilities, pricing and context info",
@@ -425,6 +431,27 @@
       "existingTerminal": "Restart open terminals for the new version and PATH to take effect.",
       "installed": "Install finished. Restart terminals to take effect."
     }
+  },
+  "usageStats": {
+    "title": "Usage statistics",
+    "subtitle": "Aggregate token usage across terminals; live data for the current session",
+    "rangeToday": "Today",
+    "rangeWeek": "This week",
+    "rangeMonth": "This month",
+      "empty": "No terminal with usage telemetry in this range yet.",
+      "typeAll": "All",
+      "overall": "Overall",
+      "trend": "Trend over time",
+      "unknown": "untracked",
+      "hit": "hits",
+      "miss": "misses",
+      "hitRate": "Cache hit rate",
+      "noCacheData": "No cache telemetry yet.",
+      "total": "Total",
+    "input": "in",
+    "output": "out",
+    "context": "ctx",
+    "terminals": "terminals"
   },
   "languageService": {
     "title": "Language Services",

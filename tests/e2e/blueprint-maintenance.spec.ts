@@ -1,219 +1,60 @@
 import { expect, test, type Page } from '@playwright/test'
 
-test.beforeEach(({ page }) => {
-  page.on('pageerror', error => { throw error })
-})
-
 const panel = (page: Page) => page.getByTestId('blueprint-chat')
-const bar = (page: Page) => panel(page).getByRole('toolbar', { name: 'Blueprint actions' })
-const organize = (page: Page) => bar(page).getByRole('button', { name: 'Organize Notes', exact: true })
-const approveAll = (page: Page) => bar(page).getByRole('button', { name: /Approve and apply all \d+/ })
-const approve = (page: Page) => panel(page).getByRole('button', { name: 'Approve and apply selected', exact: true })
-
-async function discuss(page: Page, query = '') {
-  await page.goto('/project.html' + query)
+test.beforeEach(async ({ page }) => {
+  page.on('pageerror', error => { throw error })
+  await page.goto('/project.html')
   await page.addStyleTag({ content: '[data-testid="main-chat"],[data-testid="task"]{display:none}.fixture-layout{padding:12px}.fixture-layout>section{display:flex;flex-direction:column;height:650px;max-width:440px;min-height:0}' })
-  await panel(page).locator('textarea').fill('Clarify the Note title, preserving other content')
+})
+async function send(page: Page) {
+  await panel(page).locator('textarea').fill('Update the two Notes using our discussion')
   await panel(page).locator('textarea').press('Enter')
   await expect(panel(page)).toContainText('Project reply in progress')
+}
+async function receipt(page: Page) {
+  await page.evaluate(() => {
+    const fixture = (window as any).projectFixture
+    const request = fixture.streams.at(-1)
+    const change = { id: 'change-1', txId: 'tx-1', conversationId: request.conversationId, workspacePath: 'C:/fixture', createdAt: new Date().toISOString(), reason: 'Aligned two related Notes', files: ['First Note', 'Second Note'].map((title, i) => ({ uri: 'note://fixture/' + i, title, before: '# ' + title + '\nBefore', after: '# ' + title + '\nAfter' })) }
+    fixture.noteChanges.push(change)
+    fixture.emitAgentEvent({ type: 'note_change', requestId: request.requestId, change })
+    fixture.finishStream()
+  })
+}
+
+test('continuous discussion has no organize or approval step', async ({ page }) => {
+  await send(page)
   await page.evaluate(() => (window as any).projectFixture.finishStream())
-  await expect(organize(page)).toBeEnabled()
-}
-
-/** Organize, then open the per-operation picker; the bar keeps the card collapsed by default. */
-async function propose(page: Page, partial = false) {
-  await organize(page).click()
-  if (partial) await bar(page).getByRole('button', { name: 'Approve some…', exact: true }).click()
-  await expect(bar(page).getByRole('button', { name: 'Approve and apply all 2', exact: true })).toBeVisible()
-}
-
-test('discussion, partial approval, refreshed graph, audit and selected undo form one reachable flow', async ({ page }) => {
-  await discuss(page)
+  await expect(panel(page).getByRole('button', { name: /Organize|Approve/ })).toHaveCount(0)
+  await expect(panel(page)).toContainText('Update the two Notes')
   expect(await page.evaluate(() => (window as any).projectFixture.maintenance.starts.length)).toBe(0)
-  await propose(page, true)
-  const request = await page.evaluate(() => (window as any).projectFixture.streams.at(-1))
-  expect(request.maintenanceTaskId).toBe('maintenance-1')
-  expect(request.domain).toBe('project')
-  expect(request.workspaceResources.map((item: any) => item.workspaceId)).toEqual(['ws'])
-  await expect(approve(page)).toBeDisabled()
-  await panel(page).getByRole('checkbox', { name: 'Select operation rename', exact: true }).check()
-  await approve(page).click()
-  await expect(panel(page).locator('.bp-maintenance-approval')).toHaveCount(0)
-  const applied = await page.evaluate(() => (window as any).projectFixture.maintenance)
-  expect(applied.applies[0].operationIds).toEqual(['rename'])
-  expect(applied.mutations).toBe(1)
-  expect(applied.refreshes).toContain('C:/fixture')
-  // Task lifecycle and history live behind the bar's More disclosure.
-  await bar(page).getByRole('button', { name: 'More', exact: true }).click()
-  await panel(page).getByRole('button', { name: 'Complete maintenance', exact: true }).click()
-  await panel(page).locator('summary').filter({ hasText: 'Applied history' }).click()
-  await panel(page).getByRole('button', { name: 'Undo this application', exact: true }).click()
-  await panel(page).getByRole('checkbox', { name: 'Select operation undo-rename', exact: true }).check()
-  await panel(page).getByRole('button', { name: 'Approve and apply undo', exact: true }).click()
-  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(2)
-  expect(await page.evaluate(() => (window as any).projectFixture.snapshot().graph.nodes['44444444-4444-4333-8333-444444444444'].title)).toBe('Task')
 })
 
-test('changed proposal contents clear old selection and deletions need one acknowledgement', async ({ page }) => {
-  await discuss(page)
-  await propose(page, true)
-  await panel(page).getByRole('checkbox', { name: 'Select operation rename', exact: true }).check()
-  await page.evaluate(() => (window as any).projectFixture.maintenance.replaceProposal())
-  await expect(approve(page)).toBeDisabled()
-  await expect(panel(page).getByRole('checkbox', { name: 'Select operation rename', exact: true })).not.toBeChecked()
-  await panel(page).getByRole('checkbox', { name: 'Obsolete notes', exact: true }).check()
-  // Several deletions collapse into one irreversible acknowledgement, not N checkboxes.
-  const confirmations = panel(page).locator('.bp-maintenance-delete-confirm input')
-  await expect(confirmations).toHaveCount(1)
-  await expect(approve(page)).toBeDisabled()
-  await confirmations.check()
-  await approve(page).click()
-  const input = await page.evaluate(() => (window as any).projectFixture.maintenance.applies[0])
-  expect(input.operationIds).toEqual(['delete-a', 'delete-b'])
-  expect(input.confirmedDeleteOperationIds).toEqual(['delete-a', 'delete-b'])
-})
-
-test('stale source refusal leaves bytes unchanged and allows a fresh task', async ({ page }) => {
-  await discuss(page)
-  await propose(page, true)
-  await panel(page).getByRole('checkbox', { name: 'Select operation rename', exact: true }).check()
-  await page.evaluate(() => (window as any).projectFixture.maintenance.changeSourceHash('f'.repeat(64)))
-  await approve(page).click()
-  await expect(bar(page).getByRole('alert')).toContainText('STALE_SOURCE_HASH')
-  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(0)
-  await expect(organize(page)).toBeDisabled()
-  await bar(page).getByRole('button', { name: 'More', exact: true }).click()
-  await panel(page).getByRole('button', { name: 'Complete maintenance', exact: true }).click()
-  await expect(organize(page)).toBeEnabled()
-})
-
-test('closing the panel while task creation waits cannot launch a hidden proposal', async ({ page }) => {
-  await discuss(page)
-  await page.evaluate(() => { (window as any).projectFixture.maintenance.gateStart = true })
-  await organize(page).click()
-  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.starts.length)).toBe(1)
-  await page.getByRole('button', { name: 'Toggle blueprint', exact: true }).click()
-  await page.evaluate(() => (window as any).projectFixture.maintenance.finishStart())
-  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.tasks[0].status)).toBe('cancelled')
-  expect(await page.evaluate(() => (window as any).projectFixture.streams.length)).toBe(1)
-})
-
-test('canvas focus binds a Note batch and scope, and rejects the other checkout until switched', async ({ page }) => {
-  await discuss(page, '?two-checkouts')
-  const nodeId = '44444444-4444-4333-8333-444444444444'
-  await page.evaluate(id => (window as any).projectFixture.selectMaintenanceNode(id), nodeId)
-  await propose(page)
-  const fixture = await page.evaluate(() => ({ start: (window as any).projectFixture.maintenance.starts[0], stream: (window as any).projectFixture.streams.at(-1) }))
-  expect(fixture.start.nodeScope).toEqual({ type: 'node', nodeId })
-  expect(fixture.stream.noteRefs[0]).toMatchObject({ checkoutPath: 'C:/fixture', expectedHash: 'a'.repeat(64) })
-  await page.evaluate(id => (window as any).projectFixture.selectMaintenanceNode('checkout-b:' + id), nodeId)
-  await expect(bar(page).getByRole('button', { name: 'Switch to Checkout B', exact: true })).toBeVisible()
-  await expect(panel(page).locator('.bp-maintenance-approval')).toHaveCount(0)
-  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(0)
-  await bar(page).getByRole('button', { name: 'Switch to Checkout B', exact: true }).click()
-  await expect(panel(page)).not.toContainText('Clarify the Note title')
-  await panel(page).locator('textarea').fill('Maintain the second checkout only')
-  await panel(page).locator('textarea').press('Enter')
+test('a multi-Note receipt refreshes the graph and shows changes without hiding discussion', async ({ page }) => {
+  await send(page); await receipt(page)
+  await expect(panel(page)).toContainText('Aligned two related Notes')
   await expect(panel(page)).toContainText('Project reply in progress')
-  await page.evaluate(() => (window as any).projectFixture.finishStream())
-  await organize(page).click()
-  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.starts.length)).toBe(2)
-  const second = await page.evaluate(() => ({ start: (window as any).projectFixture.maintenance.starts[1], stream: (window as any).projectFixture.streams.at(-1) }))
-  expect(second.start).toMatchObject({ workspacePath: 'C:/fixture-b', nodeScope: { type: 'node', nodeId } })
-  expect(second.start.blueprintId).toContain(':checkout-b')
-  expect(second.stream.workspaceResources.map((item: any) => item.workspaceId)).toEqual(['ws-b'])
-  expect(second.stream.noteRefs[0]).toMatchObject({ checkoutPath: 'C:/fixture-b', expectedHash: 'd'.repeat(64) })
+  await panel(page).getByText('View changes', { exact: true }).click()
+  await expect(panel(page).getByLabel('Before', { exact: true })).toHaveCount(2)
+  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.refreshes.length)).toBeGreaterThan(0)
+  await send(page)
+  expect(await page.evaluate(() => (window as any).projectFixture.streams.length)).toBe(2)
 })
 
-test('clearing the conversation during task creation cancels the new task', async ({ page }) => {
-  await discuss(page)
-  await page.evaluate(() => { (window as any).projectFixture.maintenance.gateStart = true })
-  await organize(page).click()
-  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.starts.length)).toBe(1)
-  await panel(page).getByRole('button', { name: 'Clear', exact: true }).click()
-  await page.evaluate(() => (window as any).projectFixture.maintenance.finishStart())
-  await expect(bar(page).getByRole('alert')).toContainText('conversation has changed')
-  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.tasks[0].status)).toBe('cancelled')
-  expect(await page.evaluate(() => (window as any).projectFixture.streams.length)).toBe(1)
-})
-
-test('a failed task-list read stays visible and refresh retries it', async ({ page }) => {
-  await discuss(page)
+test('undo succeeds and the receipt survives closing and reopening', async ({ page }) => {
+  await send(page); await receipt(page)
+  await panel(page).getByRole('button', { name: 'Undo this application', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.undoApplies)).toBe(1)
   await page.getByRole('button', { name: 'Toggle blueprint', exact: true }).click()
-  await page.evaluate(() => { (window as any).projectFixture.maintenance.failList = true })
   await page.getByRole('button', { name: 'Toggle blueprint', exact: true }).click()
-  await expect(bar(page).getByRole('alert')).toContainText('Task list unavailable')
-  await expect(organize(page)).toBeDisabled()
-  await page.evaluate(() => { (window as any).projectFixture.maintenance.failList = false })
-  await bar(page).getByRole('button', { name: 'Refresh', exact: true }).click()
-  await expect(organize(page)).toBeEnabled()
+  await expect(panel(page)).toContainText('Aligned two related Notes')
+  await expect(panel(page).getByRole('button', { name: 'Undo this application', exact: true })).toBeDisabled()
 })
 
-test('dispatch is one click: brief, prefilled terminal, bound anchor node', async ({ page }) => {
-  await discuss(page)
-  const dispatch = bar(page).getByRole('button', { name: 'Dispatch', exact: true })
-  await expect(panel(page).locator('.bp-maintenance-approval')).toHaveCount(0)
-  await expect(dispatch).toBeEnabled()
-  await dispatch.click()
-
-  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.binds.length)).toBe(1)
-  const state = await page.evaluate(() => (window as any).projectFixture.maintenance)
-  expect(state.dispatchBriefs).toHaveLength(1)
-  expect(state.terminalCreates[0].preset).toBe('codex')
-  expect(state.terminalCreates[0].cwd).toBe('C:/fixture')
-  // Prefilled, never submitted: no newline is appended to the brief.
-  expect(state.terminalInputs).toHaveLength(1)
-  expect(state.terminalInputs[0].data).toContain('Implement the clarified title')
-  expect(state.terminalInputs[0].data.endsWith('\n')).toBe(false)
-  // The host drops a citation it cannot authorize before it reaches the terminal.
-  expect(state.terminalInputs[0].data).not.toContain('not-authorized')
-  expect(state.binds[0]).toMatchObject({ cwd: 'C:/fixture', nodeId: '44444444-4444-4333-8333-444444444444' })
-  // Dispatch alone must not have touched Note content.
-  expect(state.mutations).toBe(0)
-  expect(state.applies).toHaveLength(0)
-  await expect(bar(page)).toContainText('Dispatched to Codex')
-})
-
-test('a brief failure stays visible and launches nothing', async ({ page }) => {
-  await discuss(page)
-  await page.evaluate(() => { (window as any).projectFixture.maintenance.failDispatch = true })
-  await bar(page).getByRole('button', { name: 'Dispatch', exact: true }).click()
-  await expect(bar(page).getByRole('alert')).toContainText('Fixture brief unavailable')
-  const state = await page.evaluate(() => (window as any).projectFixture.maintenance)
-  expect(state.terminalCreates).toHaveLength(0)
-  expect(state.binds).toHaveLength(0)
-  await page.evaluate(() => { (window as any).projectFixture.maintenance.failDispatch = false })
-  await bar(page).getByRole('button', { name: 'Dispatch', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.maintenance.terminalInputs.length)).toBe(1)
-})
-
-test('bulk approval applies everything but deletions in one click, and gates them behind an acknowledgement', async ({ page }) => {
-  await discuss(page)
-  await propose(page)
-  // 2 updates + 2 deletes in the fixture proposal.
-  await expect(approveAll(page)).toHaveText('Approve and apply all 2')
-  await expect(approveAll(page)).toBeEnabled()
-  await expect(bar(page)).toContainText('2 deletions are outside bulk approval')
-
-  await approveAll(page).click()
-  await expect(panel(page).locator('.bp-maintenance-approval')).toHaveCount(0)
-  const applied = await page.evaluate(() => (window as any).projectFixture.maintenance.applies[0])
-  expect(applied.operationIds).toEqual(['rename', 'description'])
-  expect(applied.confirmedDeleteOperationIds ?? []).toEqual([])
-  // A deletion the user never acknowledged must not ride along.
-  expect(applied.operationIds).not.toContain('delete-a')
-  expect(await page.evaluate(() => (window as any).projectFixture.maintenance.mutations)).toBe(1)
-})
-
-test('partial approval still expands to the per-operation picker', async ({ page }) => {
-  await discuss(page)
-  await propose(page)
-  await expect(approve(page)).toHaveCount(0)
-  await bar(page).getByRole('button', { name: 'Approve some…', exact: true }).click()
-  await expect(panel(page).locator('.bp-maintenance-approval')).toBeVisible()
-  await expect(approve(page)).toBeDisabled()
-  await panel(page).getByRole('checkbox', { name: 'Select operation rename', exact: true }).check()
-  await approve(page).click()
-  await expect(panel(page).locator('.bp-maintenance-approval')).toHaveCount(0)
-  expect((await page.evaluate(() => (window as any).projectFixture.maintenance.applies[0])).operationIds).toEqual(['rename'])
+test('a conflicting undo reports failure and leaves files untouched', async ({ page }) => {
+  await send(page); await receipt(page)
+  await page.evaluate(() => { (window as any).projectFixture.undoConflict = true })
+  await panel(page).getByRole('button', { name: 'Undo this application', exact: true }).click()
+  await expect(panel(page).getByRole('alert')).toContainText('changed')
+  expect(await page.evaluate(() => (window as any).projectFixture.undoApplies)).toBe(0)
 })

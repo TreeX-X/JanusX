@@ -8,6 +8,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runChatTurn } from '@janus-agent/janus-agent'
 import type { KnowledgeContextResult } from '@janus-agent/chat-core'
+import { ManagedChatSession } from '../../../src/main/llm/managed-chat-session'
+import { openRouterRecordToRegistryEntry } from '@janusx/llm-core'
 import {
   buildJanusChatTurnPorts,
   type JanusChatTurnPortsDeps,
@@ -39,6 +41,75 @@ function baseDeps(overrides: Partial<JanusChatTurnPortsDeps> = {}): JanusChatTur
 }
 
 describe('model port', () => {
+  it.each([undefined, 16_384])('uses live Gemini metadata before compaction over bundled capacity %s', async contextWindow => {
+    const metadata = openRouterRecordToRegistryEntry({ id: 'google/gemini-3.8-flash', name: 'Google: Gemini 3.8 Flash',
+      context_length: 1_048_576, top_provider: { max_completion_tokens: 65_536 } })!
+    const resolveModelMetadata = vi.fn(async () => metadata)
+    const stream = vi.fn(async () => ({ textStream: (async function* () { yield 'Full context retained' })() }))
+    const ports = buildJanusChatTurnPorts(baseDeps({
+      getProviderSettings: async () => ({ modelId: 'gemini-3.8-flash' }),
+      listModels: async () => [{ id: 'gemini-3.8-flash', supportsFunctionCalling: true, contextWindow, maxOutputTokens: 4096 }], resolveModelMetadata,
+      knowledgeSearch: undefined, captureObservation: undefined, streamTextFn: stream,
+    }))
+    const endpoint = await ports.model.resolve('vertex')
+    expect(endpoint).toMatchObject({ contextWindow: 1_048_576, maxOutputTokens: 65_536, source: 'registry' })
+    expect(resolveModelMetadata).toHaveBeenCalledWith('gemini-3.8-flash')
+    const messages = Array.from({ length: 31 }, (_, index) => ({ role: index % 2 ? 'assistant' as const : 'user' as const, content: `Decision ${index}: ` + 'rule '.repeat(1000) }))
+    const session = new ManagedChatSession()
+    session.beginTurn(messages, 'scope', undefined, () => {}, 'registry')
+    const summarize = vi.fn()
+    await runChatTurn({ requestId: 'automatic-gemini', providerId: 'vertex', messages, chatSession: session, compactionSummarizer: summarize }, ports)
+    expect(summarize).not.toHaveBeenCalled()
+    expect(stream).toHaveBeenCalledOnce()
+    expect(messages).toHaveLength(31)
+  })
+
+  it('skips automatic metadata only for an explicit user context limit', async () => {
+    const resolveModelMetadata = vi.fn()
+    const configured = buildJanusChatTurnPorts(baseDeps({ resolveModelMetadata,
+      getProviderSettings: async () => ({ modelId: 'gemini-3.8-flash', extra: { chatModelLimits: { 'gemini-3.8-flash': { contextWindow: 1_000_000 } } } }),
+    }))
+    expect(await configured.model.resolve('vertex')).toMatchObject({ contextWindow: 1_000_000, source: 'configured' })
+    expect(resolveModelMetadata).not.toHaveBeenCalled()
+    resolveModelMetadata.mockResolvedValue(undefined)
+    const listed = buildJanusChatTurnPorts(baseDeps({ resolveModelMetadata,
+      listModels: async () => [{ id: 'm1', contextWindow: 128_000 }],
+    }))
+    expect(await listed.model.resolve('provider')).toMatchObject({ contextWindow: 128_000, source: 'catalog' })
+    expect(resolveModelMetadata).toHaveBeenCalledWith('m1')
+  })
+
+  it.each([undefined, 128_000])('falls back after a catalog failure with adapter capacity %s', async contextWindow => {
+    const ports = buildJanusChatTurnPorts(baseDeps({
+      listModels: async () => [{ id: 'm1', contextWindow }],
+      resolveModelMetadata: async () => { throw new Error('offline') },
+    }))
+    expect(await ports.model.resolve('provider')).toMatchObject({
+      contextWindow: contextWindow ?? 16_384, source: contextWindow ? 'catalog' : 'estimated',
+    })
+  })
+
+  it.each([undefined, 1_000_000])('uses the configured Gemini window in the actual compaction loop: %s', async contextWindow => {
+    const modelId = 'gemini-3.8-flash'
+    const summarize = vi.fn(async () => '## Goal\nPreserve the decision.\n## Progress\nDiscussed constraints.\n## Next Steps\nContinue.')
+    const stream = vi.fn(async () => ({ textStream: (async function* () { yield 'Acknowledged' })() }))
+    const ports = buildJanusChatTurnPorts(baseDeps({
+      getProviderSettings: async () => ({ modelId, extra: { chatModelLimits: { [modelId]: { contextWindow } } } }),
+      listModels: async () => [{ id: modelId, supportsFunctionCalling: true }],
+      knowledgeSearch: undefined, captureObservation: undefined, streamTextFn: stream,
+    }))
+    const endpoint = await ports.model.resolve('vertex')
+    expect(endpoint.contextWindow).toBe(contextWindow ?? 16_384)
+    const messages = Array.from({ length: 31 }, (_, index) => ({ role: index % 2 ? 'assistant' as const : 'user' as const, content: `Decision ${index}: ` + 'rule '.repeat(1000) }))
+    const session = new ManagedChatSession()
+    session.beginTurn(messages, 'scope', undefined, () => {}, contextWindow ? 'configured' : 'estimated')
+    await runChatTurn({ requestId: 'gemini-budget', providerId: 'vertex', messages, chatSession: session, compactionSummarizer: summarize }, ports)
+    expect(stream).toHaveBeenCalledTimes(1)
+    if (contextWindow) expect(summarize).not.toHaveBeenCalled()
+    else expect(summarize).toHaveBeenCalled()
+    expect(messages).toHaveLength(31)
+  })
+
   it('resolves provider settings + language model + catalog flags', async () => {
     const ports = buildJanusChatTurnPorts(baseDeps({
       listModels: async () => [

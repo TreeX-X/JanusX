@@ -6,13 +6,13 @@ import { tmpdir, homedir } from 'node:os';
 import { join, resolve, parse } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync } from 'node:fs';
-import { AW, AH } from './showcase-lib.mjs';
+import { layout, style, demos } from './showcase-config.mjs';
+import { sleep } from './record-motion.mjs';
+export { sleep, easeInOut, easeOutExpo, snapper } from './record-motion.mjs';
+const { appWidth: AW, appHeight: AH } = layout;
 
 export { AW, AH };
 export const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString();
-export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-export const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
-export const easeOutExpo = (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
 
 function testEnv(homeDir) {
   const root = parse(homeDir).root;
@@ -104,7 +104,7 @@ export async function launchApp(fixtureRoot, claudeConfig) {
   await page.waitForLoadState('domcontentloaded');
   await page.waitForFunction(() => Boolean(window.electron?.workspace?.create), null, { timeout: 30000 });
   await page.evaluate(() => window.electron.system.setLanguage('zh-CN')).catch(() => {});
-  await page.evaluate(() => window.electron.theme.update('planche')).catch(() => {});
+  await page.evaluate((theme) => window.electron.theme.update(theme), style.theme).catch(() => {});
   await page.setViewportSize({ width: AW, height: AH });
   return { application, page };
 }
@@ -167,92 +167,30 @@ export async function shellRun(page, index, text) {
   await sleep(1500);
 }
 
-/** GIF tempo: all stored delays scale x1.8 — stills breathe, motion stays smooth. */
-const TEMPO = 1.8;
-
-/** Mouse-tracked snapshots. mouse is viewport coords; composed with OX/OY offset. */
-/** Snapper with pluggable pixels: shot(page) defaults to the renderer
- *  screenshot; pass a compositor (e.g. browser view overlay) per script. */
-export function snapper(page, rawDir, frames, shot = null) {
-  const box = async (loc) => await loc.boundingBox();
-  const center = (bb) => ({ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 });
-  // Last parked cursor: rest frames reuse it so the pointer never blinks
-  // out between click → hold → glide. Null until the first real move.
-  let lastMouse = null;
-  const take = shot ?? ((pg) => pg.screenshot({ type: 'png' }));
-  async function snap(mouse, click, delay, cap) {
-    if (mouse) lastMouse = { x: mouse.x, y: mouse.y };
-    const png = await take(page);
-    const idx = frames.length;
-    const file = `p-${String(idx).padStart(2, '0')}.png`;
-    await writeFile(join(rawDir, file), png);
-    frames.push({ file, mouse, click: !!click, delay: Math.round(delay * TEMPO), cap });
-  }
-  // Visible travel between beats: every helper glides in from the parked
-  // cursor instead of teleporting. Near-zero hops collapse to one frame.
-  async function glideTo(x1, y1, x2, y2, steps, cap) {
-    if (Math.hypot(x2 - x1, y2 - y1) < 3) {
-      await page.mouse.move(x2, y2);
-      await snap({ x: x2, y: y2 }, false, 8, cap);
-      return;
-    }
-    for (let i = 1; i <= steps; i++) {
-      const t = easeOutExpo(i / steps);
-      const x = x1 + (x2 - x1) * t;
-      const y = y1 + (y2 - y1) * t;
-      await page.mouse.move(x, y);
-      await snap({ x, y }, false, 8, cap);
-    }
-  }
-  async function travelFromLast(c, cap, steps) {
-    if (lastMouse) await glideTo(lastMouse.x, lastMouse.y, c.x, c.y, steps, cap);
-    else await page.mouse.move(c.x, c.y);
-  }
-  async function moveSnap(loc, cap, delay = 45) {
-    const c = center(await box(loc));
-    await travelFromLast(c, cap, 10);
-    await sleep(450);
-    await snap({ x: c.x, y: c.y }, false, delay, cap);
-    return c;
-  }
-  /** One frame per keystroke: the GIF shows the text actually being typed. */
-  async function typeSnap(loc, text, cap, { delay = 46, lead = 60, gap = 0 } = {}) {
-    const c = center(await box(loc));
-    await travelFromLast(c, cap, 10);
-    await sleep(360);
-    await snap({ x: c.x, y: c.y }, false, lead, cap);
-    for (const ch of text) {
-      await loc.press(ch, { delay: 0 }).catch(() => {});
-      await sleep(gap);
-      await snap({ x: c.x, y: c.y }, false, delay, cap);
-    }
-    return c;
-  }
-  async function clickSnap(loc, cap) {
-    const c = center(await box(loc));
-    await travelFromLast(c, cap, 8);
-    await sleep(300);
-    await loc.click().catch(() => page.mouse.click(c.x, c.y));
-    await snap({ x: c.x, y: c.y }, true, 30, cap);
-    await sleep(800);
-    return c;
-  }
-  /** Rest frame: cursor stays parked at its last spot — the pointer never
-   *  blinks out between click → hold → glide. Null only before first move. */
-  async function rest(cap, delay = 170) {
-    await snap(lastMouse, false, delay, cap);
-  }
-  return { box, center, snap, glideTo, moveSnap, typeSnap, clickSnap, rest };
-}
-
 export async function saveManifest(recordingRoot, manifest) {
+  const entry = Object.entries(demos).find(([, demo]) => demo.asset === manifest.name);
+  if (!entry) throw new Error('Unknown showcase asset: ' + manifest.name);
+  if (!manifest.frames?.length) throw new Error('Cannot save an empty recording');
+  for (const frame of manifest.frames) {
+    if (frame.cap && !manifest.captions?.[frame.cap]) throw new Error('Missing caption: ' + frame.cap);
+  }
+  manifest = { ...manifest, schemaVersion: 1, feature: entry[0], delayUnit: 'ms',
+    viewport: { width: AW, height: AH }, canvas: { FW: layout.width, FH: layout.height },
+    count: manifest.frames.length };
   await writeFile(join(recordingRoot, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  await writeFile(resolve('.cache/showcase', entry[0] + '-latest.json'), JSON.stringify({ dir: recordingRoot }, null, 2));
   console.log(`Recorded ${manifest.name}: ${manifest.count} frames -> ${recordingRoot}`);
 }
 
 export async function closeApp(application, fixtureRoot) {
   try { await application?.close(); } catch {}
-  await rm(fixtureRoot, { recursive: true, force: true }).catch(() => {});
+  if (!fixtureRoot) return;
+  const target = resolve(fixtureRoot);
+  const temp = resolve(tmpdir());
+  if (parse(target).dir !== temp || !parse(target).base.startsWith('janusx-')) {
+    throw new Error('Refusing fixture cleanup outside the JanusX TEMP directory: ' + target);
+  }
+  await rm(target, { recursive: true, force: true });
 }
 
 /** Wrap a record main(): error shot + cleanup. Returns recordingRoot on success. */

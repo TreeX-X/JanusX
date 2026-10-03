@@ -3,6 +3,7 @@ import type { WorkContract } from '@janus-agent/harness-core'
 import type { NoteReadSnapshot, NoteSourceRead } from '../notes'
 
 export const HARNESS_COMMAND_CHANNELS = {
+  noteChatChanges: 'harness:note:chat-changes',
   noteRead: 'harness:note:read',
   resolve: 'harness:resolve',
   projectGraph: 'harness:project-graph',
@@ -365,6 +366,7 @@ export interface HarnessAPI {
   runReview(cwd: string, input: HarnessRunReviewInput): Promise<HarnessRunReviewResult>
   runFinish(cwd: string, runId: string): Promise<{ receiptId: string; completed: boolean }>
   runRepair(cwd: string, input: HarnessRunRepairInput): Promise<{ attempt: number; state: string }>
+  noteChatChanges(cwd: string, conversationId: string): Promise<import('../note-chat').NoteChatChange[]>
   undoPreview(cwd: string, txId?: string): Promise<HarnessUndoPreview>
   undoApply(cwd: string, txId?: string): Promise<HarnessUndoResult>
   migratePreview(cwd: string, blueprintId: string): Promise<HarnessMigrationPreview>

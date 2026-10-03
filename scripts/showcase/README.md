@@ -1,48 +1,97 @@
-# JanusX 演示录制工具链（showcase v3）
+# README 功能演示录制
 
-真实应用实录：打包前 `out/` + Playwright 驱动真实鼠标，只产出 raw 帧 + manifest；合成时叠加米色 1080P 虚拟背景 + 标准虚拟鼠标 + 步骤字幕，输出 `wiki/assets` 成品。
+一个功能对应一个 `record-*.mjs`：示例数据、操作步骤、断言和字幕都放在该脚本里。所有功能共用启动、鼠标、背景和 GIF 合成逻辑。脚本驱动真实 Electron 应用，截图中保留真实界面；虚拟鼠标和字幕在合成阶段叠加。
 
-旧链路（`scripts/capture-product.mjs` / `scripts/encode-product-gifs.mjs` / `showcase-pilot*.mjs`）已按需求直接删除，不归档。
+## 功能与入口
 
-## 文件
+运行 `npm run showcase -- list` 可查看完整映射。成品位于 `wiki/assets/showcase/`。
 
-| 文件 | 用途 |
-|---|---|
-| `showcase-lib.mjs` | 合成公共库：米色 1080P 虚拟背景（纸面渐变 + 网格 + 印章点缀）、墨线卡片 + 硬阴影、标准虚拟鼠标（白箭头 + 点击红圈）、字幕条、双线性重采样、共享调色板 GIF 组装。画布 `1920×1080`，应用卡 `1760×884`，底部字幕区 |
-| `showcase-caption.html` | 字幕条模板（Chromium 实渲染，保证中文清晰），分屏用 c1…c5 |
-| `record-split-quad.mjs` | 分屏正式录制：左侧工作区展开 → claude/codex/opencode/pi 四终端 → 拖拽田字格 → 调分隔线。只产出 `.cache/showcase-split-quad/session-*/frames` + `manifest.json`（含鼠标轨迹） |
-| `compose.mjs` | 统一合成：读 manifest（默认 `.cache/showcase-split-quad/latest.json`），输出 `wiki/assets/<out>.gif/png`（`--out`，默认 `terminal-split`） |
-| `probe-models.mjs` | 工具：opencode `/models` 探针，查模型 ID 用 |
+| 功能 ID | 独立脚本 | GIF / PNG 文件名 |
+| --- | --- | --- |
+| `hero` | `record-hero.mjs` | `hero-planche` |
+| `worktree` | `record-worktree.mjs` | `feature-worktree` |
+| `session` | `record-session.mjs` | `feature-session` |
+| `filetree` | `record-filetree.mjs` | `feature-filetree` |
+| `split` | `record-split-quad.mjs` | `feature-split` |
+| `browser` | `record-browser.mjs` | `feature-browser` |
+| `markdown` | `record-markdown.mjs` | `feature-markdown` |
+| `blueprint` | `record-blueprint.mjs` | `feature-blueprint` |
+| `island` | `record-island.mjs` | `feature-island` |
+| `product` | `record-product.mjs` | `feature-product` |
 
-## 前置条件
+`hero` 是总览，其余九项对应 README 基础功能。`probe-models.mjs` 是手动诊断工具，不是功能录制入口。
 
-- 构建：`out/main/index.js` 可启动（需 sibling `janus-agentX` 完整；否则用 `release/<ver>/win-unpacked/JanusX.exe` 并改 record 脚本的 launch）
-- Playwright 浏览器已安装（`npx playwright install chromium`，字幕渲染用）
-- GIF 工具装在仓库外：`%TEMP%\opencode\giftools`（`pngjs gifenc`），**禁止在仓库内 npm install**
-- 四 CLI 已安装且本机有登录态：`claude / codex / opencode / pi`（录制复用登录态到一次性 fixture，**零模型调用**，跑完删除 fixture）
+## 准备与运行
 
-## 录制规范（v3）
-
-- 输出：`1920×1080` 满幅；视口 `1760×884` 与应用卡 1:1，免重采样最清晰
-- 帧率：运动段约 12fps（delay 8–10）；静止段单帧长延迟（delay 100–150），不占体积
-- 缓动：指向 `easeOutExpo`；拖拽 `easeInOutQuad`；打字不用于演示（零模型调用）
-- 节奏：建立定格 1.0s → glide → 悬停 0.45s → 点击（红圈）→ 结果定格 1.2–1.8s
-- 字幕：底部干净区，Chromium 实渲染 chip，单条 ≤16 字
-- 左侧工作区全程展开：侧栏 + 终端列表不许收起，c1 定格需同时看到工作区与四终端
-- 终端就绪：先过首屏（claude 主题→文件夹信任 `↓+Enter`；codex 信任 `Enter`；opencode 等 logo；pi 等 prompt），`textContent` 轮询 settle（`innerText` 对隐藏 pane 返回空）
-- 模型 pin 死：fixture `opencode.json` 写 `"model": "opencode-go/gpt-6-luna"`
-- 凭证：仅复用本机登录态到一次性 fixture，跑完删除；凭证文件永不提交
-- 已知噪音：PowerShell 会在仓库下写 `Microsoft/ModuleAnalysisCache`，录制前删掉
-
-## 运行
+先按根 README 安装项目依赖，再执行 `npm run build`，确保 `out/main/index.js` 是需要录制的版本。合成还需要 Playwright Chromium，以及安装在仓库外的 `pngjs`、`gifenc`：
 
 ```powershell
-node scripts/showcase/record-split-quad.mjs
-node scripts/showcase/compose.mjs            # --manifest <dir> --out terminal-split
+npx playwright install chromium
+npm install --prefix "$env:TEMP/opencode/giftools" --no-save pngjs gifenc
 ```
 
-## 新增演示
+默认从系统临时目录的 `opencode/giftools` 读取编码工具；其他位置可设置 `SHOWCASE_GIFTOOLS` 为包含 `node_modules` 的目录。录制应用本身不依赖这些编码工具，浏览器演示的原生视图截图合成除外。
 
-1. 复制 `record-split-quad.mjs` 为 `record-<功能>.mjs`，按「建立 → 指向 → 悬停 → 点击 → 定格」写节拍，鼠标轨迹写入 manifest
-2. 字幕加进 `showcase-caption.html`
-3. `compose.mjs --out <功能>` 出成品，逐张验货
+```powershell
+# 只更新一个功能：录制并合成
+npm run showcase -- build product
+
+# 多个功能按顺序独立运行
+npm run showcase -- build browser markdown
+
+# 分开执行，调整背景或鼠标后无需重录
+npm run showcase -- record product
+npm run showcase -- compose product
+
+# 直接使用独立脚本也会更新该功能的 latest 指针
+node scripts/showcase/record-product.mjs
+
+# 指定录制目录、另存成品；参数支持空格或等号
+node scripts/showcase/compose.mjs --manifest .cache/showcase/product-xxxxxx --out showcase/product-review --tempo 0.8
+```
+
+原始帧和包含字幕、鼠标位置的 `manifest.json` 保存在 `.cache/showcase/<功能>-<随机后缀>/`。成功录制才更新 `.cache/showcase/<功能>-latest.json`；失败返回非零退出码，`build` 随即停止，不会拿旧帧合成。合成只写指定功能的 GIF 与末帧 PNG。旧版缺少字幕的 manifest 需重新录制，已提交 GIF 不受影响。
+
+各录制实例使用独立的临时用户目录。涉及 CLI 的脚本需要对应 CLI 已安装；`split` 需要 Claude、Codex、OpenCode、Pi，`session` 需要 Claude。现有 `seedFixture` 会复制本机 Claude / OpenCode 登录文件到临时目录，结束后清理。`product` 只用本地文件和 Shell，不复制登录文件，也不调用模型。蓝图默认只输入和悬停；显式设置 `JANUSX_LIVE_MAINTENANCE=1` 才会借用本机模型配置并发送真实请求。
+
+## 调整公共参数
+
+修改 [showcase-config.mjs](showcase-config.mjs)：
+
+| 参数 | 控制内容 | 是否需要重录 |
+| --- | --- | --- |
+| `style.background` | 背景上下颜色、光晕、网格、暗角 | 否，重新合成 |
+| `style.cursor` | 鼠标尺寸、填充、描边、点击圈半径 | 否，重新合成 |
+| `style.ink / accent / misprint` | 外框、字幕与强调色 | 否，重新合成 |
+| `style.theme` | 应用主题 | 是 |
+| `timing` | 运动帧时长、悬停、点击、定格、逐字输入、移动步数 | 是 |
+| 合成参数 `--tempo` | 整段播放延时倍数，`0.8` 更快，`1.2` 更慢 | 否 |
+
+画布采用固定的 `1920×1080` 排版，应用视口 `1760×884`。`layout` 集中保存尺寸和落点；改变比例还需同步背景装饰与字幕区域布局。
+
+`record-motion.mjs` 的延时参数以 **百分之一秒** 为单位，`timing.motion=4` 表示 40ms（运动约 25fps），`timing.hold=120` 表示 1.2 秒。manifest 的 `delay` 与 GIF 编码器统一使用 **毫秒**。应用等待用真实毫秒，等待界面就绪不会自动变成视频停顿。脚本里的显式节奏参数是该功能的局部覆盖；单独覆盖整套默认值可传 `snapper(page, rawDir, frames, shot, { hold: 160 })`。
+
+## 修改一个功能
+
+在对应脚本修改 `captions` 和操作序列。字幕与原始帧一起写入 manifest，重合成不读取别的功能脚本；`showcase-caption.html` 只负责字幕样式。
+
+共享的 `snapper` 提供：
+
+- `clickSnap(locator, caption, { double: true })`：移动、悬停、点击、退去点击圈；省略第三个参数为单击。
+- `typeSnap(locator, text, caption)`：聚焦后逐字输入，支持中文。
+- `dragTo(x1, y1, x2, y2, steps, caption)`：连续移动到起点、按下、缓动拖拽、释放。
+- `rest(caption)`：在当前位置定格，保留鼠标。
+- `glideTo(...) / snap(...)`：需要特殊镜头时使用；后续移动从上一帧的实际鼠标位置开始。
+
+按「定位 → 操作 → 等待真实结果 → 定格」编排；关键步骤用 Playwright 断言验证，避免录到空面板仍报告成功。浏览器脚本通过 `shot` 参数补拍 WebContentsView，其他功能默认使用 renderer 截图。合成按时间线采样共享调色板，并逐帧编码，避免同时保留所有 1080p 原始图。
+
+新增功能时创建一个 `record-<功能>.mjs`，在 `demos` 注册唯一脚本与产物文件名，然后补 README 引用。保存 manifest 时必须提供匹配的 `name`、`captions`、`frames`；`saveManifest` 校验字幕与功能映射，并补齐尺寸、数量和单位。
+
+## 验证
+
+```powershell
+npm run test:showcase
+npm run showcase -- build product
+```
+
+第一条验证鼠标连续性、点击拼接、中文输入、拖拽释放和延时单位；第二条在真实应用中验证文件提醒、HTML 交互、拖宽预览、JSON 结果、多标签切换和重新加载，并生成 GIF / PNG。录制后仍需查看成品，检查文字可读性与节奏。

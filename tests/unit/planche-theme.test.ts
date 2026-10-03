@@ -307,7 +307,9 @@ describe('planche theme contract', () => {
     expect(select).not.toMatch(/linear-gradient/)
     // 模型菜单 / 作者行纸面化
     expect(island).toContain("[data-theme='planche'] .janus-island-shell[data-stage='expanded'][data-view='chat'] .janus-chat-model-menu {")
-    expect(island).toContain("[data-theme='planche'] .janus-island-shell[data-stage='expanded'][data-view='chat'] .janus-chat-message-author {")
+    const chat = read('components/janus/styles/03-janus-chat-core.css')
+    expect(chat).toMatch(/\.janus-chat-message-author\s*\{\s*color:\s*var\(--shell-muted\)/)
+    expect(chat).toMatch(/\.janus-chat-message\.assistant \.janus-chat-message-author\s*\{\s*color:\s*var\(--shell-accent\)/)
   })
 
   it('routes the workspace ⋯ menu through theme tokens', () => {

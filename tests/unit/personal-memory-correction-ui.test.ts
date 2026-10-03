@@ -4,12 +4,14 @@ import { build } from 'esbuild'
 
 let browser: Browser
 let script: string
+// Note: commit fixture activation transitions before asserting refresh — see .agents/notes/2026-09-20-reproducible-verification--914a7e92.md
 beforeAll(async () => {
   browser = await chromium.launch({ headless: true })
   const result = await build({
     stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
       import React from 'react'
       import {createRoot} from 'react-dom/client'
+      import {flushSync} from 'react-dom'
       import i18n from 'i18next'
       import {initReactI18next} from 'react-i18next'
       import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'
@@ -22,7 +24,7 @@ beforeAll(async () => {
         proposePersonalMemoryCorrection:async input=>{window.calls.push(input);if(window.mode==='stale')throw Error('Personal correction target changed');if(window.defer)await new Promise(resolve=>window.finish=resolve);return {candidateId:'correction',status:window.mode}}
       }}
       const root=createRoot(document.getElementById('root'))
-      window.renderActive=active=>root.render(<UserPersonaTool active={active}/>)
+      window.renderActive=active=>flushSync(()=>root.render(<UserPersonaTool active={active}/>))
       window.unmount=()=>root.render(null)
       i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge}},interpolation:{escapeValue:false}}).then(()=>window.renderActive(true))
     ` },

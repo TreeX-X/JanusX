@@ -1,0 +1,12 @@
+.activity { display: grid; gap: 12px; min-width: 0; }
+.card { padding: 12px; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-card); color: var(--shell-text); font-size: 12px; line-height: 1.6; }
+.card p { margin: 6px 0; }
+.card ul { padding-left: 20px; }
+.card summary { cursor: pointer; padding: 6px 0; }
+.card button { margin-top: 8px; padding: 5px 9px; color: inherit; background: var(--shell-chrome-raised); border: 1px solid var(--shell-border); border-radius: 4px; cursor: pointer; }
+.card button:disabled { opacity: .5; cursor: default; }
+.card button:focus-visible { outline: 2px solid var(--shell-accent); }
+.card pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; font-size: 11px; }
+.diff { display: grid; gap: 8px; }
+.diff pre { margin: 0; padding: 8px; border-left: 2px solid var(--shell-diff-del); }
+.diff pre + pre { border-left-color: var(--shell-accent); }

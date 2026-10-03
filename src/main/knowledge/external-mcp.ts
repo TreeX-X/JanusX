@@ -72,7 +72,7 @@ function defaultServerEntry(): { entry: string; isPackaged: boolean } {
     // Packaged builds keep main output unpacked-adjacent; existence is still
     // verified by the caller so a missing entry reports honestly.
     ? join(process.resourcesPath, 'app.asar.unpacked', 'out', 'main', 'knowledge-mcp.js')
-    : join(app.getAppPath(), 'out', 'main', 'knowledge-mcp.js')
+    : join(process.env.JANUSX_DEV_BUILD_ROOT ?? join(app.getAppPath(), 'out'), 'main', 'knowledge-mcp.js')
   return { entry, isPackaged }
 }
 

@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HarnessNoteService } from '../../src/main/harness/service'
 import {
   applyMaintenanceSelection,
+  applyPreparedMaintenanceSelection,
+  prepareMaintenanceSelection,
   assertHarnessScope,
   resolveProjectCheckout,
 } from '../../src/main/harness/maintenance-apply'
@@ -104,6 +106,42 @@ function updateTitleOp(nodeId: string, title: string, operationId = 'm-update-1'
 }
 
 describe('maintenance harness apply wiring (S6-c slice 2b)', () => {
+  it('previews real files without writing and applies the exact prepared bytes and created identity', async () => {
+    const svc = new HarnessNoteService()
+    const root = await makeRoot()
+    roots.push(root)
+    const operations: BlueprintOperation[] = [updateTitleOp(REQ, 'Reviewed heading'), {
+      operationId: 'new', type: 'create-node', tempNodeId: 'new-note', parentId: REQ,
+      after: { title: 'Reviewed idea', type: 'issue', description: 'A reviewed idea.', positioning: '', techSolution: '', notes: '', tags: [] },
+      reason: 'Record the idea', evidenceRefs: [], dependsOn: [], risk: 'low',
+    }]
+    const prepared = await prepareMaintenanceSelection(svc, { root, repoId: REPO, operations, taskId: 'preview', changeSetVersion: 1, reason: 'Review' })
+    expect(prepared.files).toHaveLength(2)
+    expect(prepared.files[0]).toMatchObject({ path: '.agents/notes/2026-09-17-req--11111111.md', before: REQUIREMENT_MD })
+    expect((await fs.readdir(join(root, '.agents/notes')))).toHaveLength(2)
+    expect((await svc.readNote(root, REQ)).raw).toBe(REQUIREMENT_MD)
+    const result = await applyPreparedMaintenanceSelection(svc, prepared)
+    expect(result.createdNodeIds['new-note']).toBe(prepared.bridge.createdNodeIds['new-note'])
+    for (const file of prepared.files) expect(await fs.readFile(join(root, file.path), 'utf8')).toBe(file.after)
+  })
+
+  it('refuses preview drift or cancellation before applying any selected file', async () => {
+    const svc = new HarnessNoteService()
+    const root = await makeRoot()
+    roots.push(root)
+    const prepared = await prepareMaintenanceSelection(svc, {
+      root, repoId: REPO, operations: [updateTitleOp(REQ, 'Reviewed'), updateTitleOp(TASK, 'Other', 'other')],
+      taskId: 'preview', changeSetVersion: 1, reason: 'Review',
+    })
+    await expect(applyPreparedMaintenanceSelection(svc, prepared, () => { throw new Error('Cancelled workspace') })).rejects.toThrow('Cancelled workspace')
+    expect((await svc.readNote(root, REQ)).raw).toBe(REQUIREMENT_MD)
+    const changed = REQUIREMENT_MD.replace('The widget fails.', 'Edited externally.')
+    await fs.writeFile(join(root, prepared.files[0].path), changed)
+    await expect(applyPreparedMaintenanceSelection(svc, prepared)).rejects.toThrow('HARNESS_CONFLICT')
+    expect((await svc.readNote(root, TASK)).raw).toBe(TASK_MD)
+    expect(await fs.readFile(join(root, prepared.files[0].path), 'utf8')).toBe(changed)
+  })
+
   it('applies an update plus a create through one transaction with created ids', async () => {
     const svc = new HarnessNoteService()
     const root = await makeRoot()

@@ -5,6 +5,7 @@ import type {
   ProviderSettings,
 } from '@janusx/llm-core'
 import type { KnowledgeRecallTrace } from '../knowledge'
+import type { BlueprintMaintenanceTask } from '../janus/maintenance-types'
 
 export const LLM_CHANNELS = {
   getTerminalProviders: 'llm:get-terminal-providers', saveTerminalProvider: 'llm:save-terminal-provider',
@@ -30,6 +31,9 @@ export interface ChatWorkspaceResource {
   agentSessionId: string
 }
 export interface ChatRequest {
+  contextCheckpoint?: import('../chat-context').ChatContextCheckpoint
+  contextEpoch?: number
+  compact?: { keepRecentUnits: number }
   messages: ChatMessage[]; providerId: string; modelId?: string; sourceTag?: 'janus-chat'; conversationId?: string; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[]
   /** Compact trace of tool calls from earlier turns, replayed into the model's context. */
   toolTraces?: ChatToolTraceEntry[]
@@ -40,6 +44,7 @@ export interface ChatRequest {
   domain?: 'personal' | 'project'
   /** Renderer selection request only; the host resolves URIs and never trusts paths/grants from here. */
   noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
+  noteWorkingSet?: string
   maintenanceTaskId?: string
 }
 export interface ChatStreamRequest extends ChatRequest { requestId: string }
@@ -91,6 +96,10 @@ export interface ChatAnswerQuestionPayload {
  * Note: alignment trade-offs live with the contract — see .agents/notes/2026-09-12-janus-agent-chat-alignment--6813a52b.md
  */
 export type ChatAgentEvent =
+  | { type: 'context_state'; requestId: string; state: import('../chat-context').ChatContextStatus }
+  | { type: 'note_change'; requestId: string; change: import('../note-chat').NoteChatChange }
+  | { type: 'note_focus'; requestId: string; focus: import('../note-chat').NoteFocusEvent }
+  | { type: 'maintenance_result'; requestId: string; task: BlueprintMaintenanceTask }
   | { type: 'agent_start'; requestId: string }
   | { type: 'text_delta'; requestId: string; delta: string }
   | { type: 'reasoning_delta'; requestId: string; delta: string }

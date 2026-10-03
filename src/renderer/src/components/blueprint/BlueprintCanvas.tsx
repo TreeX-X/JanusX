@@ -44,12 +44,15 @@ import { useBlueprintDetailPortal } from './blueprintDetailPortal'
 import { useAnimatedOpen } from '@/components/shared/CardFrame'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
 import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
+import { useNoteCanvasFocus } from '@/features/blueprint/useNoteCanvasFocus'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
-import { collectLocalHierarchyIds, computeInitialCollapsedIds, groupRootsByConnectivity, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
+import { buildEffectiveHierarchy, collectLocalHierarchyIds, computeInitialCollapsedIds, groupRootsByConnectivity, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 import { buildNodeSearchText, nodeMatchesFocus, normalizeSearchText } from '@/features/blueprint/blueprint-focus'
 import { useI18n } from '@/i18n/useI18n'
 import { NoteWikiPanel } from './NoteWikiPanel'
 import { BlueprintCompositionPanel } from './BlueprintCompositionPanel'
+import { projectArchitecture, type BlueprintViewMode } from '@/features/blueprint/architecture-view'
+import { BlueprintViewSelector, BlueprintArchitecturePanel } from './BlueprintArchitecturePanel'
 import { nodeNoteSnapshot, resolveCompositionNote } from '@/features/blueprint/composition-view'
 
 const EMPTY_NODE_IDS: ReadonlySet<string> = new Set()
@@ -113,7 +116,8 @@ function BlueprintDetailMount({ target, children }: { target: HTMLDivElement | n
 
 export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, onRegisterFlush }: BlueprintCanvasProps) {
   const { t } = useI18n('blueprint')
-  const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
+  const sourceBlueprint = useBlueprintStore((s) => s.currentBlueprint)
+  const architecture = useMemo(() => sourceBlueprint ? projectArchitecture(sourceBlueprint) : null, [sourceBlueprint])
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
@@ -134,6 +138,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   // 统一顶栏（workbench）存在时过滤走 provider 受控；embedded 无 provider 时走本地态。
   const toolbarState = useOptionalBlueprintToolbar()
+  const [innerViewMode, setInnerViewMode] = useState<BlueprintViewMode | null>(null)
+  const requestedViewMode = toolbarState?.viewMode ?? innerViewMode
+  const setViewMode = toolbarState?.setViewMode ?? setInnerViewMode
+  const structureMode = requestedViewMode === 'structure' || (requestedViewMode === null && !!architecture?.graph.nodeIds.length)
+  const currentBlueprint = structureMode ? architecture?.graph ?? null : sourceBlueprint
+  const viewKey = blueprintId + (structureMode ? ':structure' : ':notes')
+  useEffect(() => { setInnerViewMode(null) }, [blueprintId])
   const [innerSearchQuery, setInnerSearchQuery] = useState('')
   const [innerStatusFilter, setInnerStatusFilter] = useState<StatusFilter>('all')
   const [innerKindFilter, setInnerKindFilter] = useState<KindFilter>('all')
@@ -178,13 +189,14 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const initialFitBlueprintRef = useRef<string | null>(null)
   const detailOpenRef = useRef<boolean | null>(null)
   const collapseInitRef = useRef<string | null>(null)
+  const pendingSourceRevealRef = useRef<string[]>([])
   const detailInitRef = useRef<string | null>(null)
 
   const workspaceNameById = useMemo(
     () => Object.fromEntries(workspaces.map((w) => [w.id, w.name])),
     [workspaces]
   )
-  const activeDetailNode = currentBlueprint && detailNodeId ? currentBlueprint.nodes[detailNodeId] ?? null : null
+  const activeDetailNode = sourceBlueprint && detailNodeId ? sourceBlueprint.nodes[detailNodeId] ?? null : null
   // Detail exit keeps the last node rendered while the slide-out plays; the
   // slot track / open signal follow the display value so the layout collapses
   // right after the content is gone (sequential, no pop).
@@ -192,13 +204,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const leavingNodeRef = useRef<typeof activeDetailNode>(null)
   if (activeDetailNode) leavingNodeRef.current = activeDetailNode
   const detailNode = activeDetailNode ?? (detailAnim.rendered ? leavingNodeRef.current : null)
-  const detailSnapshot = currentBlueprint && detailNode ? nodeNoteSnapshot(currentBlueprint, detailNode.id) : undefined
+  const detailSnapshot = sourceBlueprint && detailNode ? nodeNoteSnapshot(sourceBlueprint, detailNode.id) : undefined
   const selectCompositionNode = (id: string): void => {
     setSearchQuery(''); setStatusFilter('all'); setKindFilter('all'); setLocalFocusActive(false)
     setCollapsedNodeIds(new Set()); setSelectedId(id); setDetailNodeId(id); onNodeOpen?.(id)
   }
   const detailInCanvas = Boolean(detailNode && !detailPortal)
-  const selectedNode = currentBlueprint && selectedId ? currentBlueprint.nodes[selectedId] ?? null : null
+  const selectedNode = sourceBlueprint && selectedId ? sourceBlueprint.nodes[selectedId] ?? null : null
   /** 详情展示 note 原始词汇（HTML 高保真同构；legacy 缺透传时回退映射标签） */
   const detailKind = detailNode ? noteKindOf(detailNode) : ''
   const initialCollapsedNodeIds = useMemo(
@@ -214,12 +226,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const canvasLoadPlan = useMemo(() => {
     if (!currentBlueprint || currentBlueprint.id !== blueprintId) return null
     return {
-      blueprintId: currentBlueprint.id,
-      collapsedNodeIds: collapseInitRef.current === currentBlueprint.id
+      blueprintId: viewKey,
+      collapsedNodeIds: collapseInitRef.current === viewKey
         ? collapsedNodeIds
         : initialCollapsedNodeIds,
     }
-  }, [blueprintId, collapsedNodeIds, currentBlueprint, initialCollapsedNodeIds])
+  }, [blueprintId, collapsedNodeIds, currentBlueprint, initialCollapsedNodeIds, viewKey])
   const emptyCollapsedNodeIds = useMemo(() => new Set<string>(), [])
   const effectiveCollapsedNodeIds = useMemo(
     () => canvasLoadPlan?.collapsedNodeIds ?? emptyCollapsedNodeIds,
@@ -257,7 +269,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       currentBlueprint.composition?.interfaces ?? [],
     ).isolatedRootIds)
   }, [currentBlueprint])
-  const hiddenNodeIds = hideIsolated && !searchFilterActive ? isolatedIds : EMPTY_NODE_IDS
+  const hiddenNodeIds = !structureMode && hideIsolated && !searchFilterActive ? isolatedIds : EMPTY_NODE_IDS
   useEffect(() => setMatchIndex(0), [searchMatchKey])
   const detailWorkspaceMissing = !!detailNode?.workspaceId && !workspaceNameById[detailNode.workspaceId]
   const latestAnalysis = detailNode?.analyses?.length
@@ -293,30 +305,41 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   }, [])
 
   const persistCollapsedNodeIds = useCallback(async (nodeIds: Set<string>) => {
+    if (structureMode) return
     const cwd = useBlueprintStore.getState().workspacePathFor(blueprintId)
     if (!cwd) throw new Error('找不到该图谱所属的工作区')
     const updated = await updateBlueprintIPC(cwd, blueprintId, {
       collapsedNodeIds: [...nodeIds]
     })
     if (!updated) throw new Error('Failed to persist blueprint collapse state')
-  }, [blueprintId])
+  }, [blueprintId, structureMode])
 
   // 没有历史状态时才按层级预折叠；保存空数组代表用户选择全部展开。
   useEffect(() => {
     if (!currentBlueprint || currentBlueprint.id !== blueprintId) return
-    if (collapseInitRef.current === currentBlueprint.id) return
-    collapseInitRef.current = currentBlueprint.id
+    if (collapseInitRef.current === viewKey) return
+    collapseInitRef.current = viewKey
     const persistedCollapsedNodeIds = currentBlueprint.collapsedNodeIds
     const nextCollapsedNodeIds = persistedCollapsedNodeIds === null || persistedCollapsedNodeIds === undefined
       ? initialCollapsedNodeIds
       : new Set(persistedCollapsedNodeIds)
+    if (!structureMode && pendingSourceRevealRef.current.length) {
+      const { parentById } = buildEffectiveHierarchy(currentBlueprint.nodes)
+      for (const id of pendingSourceRevealRef.current) {
+        const seen = new Set<string>()
+        let parent = parentById.get(id)
+        while (parent && !seen.has(parent)) { seen.add(parent); nextCollapsedNodeIds.delete(parent); parent = parentById.get(parent) }
+      }
+      pendingSourceRevealRef.current = []
+      setHideIsolated(false)
+    }
     setCollapsedNodeIds(nextCollapsedNodeIds)
     if (persistedCollapsedNodeIds === null || persistedCollapsedNodeIds === undefined) {
       void persistCollapsedNodeIds(nextCollapsedNodeIds).catch((error: unknown) => {
         setActionError(error instanceof Error ? error.message : String(error))
       })
     }
-  }, [currentBlueprint, blueprintId, initialCollapsedNodeIds, persistCollapsedNodeIds])
+  }, [currentBlueprint, blueprintId, initialCollapsedNodeIds, persistCollapsedNodeIds, viewKey, structureMode, setHideIsolated])
 
   useEffect(() => () => {
     if (fitFrameRef.current !== null) cancelAnimationFrame(fitFrameRef.current)
@@ -335,6 +358,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   } = useBlueprintGraphController({
     blueprint: currentBlueprint,
     blueprintId,
+    viewKey,
+    persistLayout: !structureMode,
     workspaceNameById,
     focusedNodeIds,
     focusActive,
@@ -360,6 +385,26 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     return () => onRegisterFlush?.(() => Promise.resolve(true))
   }, [flushLayoutSave, onRegisterFlush])
   const graphReady = !currentBlueprint || currentBlueprint.nodeIds.length === 0 || rfNodes.length > 0
+  const ownerPath = useBlueprintStore(state => state.blueprintWorkspace[blueprintId] ?? null)
+  const revealAssistantNodes = useCallback((ids: string[]) => {
+    if (!sourceBlueprint) return
+    if (ids.some(id => !currentBlueprint?.nodes[id])) {
+      pendingSourceRevealRef.current = ids
+      setViewMode('notes')
+    }
+    const { parentById } = buildEffectiveHierarchy(sourceBlueprint.nodes)
+    setCollapsedNodeIds(previous => {
+      const next = new Set(previous)
+      for (const id of ids) {
+        let parent = parentById.get(id)
+        const seen = new Set<string>()
+        while (parent && !seen.has(parent)) { seen.add(parent); next.delete(parent); parent = parentById.get(parent) }
+      }
+      return next
+    })
+    if (ids.some(id => isolatedIds.has(id))) setHideIsolated(false)
+  }, [currentBlueprint, sourceBlueprint, isolatedIds, setHideIsolated, setViewMode])
+  const assistantCanvas = useNoteCanvasFocus(sourceBlueprint, ownerPath, rfNodes, rfEdges, rfInstanceRef, revealAssistantNodes)
 
   useEffect(() => {
     if (!canvasLoadPlan || !rfInstanceRef.current || !rfNodes.length) return
@@ -437,7 +482,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       setActionError(error instanceof Error ? error.message : String(error))
     })
   }, [effectiveCollapsedNodeIds, persistCollapsedNodeIds])
-  const cardActions = useMemo(() => ({ toggleCollapse }), [toggleCollapse])
+  const cardActions = useMemo(() => ({ toggleCollapse, structureMode, architectureRoles: architecture?.roles }), [toggleCollapse, structureMode, architecture?.roles])
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
     (_e, node) => {
@@ -510,8 +555,9 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   )
   return (
     <div className={`blueprint-canvas-wrapper${detailInCanvas ? ' blueprint-canvas-wrapper--detail-open' : ''}`}>
-      <div ref={canvasMainRef} className="blueprint-canvas-main" data-graph-ready={graphReady ? 'true' : 'false'}>
+      <div ref={canvasMainRef} className="blueprint-canvas-main" data-graph-ready={graphReady ? 'true' : 'false'} onPointerDownCapture={assistantCanvas.onPointerDown} onWheelCapture={assistantCanvas.onWheel}>
       {/* 画布操作工具栏（embedded 保留；workbench 已收敛到顶栏统一栏，此处不再渲染） */}
+      {!toolbarState && <BlueprintViewSelector value={structureMode ? 'structure' : 'notes'} available={!!architecture?.graph.nodeIds.length} onChange={setViewMode} />}
       {toolbarState ? null : (
       <div className="blueprint-toolbar blueprint-toolbar--canvas">
         <div className="blueprint-toolbar__main">
@@ -588,7 +634,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               <button className="blueprint-btn" onClick={fitView} title={t('blueprint:action.fitCanvas')}>
                 {t('blueprint:action.fitCanvas')}
               </button>
-              {isolatedCount > 0 && (
+              {!structureMode && isolatedCount > 0 && (
                 <button
                   className={`blueprint-btn blueprint-toolbar__toggle${hideIsolated ? ' blueprint-toolbar__toggle--active' : ''}`}
                   onClick={() => setHideIsolated((visible) => !visible)}
@@ -601,7 +647,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               <button className="blueprint-btn" onClick={() => loadBlueprint(blueprintId)} title={t('blueprint:action.replayLoading')}>
                 {t('blueprint:action.replayLoading')}
               </button>
-              {layoutSaveStatus !== 'clean' ? (
+              {structureMode ? <span className="blueprint-toolbar__save-status">{t('blueprint:action.autoLayout')}</span> : layoutSaveStatus !== 'clean' ? (
                 <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${layoutSaveStatus}`}>
                   {layoutSaveStatus === 'saving' ? '保存中…' : layoutSaveStatus === 'pending' ? '待保存' : layoutSaveStatus === 'failed' ? '保存失败' : '已保存'}
                 </span>
@@ -692,13 +738,14 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       </div>
       )}
 
+      {sourceBlueprint && architecture && (structureMode || architecture.diagnostics.length > 0) && <div className="bp-architecture-overview"><BlueprintArchitecturePanel source={sourceBlueprint} projection={architecture} onSelect={selectCompositionNode} /></div>}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
       {toolbarState && actionError && <div className="blueprint-canvas-error" role="alert">{actionError}</div>}
       {!graphReady ? <div className="blueprint-canvas-loading" aria-live="polite" aria-label={t('blueprint:toolbar.loading')} /> : null}
       <BlueprintCardActionsContext.Provider value={cardActions}>
       <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
+        nodes={assistantCanvas.nodes}
+        edges={assistantCanvas.edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
@@ -721,7 +768,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         style={{ background: 'transparent' }}
       >
         <Background color={plancheCanvas ? 'rgba(28,52,59,0.16)' : 'rgba(255,255,255,0.05)'} gap={24} />
-        {rfNodes.length <= 250 ? (
+        {!structureMode && rfNodes.length <= 250 ? (
           <MiniMap
             pannable
             zoomable
@@ -733,20 +780,20 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           />
         ) : null}
       </ReactFlow>
-      {currentBlueprint?.composition && <div className="bp-composition-overlay"><BlueprintCompositionPanel blueprint={currentBlueprint} onSelect={selectCompositionNode} /></div>}
+      {!structureMode && currentBlueprint?.composition && <div className="bp-composition-overlay"><BlueprintCompositionPanel blueprint={currentBlueprint} onSelect={selectCompositionNode} /></div>}
       <div className="bp-canvas-legend" aria-hidden="true">
-        {(['planning', 'in-progress', 'done', 'archived'] as const).map((status) => (
+        {(!structureMode ? ['planning', 'in-progress', 'done', 'archived'] as const : []).map((status) => (
           <span key={status}>
             <i className="ld" style={{ background: getBlueprintStatusVisual(status).color }} />
             {t(getBlueprintStatusVisual(status).labelKey)}
           </span>
         ))}
         <span><i style={{ color: 'var(--shell-muted)' }}>━</i> {t('blueprint:legend.parent')}</span>
-        {([
+        {(!structureMode ? [
           { type: 'depends-on', dash: '5 4', labelKey: 'blueprint:maintenance.relationType.dependsOn' },
           { type: 'implements', dash: '2 3', labelKey: 'blueprint:maintenance.relationType.implements' },
           { type: 'related-to', dash: '5 5', labelKey: 'blueprint:maintenance.relationType.relatedTo' },
-        ] as const).map((entry) => (
+        ] as const : []).map((entry) => (
               <span key={entry.type}>
                 <svg width="18" height="6" aria-hidden="true">
                   <line x1="0" y1="3" x2="18" y2="3" strokeWidth="1.5" strokeDasharray={entry.dash} style={{ stroke: 'var(--shell-muted)' }} />
@@ -796,8 +843,9 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
             </button>
           </div>
 
-          {currentBlueprint && <BlueprintCompositionPanel blueprint={currentBlueprint} nodeId={detailNode.id} onSelect={selectCompositionNode} />}
-          {currentBlueprint && detailSnapshot ? (
+          {sourceBlueprint && architecture?.roles[detailNode.id] && <BlueprintArchitecturePanel source={sourceBlueprint} projection={architecture} nodeId={detailNode.id} onSelect={selectCompositionNode} />}
+          {sourceBlueprint && !architecture?.roles[detailNode.id] && <BlueprintCompositionPanel blueprint={sourceBlueprint} nodeId={detailNode.id} onSelect={selectCompositionNode} />}
+          {sourceBlueprint && detailSnapshot ? (
             <NoteWikiPanel
               compact={Boolean(toolbarState)}
               snapshot={detailSnapshot}
@@ -805,10 +853,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               uri={detailNode.sourceUri}
               anchor={wikiAnchor?.uri === detailNode.sourceUri ? wikiAnchor?.value : undefined}
               onRefresh={() => { void loadBlueprint(blueprintId) }}
-              canNavigate={(uri) => !!resolveCompositionNote(currentBlueprint, detailNode.id, uri)}
+              canNavigate={(uri) => !!resolveCompositionNote(sourceBlueprint, detailNode.id, uri)}
               onNavigate={(uri, anchor) => {
-                const targetId = resolveCompositionNote(currentBlueprint, detailNode.id, uri)
-                const target = targetId ? currentBlueprint.nodes[targetId] : undefined
+                const targetId = resolveCompositionNote(sourceBlueprint, detailNode.id, uri)
+                const target = targetId ? sourceBlueprint.nodes[targetId] : undefined
                 if (!target) return
                 setSearchQuery(''); setStatusFilter('all'); setKindFilter('all'); setLocalFocusActive(false)
                 setCollapsedNodeIds(new Set())
@@ -928,7 +976,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               <div className="bp-item-card">
                 <span className="bp-item-card__text">
                   {detailNode.parentId
-                    ? (currentBlueprint?.nodes[detailNode.parentId]?.title || detailNode.parentId)
+                    ? (sourceBlueprint?.nodes[detailNode.parentId]?.title || detailNode.parentId)
                     : t('blueprint:detailPanel.asRoot')}
                 </span>
               </div>

@@ -19,6 +19,7 @@ import { ThinkingRegion } from './ThinkingRegion'
 import { formatThinkingDuration, type ReasoningSnapshot } from './janusReasoning'
 import type { JanusChatStatus, JanusPendingQuestion } from './janusRuntimeState'
 import { Select } from '../ui/Select'
+import { ChatContextIndicator } from './ChatContextIndicator'
 
 type SelectionMenu = 'provider' | 'model' | 'permission'
 type PermissionOption = { value: AgentApprovalMode; label: string }
@@ -82,11 +83,15 @@ interface JanusChatProps {
   minimalComposer?: boolean
   /** Host-owned actions rendered after the discussion, inside its scroll area. */
   discussionFooter?: React.ReactNode
+  /** Host-owned evidence attached to an assistant turn; undefined is the live turn. */
+  renderTurnFooter?: (turnId?: string) => React.ReactNode
   /**
    * Host-owned actions pinned directly above the composer, outside the message
    * scroll area — for anything that must stay reachable while discussing.
    */
   aboveComposer?: React.ReactNode
+  /** Keep the transcript mounted while a host document occupies its space. */
+  messagesHidden?: boolean
   /** Only the focused presentation owns input focus and global shortcuts. */
   focused?: boolean
   /** 当前模式颜色 */
@@ -380,7 +385,9 @@ export function JanusChat({
   discussionOnly = false,
   minimalComposer = false,
   discussionFooter,
+  renderTurnFooter,
   aboveComposer,
+  messagesHidden = false,
   focused = true,
   modeColor,
   messages,
@@ -416,6 +423,7 @@ export function JanusChat({
 }: JanusChatProps) {
   const { t } = useI18n('janus')
   const [input, setInput] = useState('')
+  const [historyPageSize, setHistoryPageSize] = useState(100)
   // Composer auto-grows from content (including soft-wrapped long lines) up to
   // MAX_COMPOSER_HEIGHT, then scrolls internally. Counting '\n' is not enough:
   // a single long line without newlines would stay one row high and overflow.
@@ -1383,6 +1391,7 @@ export function JanusChat({
       <div
         ref={messagesContainerRef}
         className="janus-chat-messages"
+        style={messagesHidden ? { display: 'none' } : undefined}
         onScroll={handleScroll}
       >
         {messages.length === 0 && (
@@ -1391,7 +1400,8 @@ export function JanusChat({
           </div>
         )}
 
-        {[...messages.map((msg) => ({ kind: 'message' as const, timestamp: msg.timestamp, msg })), ...roundtableCards.map((card) => ({ kind: 'card' as const, timestamp: Date.parse(card.updatedAt || card.createdAt) || 0, card })), ...roundtableQuestions.map((block) => ({ kind: 'questions' as const, timestamp: block.timestamp, block}))]
+        {messages.length > historyPageSize && <button type="button" className="janus-chat-load-history" onClick={() => setHistoryPageSize(size => size + 100)}>{t('janus:chat.context.older')}</button>}
+        {[...messages.slice(-historyPageSize).map((msg) => ({ kind: 'message' as const, timestamp: msg.timestamp, msg })), ...roundtableCards.map((card) => ({ kind: 'card' as const, timestamp: Date.parse(card.updatedAt || card.createdAt) || 0, card })), ...roundtableQuestions.map((block) => ({ kind: 'questions' as const, timestamp: block.timestamp, block}))]
           .sort((a, b) => a.timestamp - b.timestamp)
           .map((entry) => entry.kind === 'card' ? (
           <div key={entry.card.id} className="janus-chat-message assistant janus-chat-agent-card-message">
@@ -1526,12 +1536,13 @@ export function JanusChat({
                     collapsible
                   />
                 )}
+                {msg.role === 'assistant' && renderTurnFooter?.(msg.id)}
               </div>
             )}
           </div>
         )})() )}
 
-        {(isStreaming || pendingContent) && (
+        {(isStreaming || pendingContent || (error && liveToolTraces.length > 0)) && (
           <div className="janus-chat-message assistant streaming">
             <div className="janus-chat-message-author">{t('janus:chat.author.assistant')}</div>
             <div className="janus-chat-message-content">
@@ -1548,16 +1559,18 @@ export function JanusChat({
                   </div>
                 )
               )}
-              <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} defaultExpanded />
+              <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} />
+              {renderTurnFooter?.()}
             </div>
           </div>
         )}
 
         {error && (
           <div className="janus-chat-error-card">
+            {isStreaming && <div role="status">{t('janus:chat.recoveringTools')}</div>}
             <div className="janus-chat-error-text">{error}</div>
             <div className="janus-chat-error-actions">
-              <button className="janus-chat-retry" onClick={handleRetry}>
+              <button className="janus-chat-retry" onClick={handleRetry} disabled={isStreaming}>
                 {t('common:action.retry')}
               </button>
             </div>
@@ -1588,6 +1601,7 @@ export function JanusChat({
       ))}
 
       {aboveComposer}
+      <ChatContextIndicator controller={conversations} />
 
       {/* 输入区域：opencode 风格方框 composer；minimal 下加 › 前缀（对齐蓝图高保真） */}
       <div className="janus-chat-input-wrapper" data-has-input={input.length > 0}>

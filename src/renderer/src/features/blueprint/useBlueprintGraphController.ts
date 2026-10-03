@@ -174,6 +174,9 @@ export class BlueprintLayoutSaveController {
 }
 
 interface GraphControllerOptions {
+  /** Derived views cannot overwrite the source overlay. */
+  viewKey?: string
+  persistLayout?: boolean
   blueprint: Blueprint | null
   blueprintId: string
   workspaceNameById: Record<string, string>
@@ -191,6 +194,8 @@ interface GraphControllerOptions {
 export function useBlueprintGraphController({
   blueprint,
   blueprintId,
+  viewKey = blueprintId,
+  persistLayout = true,
   workspaceNameById,
   focusedNodeIds,
   focusActive,
@@ -205,19 +210,15 @@ export function useBlueprintGraphController({
   const [edges, setEdges] = useState<Edge[]>([])
   const [restoreSnapshot, setRestoreSnapshot] = useState<Layout | null>(null)
   const entryMarkFrameRef = useRef<number | null>(null)
-  /** Last derived flow keyed by topologyKey; the card-data effect reuses it. */
-  const flowRef = useRef<{ key: string; nodes: Node<BlueprintNodeData, 'blueprint'>[] } | null>(null)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const dirtyPositionsRef = useRef<Set<string>>(new Set())
-  const blueprintRef = useRef<Blueprint | null>(blueprint)
-  blueprintRef.current = blueprint
   const enteredBlueprintRef = useRef<string | null>(null)
   /**
    * 持久化的"钉住"位置：仅包含用户拖拽过的节点（初始取自 canvasLayout）。
    * 未钉住的节点跟随自动布局，折叠/展开时可回流；null 表示尚未从当前蓝图初始化。
    */
   const pinnedRef = useRef<Layout | null>(null)
-  const blueprintIdRef = useRef(blueprintId)
+  const blueprintIdRef = useRef(viewKey)
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
   const saveControllerRef = useRef<BlueprintLayoutSaveController | null>(null)
@@ -225,7 +226,10 @@ export function useBlueprintGraphController({
     saveControllerRef.current = new BlueprintLayoutSaveController(
       blueprintId,
       async (targetBlueprintId, layout) => {
-        const known = blueprintRef.current?.id === targetBlueprintId ? blueprintRef.current.nodeIds : null
+        // Pending full-view saves use the complete source, even after the
+        // canvas switches to a smaller derived view.
+        const source = useBlueprintStore.getState().currentBlueprint
+        const known = source?.id === targetBlueprintId ? source.nodeIds : null
         const filtered = known ? Object.fromEntries(Object.entries(layout).filter(([id]) => known.includes(id))) : layout
         // Overlay 写回必须命中投影所属 checkout；GLOBAL  scope 在 dev 下会漂到仓库自身。
         const cwd = useBlueprintStore.getState().workspacePathFor(targetBlueprintId)
@@ -243,14 +247,14 @@ export function useBlueprintGraphController({
     if (!blueprint) return ''
     // Note: coordinates stay out of the key so layout-save echoes reuse the
     // pinned flow instead of rebuilding all nodes/edges — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md
-    return buildBlueprintTopologyKey(blueprint, collapsedNodeIds, hiddenNodeIds)
-  }, [blueprint, collapsedNodeIds, hiddenNodeIds])
+    return viewKey + '|' + buildBlueprintTopologyKey(blueprint, collapsedNodeIds, hiddenNodeIds)
+  }, [blueprint, collapsedNodeIds, hiddenNodeIds, viewKey])
 
   const cardDataKey = useMemo(() => {
     if (!blueprint) return ''
     return blueprint.nodeIds.map((id) => {
       const node = blueprint.nodes[id]
-      return node ? `${id}:${node.updatedAt ?? ''}:${node.status}:${node.progress}:${focusedNodeIds.has(id)}:${collapsedNodeIds.has(id)}` : `${id}:missing`
+      return node ? `${id}:${node.sourceHash ?? ''}:${node.title}:${node.updatedAt ?? ''}:${node.status}:${node.progress}:${focusedNodeIds.has(id)}:${collapsedNodeIds.has(id)}` : `${id}:missing`
     }).join('|') + `|${focusActive}|${Object.entries(workspaceNameById).map(([id, name]) => `${id}:${name}`).join(',')}`
   }, [blueprint, focusActive, focusedNodeIds, workspaceNameById, collapsedNodeIds])
 
@@ -258,15 +262,15 @@ export function useBlueprintGraphController({
 
   useEffect(() => {
     const previousId = blueprintIdRef.current
-    if (previousId !== blueprintId) {
+    if (previousId !== viewKey) {
       void saveControllerRef.current!.switchBlueprint(blueprintId)
-      blueprintIdRef.current = blueprintId
+      blueprintIdRef.current = viewKey
       positionsRef.current = {}
       dirtyPositionsRef.current.clear()
       pinnedRef.current = null
       setRestoreSnapshot(null)
     }
-  }, [blueprintId])
+  }, [blueprintId, viewKey])
 
   useEffect(() => () => {
     void saveControllerRef.current!.dispose()
@@ -284,7 +288,6 @@ export function useBlueprintGraphController({
     }
     if (!blueprint) {
       enteredBlueprintRef.current = null
-      flowRef.current = null
       setNodes([])
       setEdges([])
       positionsRef.current = {}
@@ -310,7 +313,6 @@ export function useBlueprintGraphController({
         ? { ...node.style, '--bp-entry-index': capEntryIndex(index) } as typeof node.style
         : node.style,
     }))
-    flowRef.current = { key: topologyKey, nodes: allNodes }
     const computedPositions = Object.fromEntries(allNodes.map((node) => [node.id, node.position]))
     positionsRef.current = Object.fromEntries(allNodes.map((node) => [node.id, dirtyPositionsRef.current.has(node.id) ? positionsRef.current[node.id] ?? node.position : computedPositions[node.id]]))
     const nodeIndexById = new Map(allNodes.map((node, index) => [node.id, index]))
@@ -351,10 +353,9 @@ export function useBlueprintGraphController({
 
   useEffect(() => {
     if (!blueprint) return
-    const cached = flowRef.current
-    const nodes = cached && cached.key === topologyKey
-      ? cached.nodes
-      : deriveBlueprintFlow(blueprint, pinnedRef.current ?? undefined, workspaceNameById, focusedNodeIds, focusActive, collapsedNodeIds, { extraHidden: hiddenNodeIds }).nodes
+    // Source refreshes can change title/body without changing topology. Rebuild
+    // card data from the current source; layout calculation remains cached.
+    const nodes = deriveBlueprintFlow(blueprint, pinnedRef.current ?? undefined, workspaceNameById, focusedNodeIds, focusActive, collapsedNodeIds, { extraHidden: hiddenNodeIds }).nodes
     const dataById = new Map(nodes.map((node) => [node.id, node.data]))
     setNodes((current) => patchBlueprintCardNodes(current, dataById))
   }, [cardDataKey]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -372,8 +373,8 @@ export function useBlueprintGraphController({
       }
     }
     setNodes((current) => applyNodeChanges(changes, current))
-    if (moved) saveControllerRef.current!.schedule(pinnedRef.current!)
-  }, [onSelectionChange])
+    if (moved && persistLayout) saveControllerRef.current!.schedule(pinnedRef.current!)
+  }, [onSelectionChange, persistLayout])
 
   const applyLayout = useCallback(async (layout: Record<string, { x: number; y: number }>, pins: Layout) => {
     positionsRef.current = { ...positionsRef.current, ...layout }
@@ -382,8 +383,8 @@ export function useBlueprintGraphController({
       ...node,
       position: layout[node.id] ?? node.position
     })))
-    await saveControllerRef.current!.saveNow(pins)
-  }, [])
+    if (persistLayout) await saveControllerRef.current!.saveNow(pins)
+  }, [persistLayout])
 
   const autoLayout = useCallback(async () => {
     if (!blueprint) return

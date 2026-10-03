@@ -34,6 +34,7 @@ export const blueprintProposalSchema = z.object({
       status: z.enum(['not-started', 'in-progress', 'testing', 'done', 'blocked']).optional(), progress: z.number().min(0).max(100).optional(),
       positioning: z.string().optional(), description: z.string().optional(), techSolution: z.string().optional(), notes: z.string().optional(), tags: z.array(z.string()).optional(),
       features: z.array(proposedFeature).max(40).optional(),
+      sections: z.record(z.string().min(1).regex(/^[^\r\n#]+$/), z.string()).optional(),
     }) }),
     z.object({ ...operationBase, type: z.literal('move-node'), nodeId: z.string().min(1), afterParentId: z.string().min(1) }),
     z.object({ ...operationBase, type: z.literal('add-relation'), tempRelationId: z.string().min(1), after: z.object({
@@ -51,13 +52,13 @@ export const blueprintProposalSchema = z.object({
   ])).max(60),
 })
 
-export function blueprintNodeContext(blueprint: Blueprint, allowed: Set<string>): string {
+export function blueprintNodeContext(blueprint: Blueprint, allowed: Set<string>, includeContent = true): string {
   const nodes = [...allowed].map((id) => {
     const node = blueprint.nodes[id]
     return node && {
       id: node.id, title: node.title, type: node.type, status: node.status, progress: node.progress,
-      positioning: node.positioning, description: node.description, techSolution: node.techSolution,
-      notes: node.notes, tags: node.tags, parentId: node.parentId, children: node.children,
+      ...(includeContent ? { positioning: node.positioning, description: node.description, techSolution: node.techSolution, notes: node.notes } : {}),
+      sourceUri: node.sourceUri, tags: node.tags, parentId: node.parentId, children: node.children,
       primaryWorkspaceId: node.primaryWorkspaceId, linkedWorkspaceIds: node.linkedWorkspaceIds,
     }
   }).filter(Boolean)
@@ -72,7 +73,7 @@ export function blueprintNodeContext(blueprint: Blueprint, allowed: Set<string>)
       sourceInScope: allowed.has(relation.sourceNodeId),
       targetInScope: allowed.has(relation.targetNodeId),
     }))
-  return JSON.stringify({ nodes, relations }, null, 2)
+  return JSON.stringify({ nodes, relations }, null, includeContent ? 2 : undefined)
 }
 
 /**

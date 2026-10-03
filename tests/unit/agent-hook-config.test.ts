@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, unlink, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { describe, expect, it, vi } from 'vitest'
@@ -76,8 +76,8 @@ describe('AgentHookConfigManager', () => {
       'permission_prompt',
       'idle_prompt',
     ])
-    expect(parsed.hooks.Notification[0].hooks[0].command).toContain("-Matcher 'permission_prompt'")
-    expect(parsed.hooks.Notification[1].hooks[0].command).toContain("-Matcher 'idle_prompt'")
+    expect(parsed.hooks.Notification[0].hooks[0].command).toContain('permission_prompt')
+    expect(parsed.hooks.Notification[1].hooks[0].command).toContain('idle_prompt')
     expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('-EventName')
     expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('janusx-agent-hook.ps1')
       expect(parsed.hooks.UserPromptSubmit[0].hooks[0].command).toContain('-Command')
@@ -289,6 +289,11 @@ describe('AgentHookConfigManager', () => {
     expect(plugin).toContain('session.updated')
     expect(plugin).toContain('extractSessionId')
     expect(plugin).toContain('sessionID')
+    expect(await manager.isInstalled('opencode')).toBe(true)
+    await unlink(join(manager.getOpencodeConfigDir(), 'plugins', 'janusx-notify.js'))
+    expect(await manager.isInstalled('opencode')).toBe(false)
+    await manager.ensureInstalled('opencode')
+    expect(await manager.isInstalled('opencode')).toBe(true)
   })
 
   it('installs a JanusX-owned pi extension without touching user pi settings', async () => {
@@ -367,7 +372,11 @@ describe('AgentHookConfigManager', () => {
       expect(command).toContain('janusx-hook-runner.exe')
       expect(command).toContain('janusx-agent-hook.ps1')
       expect(command).toContain(JANUSX_HOOK_COMMAND_MARKER)
-      expect(command).toContain(`"${event}"`)
+      // Single-quoted `&` form: survives Codex's `powershell -Command`
+      // wrapping on Windows (double quotes become UnexpectedToken/exit 1).
+      expect(command.startsWith('& ')).toBe(true)
+      expect(command).toContain(`'${event}'`)
+      expect(command).not.toContain('"')
       expect(command).not.toContain('powershell')
       expect(command).not.toContain('-Command')
       expect(command).not.toContain('$')

@@ -23,6 +23,7 @@ import { harnessNoteService } from '../harness/service'
 import type { IncomingSnapshot } from '../harness/share-import'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
 import { applyUndo, previewUndo } from '../harness/undo'
+import { listNoteChatChanges } from '../harness/note-chat'
 import { applyMigration, archiveBlueprintSource, previewMigration } from '../janus/blueprint-migrate'
 import { blueprintStore } from '../janus/blueprint-store'
 import { GLOBAL_BLUEPRINT_SCOPE } from '../janus/blueprint-paths'
@@ -776,6 +777,11 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
       return { attempt: repaired.data.attempt, state: after.run?.state ?? 'running' }
     },
   )
+
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteChatChanges, async (_e, cwd: string, conversationId: string) => {
+    if (typeof conversationId !== 'string' || !conversationId.trim() || conversationId.length > 128) throwFailure('SCHEMA_INVALID', 'Invalid conversation id')
+    return listNoteChatChanges(await withRoot(cwd), conversationId)
+  })
 
   // ── managed undo (S8-JanusX, legacy-loop equivalence): preview then apply ──
   // Undo reverses one committed write as a new undoable changeset. Conflicts

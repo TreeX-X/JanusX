@@ -269,6 +269,13 @@
     "acceptFailed": "Accept failed: candidate not found or target parent invalid",
     "rejectFailed": "Reject failed: candidate not found"
   },
+  "noteChat": {
+    "applied": "Updated {{count}} Notes",
+    "reverted": "Change reverted",
+    "viewChanges": "View changes",
+    "fullText": "View full text",
+    "undoConflict": "Notes have changed since this edit. Ask Janus to read the latest content before adjusting it."
+  },
   "maintenance": {
     "consoleAria": "Janus Copilot Console",
     "engineLabel": "JANUS // BLUEPRINT ENGINE",
@@ -290,7 +297,19 @@
     "maintenanceGoal": "Maintenance goal",
     "maintenanceTaskFold": "Maintenance task",
     "goalDefault": "Review blueprint node content and hierarchy based on current workspace implementation",
-    "policyHint": "Janus can freely discuss within this authorization scope; it only modifies the blueprint after explicitly generating and approving a proposal.",
+    "policyHint": "Chat only reads and discusses. Organize changes, review the files, then confirm to apply them.",
+    "reviewDiscussion": "View conversation",
+    "reviewDocument": "View review document",
+    "reviewDiff": "Compare before and after",
+    "reviewHint": "Review the proposed content, then approve to apply. You can keep discussing below and organize a revised draft.",
+    "reviewOutdated": "The previous draft is no longer approvable. Organize again after discussing your changes.",
+    "filesTitle": "Files to change",
+    "filesSelect": "Select operations to preview their files.",
+    "filesLoading": "Preparing file preview…",
+    "filesRetry": "Preview files again",
+    "fileCreate": "Create",
+    "fileReplace": "Modify",
+    "fileArchive": "This Note will be archived; its file is retained.",
     "startConversation": "Start conversation",
     "roleUser": "You",
     "roleJanus": "Janus",
@@ -470,5 +489,29 @@
     "conflictTitle": "Save conflict",
     "conflictReload": "External change won the save. Reload to continue.",
     "invalidKept": "{{count}} invalid files kept, not executed"
+  },
+  "noteFocus": {
+    "read": "Accessed Notes", "addScope": "Add to working Notes", "hidden": "{{count}} highlighted Notes are hidden. Locate to reveal them.",
+    "scope": "Working Notes",
+    "locate": "Locate",
+    "clear": "Reset scope",
+    "target": "Target",
+    "reference": "Reference",
+    "dependency": "Dependency",
+    "pin": "Pin",
+    "remove": "Remove",
+    "unavailable": "Not available in this canvas: {{names}}"
+  },
+  "architecture": {
+    "project": "Project",
+    "module": "Module",
+    "view": "Blueprint view",
+    "structure": "System structure",
+    "notes": "All Notes",
+    "coverage": "Checkout coverage",
+    "currentOnly": "Current accepted declarations. Planned, example and historical Notes remain available in All Notes.",
+    "related": "Decisions and related work",
+    "noRelated": "No declared related work.",
+    "unresolved": "Unresolved target"
   }
 }

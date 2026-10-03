@@ -13,9 +13,11 @@
  *  arrives as an injected lister. No model calls, no discussion loop.
  */
 import { randomUUID } from 'node:crypto'
+import { parseNote } from '@janus-agent/harness-core'
+import { noteFileName } from '@janus-agent/harness-node'
 import type { Blueprint } from '../../shared/janus/types'
-import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
-import { translateMaintenanceOpsToHarness } from './maintenance-bridge'
+import type { BlueprintOperation, BlueprintMaintenanceFilePreview } from '../../shared/janus/maintenance-types'
+import { translateMaintenanceOpsToHarness, type BridgeResult } from './maintenance-bridge'
 import type { HarnessNoteService } from './service'
 
 export interface ProjectCheckout {
@@ -158,11 +160,19 @@ export function assertHarnessScope(operations: BlueprintOperation[], allowed: Se
  * bridge is incomplete; concurrent external edits surface HARNESS_CONFLICT
  * from the transaction instead of overwriting.
  */
-export async function applyMaintenanceSelection(
+export interface PreparedMaintenanceSelection {
+  request: HarnessSelectionRequest
+  bridge: BridgeResult
+  files: BlueprintMaintenanceFilePreview[]
+  bundleId: string
+}
+
+// Note: preview and application consume the same translated bytes — see .agents/notes/2026-09-29-blueprint-maintenance-approval-gap--a1b2c3d4.md
+export async function prepareMaintenanceSelection(
   service: HarnessNoteService,
   req: HarnessSelectionRequest,
-): Promise<HarnessSelectionResult> {
-  const snapshots = new Map<string, { uri: string; expectedHash: string; markdown: string }>()
+): Promise<PreparedMaintenanceSelection> {
+  const snapshots = new Map<string, { uri: string; expectedHash: string; markdown: string; path: string }>()
   const view = await service.projectView(req.root)
   if (view.repoId !== req.repoId) {
     throw new Error(`仓库身份已变化：期望 ${req.repoId}，当前 ${view.repoId ?? '未初始化'}，请重新确认绑定`)
@@ -174,6 +184,7 @@ export async function applyMaintenanceSelection(
         uri: `note://${req.repoId}/${nodeId}`,
         expectedHash: read.sha256,
         markdown: read.raw,
+        path: read.relPath,
       })
     } catch {
       // Invalid notes stay out of the bridge context; touching them fails
@@ -206,10 +217,41 @@ export async function applyMaintenanceSelection(
     const reasons = bridge.untranslatable.map((item) => `${item.operationId}: ${item.reason}`)
     throw new Error(`项目 Note 转换失败，未写入任何内容：${reasons.slice(0, 5).join('；')}${reasons.length > 5 ? ` 等 ${reasons.length} 项` : ''}`)
   }
+  const taken = new Set([...snapshots.values()].map(item => item.path?.split('/').pop()?.toLowerCase() ?? ''))
+  const files = bridge.ops.map(op => {
+    const original = snapshots.get(op.uri.split('/').pop()!)
+    const note = op.type === 'create' ? parseNote(op.afterMarkdown) : null
+    const path = note
+      ? `.agents/notes/${noteFileName(note.meta.created, note.title, note.meta.id, taken)}`
+      : original!.path
+    return {
+      uri: op.uri, path, kind: op.type, reason: op.reason, operationIds: op.maintenanceOperationIds,
+      before: original?.markdown ?? '', after: op.afterMarkdown,
+      ...(op.downgraded ? { archivedInsteadOfDeleted: true } : {}),
+    }
+  })
+  return { request: structuredClone(req), bridge, files, bundleId: `maintenance-${req.taskId}-${randomUUID()}` }
+}
+
+export async function applyPreparedMaintenanceSelection(
+  service: HarnessNoteService,
+  prepared: PreparedMaintenanceSelection,
+  assertCurrent?: () => void,
+): Promise<HarnessSelectionResult> {
+  const { request: req, bridge, files } = prepared
+  for (const file of files) {
+    if (file.kind === 'create') continue
+    const current = await service.readNote(req.root, file.uri.split('/').pop()!)
+    const op = bridge.ops.find(item => item.uri === file.uri)!
+    if (current.relPath !== file.path || current.sha256 !== op.expectedHash) {
+      throw new Error(`HARNESS_CONFLICT: ${file.path} changed since preview; regenerate and confirm`)
+    }
+  }
+  assertCurrent?.()
   const applied = await service.applyBundleChangeSet(
     req.root,
     {
-      id: `maintenance-${req.taskId}-${randomUUID().slice(0, 8)}`,
+      id: prepared.bundleId,
       revision: req.changeSetVersion,
       source: { type: 'harness', id: `maintenance:${req.taskId}`, revision: req.changeSetVersion },
       operations: bridge.ops.map((op) => ({
@@ -218,6 +260,7 @@ export async function applyMaintenanceSelection(
         uri: op.uri,
         expectedHash: op.expectedHash,
         afterMarkdown: op.afterMarkdown,
+        ...(op.type === 'create' ? { relativePath: files.find(file => file.uri === op.uri)!.path.replace(/^\.agents\/notes\//, '') } : {}),
         dependsOn: op.dependsOn,
         evidenceRefs: op.evidenceRefs,
       })),
@@ -240,4 +283,8 @@ export async function applyMaintenanceSelection(
     createdNodeIds: { ...bridge.createdNodeIds },
     createdRelationIds,
   }
+}
+
+export async function applyMaintenanceSelection(service: HarnessNoteService, req: HarnessSelectionRequest): Promise<HarnessSelectionResult> {
+  return applyPreparedMaintenanceSelection(service, await prepareMaintenanceSelection(service, req))
 }

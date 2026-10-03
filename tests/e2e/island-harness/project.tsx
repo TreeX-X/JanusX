@@ -13,13 +13,16 @@ import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import type { ChatAgentEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
+import { DEFAULT_APP_THEME } from '../../../src/shared/ipc/theme'
 import type { HarnessTaskDraft, HarnessTranscript } from '../../../src/shared/ipc/harness'
 import type { CreateAgentSessionInput } from '../../../src/shared/ipc/agent-runtime'
 import '../../../src/renderer/src/styles/globals.css'
+import '../../../src/renderer/src/styles/themes.generated.css'
 import '../../../src/renderer/src/components/janus/janus-island.css'
 import '../../../src/renderer/src/components/blueprint/blueprint.css'
 
 installElectronApiFallback()
+document.documentElement.dataset.theme = DEFAULT_APP_THEME
 const workbench = new URLSearchParams(location.search).has('workbench')
 Object.assign(window.electron.system, { getLanguage: async () => 'en', setLanguage: async () => undefined })
 const repoId = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
@@ -63,6 +66,8 @@ useBlueprintStore.setState({ currentBlueprint: blueprint as never, blueprintWork
 const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
 const fixture = {
+  noteChanges: [] as import('../../../src/shared/note-chat').NoteChatChange[],
+  undoConflict: false,
   runtimeSessions: [] as CreateAgentSessionInput[],
   streams: [] as ChatStreamRequest[], aborts: 0, steers: 0, answers: 0, approvals: 0, adoptions: 0,
   prepares: 0, starts: 0, executes: 0, runAborts: 0, pauses: 0, resumes: 0, rebaselines: 0, takeovers: 0, threadCloses: 0, reviews: 0, finishes: 0, repairs: 0, undoPreviews: 0, undoApplies: 0,
@@ -100,20 +105,40 @@ Object.assign(window.electron.llm, {
   onAgentEvent: (listener: (event: ChatAgentEvent) => void) => { events.add(listener); return () => events.delete(listener) },
   startChatStream: (request: ChatStreamRequest) => {
     fixture.streams.push(request)
+    if (request.maintenanceTaskId) maintenance.beginProposal(request.maintenanceTaskId)
+    if (!request.maintenanceTaskId) {
+      const task = maintenance.tasks.find(item => item.conversationId === request.conversationId && item.status === 'proposal-ready')
+      if (task) void window.electron.janus.dismissMaintenanceProposal({ taskId: task.id })
+    }
     queueMicrotask(() => {
+      if (new URLSearchParams(location.search).has('manual-stream') && !request.maintenanceTaskId) return
       emit({ type: 'text_delta', requestId: request.requestId, delta: 'Project reply in progress' })
       if (request.maintenanceTaskId) {
-        maintenance.completeProposal(request.maintenanceTaskId)
-        emit({ type: 'stream_end', requestId: request.requestId, cancelled: false })
+        const finish = () => {
+          maintenance.completeProposal(request.maintenanceTaskId!)
+          const task = maintenance.tasks.find(item => item.id === request.maintenanceTaskId)!
+          if (task.error) emit({ type: 'stream_error', requestId: request.requestId, error: task.error })
+          else {
+            if (!maintenance.dropResult) emit({ type: 'maintenance_result', requestId: request.requestId, task: structuredClone(task) })
+            emit({ type: 'stream_end', requestId: request.requestId, cancelled: false })
+          }
+        }
+        if (maintenance.gateProposal) maintenance.finishProposal = finish
+        else finish()
       }
     })
   },
-  abortChat: async () => { fixture.aborts++ },
+  abortChat: async () => {
+    fixture.aborts++
+    const request = fixture.streams.at(-1)
+    if (request?.maintenanceTaskId) maintenance.stopProposal(request.maintenanceTaskId)
+  },
   steerChat: async () => { fixture.steers++; return { accepted: true } },
   answerQuestion: async ({ requestId, callId }: { requestId: string; callId: string }) => { fixture.answers++; emit({ type: 'question_resolved', requestId, callId, status: 'answered' }); return { accepted: true } },
 })
 let draft: HarnessTaskDraft = { uri, hash: 'a'.repeat(64), lifecycle: 'draft', repoId, hasExecution: false, contract: { scope: 'Implement the value.', criteria: [{ id: 'AC-1', text: 'TBD' }], work: { scope: [{ repoId, paths: [] }], acceptanceRefs: [], verification: [] } } }
 Object.assign(window.electron.harness, {
+  noteChatChanges: async () => structuredClone(fixture.noteChanges),
   taskRead: async () => draft,
   taskAdopt: async (_cwd: string, _uri: string, _hash: string, contract: HarnessTaskDraft['contract']) => {
     fixture.adoptions++
@@ -210,10 +235,12 @@ Object.assign(window.electron.harness, {
   },
   undoPreview: async () => {
     fixture.undoPreviews++
+    if (fixture.undoConflict) return { reversible: false, files: [] }
     return { txId: 'tx-1', changeSetId: 'cs-1', revision: 1, files: [{ operationId: 'op-1', relPath: '.agents/notes/a.md', status: 'reversible', beforeHash: 'b', afterHash: 'a' }], reversible: true }
   },
   undoApply: async () => {
     fixture.undoApplies++
+    fixture.noteChanges.forEach(change => { change.reverted = true })
     return { txId: 'tx-2', reverted: ['.agents/notes/a.md'] }
   },
   runThreads: async () => fixture.runs.map((run) => {
@@ -243,6 +270,8 @@ if (twoCheckouts) maintenance.checkoutViews[secondWorkspace.path] = {
   ...blueprint, id: blueprint.id + ':checkout-b', nodeIds: [id], nodes: { [id]: { ...blueprint.nodes[id], title: 'Task checkout B', sourceHash: 'd'.repeat(64) } }, composition: undefined,
 } as never
 Object.assign(fixture, { maintenance,
+  emitAgentEvent: emit,
+  switchWorkspace: (id: string) => useWorkspaceStore.getState().setActiveWorkspace(id),
   selectMaintenanceNode: (nodeId?: string) => useBlueprintMaintenanceStore.getState().requestOpen({ blueprintId: blueprint.id, nodeId }),
   finishStream: () => emit({ type: 'stream_end', requestId: fixture.streams.at(-1)!.requestId, cancelled: false }),
   failStream: () => emit({ type: 'stream_error', requestId: fixture.streams.at(-1)!.requestId, error: 'Fixture provider unavailable' }),

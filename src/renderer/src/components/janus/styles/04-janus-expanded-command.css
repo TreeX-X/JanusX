@@ -792,11 +792,6 @@
 
 .janus-island-shell[data-stage="expanded"] .janus-chat-message.assistant .janus-chat-message-content {
   background: transparent;
-  color: rgba(255,255,255,0.78);
-}
-
-.janus-island-shell[data-stage="expanded"] .janus-chat-message.user .janus-chat-message-content {
-  color: rgba(255,255,255,0.9);
 }
 
 .janus-chat-suggestions {
@@ -867,11 +862,6 @@
   font-size: 13px;
   line-height: 1.45;
   background: rgba(0,0,0,0.34);
-  color: rgba(255,255,255,0.88);
-}
-
-.janus-island-shell[data-stage="expanded"] .janus-chat-input::placeholder {
-  color: rgba(255,255,255,0.38);
 }
 
 .janus-island-shell[data-stage="expanded"] .janus-chat-send,

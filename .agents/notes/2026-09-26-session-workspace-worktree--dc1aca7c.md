@@ -5,14 +5,41 @@ kind: initiative
 lifecycle: accepted
 created: 2026-09-26
 class: architecture
-tags: [session, workspace, worktree, parent, governance]
+tags: [session, workspace, worktree, parent, governance, architecture:module]
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a
+codeRefs:
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/sessions/session-registry.ts
+    symbol: AgentSessionRegistry
+    role: entry
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/ipc/session-handlers.ts
+    role: implementation
+interfaces:
+  - name: AgentSessionRegistry
+    direction: provides
+relations:
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/abb1ccb3-be21-5f64-9b55-de5089e621e9
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/d87e7a46-1d85-45e5-a635-63a6838d441c
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/70beb72a-424d-5e96-a0d0-8e1a29635220
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/640a69dd-bbea-4606-b51a-f9b545de37a5
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/97a21dee-2b5e-4cf8-8298-28263eeb02bb
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/cee742a2-d7ca-4a61-8021-e1e118534c96
 ---
 
-# 会话工作区父域
+# 会话与工作区
 
 ## Goal
 
-09-22 十八连发把一次会话重构切成 PR 粒度碎片，单篇不可独立理解；checkpoint 与 worktree 定义散在三处。本域提供唯一父节点，按所有权耐久、内容管线、呈现、可靠性四组收敛检索，不删除任何历史篇。
+保存会话身份、终端绑定、转录读取与检查点关联，并在工作区和 worktree 范围内呈现会话。AgentSessionRegistry 为终端等调用方提供会话注册与查询；PTY 进程和 Task 验收由其他模块负责。
+
+下列链接保留已有决策、阶段需求和交付记录的阅读路径；正文及生命周期由原 Note 负责。历史 parent 仅组织文档，跨模块关联由本声明的 related-to 补充。模块声明只在职责、接口、明确依赖或代码入口变化时维护。
 
 ## Scope
 
@@ -31,6 +58,8 @@ Checkpoint 不变式：[snapshot-safety](./2026-06-27-checkpoint-safety--94f306f
 Worktree 生命周期：[isolation 需求](./2026-09-19-worktree-isolation-parallel-agents--a361448b.md)与[总需求 P2 部分](./2026-09-21-workspace-session-checkpoint-continue--c23ebb35.md)归一以后者为准；[create-delete](./2026-09-21-worktree-create-delete--636764b9.md)、[ship-merge](./2026-09-21-worktree-ship-merge--7822452e.md)为实现两节；[sidebar-scoping](./2026-09-21-worktree-sidebar-scoping--bda5aa81.md)、[path-avatar](./2026-09-21-worktree-path-avatar--62676495.md)、[selector-stability](./2026-09-21-worktree-selector-stability--37a24b3c.md)、[file-tree-scope](./2026-09-22-worktree-file-tree-scope--c58ff1db.md)为侧栏定域修补。
 
 ## Acceptance criteria
+
+以下保留 2026-09-26 文档整理的验收原文与勾选状态，供旧 Task 引用；其中篇数是当时快照，不是当前模块大小，新增工作也不强制改写历史 parent。
 
 - [x] AC-1: 本域 38 篇直接子全部携带有效 parent，会话十八连发可按四组检索。
 - [ ] AC-2: 中文旧根 a361448b 仅作前身附录，真源以 c23ebb35 为准，不三足分立。

@@ -5,14 +5,62 @@ kind: initiative
 lifecycle: accepted
 created: 2026-09-26
 class: architecture
-tags: [agent, harness, parent, governance]
+tags: [agent, harness, parent, governance, architecture:module]
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a
+relations:
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/15a5d590-1224-5c2e-8a5a-0941429f10f1
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/31cda2d8-3b47-5cce-affd-3978b2189c19
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/4f9cb92a-9bf8-55be-b2a5-bf65e5124bee
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/82db94eb-97de-5c31-a47f-0723e8c4a9d3
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/10bb564c-beff-486e-8ba3-368da1017652
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/939f0bcf-10ec-555f-bd6c-7fdf041c8047
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/dec987d8-570e-57f0-9694-3e2475a5a532
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/90af6e6c-526e-58a8-b0c1-f524a24af92b
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/4ffa1606-df23-5880-a1a5-003ab5fac9e3
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/d9f1d453-d9cc-5fba-8655-6ac51f3cb75c
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/fbac0251-beff-50d7-9363-18fa7e812781
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/854981c7-ab43-521f-a379-020ce1549f12
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/958007ff-748f-57c1-ae16-b9b99a94c198
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/1645e12c-3b5f-4035-99ac-ba1fb8d02836
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/350594c4-3e53-4645-aeab-57e4adeffc36
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/f013beaa-bff7-4656-b086-d4816608f905
+  - type: related-to
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/3efc89cf-3aa2-4e1e-829f-a0abc4319691
+  - type: governed-by
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/11d8826d-52d7-58bb-99bd-49b6ba04dfaf
+codeRefs:
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/harness/execution-adapter.ts
+    role: entry
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/llm/janus-agent-ports.ts
+    symbol: buildJanusChatTurnPorts
+    role: implementation
 ---
 
-# Agent 执行闭环父域
+# Agent 对话与执行
 
 ## Goal
 
-Agent 循环、圆桌、turn 守卫、S6 维护面与 S7–S9 主线同属执行闭环却互无父子。本域收拢二十九篇，执行语义只看本域树，不再全文搜索。
+把 JanusX 的对话、工具、任务线程和执行回执接入共享 Agent 运行时。任务启动、验证与完成沿用已有契约和回执入口；模块声明及蓝图显示不赋予执行权限，也不决定任务完成。
+
+下列链接保留已有决策、阶段需求和交付记录的阅读路径；正文及生命周期由原 Note 负责。历史 parent 仅组织文档，跨模块关联由本声明的 related-to 补充。模块声明只在职责、接口、明确依赖或代码入口变化时维护。
 
 ## Scope
 
@@ -27,6 +75,8 @@ S6 维护面五件套：[discussion](./2026-09-17-maintenance-discussion-unified
 PI 运行时三篇为反转续接非重复：[context-recognition](./2026-09-11-janus-pi-context-recognition--e34329c5.md)否决 hook 在先，[hook-management](./2026-09-13-janus-pi-hook-management--a8a80c8f.md)声明理由过时并建 hook 在后，均以本域为父。
 
 ## Acceptance criteria
+
+以下保留 2026-09-26 文档整理的验收原文与勾选状态，供旧 Task 引用；其中篇数是当时快照，不是当前模块大小，新增工作也不强制改写历史 parent。
 
 - [x] AC-1: 本域 29 篇直接子全部携带有效 parent，执行闭环检索收敛。
 - [ ] AC-2: legacy 双件保持计划与执行先后关系，不二合一。

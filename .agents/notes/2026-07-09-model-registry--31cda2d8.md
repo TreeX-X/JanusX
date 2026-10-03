@@ -30,19 +30,27 @@ extensions:
 
 ## Problem
 
-Model capability data comes from three unreliable mouths: hardcoded limits, rough estimates, and runtime telemetry fields. Context windows disagree across surfaces because no single traceable source exists.
+Model capacity changes independently of application releases. If chat budgeting reads only bundled metadata, new model IDs receive a 16,384-token estimate and trigger premature history compaction. Adapter lists also contain bundled limits, so treating every listed capacity as a provider override prevents updated metadata from taking effect.
 
 ## Decision
 
-One registry owns model metadata: names, sources, context windows, output caps, capabilities, and pricing. Context reads resolve from the registry before any estimate. OpenRouter serves as the sole automatic sync source, generating the built-in dataset bounded to recently created models. Fuzzy matching reconciles user input, provider names, and registry ids. Built-in lists, remote-update caches, and manual overrides layer in that order, and freshness metadata lets the interface show data age.
+OpenRouter supplies the bundled model registry and the runtime catalog cache. Janus chat and the blueprint conversation share the model port in `janus-agent-ports.ts`. Each model resolution without a valid manual context override consults `ModelCatalogService`, even when the adapter supplies a capacity. Context limits resolve in this order: manual per-model configuration, runtime catalog metadata, adapter metadata, bundled registry, then the visibly estimated 16,384-token fallback. Runtime output caps also precede adapter output caps; the generation budget remains bounded by 20% of the selected context window.
+
+The service reads `userData/janusx/model-catalog.json` and uses the bundled document when the cache is unavailable or invalid. Catalogs older than 24 hours trigger a background refresh. A known model can use its cached capacity immediately; subsequent resolutions consume the completed refresh. A missing model waits for the shared refresh before inference. Automatic requests have a 60-second retry interval and a 20-second network timeout. Refresh failure preserves the last valid document, and a missing runtime entry can still resolve from the bundled registry. Only exact or high-confidence model matches supply context capacity.
 
 ## Alternatives considered
 
 - Per-provider live fetching — strongest case is always-fresh data. The driver that rules it out is multiplicative fragility: every provider outage becomes a capability outage.
 - Manual curation only — strongest case is full editorial control. The driver that rules it out is staleness velocity: model releases outrun editors within weeks.
 - Do nothing / reuse hardcoded limits — staying put needs no pipeline. The cost is permanently disagreeing context displays.
+- Refresh only when the adapter has no capacity — avoids catalog lookups for known models, but bundled adapter values can indefinitely hide updated context and output limits.
 
 ## Consequences
 
-- **Gains**: Every capability and context surface reads one versioned table with visible freshness; overrides stay explicit and auditable.
-- **Costs and limits**: Sync cadence bounds freshness and generation stays single-sourced until a second provider proves its schema.
+Chat budgeting consumes the same cached catalog exposed by settings, and explicit user context overrides remain authoritative. Cache reuse and shared refreshes avoid one network request per conversation turn.
+
+A missing model may delay the first turn by the network timeout. OpenRouter coverage and matching confidence bound automatic detection; unknown aliases and refresh failures can still require a manual context override. A known stale model keeps its previous capacity for the current resolution while refresh runs. Provider-specific restrictions require manual configuration because adapter metadata has no authoritative live-provider provenance. Revisit this priority if adapters acquire actual provider-reported limits.
+
+## Verification
+
+`npx vitest run tests/unit/model-catalog-service.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/managed-chat-session.test.ts tests/unit/llm/chat-turn-guard.test.ts` checks cache persistence, first-use refresh, stale known-model updates, offline fallback, manual overrides, and both conversation domains. The model-port regression uses a 1,048,576-token runtime entry against a 16,384-token adapter entry and verifies that 31 messages reach inference without premature compaction. Network responses are simulated.

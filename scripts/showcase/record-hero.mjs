@@ -1,3 +1,11 @@
+import { timing } from './showcase-config.mjs';
+const captions = {
+  'hero-1': { badge: '★', text: '总览：三级归位，双盘并行' },
+  'hero-2': { badge: '★', text: '终端里跑通git日志' },
+  'hero-3': { badge: '★', text: '文件树对照，边看边改' },
+  'hero-4': { badge: '★', text: '顶栏Island，随时开聊' },
+};
+
 // Record: hero overview — slow 4-act tour with real pauses between beats.
 // Act1 sidebar levels / Act2 terminal git log+status (slow typing) /
 // Act3 file tree open+hover / Act4 island hover. Long stills separate every beat.
@@ -29,10 +37,10 @@ await runRecord(async (ctx) => {
   const frames = [];
   const { center, snap, glideTo } = snapper(page, rawDir, frames);
   // inter-beat pause: still frame, no cursor — lets the viewer breathe
-  const pause = (cap) => snap(null, false, 170, cap);
+  const pause = (cap) => snap(null, false, timing.hold, cap);
 
   // ---- opening: orient 3s, no cursor ----
-  await snap(null, false, 170, 'hero-1');
+  await snap(null, false, timing.hold, 'hero-1');
   await sleep(500);
 
   // ---- act 1: sidebar three levels ----
@@ -55,13 +63,13 @@ await runRecord(async (ctx) => {
   await snap(null, false, 90, 'hero-2');
   await input.press('Enter').catch(() => {});
   await sleep(1800);
-  await snap(null, false, 170, 'hero-2');
+  await snap(null, false, timing.hold, 'hero-2');
   await input.pressSequentially('git status -sb', { delay: 85 }).catch(() => {});
   await sleep(700);
   await snap(null, false, 90, 'hero-2');
   await input.press('Enter').catch(() => {});
   await sleep(1800);
-  await snap(null, false, 170, 'hero-2');
+  await snap(null, false, timing.hold, 'hero-2');
   await pause('hero-2');
 
   // ---- act 3: file tree ----
@@ -75,7 +83,7 @@ await runRecord(async (ctx) => {
     await snap({ x: c.x, y: c.y }, false, 110, 'hero-3');
     await filesTool.first().click().catch(() => {});
     await sleep(1500);
-    await snap({ x: c.x, y: c.y }, true, 40, 'hero-3');
+    await snap({ x: c.x, y: c.y }, true, timing.click, 'hero-3');
     await sleep(600);
   }
   const fileRow = page.locator('[data-file-path="src/chain.ts"]');
@@ -101,7 +109,7 @@ await runRecord(async (ctx) => {
       await snap({ x: c.x, y: c.y }, false, 130, 'hero-4');
       const expandedMark = page.locator('.janus-island .janus-expanded-view-button[data-view="chat"]');
       await island.dblclick();
-      await snap({ x: c.x, y: c.y }, true, 40, 'hero-4');
+      await snap({ x: c.x, y: c.y }, true, timing.click, 'hero-4');
       await sleep(1500);
       if (!(await expandedMark.count())) {
         await sleep(800);
@@ -112,9 +120,9 @@ await runRecord(async (ctx) => {
       await page.locator('.janus-island').getByText('核心可视化').first()
         .waitFor({ state: 'visible', timeout: 9000 }).catch(() => {});
       await sleep(600);
-      await snap(null, false, 170, 'hero-4');
+      await snap(null, false, timing.hold, 'hero-4');
       await sleep(800);
-      await snap(null, false, 170, 'hero-4');
+      await snap(null, false, timing.hold, 'hero-4');
       // switch to chat tab, hold long
       const chatTab = page.locator('.janus-island .janus-expanded-view-button[data-view="chat"]');
       const cb = await chatTab.first().boundingBox().catch(() => null);
@@ -124,11 +132,11 @@ await runRecord(async (ctx) => {
         await sleep(600);
         await snap({ x: t.x, y: t.y }, false, 110, 'hero-4');
         await chatTab.first().click().catch(() => page.mouse.click(t.x, t.y));
-        await snap({ x: t.x, y: t.y }, true, 40, 'hero-4');
+        await snap({ x: t.x, y: t.y }, true, timing.click, 'hero-4');
         await sleep(1500);
-        await snap(null, false, 170, 'hero-4');
+        await snap(null, false, timing.hold, 'hero-4');
         await sleep(800);
-        await snap(null, false, 170, 'hero-4');
+        await snap(null, false, timing.hold, 'hero-4');
       }
       // collapse back for the clean closing still
       await island.dblclick();
@@ -143,8 +151,8 @@ await runRecord(async (ctx) => {
   await snap(null, false, 220, 'hero-4');
 
   await saveManifest(recordingRoot, {
-    name: 'hero-planche', viewport: { width: 1760, height: 884 },
-    canvas: { FW: 1920, FH: 1080 }, count: frames.length, frames,
+    captions,
+    name: 'hero-planche', count: frames.length, frames,
     createdAt: new Date().toISOString(),
   });
   await rm(repoPath.replace(/demo-repo$/, 'demo-auth'), { recursive: true, force: true }).catch(() => {});

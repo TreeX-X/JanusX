@@ -1,118 +1,30 @@
-// Record: quad AI-terminal split demo (claude/codex/opencode/pi) with left sidebar expanded.
-// Produces raw frames + manifest only. Compose with compose.mjs (beige 1080P + virtual cursor).
-// Zero model calls: reuses local CLI logins in a disposable fixture, waits for ready screens only.
-import { _electron as electron } from 'playwright';
-import { mkdir, mkdtemp, writeFile, copyFile, rm } from 'node:fs/promises';
-import { tmpdir, homedir } from 'node:os';
-import { join, resolve, parse } from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, existsSync } from 'node:fs';
-import { AW, AH } from './showcase-lib.mjs';
+import { timing } from './showcase-config.mjs';
+const captions = {
+  'c1': { badge: '1', text: '左侧展开，四终端就绪' },
+  'c2': { badge: '2', text: '拖到边缘 = 左右分屏' },
+  'c3': { badge: '3', text: '再拖到底部 = 上下分屏' },
+  'c4': { badge: '4', text: '田字格，四路并行' },
+  'c5': { badge: '5', text: '拖分隔线调比例' },
+};
 
-const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString();
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
-const easeOutExpo = (t) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
-function testEnv(homeDir) {
-  const root = parse(homeDir).root;
-  return {
-    ...process.env,
-    ELECTRON_RENDERER_URL: '',
-    NODE_ENV: 'production',
-    JANUSX_KNOWLEDGE_ROOT: join(homeDir, 'knowledge'),
-    HOME: homeDir,
-    USERPROFILE: homeDir,
-    HOMEDRIVE: root.replace(/[\\/]$/, ''),
-    HOMEPATH: homeDir.slice(root.length - 1),
-  };
-}
+// Record: four CLI terminals, drag to split and resize; no model prompts.
+import {
+  prepareRepo, seedFixture, launchApp, skipGate, ensureWorkspace, ensureSidebarExpanded,
+  openWorkspace, snapper, saveManifest, runRecord, sleep, AW, AH,
+} from './record-lib.mjs';
 
-// ---- roots: frames stay in repo cache (no creds); creds live in TEMP fixture ----
-await mkdir(resolve('.cache/showcase-split-quad'), { recursive: true });
-const recordingRoot = await mkdtemp(resolve('.cache/showcase-split-quad/session-'));
-const rawDir = join(recordingRoot, 'frames');
-await mkdir(rawDir, { recursive: true });
-const repoPath = join(recordingRoot, 'demo-repo');
-await mkdir(join(repoPath, 'src'), { recursive: true });
-await writeFile(join(repoPath, 'a.txt'), 'hi\n');
-await writeFile(join(repoPath, 'src', 'main.ts'), 'export const app = "demo";\n');
-git(repoPath, 'init', '-b', 'main');
-git(repoPath, 'config', 'user.email', 'd@x');
-git(repoPath, 'config', 'user.name', 'd');
-git(repoPath, 'add', '-A');
-git(repoPath, 'commit', '-m', 'init');
-
-const realHome = homedir();
-const fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-quad-'));
-console.log('frames:', rawDir);
-console.log('fixture:', fixtureRoot);
-try { await copyFile(join(realHome, '.claude.json'), join(fixtureRoot, '.claude.json')); } catch (e) { console.log('seed .claude.json SKIP', e.message); }
-try { cpSync(join(realHome, '.claude'), join(fixtureRoot, '.claude'), { recursive: true }); } catch (e) { console.log('seed .claude/ SKIP', e.message); }
-try {
-  mkdirSync(join(fixtureRoot, '.local', 'share', 'opencode'), { recursive: true });
-  await copyFile(join(realHome, '.local', 'share', 'opencode', 'auth.json'), join(fixtureRoot, '.local', 'share', 'opencode', 'auth.json'));
-} catch (e) { console.log('seed opencode SKIP', e.message); }
-mkdirSync(join(fixtureRoot, '.config', 'opencode'), { recursive: true });
-await writeFile(join(fixtureRoot, '.config', 'opencode', 'opencode.json'), JSON.stringify({
-  $schema: 'https://opencode.ai/config.json',
-  model: 'opencode-go/gpt-6-luna',
-}, null, 2));
-
-const claudeConfig = join(fixtureRoot, 'claude-config');
-await mkdir(claudeConfig, { recursive: true });
-await writeFile(join(claudeConfig, '.claude.json'), JSON.stringify({
-  hasCompletedOnboarding: true,
-  theme: 'dark',
-  autoUpdates: false,
-}));
-
-let application;
-const frames = [];
-let page;
-try {
-  application = await electron.launch({
-    args: [resolve('out/main/index.js'), `--user-data-dir=${join(fixtureRoot, 'user-data')}`],
-    env: {
-      ...testEnv(fixtureRoot),
-      TERM: 'xterm-256color',
-      COLORTERM: 'truecolor',
-      FORCE_COLOR: '3',
-      CLAUDE_CONFIG_DIR: claudeConfig,
-      CLAUDE_CODE_SIMPLE: '1',
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      DISABLE_AUTOUPDATER: '1',
-    },
-    timeout: 60000,
-  });
-  page = await application.firstWindow({ timeout: 60000 });
-  page.setDefaultTimeout(15000);
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForFunction(() => Boolean(window.electron?.workspace?.create), null, { timeout: 30000 });
-  await page.evaluate(() => window.electron.system.setLanguage('zh-CN')).catch(() => {});
-  await page.evaluate(() => window.electron.theme.update('planche')).catch(() => {});
-  await page.setViewportSize({ width: AW, height: AH });
-
-  const gate = page.getByRole('button', { name: '稍后再说，先用本地功能' });
-  await gate.waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
-  if (await gate.count()) await gate.click();
-
-  await page.evaluate((path) => window.electron.workspace.create({ name: 'demo-quad', path }), repoPath);
-  await page.reload();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForFunction(() => Boolean(window.electron?.workspace?.list), null, { timeout: 30000 });
-  await sleep(1500);
-  const gate2 = page.getByRole('button', { name: '稍后再说，先用本地功能' });
-  await gate2.waitFor({ state: 'visible', timeout: 8000 }).catch(() => undefined);
-  if (await gate2.count()) await gate2.click();
-
-  // ---- left workspace expanded (never collapsed in this demo) ----
-  const expandSidebar = page.getByRole('button', { name: '展开工作区侧栏' });
-  if (await expandSidebar.count()) await expandSidebar.click().catch(() => {});
-  await page.getByRole('button', { name: '收起工作区侧栏' }).first().waitFor({ state: 'visible', timeout: 10000 });
-  await page.locator('.workspace-sidebar .ws').filter({ hasText: 'demo-quad' }).first().click();
-  await sleep(1200);
-  await page.getByRole('button', { name: /展开 .* 终端列表/ }).first().click().catch(() => {});
-  await sleep(800);
+await runRecord(async (ctx) => {
+  const { recordingRoot, rawDir, repoPath } = await prepareRepo('split');
+  ctx.recordingRoot = recordingRoot;
+  const { fixtureRoot, claudeConfig } = await seedFixture();
+  ctx.fixtureRoot = fixtureRoot;
+  const { application, page } = await launchApp(fixtureRoot, claudeConfig);
+  Object.assign(ctx, { application, page });
+  const frames = [];
+  await skipGate(page);
+  await ensureWorkspace(page, 'demo-quad', repoPath);
+  await ensureSidebarExpanded(page);
+  await openWorkspace(page, 'demo-quad');
 
   // ---- four terminals ----
   try {
@@ -128,7 +40,6 @@ try {
     await page.getByRole('menuitem', { name: `New ${label} terminal`, exact: true }).click();
     await sleep(5000);
   }
-  await rm(join(repoPath, 'Microsoft'), { recursive: true, force: true }).catch(() => {});
 
   const rowsText = (n) => page.locator('.xterm-rows').nth(n).evaluate((el) => el.textContent || '').catch(() => '');
   async function waitSettled(n, tag) {
@@ -203,15 +114,7 @@ try {
   await sleep(600);
 
   // ---- directed demo ----
-  const box = async (loc) => await loc.boundingBox();
-  const center = (bb) => ({ x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 });
-  async function snap(mouse, click, delay, cap) {
-    const png = await page.screenshot({ type: 'png' });
-    const idx = frames.length;
-    const file = `p-${String(idx).padStart(2, '0')}.png`;
-    await writeFile(join(rawDir, file), png);
-    frames.push({ file, mouse, click: !!click, delay, cap });
-  }
+  const { box, center, snap, glideTo, dragTo } = snapper(page, rawDir, frames);
   async function tabCenter(nameRe) {
     const tabs = page.locator('main [role="button"][draggable="true"]');
     const n = await tabs.count();
@@ -219,34 +122,6 @@ try {
       if (nameRe.test(((await tabs.nth(i).innerText()) || '').trim())) return center(await box(tabs.nth(i)));
     }
     throw new Error('tab not found: ' + nameRe);
-  }
-  async function glideTo(x1, y1, x2, y2, steps, cap) {
-    for (let i = 1; i <= steps; i++) {
-      const t = easeOutExpo(i / steps);
-      const x = x1 + (x2 - x1) * t;
-      const y = y1 + (y2 - y1) * t;
-      await page.mouse.move(x, y);
-      await snap({ x, y }, false, 8, cap);
-    }
-  }
-  async function dragTo(x1, y1, x2, y2, steps, cap) {
-    await page.mouse.move(x1, y1);
-    await page.mouse.down();
-    for (let i = 1; i <= steps; i++) {
-      const t = easeInOut(i / steps);
-      const x = x1 + (x2 - x1) * t;
-      const y = y1 + (y2 - y1) * t;
-      await page.mouse.move(x, y);
-      if (i === Math.floor(steps * 0.62)) {
-        await sleep(500);
-        await snap({ x, y }, false, 50, cap);
-      } else {
-        await snap({ x, y }, false, 10, cap);
-      }
-    }
-    await page.mouse.up();
-    await sleep(300);
-    await snap({ x: x2, y: y2 }, true, 30, cap);
   }
   async function bigPanes() {
     const secs = page.getByRole('main').locator('section');
@@ -269,7 +144,7 @@ try {
     await dragTo(c.x, c.y, main.x + main.width - 20, main.y + main.height / 2, 11, 'c2');
     await sleep(1500);
     const last = frames[frames.length - 1];
-    await snap(last.mouse, false, 150, 'c2');
+    await snap(last.mouse, false, timing.hold, 'c2');
   }
   { // opencode -> bottom of left pane = horizontal split
     const panes = await bigPanes();
@@ -281,7 +156,7 @@ try {
     await dragTo(c.x, c.y, left.x + left.width / 2, left.y + left.height - 15, 11, 'c3');
     await sleep(1500);
     const last = frames[frames.length - 1];
-    await snap(last.mouse, false, 150, 'c3');
+    await snap(last.mouse, false, timing.hold, 'c3');
   }
   { // pi -> bottom of right pane = quad grid
     const panes = (await bigPanes()).slice().sort((a, b2) => a.x - b2.x);
@@ -293,7 +168,7 @@ try {
     await dragTo(c.x, c.y, right.x + right.width / 2, right.y + right.height - 15, 11, 'c4');
     await sleep(1500);
     const last = frames[frames.length - 1];
-    await snap(last.mouse, false, 150, 'c4');
+    await snap(last.mouse, false, timing.hold, 'c4');
     const seps = await page.getByRole('main').getByRole('separator').count();
     console.log('panes:', (await bigPanes()).length, 'seps:', seps);
     if ((await bigPanes()).length < 4 || seps < 3) throw new Error(`quad layout failed: panes=${(await bigPanes()).length} seps=${seps}`);
@@ -306,7 +181,7 @@ try {
         const cc = center(cbox);
         await glideTo(cc.x - 160, cc.y - 40, cc.x, cc.y, 5, 'c4');
         await page.mouse.click(cc.x, cc.y);
-        await snap({ x: cc.x, y: cc.y }, true, 30, 'c4');
+        await snap({ x: cc.x, y: cc.y }, true, timing.click, 'c4');
         await sleep(8000);
       } else {
         await crashed.first().click().catch(() => {});
@@ -343,17 +218,7 @@ try {
     await glideTo(last.x, last.y, dc.x, dc.y, 6, 'c5');
     await sleep(450);
     await snap({ x: dc.x, y: dc.y }, false, 45, 'c5');
-    await page.mouse.move(dc.x, dc.y);
-    await page.mouse.down();
-    for (let i = 1; i <= 10; i++) {
-      const t = easeInOut(i / 10);
-      const x = dc.x - 80 * t;
-      await page.mouse.move(x, dc.y);
-      await snap({ x, y: dc.y }, false, 10, 'c5');
-    }
-    await page.mouse.up();
-    await sleep(300);
-    await snap({ x: dc.x - 80, y: dc.y }, true, 30, 'c5');
+    await dragTo(dc.x, dc.y, dc.x - 80, dc.y, timing.dragSteps, 'c5');
     await sleep(1200);
     await snap({ x: dc.x - 80, y: dc.y }, false, 120, 'c5');
   }
@@ -371,28 +236,13 @@ try {
   }
 
   const manifest = {
-    name: 'terminal-split-quad',
+    captions,
+    name: 'feature-split',
     viewport: { width: AW, height: AH },
     canvas: { FW: 1920, FH: 1080 },
     count: frames.length,
     frames,
     createdAt: new Date().toISOString(),
   };
-  await writeFile(join(recordingRoot, 'manifest.json'), JSON.stringify(manifest, null, 2));
-  await mkdir(resolve('.cache/showcase-split-quad'), { recursive: true });
-  await writeFile(resolve('.cache/showcase-split-quad/latest.json'), JSON.stringify({ ...manifest, dir: recordingRoot }, null, 2));
-  console.log(`Recorded quad: ${frames.length} frames -> ${recordingRoot}`);
-} catch (error) {
-  console.error(error);
-  if (page) {
-    try {
-      console.log((await page.locator('body').innerText()).slice(-4000));
-    } catch {}
-    await page.screenshot({ path: join(recordingRoot, 'capture-error.png') }).catch(() => {});
-  }
-  process.exitCode = 1;
-} finally {
-  try { await application?.close(); } catch {}
-  await rm(fixtureRoot, { recursive: true, force: true }).catch(() => {});
-  console.log(`Done: ${recordingRoot}`);
-}
+  await saveManifest(recordingRoot, manifest);
+});

@@ -16,6 +16,9 @@ test('composed graph exposes interfaces and selects the exact source checkout', 
   await expect(page.locator('.bp-node-detail')).toContainText('Source from C:/dev-y')
   expect(await page.evaluate(() => (window as any).compositionFixture.reads.at(-1))).toContain('C:/dev-y|note://')
   await page.locator('.bp-node-detail .bp-panel-close').click()
+  // Dismiss the expanded overlay before navigating the canvas beneath it.
+  await panel.locator('summary').click()
+  await expect(panel.locator('details')).not.toHaveAttribute('open')
   await page.locator('.react-flow__node').filter({ hasText: 'Provider checkout X' }).dblclick()
   await expect(page.locator('.bp-node-detail')).toContainText('Source from C:/dev-x')
   await page.screenshot({ path: test.info().outputPath('composition.png'), fullPage: true })

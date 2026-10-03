@@ -142,9 +142,9 @@ describe('Janus IPC contract', () => {
     const commands = Object.values(JANUS_COMMAND_CHANNELS)
     const events = Object.values(JANUS_EVENT_CHANNELS)
 
-expect(commands).toHaveLength(33)
-expect(events).toHaveLength(3)
-expect(new Set([...commands, ...events]).size).toBe(36)
+    expect(commands).toHaveLength(34)
+    expect(events).toHaveLength(3)
+    expect(new Set([...commands, ...events]).size).toBe(37)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining(commands)
     )
@@ -208,6 +208,7 @@ expect(new Set([...commands, ...events]).size).toBe(36)
     await janusApi.listMaintenanceAudits(maintenanceAudits)
     await janusApi.startMaintenanceTask(maintenanceStart)
     await janusApi.applyMaintenanceChangeSet(maintenanceApply)
+    await janusApi.previewMaintenanceChangeSet(maintenanceApply)
     await janusApi.cancelMaintenanceTask('task-1')
     await janusApi.completeMaintenanceTask('task-1')
     await janusApi.dismissMaintenanceProposal({ taskId: 'task-1' })
@@ -239,6 +240,7 @@ expect(new Set([...commands, ...events]).size).toBe(36)
       [JANUS_COMMAND_CHANNELS.maintenanceAuditList, maintenanceAudits],
       [JANUS_COMMAND_CHANNELS.maintenanceStart, maintenanceStart],
       [JANUS_COMMAND_CHANNELS.maintenanceApply, maintenanceApply],
+      [JANUS_COMMAND_CHANNELS.maintenancePreview, maintenanceApply],
       [JANUS_COMMAND_CHANNELS.maintenanceCancel, 'task-1'],
       [JANUS_COMMAND_CHANNELS.maintenanceComplete, 'task-1'],
       [JANUS_COMMAND_CHANNELS.maintenanceDismiss, { taskId: 'task-1' }],

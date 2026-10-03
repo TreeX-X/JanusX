@@ -130,4 +130,13 @@ describe('pi notify extension', () => {
 
     expect(posts).toHaveLength(0)
   })
+
+  it('returns when the bridge accepts the connection but never responds', async () => {
+    server.removeAllListeners('request')
+    server.on('request', () => {})
+    const handlers = await loadExtension()
+    const started = Date.now()
+    await handlers.agent_start({}, {})
+    expect(Date.now() - started).toBeLessThan(5000)
+  }, 6000)
 })

@@ -258,4 +258,97 @@ describe('runtime telemetry model context lookup', () => {
       confidence: 'authoritative',
     })
   })
+
+  it('rejects prose in the explicit model flag without dropping real ids', () => {
+    expect(detectModelFromText('--model the behavior panel')).toBeUndefined()
+    expect(detectModelFromText('--model gpt-5-codex')).toBe('GPT-5-Codex')
+    expect(detectModelFromText('model: the behavior')).toBeUndefined()
+  })
+
+  it('rejects bare loose model words in prose', () => {
+    expect(detectModelFromText('the opus of the team')).toBeUndefined()
+    expect(detectModelFromText('codex review notes')).toBeUndefined()
+  })
+
+  it('drops prose-like context fractions and inverted windows', () => {
+    expect(extractRuntimeTelemetry('tokens 5/10').contextTokens).toBeUndefined()
+    expect(extractRuntimeTelemetry('ctx 15k / 10k').contextTokens).toBeUndefined()
+    expect(extractRuntimeTelemetry('ctx 15k / 10k').contextWindowTokens).toBeUndefined()
+  })
+
+  it('keeps a well-formed explicit context fraction', () => {
+    expect(extractRuntimeTelemetry('ctx 8k / 128k')).toMatchObject({
+      contextTokens: 8_000,
+      contextWindowTokens: 128_000,
+    })
+  })
+
+  it('ignores the unanchored single-turn token count in a dsh turn header', () => {
+    const snapshot = extractRuntimeTelemetry('🌑 模型醒了… · 12s · 3.2k tokens · esc 中断')
+    expect(snapshot.contextTokens).toBeUndefined()
+    expect(snapshot.contextWindowTokens).toBeUndefined()
+  })
+
+  it('drops a regressed cumulative total without a session change', () => {
+    expect(mergeRuntimeTelemetrySnapshot(
+      {
+        preset: 'codex',
+        telemetryUpdatedAt: 1_000,
+        telemetryConfidence: 'authoritative',
+        totalTokens: 80_000,
+      },
+      {
+        observedAt: 1_500,
+        source: 'terminal-text',
+        confidence: 'estimated',
+        totalTokens: 10_000,
+      },
+    )).toEqual({})
+  })
+
+  it('clears stale cumulative totals on an exact session switch', () => {
+    // Only a hook/adapter assertion (non-history source) may rebind an
+    // exact-bound terminal; a history scan with a different session is dropped.
+    expect(mergeRuntimeTelemetrySnapshot(
+      {
+        preset: 'codex',
+        telemetrySessionId: 'old-session',
+        telemetrySessionBinding: 'exact',
+        telemetryUpdatedAt: 1_000,
+        totalTokens: 80_000,
+        inputTokens: 50_000,
+        outputTokens: 30_000,
+      },
+      {
+        sessionId: 'new-session',
+        sessionBinding: 'exact',
+        observedAt: 2_000,
+        source: 'history',
+        confidence: 'authoritative',
+      },
+    )).toEqual({})
+    expect(mergeRuntimeTelemetrySnapshot(
+      {
+        preset: 'codex',
+        telemetrySessionId: 'old-session',
+        telemetrySessionBinding: 'exact',
+        telemetryUpdatedAt: 1_000,
+        totalTokens: 80_000,
+        inputTokens: 50_000,
+        outputTokens: 30_000,
+      },
+      {
+        sessionId: 'new-session',
+        sessionBinding: 'exact',
+        observedAt: 2_000,
+        source: 'provider-event',
+        confidence: 'authoritative',
+      },
+    )).toMatchObject({
+      telemetrySessionId: 'new-session',
+      totalTokens: undefined,
+      inputTokens: undefined,
+      outputTokens: undefined,
+    })
+  })
 })

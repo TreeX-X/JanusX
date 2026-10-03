@@ -84,7 +84,7 @@ export interface BlueprintUpdateNodeOperation extends BlueprintOperationBase {
   before: Partial<BlueprintNode>
   after: Partial<Pick<BlueprintNode,
     'title' | 'type' | 'status' | 'progress' | 'positioning' | 'description' |
-    'techSolution' | 'notes' | 'tags'>> & { features?: BlueprintProposedFeature[] }
+    'techSolution' | 'notes' | 'tags'>> & { features?: BlueprintProposedFeature[]; sections?: Record<string, string> }
 }
 
 export interface BlueprintMoveNodeOperation extends BlueprintOperationBase {
@@ -288,6 +288,8 @@ export interface BlueprintDispatchBriefResult {
 export interface BlueprintMaintenanceApplyInput {
   taskId: string
   changeSetId: string
+  /** Host-owned frozen file selection reviewed by the user. */
+  previewId?: string
   operationIds: string[]
   /**
    * Node-aggregated approval: callers may pass group ids instead of (or
@@ -300,6 +302,34 @@ export interface BlueprintMaintenanceApplyInput {
    * rejects the apply otherwise — bulk approval never covers deletions.
    */
   confirmedDeleteOperationIds?: string[]
+}
+
+export interface BlueprintMaintenancePreviewInput {
+  taskId: string
+  changeSetId: string
+  conversationId?: string
+  workspaceId: string
+  workspacePath: string
+  operationIds: string[]
+  groupIds?: string[]
+}
+
+export interface BlueprintMaintenanceFilePreview {
+  uri: string
+  path: string
+  kind: 'create' | 'replace'
+  reason: string
+  operationIds: string[]
+  before: string
+  after: string
+  /** Note deletion is represented by an archive in the Note transaction. */
+  archivedInsteadOfDeleted?: boolean
+}
+
+export interface BlueprintMaintenancePreview {
+  id: string
+  changeSetId: string
+  files: BlueprintMaintenanceFilePreview[]
 }
 
 export interface BlueprintMaintenanceApplyResult {

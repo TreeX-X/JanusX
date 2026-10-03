@@ -1,3 +1,12 @@
+import { timing } from './showcase-config.mjs';
+const captions = {
+  'ft-1': { badge: '1', text: '文件树跟随当前盘' },
+  'ft-2': { badge: '2', text: '搜索秒过滤，改动有徽标' },
+  'ft-3': { badge: '3', text: '切盘自动跟随新scope' },
+  'ft-4': { badge: '4', text: '双击弹出独立编辑窗' },
+  'ft-5': { badge: '5', text: '一键嵌入主窗左右对照' },
+};
+
 // Record: file tree follows worktree — scope follow, search, git badges, embed.
 // Act1 file tool + tree walk / Act2 search slow-typing + git badge /
 // Act3 switch worktree (scope follows, sweep) forth and back /
@@ -14,7 +23,6 @@ import {
   openWorkspace, newShell, snapper, saveManifest, runRecord, sleep,
 } from './record-lib.mjs';
 
-const STILL = 170;
 
 await runRecord(async (ctx) => {
   const { recordingRoot, rawDir, repoPath } = await prepareRepo('filetree');
@@ -40,11 +48,7 @@ await runRecord(async (ctx) => {
 
   const frames = [];
   const { box, center, snap, glideTo, clickSnap, typeSnap, rest } = snapper(page, rawDir, frames);
-  const hold = async (cap, ms = STILL) => {
-    await rest(cap, ms);
-    await sleep(400);
-    await rest(cap, ms);
-  };
+  const hold = rest;
   // Visible travel: glide in from the parked cursor, hover-hold, then act.
   let px = 880;
   let py = 440;
@@ -57,18 +61,7 @@ await runRecord(async (ctx) => {
     await hold(cap);
     return c;
   };
-  const travelClick = async (loc, cap) => {
-    const c = center(await box(loc));
-    await glideTo(px, py, c.x, c.y, 12, cap);
-    px = c.x;
-    py = c.y;
-    await sleep(700);
-    await hold(cap);
-    await loc.click().catch(() => page.mouse.click(c.x, c.y));
-    await snap({ x: c.x, y: c.y }, true, 30, cap);
-    await sleep(800);
-    return c;
-  };
+  const travelClick = clickSnap;
 
   const sidebar = page.locator('.workspace-sidebar');
   const mainWtRow = sidebar.locator('div[role="button"]').filter({ has: page.locator('svg.lucide-git-branch') }).first();
@@ -113,7 +106,7 @@ await runRecord(async (ctx) => {
   const search = page.getByPlaceholder('搜索文件...');
   if (await search.count()) {
     await search.first().click().catch(() => {});
-    await typeSnap(search.first(), 'chain', 'ft-2', { delay: 130, lead: 120 });
+    await typeSnap(search.first(), 'chain', 'ft-2', { delay: timing.typing, lead: timing.hover });
     await sleep(900);
     await hold('ft-2');
     await search.first().fill('');
@@ -183,7 +176,7 @@ await runRecord(async (ctx) => {
   async function popEditor(c) {
     const editorPromise = application.waitForEvent('window', { timeout: 12000 }).catch(() => null);
     await chainRow.first().dblclick();
-    await snap({ x: c.x, y: c.y }, true, 30, 'ft-4');
+    await snap({ x: c.x, y: c.y }, true, timing.click, 'ft-4');
     const editorOpened = await editorPromise;
     if (!editorOpened) return null;
     await editorOpened.bringToFront().catch(() => {});
@@ -214,22 +207,22 @@ await runRecord(async (ctx) => {
     const ebb = await embedBtn.boundingBox().catch(() => null);
     const ebc = ebb ? { x: ebb.x + ebb.width / 2, y: ebb.y + ebb.height / 2 } : null;
     // Cursor parks on the embed entry from the first popup frame: no blink.
-    await popupFrame(editorPage, ebc, false, 170, 'ft-4');
+    await popupFrame(editorPage, ebc, false, timing.hold, 'ft-4');
     await sleep(400);
-    await popupFrame(editorPage, ebc, false, 170, 'ft-4');
+    await popupFrame(editorPage, ebc, false, timing.hold, 'ft-4');
     if (await embedBtn.count()) {
       const bb = await embedBtn.boundingBox();
       if (bb) {
         const bc = { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 };
         await editorPage.mouse.move(bc.x, bc.y).catch(() => {});
         await sleep(700);
-        await popupFrame(editorPage, bc, false, 170, 'ft-4');
+        await popupFrame(editorPage, bc, false, timing.hold, 'ft-4');
         await sleep(400);
-        await popupFrame(editorPage, bc, false, 170, 'ft-4');
+        await popupFrame(editorPage, bc, false, timing.hold, 'ft-4');
         await embedBtn.click().catch(() => editorPage.mouse.click(bc.x, bc.y).catch(() => {}));
         // The popup closes itself once embedded: the click frame is
         // best-effort; a closed target means success, not failure.
-        await popupFrame(editorPage, bc, true, 30, 'ft-4').catch(() => null);
+        await popupFrame(editorPage, bc, true, timing.click, 'ft-4').catch(() => null);
         await sleep(800);
       }
     } else {
@@ -269,8 +262,8 @@ await runRecord(async (ctx) => {
   await hold('ft-5');
 
   await saveManifest(recordingRoot, {
-    name: 'feature-filetree', viewport: { width: 1760, height: 884 },
-    canvas: { FW: 1920, FH: 1080 }, count: frames.length, frames,
+    captions,
+    name: 'feature-filetree', count: frames.length, frames,
     createdAt: new Date().toISOString(),
   });
 });

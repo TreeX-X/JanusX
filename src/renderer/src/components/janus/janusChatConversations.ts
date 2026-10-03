@@ -12,7 +12,7 @@ export const MAX_TOOL_TRACES = 48
 export function capChatMessages(
   messages: PersistedJanusConversation['messages'],
 ): PersistedJanusConversation['messages'] {
-  return messages.length > MAX_CHAT_MESSAGES ? messages.slice(-MAX_CHAT_MESSAGES) : messages
+  return messages
 }
 
 export function createJanusConversation(id = crypto.randomUUID()): PersistedJanusConversation {

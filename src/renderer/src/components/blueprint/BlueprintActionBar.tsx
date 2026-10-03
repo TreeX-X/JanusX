@@ -17,7 +17,8 @@ import { Select } from '../ui/Select'
 import { TerminalPresetIcon } from '../ui/TerminalPresetIcon'
 import { useBlueprintSelectPortal } from './blueprintSelectPortal'
 import { MaintenanceApproval } from './MaintenanceApproval'
-import { bulkApproval } from './maintenanceSelection'
+import { MaintenanceFileReview } from './MaintenanceFileReview'
+import { bulkApproval, maintenanceSelection } from './maintenanceSelection'
 import { resolveMaintenanceContext } from './maintenanceContext'
 import { useI18n } from '@/i18n/useI18n'
 import type { UseJanusChatReturn } from '../janus/useJanusChat'
@@ -52,6 +53,7 @@ export interface BlueprintActionBarProps {
   foreignCount: number
   /** Matched Notes cut by the per-turn ref cap. */
   droppedCount: number
+  onReviewOpenChange: (open: boolean) => void
 }
 
 /**
@@ -78,6 +80,7 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
   const [expanded, setExpanded] = useState(false)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   const [approvalWanted, setApprovalWanted] = useState(false)
+  const [hiddenReview, setHiddenReview] = useState<string | null>(null)
   const actionLock = useRef(false)
   const alive = useRef(true)
   const latestChat = useRef(chat)
@@ -95,6 +98,13 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
     ?? store.tasks.find(item => item.blueprintId === target?.graphId && !closed(item.status))
   const working = busy || chat.isStreaming || task?.status === 'analyzing' || task?.status === 'applying'
   const proposal = task?.status === 'proposal-ready' ? task.changeSet : null
+  const reviewKey = proposal ? JSON.stringify(proposal) : null
+  const reviewOpen = !sourceUnavailable && !!reviewKey && hiddenReview !== reviewKey
+  const { onReviewOpenChange } = props
+  useEffect(() => {
+    onReviewOpenChange(reviewOpen)
+    return () => onReviewOpenChange(false)
+  }, [reviewOpen, onReviewOpenChange])
   const pendingUndo = store.pendingUndo?.changeSet.blueprintId === target?.graphId ? store.pendingUndo : null
   const audits = target ? store.audits[target.graphId] ?? [] : []
   const taskMatches = !!target && (!task || (task.conversationId === chat.conversationId && task.blueprintId === target.graphId
@@ -135,10 +145,14 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
   useEffect(() => { setReceipt(null); setConfirmBulkDelete(false); setApprovalWanted(false) },
     [chat.conversationId, target?.graphId, scopeType, scopeNodeId])
 
-  const bulk = useMemo(() => {
-    if (!proposal) return null
-    try { return bulkApproval(proposal) } catch { return null }
-  }, [proposal])
+  const bulkResult = useMemo(() => {
+    if (!proposal) return { selection: null, error: null }
+    try {
+      const selection = bulkApproval(proposal)
+      return { selection: confirmBulkDelete ? { ...selection, operations: maintenanceSelection(proposal, proposal.operations.map(op => op.operationId)), blockedDeletes: [] } : selection, error: null }
+    } catch (reason) { return { selection: null, error: reason instanceof Error ? reason.message : String(reason) } }
+  }, [proposal, confirmBulkDelete])
+  const bulk = bulkResult.selection
   // A proposal nothing can approve in bulk is a dead end, so a blocked deletion
   // forces the detail view open; otherwise it stays collapsed behind a button.
   const detailForced = !!proposal && !!bulk?.blockedDeletes.length
@@ -183,6 +197,7 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
   }, [target, taskMatches, chat, task, store, workspace, checkResult, t])
 
   const organize = useCallback(async () => {
+    setHiddenReview(null)
     const id = await ensureTask()
     if (!id || !alive.current) return
     chat.proposeMaintenance(id, t('blueprint:maintenance.proposalPrompt'))
@@ -257,7 +272,7 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
     else warmTerminalCreatePath([next])
   }, [])
 
-  const applyAll = useCallback(async () => {
+  const applyAll = useCallback(async (previewId: string) => {
     if (!proposal || !bulk || !task) return
     await run(async () => {
       const ids = bulk.operations.map((op) => op.operationId)
@@ -265,15 +280,15 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
       const confirmed = confirmBulkDelete
         ? bulk.operations.filter((op) => op.type === 'delete-node').map((op) => op.operationId)
         : []
-      checkResult(await store.apply({ taskId: task.id, changeSetId: proposal.id, operationIds: ids, confirmedDeleteOperationIds: confirmed }))
+      checkResult(await store.apply({ taskId: task.id, changeSetId: proposal.id, previewId, operationIds: ids, confirmedDeleteOperationIds: confirmed }))
     })
     setConfirmBulkDelete(false)
   }, [proposal, bulk, task, confirmBulkDelete, run, store, checkResult])
 
-  const applySelected = useCallback(async (operationIds: string[], confirmedDeleteOperationIds: string[]) => {
+  const applySelected = useCallback(async (operationIds: string[], confirmedDeleteOperationIds: string[], previewId?: string) => {
     if (!proposal || !task) return
     await run(async () => {
-      checkResult(await store.apply({ taskId: task.id, changeSetId: proposal.id, operationIds, confirmedDeleteOperationIds }))
+      checkResult(await store.apply({ taskId: task.id, changeSetId: proposal.id, previewId, operationIds, confirmedDeleteOperationIds }))
     })
   }, [proposal, task, run, store, checkResult])
 
@@ -296,14 +311,22 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
   }
 
   const applyDisabled = working || !proposal || !bulk?.operations.length || !!bulk?.blockedDeletes.length
+  const reviewContext = task && proposal ? {
+    taskId: task.id, changeSetId: proposal.id, conversationId: chat.conversationId,
+    workspaceId: workspace.id, workspacePath: workspace.path,
+  } : undefined
 
   return <div className={styles.bar} role="toolbar" aria-label={t('blueprint:maintenance.actionsAria')}
+    data-review-open={reviewOpen}
     data-state={proposal ? 'proposal' : dispatching ? 'dispatching' : 'idle'}>
     <div className={styles.row}>
       <button type="button" className={styles.primary} disabled={working || stale || !hasUserMessage || !taskMatches}
         onClick={() => void run(organize)} title={t('blueprint:maintenance.organizeHint')}>
         {task?.status === 'analyzing' ? t('blueprint:maintenance.organizing') : t('blueprint:maintenance.organize')}
       </button>
+      {proposal && <button type="button" aria-pressed={reviewOpen} onClick={() => setHiddenReview(reviewOpen ? reviewKey : null)}>
+        {t(reviewOpen ? 'blueprint:maintenance.reviewDiscussion' : 'blueprint:maintenance.reviewDocument')}
+      </button>}
       <span onMouseEnter={() => warm(preset)}>
         <Select
           value={preset}
@@ -333,6 +356,7 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
       {droppedCount > 0 ? t('blueprint:maintenance.scopeDropped', { count: droppedCount }) : ''}
     </p>}
     {error && <p className={styles.warn} role="alert">{error}</p>}
+    {bulkResult.error && <p className={styles.warn} role="alert">{bulkResult.error}</p>}
     {/* A failed source read leaves the verbs dead; refresh is the way back. */}
     {(store.error || (!target && error)) && <div className={styles.row}>
       <button type="button" disabled={working} onClick={() => void run(async () => {
@@ -345,24 +369,27 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
       </button>
     </div>}
     {task && <p className={styles.status} role="status">{task.phase}</p>}
+    {task?.error && !error && <p className={styles.warn} role="alert">{task.error}</p>}
+    {task?.status === 'active' && task.changeSetHistory.at(-1)?.status === 'rejected' && <p className={styles.hint} role="status">
+      {t('blueprint:maintenance.reviewOutdated')}
+    </p>}
     {receipt && <p className={styles.status} role="status">
       {t('blueprint:maintenance.dispatch.receipt', { preset: getTerminalPresetMeta(receipt.preset).label, count: receipt.noteCount })}
       {' · '}
       {t('blueprint:maintenance.dispatch.prefillOnly')}
     </p>}
 
-    {proposal && bulk && <div className={styles.proposal}>
+    {proposal && bulk && reviewContext && <div className={styles.proposal} hidden={!reviewOpen}>
       <p className={styles.proposalHead}>
         {t('blueprint:maintenance.pendingProposal', { version: proposal.version })}
-        {bulk.excludedDeletes.length > 0 && ` · ${t('blueprint:maintenance.deleteBulkExcluded', { count: bulk.excludedDeletes.length })}`}
+        {!confirmBulkDelete && bulk.excludedDeletes.length > 0 && ` · ${t('blueprint:maintenance.deleteBulkExcluded', { count: bulk.excludedDeletes.length })}`}
       </p>
+      <p>{proposal.reason}</p>
+      <p className={styles.hint}>{t('blueprint:maintenance.reviewHint')}</p>
       {bulk.blockedDeletes.length > 0 && <p className={styles.warn}>
         {t('blueprint:maintenance.deleteBlocked', { count: bulk.blockedDeletes.length })}
       </p>}
       <div className={styles.row}>
-        <button type="button" className={styles.primary} disabled={applyDisabled} onClick={() => void applyAll()}>
-          {t('blueprint:maintenance.approveAll', { count: bulk.operations.length })}
-        </button>
         {bulk.excludedDeletes.length > 0 && <label className={styles.danger}>
           <input type="checkbox" checked={confirmBulkDelete} disabled={working}
             onChange={event => setConfirmBulkDelete(event.target.checked)} />
@@ -372,7 +399,9 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
           {t('blueprint:maintenance.approvePartial')}
         </button>
       </div>
-      {showApproval && <MaintenanceApproval key={JSON.stringify(proposal)} changeSet={proposal} busy={!!working} onApply={applySelected} />}
+      {showApproval ? <MaintenanceApproval key={JSON.stringify(proposal)} changeSet={proposal} busy={!!working} onApply={applySelected} reviewContext={reviewContext} />
+        : <MaintenanceFileReview key={JSON.stringify(proposal)} input={{ ...reviewContext, operationIds: bulk.operations.map(op => op.operationId) }}
+          disabled={!!applyDisabled} label={t('blueprint:maintenance.approveAll', { count: bulk.operations.length })} onApply={applyAll} />}
     </div>}
 
     {task && expanded && <div className={styles.row}>

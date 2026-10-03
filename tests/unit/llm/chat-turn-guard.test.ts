@@ -14,8 +14,8 @@ const { search, searchWithUser, recordAccess, recordProjectAccess, capture, stre
   capturePersonTurn: vi.fn(),
   capturePersonEpisode: vi.fn(),
 }))
-const { proposeForConversation } = vi.hoisted(() => ({ proposeForConversation: vi.fn() }))
-vi.mock('../../../src/main/janus/maintenance/service', () => ({ blueprintMaintenanceService: { proposeForConversation } }))
+const { proposeForConversation, invalidateConversationProposal } = vi.hoisted(() => ({ proposeForConversation: vi.fn(), invalidateConversationProposal: vi.fn() }))
+vi.mock('../../../src/main/janus/maintenance/service', () => ({ blueprintMaintenanceService: { proposeForConversation, invalidateConversationProposal } }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/janusx-test' } }))
 vi.mock('../../../src/main/knowledge/context-service', () => ({
@@ -80,8 +80,8 @@ describe('chat turn guard (S6-a)', () => {
     let release!: () => void
     proposeForConversation.mockReset().mockImplementationOnce(async () => {
       await new Promise<void>((resolve) => { release = resolve })
-      return 'first proposal'
-    }).mockResolvedValue('revised proposal')
+      return { id: 'task', phase: 'first proposal' }
+    }).mockResolvedValue({ id: 'task', phase: 'revised proposal' })
     const reply = vi.fn()
     const request = { requestId: 'proposal-1', conversationId: 'project-proposal', providerId: 'p', domain: 'project' as const, messages: userMessages, maintenanceTaskId: 'task' }
     const turn = handleChatStream({ reply } as never, request)
@@ -100,7 +100,9 @@ describe('chat turn guard (S6-a)', () => {
     await turn
     expect(proposeForConversation).toHaveBeenCalledTimes(2)
     expect(proposeForConversation.mock.calls[1][0].messages.at(-1).content).toBe('Use the revised scope')
-    expect(reply).toHaveBeenCalledWith('llm:chat:agent-event', expect.objectContaining({ type: 'text_delta', delta: 'revised proposal' }))
+    expect(reply).toHaveBeenCalledWith('llm:chat:agent-event', expect.objectContaining({ type: 'maintenance_result', task: { id: 'task', phase: 'revised proposal' } }))
+    const types = reply.mock.calls.filter(call => call[0] === 'llm:chat:agent-event').map(call => call[1].type)
+    expect(types.indexOf('maintenance_result')).toBeLessThan(types.indexOf('stream_end'))
   })
 
   it('cancels a proposal through the ordinary chat stop route and releases its turn', async () => {
@@ -313,5 +315,23 @@ describe('chat turn guard (S6-a)', () => {
     )
     expect(userSearch).not.toHaveBeenCalled()
     expect(project.messages.some((message) => message.content.includes('[user] private'))).toBe(false)
+  })
+
+  it('manual compaction emits a checkpoint without adding a reply or running tools', async () => {
+    const messages = Array.from({ length: 14 }, (_, index) => ({ role: index % 2 ? 'assistant' as const : 'user' as const, content: `Decision ${index}` }))
+    const original = JSON.stringify(messages)
+    immediateStream('## Goal\nPreserve decisions.\n## Progress\nReviewed.\n## Next Steps\nContinue.')
+    const reply = vi.fn()
+    await handleChatStream({ reply } as never, {
+      requestId: 'manual-compact', conversationId: 'manual-compact', providerId: 'provider-a',
+      messages, compact: { keepRecentUnits: 4 }, domain: 'personal',
+    })
+    const state = reply.mock.calls.find(([, payload]) => payload.type === 'context_state' && payload.state.phase === 'compacted')?.[1].state
+    expect(state?.checkpoint.coveredMessages).toBe(10)
+    expect(streamText).toHaveBeenCalledTimes(1)
+    expect(streamText.mock.calls[0][0].tools).toBeUndefined()
+    expect(executeFunctionCall).not.toHaveBeenCalled()
+    expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'manual-compact' })
+    expect(JSON.stringify(messages)).toBe(original)
   })
 })

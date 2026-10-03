@@ -70,16 +70,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       const terminalRow = nodeDetail.locator('.bp-node-detail__terminal-footer')
       await expect(terminalRow).toBeVisible()
       await expect(terminalRow.getByRole('button')).toHaveCount(0)
-      // Dispatch lives in the panel, not the canvas.
-      const bar = chat(page).getByRole('toolbar', { name: '蓝图操作' })
-      await expect(bar).toBeVisible()
-      // Exactly three deliberate verbs, and the read scope is a quiet chip.
-      await expect(bar.getByRole('button')).toHaveCount(4)
-      await expect(bar.getByRole('button', { name: '整理 Note', exact: true })).toBeVisible()
-      await expect(bar.getByRole('button', { name: '目标终端' })).toBeVisible()
-      await expect(bar.getByRole('button', { name: '派发', exact: true })).toBeVisible()
-      // Selecting the child narrows the chip to that subtree.
-      await expect(bar).toContainText('读 1 篇')
+      await expect(chat(page).locator('.bp-maintenance-policy-hint')).toHaveCount(0)
+      await expect(chat(page).getByRole('toolbar')).toHaveCount(0)
       // Nothing is expanded until a decision demands it.
       await expect(chat(page).locator('.bp-maintenance-approval')).toHaveCount(0)
     })
@@ -112,7 +104,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       await insideViewport(page, chat(page).locator('.janus-chat textarea'))
       await expect(chat(page).locator('.bp-maintenance-controls')).toHaveCount(0)
       await expect(chat(page).locator('.bp-maintenance-context')).toHaveCount(0)
-      await expect(chat(page).getByRole('toolbar', { name: '蓝图操作' })).toBeVisible()
+      await expect(chat(page).locator('.bp-maintenance-policy-hint')).toHaveCount(0)
       const bodyScroll = await chat(page).locator('.janus-chat-messages').evaluate(element => getComputedStyle(element).overflowY)
       expect(['auto', 'scroll']).toContain(bodyScroll)
       expect(errors).toEqual([])
@@ -219,6 +211,30 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       expect(request.domain).toBe('project')
       expect(request.workspaceResources).toEqual([{ workspaceId: 'ws', workspacePath: 'C:/fixture', workspaceName: 'Project', agentSessionId: 'session' }])
       expect(request.maintenanceTaskId).toBeUndefined()
+    })
+
+    test('long applied Note details keep continuous discussion and the input usable', async ({ page }) => {
+      await open(page)
+      const input = chat(page).locator('.janus-chat textarea')
+      await input.fill('Update the complete long Note')
+      await input.press('Enter')
+      await expect(chat(page)).toContainText('Project reply in progress')
+      await page.evaluate(() => {
+        const fixture = (window as any).projectFixture
+        const request = fixture.streams.at(-1)
+        const change = { id: 'long-change', txId: 'tx-1', conversationId: request.conversationId, workspacePath: 'C:/fixture', createdAt: new Date().toISOString(), reason: 'Long Note updated', files: [{ uri: 'note://fixture/long', title: 'Long Note', before: 'Before', after: Array.from({ length: 200 }, (_, i) => 'Line ' + i).join('\n') }] }
+        fixture.noteChanges.push(change)
+        fixture.emitAgentEvent({ type: 'note_change', requestId: request.requestId, change })
+        fixture.finishStream()
+      })
+      const card = chat(page).locator('article').filter({ hasText: 'Long Note updated' })
+      await card.locator('summary').first().click()
+      await card.locator('summary').nth(1).click()
+      await card.getByRole('button').scrollIntoViewIfNeeded()
+      await insideViewport(page, input)
+      await insideViewport(page, card.getByRole('button'))
+      await expect(chat(page).locator('.janus-chat-messages')).toBeVisible()
+      await page.screenshot({ path: test.info().outputPath('workbench-note-change.png'), animations: 'disabled' })
     })
 
     test('switching workspace notifies once, resets context and stays in one session', async ({ page }) => {

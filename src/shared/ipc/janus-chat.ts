@@ -36,6 +36,8 @@ export interface EngineeringContext {
 }
 
 export interface PersistedJanusConversation {
+  contextCheckpoint?: import('../chat-context').ChatContextCheckpoint
+  contextEpoch?: number
   id: string
   title: string
   createdAt: number
@@ -63,7 +65,6 @@ export interface JanusChatAPI {
 }
 
 const MAX_CONVERSATIONS = 100
-const MAX_MESSAGES = 200
 const MAX_TOOL_TRACES = 48
 const MAX_ID_LENGTH = 128
 const MAX_TITLE_LENGTH = 80
@@ -160,12 +161,12 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
   const updatedAt = finiteTimestamp(source.updatedAt)
   if (!id || !title || createdAt === null || updatedAt === null || !Array.isArray(source.messages)) return null
 
-  const messages = source.messages.slice(-MAX_MESSAGES).flatMap((item): JanusChatMessage[] => {
+  const messages = source.messages.flatMap((item): JanusChatMessage[] => {
     if (!item || typeof item !== 'object') return []
     const message = item as Record<string, unknown>
     const messageId = boundedString(message.id, MAX_ID_LENGTH)
     const content = typeof message.content === 'string'
-      ? message.content.slice(0, MAX_MESSAGE_LENGTH)
+      ? message.content
       : null
     const timestamp = finiteTimestamp(message.timestamp)
     if (!messageId || content === null || timestamp === null) return []
@@ -242,7 +243,15 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
       }).slice(0, MAX_PENDING_ACTIONS)
     : undefined
   const pendingActions = rawPendingActions?.length ? rawPendingActions : undefined
+  const checkpoint = source.contextCheckpoint as import('../chat-context').ChatContextCheckpoint | undefined
+  const contextCheckpoint = checkpoint && typeof checkpoint.summary === 'string' && checkpoint.summary.length <= MAX_MESSAGE_LENGTH
+    && Number.isSafeInteger(checkpoint.coveredMessages) && checkpoint.coveredMessages >= 0
+    && typeof checkpoint.prefixHash === 'string' && /^[a-f0-9]{64}$/.test(checkpoint.prefixHash)
+    && typeof checkpoint.scopeKey === 'string' && checkpoint.scopeKey.length < 16000
+    && (checkpoint.references === undefined || (Array.isArray(checkpoint.references) && checkpoint.references.every(ref => typeof ref === 'string' && ref.length <= 16000))) ? checkpoint : undefined
   return {
+    ...(contextCheckpoint ? { contextCheckpoint } : {}),
+    contextEpoch: Number.isSafeInteger(source.contextEpoch) ? source.contextEpoch as number : 0,
     id,
     title,
     createdAt,

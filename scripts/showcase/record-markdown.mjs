@@ -1,12 +1,15 @@
+const captions = {
+  'md-1': { badge: '1', text: '底部抽屉切到Markdown' },
+  'md-2': { badge: '2', text: '新建笔记逐字书写' },
+  'md-3': { badge: '3', text: '分栏左写右看纯预览' },
+};
+
 // Record: Quick Note markdown — bottom drawer, slow-typed note,
 // split edit/preview, pure preview render. Zero model calls.
 import {
   prepareRepo, seedFixture, launchApp, skipGate, ensureWorkspace, ensureSidebarExpanded,
   openWorkspace, newShell, snapper, saveManifest, runRecord, sleep,
 } from './record-lib.mjs';
-
-const STILL = 170;
-const NOTE = '# 联调记录\n- [ ] 鉴权链路回归\n- [x] login->token 对齐\n\n今日收尾：跑通主流程';
 
 await runRecord(async (ctx) => {
   const { recordingRoot, rawDir, repoPath } = await prepareRepo('markdown');
@@ -24,41 +27,10 @@ await runRecord(async (ctx) => {
   await newShell(page);
 
   const frames = [];
-  const { box, center, snap, glideTo, rest } = snapper(page, rawDir, frames);
-  const hold = async (cap, ms = STILL) => {
-    await rest(cap, ms);
-    await sleep(400);
-    await rest(cap, ms);
-  };
-  let px = 880;
-  let py = 440;
-  const travelClick = async (loc, cap) => {
-    const c = center(await box(loc));
-    await glideTo(px, py, c.x, c.y, 12, cap);
-    px = c.x;
-    py = c.y;
-    await sleep(700);
-    await hold(cap);
-    await loc.click().catch(() => page.mouse.click(c.x, c.y));
-    await snap({ x: c.x, y: c.y }, true, 30, cap);
-    await sleep(800);
-    return c;
-  };
-  // Slow typing with real newlines: one frame per keystroke.
-  const mdType = async (loc, text, cap) => {
-    const c = center(await box(loc));
-    await glideTo(px, py, c.x, c.y, 10, cap);
-    px = c.x;
-    py = c.y;
-    await sleep(360);
-    await snap({ x: c.x, y: c.y }, false, 100, cap);
-    for (const ch of text) {
-      if (ch === '\n') await loc.press('Enter').catch(() => {});
-      else await loc.pressSequentially(ch, { delay: 0 }).catch(() => {});
-      await snap({ x: c.x, y: c.y }, false, 100, cap);
-    }
-    return c;
-  };
+  const { rest, clickSnap, typeSnap } = snapper(page, rawDir, frames);
+  const hold = rest;
+  const travelClick = clickSnap;
+  const mdType = typeSnap;
 
   // ---- md-1: bottom drawer -> Markdown tab ----
   const toggle = page.getByRole('button', { name: '切换 Runtime 状态面板' });
@@ -111,8 +83,8 @@ await runRecord(async (ctx) => {
   }
 
   await saveManifest(recordingRoot, {
-    name: 'feature-markdown', viewport: { width: 1760, height: 884 },
-    canvas: { FW: 1920, FH: 1080 }, count: frames.length, frames,
+    captions,
+    name: 'feature-markdown', count: frames.length, frames,
     createdAt: new Date().toISOString(),
   });
 });

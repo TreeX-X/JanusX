@@ -1,3 +1,11 @@
+import { timing } from './showcase-config.mjs';
+const captions = {
+  'br-1': { badge: '1', text: '点新建浏览器开标签页' },
+  'br-2': { badge: '2', text: '地址栏输入回车打开' },
+  'br-3': { badge: '3', text: '前后退刷新走历史' },
+  'br-4': { badge: '4', text: '多标签并存对照' },
+};
+
 // Record: embedded browser — new browser, slow-typed address, two pages,
 // back/forward/reload through history, second tab. Offline file:// fixtures.
 //
@@ -6,16 +14,12 @@
 // onto the placeholder body rect. No product changes; record-side only.
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createRequire } from 'node:module';
 import {
   prepareRepo, seedFixture, launchApp, skipGate, ensureWorkspace, ensureSidebarExpanded,
   openWorkspace, newShell, snapper, saveManifest, runRecord, sleep,
 } from './record-lib.mjs';
-import { downscaleBilinear } from './showcase-lib.mjs';
+import { PNG, downscaleBilinear } from './showcase-lib.mjs';
 
-const STILL = 170;
-const gifReq = createRequire('C:/Users/Tree/AppData/Local/Temp/opencode/giftools/package.json');
-const { PNG } = gifReq('pngjs');
 
 const PAGE_CSS = 'body{background:#EFE4C5;color:#1C343B;font-family:sans-serif;margin:0;padding:48px}h1{font-size:40px}p{font-size:20px}';
 
@@ -94,33 +98,16 @@ await runRecord(async (ctx) => {
   };
 
   const frames = [];
-  const { box, center, snap, glideTo, typeSnap, rest } = snapper(page, rawDir, frames, shot);
-  const hold = async (cap, ms = STILL) => {
-    await rest(cap, ms);
-    await sleep(400);
-    await rest(cap, ms);
-  };
-  let px = 880;
-  let py = 440;
-  const travelClick = async (loc, cap) => {
-    const c = center(await box(loc));
-    await glideTo(px, py, c.x, c.y, 12, cap);
-    px = c.x;
-    py = c.y;
-    await sleep(700);
-    await hold(cap);
-    await loc.click().catch(() => page.mouse.click(c.x, c.y));
-    await snap({ x: c.x, y: c.y }, true, 30, cap);
-    await sleep(800);
-    return c;
-  };
+  const { typeSnap, rest, clickSnap } = snapper(page, rawDir, frames, shot);
+  const hold = rest;
+  const travelClick = clickSnap;
   const urlFor = (f) => 'file:///' + join(repoPath, f).replace(/\\/g, '/');
   const goUrl = async (file, cap) => {
     const address = page.getByRole('textbox', { name: '地址栏' }).first();
     await address.waitFor({ state: 'visible', timeout: 10000 });
     await travelClick(address, cap);
     await address.fill('');
-    await typeSnap(address, urlFor(file), cap, { delay: 80, lead: 100 });
+    await typeSnap(address, urlFor(file), cap, { delay: timing.typing, lead: timing.hover });
     await sleep(800);
     await hold(cap);
     await address.press('Enter').catch(() => {});
@@ -174,8 +161,8 @@ await runRecord(async (ctx) => {
   console.log('pane tabs:', tabs);
 
   await saveManifest(recordingRoot, {
-    name: 'feature-browser', viewport: { width: 1760, height: 884 },
-    canvas: { FW: 1920, FH: 1080 }, count: frames.length, frames,
+    captions,
+    name: 'feature-browser', count: frames.length, frames,
     createdAt: new Date().toISOString(),
   });
 });
