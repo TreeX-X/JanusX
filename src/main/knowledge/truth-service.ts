@@ -13,6 +13,8 @@ import type {
 } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
+import { wikiFreshness } from './wiki-freshness'
+import { assertWikiReviewReady } from './wiki-review-recovery'
 import { isMemoryScope, isSourceEvidence } from './memory-evidence'
 
 interface WikiPageIndexEntry {
@@ -188,8 +190,9 @@ async function readJsonl<T>(
       })
     reportTruthSchemaViolations(relativePath, targetType, violations)
     return records
-  } catch {
-    return []
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
   }
 }
 
@@ -199,30 +202,28 @@ async function readPublishedWikiPages(): Promise<WikiPage[]> {
     parsed = JSON.parse(
       await readFile(join(knowledgeRootPath(), 'wiki', 'pages-index.json'), 'utf8'),
     )
-  } catch {
-    return []
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
   }
 
-  if (!isRecord(parsed) || !Array.isArray(parsed.pages)) return []
+  if (!isRecord(parsed) || !Array.isArray(parsed.pages)) throw new Error('Invalid wiki index')
 
   const pages = await Promise.all(
     parsed.pages
       .filter(isPublishedWikiEntry)
       .map(async (page): Promise<WikiPage | null> => {
-        try {
-          const markdown = await readFile(join(knowledgeRootPath(), page.relativePath), 'utf8')
-          return { ...page, markdown }
-        } catch {
-          return null
-        }
+        const markdown = await readFile(join(knowledgeRootPath(), page.relativePath), 'utf8')
+        return { ...page, markdown }
       }),
   )
   return pages.filter((page): page is WikiPage => page !== null)
 }
 
 export class KnowledgeTruthService {
-  async list(): Promise<KnowledgeTruthSnapshot> {
+  async list(options: { includeStaleWiki?: boolean } = {}): Promise<KnowledgeTruthSnapshot> {
     const reviewRevision = await assertFactReviewReady()
+    const wikiRevision = await assertWikiReviewReady()
     const [facts, wikiPages, graphEdges] = await Promise.all([
       readJsonl(join('facts', 'facts.jsonl'), isMemoryFact, 'fact'),
       readPublishedWikiPages(),
@@ -232,9 +233,23 @@ export class KnowledgeTruthService {
     const barrier = await readPersonalForgettingBarrier()
     const revocations = await readObservationRevocationBarrier()
     await assertFactReviewReady(reviewRevision)
+    await assertWikiReviewReady(wikiRevision)
+    const visibleFacts = facts.filter(fact => !barrier.blocksFact(fact) && !revocations.blocksFact(fact))
+    const pages = await Promise.all(wikiPages.map(async page => {
+      let freshness = wikiFreshness(page, visibleFacts)
+      if (revocations.blocksFactIds(page.workspaceId, page.sourceFactIds)) freshness = 'stale'
+      if (page.sourceNoteRefs?.length) {
+        const { wikiSourceStatuses } = await import('./note-sources')
+        const sources = await wikiSourceStatuses(page.workspacePath ?? '', page.sourceNoteRefs)
+        if (sources.some(source => source.status !== 'fresh')) freshness = 'stale'
+        else if (!page.sourceFactIds.length) freshness = 'current'
+      }
+      return { ...page, freshness }
+    }))
+    await assertWikiReviewReady(wikiRevision)
     return {
-      facts: facts.filter(fact => !barrier.blocksFact(fact) && !revocations.blocksFact(fact)),
-      wikiPages: wikiPages.filter(page => !revocations.blocksFactIds(page.workspaceId, page.sourceFactIds)),
+      facts: visibleFacts,
+      wikiPages: options.includeStaleWiki ? pages : pages.filter(page => page.freshness !== 'stale'),
       graphEdges: graphEdges.filter(edge => !revocations.blocksFactIds(edge.workspaceId, edge.sourceFactIds)),
     }
   }

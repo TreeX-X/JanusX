@@ -1,5 +1,10 @@
 import { controlLaya } from '../knowledge/laya-runtime'
+import { listWikiHistory, readWikiRevision, pinWikiRevision } from '../knowledge/wiki-history'
+import { knowledgeAutomationService } from '../knowledge/automation-service'
+import { getJevKey, setJevKey } from '../knowledge/knowledge-credentials'
+import { stopKnowledgeLocalModel } from '../knowledge/knowledge-models'
 import { ipcMain } from 'electron'
+import { configService } from '../config/service'
 import { noteWikiPages, prepareNoteWiki, wikiSourceStatuses } from '../knowledge/note-sources'
 import type { PrepareNoteWikiInput } from '../../shared/ipc/knowledge'
 import { knowledgeContractService } from '../knowledge/contract-service'
@@ -43,6 +48,21 @@ import type {
 } from '../../shared/knowledge'
 
 export function registerKnowledgeHandlers(): void {
+  const assertEnabled = async () => { if (!(await configService.getExperimentalFeatures()).knowledge) throw new Error('knowledge-disabled') }
+  ipcMain.handle(KNOWLEDGE_CHANNELS.automationStatus, () => knowledgeAutomationService.status())
+  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRun, async (_event, input?: { backfill?: boolean }) => {
+    await assertEnabled()
+    if (input?.backfill === true) await knowledgeAutomationService.backfill()
+    else await knowledgeAutomationService.run()
+    return knowledgeAutomationService.status()
+  })
+  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRetry, async (_event, id: string) => { await assertEnabled(); await knowledgeAutomationService.retry(id) })
+  ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredential, async (_event, input: unknown) => { await assertEnabled(); knowledgeAutomationService.stop(); return setJevKey(input) })
+  ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredentialStatus, async () => ({ configured: Boolean(await getJevKey()) }))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.localModelStop, () => { knowledgeAutomationService.stop(); stopKnowledgeLocalModel() })
+  ipcMain.handle(KNOWLEDGE_CHANNELS.wikiHistory, (_event, input: unknown) => listWikiHistory(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.wikiRevision, (_event, input: unknown) => readWikiRevision(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.pinWikiRevision, async (_event, input: unknown) => { await assertEnabled(); return pinWikiRevision(input) })
   ipcMain.handle(KNOWLEDGE_CHANNELS.candidateAction, (_event, input: unknown) => knowledgeProcessingQueue.processCandidateAction(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.layaControl, (_event, action) => controlLaya(action))
   ipcMain.handle(KNOWLEDGE_CHANNELS.importLegacyPersonalMemory, () => importLegacyPersonalMemory())
@@ -57,7 +77,7 @@ export function registerKnowledgeHandlers(): void {
       if (!candidate) throw new Error('Wiki candidate not found')
       return wikiSourceStatuses(candidate.provenance.workspacePath, candidate.sourceNoteRefs)
     }
-    const page = (await knowledgeTruthService.list()).wikiPages.find(p => p.workspaceId === input.workspaceId && p.slug === input.slug)
+    const page = (await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages.find(p => p.workspaceId === input.workspaceId && p.slug === input.slug)
     if (!page) throw new Error('Wiki page not found')
     return wikiSourceStatuses(page.workspacePath ?? '', page.sourceNoteRefs)
   })
@@ -161,7 +181,7 @@ export function registerKnowledgeHandlers(): void {
   })
 
   ipcMain.handle(KNOWLEDGE_CHANNELS.listTruth, async () => {
-    return knowledgeTruthService.list()
+    return knowledgeTruthService.list({ includeStaleWiki: true })
   })
 
   ipcMain.handle(KNOWLEDGE_CHANNELS.revokeTruth, async (_event, input: RevokeTruthInput) => {

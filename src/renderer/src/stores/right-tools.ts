@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { PersistStorage, StateStorage } from 'zustand/middleware'
 import { useAppStore } from './app'
+import { useExperimentalStore } from './experimental'
+import { isRightToolEnabled } from '../right-tools/registry'
 import {
   activateRightTool,
   clampRightToolPanelWidth,
@@ -74,10 +76,10 @@ export const useRightToolStore = create<RightToolStore>()(
 
       return {
         ...defaults,
-        openTool: (toolId) => applyTransition(openRightTool(get(), toolId)),
-        activateTool: (toolId) => applyTransition(activateRightTool(get(), toolId)),
+        openTool: (toolId) => { if (isRightToolEnabled(toolId, useExperimentalStore.getState())) applyTransition(openRightTool(get(), toolId)) },
+        activateTool: (toolId) => { if (isRightToolEnabled(toolId, useExperimentalStore.getState())) applyTransition(activateRightTool(get(), toolId)) },
         closeTool: (toolId) => applyTransition(closeRightTool(get(), toolId)),
-        toggleFromRail: (toolId) => applyTransition(toggleRightToolFromRail(get(), toolId)),
+        toggleFromRail: (toolId) => { if (isRightToolEnabled(toolId, useExperimentalStore.getState())) applyTransition(toggleRightToolFromRail(get(), toolId)) },
         setPanelWidth: (panelWidth) => set({ panelWidth: clampRightToolPanelWidth(panelWidth) }),
         reconcile: () => set(reconcileRightToolPreferences(get())),
       }

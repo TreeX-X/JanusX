@@ -33,19 +33,22 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
   const { t } = useI18n('settings')
   const { t: tTeam } = useI18n('team')
   const { t: tCommon } = useI18n('common')
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab)
+  const [selectedTab, setActiveTab] = useState<SettingsTab>(initialTab)
   // 创新开关门控团队页：关闭时 tab 隐藏；正停在 team 页则退回 general，避免悬空态。
   const teamCollabEnabled = useExperimentalStore((s) => s.teamCollab)
+  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
   const loadExperimental = useExperimentalStore((s) => s.load)
-  const tabOrder = teamCollabEnabled ? TAB_ORDER : TAB_ORDER.filter((tab) => tab !== 'team')
+  const tabOrder = TAB_ORDER.filter((tab) => (tab !== 'team' || teamCollabEnabled) && (tab !== 'knowledge' || knowledgeEnabled))
+  // Note: disabled knowledge entries never mount, including direct navigation — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+  const activeTab = tabOrder.includes(selectedTab) ? selectedTab : 'general'
 
   useEffect(() => {
     void loadExperimental()
   }, [loadExperimental])
 
   useEffect(() => {
-    if (!teamCollabEnabled) setActiveTab((prev) => (prev === 'team' ? 'general' : prev))
-  }, [teamCollabEnabled])
+    setActiveTab((prev) => (prev === 'team' && !teamCollabEnabled || prev === 'knowledge' && !knowledgeEnabled) ? 'general' : prev)
+  }, [teamCollabEnabled, knowledgeEnabled])
 
   useEffect(() => {
     if (isOpen) setActiveTab(initialTab)

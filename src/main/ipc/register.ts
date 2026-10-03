@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { configService } from '../config/service'
 import type { OfficeArtifactIndex } from '../office/office-artifact-index'
 import type { OfficeWatchPool } from '../office/office-watch-pool'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
@@ -39,6 +40,8 @@ import { runDeterministicStage } from '../knowledge/deterministic-extractor'
 import { registerLayaScorer } from '../knowledge/laya-runtime'
 import { runCandidateAction } from '../knowledge/candidate-actions'
 import { runLlmStage } from '../knowledge/llm-stage'
+import { knowledgeAutomationService } from '../knowledge/automation-service'
+import { appShutdown } from '../shutdown/AppShutdown'
 import { knowledgeRefinementTasks } from '../knowledge/refinement-tasks'
 import { terminalManager } from '../terminal/manager'
 import { analyzer } from '../janus/analyzer'
@@ -141,9 +144,15 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   knowledgeProcessingQueue.configureDeterministicHandler((batch) =>
     runDeterministicStage(batch).then(() => undefined),
   )
-  knowledgeProcessingQueue.configureLlmHandler((batch) => runLlmStage(batch))
+  knowledgeProcessingQueue.configureAutomationHandler(() => knowledgeAutomationService.run())
+  appShutdown.configure({ stopKnowledge: () => knowledgeAutomationService.shutdown() })
+  knowledgeProcessingQueue.configureLlmHandler(async (batch) => {
+    if ((await configService.getKnowledgeSettings()).automation) return { skipped: true, skippedReason: 'no-refinement', processed: 0, proposed: 0, merged: 0 }
+    return runLlmStage(batch)
+  })
   knowledgeProcessingQueue.configureRefinementHandler(
-    (workspaceId) => knowledgeRefinementTasks.runDue(workspaceId),
+    async (workspaceId) => (await configService.getKnowledgeSettings()).automation
+      ? { processed: 0, failed: 0, cancelled: 0, deferred: 0 } : knowledgeRefinementTasks.runDue(workspaceId),
     () => knowledgeRefinementTasks.stats(),
   )
   knowledgeProcessingQueue.startRefinementLoop()
@@ -161,6 +170,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     .then(async ({ pendingTotal }) => {
       if (pendingTotal > 0) console.log(`[knowledge] processing queue restored with ${pendingTotal} pending observations`)
       await knowledgeProcessingQueue.processRefinementsNow()
+      await knowledgeAutomationService.run()
     })
     .catch((error: unknown) => {
       console.error(`[knowledge] queue startup restore failed: ${error instanceof Error ? error.message : String(error)}`)

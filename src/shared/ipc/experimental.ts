@@ -14,7 +14,7 @@ export type ExperimentalChannel = (typeof EXPERIMENTAL_CHANNELS)[keyof typeof EX
 export interface ExperimentalFeatures {
   /** 蓝图工作台入口（标题栏切换器 + 工作台本体 + 相关跳转）。 */
   blueprint: boolean
-  /** 知识库工作台入口（标题栏切换器 + 工作台本体 + 相关跳转）。 */
+  /** 知识库工作台、知识库设置及右侧审核入口与相关跳转。 */
   knowledge: boolean
   /** 圆桌视图（灵动岛二级展开的 roundtable 页）。 */
   roundtable: boolean

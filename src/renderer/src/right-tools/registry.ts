@@ -1,5 +1,13 @@
 // Note: rail plus singleton tools with shared icon taxonomy — see .agents/notes/2026-07-19-right-dock--a73f2f05.md
 import type { RightToolDefinition, RightToolId } from './types'
+import type { ExperimentalFeatures } from '../../../shared/ipc/experimental'
+
+// Note: review shares the knowledge entry gate, including programmatic opens — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+export function isRightToolEnabled(toolId: RightToolId, features: Pick<ExperimentalFeatures, 'knowledge' | 'persona'>): boolean {
+  if (toolId === 'review') return features.knowledge
+  if (toolId === 'persona') return features.persona
+  return true
+}
 
 export const RIGHT_TOOL_REGISTRY = [
   {

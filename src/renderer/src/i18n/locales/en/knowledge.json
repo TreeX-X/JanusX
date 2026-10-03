@@ -1,4 +1,18 @@
 {
+  "wikiHistory": {
+    "title": "Publication history",
+    "hint": "Keeps the latest 20 published versions and pinned versions. History is for reference and is excluded from current Agent knowledge.",
+    "failed": "Could not read or save history. Please retry.",
+    "empty": "No publication history is saved yet. The existing page will be preserved at its next update.",
+    "version": "Version {{version}}",
+    "pinned": "Pinned version",
+    "pin": "Pin version",
+    "unpin": "Unpin version",
+    "previous": "Previous page",
+    "next": "Next page",
+    "legacy": "Existing page preserved before updating; the original reviewer and reason were not recorded.",
+    "sources": "Sources for this version"
+  },
   "observation": {
     "history": "Withdrawn sources",
     "historyRefresh": "Refresh records",
@@ -383,5 +397,61 @@
   },
   "time": {
     "unknown": "unknown"
+  },
+  "automation": {
+    "title": "Knowledge automation",
+    "description": "Publish project knowledge and Wiki after review. People handle missing evidence, conflicts and model failures. Personal memory remains manually reviewed.",
+    "enable": "Enable automatic review and publication",
+    "stage": {
+      "extraction": "Knowledge extraction",
+      "entryReview": "Entry review",
+      "wikiGeneration": "Wiki generation",
+      "wikiReview": "Wiki review"
+    },
+    "provider": {
+      "off": "Off · manual handling",
+      "local": "Local model",
+      "external": "External model",
+      "jev": "Jev review"
+    },
+    "externalProvider": "External provider",
+    "selectProvider": "Select a configured provider",
+    "model": "Model name",
+    "thinking": "Enable thinking",
+    "externalHint": "Reuse the configured provider and credentials. Reasoning follows the provider and model; no local service starts.",
+    "localTitle": "Local service",
+    "localHint": "Connect to a compatible service, or supply absolute server and weight paths for on-demand startup. Unloads after 3 idle minutes. Local stages share weights; nothing downloads automatically.",
+    "local": {
+      "endpoint": "Endpoint",
+      "serverPath": "llama-server path (optional)",
+      "modelPath": "GGUF weights path (optional)"
+    },
+    "release": "Stop current processing and unload local model",
+    "jevEndpoint": "Jev endpoint",
+    "keyConfigured": "Credential stored encrypted",
+    "keyMissing": "Credential not configured",
+    "key": "Jev credential",
+    "saveKey": "Save credential",
+    "clearKey": "Delete credential",
+    "credentialFailed": "Could not save credential. Check system encryption.",
+    "loadFailed": "Could not load automation state or configuration. Refresh to retry.",
+    "actionFailed": "Operation failed. Check configuration and task records.",
+    "progress": "Automation progress",
+    "active": "Enabled",
+    "paused": "Paused",
+    "counts": "Pending {{pending}} · Running {{running}} · Complete {{succeeded}} · Review {{needs-review}} · Failed {{failed}}",
+    "run": "Process pending",
+    "backfill": "Process existing backlog",
+    "backfillHint": "Only new material since enablement is processed by default. Backfill includes existing project material and uses the selected models; external API charges may apply.",
+    "records": "Recent processing records (up to 200)",
+    "retry": "Review again",
+    "status": {
+      "pending": "Pending",
+      "running": "Running",
+      "succeeded": "Complete",
+      "needs-review": "Human review needed",
+      "failed": "Failed",
+      "cancelled": "Source or version changed"
+    }
   }
 }

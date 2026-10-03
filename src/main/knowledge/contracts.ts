@@ -17,6 +17,7 @@ export const KNOWLEDGE_STORAGE_LAYOUT: KnowledgeStorageLayout = {
     { key: 'blobs', relativePath: 'blobs', purpose: 'Compressed large-content blobs for long observations.' },
     { key: 'facts', relativePath: 'facts', purpose: 'Derived facts and fact candidates.' },
     { key: 'wiki', relativePath: 'wiki', purpose: 'Human-readable knowledge pages and patch drafts.' },
+    { key: 'wiki-history', relativePath: 'wiki/history', purpose: 'Published snapshots; latest 20 plus pinned, excluded from recall.' },
     { key: 'graph', relativePath: 'graph', purpose: 'Entity relations and graph candidates.' },
     { key: 'audit', relativePath: 'audit', purpose: 'Append-only audit trail for every mutation.' },
     { key: 'indexes', relativePath: 'indexes', purpose: 'BM25 and graph side indexes, rebuildable from source layers.' },
@@ -40,6 +41,7 @@ export const KNOWLEDGE_STORAGE_LAYOUT: KnowledgeStorageLayout = {
     { key: 'user-profile-snapshot', relativePath: 'profile/snapshot.json', format: 'json', purpose: 'Derived private profile from confirmed personal facts and overrides.' },
     { key: 'user-profile-overrides', relativePath: 'profile/overrides.json', format: 'json', purpose: 'Explicit manual profile overrides, separate from derived content.' },
     { key: 'refinement-tasks', relativePath: 'processing/refinement-tasks.json', format: 'json', purpose: 'Recoverable refinement task states and evidence hashes; no copied source text.' },
+    { key: 'automation-tasks', relativePath: 'processing/automation-tasks.json', format: 'json', purpose: 'Durable per-stage project knowledge processing, exceptions and bounded retries.' },
   ],
 }
 
@@ -50,6 +52,7 @@ export const KNOWLEDGE_WRITE_POLICY: KnowledgeWritePolicy = {
     'Knowledge storage is global; workspace fields are provenance, filters, and audit anchors.',
     'Derived knowledge must remain rebuildable from observations plus audit history.',
     'LLM-generated outputs may only enter candidate collections until reviewed.',
+    'Configured model review may authorize project facts and Wiki; the host revalidates sources, conflicts and versions before committing.',
     'Every accepted, rejected, superseded, or applied change must emit an audit event.',
     'Code truth beats stale memory when the two conflict.',
   ],
@@ -157,6 +160,7 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'ttl',
     ],
     wikiPage: [
+      'sourceFactRefs', 'managed', 'generationHash', 'freshness',
       'slug',
       'title',
       'markdown',
@@ -189,6 +193,7 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'provenance',
     ],
     candidateWikiPatch: [
+      'sourceFactRefs', 'managed', 'generationHash', 'generatedSections',
       'id',
       'type',
       'status',

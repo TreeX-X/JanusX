@@ -1,4 +1,5 @@
 import { syncLayaSettings } from '../knowledge/laya-runtime'
+import { knowledgeAutomationService } from '../knowledge/automation-service'
 import { BrowserWindow, ipcMain } from 'electron'
 import { configService } from '../config/service'
 import { remoteNotificationDispatcher } from '../remote-notifications/dispatcher'
@@ -84,6 +85,7 @@ export function registerSettingsHandlers(): void {
     KNOWLEDGE_CHANNELS.updateSettings,
     async (_event, settings: Partial<KnowledgeSettings>) => {
       const next = await configService.updateKnowledgeSettings(settings ?? {})
+      knowledgeAutomationService.stop()
       await syncLayaSettings()
       return next
     },
@@ -96,7 +98,10 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(
     EXPERIMENTAL_CHANNELS.update,
     async (_event, settings: Partial<ExperimentalFeatures>) => {
-      return configService.updateExperimentalFeatures(settings ?? {})
+      const next = await configService.updateExperimentalFeatures(settings ?? {})
+      if (!next.knowledge) knowledgeAutomationService.stop()
+      await syncLayaSettings()
+      return next
     },
   )
 

@@ -21,9 +21,11 @@ function manager(): LayaProcess {
 export async function syncLayaSettings(): Promise<void> {
   const settings = await configService.getKnowledgeSettings()
   const modelPath = settings.laya?.modelPath || join(app.getPath('userData'), 'laya-weights', LAYA_MODEL_REVISION)
-  try { calibration = settings.laya?.enabled ? await loadLayaCalibration(modelPath, resourcePath()) : undefined }
+  const allowed = settings.enabled && settings.laya?.enabled === true && !settings.automation
+    && (await configService.getExperimentalFeatures()).knowledge
+  try { calibration = allowed ? await loadLayaCalibration(modelPath, resourcePath()) : undefined }
   catch (error) { calibration = undefined; manager().stop('calibration-invalid'); throw error }
-  manager().configure({ enabled: settings.enabled && settings.laya?.enabled === true,
+  manager().configure({ enabled: allowed,
     pythonPath: settings.laya?.pythonPath ?? '', modelPath })
 }
 export const layaScorer: DecisionScorer = {

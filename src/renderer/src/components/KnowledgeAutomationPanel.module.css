@@ -1,0 +1,6 @@
+.panel { min-width: 0; }
+.panel fieldset { border: 1px solid var(--shell-border); border-radius: 8px; padding: 12px; min-width: 0; margin: 8px 0; }
+.panel input:not([type='checkbox']) { min-width: 0; width: 100%; max-width: 240px; padding: 6px 8px; border: 1px solid var(--control-border); border-radius: 6px; color: var(--shell-text); background: var(--shell-card); }
+.panel label { grid-template-columns: minmax(0, 1fr) minmax(80px, 1fr); }
+.panel label:has(input[type='checkbox']) { grid-template-columns: minmax(0, 1fr) auto; }
+.panel p { overflow-wrap: anywhere; }

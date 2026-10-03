@@ -20,6 +20,7 @@ import { MemoryReviewCard } from './MemoryReviewTool'
 import { ObservationRevokeControl } from './ObservationRevokeControl'
 import { ObservationRevocations } from './ObservationRevocations'
 import { KnowledgeStatusBar } from './KnowledgeStatusBar'
+import { AutomationStatus } from './AutomationStatus'
 import { NoteWikiEditor, WikiPageDetail, WikiCandidateSources } from './NoteWikiLinks'
 import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas'
 import type { KnowledgeGraphNode } from './knowledgeGraph'
@@ -366,6 +367,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
         </header>
         <div className={styles.statusCard} style={cardStyle(1)}>
           <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
+          <AutomationStatus active={isOpen} onChanged={() => void refresh()} />
         </div>
         <main className={styles.grid} data-detail-open={cardPlan.detailOpen ? 'true' : 'false'}>
           <nav className={styles.leftPane} style={cardStyle(2)} aria-label={t('knowledge:aria.engine')}>

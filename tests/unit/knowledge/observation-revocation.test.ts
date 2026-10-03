@@ -125,7 +125,9 @@ describe('durable observation revocation', () => {
     await writeFile(join(root, 'wiki/pages-index.json'), JSON.stringify({ version: 1, pages: [{ slug: 'page', title: 'pnpm', relativePath: 'wiki/page.md', markdown: '', tags: [], status: 'published', sourceFactIds: [fact.id], updatedAt: source.createdAt, version: 1, workspaceId: 'ws' }] }))
     const original = await readFile(join(root, 'facts/facts.jsonl'), 'utf8')
     expect((await userProfileService.load()).confirmedFacts).toHaveLength(1)
-    expect((await knowledgeTruthService.list()).wikiPages).toHaveLength(1)
+    // Engineering Wiki cannot recall a private or cross-workspace source even before withdrawal.
+    expect((await knowledgeTruthService.list()).wikiPages).toHaveLength(0)
+    expect((await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages).toHaveLength(1)
     await revokeObservation(await input())
     const truth = await knowledgeTruthService.list()
     expect(truth.facts.map(item => item.id)).toEqual(['independent'])

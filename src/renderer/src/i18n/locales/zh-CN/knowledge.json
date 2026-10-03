@@ -1,4 +1,18 @@
 {
+  "wikiHistory": {
+    "title": "发布历史",
+    "hint": "保留最近 20 个发布版本及标记的重要版本。历史仅供查阅，不用于 Agent 的当前知识。",
+    "failed": "历史记录读取或保存失败，请重试。",
+    "empty": "尚无保存的发布历史。已有页面会在下次更新时保留当前版本。",
+    "version": "版本 {{version}}",
+    "pinned": "重要版本",
+    "pin": "标记为重要版本",
+    "unpin": "取消重要标记",
+    "previous": "上一页",
+    "next": "下一页",
+    "legacy": "更新前保留的已有页面；原审核人和修改原因未记录。",
+    "sources": "此版本的来源"
+  },
   "observation": {
     "history": "已撤回来源",
     "historyRefresh": "刷新记录",
@@ -383,5 +397,61 @@
   },
   "time": {
     "unknown": "未知"
+  },
+  "automation": {
+    "title": "知识库自动处理",
+    "description": "审核通过的项目知识条目和 Wiki 自动入库；来源不足、冲突和模型故障交由人工处理。个人记忆继续人工审核。",
+    "enable": "启用自动审核与入库",
+    "stage": {
+      "extraction": "知识提取",
+      "entryReview": "条目审核",
+      "wikiGeneration": "Wiki 生成",
+      "wikiReview": "Wiki 再审核"
+    },
+    "provider": {
+      "off": "关闭 · 人工处理",
+      "local": "本地模型",
+      "external": "外部模型",
+      "jev": "Jev 审核"
+    },
+    "externalProvider": "外部提供方",
+    "selectProvider": "选择已配置的提供方",
+    "model": "模型名称",
+    "thinking": "启用思考",
+    "externalHint": "复用应用已配置的提供方和密钥。推理模式由该提供方与模型决定，不启动本地服务。",
+    "localTitle": "本地服务",
+    "localHint": "可连接已运行的兼容服务；填写程序和权重的绝对路径后可按需启动，闲置 3 分钟释放。各本地环节共用权重，不会自动下载。",
+    "local": {
+      "endpoint": "接口地址",
+      "serverPath": "llama-server 程序路径（可选）",
+      "modelPath": "GGUF 权重路径（可选）"
+    },
+    "release": "停止当前处理并释放本地模型",
+    "jevEndpoint": "Jev 接口地址",
+    "keyConfigured": "密钥已加密保存",
+    "keyMissing": "尚未配置密钥",
+    "key": "Jev 密钥",
+    "saveKey": "保存密钥",
+    "clearKey": "删除密钥",
+    "credentialFailed": "密钥保存失败，请检查系统加密服务。",
+    "loadFailed": "自动处理状态或配置读取失败，请刷新重试。",
+    "actionFailed": "操作失败，请检查配置与任务记录。",
+    "progress": "自动处理进度",
+    "active": "已启用",
+    "paused": "已暂停",
+    "counts": "待处理 {{pending}} · 处理中 {{running}} · 完成 {{succeeded}} · 待审核 {{needs-review}} · 失败 {{failed}}",
+    "run": "处理待办",
+    "backfill": "处理历史积压",
+    "backfillHint": "默认仅处理启用后的新资料。处理历史积压会纳入现有项目资料，并使用所选模型，外部接口可能产生费用。",
+    "records": "近期处理记录（最多 200 条）",
+    "retry": "重新审核",
+    "status": {
+      "pending": "待处理",
+      "running": "处理中",
+      "succeeded": "完成",
+      "needs-review": "需要人工处理",
+      "failed": "失败",
+      "cancelled": "来源或版本已变化"
+    }
   }
 }

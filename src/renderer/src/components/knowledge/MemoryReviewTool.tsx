@@ -1,6 +1,7 @@
 import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
 import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { FactReviewControls } from './FactReviewControls'
+import { AutomationStatus } from './AutomationStatus'
 import { LegacyEpisodeMigrationControl } from './LegacyEpisodeMigrationControl'
 // Note: one review surface preserves engineering and private memory ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -111,6 +112,7 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
       {filters.map(filter => <button key={filter.scope} type="button" aria-pressed={scope === filter.scope} onClick={() => setScope(filter.scope)}>{filter.label} {loading || error ? '—' : filter.count}</button>)}
     </div>
     <div className={styles.body} aria-busy={loading || busy}>
+      <AutomationStatus active={active} onChanged={() => void refresh()} />
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {loading && <p role="status">{t('knowledge:state.loading.title')}</p>}

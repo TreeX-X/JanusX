@@ -42,6 +42,9 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../src/main/knowledge/laya-runtime', () => ({ controlLaya: vi.fn(), syncLayaSettings: vi.fn(async () => {}) }))
+vi.mock('../../src/main/knowledge/automation-service', () => ({ knowledgeAutomationService: { stop: vi.fn() } }))
+vi.mock('../../src/main/knowledge/knowledge-models', () => ({ stopKnowledgeLocalModel: vi.fn() }))
+vi.mock('../../src/main/knowledge/knowledge-credentials', () => ({ getJevKey: vi.fn(), setJevKey: vi.fn() }))
 vi.mock('../../src/main/knowledge/contract-service', () => ({ knowledgeContractService: {} }))
 vi.mock('../../src/main/knowledge/audit-service', () => ({ knowledgeAuditService: {} }))
 vi.mock('../../src/main/knowledge/observation-service', () => ({ knowledgeObservationService: {} }))
@@ -87,7 +90,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(46)
+    expect(channels).toHaveLength(55)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -319,6 +322,15 @@ describe('Knowledge IPC contract', () => {
     }
     const api = window.electron.knowledge
     const calls: Array<() => Promise<unknown>> = [
+      () => api.automationStatus(),
+      () => api.automationRun({ backfill: false }),
+      () => api.automationRetry('task'),
+      () => api.setJevCredential(''),
+      () => api.jevCredentialStatus(),
+      () => api.stopLocalModel(),
+      () => api.wikiHistory({ workspaceId: 'w', slug: 'a' }),
+      () => api.wikiRevision({ workspaceId: 'w', slug: 'a', version: 1 }),
+      () => api.pinWikiRevision({ workspaceId: 'w', slug: 'a', version: 1, contentHash: 'a'.repeat(64), pinned: true }),
       () => api.noteWikiPages({ rootPath: 'C:\\work', uri: 'note://repo/a' }),
       () => api.prepareNoteWiki({ rootPath: 'C:\\work', uris: ['note://repo/a'], pageSlug: 'a', reviewMode: 'incremental', expectedVersion: 1 }),
       () => api.proposeNoteWiki({ draftId: 'draft-1', title: 't', markdown: 'm', rationale: 'r' }),
@@ -367,8 +379,8 @@ describe('Knowledge IPC contract', () => {
     calls.push(() => api.personalProfileEditContext())
     calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
     calls.push(() => api.migrateLegacyEpisodes())
-    expect(Object.keys(api)).toHaveLength(46)
-    expect(calls).toHaveLength(46)
+    expect(Object.keys(api)).toHaveLength(55)
+    expect(calls).toHaveLength(55)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

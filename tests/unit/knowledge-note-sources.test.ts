@@ -42,7 +42,7 @@ async function propose(options: { root?: string; mode?: 'incremental' | 'full-pa
   return knowledgeReviewService.proposeNoteWiki({ draftId: draft.draftId, title: 'Design', markdown: options.markdown ?? '# Design\n\nReviewed source summary.', rationale: 'Reviewed complete page' })
 }
 async function apply(candidate: CandidateWikiPatch) { return knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'wiki-patch', id: candidate.id })) }
-async function page() { return (await knowledgeTruthService.list()).wikiPages.find(p => p.workspaceId === root)! }
+async function page() { return (await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages.find(p => p.workspaceId === root)! }
 async function stored() { return readFile(join(knowledge, 'wiki', 'pages-index.json'), 'utf8') }
 async function candidates(): Promise<CandidateWikiPatch[]> { return (await readFile(join(knowledge, 'wiki', 'patches.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)) }
 
@@ -52,7 +52,7 @@ beforeEach(async () => {
   roots.push(knowledge)
   vi.stubEnv('JANUSX_KNOWLEDGE_ROOT', knowledge)
   await source()
-  vi.spyOn(knowledgeAuditService, 'recordBatch').mockResolvedValue([])
+  vi.spyOn(knowledgeAuditService, 'recordBatch')
   vi.spyOn(knowledgeAuditService, 'record').mockResolvedValue({} as never)
 })
 afterEach(async () => {
@@ -134,24 +134,22 @@ describe('R3 wiki review transactions', () => {
     await source(a, note(a, 'Changed'))
     const patch = await propose({ mode: 'incremental', version: 1, markdown: 'Small addition' })
     await expect(apply(patch)).rejects.toThrow('full-page review is required')
-    expect(await page()).toEqual(original); expect(await stored()).toBe(before)
+    expect(await page()).toEqual({ ...original, freshness: 'stale' }); expect(await stored()).toBe(before)
     expect((await candidates()).find(c => c.id === patch.id)?.status).toBe('proposed')
   })
 
-  it('allows full-page review to replace all content and update all hashes, preserving fact ids', async () => {
+  it('replaces full content and keeps only sources actually read for the new page', async () => {
     await source(b); await apply(await propose({ uris: [uri(), uri(b)] }))
-    const index = JSON.parse(await stored()); index.pages[0].sourceFactIds = ['fact-1']
-    await writeFile(join(knowledge, 'wiki', 'pages-index.json'), JSON.stringify(index))
     await source(a, note(a, 'New A')); await source(b, note(b, 'New B'))
     const replacement = await propose({ version: 1, uris: [uri()], markdown: '# Entirely reviewed replacement' })
-    expect(replacement.sourceNoteRefs).toHaveLength(2)
+    expect(replacement.sourceNoteRefs).toHaveLength(1)
     await apply(replacement)
-    expect(await page()).toMatchObject({ markdown: '# Entirely reviewed replacement\n', version: 2, sourceFactIds: ['fact-1'], sourceNoteRefs: [{ uri: uri(), sourceHash: hash(note(a, 'New A')) }, { uri: uri(b), sourceHash: hash(note(b, 'New B')) }] })
+    expect(await page()).toMatchObject({ markdown: '# Entirely reviewed replacement\n', version: 2, sourceFactIds: [], sourceNoteRefs: [{ uri: uri(), sourceHash: hash(note(a, 'New A')) }] })
   })
 
   it('rejects page version races and source changes between proposal and apply', async () => {
     await apply(await propose())
-    const first = await propose({ version: 1 }); const concurrent = await propose({ version: 1 })
+    const first = await propose({ version: 1, markdown: '# Changed page' }); const concurrent = await propose({ version: 1 })
     await apply(first)
     await expect(apply(concurrent)).rejects.toThrow('version changed')
     const changedSource = await propose({ version: 2 })
@@ -182,7 +180,7 @@ describe('R3 wiki review transactions', () => {
     expect((await wikiSourceStatuses(root, (await page()).sourceNoteRefs))[0].status).toBe('unknown')
     await apply(await propose({ version: 4 }))
     expect(JSON.parse(await stored()).pages[0].relativePath).toBe(legacy.relativePath)
-    expect((await page()).sourceFactIds).toEqual(['old-fact'])
+    expect((await page()).sourceFactIds).toEqual([])
   })
 
   it('rolls full page content, index and candidate back after audit failure', async () => {
@@ -191,7 +189,7 @@ describe('R3 wiki review transactions', () => {
     const candidate = await propose({ version: 1, markdown: '# Replacement' })
     vi.mocked(knowledgeAuditService.recordBatch).mockRejectedValueOnce(new Error('audit unavailable'))
     await expect(apply(candidate)).rejects.toThrow('audit unavailable')
-    expect(await page()).toEqual(beforePage); expect(await stored()).toBe(beforeIndex)
+    expect(await page()).toEqual({ ...beforePage, freshness: 'stale' }); expect(await stored()).toBe(beforeIndex)
     expect((await candidates()).find(c => c.id === candidate.id)?.status).toBe('proposed')
   })
 

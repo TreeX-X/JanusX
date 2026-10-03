@@ -76,7 +76,7 @@ export async function wikiWorkspace(rootPath: string) {
 // resolves every citing page across workspaces (see the same-slug test).
 export async function noteWikiPages(_rootPath: string, uri: string): Promise<NoteWikiPage[]> {
   if (!URI.test(uri)) throw new Error('A full Note URI is required')
-  const { wikiPages } = await knowledgeTruthService.list()
+  const { wikiPages } = await knowledgeTruthService.list({ includeStaleWiki: true })
   return Promise.all(wikiPages.filter(p => p.sourceNoteRefs?.some(ref => ref.uri === uri)).map(async page => ({
     page, sources: await wikiSourceStatuses(page.workspacePath ?? '', page.sourceNoteRefs),
   })))
@@ -90,9 +90,9 @@ export async function prepareNoteWiki(input: PrepareNoteWikiInput): Promise<Note
   if (!input.rootPath?.trim() || !input.pageSlug?.trim() || !Array.isArray(input.uris) || !input.uris.length || input.uris.length > 50
     || !Number.isInteger(input.expectedVersion) || input.expectedVersion < 0 || !['incremental', 'full-page'].includes(input.reviewMode)) throw new Error('Invalid Note wiki proposal input')
   const workspace = await wikiWorkspace(input.rootPath)
-  const page = (await knowledgeTruthService.list()).wikiPages.find(p => p.workspaceId === workspace.workspaceId && p.slug === input.pageSlug)
+  const page = (await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages.find(p => p.workspaceId === workspace.workspaceId && p.slug === input.pageSlug)
   if ((page?.version ?? 0) !== input.expectedVersion) throw new Error('Page version changed; open the current full page')
-  const uris = [...new Set([...input.uris, ...(input.reviewMode === 'full-page' ? page?.sourceNoteRefs?.map(r => r.uri) ?? [] : [])])]
+  const uris = [...new Set(input.uris)]
   if (uris.length > 50) throw new Error('A page review supports at most 50 Note sources')
   const sources: NoteWikiDraft['sources'] = []
   for (const uri of uris) {
@@ -118,7 +118,7 @@ export async function buildNoteWikiCandidate(input: { draftId: string; title: st
     id: randomUUID(), type: 'wiki-patch', status: 'proposed', pageSlug: prepared.input.pageSlug,
     title: input.title.trim(), patchMarkdown: input.markdown, rationale: input.rationale, confidence: 1,
     sourceNoteRefs: refs, reviewMode: prepared.input.reviewMode, expectedVersion: prepared.input.expectedVersion,
-    sourceFactIds: prepared.draft.page?.sourceFactIds ?? [], derivation: 'deterministic', evidence: { observationIds: [] },
+    sourceFactIds: prepared.input.reviewMode === 'full-page' ? [] : prepared.draft.page?.sourceFactIds ?? [], derivation: 'deterministic', evidence: { observationIds: [] },
     provenance: { workspaceId, workspaceName, workspacePath, source: 'manual', sourceObservationIds: [], fileRefs: [], actor: 'note-wiki-review', createdAt: new Date().toISOString() },
   }
   drafts.delete(input.draftId)

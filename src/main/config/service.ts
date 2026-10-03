@@ -240,6 +240,9 @@ export class ConfigService {
       ...current,
       ...partial,
     })
+    if (knowledgeSettings.automation?.enabled && !knowledgeSettings.automation.enabledSince) {
+      knowledgeSettings.automation.enabledSince = new Date().toISOString()
+    }
     await this.update({ knowledgeSettings })
     return knowledgeSettings
   }

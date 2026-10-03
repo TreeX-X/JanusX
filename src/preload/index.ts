@@ -150,6 +150,15 @@ const browserAPI: BrowserAPI = {
 }
 
 const knowledgeAPI: KnowledgeAPI = {
+  automationStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationStatus),
+  automationRun: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationRun, input),
+  automationRetry: (id) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationRetry, id),
+  setJevCredential: (key) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredential, key),
+  jevCredentialStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredentialStatus),
+  stopLocalModel: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localModelStop),
+  wikiHistory: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.wikiHistory, input),
+  wikiRevision: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.wikiRevision, input),
+  pinWikiRevision: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.pinWikiRevision, input),
   noteWikiPages: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.noteWikiPages, input),
   prepareNoteWiki: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.prepareNoteWiki, input),
   proposeNoteWiki: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.proposeNoteWiki, input),

@@ -1,4 +1,4 @@
-import { LayaSettingsPanel } from './LayaSettingsPanel'
+import { KnowledgeAutomationPanel } from './KnowledgeAutomationPanel'
 import { useEffect, useState } from 'react'
 import {
   getKnowledgeSettings,
@@ -24,7 +24,6 @@ export function KnowledgeSettingsPanel() {
   const [mcpBusy, setMcpBusy] = useState(false)
   const [mcpMsg, setMcpMsg] = useState('')
   const [mcpOk, setMcpOk] = useState(true)
-  const [layaBusy, setLayaBusy] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -141,7 +140,7 @@ export function KnowledgeSettingsPanel() {
     }
   }
 
-  const isBusy = status === 'loading' || status === 'saving' || layaBusy
+  const isBusy = status === 'loading' || status === 'saving'
   const modeOptions = [
     { value: 'auto', label: t('settings:knowledge.row.mode.auto') },
     { value: 'deterministic-only', label: t('settings:knowledge.row.mode.deterministicOnly') },
@@ -173,7 +172,7 @@ export function KnowledgeSettingsPanel() {
             </span>
           </div>
         </div>
-        <div className={styles.row}>
+        {!draft.automation?.enabled && <div className={styles.row}>
           <div className={styles.label}>
             <span className={styles.labelText}>{t('settings:knowledge.row.mode.label')}</span>
             <span className={styles.hint}>
@@ -187,13 +186,13 @@ export function KnowledgeSettingsPanel() {
             options={modeOptions}
             ariaLabel={t('settings:knowledge.row.mode.label')}
           />
-        </div>
+        </div>}
       </section>
 
-      <LayaSettingsPanel value={draft.laya} knowledgeEnabled={draft.enabled} onChange={laya => {
-        setDraft(current => ({ ...current, laya }))
+      <KnowledgeAutomationPanel value={draft.automation} knowledgeEnabled={draft.enabled} onChange={automation => {
+        setDraft(current => ({ ...current, automation }))
         if (status === 'saved' || status === 'error') { setStatus('idle'); setError('') }
-      }} onSave={handleSave} disabled={isBusy} onBusyChange={setLayaBusy} />
+      }} onSave={handleSave} disabled={isBusy} />
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.externalMcp')}</h3>
         <div className={styles.row}>

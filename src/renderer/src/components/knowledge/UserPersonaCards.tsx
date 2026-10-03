@@ -16,7 +16,7 @@ export function UserPersonaCards({
   onEditProfile,
 }: {
   overview: UserMemoryOverview
-  onOpenInbox: () => void
+  onOpenInbox?: () => void
   onForgetEpisode?: (episode: UserMemoryOverviewEpisode) => void
   onForget?: (memory: UserMemoryOverviewHabit) => void
   onCorrect?: (memory: UserMemoryOverviewHabit) => void
@@ -92,9 +92,9 @@ export function UserPersonaCards({
       </section>
       <div className={styles.footer}>
         {onRefresh && <button type="button" className={styles.copyButton} onClick={onRefresh}>{t('knowledge:action.refresh')}</button>}
-        <button type="button" className={styles.copyButton} onClick={onOpenInbox}>
+        {onOpenInbox && <button type="button" className={styles.copyButton} onClick={onOpenInbox}>
           {t('knowledge:persona.openInbox')}
-        </button>
+        </button>}
       </div>
     </div>
   )

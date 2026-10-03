@@ -57,14 +57,6 @@ export interface KnowledgeWorkbenchSnapshot {
   errors: string[]
 }
 
-async function invokeOrEmpty<T>(operation: () => Promise<T>, fallback: T): Promise<T> {
-  try {
-    return await operation()
-  } catch {
-    return fallback
-  }
-}
-
 export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkbenchSnapshot> {
   const errors: string[] = []
   const [
@@ -77,18 +69,14 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     truth,
     settings,
   ] = await Promise.all([
-    invokeOrEmpty(() => window.electron.knowledge.listObservations({ scope: 'global', limit: 40 }), []),
-    invokeOrEmpty(() => window.electron.knowledge.listCandidates(), []),
-    invokeOrEmpty(() => window.electron.knowledge.listWikiPatchCandidates(), []),
-    invokeOrEmpty(() => window.electron.knowledge.listGraphCandidates(), []),
-    invokeOrEmpty(() => window.electron.knowledge.listAudit({ limit: 30 }), []),
-    invokeOrEmpty<RetentionStats | null>(() => window.electron.knowledge.retentionStats(), null),
-    invokeOrEmpty(() => window.electron.knowledge.listTruth(), {
-      facts: [],
-      wikiPages: [],
-      graphEdges: [],
-    }),
-    invokeOrEmpty(() => window.electron.knowledge.getSettings(), null),
+    window.electron.knowledge.listObservations({ scope: 'global', limit: 40 }),
+    window.electron.knowledge.listCandidates(),
+    window.electron.knowledge.listWikiPatchCandidates(),
+    window.electron.knowledge.listGraphCandidates(),
+    window.electron.knowledge.listAudit({ limit: 30 }),
+    window.electron.knowledge.retentionStats(),
+    window.electron.knowledge.listTruth(),
+    window.electron.knowledge.getSettings(),
   ])
 
   const libraryCards = truthSnapshotToKnowledgeCards(truth)
@@ -99,7 +87,7 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
   ].filter(Boolean))]
   const conflicts = (await Promise.all(
     workspaceIds.map((workspaceId) =>
-      invokeOrEmpty(() => window.electron.knowledge.listConflicts(workspaceId), []),
+      window.electron.knowledge.listConflicts(workspaceId),
     ),
   )).flat()
 

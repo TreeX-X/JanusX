@@ -308,7 +308,7 @@ export interface MemoryFact {
   cardinality?: 'single'
   polarity?: 'positive' | 'negative'
   /** Host-written on explicit review; binds the reviewed content, never model authority. */
-  confirmation?: { kind: 'human-review'; contentHash: string; confirmedAt: string }
+  confirmation?: { kind: 'human-review' | 'model-review'; contentHash: string; confirmedAt: string; taskId?: string; model?: string }
   id: string
   content: string
   concepts: string[]
@@ -347,6 +347,11 @@ export interface WikiNoteStatus {
   detail?: string
 }
 export interface WikiPage {
+  /** Host-owned dependencies and topic ownership for maintained project pages. */
+  sourceFactRefs?: Array<{ id: string; contentHash: string }>
+  managed?: boolean
+  generationHash?: string
+  freshness?: 'current' | 'stale' | 'unknown'
   slug: string
   title: string
   markdown: string
@@ -530,6 +535,10 @@ export interface CandidateFact {
 }
 
 export interface CandidateWikiPatch {
+  generatedSections?: Array<{ markdown: string; ids: string[] }>
+  sourceFactRefs?: Array<{ id: string; contentHash: string }>
+  managed?: boolean
+  generationHash?: string
   id: string
   type: 'wiki-patch'
   status: CandidateStatus
