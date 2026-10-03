@@ -15,6 +15,8 @@ const SEMANTIC_ZOOM_THRESHOLD = 0.5
 /** 画布注入的卡片交互；脱离画布上下文（如测试）时为 null，卡片隐藏折叠入口 */
 export const BlueprintCardActionsContext = createContext<{
   toggleCollapse: (nodeId: string) => void
+  structureMode?: boolean
+  architectureRoles?: Record<string, 'project' | 'module'>
 } | null>(null)
 
 /** ?????????? */
@@ -51,6 +53,7 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
   const childCount = d.childCount ?? 0
   const collapsed = d.collapsed ?? false
   const noteKind = noteKindOf({ kind: d.kind ?? undefined, type: d.nodeType })
+  const architectureRole = actions?.structureMode ? actions.architectureRoles?.[id] : undefined
 
   return (
     <div
@@ -69,9 +72,9 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
       <Handle type="target" id="right" position={Position.Right} style={{ opacity: 0 }} />
 
       <div className="bp-node-card__header">
-        <span className="bp-node-card__dot" style={{ background: visual.color, color: visual.color }} />
-        <span className="bp-node-card__kindtag">{NOTE_KIND_LABEL_KEY[noteKind] ? t(NOTE_KIND_LABEL_KEY[noteKind]) : noteKind}</span>
-        {minimal ? null : (
+        <span className="bp-node-card__dot" style={{ background: architectureRole ? 'var(--shell-muted)' : visual.color, color: architectureRole ? 'var(--shell-muted)' : visual.color }} />
+        <span className="bp-node-card__kindtag">{architectureRole ? t('blueprint:architecture.' + architectureRole) : NOTE_KIND_LABEL_KEY[noteKind] ? t(NOTE_KIND_LABEL_KEY[noteKind]) : noteKind}</span>
+        {minimal || architectureRole ? null : (
           <span className="bp-node-card__type">{NODE_TYPE_LABEL[d.nodeType]?.toUpperCase() ?? d.nodeType}</span>
         )}
         {childCount > 0 && actions ? (
@@ -98,12 +101,12 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
 
       {minimal ? null : (
         <>
-          <div className="bp-node-card__progress">
+          {!actions?.structureMode && <div className="bp-node-card__progress">
             <div className="bp-node-card__progress-bar" style={{ width: `${progress}%` }} />
-          </div>
+          </div>}
 
           <div className="bp-node-card__footer">
-            <span>{t(visual.labelKey)}</span>
+            <span>{actions?.structureMode ? t('blueprint:architecture.structure') : t(visual.labelKey)}</span>
             <span className={`bp-node-card__workspace${d.workspaceName ? '' : ' bp-node-card__workspace--empty'}`}>
               {d.workspaceName ?? t('blueprint:nodeCard.noWorkspace')}
             </span>
@@ -113,7 +116,7 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
               </span>
             ) : null}
           </div>
-          {(d.childSummary || d.issueSummary || d.blockedReason || d.analysisSummary || d.collapsedSummary) ? (
+          {!actions?.structureMode && (d.childSummary || d.issueSummary || d.blockedReason || d.analysisSummary || d.collapsedSummary) ? (
             <div className="bp-node-card__signals" aria-label={t('blueprint:nodeCard.signalsAria')}>
               {d.childSummary ? <span>{d.childSummary}</span> : null}
               {d.issueSummary ? <span className="bp-node-card__signal--risk">{d.issueSummary}</span> : null}

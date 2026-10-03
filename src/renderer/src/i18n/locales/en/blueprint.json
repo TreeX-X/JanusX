@@ -501,5 +501,17 @@
     "pin": "Pin",
     "remove": "Remove",
     "unavailable": "Not available in this canvas: {{names}}"
+  },
+  "architecture": {
+    "project": "Project",
+    "module": "Module",
+    "view": "Blueprint view",
+    "structure": "System structure",
+    "notes": "All Notes",
+    "coverage": "Checkout coverage",
+    "currentOnly": "Current accepted declarations. Planned, example and historical Notes remain available in All Notes.",
+    "related": "Decisions and related work",
+    "noRelated": "No declared related work.",
+    "unresolved": "Unresolved target"
   }
 }

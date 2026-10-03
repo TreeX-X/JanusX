@@ -5,12 +5,26 @@ kind: initiative
 lifecycle: accepted
 created: 2026-09-26
 class: architecture
-tags: [agent, harness, parent, governance]
+tags: [agent, harness, parent, governance, architecture:module]
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a
+relations:
+  - type: governed-by
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/11d8826d-52d7-58bb-99bd-49b6ba04dfaf
+codeRefs:
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/harness/execution-adapter.ts
+    role: entry
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/llm/janus-agent-ports.ts
+    symbol: buildJanusChatTurnPorts
+    role: implementation
 ---
 
-# Agent 执行闭环父域
+# Agent 对话与执行
 
 ## Goal
+
+把 JanusX 的对话、工具、任务线程和执行回执接入共享 Agent 运行时。任务启动、验证与完成沿用已有契约和回执入口；模块声明及蓝图显示不赋予执行权限，也不决定任务完成。
 
 Agent 循环、圆桌、turn 守卫、S6 维护面与 S7–S9 主线同属执行闭环却互无父子。本域收拢二十九篇，执行语义只看本域树，不再全文搜索。
 

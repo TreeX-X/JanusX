@@ -5,12 +5,25 @@ kind: initiative
 lifecycle: accepted
 created: 2026-09-26
 class: architecture
-tags: [desktop, distribution, parent, governance]
+tags: [desktop, distribution, parent, governance, architecture:module]
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a
+relations:
+  - type: governed-by
+    target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/39f58575-dba9-584f-a285-a33a2c73cdc4
+codeRefs:
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/index.ts
+    role: entry
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/ipc/register.ts
+    role: implementation
 ---
 
-# 桌面分发父域
+# 桌面与分发
 
 ## Goal
+
+负责 Electron 启动、窗口与宿主服务装配、应用 IPC 注册及桌面分发。它承载各子系统并管理应用生命周期，领域行为仍由终端、会话、执行和知识等模块维护。
 
 桌面史、打包修复、CLI 发布与早期基石能力散在二十篇孤儿。本域确立桌面壳与分发的唯一父节点，发布回归先看本域树。
 

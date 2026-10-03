@@ -13,7 +13,10 @@ export function BlueprintCompositionPanel({ blueprint, nodeId, onSelect }: { blu
     <section aria-label="组合蓝图状态">
       {!nodeId && value.checkouts.map(row => <div className="bp-note-diagnostic" key={row.repoId + ':' + row.checkoutId}><strong>{row.name ?? row.checkoutId} · {labels[row.status]}</strong><small>{row.path} · 修订 {row.revision ?? '未知'}{row.selected ? ' · 已选定' : ''}{row.dirty ? ' · 有未提交修改' : ''}</small>{row.diagnostic && <small>{row.diagnostic}</small>}</div>)}
       {ports.map(port => <div className="bp-note-relation" key={port.id}><button type="button" onClick={() => onSelect(port.nodeId)}>{blueprint.nodes[port.nodeId]?.title} · {port.name}</button><small>{port.direction === 'provides' ? '提供' : '需要'} · {labels[port.status]}</small>{port.provider && <button type="button" disabled={!port.providerNodeId} title={port.provider} onClick={() => port.providerNodeId && onSelect(port.providerNodeId)}>提供方：{blueprint.nodes[port.providerNodeId ?? '']?.title ?? port.provider}</button>}</div>)}
-      {diagnostics.map((item, index) => <p className="bp-note-warning" key={index}>{item.message}</p>)}
+      {diagnostics.map((item, index) => <div className="bp-note-warning" key={index}>
+        {item.nodeId && blueprint.nodes[item.nodeId] && <button type="button" onClick={() => onSelect(item.nodeId!)}>{blueprint.nodes[item.nodeId].title}</button>}
+        <p>{item.message}</p>{item.sourceUri && <small>{item.sourceUri}</small>}
+      </div>)}
     </section>
   </details>
 }

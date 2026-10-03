@@ -5,12 +5,29 @@ kind: initiative
 lifecycle: accepted
 created: 2026-09-26
 class: architecture
-tags: [terminal, shell, parent, governance]
+tags: [terminal, shell, parent, governance, architecture:module]
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a
+codeRefs:
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/terminal/manager.ts
+    symbol: TerminalManager
+    role: entry
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/ipc/terminal-handlers.ts
+    role: implementation
+interfaces:
+  - name: TerminalManager
+    direction: provides
+  - name: AgentSessionRegistry
+    direction: needs
+    provider: note://972afef3-2fc7-49de-a3ee-7e041225d28c/dc1aca7c-408f-406d-add4-ba78d556b662
 ---
 
-# 终端与执行面父域
+# 终端与外部 CLI
 
 ## Goal
+
+管理 PTY 进程、终端输入输出、外部 CLI 的启动与终端界面。终端 IPC 通过会话模块的 AgentSessionRegistry 关联会话与终端事件；终端模块不拥有会话持久化或 Task 验收规则。
 
 终端、Shell 与模型绑定散在 26 篇平铺 Note 中，检索靠文件名猜测。本域提供唯一父节点：状态显示、设置绑定、cc-switch 机制、Shell 语义各自成链，新终端工作先定位本域再下钻。
 

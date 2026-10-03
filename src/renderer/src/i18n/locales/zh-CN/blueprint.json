@@ -501,5 +501,17 @@
     "pin": "固定",
     "remove": "移除",
     "unavailable": "当前画布不可用：{{names}}"
+  },
+  "architecture": {
+    "project": "项目",
+    "module": "模块",
+    "view": "蓝图视图",
+    "structure": "系统结构",
+    "notes": "全部 Note",
+    "coverage": "检出范围",
+    "currentOnly": "仅显示已采纳的当前声明；计划、示例和历史文档可在全部 Note 中查看。",
+    "related": "决策与相关工作",
+    "noRelated": "暂无明确关联的工作。",
+    "unresolved": "目标未解析"
   }
 }

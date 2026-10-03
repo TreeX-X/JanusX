@@ -5,12 +5,26 @@ kind: initiative
 lifecycle: accepted
 created: 2026-09-26
 class: architecture
-tags: [session, workspace, worktree, parent, governance]
+tags: [session, workspace, worktree, parent, governance, architecture:module]
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a
+codeRefs:
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/sessions/session-registry.ts
+    symbol: AgentSessionRegistry
+    role: entry
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/ipc/session-handlers.ts
+    role: implementation
+interfaces:
+  - name: AgentSessionRegistry
+    direction: provides
 ---
 
-# 会话工作区父域
+# 会话与工作区
 
 ## Goal
+
+保存会话身份、终端绑定、转录读取与检查点关联，并在工作区和 worktree 范围内呈现会话。AgentSessionRegistry 为终端等调用方提供会话注册与查询；PTY 进程和 Task 验收由其他模块负责。
 
 09-22 十八连发把一次会话重构切成 PR 粒度碎片，单篇不可独立理解；checkpoint 与 worktree 定义散在三处。本域提供唯一父节点，按所有权耐久、内容管线、呈现、可靠性四组收敛检索，不删除任何历史篇。
 

@@ -4728,3 +4728,8 @@
 [data-theme='planche'] .blueprint-focus-progress-ring {
   border: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
 }
+
+.bp-view-selector { display: flex; gap: 4px; flex-shrink: 0; }
+.bp-view-selector [aria-pressed="true"] { background: var(--shell-hover); outline: 1px solid var(--shell-muted); }
+.bp-architecture-panel { max-height: 45vh; overflow: auto; }
+.bp-architecture-overview { flex: none; max-height: 30%; overflow: auto; padding: 4px 12px; border-bottom: 1px solid var(--shell-muted); }
