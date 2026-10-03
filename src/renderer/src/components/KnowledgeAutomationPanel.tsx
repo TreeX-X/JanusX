@@ -54,7 +54,8 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
       return <fieldset className={automationStyles.stage} key={stage} disabled={disabled}>
         <legend><span className={automationStyles.step} aria-hidden>{String(index + 1).padStart(2, '0')}</span>{t(`knowledge:automation.stage.${stage}`)}</legend>
         <div className={automationStyles.stageFields}>
-          <Select className={automationStyles.provider} disabled={disabled} value={selected.provider} ariaLabel={t(`knowledge:automation.stage.${stage}`)} options={choices.filter(provider => provider !== 'local' || config.local.enabled).map(provider => ({ value: provider, label: t(`knowledge:automation.provider.${provider}`) }))}
+          <Select className={automationStyles.provider} disabled={disabled} value={selected.provider} ariaLabel={t(`knowledge:automation.stage.${stage}`)} options={choices.filter(provider => provider !== 'local' || config.local.enabled).map(provider => ({ value: provider,
+            label: stage === 'extraction' && provider === 'off' ? t('knowledge:automation.rulesOnly') : t(`knowledge:automation.provider.${provider}`) }))}
             onChange={provider => updateStage(stage, { provider: provider as KnowledgeProvider, thinking: provider === 'local' && stage === 'wikiGeneration',
               model: provider === 'jev' ? config.jev.model : provider === 'local' && selected.provider !== 'local' ? 'Qwen3.5-4B'
                 : provider === 'external' && selected.provider !== 'external' ? '' : selected.model })} />
@@ -70,6 +71,7 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
             <span>{t('knowledge:automation.thinking')}</span>
           </label>}
         </div>
+        {stage === 'extraction' && <p className={styles.hint}>{t('knowledge:automation.extractionHint')}</p>}
         {selected.provider === 'external' && <p className={styles.hint}>{t('knowledge:automation.externalHint')}</p>}
       </fieldset>
     })}</div>

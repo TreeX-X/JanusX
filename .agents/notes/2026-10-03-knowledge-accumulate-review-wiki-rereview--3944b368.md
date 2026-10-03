@@ -86,6 +86,8 @@ Wiki 应作为持续更新的项目手册，按稳定主题维护当前有效知
 
 [环境检测](../../src/main/knowledge/knowledge-local-environment.ts)检查 loopback 地址、绝对文件路径、空闲端口及可执行程序的 `--list-devices`，程序启动验证同时覆盖系统架构和依赖库是否可运行。GGUF 元数据读取最多 32 MiB，当前资源模型支持 qwen35，读取 context_length、层数、全注意力间隔、KV 头数与维度。Qwen3.5-4B 的 32 层中每 4 层包含一层全注意力，f16 KV 估算为每 token 32 KiB，32K、64K、128K 分别约占 1、2、4 GiB KV。GPU 预算另计权重与 1280 MiB 运行/余量，主内存需保留权重大小加 2048 MiB；CPU 预算为权重的 1.1 倍、KV 与 3584 MiB 运行/余量。NVIDIA 的可用显存取运行时预算和 nvidia-smi 空闲测量的较小值。自动模式每次冷启动重新选档；手动档位不足时明确失败，不降档。
 
+程序和权重路径均为空时，检测只连接已有本机服务，不自动搜索仓库中的模型文件或启动进程。`/health` 连接拒绝、超时和非成功状态统一显示服务不可用，提示实际地址，并说明填写双路径和自行启动服务这两种处理方式；这不是内存不足结论。`/props` 网络、状态、JSON 或上下文参数异常单独显示上下文无法确认，用户取消仍保留取消语义。dev 使用独立 `JanusX-Dev` 配置，仓库中的实验权重与测试中显式传入的路径不会自动成为 dev 设置。
+
 [运行时](../../src/main/knowledge/knowledge-local-runtime.ts)按需加载，`--fit off` 保留用户上下文，加载预热和 `/health` 成功后继续检查 `/props` 中实际 n_ctx。运行失败和请求取消均释放托管进程；同一时间只允许一个本地请求，重启等待旧进程退出。空闲计时仅由本地请求维护，外部模型调用不会延长或误触本地计时。短输入采用 UTF-8 字节保守上界；长托管输入通过 `/apply-template` 和 `/tokenize` 复核真实 token 数，再预留输出与模板余量。外部管理的本机服务须提供 `/health` 与 `/props` 且至少 32K；应用只能限制请求预算和停止调用，不能替它重配上下文或结束进程，其输入仍采用保守字节上界。
 
 [本地控件](../../src/renderer/src/components/KnowledgeLocalModelPanel.tsx)始终显示本地服务入口，显示关闭或按需加载状态。路径和上下文仅在关闭时可改，“检测并启用”“关闭本地部署”即时保存，不依赖总 Save。检查期间可以取消，即使总设置正在保存也可关闭；通过后显示内存、显存或 CPU 模式及推荐档位。所有生成与审核环节仅在启用后列出本地选项。
@@ -96,11 +98,21 @@ Wiki 应作为持续更新的项目手册，按稳定主题维护当前有效知
 
 ### 知识库控件（2026-10-03）
 
-[知识库设置](../../src/renderer/src/components/KnowledgeSettingsPanel.tsx)使用独立样式，以分隔线组织采集、自动处理和外部接入；标题与输入正文为 12px，环节及操作标签为 11px，次要状态为 10px。四个环节显示序号、提供方、模型和本地思考开关，输入框高 30px，操作按钮最小高 28px。总开关与思考开关采用同一滑块样式并保留原生 checkbox 的键盘、标签及禁用语义；路径和连接参数在“本地服务”中展开，当前地址在收起时可见。设置保存、先保存再处理、纯外部配置与 Jev 生成能力限制沿用原逻辑。
+[知识库设置](../../src/renderer/src/components/KnowledgeSettingsPanel.tsx)使用独立样式，以分隔线组织采集、自动处理和外部接入；标题与输入正文为 12px，环节及操作标签为 11px，次要状态为 10px。四个环节显示序号、提供方、模型和本地思考开关，输入框高 30px，操作按钮最小高 28px。总开关与思考开关采用同一滑块样式并保留原生 checkbox 的键盘、标签及禁用语义；路径和连接参数在“本地服务”中展开，当前启停状态在收起时可见。设置保存、先保存再处理、纯外部配置与 Jev 生成能力限制沿用原逻辑。
+
+提取环节显示“模型辅助提取（可选）”，关闭选项显示“仅规则提取（自动）”。采集开启后，队列中的规则归一化、去重与高置信候选提取自动运行且无需模型；模型辅助只补充语义提取。候选是否能正式入库仍受审核和宿主校验约束。禁用输入框的透明度仅作用于普通输入，不能覆盖滑块内原生 checkbox 的完全透明样式；否则关闭采集或保存期间会出现原生方框覆盖滑块。滑块轨道自身表达禁用状态，焦点提示和 Space 切换由原生输入保留。
 
 [自动处理状态](../../src/renderer/src/components/knowledge/AutomationStatus.tsx)以紧凑标题、启停指示、分类计数和操作按钮呈现；需要人工处理与失败用主题强调色提示，含状态文字。近期任务默认收起，展开后列表高度限制为 220px 与 28vh 的较小值，避免大量任务挤占知识正文。工作台的处理状态独占整行；收件箱范围使用横向筛选按钮，选中状态由 `aria-pressed` 表达。[Wiki 历史](../../src/renderer/src/components/knowledge/WikiHistory.tsx)按版本列表显示日期、重要标记及选中项，正文与来源在列表下方阅读，分页与标记仍调用原历史接口。正文保持 12px 与独立行距，不随状态文字缩小。
 
 ## Verification
+
+### dev 检测提示、提取说明与开关修正（2026-10-04）
+
+现场只读检查发现 dev 配置未保存本地双路径，默认 `127.0.0.1:18791/health` 返回 `ECONNREFUSED`。同一检测函数传空路径明确返回 `local-service-unavailable`，提供仓库现有 llama-server 与 Qwen3.5 GGUF 绝对路径后检测通过；后者仅执行元数据和设备探测，没有加载模型或写入用户启用配置。根因是 `fetch` 抛出的连接错误被外层归入通用环境失败，原先的健康接口非 2xx 处理没有覆盖连接拒绝。既有真实模型测试显式传入路径，不能证明未配置的 dev 可以直接启动。
+
+复用 `tests/unit/knowledge/knowledge-models.test.ts` 检查服务连接拒绝、503、上下文请求失败、非法 JSON 与取消传播；复用 `tests/unit/knowledge-automation-ui.test.ts` 检查规则自动提取说明、五种交互场景及禁用开关。`npx vitest run tests/unit/knowledge/knowledge-models.test.ts tests/unit/knowledge-automation-ui.test.ts --maxWorkers=2 --reporter=dot` 通过 2 个文件、15 项，没有新增常驻测试文件。
+
+临时视觉入口 `node artifacts/knowledge-switch-preview.mjs` 用真实设置组件复现禁用样式：旧规则使原生 checkbox 的计算透明度为 0.45，截图显示原生方框叠加；修正规则后透明度为 0，仅保留变淡的圆形滑块。重新开启采集后，Space 可开关自动处理，焦点外框可见。截图为 `artifacts/knowledge-controls-ui/disabled-switch-before.png`、`disabled-switch-after.png`、`focused-switch-after.png`。`npm run typecheck:strict-unused`、`npm run build:check`、变更组件及检测器 ESLint、`npm run i18n:check` 均通过；构建写入隔离产物，不覆盖运行中的 dev 输出。此修正没有重新加载真实模型。
 
 ### 本地启停与上下文验证（2026-10-03）
 

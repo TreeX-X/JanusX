@@ -403,7 +403,7 @@
     "description": "审核通过的项目知识条目和 Wiki 自动入库；来源不足、冲突和模型故障交由人工处理。个人记忆继续人工审核。",
     "enable": "启用自动审核与入库",
     "stage": {
-      "extraction": "知识提取",
+      "extraction": "模型辅助提取（可选）",
       "entryReview": "条目审核",
       "wikiGeneration": "Wiki 生成",
       "wikiReview": "Wiki 再审核"
@@ -414,13 +414,15 @@
       "external": "外部模型",
       "jev": "Jev 审核"
     },
+    "rulesOnly": "仅规则提取（自动）",
+    "extractionHint": "知识库采集开启后，基础规则提取自动运行，无需模型。这里选择模型可补充语义提取；关闭仅停用模型辅助，不停止采集与规则提取。提取结果仍需审核后入库。",
     "externalProvider": "外部提供方",
     "selectProvider": "选择已配置的提供方",
     "model": "模型名称",
     "thinking": "启用思考",
     "externalHint": "复用应用已配置的提供方和密钥。推理模式由该提供方与模型决定，不启动本地服务。",
     "localTitle": "本地服务",
-    "localHint": "默认关闭。填写 llama-server 与 Qwen3.5 GGUF 绝对路径，检测通过后才允许选择本地模型。启用与关闭立即保存；按需加载，空闲 3 分钟释放，下次加载重新检测。修改路径或上下文前请先关闭。路径均留空可连接已启动且支持 /health、/props 的本机服务；关闭仅断开调用，不结束外部进程。",
+    "localHint": "由 JanusX 启动 Qwen：同时填写 llama-server 程序和 Qwen3.5 GGUF 权重的绝对路径，再检测并启用。两项均留空表示连接你已自行启动的本机服务，不会自动寻找或启动模型。启用与关闭立即保存；托管模型按需加载，空闲 3 分钟释放，修改路径或上下文前请先关闭。",
     "localEnabled": "已启用 · 按需加载",
     "localDisabled": "已关闭",
     "localContext": "上下文上限",
@@ -434,7 +436,7 @@
     "localPassed": "检测通过，已启用 · {{tokens}}K tokens",
     "localResources": "可用内存 {{memory}} GB · {{device}}",
     "localCpu": "CPU 运行，速度较慢",
-    "localService": "外部管理的本机服务",
+    "localService": "连接已有本机服务",
     "localRecommendation": "推荐 {{tokens}}K tokens。资源预算为估算，实际加载失败会停止并报告，不会降低手动上限。",
     "localErrors": {
       "invalid-model-endpoint": "请使用合法的本机地址；托管启动需要 HTTP。",
@@ -444,15 +446,15 @@
       "local-runtime-unavailable": "llama-server 无法运行，请检查版本、系统架构和依赖库。",
       "local-port-unavailable": "服务端口已被占用，请关闭占用进程或修改端口。",
       "local-context-unsupported": "所选上下文超出模型或当前资源预算，请选择自动推荐或更小档位。",
-      "local-service-unavailable": "本机服务未就绪，请先启动服务。",
+      "local-service-unavailable": "无法连接本机服务 {{endpoint}}，尚未进行硬件适配检测。若要由 JanusX 启动 Qwen，请同时填写程序与权重路径；若连接已有服务，请先启动该服务并核对地址。",
       "local-service-context-unknown": "无法确认服务上下文，或服务低于 32K。请检查 /props 中的 n_ctx。",
       "local-memory-insufficient": "当前可用资源不足以运行 32K 上下文，请释放内存或显存后重试。",
       "local-environment-failed": "环境检测未通过，请检查本机服务、程序及权重。"
     },
     "local": {
       "endpoint": "接口地址",
-      "serverPath": "llama-server 程序路径（可选）",
-      "modelPath": "GGUF 权重路径（可选）"
+      "serverPath": "llama-server 程序路径",
+      "modelPath": "GGUF 权重路径"
     },
     "release": "停止当前处理并释放本地模型",
     "jevEndpoint": "Jev 接口地址",

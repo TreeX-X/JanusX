@@ -61,7 +61,7 @@ export function KnowledgeLocalModelPanel({ value, disabled, onPersist }: {
     </div>
     {report && <div className={report.ok ? styles.status : `${styles.status} ${styles.statusError}`} role={report.ok ? 'status' : 'alert'}>
       <p>{report.ok ? t('knowledge:automation.localPassed', { tokens: report.selectedContextTokens / 1024 })
-        : t(`knowledge:automation.localErrors.${report.reason as LocalErrorKey}`, { defaultValue: t('knowledge:automation.localCheckFailed') })}</p>
+        : t(`knowledge:automation.localErrors.${report.reason as LocalErrorKey}`, { endpoint: draft.endpoint, defaultValue: t('knowledge:automation.localCheckFailed') })}</p>
       <p>{t('knowledge:automation.localResources', { memory: (report.availableMemoryMiB / 1024).toFixed(1),
         device: report.mode === 'gpu' ? `${report.deviceName} · ${((report.availableVramMiB ?? 0) / 1024).toFixed(1)} GB` : t(report.mode === 'service' ? 'knowledge:automation.localService' : 'knowledge:automation.localCpu') })}</p>
       {!!report.recommendedContextTokens && <p>{t('knowledge:automation.localRecommendation', { tokens: report.recommendedContextTokens / 1024 })}</p>}

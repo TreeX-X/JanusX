@@ -4,7 +4,7 @@
 .panel input:not([type='checkbox']) { box-sizing: border-box; min-width: 0; height: 30px; padding: 0 9px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--shell-text); background: var(--so-field, var(--shell-canvas)); font: inherit; font-size: 12px; }
 .panel input:not([type='checkbox']):focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 1px; }
 .panel input::placeholder { color: var(--shell-muted); }
-.panel input:disabled { opacity: .45; }
+.panel input:not([type='checkbox']):disabled { opacity: .45; }
 .panel p { margin: 0; overflow-wrap: anywhere; }
 .stages { display: grid; gap: 12px; padding: 12px 0; border-top: 1px solid var(--shell-border-soft); border-bottom: 1px solid var(--shell-border-soft); }
 .stage { padding: 0; border: 0; }

@@ -104,16 +104,21 @@ export async function detectLocalEnvironment(config: KnowledgeLocalSettings, sig
     if (!config.serverPath && !config.modelPath) {
       report.mode = 'service'
       const options = { signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]), redirect: 'error' as const }
-      const health = await fetch(new URL('/health', url), options)
-      await health.body?.cancel()
-      if (!health.ok) throw new Error('local-service-unavailable')
-      const response = await fetch(new URL('/props', url), options)
-      if (!response.ok) { await response.body?.cancel(); throw new Error('local-service-context-unknown') }
-      const props = await response.json() as { default_generation_settings?: { n_ctx?: number } }
-      const context = props.default_generation_settings?.n_ctx
-      if (!Number.isSafeInteger(context) || Number(context) < 32768) throw new Error('local-service-context-unknown')
-      report.modelContextTokens = Number(context)
-      report.supportedContextTokens = LOCAL_CONTEXT_OPTIONS.filter(tokens => tokens <= Number(context))
+      // A refused connection is a missing service, not a failed hardware assessment.
+      try {
+        const health = await fetch(new URL('/health', url), options)
+        await health.body?.cancel()
+        if (!health.ok) throw new Error('unhealthy')
+      } catch { throw new Error('local-service-unavailable') }
+      try {
+        const response = await fetch(new URL('/props', url), options)
+        if (!response.ok) { await response.body?.cancel(); throw new Error('missing-props') }
+        const props = await response.json() as { default_generation_settings?: { n_ctx?: number } }
+        const context = props.default_generation_settings?.n_ctx
+        if (!Number.isSafeInteger(context) || Number(context) < 32768) throw new Error('invalid-context')
+        report.modelContextTokens = Number(context)
+        report.supportedContextTokens = LOCAL_CONTEXT_OPTIONS.filter(tokens => tokens <= Number(context))
+      } catch { throw new Error('local-service-context-unknown') }
     } else {
       if (!isAbsolute(config.serverPath) || !isAbsolute(config.modelPath)) throw new Error('invalid-local-model-path')
       try { if (!(await stat(config.serverPath)).isFile() || !(await stat(config.modelPath)).isFile()) throw new Error() }

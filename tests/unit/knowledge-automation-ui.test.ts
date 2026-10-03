@@ -42,19 +42,22 @@ beforeAll(async () => {
 })
 afterAll(async () => { await browser?.close() })
 async function mount(page: Page, gates = false) {
-  page.setDefaultTimeout(4000); await page.setContent('<div id="root"></div>'); await page.addStyleTag({ content: css + '\n*{box-sizing:border-box}body{margin:0;padding:16px}#root{max-width:800px}' })
+  page.setDefaultTimeout(4000); await page.setContent('<div id="root"></div>'); await page.addStyleTag({ content: css + '\n:root{--shell-accent:#ff7830}*{box-sizing:border-box}body{margin:0;padding:16px}#root{max-width:800px}' })
   await page.evaluate(value => { (window as any).gates = value }, gates); await page.addScriptTag({ content: script })
   await page.getByRole('heading', { name: 'Knowledge automation', exact: true }).waitFor()
 }
 it('configures all four stages, excludes Jev generation, saves before running and supports external-only', async () => {
-  const page = await browser.newPage()
+  const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } })
   try {
     await mount(page)
-    for (const stage of ['Knowledge extraction','Entry review','Wiki generation','Wiki review']) {
+    const extraction = page.locator('fieldset').filter({ has: page.locator('legend', { hasText: 'Model-assisted extraction (optional)' }) })
+    expect(await extraction.innerText()).toContain('Rules only (automatic)')
+    expect(await extraction.innerText()).toContain('basic rule extraction runs automatically without a model')
+    for (const stage of ['Model-assisted extraction (optional)','Entry review','Wiki generation','Wiki review']) {
       await page.getByRole('button', { name: stage, exact: true }).scrollIntoViewIfNeeded()
       await page.waitForTimeout(100)
       await page.getByRole('button', { name: stage, exact: true }).click()
-      expect(await page.getByRole('option', { name: 'Jev review', exact: true }).count()).toBe(stage.includes('review') ? 1 : 0)
+      await expect.poll(() => page.getByRole('option', { name: 'Jev review', exact: true }).count()).toBe(stage.includes('review') ? 1 : 0)
       await page.getByRole('option', { name: 'External model', exact: true }).click()
       const field = page.locator('fieldset').filter({ has: page.locator('legend', { hasText: stage }) })
       await field.getByRole('button', { name: 'External provider' }).click()
@@ -66,6 +69,25 @@ it('configures all four stages, excludes Jev generation, saves before running an
     await page.getByRole('button', { name: 'Process pending', exact: true }).click()
     await expect.poll(() => page.evaluate(() => (window as any).calls)).toEqual(['save','run'])
     expect(await page.evaluate(() => Object.values((window as any).config.automation.stages).every((stage: any) => stage.provider === 'external' && stage.model === 'chosen-reviewer'))).toBe(true)
+  } finally { await page.close() }
+})
+it('keeps the native checkbox hidden when automation is disabled, while retaining keyboard switching', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page)
+    const capture = page.getByRole('checkbox').first()
+    const automation = page.getByRole('checkbox', { name: 'Enable automatic review and publication' })
+    await capture.uncheck()
+    expect(await automation.isDisabled()).toBe(true)
+    expect(await automation.evaluate(element => getComputedStyle(element).opacity)).toBe('0')
+    const track = automation.locator('xpath=following-sibling::span')
+    expect(await track.evaluate(element => getComputedStyle(element).opacity)).toBe('0.4')
+    await capture.check()
+    await automation.focus(); await automation.press('Space')
+    expect(await automation.isChecked()).toBe(true)
+    expect(await track.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    expect(await page.evaluate(() => (window as any).config.automation.enabled)).toBe(true)
   } finally { await page.close() }
 })
 it('unmounts knowledge settings and review immediately, blocks programmatic reopen and keeps persona independent', async () => {

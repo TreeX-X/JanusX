@@ -403,7 +403,7 @@
     "description": "Publish project knowledge and Wiki after review. People handle missing evidence, conflicts and model failures. Personal memory remains manually reviewed.",
     "enable": "Enable automatic review and publication",
     "stage": {
-      "extraction": "Knowledge extraction",
+      "extraction": "Model-assisted extraction (optional)",
       "entryReview": "Entry review",
       "wikiGeneration": "Wiki generation",
       "wikiReview": "Wiki review"
@@ -414,13 +414,15 @@
       "external": "External model",
       "jev": "Jev review"
     },
+    "rulesOnly": "Rules only (automatic)",
+    "extractionHint": "With knowledge capture enabled, basic rule extraction runs automatically without a model. Select a model for additional semantic extraction; turning it off leaves capture and rule extraction running. Candidates still require review before publication.",
     "externalProvider": "External provider",
     "selectProvider": "Select a configured provider",
     "model": "Model name",
     "thinking": "Enable thinking",
     "externalHint": "Reuse the configured provider and credentials. Reasoning follows the provider and model; no local service starts.",
     "localTitle": "Local service",
-    "localHint": "Off by default. Supply absolute llama-server and Qwen3.5 GGUF paths. Local stages become selectable only after checks pass. Enable/disable saves immediately; loads on demand, unloads after 3 idle minutes and rechecks before loading. Disable before editing paths or context. Leave both paths empty for an existing local service supporting /health and /props; disabling disconnects without terminating that external process.",
+    "localHint": "For JanusX to start Qwen, supply both absolute paths: llama-server and Qwen3.5 GGUF weights, then check and enable. Leaving both empty connects to a service you already started; it does not find or launch a model. Enable/disable saves immediately. Managed models load on demand and unload after 3 idle minutes. Disable before editing paths or context.",
     "localEnabled": "Enabled · on demand",
     "localDisabled": "Disabled",
     "localContext": "Context limit",
@@ -434,7 +436,7 @@
     "localPassed": "Checks passed, enabled · {{tokens}}K tokens",
     "localResources": "Available RAM {{memory}} GB · {{device}}",
     "localCpu": "CPU mode, slower",
-    "localService": "Externally managed local service",
+    "localService": "Connect to an existing local service",
     "localRecommendation": "Recommended: {{tokens}}K tokens. Budgets are estimates; load failures stop and report, without lowering a manual limit.",
     "localErrors": {
       "invalid-model-endpoint": "Use a valid loopback endpoint; managed startup requires HTTP.",
@@ -444,15 +446,15 @@
       "local-runtime-unavailable": "llama-server cannot run. Check its version, architecture and dependencies.",
       "local-port-unavailable": "The port is occupied. Stop the other process or choose another port.",
       "local-context-unsupported": "Context exceeds the model or current resource budget. Select automatic or a smaller limit.",
-      "local-service-unavailable": "The local service is not ready. Start it first.",
+      "local-service-unavailable": "Cannot connect to local service {{endpoint}}; hardware compatibility has not been assessed. To let JanusX start Qwen, supply both server and weight paths. For an existing service, start it and check the endpoint.",
       "local-service-context-unknown": "Cannot confirm context, or it is below 32K. Check n_ctx in /props.",
       "local-memory-insufficient": "Not enough available resources for 32K context. Free RAM or VRAM and retry.",
       "local-environment-failed": "Environment checks failed. Check the local service, executable and weights."
     },
     "local": {
       "endpoint": "Endpoint",
-      "serverPath": "llama-server path (optional)",
-      "modelPath": "GGUF weights path (optional)"
+      "serverPath": "llama-server path",
+      "modelPath": "GGUF weights path"
     },
     "release": "Stop current processing and unload local model",
     "jevEndpoint": "Jev endpoint",

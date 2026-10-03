@@ -46,6 +46,23 @@ describe('knowledge providers', () => {
     const controller = new AbortController(); controller.abort()
     await expect(detectLocalEnvironment(local, controller.signal)).rejects.toThrow()
   })
+  it('distinguishes an unavailable existing service from unknown service context and preserves cancellation', async () => {
+    const local = defaultKnowledgeAutomation().local
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'))
+    vi.stubGlobal('fetch', fetchMock)
+    const signal = new AbortController().signal
+    expect(await detectLocalEnvironment(local, signal)).toMatchObject({ ok: false, mode: 'service', reason: 'local-service-unavailable' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 503 }))
+    expect(await detectLocalEnvironment(local, signal)).toMatchObject({ reason: 'local-service-unavailable' })
+    fetchMock.mockResolvedValueOnce(new Response('{}'))
+    expect(await detectLocalEnvironment(local, signal)).toMatchObject({ reason: 'local-service-context-unknown' })
+    fetchMock.mockResolvedValueOnce(new Response('{}')).mockResolvedValueOnce(new Response('not-json'))
+    expect(await detectLocalEnvironment(local, signal)).toMatchObject({ reason: 'local-service-context-unknown' })
+    const controller = new AbortController()
+    fetchMock.mockImplementationOnce(async () => { controller.abort(); throw new Error('cancelled') })
+    await expect(detectLocalEnvironment(local, controller.signal)).rejects.toThrow()
+  })
   it('sends a real local HTTP request with separate thinking mode and rejects incomplete output', async () => {
     let body: any; let finish = 'stop'
     server = createServer(async (req, res) => {
