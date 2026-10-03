@@ -6,11 +6,14 @@ lifecycle: accepted
 created: 2026-09-26
 class: architecture
 tags: [blueprint, performance, parent, governance]
+parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd
 ---
 
-# 蓝图性能父域
+# 蓝图性能专题
 
 ## Goal
+
+本专题保存索引、传输和渲染性能的交付约束，隶属 [Note 与蓝图模块](./2026-10-03-module-note-blueprint--f12d99b4.md)。它不是独立系统模块；下方 AC 是 R7 的既有验收输入，保持原文。
 
 进入蓝图不再经历秒级全量重扫与 25 帧逐批挂载：热缓存命中时进入一次读缓存完成，focus 返回与无关写入零开销，真变更走增量补丁。性能回归先看本域树。
 

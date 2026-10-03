@@ -723,7 +723,7 @@ export class AgentHookConfigManager {
     }
 
     // dsh has no hook contract yet (phase 1 = bare PTY via `dsh --profile dsh-tui`,
-    // see .agents/notes/dsh-integration.md): no-op so a dsh launch never
+    // see .agents/notes/2026-09-30-dsh-terminal-integration--b28d07a3.md): no-op so a dsh launch never
     // touches the opencode plugin dir as a side effect.
     if (engine === 'dsh') {
       return { engine, installed: true, path: this.getHooksRootDir() }

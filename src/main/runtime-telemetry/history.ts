@@ -60,7 +60,7 @@ export async function getRuntimeTelemetrySnapshot(
   }
   // Note: dsh has no hook pipeline, so (like janus/pi) only the declared
   // model is terminal-safe without an exact session id — see
-  // .agents/notes/dsh-integration.md (phase 3). Session logs are
+  // .agents/notes/2026-09-30-dsh-terminal-integration--b28d07a3.md (history binding). Session logs are
   // zstd-compressed, so the scan binds id/path/recency without usage numbers.
   if (preset === 'dsh') {
     return sessionId

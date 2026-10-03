@@ -5,17 +5,25 @@ kind: requirement
 lifecycle: draft
 created: 2026-09-23
 class: feature
+extensions:
+  corpusReorganization:
+    sourcePath: .agents/notes/proposed/feature/2026-09-23-planche-theme.md
+    sourceCommit: 9842316
+    sourceHash: ea5f09a84e12d5aaa192643450b35a60c4f96ef55a549115566280857dbe8f75
+    reason: Git blob provenance before separating current facts and historical planning.
 ---
 
-# Agent Note: Planche litho theme + TUI background adaptation
+# Planche litho theme and TUI adaptation
 
 ## Problem
+
+This draft records the 2026-09-23 starting point and phased proposal. It is retained as a planning source, not a description of the current theme implementation. Later decisions on [session surfaces](./2026-09-29-session-card-surface--764d5d26.md), [settings scrims](./2026-09-29-settings-footer-scrim-token--16ff77a0.md) and [modal motion](./2026-09-29-worktree-composer-entry-motion--c0b4743b.md) carry their own implementation facts. Original criteria below keep their proposed dark-default requirement; the draft is not silently updated to match a later default.
 
 JanusX has no real theme system. `GlobalConfig.theme: 'dark' | 'light'` (`src/main/workspace/types.ts:52`, default in `src/main/config/service.ts:44`) is stored but never read by the renderer. All surfaces are hardcoded dark: shell ramp `--shell-*` in `src/renderer/src/styles/globals.css:24-54`, xterm `theme.background #151517` in `src/renderer/src/components/CLITerminal.tsx:167-190`, the Codex `OSC 10/11` probe answers in `src/shared/terminalColorQuery.ts:8-21`, Monaco `janusx-dark` in `src/renderer/src/lib/monaco-theme.ts:13-54`, and the web gateway xterm in `src/main/web-test-gateway/page.ts:720`.
 
 The requested style (`design/pelican-lithograph-style.md`, source `https://01a0c211-d4a3-7951-aadf-ac976597b895.arena.site/`) is a light print style: paper `#EFE4C5`, ink `#1C343B`, single vermilion accent `#D43D2A`, flat fills, no gradients/shadows/large radii. There is no token mapping, no `[data-theme]` switch, and no light ANSI palette. Shipping light CSS alone would leave the middle-workspace TUI dark (seam) or, worse, turn xterm light while the `OSC 11` responder still reports dark so Codex/Claude TUI contrast logic renders wrong colors.
 
-## Proposal
+## Expected behavior
 
 Add a global `planche` theme, phased so the middle-workspace TUI background adapts safely.
 
@@ -27,6 +35,10 @@ Phase 2 — TUI background (the hard part): define a light xterm palette (bg `#E
 
 Phase 3 — editors + polish: add `planche` Monaco theme (editor.background paper, cursor vermilion), paper-grain overlay at 3-5% multiply (off in form areas), 120-200ms linear/steps motion, hard offset shadows only.
 
+## Scope
+
+The proposal covers shared shell tokens, persisted theme selection, xterm palette and OSC replies, the web gateway and Monaco. TUI readability requires per-engine evidence; changing shell CSS alone cannot establish it. Existing sessions may need a redraw, and theme switching must not restart the PTY or lose replay.
+
 ## Alternatives considered
 
 - CSS-only light shell, TUI stays dark — strongest case is zero TUI risk and a deliberate "dark island" look. The driver against it as end-state is the visible seam in the middle workspace plus unfulfilled request; keep as Phase 2a stepping stone, not the final state.
@@ -36,13 +48,13 @@ Phase 3 — editors + polish: add `planche` Monaco theme (editor.background pape
 
 ## Acceptance criteria
 
-- [ ] `planche` opt-in applies to shell via `[data-theme]` with no change to default dark rendering.
-- [ ] Setting persists across restart; clearing restores byte-identical dark path.
-- [ ] Middle-workspace xterm background follows the theme live without PTY restart or replay loss.
-- [ ] Codex `OSC 10/11` probe returns the active theme values (dark stays dark, planche returns paper/ink).
-- [ ] Light ANSI palette passes readability check on claude/codex/opencode reference shots (body text WCAG AA at default font).
-- [ ] Monaco has a matching light theme; no dark-only color leaks in find widget/selection.
-- [ ] Docs updated: `design/` token table is the single source; note records the 2-step TUI rollout.
+- [ ] AC-1: `planche` opt-in applies to shell via `[data-theme]` with no change to default dark rendering.
+- [ ] AC-2: Setting persists across restart; clearing restores byte-identical dark path.
+- [ ] AC-3: Middle-workspace xterm background follows the theme live without PTY restart or replay loss.
+- [ ] AC-4: Codex `OSC 10/11` probe returns the active theme values (dark stays dark, planche returns paper/ink).
+- [ ] AC-5: Light ANSI palette passes readability check on claude/codex/opencode reference shots (body text WCAG AA at default font).
+- [ ] AC-6: Monaco has a matching light theme; no dark-only color leaks in find widget/selection.
+- [ ] AC-7: Docs updated: `design/` token table is the single source; note records the 2-step TUI rollout.
 
 ## Risks
 
@@ -51,7 +63,9 @@ Phase 3 — editors + polish: add `planche` Monaco theme (editor.background pape
 - Light-theme contrast regressions across panes — mitigation is mandatory scrim/min-contrast rule from the style doc; full-bleed zero-chrome modes never ship.
 - Test pins on dark colors (monaco-theme, desktop snapshots) — mitigation is keeping dark as default and updating pins only for the new theme path.
 
-## Branch sync gate (2026-09-25)
+## Historical branch sync gate (2026-09-25)
+
+The following gate records the branch state and authorization context on that date. It does not authorize a push or block this document reorganization.
 
 - Do not start Phase 0 until local `main` (76 ahead of `origin/main`, 609 files as of 2026-09-25) is pushed to `origin/main`.
 - After push, sync `feature/planche-theme` worktree once (`fetch` + `merge`/`rebase` `origin/main`) and verify zero diff vs `main` before starting.
