@@ -100,7 +100,14 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await expect(conversation).toBeVisible()
     // 单会话工作区对话：面板头为 Janus 标识（旧 COPILOT CONTROL 标题已随 chrome 精简移除）。
     await expect(conversation.getByText('Janus', { exact: true })).toBeVisible()
-    await expect(conversation.getByRole('button', { name: '整理修改', exact: true })).toBeDisabled()
+    const chatInput = conversation.locator('.janus-chat-input')
+    const sendButton = conversation.locator('.janus-chat-send')
+    await expect(chatInput).toBeVisible()
+    await expect(sendButton).toBeDisabled()
+    await chatInput.fill('Review the selected Note')
+    await expect(sendButton).toBeEnabled()
+    await chatInput.clear()
+    await expect(sendButton).toBeDisabled()
     const conversationBoxBeforeDetail = await conversation.boundingBox()
 
     await page.locator('.react-flow__node').first().dblclick()
@@ -170,10 +177,10 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       }
     }
 
-    // 统一栏四按钮：适应画布 / 隐藏未关联 / 节点详情 / 恢复默认布局，不溢出 shell。
-    // 「在对话中变更」中转按钮已移除：面板常驻且自带画布上下文，无需手动带节点进对话。
+    // 两个视图选择按钮与四个画布操作均须保持在工作台内且互不重叠。
     const toolbarActions = workbenchToolbar.locator('.blueprint-btn')
-    await expect(toolbarActions).toHaveCount(4)
+    await expect(toolbarActions).toHaveCount(6)
+    await expect(workbenchToolbar.getByRole('button', { name: '系统结构', exact: true })).toBeDisabled()
     const toolbarActionBoxes = await toolbarActions.evaluateAll((elements) =>
       elements.map((element) => {
         const { bottom, left, right, top } = element.getBoundingClientRect()
