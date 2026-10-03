@@ -7,6 +7,20 @@ import type { Blueprint } from '../../src/shared/janus/types'
 const event = (id: string, uris = ['note://repo/a', 'note://repo/b']): NoteFocusEvent => ({ id, conversationId: 'chat', workspacePath: 'C:/project', mode: 'scope', focus: 'auto', reason: 'Related work', notes: uris.map((uri, i) => ({ uri, title: uri, role: i ? 'reference' : 'target', reason: 'Relevant' })) })
 beforeEach(() => useNoteFocusStore.setState({ scopes: {}, history: [], display: null, displays: {}, hidden: {}, activeConversationId: 'chat' }))
 describe('assistant visual scope', () => {
+  it('merges paged access by turn, document and checkout without losing write roles', () => {
+    const state = useNoteFocusStore.getState()
+    const read = { ...event('read'), mode: 'access' as const, turnId: 'turn-1' }
+    state.receive(read)
+    state.receive({ ...read, id: 'page-2', notes: [read.notes[0], read.notes[0]] })
+    expect(useNoteFocusStore.getState().history).toHaveLength(1)
+    expect(useNoteFocusStore.getState().history[0].notes).toHaveLength(2)
+    state.receive({ ...read, id: 'page-3', notes: [{ ...read.notes[0], role: 'reference' }] })
+    expect(useNoteFocusStore.getState().history[0].notes[0].role).toBe('target')
+    state.receive({ ...read, id: 'next', turnId: 'turn-2' })
+    state.receive({ ...read, id: 'other-chat', conversationId: 'other' })
+    state.receive({ ...read, id: 'other-root', workspacePath: 'C:/other' })
+    expect(useNoteFocusStore.getState().history).toHaveLength(4)
+  })
   it('preserves semantic scope while recording later reads and isolates same-checkout conversations', () => {
     const state = useNoteFocusStore.getState()
     state.activate('chat')

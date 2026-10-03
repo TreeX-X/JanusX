@@ -19,6 +19,8 @@ export interface NoteScopeItem {
 
 export interface NoteFocusEvent {
   id: string
+  /** Renderer-owned assistant message identity for grouping access within a turn. */
+  turnId?: string
   conversationId: string
   workspacePath: string
   mode: 'display' | 'scope' | 'access'

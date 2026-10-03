@@ -1,6 +1,7 @@
 // Note: assistant highlighting never changes mouse selection or execution scope — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
 import { create } from 'zustand'
 import type { NoteFocusEvent, NoteScopeItem } from '../../../shared/note-chat'
+import { sameCheckoutPath } from '../features/blueprint/resolveNodeWorkspace'
 
 export interface WorkingScope { workspacePath: string; notes: NoteScopeItem[]; excluded: string[] }
 export const useNoteFocusStore = create<{
@@ -23,6 +24,18 @@ export const useNoteFocusStore = create<{
   reportHidden: (id, ids) => set(state => JSON.stringify(state.hidden[id]) === JSON.stringify(ids) ? state : { hidden: { ...state.hidden, [id]: ids } }),
   activate: activeConversationId => set(state => ({ activeConversationId, display: activeConversationId ? state.displays[activeConversationId] ?? null : null })),
   receive: event => set(state => {
+    const sameAccess = (item: NoteFocusEvent) => event.mode === 'access' && !!event.turnId
+      && item.mode === 'access' && item.turnId === event.turnId && item.conversationId === event.conversationId
+      && sameCheckoutPath(item.workspacePath, event.workspacePath)
+    const previousAccess = state.history.find(sameAccess)
+    if (previousAccess) {
+      const merged = new Map(previousAccess.notes.map(note => [note.uri, note]))
+      for (const note of event.notes) {
+        const previous = merged.get(note.uri)
+        merged.set(note.uri, previous?.role === 'target' && note.role !== 'target' ? previous : note)
+      }
+      event = { ...event, id: previousAccess.id, notes: [...merged.values()].slice(-32) }
+    }
     const previous = state.scopes[event.conversationId]
     const old = previous?.workspacePath === event.workspacePath ? previous : undefined
     const excluded = old?.excluded ?? []

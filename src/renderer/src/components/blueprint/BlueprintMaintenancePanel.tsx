@@ -15,7 +15,7 @@ import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { EMPTY_FOCUS, resolveBlueprintContextScope } from '@/features/blueprint/blueprint-focus'
 import { useOptionalBlueprintToolbar } from './BlueprintToolbar'
 import { NoteChatActivity } from './NoteChatActivity'
-import { NoteWorkingScope } from './NoteWorkingScope'
+import { NoteWorkingScope, NoteTurnActivity } from './NoteWorkingScope'
 import { useNoteFocusStore } from '@/stores/note-focus'
 import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 
@@ -143,7 +143,9 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
-        discussionFooter={<><NoteWorkingScope conversationId={chat.conversationId} workspacePath={activeWorkspace.path} history /><NoteChatActivity conversationId={chat.conversationId} workspacePath={activeWorkspace.path} /></>}
+        renderTurnFooter={turnId => <NoteTurnActivity key={turnId ?? 'live'} conversationId={chat.conversationId}
+          workspacePath={activeWorkspace.path} turnId={turnId ?? chat.activeTurnId} live={!turnId} />}
+        discussionFooter={<NoteChatActivity conversationId={chat.conversationId} workspacePath={activeWorkspace.path} />}
         pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
         modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
         resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}

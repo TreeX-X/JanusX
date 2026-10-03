@@ -14,7 +14,7 @@ export interface ToolCallCardProps {
   entry: ChatToolTraceEntry
   /** 已附加工作区名表，用于把 workspaceId 解析为可读名。 */
   workspaceNames: Map<string, string>
-  /** 卡片初始是否展开（流式中默认展开看细节，历史默认收起）。 */
+  /** 卡片初始是否展开；实时和历史调用均默认收起详情。 */
   defaultExpanded?: boolean
 }
 
@@ -164,7 +164,7 @@ export function summarizeToolCallGroup(entries: ChatToolTraceEntry[]): ToolCallG
 export interface ToolCallGroupProps {
   entries: ChatToolTraceEntry[]
   workspaceNames: Map<string, string>
-  /** 流式中整组默认展开看细节（默认 false）。 */
+  /** 显式展开整组和卡片详情（默认 false）。 */
   defaultExpanded?: boolean
   /**
    * 历史回看时整组收起为一行摘要，可展开（默认 false 即平铺）。

@@ -95,6 +95,7 @@ export interface JanusResourceController {
 }
 
 export interface UseJanusChatReturn {
+  activeTurnId?: string
   contextStatus?: import('../../../../shared/chat-context').ChatContextStatus
   setContextWindow?: (tokens: number) => Promise<void>
   engineeringContext?: EngineeringContext
@@ -727,7 +728,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
               return
             }
             if (agentEvent.type === 'note_focus') {
-              if (handles.generation === generation && agentEvent.focus.conversationId === id) useNoteFocusStore.getState().receive(agentEvent.focus)
+              if (handles.generation === generation && agentEvent.focus.conversationId === id) {
+                useNoteFocusStore.getState().receive({ ...agentEvent.focus, turnId: handles.assistantMessageId ?? undefined })
+              }
               return
             }
             if (agentEvent.type === 'note_change') {
@@ -1168,6 +1171,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       conversationTitle: conversation?.title ?? NEW_CONVERSATION_TITLE,
       conversations: summaries,
       messages: conversation?.messages ?? [],
+      activeTurnId: handlesRef.current.get(id)?.assistantMessageId ?? undefined,
       pendingContent: runtime.pendingContent,
       pendingReasoning: runtime.pendingReasoning,
       reasoningByTurn: runtime.reasoningByTurn,

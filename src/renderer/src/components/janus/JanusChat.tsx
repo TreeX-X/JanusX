@@ -83,6 +83,8 @@ interface JanusChatProps {
   minimalComposer?: boolean
   /** Host-owned actions rendered after the discussion, inside its scroll area. */
   discussionFooter?: React.ReactNode
+  /** Host-owned evidence attached to an assistant turn; undefined is the live turn. */
+  renderTurnFooter?: (turnId?: string) => React.ReactNode
   /**
    * Host-owned actions pinned directly above the composer, outside the message
    * scroll area — for anything that must stay reachable while discussing.
@@ -383,6 +385,7 @@ export function JanusChat({
   discussionOnly = false,
   minimalComposer = false,
   discussionFooter,
+  renderTurnFooter,
   aboveComposer,
   messagesHidden = false,
   focused = true,
@@ -1533,6 +1536,7 @@ export function JanusChat({
                     collapsible
                   />
                 )}
+                {msg.role === 'assistant' && renderTurnFooter?.(msg.id)}
               </div>
             )}
           </div>
@@ -1555,7 +1559,8 @@ export function JanusChat({
                   </div>
                 )
               )}
-              <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} defaultExpanded />
+              <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} />
+              {renderTurnFooter?.()}
             </div>
           </div>
         )}

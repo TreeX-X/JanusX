@@ -11,6 +11,8 @@
 .bp-note-role-target { color: var(--shell-accent); }
 .bp-note-role-reference,.bp-note-role-dependency { opacity: .7; }
 .bp-note-locations details { font-size: 12px; padding: 8px 0; border-bottom: 1px solid var(--shell-border); }
+.bp-note-locations summary { cursor: pointer; color: var(--shell-muted); }
+.bp-note-locations ul { max-height: 170px; overflow: auto; overflow-wrap: anywhere; padding-left: 20px; }
 .bp-assistant-target .bp-node-card { outline: 3px solid var(--shell-accent); outline-offset: 4px; }
 .bp-assistant-reference .bp-node-card { outline: 2px dashed var(--shell-accent); outline-offset: 4px; }
 .bp-assistant-dependency .bp-node-card { outline: 2px dotted var(--shell-accent); outline-offset: 4px; }
