@@ -16,6 +16,7 @@ test-results/
 artifacts/screenshots/
 
 # Tool caches
+__pycache__/
 .vite/
 .cache/
 .parcel-cache/

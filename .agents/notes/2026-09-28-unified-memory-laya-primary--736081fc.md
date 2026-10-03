@@ -25,6 +25,40 @@ JanusX 的 observation → candidate → review → truth → BM25 管线承载�
 
 ## Expected behavior
 
+### Python 测试资产与复验（2026-10-03）
+
+`tests/laya` 常驻保留 [test_sidecar.py](../../tests/laya/test_sidecar.py) 的 7 项协议与文件校验测试，因为 [sidecar](../../resources/laya/sidecar.py) 仍是应用发布的兼容资源。8 个评测工具测试文件、共 55 项用例以本节的方法和结果记录为归档，完整源码由 Git 保存，不另建测试副本。评测脚本、固定标准、样例及原始模型报告继续保留；Python 的 `__pycache__` 属于忽略的生成缓存。
+
+清理前基线为提交 `7713065def15ae167a93899ff0e8eff1fdbd0b8f`。2026-10-03 在该基线工作区执行 `artifacts/qwen-review/.venv/Scripts/python.exe -B -m unittest discover -s tests/laya -v`，9 个文件、62 项全部通过，unittest 报告耗时 0.687 秒，无跳过。下表“通过”均指这次确定性测试；它们使用固定样例、构造响应、替身和临时文件，不加载模型权重、不调用真实云端接口，Jev 子进程只运行无网络预览。
+
+| 文件及去向 | 被测入口与测试方法 | 基线结果 |
+| --- | --- | --- |
+| `test_evaluation.py`，Git 归档 | `scripts/evaluate-laya.py`：修改留出集标签，确认温度拟合不变；构造非法概率、重复来源和跨语言泄漏；核对准确率、Brier、ECE；合成数据或未固定策略不能通过质量门槛。 | 7/7 通过 |
+| `test_evaluation_reporting.py`，Git 归档 | `scripts/evaluate-laya.py`：缺题、重复题、非法概率和弃答仍计入尝试分母；99% 多数类准确率必须显示零正类召回；缺类别、局部覆盖不足不能验收；报告定位错题与置信度；48 条诊断数据按语言覆盖标签，分流漏检与多余精修分别统计。 | 10/10 通过 |
+| `test_admission_probe.py`，Git 归档 | `scripts/probe-laya-admission.py`：构造宿主门控失败、低置信度、临时或无依据内容，断言不写入；显式替代与未决冲突分开；空上下文不依赖旧关系；零写入不算完美精度，错误替代计入错误写入，noul 方向独立于所选答案置信度。 | 7/7 通过 |
+| `test_reviewer_benchmark.py`，Git 归档 | `scripts/benchmark-knowledge-reviewers.py`：用人工构造概率验证支持方向、非法值、弃答、误放与漏放；整页 Wiki 必须全部断言通过，缺失断言保持待审；固定标准包含独立验证与整页用例。Qwen、Jev、Nimble 和重复诊断仍复用此脚本。 | 6/6 通过 |
+| `test_jev_benchmark.py`，Git 归档 | `scripts/benchmark-jev-reviewer.py`：构造 noul 响应和调用替身，拒绝模型漂移、非法 usage；请求不带金标；预算停止、HTTP 失败和重复不一致保留分母；重定向和错误文本不泄露凭据。 | 7/7 通过 |
+| `test_jev_repeat_analysis.py`，Git 归档 | `scripts/analyze-jev-repeat-results.py`：扩展标准预览为 136 样例，验证集分类合计 112、长上下文 32、Wiki 8 页；区分概率波动、分类翻转和过审核阈值的动作翻转；保留每次重复及原摘要，拒绝缺重复和标签变化。 | 4/4 通过 |
+| `test_qwen_benchmark.py`，Git 归档 | `scripts/benchmark-qwen-reviewer.py`：构造 chat completion 响应，截断、非法结论和 usage 不放行；缺重复仍在分母；请求不含标签，非思考输出上限 160、思考上限 1536 token；只保留思考字符数。 | 4/4 通过 |
+| `test_nimble_reviewer.py`，Git 归档 | `scripts/benchmark-nimble-reviewer.py`：构造响应核对冻结问题与证据、模型身份、概率、usage 和上下文上限；缺失与失败保留分母，数值不稳定不能被动作一致掩盖；显存 768 MiB、可用内存 3072 MiB 为测试中的资源下限，拒绝重定向。 | 10/10 通过 |
+| `test_sidecar.py`，常驻保留 | `resources/laya/sidecar.py`：临时 checkpoint 改写不污染下载；规范化概率方向与舍入；拒绝缺题、选项坍缩、非法置信度与错误 choice；相同大小但不同字节、缺失文件均不能通过哈希校验。 | 7/7 通过 |
+
+当前日常命令仍为 `artifacts/qwen-review/.venv/Scripts/python.exe -B -m unittest discover -s tests/laya -v`，只覆盖保留的 7 项。它不是默认 `npm run verify` 的一部分。生产知识库的自动入库、模型适配、Wiki 历史及开关联动继续由 `tests/unit/knowledge/` 等现有 TypeScript 测试覆盖，实施结果见[自动处理需求](./2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md)。本篇其余小节的 14～62 项 Python 结果均是历史快照，不能把当前 7 项运行解释为重跑了这些历史测试。
+
+需要审计原始断言时，可在仓库根目录使用以下 PowerShell 命令，将固定基线及其脚本、数据解压到独立临时目录复验。Python 3.12 标准库即可执行；示例使用本机现有解释器，迁移机器时替换解释器路径。复原代码只用于历史复验，不能证明随后修改过的评测脚本仍满足原断言。
+
+```powershell
+$archiveDir = Join-Path ([IO.Path]::GetTempPath()) ('janusx-knowledge-tests-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $archiveDir | Out-Null
+git archive --format=zip --output="$archiveDir/baseline.zip" 7713065def15ae167a93899ff0e8eff1fdbd0b8f tests/laya scripts resources/laya tests/fixtures
+Expand-Archive -LiteralPath "$archiveDir/baseline.zip" -DestinationPath $archiveDir
+& 'artifacts/qwen-review/.venv/Scripts/python.exe' -B -m unittest discover -s "$archiveDir/tests/laya" -v
+```
+
+真实模型的测试方法与结果继续以本篇各模型实验小节及链接的 JSON 报告为准：固定样例和模型身份、逐次保留重复、统计误放/漏放、整页断言、延迟与资源占用；历史结果不能代替真实脱敏数据的质量验收。当前脚本可用 `scripts/evaluate-laya.py --validate-only`、`scripts/probe-laya-admission.py --validate-only`、`scripts/benchmark-knowledge-reviewers.py --validate-only` 和 `scripts/benchmark-jev-reviewer.py` 做无推理的数据/预览检查；每条命令前加上述 Python 路径。它们只能检查输入或预览，不能替代被归档的行为断言。真实 Qwen、Jev 或旧模型复验按下文命令和资源前提执行，本次整理不重跑真实推理。
+
+整理验证（2026-10-03）：当前目录的 7 项测试全部通过，耗时 0.024 秒；上述 Git 归档命令在系统临时目录实际复原后，62 项全部通过，耗时 0.849 秒。四条数据/预览命令均成功：Laya 数据 24 条、准入场景 24 条、统一标准 52 条（开发 24、验证 28），Jev 预览 52 条、最多 156 请求且无网络调用。`npm run check:notes` 检查 234 篇、0 错误、27 项既有显式链接诊断；`git diff --check` 通过。此次变更仅清理测试文件、补充说明和忽略缓存，未运行应用构建或全量 TypeScript 测试。
+
 ### 按环节选择模型与部署收敛（2026-09-30）
 
 用户确认后续知识库按环节独立选择模型：知识条目审核默认使用 Qwen3.5-4B 非思考模式，Wiki 生成与整理默认使用 Qwen3.5-4B 思考模式。此选择优先兼顾知识审核延迟和本地模型多用途复用；此前推荐审核使用有限思考的建议不再作为产品默认。思考模式审核的实测优势及非思考模式的已知误放行仍保留在下文，不能将用户选择默认模式解释为质量已经验收。Wiki 生成的思考预算需要专项测试，不能直接把审核用的256 token预算认定为生成任务的合适预算。
@@ -476,7 +510,7 @@ Laya 拟位于候选提取与正式知识提交之间，比较候选、证据与
 
 不考虑置信度门槛的证据支持答案正确数分别为 11/24、14/24、14/24；13 个有旧条目的关系答案正确数分别为 6/13、5/13、4/13。明确证据“已确认 Atlas 生产服务配置：端口为 9443，长期生效”支持候选“Atlas 生产服务端口为 9443”，六题组仍以 99.32% 置信度回答不支持，两套聚焦模板也以 97.11% 回答不支持。仅调整分流位置、减少问题或翻译模板尚未解决基础语义错误；这组结果不支持当前部署模型独立自动审核，也不能证明所有本地模型或 Laya 的其他适配方式不可行。
 
-验证命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/probe-laya-admission.py --validate-only` 验证 24 条场景；同一 Python 执行 `scripts/probe-laya-admission.py --model-dir artifacts/laya-eval-runtime/model --output tests/fixtures/laya-admission-probe-windows.json` 完成真实推理；`-m unittest discover -s tests/laya -v` 通过 31 项测试，其中[准入策略测试](../../tests/laya/test_admission_probe.py)覆盖冲突与替代、来源门控失败、低置信度、无旧条目、错误写入、零写入及概率方向。输出不可用保留在分母，错误的新增/合并/替代动作计为错误写入。
+验证命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/probe-laya-admission.py --validate-only` 验证 24 条场景；同一 Python 执行 `scripts/probe-laya-admission.py --model-dir artifacts/laya-eval-runtime/model --output tests/fixtures/laya-admission-probe-windows.json` 完成真实推理；`-m unittest discover -s tests/laya -v` 通过 31 项测试，其中归档的准入策略测试（方法与结果见本篇 Python 测试资产节）覆盖冲突与替代、来源门控失败、低置信度、无旧条目、错误写入、零写入及概率方向。输出不可用保留在分母，错误的新增/合并/替代动作计为错误写入。
 
 本次仅验证本地语义评分与模拟策略；来源校验假定通过，模型输入是已经整理好的候选，未执行真实提取、宿主事务、历史展示、搜索交付或 Wiki 生成。后续还需从原始记录验证候选完整性、限定条件、证据归因，并验证重复合证据、冲突暂存、版本替代、来源失效和实际检索；Wiki 的模板组织与自由长文生成需分别定义验收。现阶段保留模型可替换的判断接口，Laya 可继续用于辅助分析和针对性验证，不能将当前失败结果作为启用自动批准的依据。AC-20、AC-21、AC-22 保持未完成。
 
@@ -490,7 +524,7 @@ Laya 拟位于候选提取与正式知识提交之间，比较候选、证据与
 
 CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 及 mDeBERTa 量化 ONNX，各 4 个计算线程、单条 batch、一次预热、每样例连续三次计时。准确率每样例仅计一次，重复只检查稳定性并测 P50/P95。内存为每 20ms 采样的进程 RSS 峰值，包括运行时、加载和推理；不是显存或纯权重大小。加载时间包含导入与校验，不保证磁盘冷缓存；ONNX 版仍通过 Python/Transformers 分词，不能把其测量当成最小原生运行时成本。
 
-权重保存在 `artifacts/knowledge-review-models`，Laya 复用原评测目录，均不提交仓库。下载固定 revision，检查文件大小及 LFS SHA-256 或 Git blob 身份，再记录每个文件 SHA-256；推理离线且重新核验所需文件。环境扩展由[依赖文件](../../scripts/requirements-reviewer-benchmark.txt)固定，下载失败可有限重试。执行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-knowledge-reviewers.py --prepare` 准备资源，`--validate-only` 检查数据，去掉这两个参数运行完整对照。[指标测试](../../tests/laya/test_reviewer_benchmark.py)覆盖概率方向、非法值、零放行、不可用、漏放与误放分离，以及 Wiki 单处错误不可被平均分掩盖。
+权重保存在 `artifacts/knowledge-review-models`，Laya 复用原评测目录，均不提交仓库。下载固定 revision，检查文件大小及 LFS SHA-256 或 Git blob 身份，再记录每个文件 SHA-256；推理离线且重新核验所需文件。环境扩展由[依赖文件](../../scripts/requirements-reviewer-benchmark.txt)固定，下载失败可有限重试。执行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-knowledge-reviewers.py --prepare` 准备资源，`--validate-only` 检查数据，去掉这两个参数运行完整对照。归档的指标测试（方法与结果见本篇 Python 测试资产节）覆盖概率方向、非法值、零放行、不可用、漏放与误放分离，以及 Wiki 单处错误不可被平均分掩盖。
 
 [Windows 对照报告](../../tests/fixtures/knowledge-review-benchmark-windows.json)在 Ryzen 9 7945HX、16 核/32 线程、约 32 GiB 内存机器上完成，所有推理限制为 CPU 4 线程。4 种部署各 52 条样例、每条 3 次，共 624 次计时推理，另有每部署一次预热；无不可用或重复不稳定结果。以下质量数据仅取 28 条新验证陈述（18 条支持、10 条不支持），耗时取全部 52 条的重复测量：
 
@@ -519,7 +553,7 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 默认结果文件为 `artifacts/jev-review-benchmark.json`，保留标准、开发样例、适配器和指标脚本的摘要，避免覆盖本地模型报告。Jev 时延包含网络和服务端时间，没有可比的服务器 CPU/RSS；官方分词器未在本地提供，因此只能保证输入文字一致，不能宣称已核验 512-token 分词预算完全一致。API 不增加预热调用，首次请求包含在时延内；这些差异须随最终对照报告呈现。
 
-准备验证：运行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-jev-reviewer.py` 输出 52 样例、最多 156 请求的无网络预览；`-m unittest discover -s tests/laya` 通过 44 项测试。[接入测试](../../tests/laya/test_jev_benchmark.py)覆盖 noul 方向、模型漂移、非法 usage、预算和失败后保留分母、重复不稳定及重定向/错误消息的凭证保护。提供凭证后使用同一 Python 执行 `scripts/benchmark-jev-reviewer.py --run --key-file <仓库外密钥文件>`，或在已配置环境变量时仅加 `--run`。截至接入交付没有真实 Jev 请求，不能将替身测试通过解释为服务可用或模型质量通过。
+准备验证：运行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-jev-reviewer.py` 输出 52 样例、最多 156 请求的无网络预览；`-m unittest discover -s tests/laya` 通过 44 项测试。归档的接入测试（方法与结果见本篇 Python 测试资产节）覆盖 noul 方向、模型漂移、非法 usage、预算和失败后保留分母、重复不稳定及重定向/错误消息的凭证保护。提供凭证后使用同一 Python 执行 `scripts/benchmark-jev-reviewer.py --run --key-file <仓库外密钥文件>`，或在已配置环境变量时仅加 `--run`。截至接入交付没有真实 Jev 请求，不能将替身测试通过解释为服务可用或模型质量通过。
 
 ### Jev 真实调用与重复稳定性诊断（2026-09-30）
 
@@ -531,7 +565,7 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 52 条样例没有发生跨 0.5 的分类翻转；开发集 `preference-update` 的概率为 0.89/0.91/0.89，导致放行与暂存切换，其他开发样例及全部新验证样例的动作一致。验证集概率最大范围为 0.03，开发集为 0.04。补充诊断是在观察到波动后增加，不能代替预先确定的验收标准。后续可讨论将语义正确率、动作稳定性和数值稳定性分别验收，并对临界概率设置复核规则；本次不修改既有标准或启用自动批准。
 
-同样的新验证陈述上，Jev 的三次原始判断均优于本地模型，值得作为后续自动审核的优先验证候选；这一结论只适用于当前中文合成短样例，不证明真实资料、长 Wiki、完整性、来源变化和全流程安全。独立人工标注、额外边界样例以及稳定性验收仍缺失。运行 `scripts/analyze-jev-repeat-results.py --input tests/fixtures/jev-review-benchmark-live.json --output tests/fixtures/jev-review-repeat-diagnostics.json` 可复现补充统计；`-m unittest discover -s tests/laya` 通过 47 项测试，包括[波动诊断测试](../../tests/laya/test_jev_repeat_analysis.py)。知识库重构及自动审核验收继续未完成。
+同样的新验证陈述上，Jev 的三次原始判断均优于本地模型，值得作为后续自动审核的优先验证候选；这一结论只适用于当前中文合成短样例，不证明真实资料、长 Wiki、完整性、来源变化和全流程安全。独立人工标注、额外边界样例以及稳定性验收仍缺失。运行 `scripts/analyze-jev-repeat-results.py --input tests/fixtures/jev-review-benchmark-live.json --output tests/fixtures/jev-review-repeat-diagnostics.json` 可复现补充统计；`-m unittest discover -s tests/laya` 通过 47 项测试，包括归档的波动诊断测试（方法与结果见本篇 Python 测试资产节）。知识库重构及自动审核验收继续未完成。
 
 ### Jev 扩展样本实测（2026-09-30）
 
@@ -644,6 +678,8 @@ source 按会话或原始来源分组，翻译及同事件变体共用 scenario�
 
 ## Alternatives considered
 
+- 保留全部 9 个 Python 测试文件能持续复查评测工具的统计与异常处理；按用户当前的资产精简要求，选择将其中 8 个文件的方法和结果集中归档，只常驻保留随产品发布的 sidecar 测试。把全部用例合并成一个大文件虽能减少文件数，仍需维护同样的实验断言；删除全部测试则会失去 sidecar 的直接协议保障，因此均不采用。
+
 - 只在原观察详情显示撤回状态：实现最小，但来源退出召回或文件被清理后就无法找到记录。把全部正文复制进撤回日志便于离线查看，却扩大敏感内容留存；采用原回执加现存来源解析，以明确缺失/变化状态承担历史正文不可恢复的边界。
 
 - 撤回时删除所有关联原文件：清理直观，但会破坏来源追溯，并需要观察归档、候选、事实、Wiki、图边与任务之间的跨文件事务。沿用普通事实归档最省实现，却不能约束来源重放；采用单一撤回屏障与受约束视图，保留原始证据，并明确承担入口一致性和全量扫描成本。
@@ -694,6 +730,8 @@ source 按会话或原始来源分组，翻译及同事件变体共用 scenario�
 - [ ] AC-24: 无本地部署模式 — 不安装任何本地模型、未配置Jev时，仅使用用户外部LLM配置即可完成所选知识和Wiki环节；不得自动下载、启动本地推理或强制输入Jev Key。未配置环节可见且不误放行；完全无模型时规则加人工路径仍可用。仅本地、仅外部及混合提供方均须独立验证。
 
 ## Risks
+
+评测工具的 55 项归档断言不再随当前源码常驻运行，Note 中的通过记录不能发现未来回归。修改 `scripts/evaluate-laya.py`、`probe-laya-admission.py`、`benchmark-*-reviewer*.py` 或重复统计时，需从固定 Git 基线取回相关断言并针对当前源码复验，或增加该次变更必要的验证；出现持续维护需求时再恢复对应小套件。sidecar 完全退出产品发布后，其余 7 项测试可随运行时一并清理。
 
 来源核验与审核状态会增加数据字段和迁移成本，但它们分别回答“谁说的、证据是否匹配、是否允许采纳”，不能合并成一个 confidence。人工确认只能证明采纳意图，不能保证陈述永远正确；后续冲突仍须暴露。
 

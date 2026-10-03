@@ -1,3 +1,4 @@
+# Note: retain shipped sidecar coverage and archive benchmark tests — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import importlib.util
 import math
 from pathlib import Path
