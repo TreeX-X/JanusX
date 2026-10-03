@@ -305,6 +305,7 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
     callerId,
     getProviderSettings: (providerId) => llmService.getProviderSettings('janus', providerId),
     getLanguageModel: (providerId, modelId) => llmService.getLanguageModel('janus', providerId, modelId),
+    resolveModelMetadata: modelId => llmService.resolveModelMetadata?.(modelId) ?? Promise.resolve(undefined),
     listModels: (providerId) => {
       const catalog = llmService as typeof llmService & {
         listModels?: (terminal: string, provider: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>

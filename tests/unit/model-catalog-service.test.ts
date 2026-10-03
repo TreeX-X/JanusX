@@ -13,6 +13,57 @@ afterEach(async () => {
 })
 
 describe('ModelCatalogService', () => {
+  it('uses an updated window on the next resolution of an existing stale model', async () => {
+    const cachePath = await createCachePath()
+    const bundled = documentAt('2026-07-01T00:00:00.000Z', 'vendor/model')
+    bundled.models[0].effectiveContextWindow = 16_384
+    let resolveFetch!: (value: unknown) => void
+    const fetchModels = vi.fn(() => new Promise(resolve => { resolveFetch = resolve }))
+    const service = new ModelCatalogService({ cachePath, bundledDocument: bundled, fetchModels, now: () => NOW })
+    expect(await service.resolveModel('vendor/model')).toMatchObject({ effectiveContextWindow: 16_384 })
+    await vi.waitFor(() => expect(fetchModels).toHaveBeenCalledOnce())
+    resolveFetch({ data: [{ id: 'vendor/model', name: 'Vendor Model', context_length: 1_048_576 }] })
+    await service.refresh()
+    expect(await service.resolveModel('vendor/model')).toMatchObject({ effectiveContextWindow: 1_048_576 })
+    expect(fetchModels).toHaveBeenCalledOnce()
+  })
+
+  it('waits for a missing Gemini model before returning its automatic limits, then reuses the cache', async () => {
+    const cachePath = await createCachePath()
+    let resolveFetch!: (value: unknown) => void
+    const fetchModels = vi.fn(() => new Promise(resolve => { resolveFetch = resolve }))
+    const options = { cachePath, bundledDocument: documentAt('2026-07-10T07:30:00.000Z', 'bundled/model'), now: () => NOW }
+    const service = new ModelCatalogService({ ...options, fetchModels })
+    let resolved = false
+    const first = service.resolveModel('gemini-3.8-flash').then(value => { resolved = true; return value })
+    const second = service.resolveModel('google/gemini-3.8-flash')
+    await vi.waitFor(() => expect(fetchModels).toHaveBeenCalledOnce())
+    expect(resolved).toBe(false)
+    resolveFetch({ data: [{ id: 'google/gemini-3.8-flash', name: 'Google: Gemini 3.8 Flash', context_length: 1_048_576,
+      top_provider: { context_length: 1_048_576, max_completion_tokens: 65_536 } }] })
+    for (const model of await Promise.all([first, second])) expect(model).toMatchObject({ effectiveContextWindow: 1_048_576, maxOutputTokens: 65_536 })
+    await service.resolveModel('gemini-3.8-flash')
+    expect(fetchModels).toHaveBeenCalledOnce()
+    const offline = vi.fn(async () => { throw new Error('offline') })
+    const restarted = new ModelCatalogService({ ...options, fetchModels: offline })
+    expect(await restarted.resolveModel('gemini-3.8-flash')).toMatchObject({ effectiveContextWindow: 1_048_576 })
+    expect(offline).not.toHaveBeenCalled()
+  })
+
+  it('does not assign a nearby model window or repeatedly fetch unknown models after a failed refresh', async () => {
+    let time = NOW
+    const fetchModels = vi.fn(async () => { throw new Error('offline') })
+    const service = new ModelCatalogService({ cachePath: await createCachePath(),
+      bundledDocument: documentAt('2026-07-01T00:00:00.000Z', 'bundled/model'), now: () => time, fetchModels })
+    expect(await service.resolveModel('gemini-3.8-flash')).toBeUndefined()
+    expect(await service.resolveModel('unknown/model')).toBeUndefined()
+    await service.getCatalog()
+    expect(fetchModels).toHaveBeenCalledOnce()
+    time += 60_001
+    expect(await service.resolveModel('gemini-3.8-flash')).toBeUndefined()
+    expect(fetchModels).toHaveBeenCalledTimes(2)
+  })
+
   it('returns bundled data immediately while a stale refresh runs', async () => {
     const cachePath = await createCachePath()
     let resolveFetch!: (value: unknown) => void

@@ -16,6 +16,7 @@ import type { ProviderSettings, LanguageModelV1, ModelInfo } from '@janusx/llm-c
 import { llmConfigStore } from './ConfigStore'
 import type { LlmTerminalConsumer } from './ConfigStore'
 import { AuthType } from '@janusx/llm-core'
+import { getModelCatalogService } from './ModelCatalogService'
 import { app, session } from 'electron'
 
 const AUTH_TYPE_TO_ADAPTER: Record<string, string> = {
@@ -223,6 +224,10 @@ class LlmService {
    */
   async getProviderSettings(terminal: LlmTerminalConsumer, providerId: string): Promise<ProviderSettings | null> {
     return llmConfigStore.getTerminalProvider(terminal, providerId)
+  }
+
+  async resolveModelMetadata(modelId: string) {
+    return getModelCatalogService().resolveModel(modelId)
   }
 
   /**

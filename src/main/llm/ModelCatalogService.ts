@@ -5,6 +5,7 @@ import {
   getAiModelRegistryMetadata,
   getAllAiModels,
   isOpenRouterLatestAlias,
+  matchAiModel,
   openRouterRecordToRegistryEntry,
   type AiModelRegistryDocument,
   type ModelCatalogRefreshResult,
@@ -32,6 +33,7 @@ export class ModelCatalogService {
   private loadedDocument?: AiModelRegistryDocument
   private loadPromise?: Promise<AiModelRegistryDocument>
   private refreshPromise?: Promise<ModelCatalogRefreshResult>
+  private lastAutomaticRefresh = -Infinity
 
   constructor(options: ModelCatalogServiceOptions = {}) {
     const metadata = getAiModelRegistryMetadata()
@@ -47,8 +49,27 @@ export class ModelCatalogService {
 
   async getCatalog(): Promise<ModelCatalogSnapshot> {
     const catalog = this.toSnapshot(await this.loadDocument())
-    if (catalog.isStale) void this.refresh().catch(() => {})
+    if (catalog.isStale) void this.refreshAutomatically()?.catch(() => {})
     return catalog
+  }
+
+  // Note: chat budgets consume the same live registry as settings — see .agents/notes/2026-07-09-model-registry--31cda2d8.md
+  async resolveModel(modelId: string): Promise<AiModelRegistryDocument['models'][number] | undefined> {
+    const catalog = await this.getCatalog()
+    const cached = modelWithContext(modelId, catalog.models)
+    if (cached) return cached
+    // Wait for a missing model before the first inference; background refresh
+    // alone would still compact that first request against the 16k fallback.
+    const refreshed = await this.refreshAutomatically()
+    const current = refreshed?.catalog ?? this.toSnapshot(await this.loadDocument())
+    return modelWithContext(modelId, current.models) ?? modelWithContext(modelId, this.bundledDocument.models)
+  }
+
+  private refreshAutomatically(): Promise<ModelCatalogRefreshResult> | undefined {
+    if (this.refreshPromise) return this.refreshPromise
+    if (this.now() - this.lastAutomaticRefresh < 60_000) return undefined
+    this.lastAutomaticRefresh = this.now()
+    return this.refresh()
   }
 
   async refresh(): Promise<ModelCatalogRefreshResult> {
@@ -129,6 +150,13 @@ export class ModelCatalogService {
         || this.now() - Date.parse(document.updatedAt) >= this.staleMs,
     }
   }
+}
+
+function modelWithContext(modelId: string, models: AiModelRegistryDocument['models']) {
+  const result = matchAiModel(modelId, models.filter(model => !isOpenRouterLatestAlias(model)))
+  const match = result.match
+  return (result.confidence === 'exact' || result.confidence === 'high')
+    && match && Number.isSafeInteger(match.effectiveContextWindow) && match.effectiveContextWindow! > 0 ? match : undefined
 }
 
 async function fetchOpenRouterModels(): Promise<unknown> {

@@ -15,6 +15,7 @@ import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import type { KnowledgeSource, ObservationType, StructuredCloneValue } from '../../shared/knowledge'
 import { USER_MEMORY_WORKSPACE_ID, USER_MEMORY_WORKSPACE_PATH } from '../knowledge/constants'
 import { resolveChatModelBudget } from './chat-model-budget'
+import type { AiModelRegistryEntry } from '@janusx/llm-core'
 
 export interface JanusAgentSessionShape {
   id: string
@@ -52,6 +53,7 @@ export interface JanusChatTurnPortsDeps {
   getLanguageModel: (providerId: string, modelId: string) => Promise<unknown>
   /** Optional: older LlmService shapes lack a catalog; the gate is then skipped. */
   listModels?: (providerId: string) => Promise<JanusModelInfoShape[]>
+  resolveModelMetadata?: (modelId: string) => Promise<AiModelRegistryEntry | undefined>
   getMaxTurns: () => Promise<number>
   getAgentSession: (agentSessionId: string) => JanusAgentSessionShape | null | undefined
   executeFunctionCall: (input: ExecuteToolInput, callerId: string) => Promise<ToolResult>
@@ -99,11 +101,15 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
           ? await deps.listModels(providerId).catch(() => [])
           : []
         const info = infos.find((candidate) => candidate.id === actualModelId)
+        const initialBudget = resolveChatModelBudget(actualModelId, info, settings.extra)
+        // Adapter lists contain bundled metadata, not an explicit provider limit.
+        const metadata = initialBudget.source !== 'configured'
+          ? await deps.resolveModelMetadata?.(actualModelId).catch(() => undefined) : undefined
         return {
           model,
           modelId: actualModelId,
           supportsFunctionCalling: info?.supportsFunctionCalling,
-          ...resolveChatModelBudget(actualModelId, info, settings.extra),
+          ...resolveChatModelBudget(actualModelId, info, settings.extra, metadata),
         }
       },
       getMaxTurns: () => deps.getMaxTurns(),
