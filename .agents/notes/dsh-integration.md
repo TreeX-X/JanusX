@@ -4,7 +4,7 @@ id: b28d07a3-bc27-4be1-9868-87849e9efb16
 kind: decision
 lifecycle: active
 created: 2026-09-30
-updated: 2026-10-01
+updated: 2026-10-02
 class: feature
 tags: [dsh, terminal, external-cli]
 ---
@@ -338,3 +338,27 @@ export const EXTERNAL_CLI_TOOL_ICONS: Record<ExternalCliToolId, string> = {
 - dsh 成功结束标记、approval/questionnaire 面板信号、`statusBar.tokens/tps` 与
   `contextUsage/contextBar` 的数值解析；
 - 跨引擎全局 `UsageStatsPanel`（全引擎改动，需独立任务验证）。
+
+## 未完成优化任务梳理（2026-10-02，分支已合并清理后）
+
+`feature/dsh-integration` 已合并到 `main` 并删除本地分支与 worktree，本节汇总仍需独立任务验证的缺口，上下文解析机制为重点。
+
+1. **PTY 上下文解析缺口（`runtime-telemetry.ts` / `CLITerminal.tsx`）**：
+   - `extractDshTurnStatus` 只断言正向状态（`模型醒了`→running，`turn error`→degraded），永不推断 idle；dsh 成功结束标记缺失，需配 key 的真实会话样本才能补结束信号，否则状态灯无法回到 wait。
+   - turn 头 `3.2k tokens` 因无 `ctx/context` 锚定，保持忽略是正确的，但单轮用量因此不进入窗口统计；`statusBar.tokens/tps` 默认关闭，`contextUsage/contextBar` 需非零样本定格式，绝不臆测。
+   - approval/questionnaire 面板信号未接入；`CLITerminal.writeLiveOutput` 仅对 dsh 预设应用状态且不覆盖 needs-approval/needs-input/error，面板级审批仍缺信号源。
+   - `extractExplicitContext` 已加量级门（窗口 4k..10M 且 `used <= window`），`detectModelFromText` 已加 `isPlausibleModelId` 门；`mergeRuntimeTelemetrySnapshot` 累积语义（`next >= previous`、低置信不覆盖高置信、会话切换清零）保持不变，未动全引擎逻辑。
+
+2. **历史扫描与会话绑定缺口（`history.ts`）**：
+   - 磁盘日志是 `session.v4.jsonl.zstd`，无解码器，只绑定不读用量；`scanDshHistory` 仅返回 id/path/recency，tokens 置零，无真实用量。
+   - pid→session 挂载匹配不可行（conpty 中间层 pid 与 `session-mounts.json` 内层 pid 不一致）；无 hook 故终端永不自动绑定，扫描仅在外部传入 sessionId 时生效。
+   - 无 sessionId 回退 `readDshBootstrapTelemetry`（`~/.dsh-tui/model-recents.json` 首项，回退 `deepseek-flash`，deepseek 系窗口 128k，source configuration/declared），属粗粒度估计。
+   - 已做精度项：exact-UUID 优先于子串、`resolveDshWorkspaceDir` 大小写不敏感回退。
+
+3. **跨引擎用量统计（需独立任务）**：
+   - 通用累加逻辑与 `UsageStatsPanel.tsx` 属全引擎改动，不随 dsh 合并；跨终端聚合、历史累计 token、按时间筛选（今日/本周/本月）未做。
+   - 做与不做：不做为当前决策，dsh 侧已用锚定识别规避散文误判；重做需独立验证全引擎回归。
+
+4. **验证与规范债**：
+   - `test:unit` 全量有 9 个 pre-existing 失败套件（theme/yaml，与 dsh 无关；dsh 相关 6 套件 105 例全过），终端选择器 DSH 卡片与设置面板 DSH 行需启动 App 目检。
+   - `check:notes` 仍报本篇路径层级不合规（旧布局），与其他三篇存量错误并存，需按现行 harness-note 规范单独修。

@@ -9,13 +9,14 @@ import { KnowledgeSettingsPanel } from './KnowledgeSettingsPanel'
 import { LlmConfigModal } from './LlmConfigModal'
 import { ModelCatalogPanel } from './ModelCatalogPanel'
 import { AgentSettingsPanel } from './AgentSettingsPanel'
+import { UsageStatsPanel } from './UsageStatsPanel'
 import { HostedSettingsPanel } from './HostedSettingsPanel'
 import { TeamSettingsPanel } from './team/TeamSettingsPanel'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
 
-export type SettingsTab = 'general' | 'experimental' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'models' | 'team' | 'hosted'
+export type SettingsTab = 'general' | 'experimental' | 'notifications' | 'knowledge' | 'agent' | 'llm' | 'usage' | 'models' | 'team' | 'hosted'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -23,7 +24,7 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-const TAB_ORDER: SettingsTab[] = ['general', 'experimental', 'notifications', 'knowledge', 'agent', 'llm', 'models', 'team', 'hosted']
+const TAB_ORDER: SettingsTab[] = ['general', 'experimental', 'notifications', 'knowledge', 'agent', 'llm', 'usage', 'models', 'team', 'hosted']
 
 // Note: the modal mounts only while open, so ModalFrame owns the whole
 // open/closing/hidden lifecycle — see shared/ModalFrame.css and
@@ -127,6 +128,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
               {activeTab === 'knowledge' && <KnowledgeSettingsPanel />}
               {activeTab === 'agent' && <AgentSettingsPanel />}
               {activeTab === 'llm' && <LlmConfigModal embedded />}
+              {activeTab === 'usage' && <UsageStatsPanel />}
               {activeTab === 'models' && <ModelCatalogPanel />}
               {activeTab === 'team' && <TeamSettingsPanel />}
               {activeTab === 'hosted' && <HostedSettingsPanel />}

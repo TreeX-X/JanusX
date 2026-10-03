@@ -97,7 +97,7 @@ export interface JanusResourceController {
 export interface UseJanusChatReturn {
   activeTurnId?: string
   contextStatus?: import('../../../../shared/chat-context').ChatContextStatus
-  setContextWindow?: (tokens: number) => Promise<void>
+  setContextWindow?: (tokens: number | null) => Promise<void>
   engineeringContext?: EngineeringContext
   setEngineeringContext: (context: EngineeringContext) => void
   proposeMaintenance: (taskId: string, text: string) => void
@@ -1147,17 +1147,24 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     return {
       contextStatus: runtime.contextStatus,
       setContextWindow: async (tokens) => {
-        if (!Number.isSafeInteger(tokens) || tokens < 1024 || tokens > 10_000_000 || !activeModel) throw new Error('Invalid context window')
+        if (!activeModel || (tokens !== null && (!Number.isSafeInteger(tokens) || tokens < 1024 || tokens > 10_000_000))) throw new Error('Invalid context window')
         const providers = await getTerminalProviders('janus')
         const provider = providers.find(item => item.id === activeModel.providerId)
         if (!provider) throw new Error('Provider unavailable')
         const limits = provider.extra?.chatModelLimits as Record<string, unknown> | undefined
+        const modelLimits = { ...limits }
+        if (tokens === null) delete modelLimits[activeModel.modelId]
+        else modelLimits[activeModel.modelId] = { contextWindow: tokens }
         const saved = await saveTerminalProvider('janus', { ...provider, extra: { ...provider.extra,
-          chatModelLimits: { ...limits, [activeModel.modelId]: { contextWindow: tokens } } } })
+          chatModelLimits: modelLimits } })
         if (!saved.success) throw new Error(saved.error ?? 'Failed to save model window')
         const latest = conversationsRef.current.find(item => item.id === id)
         if (!latest || (latest.providerId && latest.providerId !== activeModel.providerId)
           || (latest.modelId && latest.modelId !== activeModel.modelId)) return
+        if (tokens === null) {
+          setRuntime(id, current => ({ ...current, contextStatus: undefined }))
+          return
+        }
         setRuntime(id, current => ({ ...current, contextStatus: { phase: 'ready', usedTokens: current.contextStatus?.usedTokens ?? 0,
           windowTokens: tokens, source: 'configured', checkpoint: current.contextStatus?.checkpoint } }))
       },

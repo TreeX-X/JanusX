@@ -6,7 +6,7 @@
       "configure": "Model context window (tokens)", "save": "Save", "compact": "Compact now", "older": "Show earlier messages",
       "hint": "Applies to this model and provider starting with the next request.",
       "estimatedHint": "Model capacity is unavailable, so 16k is estimated. If your provider supports 1M, enter 1000000 and save.",
-      "saving": "Saving…", "saved": "Saved. The next request uses the new capacity."
+      "saving": "Saving…", "saved": "Saved. The next request uses the new capacity.", "automatic": "Use automatic capacity"
     },
     "recoveringTools": "Tool context error. Retrying once (1/1)…",
     "author": {

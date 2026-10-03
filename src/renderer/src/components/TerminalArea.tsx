@@ -1936,9 +1936,17 @@ export function TerminalArea() {
                       const ratio = contextRatio(terminal)
                       const ratioColor = contextRatioColor(ratio)
                       const isActiveCard = terminal.id === activeTerminalId
+                      const cardVisual = getTerminalStatusVisual(terminal.status)
+                      const cardStatusLabel = cardVisual ? t(cardVisual.labelKey) : undefined
+                      const identityLabel = cardStatusLabel
+                        ? `${providerLabel(terminal.preset, t)} · ${cardStatusLabel} · ${terminal.cwd}`
+                        : `${providerLabel(terminal.preset, t)} · ${terminal.cwd}`
                       return (
-                        <ThemedTooltip key={terminal.id} label={`${providerLabel(terminal.preset, t)} · ${terminal.cwd}`}>
+                        // Note: 卡片不再用整卡 ThemedTooltip 包裹 — 外层 `provider·cwd`
+                        // 与内层 ContextUsagePopover / tokenSummary 会在用量条与 age 上
+                        // 双浮层重叠。身份信息只绑在 header，用量详情只走内层 popover。
                         <button
+                          key={terminal.id}
                           type="button"
                           className="flex min-w-0 cursor-pointer flex-col gap-2 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
                           style={{
@@ -1946,9 +1954,11 @@ export function TerminalArea() {
                             background: isActiveCard ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.018)',
                           }}
                           aria-current={isActiveCard ? 'true' : undefined}
+                          aria-label={identityLabel}
                           onClick={() => setActiveTerminal(terminal.id)}
                         >
                           <span className="flex min-w-0 items-center justify-between gap-2">
+                            <ThemedTooltip label={identityLabel}>
                             <span className="flex min-w-0 items-center gap-1.5 text-[var(--shell-text)]">
                               <TerminalStatusLight status={terminal.status} compact />
                               {/*-- 与抽屉条左端 / 中部 tab 同一枚 preset 图标：卡片只给名称时
@@ -1959,6 +1969,7 @@ export function TerminalArea() {
                               />
                               <span className="truncate">{providerLabel(terminal.preset, t)}</span>
                             </span>
+                            </ThemedTooltip>
                             <ThemedTooltip label={t('terminal:tab.tokenSummaryTitle', { input: formatTokenCount(terminal.inputTokens), output: formatTokenCount(terminal.outputTokens) })}>
                             <span className="shrink-0 text-[10px] text-[var(--shell-dim)]">
                               {formatAge(terminal.telemetryUpdatedAt)}
@@ -1998,7 +2009,6 @@ export function TerminalArea() {
                             </span>
                           </ContextUsagePopover>
                         </button>
-                        </ThemedTooltip>
                       )
                     })}
                   </div>

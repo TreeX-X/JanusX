@@ -53,7 +53,7 @@
   border-color: rgba(255, 255, 255, 0.16);
 }
 
-.searchInput::placeholder { color: #5f6368; }
+.searchInput::placeholder { color: var(--shell-dim); }
 
 .refreshButton {
   display: inline-flex;
@@ -160,7 +160,7 @@
   grid-template-columns: 14px minmax(0, 1fr) auto;
   min-height: 40px;
   padding: 0 8px;
-  color: #d9d9dd;
+  color: var(--shell-text);
   font-size: 12px;
   font-weight: 650;
 }
@@ -211,7 +211,7 @@
 .modelSummary:hover { background: rgba(255, 255, 255, 0.025); }
 
 .modelIdentity { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.modelIdentity strong { color: #e2e2e5; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.modelIdentity strong { color: var(--shell-text); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 .modelIdentity code { color: var(--shell-dim); font: 10px/1.35 'SF Mono', Consolas, monospace; overflow-wrap: anywhere; }
 .modelQuickMeta { color: var(--shell-muted); font-size: 10px; white-space: nowrap; }
 
@@ -224,7 +224,7 @@
 
 .metadata { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .metadata span { color: var(--shell-dim); font-size: 10px; }
-.metadata strong { color: #d9d9dd; font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+.metadata strong { color: var(--shell-text); font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
 
 .description {
   grid-column: 1 / -1;
@@ -248,7 +248,7 @@
   font-size: 11px;
   text-align: center;
 }
-.empty strong { color: #d9d9dd; font-size: 12px; }
+.empty strong { color: var(--shell-text); font-size: 12px; }
 .empty span { max-width: 100%; overflow-wrap: anywhere; }
 
 .srOnly {
@@ -270,8 +270,13 @@
   .details { grid-template-columns: 1fr; }
 }
 
-/* ── planche：模型目录纸面化（加法层，dark 原样不动）── */
+/* ── planche：模型目录纸面化（加法层，dark 原样不动）
+   基底文字已收敛到 --shell-text（双主题自适应），此处逐条点名做特异性兜底：
+   vendor 展开态选择器特异性更高，不点名会被基底盖回去；
+   modelIdentity strong 是历史漏网（硬编码 #e2e2e5 白字在纸面上隐形）。 ── */
 :global([data-theme='planche']) .vendorHeader,
+:global([data-theme='planche']) .vendorGroup[open] > .vendorHeader,
+:global([data-theme='planche']) .modelIdentity strong,
 :global([data-theme='planche']) .metadata strong,
 :global([data-theme='planche']) .empty strong {
   color: var(--ink, #1C343B);
