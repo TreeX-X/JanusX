@@ -23,6 +23,7 @@ beforeAll(async () => {
         if (!current || (await reviewCandidateInput(current)).candidateHash !== input.candidateHash) throw Error('Candidate changed')
       }
       window.electron = {knowledge:{
+        automationStatus:async()=>({enabled:false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
         factReviewContext:async()=>{if(window.failContext)throw Error('unavailable');return window.conflictContext ?? {targets:[],competing:[]}},
         candidateAction:async input=>{window.calls.push(input);if(window.defer)await new Promise(resolve=>window.finish=resolve)},
         importLegacyPersonalMemory:async()=>{window.imports=(window.imports||0)+1;window.items.push({...candidate('old-profile','user'),legacySource:{kind:'profile',id:'identity',hash:'source'}});return {created:1,remaining:0}},

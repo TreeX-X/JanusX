@@ -413,7 +413,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                   <button
                     key={option.scope}
                     type="button"
-                    className={`${styles.navButton} ${scopeFilter === option.scope ? styles.navActive : ''}`}
+                    className={styles.scopeButton}
                     aria-pressed={scopeFilter === option.scope}
                     onClick={() => {
                       setScopeFilter(option.scope)

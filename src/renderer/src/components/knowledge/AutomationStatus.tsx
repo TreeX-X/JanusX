@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Activity, Play, RotateCw } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
+import styles from './AutomationStatus.module.css'
 
 export function AutomationStatus({ active, beforeRun, disabled = false, onChanged }: {
   active: boolean; disabled?: boolean; beforeRun?: () => Promise<boolean>; onChanged?: () => void
@@ -40,21 +42,30 @@ export function AutomationStatus({ active, beforeRun, disabled = false, onChange
     } catch { setError(t('knowledge:automation.actionFailed')) }
     finally { setBusy(false) }
   }
-  return <section aria-label={t('knowledge:automation.progress')}>
-    <h4>{t('knowledge:automation.progress')}</h4>
-    {error && <p role="alert">{error}</p>}
-    {status && !error && <p role="status">{t(status.enabled ? 'knowledge:automation.active' : 'knowledge:automation.paused')} · {t('knowledge:automation.counts', status.counts)}</p>}
-    <button type="button" disabled={busy || disabled || !beforeRun && !status?.enabled} onClick={() => void run()}>{t('knowledge:automation.run')}</button>
-    {beforeRun && <button type="button" disabled={busy || disabled} onClick={() => void run(true)}>{t('knowledge:automation.backfill')}</button>}
-    {beforeRun && <p>{t('knowledge:automation.backfillHint')}</p>}
-    {!!status?.tasks.length && <details><summary>{t('knowledge:automation.records')}</summary>
-      {status.tasks.map(task => <article key={task.id} style={{ padding: '8px 0', overflowWrap: 'anywhere' }}>
-        <strong>{t(`knowledge:automation.stage.${task.stage}`)} · {t(`knowledge:automation.status.${task.status}`)}</strong>
-        <p>{task.workspaceId} · {task.subject}</p>
-        <p>{task.model.provider} / {task.model.model} · {task.updatedAt}</p>
-        {task.reason && <p>{task.reason}</p>}
-        {['failed', 'needs-review'].includes(task.status) && <button type="button" disabled={busy || disabled || !status.enabled} onClick={() => void run(false, task.id)}>{t('knowledge:automation.retry')}</button>}
-      </article>)}
+  return <section className={styles.root} aria-label={t('knowledge:automation.progress')}>
+    <div className={styles.overview}>
+      <h4><Activity size={13} aria-hidden />{t('knowledge:automation.progress')}</h4>
+      {status && !error && <div className={styles.metrics} role="status">
+        <span className={styles.state} data-enabled={status.enabled}>{t(status.enabled ? 'knowledge:automation.active' : 'knowledge:automation.paused')}</span>
+        {(['pending', 'running', 'succeeded', 'needs-review', 'failed'] as const).map(name => <span className={styles.metric} key={name} data-attention={status.counts[name] > 0 && (name === 'failed' || name === 'needs-review')}>
+          <span>{t(`knowledge:automation.status.${name}`)}</span><b>{status.counts[name]}</b>
+        </span>)}
+      </div>}
+      <div className={styles.actions}>
+        <button type="button" disabled={busy || disabled || !beforeRun && !status?.enabled} onClick={() => void run()}><Play size={12} aria-hidden />{t('knowledge:automation.run')}</button>
+        {beforeRun && <button type="button" disabled={busy || disabled} onClick={() => void run(true)}>{t('knowledge:automation.backfill')}</button>}
+      </div>
+    </div>
+    {error && <p className={styles.error} role="alert">{error}</p>}
+    {beforeRun && <p className={styles.hint}>{t('knowledge:automation.backfillHint')}</p>}
+    {!!status?.tasks.length && <details className={styles.records}><summary>{t('knowledge:automation.records')}</summary>
+      <div className={styles.taskList}>{status.tasks.map(task => <article className={styles.task} key={task.id}>
+        <div className={styles.taskHeading}><strong>{t(`knowledge:automation.stage.${task.stage}`)}</strong><span data-attention={['failed', 'needs-review'].includes(task.status)}>{t(`knowledge:automation.status.${task.status}`)}</span></div>
+        <p>{task.subject}</p>
+        <p className={styles.hint}>{task.workspaceId} · {t(`knowledge:automation.provider.${task.model.provider}`)} / {task.model.model} · <time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleString()}</time></p>
+        {task.reason && <p className={styles.hint}>{task.reason}</p>}
+        {['failed', 'needs-review'].includes(task.status) && <button type="button" disabled={busy || disabled || !status.enabled} onClick={() => void run(false, task.id)}><RotateCw size={12} aria-hidden />{t('knowledge:automation.retry')}</button>}
+      </article>)}</div>
     </details>}
   </section>
 }

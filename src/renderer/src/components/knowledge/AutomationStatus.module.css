@@ -1,0 +1,27 @@
+.root { min-width: 0; color: var(--shell-text); font-size: 11px; line-height: 1.5; }
+.overview { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-height: 30px; }
+.overview h4 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 11px; font-weight: 600; }
+.overview h4 svg { color: var(--shell-muted); }
+.metrics { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; }
+.state { display: inline-flex; align-items: center; gap: 5px; color: var(--shell-muted); font-size: 10px; }
+.state::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--shell-muted); }
+.state[data-enabled='true']::before { background: var(--shell-diff-add); }
+.metric { display: inline-flex; gap: 5px; align-items: baseline; color: var(--shell-muted); font-size: 10px; }
+.metric b { font-size: 11px; font-weight: 600; color: var(--shell-text); font-variant-numeric: tabular-nums; }
+.root [data-attention='true'], .metric[data-attention='true'] b { color: var(--shell-accent); }
+.actions { display: flex; gap: 6px; margin-left: auto; }
+.root button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 4px 8px; border: 1px solid var(--control-border); border-radius: 5px; background: transparent; color: var(--shell-text); font: inherit; cursor: pointer; }
+.root button:hover:not(:disabled) { background: var(--shell-hover); }
+.root button:disabled { cursor: default; opacity: .45; }
+.root button:focus-visible, .records summary:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+.root p { margin: 5px 0 0; overflow-wrap: anywhere; }
+.hint { color: var(--shell-muted); font-size: 11px; }
+.error { color: var(--shell-diff-del); }
+.records { margin-top: 6px; }
+.records > summary { width: fit-content; max-width: 100%; min-height: 24px; color: var(--shell-muted); font-size: 10px; cursor: pointer; }
+.taskList { max-height: min(220px, 28vh); overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; }
+.task { padding: 10px 0; border-top: 1px solid var(--shell-border-soft); overflow-wrap: anywhere; }
+.taskHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.taskHeading strong { font-size: 11px; font-weight: 600; }
+.taskHeading span { color: var(--shell-muted); font-size: 10px; }
+.task button { margin-top: 6px; }

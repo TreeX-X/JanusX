@@ -1,4 +1,6 @@
+// Note: compact knowledge controls share explicit typography and theme tokens — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
 import { KnowledgeAutomationPanel } from './KnowledgeAutomationPanel'
+import { Database, Plug } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   getKnowledgeSettings,
@@ -10,7 +12,7 @@ import { DEFAULT_KNOWLEDGE_SETTINGS, type KnowledgeProcessingMode } from '../../
 import type { ExternalMcpClientId, ExternalMcpStatus } from '../../../shared/ipc/knowledge'
 import { useI18n } from '@/i18n/useI18n'
 import { Select } from './ui/Select'
-import styles from './NotificationSettingsPanel.module.css'
+import styles from './KnowledgeSettingsPanel.module.css'
 
 type StatusState = 'idle' | 'loading' | 'saving' | 'saved' | 'error'
 
@@ -156,7 +158,7 @@ export function KnowledgeSettingsPanel() {
   return (
     <div className={styles.panel}>
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.capture')}</h3>
+        <h3 className={styles.sectionTitle}><Database size={14} aria-hidden />{t('settings:knowledge.section.capture')}</h3>
         <SettingSwitch
           label={t('settings:knowledge.toggle.enable.label')}
           hint={t('settings:knowledge.toggle.enable.hint')}
@@ -194,7 +196,7 @@ export function KnowledgeSettingsPanel() {
         if (status === 'saved' || status === 'error') { setStatus('idle'); setError('') }
       }} onSave={handleSave} disabled={isBusy} />
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.externalMcp')}</h3>
+        <h3 className={styles.sectionTitle}><Plug size={14} aria-hidden />{t('settings:knowledge.section.externalMcp')}</h3>
         <div className={styles.row}>
           <div className={styles.label}>
             <span className={styles.labelText}>{t('settings:knowledge.mcp.entry.label')}</span>
@@ -239,7 +241,7 @@ export function KnowledgeSettingsPanel() {
       </section>
 
       <div className={styles.footer}>
-        <div className={statusClass}>
+        <div className={statusClass} role="status">
           {status === 'loading' && t('settings:footer.loading')}
           {status === 'saving' && t('settings:footer.saving')}
           {status === 'saved' && t('settings:footer.saved')}

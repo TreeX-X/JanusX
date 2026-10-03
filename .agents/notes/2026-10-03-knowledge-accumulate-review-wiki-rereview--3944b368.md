@@ -39,6 +39,8 @@ Wiki 应作为持续更新的项目手册，按稳定主题维护当前有效知
 
 ## Alternatives considered
 
+知识库控件沿用浏览器默认字号和外观可以减少样式维护，但默认 16px 的模型环节、自动处理状态与现有 11～12px 的工作台不协调。整体缩小应用字号改动集中，却会影响其他设置页和正文阅读；知识库使用独立样式，只收紧操作控件、配置行和元信息，并复用当前主题颜色。
+
 维持现状（规则提取加人工审核加人工 Wiki 整理）是最省改动的方案，零依赖且今天可用。拒绝将其作为本链路答案的原因是收件箱规模扩大后人工逐条处理不可持续，且 Wiki 沉淀停滞，违背用户已确认的三段式目标。
 
 全部环节固定走单一外部 LLM 是实现最简单的自由度替代，配置与路由成本最低。拒绝的原因是用户明确要求本地与 Jev 可选，纯外部方案不能满足离线、数据边界与成本对照需求，且把判断与生成耦合在同一账单与故障域。
@@ -57,6 +59,7 @@ Wiki 应作为持续更新的项目手册，按稳定主题维护当前有效知
 - [x] AC-8: 每页默认保留最近 20 个发布版本，重要版本可标记保留；历史页可分页浏览正文、来源与修改信息，读取失败显式报错；历史不进入默认召回。
 - [x] AC-9: knowledge 创新开关同时控制知识库设置与右侧审核栏；关闭即卸载、设置回到常规页，程序跳转无法重新打开，重新开启不自动恢复旧审核面板。
 - [x] AC-10: 候选超过单批上限、知识超过相关上下文上限时仍可继续处理；任务在重启、预算不足与依赖变化后有明确恢复或重算路径。
+- [x] AC-11: 知识库工作台、审核侧栏与知识库设置的控件具有明确字号和尺寸；四环节配置、状态统计和 Wiki 历史可紧凑浏览，深色与 planche 主题、窄窗口、键盘操作及禁用状态可用，创新开关与审核行为继续受原约束。
 
 ## Risks
 
@@ -72,7 +75,23 @@ Wiki 应作为持续更新的项目手册，按稳定主题维护当前有效知
 
 [发布恢复日志](../../src/main/knowledge/wiki-review-recovery.ts)把正文、索引、候选和历史的原始字节及目标字节组成一次发布；审计批次是提交标记。中断后按标记恢复全部文件，没有提交标记则恢复旧字节，包括被保留策略裁掉的版本；有外部修改冲突时停止恢复并报错。读者在恢复期间拒绝读取半成品。历史仅保留完整发布快照，最近 20 版以外的未标记版本会被裁剪，重要版本可继续保留。旧版来源正文、附件和模型会话均不复制到历史。
 
+### 知识库控件（2026-10-03）
+
+[知识库设置](../../src/renderer/src/components/KnowledgeSettingsPanel.tsx)使用独立样式，以分隔线组织采集、自动处理和外部接入；标题与输入正文为 12px，环节及操作标签为 11px，次要状态为 10px。四个环节显示序号、提供方、模型和本地思考开关，输入框高 30px，操作按钮最小高 28px。总开关与思考开关采用同一滑块样式并保留原生 checkbox 的键盘、标签及禁用语义；路径和连接参数在“本地服务”中展开，当前地址在收起时可见。设置保存、先保存再处理、纯外部配置与 Jev 生成能力限制沿用原逻辑。
+
+[自动处理状态](../../src/renderer/src/components/knowledge/AutomationStatus.tsx)以紧凑标题、启停指示、分类计数和操作按钮呈现；需要人工处理与失败用主题强调色提示，含状态文字。近期任务默认收起，展开后列表高度限制为 220px 与 28vh 的较小值，避免大量任务挤占知识正文。工作台的处理状态独占整行；收件箱范围使用横向筛选按钮，选中状态由 `aria-pressed` 表达。[Wiki 历史](../../src/renderer/src/components/knowledge/WikiHistory.tsx)按版本列表显示日期、重要标记及选中项，正文与来源在列表下方阅读，分页与标记仍调用原历史接口。正文保持 12px 与独立行距，不随状态文字缩小。
+
 ## Verification
+
+### 控件验证（2026-10-03）
+
+浏览器验证方法：用 esbuild 打包真实 React 组件，在 Chromium 中注入合成知识、任务和历史数据以及 IPC 替身，分别检查 1280×900、820×720、640×720 与 360px 历史区域；真实用户数据与模型不参与。聚焦开关后通过 Space 切换思考并保存，检查保存参数；用 Enter 展开本地连接，输入长路径并检查 fieldset 无横向溢出；点击收件箱范围，检查选中属性和同一行布局；展开任务记录，选择历史版本、标记重要版本及关闭历史，核对宿主请求的版本与哈希。以上交互全部通过，截图人工检查深色与 planche 主题，模型环节实测字号从 16px 变为 11px。临时复验入口为 `node artifacts/knowledge-controls-preview.mjs after`，截图位于 `artifacts/knowledge-controls-ui/`；这些本机产物不作为常驻测试提交，方法与结果以本节为记录。
+
+既有审核浏览器测试补齐 `automationStatus` 替身，使审核失败断言不受无关的自动处理接口缺失干扰；没有新增测试文件。
+
+`npx vitest run tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/memory-review-ui.test.ts --reporter=dot` 通过 3 个文件、12 项，包含四环节配置、纯外部模式、保存后处理、创新开关联动、Wiki 审核、冲突替代确认与失败重试。`npm run typecheck:strict-unused`、`npm run build` 通过；变更组件 ESLint 为 0 错误，保留 KnowledgeWorkbench 原有的 refresh effect 依赖警告。`npm run check:notes` 为 234 篇、0 错误、27 项既有显式链接诊断，`git diff --check` 通过。本次未重跑真实模型或桌面 IPC 全链路。
+
+### 自动处理实施验证
 
 2026-10-03：相关知识服务、浏览器交互、IPC 和侧栏回归执行 674 项通过；另补充的人工主题保护和事务路径校验测试通过。命令为 `npx vitest run tests/unit/knowledge tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-ipc-contract.test.ts tests/unit/laya-settings-ui.test.ts tests/unit/right-tool-state.test.ts tests/unit/right-tool-dock.test.ts tests/unit/experimental-features.test.ts --reporter=dot`。常规运行跳过需要显式环境变量的真实模型实验。
 

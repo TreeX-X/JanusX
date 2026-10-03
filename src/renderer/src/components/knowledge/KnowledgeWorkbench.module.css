@@ -17,6 +17,8 @@
 }
 
 .shell {
+  font-size: 12px;
+  line-height: 1.5;
   width: calc(100vw - 32px);
   height: calc(100vh - 32px);
   min-width: 0;
@@ -147,9 +149,9 @@
 /* Phase 4 top status strip (§6) as an independent card; the inner row stays plain. */
 .statusCard {
   min-height: 30px;
-  display: flex;
-  align-items: center;
-  padding: 0 14px;
+  display: grid;
+  gap: 4px;
+  padding: 6px 14px;
   overflow: hidden;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -167,6 +169,8 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+
+.statusCard > section { border-top: 1px solid var(--shell-border-soft); padding-top: 4px; }
 
 /* Phase 4 top status strip (§6): pipeline metrics + manual trigger. */
 .statusBar {
@@ -1063,6 +1067,16 @@
   gap: 6px;
   margin-top: 10px;
 }
+
+.scopeButton { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 4px 9px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--shell-muted); font: inherit; font-size: 11px; cursor: pointer; }
+.filterRow .scopeButton > span { padding: 0; border: 0; background: transparent; color: inherit; }
+.filterRow .scopeButton .paneCount { padding: 0 4px; min-width: 16px; font-variant-numeric: tabular-nums; }
+.scopeButton:hover { background: var(--shell-hover); color: var(--shell-text); }
+.scopeButton[aria-pressed='true'] { background: var(--shell-active); border-color: var(--shell-border); color: var(--shell-text); }
+.scopeButton:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+.filterRow:has(.scopeButton) { margin-top: 0; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--shell-border-soft); }
+.wikiSections > details > summary { min-height: 28px; color: var(--shell-muted); font-size: 11px; cursor: pointer; }
+.wikiSections > details > summary:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
 
 .searchResults {
   overflow-y: auto;

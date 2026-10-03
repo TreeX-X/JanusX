@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ChevronDown, History, Pin, RefreshCw } from 'lucide-react'
 import type { WikiHistoryPage, WikiRevision } from '../../../../shared/wiki-history'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './NoteWikiLinks.module.css'
@@ -34,28 +35,31 @@ export function WikiHistory({ workspaceId, slug }: { workspaceId: string; slug: 
     const result = await window.electron.knowledge.wikiHistory({ workspaceId, slug })
     if (request === generation.current) { setHistory(result); setRevision(null) }
   })
-  return <section className={styles.detail} aria-label={t('knowledge:wikiHistory.title')}>
-    <button type="button" aria-expanded={open} onClick={() => {
+  return <section className={`${styles.detail} ${styles.history}`} aria-label={t('knowledge:wikiHistory.title')}>
+    <button className={styles.historyToggle} type="button" aria-expanded={open} onClick={() => {
       if (open) { generation.current++; setOpen(false); setBusy(false); setRevision(null) }
       else { setOpen(true); void load() }
-    }}>{t('knowledge:wikiHistory.title')}</button>
+    }}><History size={14} aria-hidden /><span>{t('knowledge:wikiHistory.title')}</span><ChevronDown size={12} aria-hidden /></button>
     {open && <>
-      <p>{t('knowledge:wikiHistory.hint')}</p>
+      <p className={styles.meta}>{t('knowledge:wikiHistory.hint')}</p>
       {busy && <p role="status">{t('knowledge:state.loading.title')}</p>}
       {error && <p role="alert">{error}</p>}
-      <button type="button" disabled={busy} onClick={() => void load()}>{t('knowledge:action.refresh')}</button>
+      <div className={styles.actions}><button type="button" disabled={busy} onClick={() => void load()}><RefreshCw size={12} aria-hidden />{t('knowledge:action.refresh')}</button></div>
       {!busy && !error && history?.total === 0 && <p>{t('knowledge:wikiHistory.empty')}</p>}
       {history && !error && <>
-        <ul className={styles.sources}>{history.items.map(item => <li key={item.version}>
-          <button type="button" disabled={busy} onClick={() => void select(item.version)}>{t('knowledge:wikiHistory.version', { version: item.version })} · {item.publishedAt}</button>
-          {item.pinned && <span>{t('knowledge:wikiHistory.pinned')}</span>}
+        <ul className={styles.revisionList}>{history.items.map(item => <li key={item.version}>
+          <button className={styles.revisionButton} type="button" disabled={busy} aria-pressed={revision?.version === item.version} onClick={() => void select(item.version)}>
+            <span>{t('knowledge:wikiHistory.version', { version: item.version })}</span>
+            <time dateTime={item.publishedAt}>{new Date(item.publishedAt).toLocaleString()}</time>
+            {item.pinned && <span className={styles.pinBadge}><Pin size={11} aria-hidden />{t('knowledge:wikiHistory.pinned')}</span>}
+          </button>
         </li>)}</ul>
         <div className={styles.actions}>
           <button type="button" disabled={busy || history.offset === 0} onClick={() => void load(Math.max(0, history.offset - history.limit))}>{t('knowledge:wikiHistory.previous')}</button>
           <button type="button" disabled={busy || history.offset + history.limit >= history.total} onClick={() => void load(history.offset + history.limit)}>{t('knowledge:wikiHistory.next')}</button>
         </div>
       </>}
-      {revision && !error && <article>
+      {revision && !error && <article className={styles.revisionPreview}>
         <h4>{t('knowledge:wikiHistory.version', { version: revision.version })} · {revision.title}</h4>
         <p>{revision.legacy ? t('knowledge:wikiHistory.legacy') : `${revision.actor ?? ''} · ${revision.reason ?? ''}`}</p>
         <pre>{revision.page.markdown}</pre>
