@@ -6,8 +6,9 @@
 .panel input::placeholder { color: var(--shell-muted); }
 .panel input:not([type='checkbox']):disabled { opacity: .45; }
 .panel p { margin: 0; overflow-wrap: anywhere; }
-.stages { display: grid; gap: 12px; padding: 12px 0; border-top: 1px solid var(--shell-border-soft); border-bottom: 1px solid var(--shell-border-soft); }
-.stage { padding: 0; border: 0; }
+.stages { display: grid; gap: 14px; }
+.stage { padding: 12px; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-pane); }
+.stage legend { padding: 0 5px; }
 .step { color: var(--shell-muted); font-size: 10px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .stageFields { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .provider { width: 154px; flex: 0 1 154px; }
@@ -15,7 +16,7 @@
 .stageFields .model { flex: 1 1 160px; width: 160px; }
 .thinking { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; font-size: 11px; white-space: nowrap; color: var(--shell-muted); cursor: pointer; }
 .stage > p { margin-top: 5px; }
-.connection { min-width: 0; border-bottom: 1px solid var(--shell-border-soft); padding-bottom: 10px; }
+.connection { min-width: 0; border: 1px solid var(--shell-border); border-radius: 8px; padding: 12px; background: var(--shell-pane); }
 .connection summary { display: flex; align-items: center; gap: 7px; min-height: 28px; color: var(--shell-muted); cursor: pointer; list-style: none; }
 .connection summary::before { content: '›'; font-size: 16px; width: 10px; transition: transform 120ms ease; }
 .connection[open] summary::before { transform: rotate(90deg); }

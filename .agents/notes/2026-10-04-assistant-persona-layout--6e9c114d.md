@@ -26,6 +26,8 @@ tags: [memory, persona, right-dock, ui]
 
 侧栏保留摘要，完整工作台使用 PersonalMemoryBoard；两者复用 UserPersonaTool 的读取与写操作。共享导航状态使助手打开工作台时落到相应领域。个人设置继续复用独立设置面板，工程模型配置不混入个人卡片。
 
+设置页面按功能使用有边框、内边距、标题分隔和主题背景的卡片。知识库分为采集、自动处理与 MCP 接入，自动处理内部的四环节和连接配置有独立边界。个人设置分为记忆积累、对话使用和近期记忆保留三张卡片，保留即时保存与原有开关语义。卡片共享 KnowledgeSettingsPanel.module.css，完整工作台中的个人设置也使用同一布局。
+
 ## Alternatives considered
 
 保留三个入口具有一步直达优势，但不能减少右侧种类。只合并 Assist 和画像减少改动，但审核仍割裂更正流程。合并三者增加分区切换，因此保留数量提示和审核直达。
@@ -37,6 +39,8 @@ tags: [memory, persona, right-dock, ui]
 右侧种类减少，完整画像具备分类和详情阅读能力。代价是两个尺寸的呈现组件和旧入口别名需要维护。审核数量是定期更新的显示信息，不是事务授权依据；真实操作仍读取并校验最新快照。卡片正文可截断，详情必须完整可读。
 
 ## Verification
+
+设置卡片与图标调整使用现有 assistant-ui、knowledge-automation-ui、laya-settings-ui 三个浏览器测试文件复验，共 16 项通过，覆盖独立保存、禁用、本地控制与 MCP 更新操作。截图检查深色、planche 和窄窗口；类型检查与 i18n 检查通过。知识库四环节、个人三张设置卡片与 MCP 图标沿用实际组件，未增加仅比对样式常量的测试。
 
 2026-10-04：tests/unit/assistant-ui.test.ts 使用真实 React 组件与浏览器 IPC 替身，检查三个助手分区、四种开关组合、无工作区画像、旧审核跳转、1440×900 完整工作台、搜索及来源详情、640×720 窄屏与主题布局。截图在 artifacts/memory-domain-acceptance/personal-board-*.png，人工检查正文、操作入口和横向溢出；测试产物不入库。
 

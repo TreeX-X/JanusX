@@ -38,7 +38,7 @@ beforeAll(async () => {
       window.showMemory=()=>window.root.render(<KnowledgeWorkbench isOpen onClose={()=>window.root.render(null)}/>)
       window.root.render(window.gates?<><AppSettingsModal isOpen initialTab='knowledge' onClose={()=>{}}/><RightDock effectiveCollapsed={false} effectiveMaxWidth={600} forcedCollapsed={false} onResizingChange={()=>{}}/></>:<KnowledgeSettingsPanel/>)
     })
-  ` }, bundle: true, write: false, outfile: 'automation-ui.js', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'fixtures', setup(builder) {
+  ` }, loader: { '.svg': 'dataurl' }, bundle: true, write: false, outfile: 'automation-ui.js', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'fixtures', setup(builder) {
     builder.onLoad({ filter: /[/\\]i18n[/\\]index\.ts$/ }, () => ({ contents: "import i18n from 'i18next'; export default i18n;export const changeLanguage=()=>{}", loader: 'ts' }))
     builder.onLoad({ filter: /[/\\](GeneralSettingsPanel|ExperimentalSettingsPanel|NotificationSettingsPanel|LlmConfigModal|ModelCatalogPanel|AgentSettingsPanel|UsageStatsPanel|HostedSettingsPanel|TeamSettingsPanel)\.tsx$/ }, args => {
       const name = args.path.split(/[/\\]/).at(-1)!.replace('.tsx', '')
@@ -58,6 +58,9 @@ it('configures all four stages, excludes Jev generation, saves before running an
   const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } })
   try {
     await mount(page)
+    await page.evaluate(() => document.documentElement.dataset.theme='dark')
+    await page.locator('#root').screenshot({path:'artifacts/memory-domain-acceptance/knowledge-settings-cards-dark.png',animations:'disabled'})
+    await page.evaluate(() => document.documentElement.dataset.theme='planche')
     const extraction = page.locator('fieldset').filter({ has: page.locator('legend', { hasText: 'Model-assisted extraction (optional)' }) })
     expect(await extraction.innerText()).toContain('Rules only (automatic)')
     expect(await extraction.innerText()).toContain('basic rule extraction runs automatically without a model')
@@ -203,6 +206,7 @@ it('opens personal memory without engineering, saves independent settings and un
     await page.screenshot({path:'artifacts/memory-domain-acceptance/personal-dark.png',animations:'disabled'})
     expect(await page.getByRole('button', {name:'Project knowledge',exact:true}).count()).toBe(0)
     await page.getByRole('button', {name:'Preferences',exact:true}).click()
+    await page.getByRole('heading', {name:'Recent memory retention',exact:true}).waitFor()
     await page.evaluate(() => document.documentElement.dataset.theme='planche')
     await page.setViewportSize({width:640,height:720})
     await page.screenshot({path:'artifacts/memory-domain-acceptance/personal-settings-planche.png',animations:'disabled'})

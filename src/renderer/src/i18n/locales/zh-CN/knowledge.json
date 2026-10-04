@@ -517,6 +517,7 @@
     "settings": "功能设置"
   },
   "memorySettings": {
+    "groups": { "capture": "记忆积累", "recall": "对话使用", "retention": "近期记忆保留" },
     "title": "个人画像",
     "navMeta": "记忆与偏好",
     "description": "管理 Janus 如何记住和使用你的个人信息。关闭创新功能中的个人画像将停止个人记忆采集、处理与对话召回，已有资料保留。",

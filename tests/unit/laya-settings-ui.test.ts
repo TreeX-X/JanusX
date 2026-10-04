@@ -56,7 +56,7 @@ beforeAll(async () => {
         window.root.render(<div className={shell.panel} style={{display:'block',width:'100%',height:'auto',overflow:'visible'}}><div className={shell.body}>{window.fullPanel?<KnowledgeSettingsPanel/>:<Panel/>}</div></div>)
       })
     ` },
-    bundle: true, write: false, outfile: 'laya-settings-test.js', jsx: 'automatic', format: 'iife',
+    loader: { '.svg': 'dataurl' }, bundle: true, write: false, outfile: 'laya-settings-test.js', jsx: 'automatic', format: 'iife',
     define: { 'process.env.NODE_ENV': '"test"' },
     plugins: [{ name: 'i18n', setup(builder) {
       builder.onLoad({ filter: /[/\\]i18n[/\\]index\.ts$/ }, () => ({ contents: "import i18n from 'i18next'; export default i18n; export const changeLanguage = lang => i18n.changeLanguage(lang)", loader: 'ts' }))

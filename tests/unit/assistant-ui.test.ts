@@ -22,7 +22,7 @@ beforeAll(async () => {
       listCandidates:async()=>[],listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
       automationStatus:async()=>({enabled:false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
       getPersonalSettings:async()=>({captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60}),
-      externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''}]}),
+      externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''},...[['claude-code','Claude Code'],['opencode','OpenCode'],['janus','Janus CLI'],['dsh','DeepSeek / dsh'],['shell','Shell']].map(([id,label])=>({id,label,support:id==='shell'?'manual':['claude-code','opencode'].includes(id)?'automatic':'unverified',registered:false,configPath:''}))]}),
       registerExternalMcp:async id=>{window.calls.push(id);return {ok:true,configPath:'config.toml'}},
       probeExternalMcp:async()=>({ok:true,stage:'query',tools:[]}),
     }}
@@ -31,7 +31,7 @@ beforeAll(async () => {
       window.show=mode=>{if(mode==='board'){useAssistantStore.setState({workbenchDomain:'personal'});root.render(<KnowledgeWorkbench isOpen onClose={()=>root.render(null)}/>)}else if(mode==='mcp')root.render(<ExternalMcpPanel/>);else root.render(<AssistantTool active workspaceId={null} workspacePath={null}/>)}
       window.show(window.mode)
     })
-  ` }, bundle: true, write: false, outfile: 'assistant-ui.js', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'i18n-fixture', setup(builder) {
+  ` }, loader: { '.svg': 'dataurl' }, bundle: true, write: false, outfile: 'assistant-ui.js', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'i18n-fixture', setup(builder) {
     builder.onLoad({ filter: /[/\\]i18n[/\\]index\.ts$/ }, () => ({ contents: "import i18n from 'i18next'; export default i18n;export const changeLanguage=()=>{}", loader: 'ts' }))
   } }] })
   script = result.outputFiles.find(file => file.path.endsWith('.js'))!.text
@@ -100,6 +100,14 @@ it('allows stale client repair and distinguishes service checks from client veri
     expect(await page.evaluate(() => (window as any).calls)).toEqual(['codex'])
     await page.getByRole('button',{name:'Test service connection',exact:true}).click()
     await page.getByText('Service handshake, five tools and query passed. External client connection is not verified.',{exact:true}).waitFor()
-    expect(await page.getByText('Client MCP integration is not verified. No configuration will be written.',{exact:true}).count()).toBe(1)
+    expect(await page.getByText('Client MCP integration is not verified. No configuration will be written.',{exact:true}).count()).toBe(3)
+    expect(await page.locator('img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0))).toBe(true)
+    await page.setViewportSize({width:800,height:1000})
+    await page.evaluate(() => document.documentElement.dataset.theme='dark')
+    await page.screenshot({path:'artifacts/memory-domain-acceptance/mcp-settings-cards-dark.png',fullPage:true})
+    await page.setViewportSize({width:420,height:800})
+    await page.evaluate(() => document.documentElement.dataset.theme='planche')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({path:'artifacts/memory-domain-acceptance/mcp-settings-cards-planche.png',fullPage:true})
   } finally { await page.close() }
 })

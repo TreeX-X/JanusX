@@ -517,6 +517,7 @@
     "settings": "Preferences"
   },
   "memorySettings": {
+    "groups": { "capture": "Memory capture", "recall": "Use in conversations", "retention": "Recent memory retention" },
     "title": "Personal profile",
     "navMeta": "Memory & preferences",
     "description": "Control how Janus remembers and uses personal information. Disabling Personal profile stops personal capture, processing and chat recall while retaining existing data.",
@@ -527,7 +528,7 @@
     "useInChat": "Use personal memory in chat",
     "useInChatHint": "Allow Janus to recall confirmed personal information, preferences and valid recent records.",
     "retention": "Retention for new recent records",
-    "retentionHint": "Applies to new records only (30?90 days). Existing expiry dates and confirmed long-term memories are unchanged.",
+    "retentionHint": "Applies to new records only (30–90 days). Existing expiry dates and confirmed long-term memories are unchanged.",
     "days": "{{count}} days",
     "savedImmediately": "Changes save immediately. Personal memories require human review; these settings do not enable local models or automatic admission."
   },
