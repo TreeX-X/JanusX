@@ -71,6 +71,8 @@ function taskId(task: Pick<RefinementTask, 'trigger' | 'scope' | 'workspaceId' |
 }
 
 export class RefinementTaskService {
+  private domainAllowed?: (scope: string) => Promise<boolean>
+  configureDomainPolicy(policy: (scope: string) => Promise<boolean>): void { this.domainAllowed = policy }
   constructor(private readonly deps: RefinementTaskDeps = defaultDeps()) {}
 
   private async read(): Promise<RefinementTask[]> {
@@ -254,7 +256,8 @@ export class RefinementTaskService {
         }
         const settings = await this.deps.settings()
         const cost = observations.reduce((sum, observation) => sum + observation.content.length, 0)
-        if (task.nextRetryAt > this.deps.nowMs() || !settings.enabled
+        if (this.domainAllowed && !await this.domainAllowed(task.scope)) { result.deferred += 1; continue }
+        if (task.nextRetryAt > this.deps.nowMs() || task.scope !== 'user' && !settings.enabled
           || (!manual && (settings.mode === 'deterministic-only' || scorer.provider === 'noop' || this.deps.scorerAvailable?.() === false || (scorer.provider === 'laya' && settings.laya?.enabled !== true)))
           || cost > budget || calls >= 20 || !(await this.deps.hasModel().catch(() => false))) {
           result.deferred++; continue
@@ -264,9 +267,10 @@ export class RefinementTaskService {
         await this.write(tasks)
         budget -= cost; calls++
         const validate = async () => {
+          if (this.domainAllowed && !await this.domainAllowed(task.scope)) return false
           if ((await readPersonalForgettingBarrier()).blocksTask(task)) return false
           const current = await this.deps.settings()
-          if (!current.enabled || (!manual && (current.mode === 'deterministic-only'
+          if (task.scope !== 'user' && !current.enabled || (!manual && (current.mode === 'deterministic-only'
             || this.deps.scorerAvailable?.() === false
             || (task.scorer.provider === 'laya' && current.laya?.enabled !== true)
             || refinementHash(this.deps.scorerIdentity()) !== refinementHash(task.scorer)))) return false

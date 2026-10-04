@@ -14,11 +14,11 @@ export type ExperimentalChannel = (typeof EXPERIMENTAL_CHANNELS)[keyof typeof EX
 export interface ExperimentalFeatures {
   /** 蓝图工作台入口（标题栏切换器 + 工作台本体 + 相关跳转）。 */
   blueprint: boolean
-  /** 知识库工作台、知识库设置及右侧审核入口与相关跳转。 */
+  /** 工程知识采集、处理、召回、设置与审核；知识与记忆入口由任一领域开启。 */
   knowledge: boolean
   /** 圆桌视图（灵动岛二级展开的 roundtable 页）。 */
   roundtable: boolean
-  /** 个人画像（右侧 Dock persona 工具 + 灵动岛记忆徽标）。 */
+  /** 个人记忆采集、处理与召回，以及画像、详细设置和个人审核。关闭保留数据。 */
   persona: boolean
   /** 远程协作控制（状态栏远控胶囊 + 远控弹窗：配对/终端尾流/受控提交/被控服务）。 */
   remoteControl: boolean

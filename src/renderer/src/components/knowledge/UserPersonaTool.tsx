@@ -17,10 +17,10 @@ type LoadState = 'loading' | 'ready' | 'error'
  * activation; explicit corrections are proposed to the shared review tool.
  * Enabled with no workspace mounted.
  */
-export function UserPersonaTool({ active = true }: { active?: boolean }) {
+export function UserPersonaTool({ active = true, onOpenReview, expanded = false }: { active?: boolean; onOpenReview?: () => void; expanded?: boolean }) {
   const { t } = useI18n('knowledge')
   const openTool = useRightToolStore((s) => s.openTool)
-  const reviewEnabled = useExperimentalStore((s) => s.knowledge)
+  const reviewEnabled = useExperimentalStore((s) => s.persona)
   const [overview, setOverview] = useState<UserMemoryOverview | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const generation = useRef(0)
@@ -55,7 +55,7 @@ export function UserPersonaTool({ active = true }: { active?: boolean }) {
   }, [openTool])
 
   return (
-    <section className={styles.root} aria-label={t('knowledge:persona.toolAria')}>
+    <section className={styles.root} data-expanded={expanded || undefined} aria-label={t('knowledge:persona.toolAria')}>
       {loadState === 'loading' && !correcting && !forgetting && !editingProfile && (
         <div className={styles.state}>
           <strong>{t('knowledge:state.loading.title')}</strong>
@@ -70,7 +70,7 @@ export function UserPersonaTool({ active = true }: { active?: boolean }) {
         </div>
       )}
       {loadState === 'ready' && overview && !correcting && !forgetting && !editingProfile && (
-        <UserPersonaCards overview={overview} onEditProfile={() => setEditingProfile(true)} onOpenInbox={reviewEnabled ? openInbox : undefined} onForgetEpisode={episode => setForgetting({ ...episode, kind: 'episode' })} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
+        <UserPersonaCards overview={overview} onEditProfile={() => setEditingProfile(true)} onOpenInbox={reviewEnabled ? onOpenReview ?? openInbox : undefined} onForgetEpisode={episode => setForgetting({ ...episode, kind: 'episode' })} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
       )}
       {editingProfile && <PersonalProfileEditor onClose={() => { setEditingProfile(false); void refresh() }}
         onSaved={() => { setEditingProfile(false); void refresh() }} />}

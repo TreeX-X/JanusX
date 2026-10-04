@@ -94,7 +94,8 @@ describe('knowledge providers', () => {
     input.stage = 'wikiGeneration'; await knowledgeModelJson(input)
     expect(body.chat_template_kwargs.enable_thinking).toBe(true)
     expect(body.max_tokens).toBe(3072)
-    finish = 'length'; await expect(knowledgeModelJson(input)).rejects.toThrow('model-invalid-or-unavailable')
+    expect(body.reasoning_budget_tokens).toBe(1024)
+    finish = 'length'; await expect(knowledgeModelJson(input)).rejects.toThrow('incomplete-model-output')
     expect(mocks.provider).not.toHaveBeenCalled()
   })
   it('uses only the selected external provider, no local paths or default fallback', async () => {

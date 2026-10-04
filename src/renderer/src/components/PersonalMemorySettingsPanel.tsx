@@ -1,0 +1,46 @@
+import { useEffect, useState } from 'react'
+import type { PersonalMemorySettings } from '../../../shared/personal-memory-settings'
+import { useI18n } from '@/i18n/useI18n'
+import styles from './KnowledgeSettingsPanel.module.css'
+
+export function PersonalMemorySettingsPanel() {
+  const { t } = useI18n('knowledge')
+  const [settings, setSettings] = useState<PersonalMemorySettings | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    window.electron.knowledge.getPersonalSettings().then(value => { if (active) setSettings(value) })
+      .catch(() => { if (active) setError(t('knowledge:error.loadFailed')) })
+    return () => { active = false }
+  }, [t])
+  const update = async (partial: Partial<PersonalMemorySettings>) => {
+    if (busy) return
+    setBusy(true); setError('')
+    try { setSettings(await window.electron.knowledge.updatePersonalSettings(partial)) }
+    catch { setError(t('knowledge:review.failed')) }
+    finally { setBusy(false) }
+  }
+  return <div className={styles.panel}>
+    <p className={styles.hint}>{t('knowledge:memorySettings.description')}</p>
+    {error && <p role="alert" className={styles.statusError}>{error}</p>}
+    {!settings && !error && <p role="status">{t('knowledge:state.loading.title')}</p>}
+    {settings && <section className={styles.section} aria-busy={busy}>
+      {(['captureConversations', 'inferEngineeringHabits', 'useInChat'] as const).map(key =>
+        <label key={key} className={styles.row}>
+          <span className={styles.label}><span className={styles.labelText}>{t(`knowledge:memorySettings.${key}`)}</span>
+            <span className={styles.hint}>{t(`knowledge:memorySettings.${key}Hint`)}</span></span>
+          <span className={styles.switch}><input type="checkbox" checked={settings[key]} disabled={busy}
+            onChange={event => void update({ [key]: event.target.checked })} /><span className={styles.switchTrack} /></span>
+        </label>)}
+      <label className={styles.row}><span className={styles.label}>
+        <span className={styles.labelText}>{t('knowledge:memorySettings.retention')}</span>
+        <span className={styles.hint}>{t('knowledge:memorySettings.retentionHint')}</span></span>
+        <select className={styles.button} value={settings.episodeTtlDays} disabled={busy} onChange={event => void update({ episodeTtlDays: Number(event.target.value) })}>
+          {[...new Set([30, 60, 90, settings.episodeTtlDays])].sort((a, b) => a - b).map(days => <option key={days} value={days}>{t('knowledge:memorySettings.days', { count: days })}</option>)}
+        </select>
+      </label>
+    </section>}
+    <p className={styles.hint}>{t('knowledge:memorySettings.savedImmediately')}</p>
+  </div>
+}

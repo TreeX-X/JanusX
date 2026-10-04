@@ -123,12 +123,19 @@ function assertReviewedSnapshot(candidate: ReviewCandidate, input: ReviewCandida
   }
 }
 
+let candidateAllowed: ((candidate: ReviewCandidate, operation: 'propose' | 'review') => Promise<boolean>) | undefined
+export function configureCandidateDomainPolicy(policy: NonNullable<typeof candidateAllowed>): void { candidateAllowed = policy }
+async function assertCandidateAllowed(candidate: ReviewCandidate, operation: 'propose' | 'review' = 'review'): Promise<void> {
+  if (candidateAllowed && !await candidateAllowed(candidate, operation)) throw new Error('memory-domain-disabled')
+}
+
 export async function proposeDerivedCandidates(candidates: Array<CandidateWikiPatch | CandidateGraphEdge>): Promise<void> {
   for (const type of ['wiki-patch', 'graph-edge'] as const) {
     const incoming = candidates.filter(candidate => candidate.type === type)
     if (!incoming.length) continue
     const path = candidateRelativePath(type)
     await withMutationLock(path, async () => {
+      for (const candidate of incoming) await assertCandidateAllowed(candidate, 'propose')
       const records = await readJsonl<CandidateWikiPatch | CandidateGraphEdge>(path)
       const revocations = await readObservationRevocationBarrier()
       const ids = new Set(records.map(candidate => candidate.id))
@@ -190,6 +197,7 @@ export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<
 export async function proposeFactCandidates(candidates: CandidateFact[]): Promise<CandidateFact[]> {
   if (candidates.length === 0) return []
   return withFactCandidatesLock(async () => {
+    for (const candidate of candidates) await assertCandidateAllowed(candidate, 'propose')
     const file = absolute(FACT_CANDIDATES_FILE)
     await ensureParent(file)
     let content = ''
@@ -427,6 +435,7 @@ export class KnowledgeReviewService {
     }
 
     const current = records[index]!
+    await assertCandidateAllowed(current)
     assertReviewedSnapshot(current, input)
     if (current.status === 'rejected') {
       return { candidate: current, auditEvents: [] }
@@ -477,6 +486,7 @@ export class KnowledgeReviewService {
     }
 
     const current = records[index]!
+    await assertCandidateAllowed(current)
     if (automatic && (current.type === 'graph-edge' || current.type === 'fact' && (factScope(current.fact) !== 'project' || current.legacySource || current.personalCorrection))) {
       throw new Error('candidate-requires-human-review')
     }

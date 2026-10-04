@@ -4,7 +4,7 @@ import { candidateDecisionHash } from '../../../src/main/knowledge/decision-scor
 import { runCandidateAction } from '../../../src/main/knowledge/candidate-actions'
 
 const mocks = vi.hoisted(() => ({ settings: vi.fn(), candidates: vi.fn(), observations: vi.fn(), run: vi.fn(), manual: vi.fn(), enqueue: vi.fn() }))
-vi.mock('../../../src/main/config/service', () => ({ configService: { getKnowledgeSettings: mocks.settings } }))
+vi.mock('../../../src/main/config/service', () => ({ configService: { getExperimentalFeatures: async () => ({ knowledge: true, persona: true }), getPersonalMemorySettings: async () => ({ captureConversations: true, useInChat: true }), getKnowledgeSettings: mocks.settings } }))
 vi.mock('../../../src/main/knowledge/extract-service', () => ({ knowledgeExtractService: { listFactCandidates: mocks.candidates } }))
 vi.mock('../../../src/main/knowledge/observation-service', () => ({ knowledgeObservationService: { listAll: mocks.observations } }))
 vi.mock('../../../src/main/knowledge/decision-stage', () => ({ knowledgeDecisionStage: { run: mocks.run } }))
@@ -38,6 +38,6 @@ it('rejects stale snapshots, extra authority fields and disabled knowledge', asy
   candidate.fact.content = 'changed'
   await expect(runCandidateAction(input)).rejects.toThrow('candidate-changed')
   mocks.settings.mockResolvedValue({ enabled: false })
-  await expect(runCandidateAction(input)).rejects.toThrow('knowledge-disabled')
+  await expect(runCandidateAction({ ...input, candidateHash: candidateDecisionHash(candidate) })).rejects.toThrow('memory-domain-disabled')
   expect(mocks.run).not.toHaveBeenCalled()
 })

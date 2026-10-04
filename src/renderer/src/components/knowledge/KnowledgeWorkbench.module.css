@@ -1778,3 +1778,13 @@
 :global([data-theme='planche']) .grid .rightPane {
   box-shadow: none;
 }
+
+.domainNavigation { display: flex; flex-wrap: wrap; gap: 8px; }
+.domainNavigation button { background: transparent; color: var(--shell-muted); border: 1px solid var(--shell-border); border-radius: 5px; padding: 6px 12px; font: inherit; cursor: pointer; }
+.domainNavigation button[aria-pressed="true"] { color: var(--shell-text); background: var(--shell-hover); border-color: var(--shell-accent); }
+.domainNavigation button:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+.personalShell { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 16px; width: min(100%, 1100px); height: calc(100vh - 32px); min-width: 0; padding: 20px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-canvas, #18191c); color: var(--shell-text); font-size: 12px; }
+.personalHeader { display: flex; align-items: center; gap: 16px; }
+.personalContent { min-height: 0; overflow: auto; }
+.personalContent > section { height: 100%; }
+@media (max-width: 640px) { .personalShell { padding: 12px; } .domainNavigation button { padding: 6px 8px; } }

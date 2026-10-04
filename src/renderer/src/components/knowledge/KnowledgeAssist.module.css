@@ -85,3 +85,8 @@
 :global([data-theme='planche']) .detail > strong {
   color: var(--ink, #1C343B);
 }
+
+.root[data-expanded="true"] .rowContent { display: block; -webkit-line-clamp: unset; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--shell-text); }
+.root[data-expanded="true"] .rowSource { white-space: normal; overflow-wrap: anywhere; }
+
+.root[data-expanded="true"] .state { min-height: 64px; }

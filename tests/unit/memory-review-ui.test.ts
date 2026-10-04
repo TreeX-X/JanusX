@@ -13,6 +13,8 @@ beforeAll(async () => {
       import i18n from 'i18next'
       import {initReactI18next} from 'react-i18next'
       import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'
+      import {useExperimentalStore} from './src/renderer/src/stores/experimental'
+      useExperimentalStore.setState({loaded:true,knowledge:true,persona:true})
       import {MemoryReviewTool} from './src/renderer/src/components/knowledge/MemoryReviewTool'
       import {reviewCandidateInput} from './src/shared/review-candidate-snapshot'
       const candidate = (id, scope) => ({id,type:'fact',status:'proposed',derivation:'deterministic',evidence:{observationIds:['obs']},fact:{content:id,scope,kind:'preference',provenance:{workspaceId:scope==='user'?'user':'project-a',fileRefs:[]}}})
@@ -113,12 +115,12 @@ describe('memory review browser interactions', () => {
       await page.addScriptTag({ content: script })
       await page.getByRole('button', { name: 'All 2', exact: true }).waitFor()
       await page.evaluate(() => { (window as any).defer = true })
-      const card = page.locator('article').filter({ hasText: 'private-choice' })
+      const card = page.locator('article').filter({ hasText: 'project-rule' })
       await card.getByRole('button', { name: 'Queue LLM refinement', exact: true }).click()
       await page.waitForFunction(() => (window as any).calls.length === 1)
       expect(await card.getByRole('button', { name: 'Approve', exact: true }).isDisabled()).toBe(true)
       const calls = await page.evaluate(() => (window as any).calls)
-      expect(calls).toEqual([{ candidateId: 'private-choice', candidateHash: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'refine' }])
+      expect(calls).toEqual([{ candidateId: 'project-rule', candidateHash: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'refine' }])
       await page.waitForFunction(() => typeof (window as any).finish === 'function')
       await page.evaluate(() => (window as any).finish())
       await page.getByText(/Refinement submitted/).waitFor()

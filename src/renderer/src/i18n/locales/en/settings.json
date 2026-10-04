@@ -80,8 +80,8 @@
       },
       "knowledge": {
         "label": "Knowledge",
-        "hint": "Show the knowledge workbench entry. Turning off hides the title-bar switcher and the workbench.",
-        "note": "Requires Laya engine support, please ensure it is installed and configured"
+        "hint": "Enable project knowledge capture, processing, recall and management. Turning off retains data; personal memory is independent.",
+        "note": "Rules and human review need no model. Local models require separate activation in detailed settings."
       },
       "roundtable": {
         "label": "Roundtable",
@@ -90,8 +90,8 @@
       },
       "persona": {
         "label": "Persona",
-        "hint": "Show the persona tool in the right dock plus island memory reminders. Turning off hides the entries.",
-        "note": "Feature in development, may be unstable"
+        "hint": "Enable personal memory and profile. Turning off stops personal capture, processing and chat recall while retaining data.",
+        "note": "Detailed settings control capture, inferred project habits, chat recall and retention."
       },
       "remoteControl": {
         "label": "Remote collaboration",

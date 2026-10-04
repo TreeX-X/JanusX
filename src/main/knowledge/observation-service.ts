@@ -454,10 +454,16 @@ export interface ObservationCaptureContext {
 
 export class KnowledgeObservationService {
   withSourceMutation<T>(operation: () => Promise<T>): Promise<T> { return this.writeQueue.run(operation) }
+  private captureAllowed?: (input: CaptureObservationInput, context?: ObservationCaptureContext) => Promise<boolean>
+  configureCapturePolicy(policy: NonNullable<KnowledgeObservationService['captureAllowed']>): void { this.captureAllowed = policy }
+  private async assertCaptureAllowed(input: CaptureObservationInput, context?: ObservationCaptureContext): Promise<void> {
+    if (this.captureAllowed && !await this.captureAllowed(input, context)) throw new Error('memory-capture-disabled')
+  }
   /** 串行化 shard 追加与重写：防止 prune/archive 整文件重写吞掉并发 capture 的追加 */
   private readonly writeQueue = new SerialQueue()
 
   async capture(input: CaptureObservationInput, context?: ObservationCaptureContext): Promise<Observation> {
+    await this.assertCaptureAllowed(input, context)
     const workspacePath = input.workspacePath.trim()
     if (!workspacePath) {
       throw new Error('Workspace path is required as observation provenance')
@@ -557,6 +563,7 @@ export class KnowledgeObservationService {
     // Dedupe check and append share the write queue: concurrent captures of the
     // same content cannot both pass the check before either appends.
     const duplicate = await this.writeQueue.run(async () => {
+      await this.assertCaptureAllowed(input, context)
       // An event retry may arrive after restart or a monthly shard rollover.
       const existing = sourceEventId
         ? (await listObservationShardFiles()).flatMap((shard) => parseShardLines(shard))

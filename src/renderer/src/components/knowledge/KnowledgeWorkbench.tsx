@@ -1,3 +1,7 @@
+import { useExperimentalStore } from '@/stores/experimental'
+import { UserPersonaTool } from './UserPersonaTool'
+import { MemoryReviewTool } from './MemoryReviewTool'
+import { PersonalMemorySettingsPanel } from '../PersonalMemorySettingsPanel'
 import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
@@ -91,6 +95,11 @@ export interface InspectorRecord {
 
 export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const { t } = useI18n('knowledge')
+  const engineeringEnabled = useExperimentalStore(s => s.knowledge)
+  const personalEnabled = useExperimentalStore(s => s.persona)
+  const [chosenDomain, setDomain] = useState<'engineering' | 'personal'>('engineering')
+  const domain = chosenDomain === 'engineering' && engineeringEnabled || !personalEnabled ? 'engineering' : 'personal'
+  const [personalView, setPersonalView] = useState<'profile' | 'review' | 'settings'>('profile')
   const TAB_LABELS: Record<KnowledgeWorkbenchTab, string> = {
     inbox: t('knowledge:tab.inbox'),
     library: t('knowledge:tab.library'),
@@ -150,7 +159,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     setLoadError('')
     try {
       const [next, stats] = await Promise.all([
-        loadKnowledgeWorkbenchSnapshot(),
+        loadKnowledgeWorkbenchSnapshot(true),
         getKnowledgeProcessingStats(),
       ])
       setSnapshot(next)
@@ -178,8 +187,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   }
 
   useEffect(() => {
-    if (isOpen) void refresh()
-  }, [isOpen])
+    if (isOpen && domain === 'engineering' && engineeringEnabled) void refresh()
+  }, [isOpen, domain, engineeringEnabled])
 
   useEffect(() => {
     if (!isOpen) return
@@ -191,7 +200,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   }, [isOpen, requestClose])
 
   useEffect(() => {
-    if (!isOpen || tab !== 'search') return
+    if (!isOpen || domain !== 'engineering' || !engineeringEnabled || tab !== 'search') return
     const term = query.trim()
     setSelectedSearch(null)
     if (!term) {
@@ -206,7 +215,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     searchKnowledgeCards({ query: term, limit: 12 })
       .then((cards) => {
         if (cancelled) return
-        setSearchCards(cards)
+        setSearchCards(cards.filter(card => card.workspaceId !== 'user'))
         setSearchState('idle')
       })
       .catch(() => {
@@ -216,7 +225,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
         setSearchState('unavailable')
       })
     return () => { cancelled = true }
-  }, [isOpen, query, tab])
+  }, [isOpen, query, tab, domain, engineeringEnabled])
 
   const selected = useMemo(
     () => tab === 'search' || tab === 'audit' || tab === 'graph'
@@ -295,7 +304,27 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     } finally { setReviewBusy(false) }
   }
 
-  if (phase === 'hidden') return null
+  if (phase === 'hidden' || !engineeringEnabled && !personalEnabled) return null
+  const domainNavigation = <nav className={styles.domainNavigation} aria-label={t('knowledge:domains.title')}>
+    {engineeringEnabled && <button type="button" aria-pressed={domain === 'engineering'} onClick={() => setDomain('engineering')}>{t('knowledge:domains.engineering')}</button>}
+    {personalEnabled && <button type="button" aria-pressed={domain === 'personal'} onClick={() => setDomain('personal')}>{t('knowledge:domains.personal')}</button>}
+  </nav>
+  if (domain === 'personal') return createPortal(<div className={styles.backdrop}>
+    <section className={styles.personalShell} aria-label={t('knowledge:domains.title')}>
+      <header className={styles.personalHeader}>
+        <button type="button" className={styles.closeButton} onClick={onClose} aria-label={t('knowledge:aria.close')}><span aria-hidden="true" /></button>
+        {domainNavigation}
+      </header>
+      <nav className={styles.domainNavigation} aria-label={t('knowledge:domains.personal')}>
+        {(['profile', 'review', 'settings'] as const).map(view => <button key={view} type="button" aria-pressed={personalView === view} onClick={() => setPersonalView(view)}>{t(`knowledge:domains.${view}`)}</button>)}
+      </nav>
+      <main className={styles.personalContent}>
+        {personalView === 'profile' && <UserPersonaTool expanded active={isOpen} onOpenReview={() => setPersonalView('review')} />}
+        {personalView === 'review' && <MemoryReviewTool active={isOpen} domain="user" />}
+        {personalView === 'settings' && <PersonalMemorySettingsPanel />}
+      </main>
+    </section>
+  </div>, document.body)
 
   const paneTitle = tab === 'inbox' ? t('knowledge:paneTitle.inbox') : tab === 'library' ? t('knowledge:paneTitle.library') : TAB_LABELS[tab]
   // Demo parity: every nav tab carries its own count badge.
@@ -350,6 +379,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
       >
         <header className={styles.header} style={cardStyle(0)}>
           <button type="button" className={styles.closeButton} onClick={requestClose} title={t('knowledge:action.close')} aria-label={t('knowledge:aria.close')}><span aria-hidden="true" /></button>
+          {domainNavigation}
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
             <span className={styles.bcCurrent}>{t('knowledge:breadcrumb.engine')}</span>
             <span className={styles.bcSep} aria-hidden="true">/</span>
@@ -407,7 +437,6 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               <div className={styles.filterRow} role="group" aria-label={t('knowledge:inbox.scope.label')}>
                 {([
                   { scope: 'all' as const, label: t('knowledge:inbox.scope.all'), count: inboxScopes.user + inboxScopes.engineering },
-                  { scope: 'user' as const, label: t('knowledge:inbox.scope.personal'), count: inboxScopes.user },
                   { scope: 'engineering' as const, label: t('knowledge:inbox.scope.engineering'), count: inboxScopes.engineering },
                 ]).map((option) => (
                   <button

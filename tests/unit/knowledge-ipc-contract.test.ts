@@ -96,7 +96,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(58)
+    expect(channels).toHaveLength(60)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -445,8 +445,9 @@ describe('Knowledge IPC contract', () => {
     calls.push(() => api.personalProfileEditContext())
     calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
     calls.push(() => api.migrateLegacyEpisodes())
-    expect(Object.keys(api)).toHaveLength(58)
-    expect(calls).toHaveLength(58)
+    calls.push(() => api.getPersonalSettings(), () => api.updatePersonalSettings({ useInChat: false }))
+    expect(Object.keys(api)).toHaveLength(60)
+    expect(calls).toHaveLength(60)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

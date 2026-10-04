@@ -36,6 +36,9 @@ import { registerPeerHandlers, registerRemoteHandlers } from './remote-handlers'
 import { handleTerminalHostWindowClosed, registerTerminalHandlers } from './terminal-handlers'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { installMemoryDomainControls } from '../knowledge/memory-domain-controls'
+import { memoryDomainPolicy } from '../knowledge/memory-domain-policy'
+import { observationScope } from '../knowledge/memory-evidence'
 import { runDeterministicStage } from '../knowledge/deterministic-extractor'
 import { registerLayaScorer } from '../knowledge/laya-runtime'
 import { runCandidateAction } from '../knowledge/candidate-actions'
@@ -139,10 +142,14 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   // Phase 1-2: plug the deterministic stage into the processing queue and
   // report unprocessed ranges from the persisted cursor on startup.
   // Persist plans after deterministic batches; recover model tasks independently of cursors.
+  installMemoryDomainControls()
   registerLayaScorer()
   knowledgeProcessingQueue.configureCandidateActionHandler(runCandidateAction)
   knowledgeProcessingQueue.configureDeterministicHandler((batch) =>
-    runDeterministicStage(batch).then(() => undefined),
+    runDeterministicStage(batch, { allowHabitSource: async observation => {
+      const policy = await memoryDomainPolicy()
+      return observationScope(observation) === 'user' ? policy.personal : policy.inferEngineeringHabits
+    } }).then(() => undefined),
   )
   knowledgeProcessingQueue.configureAutomationHandler(() => knowledgeAutomationService.run())
   appShutdown.configure({ stopKnowledge: () => knowledgeAutomationService.shutdown() })

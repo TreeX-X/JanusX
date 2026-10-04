@@ -78,6 +78,17 @@ export function registerSettingsHandlers(): void {
     return feishuInboundRuntime.getControlStatus()
   })
 
+  ipcMain.handle(KNOWLEDGE_CHANNELS.getPersonalSettings, () => configService.getPersonalMemorySettings())
+  ipcMain.handle(KNOWLEDGE_CHANNELS.updatePersonalSettings, async (_event, settings) => {
+    const { z } = await import('zod')
+    const input = z.object({ captureConversations: z.boolean().optional(), inferEngineeringHabits: z.boolean().optional(),
+      useInChat: z.boolean().optional(), episodeTtlDays: z.number().int().min(30).max(90).optional() }).strict().parse(settings)
+    const result = await configService.updatePersonalMemorySettings(input)
+    const { settleMemoryMutations } = await import('../knowledge/memory-domain-controls')
+    await settleMemoryMutations()
+    return result
+  })
+
   ipcMain.handle(KNOWLEDGE_CHANNELS.getSettings, async () => {
     return configService.getKnowledgeSettings()
   })
@@ -102,6 +113,8 @@ export function registerSettingsHandlers(): void {
     async (_event, settings: Partial<ExperimentalFeatures>) => {
       const next = await configService.updateExperimentalFeatures(settings ?? {})
       if (!next.knowledge) { knowledgeAutomationService.stop(); await cancelKnowledgeLocalSetup() }
+      const { settleMemoryMutations } = await import('../knowledge/memory-domain-controls')
+      await settleMemoryMutations()
       await syncLayaSettings()
       return next
     },

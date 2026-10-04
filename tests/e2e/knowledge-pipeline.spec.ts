@@ -34,7 +34,7 @@ async function closeApplication(application: ElectronApplication | undefined): P
 }
 
 test('knowledge pipeline: observe → propose → review → truth → search → context', async () => {
-  const entry = resolve('out/main/index.js')
+  const entry = resolve(process.env.JANUSX_DESKTOP_ENTRY ?? 'out/main/index.js')
   let fixtureRoot: string | undefined
   let application: ElectronApplication | undefined
   let page: Page | undefined
@@ -81,6 +81,7 @@ test('knowledge pipeline: observe → propose → review → truth → search �
       await experimental.update(originalFlags)
       return { saved: saved.automation!.local.enabled, checked: checked.report, stopped: stopped.automation!.local.enabled }
     }, defaultKnowledgeAutomation())
+    await page.evaluate(() => window.electron.experimental.update({ knowledge: true, persona: true }))
     expect(localGate.saved).toBe(false)
     expect(localGate.checked).toMatchObject({ ok: false, reason: 'invalid-local-model-path' })
     expect(localGate.stopped).toBe(false)
@@ -205,6 +206,32 @@ test('knowledge pipeline: observe → propose → review → truth → search �
     const backupDirectory = join(fixtureRoot, 'knowledge', 'migration', 'episodes')
     const [backup] = await readdir(backupDirectory)
     expect(await readFile(join(backupDirectory, backup), 'utf8')).toBe(legacyBytes)
+    const controls = await page.evaluate(async ({ workspacePath, workspaceId }) => {
+      const { knowledge, experimental } = window.electron
+      const originalSettings = await knowledge.getSettings()
+      await knowledge.updatePersonalSettings({ useInChat: false, episodeTtlDays: 30 })
+      const saved = await knowledge.getPersonalSettings()
+      const projectSettings = await knowledge.getSettings()
+      const capture = async (personal: boolean) => {
+        try {
+          await knowledge.observe({ workspaceId: personal ? 'user' : workspaceId,
+            workspacePath: personal ? 'user' : workspacePath, source: 'manual', type: 'user-note', content: 'Domain controls fixture' })
+          return true
+        } catch { return false }
+      }
+      const combinations: Array<{ knowledge: boolean; persona: boolean; projectCaptured: boolean; personalCaptured: boolean }> = []
+      for (const flags of [{ knowledge: true, persona: false }, { knowledge: false, persona: true }, { knowledge: false, persona: false }, { knowledge: true, persona: true }]) {
+        await experimental.update(flags)
+        combinations.push({ ...flags, projectCaptured: await capture(false), personalCaptured: await capture(true) })
+      }
+      return { saved, engineeringUnchanged: JSON.stringify(projectSettings) === JSON.stringify(originalSettings), combinations }
+    }, { workspacePath, workspaceId: WS_ID })
+    expect(controls.saved).toMatchObject({ useInChat: false, episodeTtlDays: 30 })
+    expect(controls.engineeringUnchanged).toBe(true)
+    for (const result of controls.combinations) {
+      expect(result.projectCaptured).toBe(result.knowledge)
+      expect(result.personalCaptured).toBe(result.persona)
+    }
   } finally {
     await closeApplication(application).catch(() => undefined)
     if (fixtureRoot) {

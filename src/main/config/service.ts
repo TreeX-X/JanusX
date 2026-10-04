@@ -229,6 +229,22 @@ export class ConfigService {
     return normalizeRemoteNotificationSettings(settings.remote)
   }
 
+  async getPersonalMemorySettings() {
+    const { normalizePersonalMemorySettings } = await import('../../shared/personal-memory-settings')
+    return normalizePersonalMemorySettings((await this.get()).personalMemorySettings)
+  }
+
+  async updatePersonalMemorySettings(partial: Partial<import('../../shared/personal-memory-settings').PersonalMemorySettings>) {
+    const { normalizePersonalMemorySettings } = await import('../../shared/personal-memory-settings')
+    return this.writeQueue.run(async () => {
+      const current = await this.get()
+      const personalMemorySettings = normalizePersonalMemorySettings({ ...current.personalMemorySettings, ...partial })
+      this.config = { ...current, personalMemorySettings }
+      await this.persist()
+      return personalMemorySettings
+    })
+  }
+
   async getKnowledgeSettings(): Promise<KnowledgeSettings> {
     const config = await this.get()
     return normalizeKnowledgeSettings(config.knowledgeSettings)

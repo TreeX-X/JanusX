@@ -18,6 +18,11 @@ import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall
 import { DEFAULT_KNOWLEDGE_SETTINGS, normalizeKnowledgeSettings } from '../../../src/shared/knowledge-settings'
 import type { CaptureObservationInput, UserEpisode } from '../../../src/shared/knowledge'
 
+vi.mock('../../../src/main/config/service', () => ({ configService: {
+  getExperimentalFeatures: async () => ({ persona: true, knowledge: true }),
+  getKnowledgeSettings: async () => ({ enabled: true }),
+  getPersonalMemorySettings: async () => ({ captureConversations: true, useInChat: true, episodeTtlDays: 60 }),
+} }))
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
 const remember: CaptureObservationInput = {

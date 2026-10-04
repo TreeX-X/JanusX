@@ -151,6 +151,8 @@ export function installElectronApiFallback(): void {
       candidateAction: () => unavailableKnowledge(),
       forgetPersonalMemory: () => unavailableKnowledge(),
       proposePersonalMemoryCorrection: () => unavailableKnowledge(),
+      getPersonalSettings: () => unavailableKnowledge(),
+      updatePersonalSettings: () => unavailableKnowledge(),
       getSettings: () => unavailableKnowledge(),
       updateSettings: () => unavailableKnowledge(),
     },

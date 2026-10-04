@@ -57,7 +57,7 @@ export interface KnowledgeWorkbenchSnapshot {
   errors: string[]
 }
 
-export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkbenchSnapshot> {
+export async function loadKnowledgeWorkbenchSnapshot(projectOnly = false): Promise<KnowledgeWorkbenchSnapshot> {
   const errors: string[] = []
   const [
     observations,
@@ -79,6 +79,13 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
     window.electron.knowledge.getSettings(),
   ])
 
+  if (projectOnly) {
+    truth.facts = truth.facts.filter(fact => fact.scope !== 'user' && fact.provenance.workspaceId !== 'user')
+    for (let index = factCandidates.length - 1; index >= 0; index--) {
+      const fact = factCandidates[index]!.fact
+      if (fact.scope === 'user' || fact.provenance.workspaceId === 'user') factCandidates.splice(index, 1)
+    }
+  }
   const libraryCards = truthSnapshotToKnowledgeCards(truth)
   const workspaceIds = [...new Set([
     ...factCandidates.map((item) => item.fact.provenance.workspaceId),
@@ -96,11 +103,11 @@ export async function loadKnowledgeWorkbenchSnapshot(): Promise<KnowledgeWorkben
   }
 
   return {
-    observations,
+    observations: projectOnly ? observations.filter(item => item.scope !== 'user' && item.workspaceId !== 'user') : observations,
     factCandidates,
     wikiPatches,
     graphCandidates,
-    auditEvents,
+    auditEvents: projectOnly ? auditEvents.filter(item => item.provenance.workspaceId !== 'user') : auditEvents,
     retentionStats,
     libraryCards,
     conflicts,

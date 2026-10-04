@@ -82,7 +82,7 @@ export function Titlebar() {
 
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
-  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
+  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge || s.persona)
   const blueprintEnabled = useExperimentalStore((s) => s.blueprint)
   const loadExperimental = useExperimentalStore((s) => s.load)
 

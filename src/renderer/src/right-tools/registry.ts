@@ -2,9 +2,9 @@
 import type { RightToolDefinition, RightToolId } from './types'
 import type { ExperimentalFeatures } from '../../../shared/ipc/experimental'
 
-// Note: review shares the knowledge entry gate, including programmatic opens — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: either enabled domain can use its review queue — see .agents/notes/2026-10-04-memory-domain-controls--908d675a.md
 export function isRightToolEnabled(toolId: RightToolId, features: Pick<ExperimentalFeatures, 'knowledge' | 'persona'>): boolean {
-  if (toolId === 'review') return features.knowledge
+  if (toolId === 'review') return features.knowledge || features.persona
   if (toolId === 'persona') return features.persona
   return true
 }

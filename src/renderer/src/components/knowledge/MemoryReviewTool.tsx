@@ -5,6 +5,7 @@ import { AutomationStatus } from './AutomationStatus'
 import { LegacyEpisodeMigrationControl } from './LegacyEpisodeMigrationControl'
 // Note: one review surface preserves engineering and private memory ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import type { CandidateFact } from '../../../../shared/knowledge'
 import { memoryCandidateSnapshot } from '../../../../shared/memory-candidate-snapshot'
@@ -14,16 +15,18 @@ import { WikiCandidateSources } from './NoteWikiLinks'
 import styles from './MemoryReviewTool.module.css'
 
 /** A failed domain read must not masquerade as an empty review queue. */
-export async function loadReviewCandidates(): Promise<InboxCandidate[]> {
+export async function loadReviewCandidates(engineering = true): Promise<InboxCandidate[]> {
   const [facts, wiki, graph] = await Promise.all([
     window.electron.knowledge.listCandidates(),
-    window.electron.knowledge.listWikiPatchCandidates(),
-    window.electron.knowledge.listGraphCandidates(),
+    engineering ? window.electron.knowledge.listWikiPatchCandidates() : [],
+    engineering ? window.electron.knowledge.listGraphCandidates() : [],
   ])
   return [...facts, ...wiki, ...graph].filter(candidate => candidate.status === 'proposed')
 }
 
-export function MemoryReviewTool({ active }: { active: boolean }) {
+export function MemoryReviewTool({ active, domain }: { active: boolean; domain?: 'user' | 'engineering' }) {
+  const engineering = useExperimentalStore(s => s.knowledge) && domain !== 'user'
+  const personal = useExperimentalStore(s => s.persona) && domain !== 'engineering'
   const { t } = useI18n('knowledge')
   const [candidates, setCandidates] = useState<InboxCandidate[]>([])
   const [scope, setScope] = useState<InboxScopeFilter>('all')
@@ -38,14 +41,14 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
     setLoading(true)
     setError('')
     try {
-      const next = await loadReviewCandidates()
+      const next = (await loadReviewCandidates(engineering)).filter(candidate => isUserScopeCandidate(candidate) ? personal : engineering)
       if (request === generation.current) setCandidates(next)
     } catch {
       if (request === generation.current) setError(t('knowledge:error.loadFailed'))
     } finally {
       if (request === generation.current) setLoading(false)
     }
-  }, [t])
+  }, [t, engineering, personal])
   useEffect(() => {
     if (active) void refresh()
     return () => { generation.current += 1 }
@@ -88,7 +91,9 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
       setBusy(false)
     }
   }
-  const counts = countInboxScopes(candidates)
+  const visibleCandidates = candidates.filter(candidate => isUserScopeCandidate(candidate) ? personal : engineering)
+  const selectedScope = engineering && personal ? scope : personal ? 'user' : 'engineering'
+  const counts = countInboxScopes(visibleCandidates)
   const decide = async (candidate: CandidateFact, action: 'score' | 'refine') => {
     if (actionLock.current) return
     actionLock.current = true
@@ -103,26 +108,26 @@ export function MemoryReviewTool({ active }: { active: boolean }) {
     finally { actionLock.current = false; setBusy(false) }
   }
   const filters = [
-    { scope: 'all' as const, label: t('knowledge:inbox.scope.all'), count: candidates.length },
+    { scope: 'all' as const, label: t('knowledge:inbox.scope.all'), count: visibleCandidates.length },
     { scope: 'engineering' as const, label: t('knowledge:inbox.scope.engineering'), count: counts.engineering },
     { scope: 'user' as const, label: t('knowledge:inbox.scope.personal'), count: counts.user },
   ]
   return <section className={styles.root} aria-label={t('knowledge:review.title')}>
     <div className={styles.filters} role="group" aria-label={t('knowledge:inbox.scope.label')}>
-      {filters.map(filter => <button key={filter.scope} type="button" aria-pressed={scope === filter.scope} onClick={() => setScope(filter.scope)}>{filter.label} {loading || error ? '—' : filter.count}</button>)}
+      {filters.filter(filter => filter.scope === 'all' ? engineering && personal : filter.scope === 'user' ? personal : engineering).map(filter => <button key={filter.scope} type="button" aria-pressed={selectedScope === filter.scope} onClick={() => setScope(filter.scope)}>{filter.label} {loading || error ? '—' : filter.count}</button>)}
     </div>
     <div className={styles.body} aria-busy={loading || busy}>
-      <AutomationStatus active={active} onChanged={() => void refresh()} />
+      {engineering && <AutomationStatus active={active} onChanged={() => void refresh()} />}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {loading && <p role="status">{t('knowledge:state.loading.title')}</p>}
-      {!loading && !error && filterInboxByScope(candidates, scope).length === 0 && <p>{t('knowledge:inbox.empty.title')}</p>}
-      {!loading && filterInboxByScope(candidates, scope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} onDecision={candidate.type === 'fact' ? action => void decide(candidate, action) : undefined} />)}
+      {!loading && !error && filterInboxByScope(visibleCandidates, selectedScope).length === 0 && <p>{t('knowledge:inbox.empty.title')}</p>}
+      {!loading && filterInboxByScope(visibleCandidates, selectedScope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} onDecision={candidate.type === 'fact' && !isUserScopeCandidate(candidate) ? action => void decide(candidate, action) : undefined} />)}
     </div>
     <footer className={styles.filters}>
-      <LegacyEpisodeMigrationControl />
+      {personal && <LegacyEpisodeMigrationControl />}
       <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t('knowledge:action.refresh')}</button>
-      <button type="button" disabled={busy || loading} onClick={() => void importLegacy()}>{t('knowledge:review.importLegacy')}</button>
+      {personal && <button type="button" disabled={busy || loading} onClick={() => void importLegacy()}>{t('knowledge:review.importLegacy')}</button>}
     </footer>
   </section>
 }

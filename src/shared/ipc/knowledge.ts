@@ -112,6 +112,8 @@ export const KNOWLEDGE_CHANNELS = {
   migrateLegacyEpisodes: 'knowledge:user-memory:migrate-episodes',
   forgetPersonalMemory: 'knowledge:user-memory:forget',
   proposePersonalMemoryCorrection: 'knowledge:user-memory:correct',
+  getPersonalSettings: 'settings:personal-memory:get',
+  updatePersonalSettings: 'settings:personal-memory:update',
   getSettings: 'settings:knowledge:get',
   updateSettings: 'settings:knowledge:update',
 } as const
@@ -369,6 +371,8 @@ export interface KnowledgeAPI {
   candidateAction: (input: { candidateId: string; candidateHash: string; action: 'score' | 'refine' }) => Promise<void>
   forgetPersonalMemory: (input: { targetId: string; targetHash: string; kind?: 'fact' | 'episode' | 'override' }) => Promise<void>
   proposePersonalMemoryCorrection: (input: { targetId: string; targetHash: string; content: string }) => Promise<{ candidateId: string; status: CandidateFact['status'] }>
+  getPersonalSettings: () => Promise<import('../personal-memory-settings').PersonalMemorySettings>
+  updatePersonalSettings: (settings: Partial<import('../personal-memory-settings').PersonalMemorySettings>) => Promise<import('../personal-memory-settings').PersonalMemorySettings>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>
 }

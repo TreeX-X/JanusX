@@ -207,6 +207,8 @@ const knowledgeAPI: KnowledgeAPI = {
   candidateAction: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.candidateAction, input),
   forgetPersonalMemory: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.forgetPersonalMemory, input),
   proposePersonalMemoryCorrection: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.proposePersonalMemoryCorrection, input),
+  getPersonalSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getPersonalSettings),
+  updatePersonalSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updatePersonalSettings, settings),
   getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
   updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
 }

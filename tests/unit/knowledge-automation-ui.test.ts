@@ -5,8 +5,10 @@ let browser: Browser, script: string, css: string
 beforeAll(async () => {
   browser = await chromium.launch({ headless: true })
   const result = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
+    import './src/renderer/src/styles/themes.generated.css'
     import React from 'react'; import {createRoot} from 'react-dom/client'; import i18n from 'i18next'; import {initReactI18next} from 'react-i18next'
     import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'; import settings from './src/renderer/src/i18n/locales/en/settings.json'; import common from './src/renderer/src/i18n/locales/en/common.json'
+    import {KnowledgeWorkbench} from './src/renderer/src/components/knowledge/KnowledgeWorkbench'
     import {KnowledgeSettingsPanel} from './src/renderer/src/components/KnowledgeSettingsPanel'
     import {AppSettingsModal} from './src/renderer/src/components/AppSettingsModal'
     import {RightDock} from './src/renderer/src/components/right-tools/RightDock'
@@ -19,6 +21,10 @@ beforeAll(async () => {
     const disabledLocal=()=>{window.config.automation.local.enabled=false;Object.values(window.config.automation.stages).forEach(stage=>{if(stage.provider==='local')stage.provider='off'})}
     const status=()=>({enabled:window.config.automation.enabled,running:false,counts,total:0,tasks:[]})
     window.electron={llm:{getTerminalProviders:async()=>[{id:'external',name:'My provider',modelId:'chosen-reviewer',enabled:true}]},knowledge:{
+      getPersonalSettings:async()=>window.personalSettings ?? {captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60},
+      updatePersonalSettings:async partial=>{window.personalSettings={...await window.electron.knowledge.getPersonalSettings(),...partial};return window.personalSettings},
+      userMemoryOverview:async()=>({profile:{identity:'Tree',formatPrefs:['Concise'],toolPrefs:[]},habits:[],recent:[],pendingHabitCount:0}),
+      listCandidates:async()=>[],listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
       getSettings:async()=>window.config,updateSettings:async(value)=>{window.calls.push('save');value.automation.local=window.config.automation.local;window.config=value;return structuredClone(value)},externalMcpStatus:async()=>null,
       automationStatus:async()=>status(),automationRun:async()=>{window.calls.push('run');return status()},automationRetry:async()=>{},
       localResourcesStatus:async()=>structuredClone(window.resources),installLocalResources:async()=>{window.calls.push('install');window.resources.phase='downloading';window.resources.totalBytes=100;return structuredClone(window.resources)},
@@ -29,6 +35,7 @@ beforeAll(async () => {
     window.features=useExperimentalStore;window.dock=useRightToolStore
     i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge,settings,common}},interpolation:{escapeValue:false}}).then(()=>{
       window.root=createRoot(document.getElementById('root'))
+      window.showMemory=()=>window.root.render(<KnowledgeWorkbench isOpen onClose={()=>window.root.render(null)}/>)
       window.root.render(window.gates?<><AppSettingsModal isOpen initialTab='knowledge' onClose={()=>{}}/><RightDock effectiveCollapsed={false} effectiveMaxWidth={600} forcedCollapsed={false} onResizingChange={()=>{}}/></>:<KnowledgeSettingsPanel/>)
     })
   ` }, bundle: true, write: false, outfile: 'automation-ui.js', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'fixtures', setup(builder) {
@@ -91,7 +98,7 @@ it('keeps the native checkbox hidden when automation is disabled, while retainin
     expect(await page.evaluate(() => (window as any).config.automation.enabled)).toBe(true)
   } finally { await page.close() }
 })
-it('unmounts knowledge settings and review immediately, blocks programmatic reopen and keeps persona independent', async () => {
+it('keeps personal review when knowledge closes and blocks review when both domains close', async () => {
   const page = await browser.newPage()
   try {
     await mount(page, true)
@@ -99,10 +106,14 @@ it('unmounts knowledge settings and review immediately, blocks programmatic reop
     await page.locator('[data-tool="review"]').waitFor()
     await page.evaluate(() => (window as any).features.getState().apply({ knowledge: false }))
     await expect.poll(() => page.getByRole('heading', { name: 'Knowledge automation', exact: true }).count()).toBe(0)
-    expect(await page.locator('[data-tool="review"]').count()).toBe(0)
+    expect(await page.locator('[data-tool="review"]').count()).toBe(1)
     expect(await page.getByText('GeneralSettingsPanel', { exact: true }).count()).toBe(1)
     await page.evaluate(() => { const dock=(window as any).dock.getState();dock.openTool('review');dock.activateTool('review');dock.toggleFromRail('review');dock.openTool('persona') })
-    expect(await page.evaluate(() => (window as any).dock.getState().openToolIds)).toEqual(['persona'])
+    expect(await page.evaluate(() => (window as any).dock.getState().openToolIds)).toContain('persona')
+    await page.evaluate(() => (window as any).features.getState().apply({ persona: false }))
+    await expect.poll(() => page.locator('[data-tool="review"]').count()).toBe(0)
+    await page.evaluate(() => (window as any).dock.getState().openTool('review'))
+    expect(await page.evaluate(() => (window as any).dock.getState().openToolIds)).toEqual([])
     await page.evaluate(() => (window as any).features.getState().apply({ knowledge: true }))
     expect(await page.locator('[data-tool="review"]').count()).toBe(0)
   } finally { await page.close() }
@@ -179,5 +190,32 @@ it('downloads only on request, allows cancellation and fills verified paths with
     expect(await page.getByLabel('llama-server path', { exact: true }).inputValue()).toBe('')
     await page.setViewportSize({ width: 640, height: 720 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  } finally { await page.close() }
+})
+
+it('opens personal memory without engineering, saves independent settings and unmounts on disable', async () => {
+  const page = await browser.newPage({viewport:{width:820,height:720}})
+  try {
+    await mount(page)
+    await page.evaluate(() => { (window as any).features.getState().apply({knowledge:false,persona:true}); (window as any).showMemory() })
+    await page.getByText('Tree', {exact:true}).waitFor()
+    await page.evaluate(() => document.documentElement.dataset.theme='dark')
+    await page.screenshot({path:'artifacts/memory-domain-acceptance/personal-dark.png',animations:'disabled'})
+    expect(await page.getByRole('button', {name:'Project knowledge',exact:true}).count()).toBe(0)
+    await page.getByRole('button', {name:'Preferences',exact:true}).click()
+    await page.evaluate(() => document.documentElement.dataset.theme='planche')
+    await page.setViewportSize({width:640,height:720})
+    await page.screenshot({path:'artifacts/memory-domain-acceptance/personal-settings-planche.png',animations:'disabled'})
+    const recall = page.getByRole('checkbox', {name:'Use personal memory in chat'})
+    await recall.uncheck()
+    await expect.poll(() => page.evaluate(() => (window as any).personalSettings?.useInChat)).toBe(false)
+    await page.getByRole('combobox').selectOption('30')
+    await expect.poll(() => page.evaluate(() => (window as any).personalSettings.episodeTtlDays)).toBe(30)
+    expect(await page.evaluate(() => (window as any).config.enabled)).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.getByRole('button', {name:'Personal memory review',exact:true}).click()
+    expect(await page.getByRole('button', {name:/Project knowledge/}).count()).toBe(0)
+    await page.evaluate(() => (window as any).features.getState().apply({persona:false}))
+    await expect.poll(() => page.getByRole('region', {name:'Knowledge & memory'}).count()).toBe(0)
   } finally { await page.close() }
 })

@@ -209,6 +209,8 @@ interface CursorFileShape {
 
 export class KnowledgeProcessingQueue {
   private readonly queue = new SerialQueue()
+  private processingAllowed?: (workspaceId: string) => Promise<boolean>
+  configureDomainPolicy(policy: (workspaceId: string) => Promise<boolean>): void { this.processingAllowed = policy }
   private handler: DeterministicBatchHandler | null = null
   private llmHandler: LlmBatchHandler | null = null
   private refinementHandler: ((workspaceId?: string) => Promise<RefinementRunResult>) | null = null
@@ -502,6 +504,7 @@ export class KnowledgeProcessingQueue {
     let processed = 0
     let failed = 0
     for (const batch of batches) {
+      if (this.processingAllowed && !await this.processingAllowed(batch.workspaceId)) continue
       try {
         await this.handler(batch)
       } catch (error) {

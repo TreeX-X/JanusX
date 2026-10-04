@@ -68,9 +68,12 @@ export async function knowledgeModelJson({ stage, settings, system, input, signa
         const response = await jsonRequest(url, { model: selected.model,
           messages,
           max_tokens: maxTokens, temperature: 0.2, stream: false, cache_prompt: false,
+          // Reserve output for the actual result; llama.cpp b11277 accepts this per request.
+          ...(selected.thinking ? { reasoning_budget_tokens: stage === 'wikiGeneration' ? 1024 : stage === 'extraction' ? 512 : 256 } : {}),
           chat_template_kwargs: { enable_thinking: selected.thinking }, response_format: { type: 'json_object' },
         }, localSignal)
-        const parsed = z.object({ choices: z.array(z.object({ finish_reason: z.literal('stop'), message: z.object({ content: z.string() }) })).length(1) }).parse(response)
+        const parsed = z.object({ choices: z.array(z.object({ finish_reason: z.string(), message: z.object({ content: z.string() }) })).length(1) }).parse(response)
+        if (parsed.choices[0]!.finish_reason !== 'stop') throw new Error('incomplete-model-output')
         return parsed.choices[0]!.message.content
       })
     } else {

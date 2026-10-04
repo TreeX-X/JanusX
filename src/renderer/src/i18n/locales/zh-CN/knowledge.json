@@ -507,5 +507,28 @@
       "ready": "资源已就绪。点击“检测并启用”后，流程中才可选择本地模型。",
       "cancelled": "已取消，保留已校验的完整文件；重试时复用。"
     }
+  },
+  "domains": {
+    "title": "知识与记忆",
+    "engineering": "工程知识",
+    "personal": "个人画像",
+    "profile": "画像与记忆",
+    "review": "个人记忆审核",
+    "settings": "功能设置"
+  },
+  "memorySettings": {
+    "title": "个人画像",
+    "navMeta": "记忆与偏好",
+    "description": "管理 Janus 如何记住和使用你的个人信息。关闭创新功能中的个人画像将停止个人记忆采集、处理与对话召回，已有资料保留。",
+    "captureConversations": "积累个人对话",
+    "captureConversationsHint": "从 Janus 对话保存近期记录并提出个人记忆候选；关闭后仍可主动要求记住。",
+    "inferEngineeringHabits": "从工程活动提取个人习惯",
+    "inferEngineeringHabitsHint": "从已启用的工程知识采集中归纳可归因于你的偏好，需经个人审核，不会发布到工程知识库。",
+    "useInChat": "在对话中使用个人记忆",
+    "useInChatHint": "允许 Janus 召回已确认的个人资料、偏好和有效近期记录。",
+    "retention": "新近期记录保留期",
+    "retentionHint": "仅影响新记录，范围 30–90 天；不修改旧记录到期日，也不删除已确认的长期记忆。",
+    "days": "{{count}} 天",
+    "savedImmediately": "修改即时保存。个人记忆由人工确认；此处不会启用本地模型或自动放行。"
   }
 }

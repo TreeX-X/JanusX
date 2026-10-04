@@ -20,7 +20,7 @@ export function WorkbenchSwitcher() {
   const toggleWorkbench = useAppStore((s) => s.toggleWorkbench)
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const activeSession = useBlueprintStore((s) => s.activeSession)
-  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
+  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge || s.persona)
   const blueprintEnabled = useExperimentalStore((s) => s.blueprint)
   const loadExperimental = useExperimentalStore((s) => s.load)
 
