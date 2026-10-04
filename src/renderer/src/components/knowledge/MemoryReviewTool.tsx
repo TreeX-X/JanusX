@@ -12,7 +12,9 @@ import { memoryCandidateSnapshot } from '../../../../shared/memory-candidate-sna
 import { applyKnowledgeCandidate, rejectKnowledgeCandidate } from '../../services/knowledge'
 import { competingCorrections, countInboxScopes, filterInboxByScope, isUserScopeCandidate, type InboxCandidate, type InboxScopeFilter } from './inboxScope'
 import { WikiCandidateSources } from './NoteWikiLinks'
+import surface from './MemorySurface.module.css'
 import styles from './MemoryReviewTool.module.css'
+import { CardSkeleton } from '../shared/CardFrame'
 
 /** A failed domain read must not masquerade as an empty review queue. */
 export async function loadReviewCandidates(engineering = true): Promise<InboxCandidate[]> {
@@ -24,7 +26,7 @@ export async function loadReviewCandidates(engineering = true): Promise<InboxCan
   return [...facts, ...wiki, ...graph].filter(candidate => candidate.status === 'proposed')
 }
 
-export function MemoryReviewTool({ active, domain }: { active: boolean; domain?: 'user' | 'engineering' }) {
+export function MemoryReviewTool({ active, domain, expanded = false }: { active: boolean; domain?: 'user' | 'engineering'; expanded?: boolean }) {
   const engineering = useExperimentalStore(s => s.knowledge) && domain !== 'user'
   const personal = useExperimentalStore(s => s.persona) && domain !== 'engineering'
   const { t } = useI18n('knowledge')
@@ -113,21 +115,21 @@ export function MemoryReviewTool({ active, domain }: { active: boolean; domain?:
     { scope: 'engineering' as const, label: t('knowledge:inbox.scope.engineering'), count: counts.engineering },
     { scope: 'user' as const, label: t('knowledge:inbox.scope.personal'), count: counts.user },
   ]
-  return <section className={styles.root} aria-label={t('knowledge:review.title')}>
-    <div className={styles.filters} role="group" aria-label={t('knowledge:inbox.scope.label')}>
+  return <section className={styles.root} data-expanded={expanded || undefined} aria-label={t('knowledge:review.title')}>
+    {!domain && <div className={styles.filters} role="group" aria-label={t('knowledge:inbox.scope.label')}>
       {filters.filter(filter => filter.scope === 'all' ? engineering && personal : filter.scope === 'user' ? personal : engineering).map(filter => <button key={filter.scope} type="button" aria-pressed={selectedScope === filter.scope} onClick={() => setScope(filter.scope)}>{filter.label} {loading || error ? '—' : filter.count}</button>)}
-    </div>
+    </div>}
     <div className={styles.body} aria-busy={loading || busy}>
       {engineering && <AutomationStatus active={active} onChanged={() => void refresh()} />}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
-      {loading && <p role="status">{t('knowledge:state.loading.title')}</p>}
+      {loading && <CardSkeleton lines={4} label={t('knowledge:state.loading.title')} />}
       {!loading && !error && filterInboxByScope(visibleCandidates, selectedScope).length === 0 && <p>{t('knowledge:inbox.empty.title')}</p>}
-      {!loading && filterInboxByScope(visibleCandidates, selectedScope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} onDecision={candidate.type === 'fact' && !isUserScopeCandidate(candidate) ? action => void decide(candidate, action) : undefined} />)}
+      {!loading && <div className={expanded ? `${surface.grid} ${surface.enter}` : styles.reviewList}>{filterInboxByScope(visibleCandidates, selectedScope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} onDecision={candidate.type === 'fact' && !isUserScopeCandidate(candidate) ? action => void decide(candidate, action) : undefined} />)}</div>}
     </div>
     <footer className={styles.filters}>
       {personal && <LegacyEpisodeMigrationControl />}
-      <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t('knowledge:action.refresh')}</button>
+      <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t(domain === 'user' ? 'knowledge:personalBoard.refresh' : 'knowledge:action.refresh')}</button>
       {personal && <button type="button" disabled={busy || loading} onClick={() => void importLegacy()}>{t('knowledge:review.importLegacy')}</button>}
     </footer>
   </section>
@@ -138,7 +140,7 @@ export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, co
   const personal = isUserScopeCandidate(candidate)
   const provenance = candidate.type === 'fact' ? candidate.fact.provenance : candidate.type === 'wiki-patch' ? candidate.provenance : undefined
   const content = candidate.type === 'fact' ? candidate.fact.content : candidate.type === 'wiki-patch' ? candidate.patchMarkdown : `${candidate.edge.from} → ${candidate.edge.to} (${candidate.edge.type})`
-  return <article className={styles.card}>
+  return <article className={`${styles.card} ${surface.card}`}>
     <strong>{t(personal ? 'knowledge:inbox.scope.personal' : 'knowledge:inbox.scope.engineering')}</strong>
     <p>{t(personal ? 'knowledge:review.personalUse' : 'knowledge:review.engineeringUse')}</p>
     {candidate.type === 'fact' && candidate.legacySource && <p>{t('knowledge:review.legacySource')}</p>}

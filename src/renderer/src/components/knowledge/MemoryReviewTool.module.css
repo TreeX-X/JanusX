@@ -6,7 +6,14 @@
 .filters button:disabled { opacity: .5; cursor: default; }
 .filters button:focus-visible, .card summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .body { flex: 1; min-height: 0; overflow: auto; padding: 0 8px; }
-.card { border-top: 1px solid var(--border); padding: 12px 0; overflow-wrap: anywhere; }
+.card { line-height: 1.6; }
+.reviewList { display: flex; flex-direction: column; gap: 12px; }
+.root[data-expanded='true'] .body { padding: 0; }
+.card button { padding: 6px 10px; border: 1px solid var(--shell-border); border-radius: 6px; background: var(--shell-chrome); color: var(--shell-text); cursor: pointer; font: inherit; }
+.card button:hover:not(:disabled) { background: var(--shell-hover); }
+.card button:disabled { opacity: .5; cursor: default; }
+.card button:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+
 .card p { white-space: pre-wrap; margin: 8px 0; }
 .card summary { cursor: pointer; color: var(--text-secondary); }
 .card blockquote { margin: 8px 0; padding-left: 10px; border-left: 2px solid var(--border); }

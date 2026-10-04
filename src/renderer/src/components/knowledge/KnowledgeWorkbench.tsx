@@ -39,10 +39,11 @@ import type {
 } from '../../../../shared/knowledge'
 import { RefreshIconButton } from '../ui/RefreshIconButton'
 import { QuantumTopologyPreview } from '../ui/QuantumTopologyPreview'
-import { competingCorrections, countInboxScopes, filterInboxByScope, type InboxScopeFilter } from './inboxScope'
+import { competingCorrections, filterInboxByScope, type InboxScopeFilter } from './inboxScope'
 import { CardSkeleton, useAnimatedOpen, useWorkbenchPhase } from '../shared/CardFrame'
 import { useI18n } from '@/i18n/useI18n'
 import '../shared/CardFrame.css'
+import surface from './MemorySurface.module.css'
 import styles from './KnowledgeWorkbench.module.css'
 
 export type KnowledgeWorkbenchTab = 'inbox' | 'library' | 'wiki' | 'graph' | 'search' | 'audit'
@@ -111,9 +112,12 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     audit: t('knowledge:tab.audit'),
   }
   const [tab, setTab] = useState<KnowledgeWorkbenchTab>('inbox')
+  const activeTabRef = useRef(tab)
+  activeTabRef.current = tab
   const [snapshot, setSnapshot] = useState<KnowledgeWorkbenchSnapshot | null>(null)
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [loadError, setLoadError] = useState('')
+  const loadGeneration = useRef(0)
   const [selectedId, setSelectedId] = useState('')
   const [selectedSearch, setSelectedSearch] = useState<InspectorRecord | null>(null)
   const [query, setQuery] = useState('')
@@ -121,10 +125,6 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'unavailable'>('idle')
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewError, setReviewError] = useState('')
-  // Memory separation: one Inbox, two review columns. The filter never
-  // rewrites stored lists; counts share the inboxScope predicate with the
-  // persona pendingHabitCount reader so the columns cannot drift by definition.
-  const [scopeFilter, setScopeFilter] = useState<InboxScopeFilter>('all')
   const [procStats, setProcStats] = useState<KnowledgeProcessingStats | null>(null)
   const [procBusy, setProcBusy] = useState(false)
 
@@ -155,7 +155,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     return () => cancelAnimationFrame(frame)
   }, [isOpen])
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
+    const request = ++loadGeneration.current
     setSelectedSearch(null)
     setLoadState('loading')
     setLoadError('')
@@ -164,15 +165,17 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
         loadKnowledgeWorkbenchSnapshot(true),
         getKnowledgeProcessingStats(),
       ])
+      if (request !== loadGeneration.current) return
       setSnapshot(next)
       setProcStats(stats)
-      setSelectedId((current) => selectionIdForTab(next, tab, current, scopeFilter))
+      setSelectedId((current) => selectionIdForTab(next, activeTabRef.current, current, 'engineering'))
       setLoadState('idle')
     } catch (error) {
+      if (request !== loadGeneration.current) return
       setLoadError(error instanceof Error ? error.message : t('knowledge:error.loadFailed'))
       setLoadState('error')
     }
-  }
+  }, [t])
 
   const processNow = async () => {
     if (procBusy) return
@@ -190,7 +193,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
 
   useEffect(() => {
     if (isOpen && domain === 'engineering' && engineeringEnabled) void refresh()
-  }, [isOpen, domain, engineeringEnabled])
+    return () => { loadGeneration.current += 1 }
+  }, [isOpen, domain, engineeringEnabled, refresh])
 
   useEffect(() => {
     if (!isOpen) return
@@ -236,16 +240,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     [selectedId, selectedSearch, snapshot, tab],
   )
 
-  // Memory separation: column counts share the inboxScope predicate with the
-  // persona pendingHabitCount reader. Hooks stay above the hidden-phase return.
-  const inboxScopes = useMemo(
-    () => (snapshot ? countInboxScopes(candidatesForTab(snapshot, 'inbox')) : { user: 0, engineering: 0 }),
-    [snapshot],
-  )
-
   // Detail side panel stays mounted across its exit slide: the grid track
   // collapses in parallel while the last record fades/slides out.
-  const detailOpen = selected != null
+  const detailOpen = domain === 'engineering' && selected != null
   const planDetailOpen = isClosing ? closingPlan.detailOpen : detailOpen
   const detailAnim = useAnimatedOpen(planDetailOpen)
   const prevRecordRef = useRef<InspectorRecord | null>(null)
@@ -256,7 +253,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     setTab(nextTab)
     setSelectedSearch(null)
     if (snapshot) {
-      setSelectedId((current) => selectionIdForTab(snapshot, nextTab, current, scopeFilter))
+      setSelectedId((current) => selectionIdForTab(snapshot, nextTab, current, 'engineering'))
     }
   }
 
@@ -311,27 +308,10 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     {engineeringEnabled && <button type="button" aria-pressed={domain === 'engineering'} onClick={() => setDomain('engineering')}>{t('knowledge:domains.engineering')}</button>}
     {personalEnabled && <button type="button" aria-pressed={domain === 'personal'} onClick={() => setDomain('personal')}>{t('knowledge:domains.personal')}</button>}
   </nav>
-  if (domain === 'personal') return createPortal(<div className={styles.backdrop}>
-    <section className={styles.personalShell} aria-label={t('knowledge:domains.title')}>
-      <header className={styles.personalHeader}>
-        <button type="button" className={styles.closeButton} onClick={onClose} aria-label={t('knowledge:aria.close')}><span aria-hidden="true" /></button>
-        {domainNavigation}
-      </header>
-      <nav className={styles.domainNavigation} aria-label={t('knowledge:domains.personal')}>
-        {(['profile', 'review', 'settings'] as const).map(view => <button key={view} type="button" aria-pressed={personalView === view} onClick={() => setPersonalView(view)}>{t(`knowledge:domains.${view}`)}</button>)}
-      </nav>
-      <main className={styles.personalContent}>
-        {personalView === 'profile' && <UserPersonaTool expanded active={isOpen} onOpenReview={() => setPersonalView('review')} />}
-        {personalView === 'review' && <MemoryReviewTool active={isOpen} domain="user" />}
-        {personalView === 'settings' && <PersonalMemorySettingsPanel />}
-      </main>
-    </section>
-  </div>, document.body)
-
   const paneTitle = tab === 'inbox' ? t('knowledge:paneTitle.inbox') : tab === 'library' ? t('knowledge:paneTitle.library') : TAB_LABELS[tab]
   // Demo parity: every nav tab carries its own count badge.
   const tabCounts: Record<KnowledgeWorkbenchTab, number> = {
-    inbox: inboxScopes.user + inboxScopes.engineering,
+    inbox: snapshot ? candidatesForTab(snapshot, 'inbox', 'engineering').length : 0,
     library: snapshot?.libraryCards.length ?? 0,
     wiki: (snapshot?.wikiPatches.length ?? 0) + (snapshot ? publishedWikiCards(snapshot).length : 0),
     graph: snapshot?.graphCandidates.length ?? 0,
@@ -377,31 +357,47 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
           '--card-enter-duration': `${WORKBENCH_CARD_ENTER_DURATION_MS}ms`,
           '--card-exit-stagger': `${WORKBENCH_CARD_EXIT_STAGGER_MS}ms`,
         } as CSSProperties}
-        aria-label={t('knowledge:aria.engine')}
+        aria-label={t('knowledge:domains.title')}
       >
         <header className={styles.header} style={cardStyle(0)}>
           <button type="button" className={styles.closeButton} onClick={requestClose} title={t('knowledge:action.close')} aria-label={t('knowledge:aria.close')}><span aria-hidden="true" /></button>
           {domainNavigation}
           <nav className={styles.breadcrumb} aria-label="Breadcrumb">
-            <span className={styles.bcCurrent}>{t('knowledge:breadcrumb.engine')}</span>
+            <span className={styles.bcCurrent}>{t(`knowledge:domains.${domain}`)}</span>
             <span className={styles.bcSep} aria-hidden="true">/</span>
-            <span>{TAB_LABELS[tab]}</span>
+            <span>{domain === 'personal' ? t(`knowledge:domains.${personalView}`) : TAB_LABELS[tab]}</span>
           </nav>
-          {snapshot?.usingDemoData && <span className={styles.badge}>{t('knowledge:badge.demoData')}</span>}
-          <div className={styles.headerActions}>
+          {domain === 'engineering' && snapshot?.usingDemoData && <span className={styles.badge}>{t('knowledge:badge.demoData')}</span>}
+          {domain === 'engineering' && <div className={styles.headerActions}>
             <RefreshIconButton
               accent="blue"
               label={t('knowledge:action.refresh')}
               loading={loadState === 'loading'}
               onClick={() => void refresh()}
             />
-          </div>
+          </div>}
         </header>
         <div className={styles.statusCard} style={cardStyle(1)}>
+          {domain === 'personal' ? <div className={styles.personalStatus}><strong>{t('knowledge:domains.personal')}</strong><span>{t('knowledge:personalBoard.description')}</span></div> : <>
           <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
           <AutomationStatus active={isOpen} onChanged={() => void refresh()} />
+          </>}
         </div>
-        <main className={styles.grid} data-detail-open={cardPlan.detailOpen ? 'true' : 'false'}>
+        <main key={domain} className={styles.grid} data-domain={domain} data-detail-open={cardPlan.detailOpen ? 'true' : 'false'}>
+          {domain === 'personal' ? <>
+            <nav className={styles.leftPane} style={cardStyle(2)} aria-label={t('knowledge:domains.personal')}>
+              <div className={styles.navLabel}>{t('knowledge:nav.main')}</div>
+              {(['profile', 'review', 'settings'] as const).map(view => <button key={view} type="button"
+                className={`${styles.navButton} ${personalView === view ? styles.navActive : ''}`}
+                aria-pressed={personalView === view} onClick={() => setPersonalView(view)}>{t(`knowledge:domains.${view}`)}</button>)}
+            </nav>
+            <section key={personalView} className={`${styles.stage} ${styles.personalContent}`} style={cardStyle(3)}>
+              {personalView !== 'profile' && <div className={styles.paneHeader}><h2 className={styles.paneTitle}>{t(`knowledge:domains.${personalView}`)}</h2></div>}
+              {personalView === 'profile' && <UserPersonaTool expanded active={isOpen} onOpenReview={() => setPersonalView('review')} />}
+              {personalView === 'review' && <MemoryReviewTool expanded active={isOpen} domain="user" />}
+              {personalView === 'settings' && <PersonalMemorySettingsPanel />}
+            </section>
+          </> : <>
           <nav className={styles.leftPane} style={cardStyle(2)} aria-label={t('knowledge:aria.engine')}>
             <div className={styles.navLabel}>{t('knowledge:nav.main')}</div>
             {MAIN_TABS.map((item) => (
@@ -430,37 +426,15 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               </button>
             ))}
           </nav>
-          <section className={styles.stage} style={cardStyle(3)}>
+          <section key={tab} className={styles.stage} style={cardStyle(3)} aria-busy={loadState === 'loading'}>
             <div className={styles.paneHeader}>
               <div className={styles.paneTitle}>{paneTitle}</div>
               <span className={styles.paneCount} aria-label={t('knowledge:aria.paneCount', { title: paneTitle })}>{paneCount}</span>
             </div>
-            {tab === 'inbox' && snapshot && (
-              <div className={styles.filterRow} role="group" aria-label={t('knowledge:inbox.scope.label')}>
-                {([
-                  { scope: 'all' as const, label: t('knowledge:inbox.scope.all'), count: inboxScopes.user + inboxScopes.engineering },
-                  { scope: 'engineering' as const, label: t('knowledge:inbox.scope.engineering'), count: inboxScopes.engineering },
-                ]).map((option) => (
-                  <button
-                    key={option.scope}
-                    type="button"
-                    className={styles.scopeButton}
-                    aria-pressed={scopeFilter === option.scope}
-                    onClick={() => {
-                      setScopeFilter(option.scope)
-                      setSelectedId((current) => selectionIdForTab(snapshot, 'inbox', current, option.scope))
-                    }}
-                  >
-                    <span>{option.label}</span>
-                    <span className={styles.paneCount}>{option.count}</span>
-                  </button>
-                ))}
-              </div>
-            )}
             {loadState === 'loading' && <CardSkeleton lines={4} label={t('knowledge:state2.loadingRecords')} />}
             {loadState === 'error' && <StateBlock title={t('knowledge:state2.workbenchUnavailable')} detail={loadError} />}
             {loadState === 'idle' && snapshot && <>
-              {tab === 'inbox' && <CardCollection title={t('knowledge:inbox.empty.title')} detail={t('knowledge:inbox.empty.detail')} cards={candidatesForTab(snapshot, 'inbox', scopeFilter).map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
+              {tab === 'inbox' && <CardCollection title={t('knowledge:inbox.empty.title')} detail={t('knowledge:inbox.empty.detail')} cards={candidatesForTab(snapshot, 'inbox', 'engineering').map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'library' && <CardCollection title={t('knowledge:library.empty.title')} detail={t('knowledge:library.empty.detail')} cards={snapshot.libraryCards} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'search' && <SearchLab query={query} onQueryChange={setQuery} cards={searchCards} state={searchState} selectedId={selectedId} onSelect={(card) => { setSelectedSearch(recordFromCard(card)); setSelectedId(card.id) }} />}
               {tab === 'wiki' && <div className={styles.wikiSections}>
@@ -482,6 +456,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               <Inspector record={shownSelected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={replacement => void review('apply', replacement)} onReject={() => void review('reject')} onRevoke={() => void revoke()} onCloseDetail={clearDetail} />
             </aside>
           ) : null}
+          </>}
         </main>
       </section>
     </div>,
@@ -571,7 +546,7 @@ export function selectionIdForTab(
 
 function CardCollection({ title, detail, cards, selectedId, onSelect }: { title: string; detail: string; cards: KnowledgeCard[]; selectedId: string; onSelect: (id: string) => void }) {
   if (!cards.length) return <StateBlock title={title} detail={detail} />
-  return <div className={styles.cardGrid}>{cards.map((card) => <KnowledgeCardTile key={card.id} card={card} active={card.id === selectedId} onSelect={() => onSelect(card.id)} />)}</div>
+  return <div className={`${styles.cardGrid} ${surface.grid} ${surface.enter}`}>{cards.map((card) => <KnowledgeCardTile key={card.id} card={card} active={card.id === selectedId} onSelect={() => onSelect(card.id)} />)}</div>
 }
 
 function AuditList({ events, onSelect }: { events: KnowledgeWorkbenchSnapshot['auditEvents']; onSelect: (record: InspectorRecord) => void }) {
@@ -588,7 +563,7 @@ function SearchLab({ query, onQueryChange, cards, state, selectedId, onSelect }:
 function KnowledgeCardTile({ card, active, onSelect }: { card: KnowledgeCard; active?: boolean; onSelect: () => void }) {
   const { t } = useI18n('knowledge')
   return (
-    <button type="button" className={`${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`} onClick={onSelect}>
+    <button type="button" className={`${surface.card} ${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`} onClick={onSelect}>
       <div className={styles.cardTopline}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <QuantumTopologyPreview kind={card.kind} name={card.title} size="icon" />
@@ -613,7 +588,7 @@ function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevok
   const conflicts = snapshot?.conflicts.filter((item) => item.candidateId === record.id || item.targetId === record.id) ?? []
   const reviewCandidate = record.reviewType && snapshot ? [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates].find(candidate => candidate.id === record.id && candidate.type === record.reviewType) : undefined
   if (reviewCandidate?.status === 'proposed') return <div className={styles.inspector}>
-    <button type="button" onClick={onCloseDetail}>{t('knowledge:inspector.closeDetail')}</button>
+    <div className={styles.detailBar}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><button type="button" className={styles.detailClose} onClick={onCloseDetail} aria-label={t('knowledge:inspector.closeDetail')} title={t('knowledge:inspector.closeDetail')}><X size={16} aria-hidden="true" /></button></div>
     <MemoryReviewCard candidate={reviewCandidate} competing={competingCorrections(snapshot?.factCandidates ?? [], reviewCandidate)} disabled={!canReview} onReview={(approve, replacement) => approve ? onApprove(replacement) : onReject()} />
     {conflicts.length > 0 && <p>{t('knowledge:inspector.conflict', { detail: conflicts.map(item => item.reason).join(', ') })}</p>}
     {error && <p role="alert">{error}</p>}

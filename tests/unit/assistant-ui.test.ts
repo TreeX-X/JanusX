@@ -6,6 +6,7 @@ let browser: Browser, script: string, css: string
 beforeAll(async () => {
   browser = await chromium.launch({ headless: true })
   const result = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
+    import './src/renderer/src/styles/globals.css'
     import './src/renderer/src/styles/themes.generated.css'
     import React from 'react'; import {createRoot} from 'react-dom/client'; import i18n from 'i18next'; import {initReactI18next} from 'react-i18next'
     import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'; import settings from './src/renderer/src/i18n/locales/en/settings.json'; import common from './src/renderer/src/i18n/locales/en/common.json'
@@ -17,15 +18,20 @@ beforeAll(async () => {
     import {useRightToolStore} from './src/renderer/src/stores/right-tools'
     window.calls=[];window.features=useExperimentalStore;window.assistant=useAssistantStore;window.dock=useRightToolStore
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true,load:async()=>{}})
+    const candidate=(id,scope)=>({id,type:'fact',status:'proposed',derivation:'deterministic',evidence:{observationIds:[]},fact:{id,content:id,kind:'preference',scope,confidence:0.9,tags:[],concepts:[],provenance:{workspaceId:scope==='user'?'user':'project',sourceObservationIds:[],fileRefs:[],createdAt:'2026-10-04'}}})
+    window.reviewItems=[];window.delayCandidates=false
     window.electron={knowledge:{
       userMemoryOverview:async()=>({profile:{identity:'Tree',formatPrefs:['Concise answers'],toolPrefs:['TypeScript']},habits:[{id:'memory-1',content:'Prefer explicit error handling and complete source references.',confirmed:true,contentHash:'hash',observationIds:['source-1'],lastSeenAt:'2026-10-04'},{id:'memory-2',content:'May prefer compact examples.',confirmed:false,contentHash:'hash',observationIds:[]}],recent:[{id:'recent-1',content:'Investigating terminal MCP coverage.',createdAt:'2026-10-04',expiresAt:'2026-12-03',contentHash:'hash',tags:[]}],pendingHabitCount:1}),
-      listCandidates:async()=>[],listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
+      listCandidates:async()=>{if(window.delayCandidates)await new Promise(resolve=>window.finishCandidates=resolve);return structuredClone(window.reviewItems)},listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
+      listObservations:async()=>[],listAudit:async()=>[],retentionStats:async()=>null,listTruth:async()=>({facts:[],wikiPages:[],graphEdges:[]}),getSettings:async()=>({mode:'deterministic-only'}),listConflicts:async()=>[],processingStats:async()=>null,
+      factReviewContext:async()=>({targets:[],competing:[],blocked:false}),
       automationStatus:async()=>({enabled:false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
       getPersonalSettings:async()=>({captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60}),
       externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''},...[['claude-code','Claude Code'],['opencode','OpenCode'],['janus','Janus CLI'],['dsh','DeepSeek / dsh']].map(([id,label])=>({id,label,support:['claude-code','opencode'].includes(id)?'automatic':'unverified',registered:false,configPath:''}))]}),
       registerExternalMcp:async id=>{window.calls.push(id);return {ok:true,configPath:'config.toml'}},
       probeExternalMcp:async()=>({ok:true,stage:'query',tools:[]}),
     }}
+    window.seedReview=()=>window.reviewItems=[candidate('Engineering review item','project'),candidate('Personal review one','user'),candidate('Personal review two','user')]
     i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge,settings,common}},interpolation:{escapeValue:false}}).then(()=>{
       const root=createRoot(document.getElementById('root'))
       window.show=mode=>{if(mode==='board'){useAssistantStore.setState({workbenchDomain:'personal'});root.render(<KnowledgeWorkbench isOpen onClose={()=>root.render(null)}/>)}else if(mode==='mcp')root.render(<ExternalMcpPanel/>);else root.render(<AssistantTool active workspaceId={null} workspacePath={null}/>)}
@@ -40,6 +46,8 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close() })
 async function mount(page: Page, mode: string) {
   page.setDefaultTimeout(4000)
+  await page.route('http://localhost/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
+  await page.goto('http://localhost/')
   await page.setContent('<div id="root"></div>')
   await page.addStyleTag({ content: css + '\n*{box-sizing:border-box}body{margin:0}#root{height:100vh}:root{--shell-accent:#ff7830;--text:#ddd;--text-secondary:#bbb;--text-dim:#888;--border:#333}' })
   await page.evaluate(value => { (window as any).mode = value }, mode)
@@ -92,6 +100,58 @@ it('uses the full workbench for searchable memory cards, readable details and na
     await page.getByText('Investigating terminal MCP coverage.',{exact:true}).waitFor()
   } finally { await page.close() }
 })
+it('shares the workbench shell across domains, isolates review queues and shows real loading feedback', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await mount(page, 'board')
+    await page.getByRole('searchbox').waitFor()
+    await page.evaluate(() => { (window as any).seedReview(); document.documentElement.dataset.theme = 'dark' })
+    const shell = page.getByRole('region', { name: 'Knowledge & memory', exact: true })
+    const before = (await shell.boundingBox())!
+    const domains = page.getByRole('navigation', { name: 'Knowledge & memory', exact: true })
+    await page.evaluate(() => (window as any).delayCandidates = true)
+    await domains.getByRole('button', { name: 'Project knowledge', exact: true }).click()
+    await page.getByRole('status', { name: 'Loading knowledge records' }).waitFor()
+    expect(await page.getByRole('group', { name: 'Memory scope' }).count()).toBe(0)
+    await page.evaluate(() => { (window as any).delayCandidates = false; (window as any).finishCandidates() })
+    await page.getByRole('button').filter({ hasText: 'Engineering review item' }).waitFor()
+    await page.getByRole('button').filter({ hasText: 'Engineering review item' }).click()
+    await page.getByRole('article').waitFor()
+    const engineeringCardStyle = await page.getByRole('article').evaluate(element => {
+      const style = getComputedStyle(element)
+      return [style.borderRadius, style.borderTopWidth, style.padding, style.backgroundColor]
+    })
+    expect(await page.getByText('Personal review one', { exact: true }).count()).toBe(0)
+    const after = (await shell.boundingBox())!
+    expect(after).toEqual(before)
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/unified-engineering.png', animations: 'disabled' })
+    await domains.getByRole('button', { name: 'Personal profile', exact: true }).click()
+    await page.getByRole('searchbox').waitFor()
+    await page.getByRole('navigation', { name: 'Personal profile', exact: true }).getByRole('button', { name: 'Personal memory review', exact: true }).click()
+    await page.getByText('Personal review one', { exact: true }).waitFor()
+    const cards = page.getByRole('article')
+    expect(await cards.count()).toBe(2)
+    expect(await cards.first().evaluate(element => {
+      const style = getComputedStyle(element)
+      return [style.borderRadius, style.borderTopWidth, style.padding, style.backgroundColor]
+    })).toEqual(engineeringCardStyle)
+    const first = (await cards.nth(0).boundingBox())!
+    const second = (await cards.nth(1).boundingBox())!
+    expect(Math.abs(first.y - second.y)).toBeLessThan(2)
+    expect(second.x).toBeGreaterThan(first.x)
+    expect(await page.getByText('Engineering review item', { exact: true }).count()).toBe(0)
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/unified-personal-review.png', animations: 'disabled' })
+    await page.setViewportSize({ width: 640, height: 720 })
+    await page.evaluate(() => document.documentElement.dataset.theme = 'planche')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/unified-review-narrow.png', animations: 'disabled' })
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await domains.getByRole('button', { name: 'Project knowledge', exact: true }).click()
+    await page.getByRole('button').filter({ hasText: 'Engineering review item' }).waitFor()
+    expect(await page.locator('[data-domain="engineering"]').evaluate(element => element.getAnimations({ subtree: true }).some(animation => animation.playState === 'running' && ['memory-content-in', 'knowledge-workbench-in'].some(name => (animation as CSSAnimation).animationName?.includes(name))))).toBe(false)
+  } finally { await page.close() }
+})
+
 it('allows stale client repair and distinguishes service checks from client verification', async () => {
   const page = await browser.newPage()
   try {
