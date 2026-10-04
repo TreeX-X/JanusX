@@ -2,7 +2,7 @@ import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser'
 import { parse as parseToml } from 'smol-toml'
 import { isDeepStrictEqual } from 'node:util'
 
-export type McpConfigFormat = 'mcpServers' | 'servers' | 'opencode' | 'codex'
+export type McpConfigFormat = 'mcpServers' | 'opencode' | 'codex'
 export interface McpLaunch { command: string; args: string[]; env?: Record<string, string> }
 export const MCP_KEY = 'janusx-knowledge'
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -19,7 +19,7 @@ function read(raw: string, format: McpConfigFormat): Record<string, unknown> {
 export function clientEntry(raw: string, format: McpConfigFormat): unknown { return object(read(raw, format)[key(format)])[MCP_KEY] }
 export function desiredEntry(format: McpConfigFormat, launch: McpLaunch): Record<string, unknown> {
   if (format === 'opencode') return { type: 'local', command: [launch.command, ...launch.args], enabled: true, ...(launch.env ? { environment: launch.env } : {}) }
-  return { ...(format === 'servers' ? { type: 'stdio' } : {}), ...launch }
+  return { ...launch }
 }
 
 export function updateClientConfig(raw: string, format: McpConfigFormat, launch: McpLaunch): string {

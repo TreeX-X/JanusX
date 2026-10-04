@@ -154,7 +154,7 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.processingStats()
     await knowledgeApi.probeExternalMcp()
     await knowledgeApi.externalMcpStatus()
-    await knowledgeApi.registerExternalMcp('cursor')
+    await knowledgeApi.registerExternalMcp('claude-code')
     await knowledgeApi.userMemoryOverview()
     await knowledgeApi.personalProfileEditContext()
     await knowledgeApi.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: { identity: 'Tree' } })
@@ -200,7 +200,7 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.processingStats],
       [KNOWLEDGE_CHANNELS.probeExternalMcp],
       [KNOWLEDGE_CHANNELS.externalMcpStatus],
-      [KNOWLEDGE_CHANNELS.registerExternalMcp, 'cursor'],
+      [KNOWLEDGE_CHANNELS.registerExternalMcp, 'claude-code'],
       [KNOWLEDGE_CHANNELS.userMemoryOverview],
       [KNOWLEDGE_CHANNELS.personalProfileEditContext],
       [KNOWLEDGE_CHANNELS.savePersonalProfile, { expectedHash: 'a'.repeat(64), overrides: { identity: 'Tree' } }],
@@ -431,7 +431,7 @@ describe('Knowledge IPC contract', () => {
       () => api.processingStats(),
       () => api.probeExternalMcp(),
       () => api.externalMcpStatus(),
-      () => api.registerExternalMcp('cursor'),
+      () => api.registerExternalMcp('claude-code'),
       () => api.userMemoryOverview(),
       () => api.importLegacyPersonalMemory(),
       () => api.layaControl('status'),

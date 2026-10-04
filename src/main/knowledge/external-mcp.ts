@@ -18,18 +18,15 @@ export const EXTERNAL_MCP_CLIENTS: ReadonlyArray<{ id: ExternalMcpClientId; labe
   { id: 'codex', label: 'Codex', format: 'codex' },
   { id: 'opencode', label: 'OpenCode', format: 'opencode' },
   { id: 'janus', label: 'Janus CLI' }, { id: 'pi', label: 'Pi' }, { id: 'dsh', label: 'DeepSeek / dsh' }, { id: 'shell', label: 'Shell' },
-  { id: 'cursor', label: 'Cursor', format: 'mcpServers' }, { id: 'vscode', label: 'VS Code', format: 'servers' },
 ]
 export interface ExternalMcpDirs {
-  homeDir: string; appDataDir: string; serverEntry: string
+  homeDir: string; serverEntry: string
   command?: string; env?: Record<string, string>; codexHome?: string; configHome?: string
 }
 export function defaultExternalMcpDirs(): ExternalMcpDirs {
   const homeDir = homedir()
-  const appDataDir = process.platform === 'win32' ? process.env.APPDATA ?? join(homeDir, 'AppData', 'Roaming')
-    : process.platform === 'darwin' ? join(homeDir, 'Library', 'Application Support') : process.env.XDG_CONFIG_HOME ?? join(homeDir, '.config')
   return {
-    homeDir, appDataDir,
+    homeDir,
     serverEntry: app.isPackaged ? join(app.getAppPath(), 'out', 'main', 'knowledge-mcp.js')
       : join(process.env.JANUSX_DEV_BUILD_ROOT ?? join(app.getAppPath(), 'out'), 'main', 'knowledge-mcp.js'),
     command: app.isPackaged ? process.execPath : 'node',
@@ -40,8 +37,6 @@ export function defaultExternalMcpDirs(): ExternalMcpDirs {
 }
 export function clientConfigPath(client: ExternalMcpClientId, dirs: ExternalMcpDirs): string {
   switch (client) {
-    case 'cursor': return join(dirs.homeDir, '.cursor', 'mcp.json')
-    case 'vscode': return join(dirs.appDataDir, 'Code', 'User', 'mcp.json')
     case 'claude-code': return join(dirs.homeDir, '.claude.json')
     case 'codex': return join(dirs.codexHome || join(dirs.homeDir, '.codex'), 'config.toml')
     case 'opencode': return join(dirs.configHome || join(dirs.homeDir, '.config'), 'opencode', 'opencode.json')

@@ -291,7 +291,7 @@ export interface KnowledgeProcessingStats {  generatedAt: string
   lastMaintenanceAt: string | null
 }
 
-export type ExternalMcpClientId = 'cursor' | 'vscode' | 'claude-code' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh' | 'shell'
+export type ExternalMcpClientId = 'claude-code' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh' | 'shell'
 
 export interface ExternalMcpClientStatus {
   id: ExternalMcpClientId
