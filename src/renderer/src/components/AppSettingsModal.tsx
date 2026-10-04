@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Bell, BookOpen, Brain, ChartNoAxesCombined, Cloud, ListFilter, Settings, ShieldCheck, SlidersHorizontal, Sparkles, Users, type LucideIcon } from 'lucide-react'
 import { ModalCloseButton } from './ModalCloseButton'
 import { ModalFrame } from '@/components/shared/ModalFrame'
 import { GeneralSettingsPanel } from './GeneralSettingsPanel'
@@ -25,7 +25,19 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-const TAB_ORDER: SettingsTab[] = ['general', 'experimental', 'notifications', 'knowledge', 'personal', 'agent', 'llm', 'usage', 'models', 'team', 'hosted']
+// Note: grouped navigation preserves independent feature gates — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+const TAB_GROUPS: { id: string; tabs: SettingsTab[] }[] = [
+  { id: 'application', tabs: ['general', 'notifications', 'experimental'] },
+  { id: 'memory', tabs: ['knowledge', 'personal'] },
+  { id: 'models', tabs: ['llm', 'models', 'usage'] },
+  { id: 'collaboration', tabs: ['agent', 'team', 'hosted'] },
+]
+const TAB_ICONS: Record<SettingsTab, LucideIcon> = {
+  general: Settings, notifications: Bell, experimental: Sparkles,
+  knowledge: BookOpen, personal: Brain, llm: SlidersHorizontal,
+  models: ListFilter, usage: ChartNoAxesCombined, agent: ShieldCheck,
+  team: Users, hosted: Cloud,
+}
 
 // Note: the modal mounts only while open, so ModalFrame owns the whole
 // open/closing/hidden lifecycle — see shared/ModalFrame.css and
@@ -41,7 +53,14 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
   const personaEnabled = useExperimentalStore((s) => s.persona)
   const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
   const loadExperimental = useExperimentalStore((s) => s.load)
-  const tabOrder = TAB_ORDER.filter((tab) => (tab !== 'team' || teamCollabEnabled) && (tab !== 'knowledge' || knowledgeEnabled) && (tab !== 'personal' || personaEnabled))
+  const groups = TAB_GROUPS.map((group) => ({
+    ...group,
+    tabs: group.tabs.filter((tab) =>
+      (tab !== 'team' || teamCollabEnabled) &&
+      (tab !== 'knowledge' || knowledgeEnabled) &&
+      (tab !== 'personal' || personaEnabled)),
+  })).filter((group) => group.tabs.length > 0)
+  const tabOrder = groups.flatMap((group) => group.tabs)
   // Note: disabled knowledge entries never mount, including direct navigation — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
   const activeTab = tabOrder.includes(selectedTab) ? selectedTab : 'general'
 
@@ -98,24 +117,34 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
               <span className={styles.brandTitle}>JanusX</span>
               <span className={styles.brandMeta}>{t('settings:brand')}</span>
             </div>
-            {tabOrder.map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                data-tab={tab}
-                className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''} ${tab === 'experimental' ? styles.tabButtonExperimental : ''}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                <span className={styles.tabLabel}>
-                  {tab === 'experimental' ? (
-                    <Sparkles size={12} strokeWidth={2} aria-hidden="true" className={styles.tabSpark} />
-                  ) : null}
-                  <span>{tabNav(tab)}</span>
-                  {tab === 'experimental' ? <span className={styles.tabBadge}>NEW</span> : null}
-                </span>
-                <span className={styles.tabMeta}>{tabNavMeta(tab)}</span>
-              </button>
-            ))}
+            <nav className={styles.navigation} aria-label={t('settings:brand')}>
+              {groups.map((group) => (
+                <section key={group.id} className={styles.navGroup} aria-label={t(`settings:groups.${group.id}`)}>
+                  <h3 className={styles.groupTitle}>{t(`settings:groups.${group.id}`)}</h3>
+                  <div className={styles.groupItems}>
+                    {group.tabs.map((tab) => {
+                      const Icon = TAB_ICONS[tab]
+                      return (
+                        <button
+                          key={tab}
+                          type="button"
+                          data-tab={tab}
+                          className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''}`}
+                          aria-current={activeTab === tab ? 'page' : undefined}
+                          onClick={() => setActiveTab(tab)}
+                        >
+                          <Icon size={16} strokeWidth={1.7} aria-hidden="true" className={styles.tabIcon} />
+                          <span className={styles.tabText}>
+                            <span className={styles.tabLabel}>{tabNav(tab)}</span>
+                            <span className={styles.tabMeta}>{tabNavMeta(tab)}</span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              ))}
+            </nav>
           </aside>
 
           <section className={styles.content}>

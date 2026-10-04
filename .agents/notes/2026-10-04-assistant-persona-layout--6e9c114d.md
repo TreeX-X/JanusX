@@ -28,17 +28,25 @@ tags: [memory, persona, right-dock, ui]
 
 设置页面按功能使用有边框、内边距、标题分隔和主题背景的卡片。知识库分为采集、自动处理与 MCP 接入，自动处理内部的四环节和连接配置有独立边界。个人设置分为记忆积累、对话使用和近期记忆保留三张卡片，保留即时保存与原有开关语义。卡片共享 KnowledgeSettingsPanel.module.css，完整工作台中的个人设置也使用同一布局。
 
+设置导航按应用设置、知识与记忆、模型与用量、代理与协作分组，组内统一使用图标、标题、说明和选中指示。知识库与个人画像独立按创新开关显示，双域关闭时隐藏空分组；正在查看的领域关闭时回到通用设置。模型配置、模型目录与用量处于同组。桌面导航独立纵向滚动，窄窗口保留组名与分隔并横向滚动，键盘聚焦可到达末尾项目。
+
 ## Alternatives considered
 
 保留三个入口具有一步直达优势，但不能减少右侧种类。只合并 Assist 和画像减少改动，但审核仍割裂更正流程。合并三者增加分区切换，因此保留数量提示和审核直达。
 
 直接拉宽单列表格复用最多，却缺少分类和宽屏阅读层级。完全复制工程卡片有利于外观一致，但工程评分不等于个人确认状态；本实现复用视觉与操作模式，按个人数据语义组织卡片。
 
+沿用平铺设置导航保留现有位置，但不能表达知识与画像、模型与用量的关联。折叠分组能缩短导航，却增加展开步骤和状态维护；固定组名与按需滚动让全部启用项目保持可达，代价是低高度窗口需要滚动。
+
 ## Consequences
 
 右侧种类减少，完整画像具备分类和详情阅读能力。代价是两个尺寸的呈现组件和旧入口别名需要维护。审核数量是定期更新的显示信息，不是事务授权依据；真实操作仍读取并校验最新快照。卡片正文可截断，详情必须完整可读。
 
 ## Verification
+
+设置分组与 Shell MCP 排除的定向检查：npx vitest run tests/unit/knowledge-automation-ui.test.ts tests/unit/assistant-ui.test.ts tests/unit/knowledge/external-mcp.test.ts tests/unit/knowledge/mcp-client-config.test.ts tests/unit/knowledge-ipc-contract.test.ts --maxWorkers=2 --reporter=dot，共五文件 34 项通过。分组测试检查领域四种组合、当前页禁用回退、模型与用量切换，以及 640×720 窗口末尾导航可达且没有页面横向溢出。截图 settings-groups-dark.png 与 settings-groups-narrow.png 位于 artifacts/memory-domain-acceptance/，使用真实导航组件与内容面板替身；截图不代替完整桌面验收。
+
+分组最终复验中 knowledge-automation-ui 的 8 项通过；npm run typecheck:strict-unused、npm run build:check、npm run i18n:check 与变更源码 ESLint 通过。npm run check:notes 检查 237 篇 Note，0 个结构错误、27 项既有链接诊断。日志位于 artifacts/memory-domain-acceptance/settings-groups-*.log。
 
 设置卡片与图标调整使用现有 assistant-ui、knowledge-automation-ui、laya-settings-ui 三个浏览器测试文件复验，共 16 项通过，覆盖独立保存、禁用、本地控制与 MCP 更新操作。截图检查深色、planche 和窄窗口；类型检查与 i18n 检查通过。知识库四环节、个人三张设置卡片与 MCP 图标沿用实际组件，未增加仅比对样式常量的测试。
 

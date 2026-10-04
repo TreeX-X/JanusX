@@ -1,6 +1,12 @@
 {
   "title": "Settings",
   "brand": "Settings",
+  "groups": {
+    "application": "Application",
+    "memory": "Knowledge & memory",
+    "models": "Models & usage",
+    "collaboration": "Agents & collaboration"
+  },
   "tab": {
     "general": {
       "title": "General",
@@ -486,7 +492,6 @@
     "copy": "Copy launch configuration",
     "probe": "Test service connection",
     "unverified": "Client MCP integration is not verified. No configuration will be written.",
-    "manual": "Shell is not an MCP client. Use the launch configuration in an MCP-capable application.",
     "current": "Configuration matches · client connection not verified",
     "stale": "Configuration needs updating",
     "absent": "Not registered",

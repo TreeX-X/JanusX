@@ -291,14 +291,14 @@ export interface KnowledgeProcessingStats {  generatedAt: string
   lastMaintenanceAt: string | null
 }
 
-export type ExternalMcpClientId = 'claude-code' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh' | 'shell'
+export type ExternalMcpClientId = 'claude-code' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
 
 export interface ExternalMcpClientStatus {
   id: ExternalMcpClientId
   label: string
   configPath: string
   registered: boolean
-  support?: 'automatic' | 'unverified' | 'manual'
+  support?: 'automatic' | 'unverified'
   current?: boolean
   format?: string
   error?: string

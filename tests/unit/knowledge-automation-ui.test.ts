@@ -7,7 +7,7 @@ beforeAll(async () => {
   const result = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
     import './src/renderer/src/styles/themes.generated.css'
     import React from 'react'; import {createRoot} from 'react-dom/client'; import i18n from 'i18next'; import {initReactI18next} from 'react-i18next'
-    import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'; import settings from './src/renderer/src/i18n/locales/en/settings.json'; import common from './src/renderer/src/i18n/locales/en/common.json'
+    import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'; import settings from './src/renderer/src/i18n/locales/en/settings.json'; import common from './src/renderer/src/i18n/locales/en/common.json'; import team from './src/renderer/src/i18n/locales/en/team.json'
     import {KnowledgeWorkbench} from './src/renderer/src/components/knowledge/KnowledgeWorkbench'
     import {KnowledgeSettingsPanel} from './src/renderer/src/components/KnowledgeSettingsPanel'
     import {AppSettingsModal} from './src/renderer/src/components/AppSettingsModal'
@@ -33,7 +33,7 @@ beforeAll(async () => {
     }}
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true,load:async()=>{}})
     window.features=useExperimentalStore;window.dock=useRightToolStore
-    i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge,settings,common}},interpolation:{escapeValue:false}}).then(()=>{
+    i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge,settings,common,team}},interpolation:{escapeValue:false}}).then(()=>{
       window.root=createRoot(document.getElementById('root'))
       window.showMemory=()=>window.root.render(<KnowledgeWorkbench isOpen onClose={()=>window.root.render(null)}/>)
       window.root.render(window.gates?<><AppSettingsModal isOpen initialTab='knowledge' onClose={()=>{}}/><RightDock effectiveCollapsed={false} effectiveMaxWidth={600} forcedCollapsed={false} onResizingChange={()=>{}}/></>:<KnowledgeSettingsPanel/>)
@@ -119,6 +119,41 @@ it('keeps personal review when knowledge closes and blocks review when both doma
     expect(await page.evaluate(() => (window as any).dock.getState().openToolIds)).toEqual([])
     await page.evaluate(() => (window as any).features.getState().apply({ knowledge: true }))
     expect(await page.locator('[data-tool="assist"]').count()).toBe(0)
+  } finally { await page.close() }
+})
+
+it('groups settings navigation, hides empty memory groups and keeps narrow navigation reachable', async () => {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 850 } })
+  try {
+    await mount(page, true)
+    const navigation = page.getByRole('navigation', { name: 'Settings', exact: true })
+    const memory = navigation.getByRole('region', { name: 'Knowledge & memory', exact: true })
+    const models = navigation.getByRole('region', { name: 'Models & usage', exact: true })
+    expect(await memory.locator('[data-tab]').count()).toBe(2)
+    expect(await models.locator('[data-tab]').evaluateAll(elements => elements.map(element => element.getAttribute('data-tab')))).toEqual(['llm', 'models', 'usage'])
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark')
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/settings-groups-dark.png', animations: 'disabled' })
+    await models.locator('[data-tab="llm"]').click()
+    await page.getByText('LlmConfigModal', { exact: true }).waitFor()
+    await models.locator('[data-tab="usage"]').click()
+    await page.getByText('UsageStatsPanel', { exact: true }).waitFor()
+    expect(await models.locator('[data-tab="usage"]').getAttribute('aria-current')).toBe('page')
+    await memory.locator('[data-tab="personal"]').click()
+    await page.evaluate(() => (window as any).features.getState().apply({ knowledge: false }))
+    await expect.poll(() => memory.locator('[data-tab]').count()).toBe(1)
+    expect(await memory.locator('[data-tab="personal"]').getAttribute('aria-current')).toBe('page')
+    await page.evaluate(() => (window as any).features.getState().apply({ persona: false }))
+    await expect.poll(() => memory.count()).toBe(0)
+    await page.getByText('GeneralSettingsPanel', { exact: true }).waitFor()
+    await page.evaluate(() => (window as any).features.getState().apply({ knowledge: true, persona: false }))
+    await expect.poll(() => memory.locator('[data-tab]').count()).toBe(1)
+    expect(await memory.locator('[data-tab="knowledge"]').count()).toBe(1)
+    await page.setViewportSize({ width: 640, height: 720 })
+    await page.evaluate(() => document.documentElement.dataset.theme = 'planche')
+    await navigation.locator('[data-tab="hosted"]').click()
+    await page.getByText('HostedSettingsPanel', { exact: true }).waitFor()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/settings-groups-narrow.png', animations: 'disabled' })
   } finally { await page.close() }
 })
 

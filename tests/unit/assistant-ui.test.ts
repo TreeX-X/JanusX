@@ -22,7 +22,7 @@ beforeAll(async () => {
       listCandidates:async()=>[],listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
       automationStatus:async()=>({enabled:false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
       getPersonalSettings:async()=>({captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60}),
-      externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''},...[['claude-code','Claude Code'],['opencode','OpenCode'],['janus','Janus CLI'],['dsh','DeepSeek / dsh'],['shell','Shell']].map(([id,label])=>({id,label,support:id==='shell'?'manual':['claude-code','opencode'].includes(id)?'automatic':'unverified',registered:false,configPath:''}))]}),
+      externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''},...[['claude-code','Claude Code'],['opencode','OpenCode'],['janus','Janus CLI'],['dsh','DeepSeek / dsh']].map(([id,label])=>({id,label,support:['claude-code','opencode'].includes(id)?'automatic':'unverified',registered:false,configPath:''}))]}),
       registerExternalMcp:async id=>{window.calls.push(id);return {ok:true,configPath:'config.toml'}},
       probeExternalMcp:async()=>({ok:true,stage:'query',tools:[]}),
     }}

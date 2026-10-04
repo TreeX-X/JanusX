@@ -17,7 +17,7 @@ export const EXTERNAL_MCP_CLIENTS: ReadonlyArray<{ id: ExternalMcpClientId; labe
   { id: 'claude-code', label: 'Claude Code', format: 'mcpServers' },
   { id: 'codex', label: 'Codex', format: 'codex' },
   { id: 'opencode', label: 'OpenCode', format: 'opencode' },
-  { id: 'janus', label: 'Janus CLI' }, { id: 'pi', label: 'Pi' }, { id: 'dsh', label: 'DeepSeek / dsh' }, { id: 'shell', label: 'Shell' },
+  { id: 'janus', label: 'Janus CLI' }, { id: 'pi', label: 'Pi' }, { id: 'dsh', label: 'DeepSeek / dsh' },
 ]
 export interface ExternalMcpDirs {
   homeDir: string; serverEntry: string
@@ -58,7 +58,7 @@ export async function getExternalMcpStatus(dirs = defaultExternalMcpDirs()): Pro
   const launch = externalMcpLaunch(dirs)
   const clients = await Promise.all(EXTERNAL_MCP_CLIENTS.map(async client => {
     const configPath = await resolveConfigPath(client.id, dirs)
-    if (!client.format) return { id: client.id, label: client.label, configPath, registered: false, support: client.id === 'shell' ? 'manual' as const : 'unverified' as const }
+    if (!client.format) return { id: client.id, label: client.label, configPath, registered: false, support: 'unverified' as const }
     try {
       const entry = clientEntry(await optionalRead(configPath), client.format)
       return { id: client.id, label: client.label, configPath, format: client.format, support: 'automatic' as const,

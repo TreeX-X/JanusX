@@ -18,13 +18,13 @@ tags: [mcp, terminal, knowledge, verification]
 
 ## Decision
 
-ExternalMcpPanel 仅显示 Janus 支持的七种终端，Cursor、VS Code 不属于适配范围。Claude Code 使用 mcpServers，Codex 使用 mcp_servers TOML 表，OpenCode 使用 mcp 中的 local 命令数组与 environment。Codex 尊重 CODEX_HOME；OpenCode 尊重 XDG_CONFIG_HOME 并优先更新已有 opencode.jsonc。Janus、Pi、dsh 标记接入方式未验证，Shell 说明其本身不是 MCP 客户端，不向这些类型猜写配置。既有外部编辑器配置不由本次范围收敛自动删除；通用启动配置仍可复制供用户自行接入。
+ExternalMcpPanel 仅显示 Janus 支持的六种 AI 终端，Cursor、VS Code 不属于适配范围，普通 Shell 不需要 MCP 接入，因此不进入接入列表及 IPC 客户端类型。Claude Code 使用 mcpServers，Codex 使用 mcp_servers TOML 表，OpenCode 使用 mcp 中的 local 命令数组与 environment。Codex 尊重 CODEX_HOME；OpenCode 尊重 XDG_CONFIG_HOME 并优先更新已有 opencode.jsonc。Janus、Pi、dsh 标记接入方式未验证，不向这些类型猜写配置。既有外部编辑器配置不由本次范围收敛自动删除；通用启动配置仍可复制供用户自行接入。
 
 jsonc-parser 对目标属性进行编辑，保留注释和无关设置；smol-toml 解析及验证 Codex 表。TOML 仅替换目标服务器表，写后检查其他配置语义相同。无法安全定位的内联表、损坏配置或错误集合结构返回错误。写入串行化，保留旧文件备份、写前复查并原子替换；客户端外部写入没有跨进程文件锁，最后一次复查后的并发覆盖仍属限制。
 
 注册状态区分未注册、配置一致与需要更新，已注册项可更新。服务检测通过独立进程完成握手、五工具发现和受限查询；失败说明阶段，不把服务测试等同外部客户端接入验收。复制功能提供完整启动 JSON，包括必要的环境和数据根路径。
 
-MCP 设置按终端显示有边框的条目卡片，名称前复用 TerminalPresetIcon 的品牌图标，Shell 使用同一组件的终端线形图标。Codex 黑色字形使用浅底，OpenCode 与 Janus 的浅色字形使用深底，保证主题切换后可辨认；图标是装饰元素，名称保持文字可读。窄窗口将操作按钮换到下一行。设置卡片布局与视觉验证见[助手与画像布局](./2026-10-04-assistant-persona-layout--6e9c114d.md)。
+MCP 设置按终端显示有边框的条目卡片，名称前复用 TerminalPresetIcon 的品牌图标。Codex 黑色字形使用浅底，OpenCode 与 Janus 的浅色字形使用深底，保证主题切换后可辨认；图标是装饰元素，名称保持文字可读。窄窗口将操作按钮换到下一行。设置卡片布局与视觉验证见[助手与画像布局](./2026-10-04-assistant-persona-layout--6e9c114d.md)。
 
 开发入口使用当前构建目录与系统 Node；发布入口使用 app.getAppPath() 内的 out/main/knowledge-mcp.js，通过当前应用可执行文件的 ELECTRON_RUN_AS_NODE=1 模式读取 ASAR 及归档依赖，无需解包整个依赖树。注册环境固定当前知识根与配置文件路径，防止独立客户端读到另一安装的数据。
 
@@ -32,7 +32,7 @@ MCP 设置按终端显示有边框的条目卡片，名称前复用 TerminalPres
 
 ## Alternatives considered
 
-只保留通用启动 JSON 最省适配代码，但不能覆盖客户端格式差异或修复失效注册。保留 Cursor、VS Code 专用入口便于编辑器用户，却扩大到 Janus 未支持的终端范围并增加设置项。适配矩阵与内置终端保持一致，其他客户端可自行使用通用配置。为所有终端写同一结构会把未知能力误报为可用；显式支持矩阵暴露未验证范围，代价是客户端版本变化需要维护。
+只保留通用启动 JSON 最省适配代码，但不能覆盖客户端格式差异或修复失效注册。保留 Cursor、VS Code 专用入口便于编辑器用户，却扩大到 Janus 未支持的终端范围并增加设置项。沿用包含 Shell 的列表可提示其能力限制，但为无需接入的普通终端占据设置空间。适配矩阵限定内置 AI 终端，其他客户端可自行使用通用配置。为所有终端写同一结构会把未知能力误报为可用；显式支持矩阵暴露未验证范围，代价是客户端版本变化需要维护。
 
 将整个应用解包有利于系统 Node 读取，但扩大发布体积和维护范围；使用已随应用发布的 Electron Node 模式可读取 ASAR。该选择依赖 RunAsNode fuse 保持可用，若打包策略禁用该能力，应提供独立运行包并重新验收。
 
@@ -46,7 +46,7 @@ MCP 设置按终端显示有边框的条目卡片，名称前复用 TerminalPres
 
 终端范围收敛检查：npx vitest run tests/unit/knowledge/external-mcp.test.ts tests/unit/knowledge/mcp-client-config.test.ts tests/unit/knowledge-ipc-contract.test.ts --maxWorkers=2 --reporter=dot 为三文件 23 项通过；npm run typecheck:strict-unused 通过。Note 结构检查为 237 篇、0 errors，既有 27 项链接诊断保留。
 
-2026-10-04：external-mcp.test.ts 和 mcp-client-config.test.ts 检查七项终端状态、Claude Code 配置合并、JSONC 注释、Codex 表与环境、OpenCode 已有 JSONC、失效路径修复及错误配置拒绝。mcp-access.test.ts 验证配置变化和损坏时拒绝；knowledge-mcp-tools.test.ts 验证五工具关闭、读取中关闭、显式跨工作区及个人事实和关联页面隔离。
+2026-10-04：external-mcp.test.ts 和 mcp-client-config.test.ts 检查六项终端状态、Claude Code 配置合并、JSONC 注释、Codex 表与环境、OpenCode 已有 JSONC、失效路径修复及错误配置拒绝。mcp-access.test.ts 验证配置变化和损坏时拒绝；knowledge-mcp-tools.test.ts 验证五工具关闭、读取中关闭、显式跨工作区及个人事实和关联页面隔离。
 
 独立进程命令 JANUSX_MCP_SMOKE=1 npx vitest run tests/unit/knowledge/knowledge-mcp-smoke.test.ts --reporter=verbose 通过一项：真实事实存储、私有事实隔离、工作区校验、关闭及重新开启。系统 Node 耗时 647ms；JANUSX_MCP_COMMAND 指向 Electron、JANUSX_MCP_ENTRY 指向当前构建替换后的 ASAR 测试包时同样通过，耗时 430ms。此包由已有安装归档与当前 main 输出组成，在中立目录运行；它验证 MCP 打包机制，不代表重做全部安装器验收。
 

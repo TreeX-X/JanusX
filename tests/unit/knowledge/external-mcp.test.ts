@@ -58,9 +58,9 @@ describe('external MCP client registration', () => {
 
     expect(status.entry).toBe(dirs.serverEntry)
     expect(status.entryExists).toBe(false)
-    expect(status.clients).toHaveLength(7)
+    expect(status.clients).toHaveLength(6)
     expect(status.clients.every((client) => !client.registered)).toBe(true)
-    expect(status.clients.map((client) => client.id)).toEqual(['claude-code', 'codex', 'opencode', 'janus', 'pi', 'dsh', 'shell'])
+    expect(status.clients.map((client) => client.id)).toEqual(['claude-code', 'codex', 'opencode', 'janus', 'pi', 'dsh'])
   })
 
   it('refuses to register before the server entry is built', async () => {
@@ -81,7 +81,7 @@ describe('external MCP client registration', () => {
     expect((await registerExternalMcpClient('pi', dirs)).ok).toBe(false)
   })
 
-  it('supports Codex and existing OpenCode JSONC without reporting manual clients as registered', async () => {
+  it('supports Codex and existing OpenCode JSONC without reporting unverified clients as registered', async () => {
     await seedEntry()
     await mkdir(join(dirs.homeDir, '.config', 'opencode'), { recursive: true })
     const jsonc = `${clientConfigPath('opencode', dirs)}c`
@@ -92,7 +92,7 @@ describe('external MCP client registration', () => {
     const clients = (await getExternalMcpStatus(dirs)).clients
     expect(clients.find(client => client.id === 'codex')?.current).toBe(true)
     expect(clients.find(client => client.id === 'opencode')?.current).toBe(true)
-    expect(clients.find(client => client.id === 'shell')).toMatchObject({ support: 'manual', registered: false })
+    expect(clients.find(client => client.id === 'pi')).toMatchObject({ support: 'unverified', registered: false })
   })
 
   it('writes Claude Code config and preserves existing servers', async () => {

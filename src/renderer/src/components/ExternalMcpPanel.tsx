@@ -47,7 +47,7 @@ export function ExternalMcpPanel() {
       <div className={styles.clientIdentity}>
         <span className={styles.clientIcon} data-client={client.id}><TerminalPresetIcon preset={client.id === 'claude-code' ? 'claude' : client.id} /></span>
         <div className={styles.label}><span className={styles.labelText}>{client.label}</span>
-        <span className={styles.hint}>{client.support === 'unverified' ? t('settings:mcpAccess.unverified') : client.support === 'manual' ? t('settings:mcpAccess.manual') : client.configPath}</span>
+        <span className={styles.hint}>{client.support === 'unverified' ? t('settings:mcpAccess.unverified') : client.configPath}</span>
         {client.support === 'automatic' && <span className={styles.hint}>{t(client.current ? 'settings:mcpAccess.current' : client.registered ? 'settings:mcpAccess.stale' : 'settings:mcpAccess.absent')}</span>}
         {client.error && <span role="alert" className={styles.hint}>{client.error}</span>}
         </div>
