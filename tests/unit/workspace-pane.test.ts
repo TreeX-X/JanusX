@@ -10,8 +10,11 @@ import {
   findPaneContent,
   getBrowserPaneContent,
   getLeafPanes,
+  getPaneContentById,
+  insertPaneContentAtIndex,
   removePaneContentFromTree,
   removeTerminalFromPaneTree,
+  reorderPaneTab,
   retainWorkspacePaneContent,
   resizeSplitPane,
   splitPaneTree,
@@ -277,6 +280,106 @@ describe('workspace pane tree', () => {
     expect(leaves).toHaveLength(1)
     expect(leaves[0].id).toBe('pane-1')
     expect(leaves[0].tabs.map((tab) => tab.id)).toEqual(['terminal:terminal-1'])
+  })
+
+  it('reorders tabs within a leaf and activates the dragged tab', () => {
+    const { tree } = seedPane()
+    const second = addTerminalToPaneTree(tree, 'pane-1', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
+    const third = addTerminalToPaneTree(second.tree, 'pane-1', createTerminalPaneContent('terminal-3', 'workspace-1'), 'pane-fallback')
+
+    const reordered = reorderPaneTab(third.tree, 'pane-1', 'terminal:terminal-1', 2)
+
+    const leaves = getLeafPanes(reordered)
+    expect(leaves).toHaveLength(1)
+    expect(leaves[0].tabs.map((tab) => tab.id)).toEqual([
+      'terminal:terminal-2',
+      'terminal:terminal-3',
+      'terminal:terminal-1',
+    ])
+    expect(leaves[0].activeTabId).toBe('terminal:terminal-1')
+  })
+
+  it('returns the same tree when the reorder target equals the current position', () => {
+    const { tree } = seedPane()
+    const second = addTerminalToPaneTree(tree, 'pane-1', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
+
+    expect(reorderPaneTab(second.tree, 'pane-1', 'terminal:terminal-2', 1)).toBe(second.tree)
+  })
+
+  it('clamps reorder targets to the tab range', () => {
+    const { tree } = seedPane()
+    const second = addTerminalToPaneTree(tree, 'pane-1', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
+
+    const toEnd = reorderPaneTab(second.tree, 'pane-1', 'terminal:terminal-1', 99)
+    expect(getLeafPanes(toEnd)[0].tabs.map((tab) => tab.id)).toEqual([
+      'terminal:terminal-2',
+      'terminal:terminal-1',
+    ])
+
+    const toStart = reorderPaneTab(second.tree, 'pane-1', 'terminal:terminal-2', -5)
+    expect(getLeafPanes(toStart)[0].tabs.map((tab) => tab.id)).toEqual([
+      'terminal:terminal-2',
+      'terminal:terminal-1',
+    ])
+  })
+
+  it('leaves the tree untouched for unknown panes or tabs', () => {
+    const { tree } = seedPane()
+
+    expect(reorderPaneTab(tree, 'pane-missing', 'terminal:terminal-1', 0)).toBe(tree)
+    expect(reorderPaneTab(tree, 'pane-1', 'terminal:missing', 0)).toBe(tree)
+    expect(reorderPaneTab(null, 'pane-1', 'terminal:terminal-1', 0)).toBeNull()
+  })
+
+  it('inserts a tab into another pane at the given index', () => {
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const withSecond = addTerminalToPaneTree(split.tree, 'pane-2', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
+    const withBrowser = addPaneContentToTree(withSecond.tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+
+    const moved = insertPaneContentAtIndex(
+      withBrowser.tree,
+      'pane-2',
+      createTerminalPaneContent('terminal-1', 'workspace-1'),
+      0,
+      'pane-fallback'
+    )
+
+    const leaves = getLeafPanes(moved.tree)
+    expect(leaves.find((leaf) => leaf.id === 'pane-1')?.tabs.map((tab) => tab.id)).toEqual(['browser:surface-1'])
+    expect(leaves.find((leaf) => leaf.id === 'pane-2')?.tabs.map((tab) => tab.id)).toEqual([
+      'terminal:terminal-1',
+      'terminal:terminal-2',
+    ])
+    expect(moved.focus).toEqual({ paneId: 'pane-2', tabId: 'terminal:terminal-1', terminalId: 'terminal-1' })
+  })
+
+  it('treats same-pane indexed insert as a reorder', () => {
+    const { tree } = seedPane()
+    const second = addTerminalToPaneTree(tree, 'pane-1', createTerminalPaneContent('terminal-2', 'workspace-1'), 'pane-fallback')
+
+    const moved = insertPaneContentAtIndex(
+      second.tree,
+      'pane-1',
+      createTerminalPaneContent('terminal-2', 'workspace-1'),
+      0,
+      'pane-fallback'
+    )
+
+    expect(getLeafPanes(moved.tree)[0].tabs.map((tab) => tab.id)).toEqual([
+      'terminal:terminal-2',
+      'terminal:terminal-1',
+    ])
+    expect(moved.focus).toEqual({ paneId: 'pane-1', tabId: 'terminal:terminal-2', terminalId: 'terminal-2' })
+  })
+
+  it('looks up pane content by id for indexed moves', () => {
+    const { tree } = seedPane()
+    const withBrowser = addPaneContentToTree(tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+
+    expect(getPaneContentById(withBrowser.tree, 'browser:surface-1')).toEqual(createBrowserPaneContent('surface-1'))
+    expect(getPaneContentById(withBrowser.tree, 'browser:missing')).toBeNull()
+    expect(getPaneContentById(null, 'browser:surface-1')).toBeNull()
   })
 
   it('moves a browser tab across panes via remove + re-insert', () => {

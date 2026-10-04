@@ -535,6 +535,8 @@ interface PaneTreeViewProps {
   activeDragBrowserSurfaceRef: React.MutableRefObject<string | null>
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
+  onReorderTab: (paneId: string, tabId: string, targetIndex: number) => void
+  onMoveTabToIndex: (contentId: string, paneId: string, targetIndex: number) => void
   onTerminalDragStart: (terminalId: string) => void
   onTerminalDragEnd: () => void
   activeDragTerminalId: string | null
@@ -852,6 +854,8 @@ function LeafPane({
   activeDragBrowserSurfaceRef,
   onKillTerminal,
   onTerminalDrop,
+  onReorderTab,
+  onMoveTabToIndex,
   onTerminalDragStart,
   onTerminalDragEnd,
   activeDragTerminalId,
@@ -864,6 +868,9 @@ function LeafPane({
   const { t } = useI18n('terminal')
   const plancheEmpty = useThemeStore((s) => s.theme) === 'planche'
   const [dragHint, setDragHint] = useState<{ zone: PaneDropHint; ratio: number } | null>(null)
+  /*-- tab 条排序占位：插入位是摘除拖拽 tab 后的数组下标，与 reorderPaneTab 语义一致 --*/
+  const [tabInsertIndex, setTabInsertIndex] = useState<number | null>(null)
+  const tabNodeRefs = useRef(new Map<string, HTMLDivElement>())
   const isFocused = leaf.id === focusedPaneId
   const showFocus = showFocusChrome && isFocused
   const activeTabId = leaf.activeTabId ?? leaf.tabs[0]?.id ?? null
@@ -879,6 +886,85 @@ function LeafPane({
     },
     [leaf.id, onToggleTerminalMenu]
   )
+
+  /*-- 从一次拖拽事件解析被拖 tab 的内容 id（terminal:/browser:），读不到 dataTransfer 时退回活跃拖拽态 --*/
+  const resolveStripDraggedTabId = useCallback((event: React.DragEvent) => {
+    const dragTerminalId =
+      readTerminalDragData(event.dataTransfer) ||
+      activeDragTerminalId ||
+      activeDragTerminalRef.current ||
+      getActiveTerminalDragId()
+    if (dragTerminalId) return `terminal:${dragTerminalId}`
+    const dragBrowserSurfaceId =
+      readBrowserTabDragData(event.dataTransfer) ||
+      activeDragBrowserSurfaceId ||
+      activeDragBrowserSurfaceRef.current ||
+      getActiveBrowserTabDragId()
+    if (dragBrowserSurfaceId) return `browser:${dragBrowserSurfaceId}`
+    return null
+  }, [activeDragTerminalId, activeDragBrowserSurfaceId, activeDragTerminalRef, activeDragBrowserSurfaceRef])
+
+  /*-- 渲染期已知的被拖 tab：同 pane 拖拽时从视觉顺序里摘除它，空出的位置由占位补上（让位） --*/
+  const stripDraggedTabId =
+    activeDragTerminalId ?? activeDragTerminalRef.current
+      ? `terminal:${activeDragTerminalId ?? activeDragTerminalRef.current}`
+      : activeDragBrowserSurfaceId ?? activeDragBrowserSurfaceRef.current
+        ? `browser:${activeDragBrowserSurfaceId ?? activeDragBrowserSurfaceRef.current}`
+        : null
+  const stripDraggedIsLocal = stripDraggedTabId ? leaf.tabs.some((tab) => tab.id === stripDraggedTabId) : false
+
+  /*-- 按指针 X 落在哪个 tab 中线左侧决定插入位；同 pane 拖拽按摘除后的顺序算 --*/
+  const computeTabInsertIndex = useCallback((clientX: number, draggedId: string | null) => {
+    const visible = draggedId && leaf.tabs.some((tab) => tab.id === draggedId)
+      ? leaf.tabs.filter((tab) => tab.id !== draggedId)
+      : leaf.tabs
+    for (let index = 0; index < visible.length; index += 1) {
+      const node = tabNodeRefs.current.get(visible[index].id)
+      if (!node) continue
+      const rect = node.getBoundingClientRect()
+      if (clientX < rect.left + rect.width / 2) return index
+    }
+    return visible.length
+  }, [leaf.tabs])
+
+  const handleTabStripDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (hasWorkspaceFileDrag(event.dataTransfer)) return
+    const draggedId = resolveStripDraggedTabId(event)
+    if (!draggedId && !hasTerminalDrag(event.dataTransfer) && !hasBrowserTabDrag(event.dataTransfer)) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDragHint(null)
+    const index = computeTabInsertIndex(event.clientX, draggedId)
+    setTabInsertIndex((current) => (current === index ? current : index))
+  }, [computeTabInsertIndex, resolveStripDraggedTabId])
+
+  const handleTabStripDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+    setTabInsertIndex(null)
+  }, [])
+
+  const handleTabStripDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (hasWorkspaceFileDrag(event.dataTransfer)) return
+    const draggedId = resolveStripDraggedTabId(event)
+    if (!draggedId && !hasTerminalDrag(event.dataTransfer) && !hasBrowserTabDrag(event.dataTransfer)) return
+    event.preventDefault()
+    event.stopPropagation()
+    const index = computeTabInsertIndex(event.clientX, draggedId)
+    setTabInsertIndex(null)
+    setDragHint(null)
+    if (!draggedId) return
+    if (leaf.tabs.some((tab) => tab.id === draggedId)) {
+      onReorderTab(leaf.id, draggedId, index)
+      return
+    }
+    onMoveTabToIndex(draggedId, leaf.id, index)
+  }, [computeTabInsertIndex, leaf.id, leaf.tabs, onMoveTabToIndex, onReorderTab, resolveStripDraggedTabId])
+
+  /*-- 拖拽会话结束（全局 dragend 已清活跃态）时收回本条占位，避免 Esc 中断后残留 --*/
+  useEffect(() => {
+    if (!activeDragTerminalId && !activeDragBrowserSurfaceId) setTabInsertIndex(null)
+  }, [activeDragTerminalId, activeDragBrowserSurfaceId])
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
@@ -941,6 +1027,116 @@ function LeafPane({
     onTerminalDrop(terminalId, leaf.id, edge, ratio)
   }, [activeDragTerminalId, activeDragBrowserSurfaceId, leaf.id, onTerminalDrop, onBrowserTabDrop])
 
+  /*-- 单个 pane tab：visualIndex 是含占位在内的视觉位置，首位圆角跟随条底 --*/
+  const renderPaneTab = (tab: WorkspacePaneLeaf['tabs'][number], visualIndex: number) => {
+    const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
+    const isActive = tab.id === activeTabId
+    const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
+    const tabStatusLabel = tabVisual ? t(tabVisual.labelKey) : undefined
+    return (
+      <ThemedTooltip
+        key={tab.id}
+        label={terminal && tabStatusLabel ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
+      >
+      <div
+        role="button"
+        tabIndex={0}
+        draggable={tab.type === 'terminal' || tab.type === 'browser'}
+        data-tab-id={tab.id}
+        ref={(node) => {
+          if (node) tabNodeRefs.current.set(tab.id, node)
+          else tabNodeRefs.current.delete(tab.id)
+        }}
+        onDragStart={(event) => {
+          if (tab.type === 'terminal') {
+            setTerminalDragData(event.dataTransfer, tab.terminalId)
+            onTerminalDragStart(tab.terminalId)
+            return
+          }
+          if (tab.type === 'browser') {
+            setBrowserTabDragData(event.dataTransfer, tab.surfaceId)
+            onBrowserTabDragStart(tab.surfaceId)
+          }
+        }}
+        onDragEnd={() => {
+          setDragHint(null)
+          setTabInsertIndex(null)
+          onTerminalDragEnd()
+        }}
+        onClick={() => onTabSelect(leaf.id, tab.id)}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
+          event.preventDefault()
+          onTabSelect(leaf.id, tab.id)
+        }}
+        className="pane-tab group/tab relative flex h-8 min-w-0 basis-[144px] shrink grow-0 cursor-pointer select-none items-center gap-1.5 border-0 px-2.5 text-left font-mono text-[11px] leading-none transition-colors"
+        data-active={isActive ? 'true' : 'false'}
+        style={{
+          color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
+          /*-- 选中态与下方内容床同色，让 tab 与画布连成一体；不再是压在浅色条上的黑块。
+               未选中态刻意不写 inline background —— 内联样式会盖过 hover 类，
+               写死 transparent 等于让 hover 失效（Tailwind preflight 已把 button 置为透明）。 --*/
+          background: isActive ? 'var(--shell-canvas)' : undefined,
+          borderRight: '1px solid var(--shell-border-soft)',
+          boxShadow: isActive ? 'inset 0 1px 0 var(--shell-border-soft)' : 'none',
+          fontWeight: isActive ? 600 : 400,
+          /*-- 首个 tab 左上倒角 = 条底圆角（贴边后两者同缘，必须等值才同心）：
+               多 pane 10 / 单 pane 7，与上方 borderTopLeftRadius 呼应。
+               底边不倒角：选中态底边要与内容床连成一体。 --*/
+          borderTopLeftRadius: visualIndex === 0 ? (showFocusChrome ? 10 : 7) : 0,
+        }}
+      >
+        {/*-- tab 左侧状态灯：与左侧工作区同一盏灯（TerminalStatusLight 紧凑环），
+             色/形/动效三编码；8px 环比原来 6px 点宽 2px，仍在 144px 预算余量内。 --*/}
+        {terminal && (
+          <TerminalStatusLight status={terminal.status} compact />
+        )}
+        {terminal && (
+          <TerminalPresetIcon
+            preset={terminal.preset}
+            className="h-3.5 w-3.5 shrink-0"
+            style={{ opacity: isActive ? 0.95 : 0.55 }}
+          />
+        )}
+        {tab.type === 'browser' ? (
+          <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
+        ) : (
+          <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
+            {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
+          </span>
+        )}
+        {tab.type === 'terminal' ? (
+          <HoldToConfirm
+            as="span"
+            label={t('terminal:tab.closeTerminal')}
+            className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
+            style={{ color: 'var(--shell-diff-del)' }}
+            onConfirm={() => {
+              onKillTerminalFromTab(tab.terminalId)
+            }}
+          >
+            <X size={12} strokeWidth={1.8} />
+          </HoldToConfirm>
+        ) : (
+          <ThemedTooltip label={t('terminal:tab.closeBrowser')}>
+          <span
+            tabIndex={-1}
+            className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
+            style={{ color: 'var(--shell-muted)' }}
+            onClick={(event) => {
+              event.stopPropagation()
+              onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
+            }}
+          >
+            <X size={12} strokeWidth={1.8} aria-hidden="true" />
+          </span>
+          </ThemedTooltip>
+        )}
+      </div>
+      </ThemedTooltip>
+    )
+  }
+
   return (
       <section
       className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden transition-[border-color,box-shadow,background,border-radius]"
@@ -993,6 +1189,9 @@ function LeafPane({
         </div>
       )}
       <div
+        onDragOver={handleTabStripDragOver}
+        onDragLeave={handleTabStripDragLeave}
+        onDrop={handleTabStripDrop}
         /*-- 左侧贴边：首 tab 直接顶住条底左缘（只留右侧 pr-1 给动作按钮呼吸），
              左缘不留 4px chrome 缝，圆角由首 tab 自己的左上倒角一次成型。 --*/
         className="flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto pl-0 pr-1"
@@ -1009,108 +1208,43 @@ function LeafPane({
           scrollbarWidth: 'none',
         }}
       >
-        {leaf.tabs.map((tab, index) => {
-          const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
-          const isActive = tab.id === activeTabId
-          const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
-          const tabStatusLabel = tabVisual ? t(tabVisual.labelKey) : undefined
-          return (
-            <ThemedTooltip
-              key={tab.id}
-              label={terminal && tabStatusLabel ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
-            >
-            <div
-              role="button"
-              tabIndex={0}
-              draggable={tab.type === 'terminal' || tab.type === 'browser'}
-              onDragStart={(event) => {
-                if (tab.type === 'terminal') {
-                  setTerminalDragData(event.dataTransfer, tab.terminalId)
-                  onTerminalDragStart(tab.terminalId)
-                  return
-                }
-                if (tab.type === 'browser') {
-                  setBrowserTabDragData(event.dataTransfer, tab.surfaceId)
-                  onBrowserTabDragStart(tab.surfaceId)
-                }
-              }}
-              onDragEnd={() => {
-                setDragHint(null)
-                onTerminalDragEnd()
-              }}
-              onClick={() => onTabSelect(leaf.id, tab.id)}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                onTabSelect(leaf.id, tab.id)
-              }}
-              className="pane-tab group/tab relative flex h-8 min-w-0 basis-[144px] shrink grow-0 cursor-pointer select-none items-center gap-1.5 border-0 px-2.5 text-left font-mono text-[11px] leading-none transition-colors"
-              data-active={isActive ? 'true' : 'false'}
-              style={{
-                color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
-                /*-- 选中态与下方内容床同色，让 tab 与画布连成一体；不再是压在浅色条上的黑块。
-                     未选中态刻意不写 inline background —— 内联样式会盖过 hover 类，
-                     写死 transparent 等于让 hover 失效（Tailwind preflight 已把 button 置为透明）。 --*/
-                background: isActive ? 'var(--shell-canvas)' : undefined,
-                borderRight: '1px solid var(--shell-border-soft)',
-                boxShadow: isActive ? 'inset 0 1px 0 var(--shell-border-soft)' : 'none',
-                fontWeight: isActive ? 600 : 400,
-                /*-- 首个 tab 左上倒角 = 条底圆角（贴边后两者同缘，必须等值才同心）：
-                     多 pane 10 / 单 pane 7，与上方 borderTopLeftRadius 呼应。
-                     底边不倒角：选中态底边要与内容床连成一体。 --*/
-                borderTopLeftRadius: index === 0 ? (showFocusChrome ? 10 : 7) : 0,
-              }}
-            >
-              {/*-- tab 左侧状态灯：与左侧工作区同一盏灯（TerminalStatusLight 紧凑环），
-                   色/形/动效三编码；8px 环比原来 6px 点宽 2px，仍在 144px 预算余量内。 --*/}
-              {terminal && (
-                <TerminalStatusLight status={terminal.status} compact />
-              )}
-              {terminal && (
-                <TerminalPresetIcon
-                  preset={terminal.preset}
-                  className="h-3.5 w-3.5 shrink-0"
-                  style={{ opacity: isActive ? 0.95 : 0.55 }}
-                />
-              )}
-              {tab.type === 'browser' ? (
-                <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
-              ) : (
-                <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
-                  {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
-                </span>
-              )}
-              {tab.type === 'terminal' ? (
-                <HoldToConfirm
-                  as="span"
-                  label={t('terminal:tab.closeTerminal')}
-                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
-                  style={{ color: 'var(--shell-diff-del)' }}
-                  onConfirm={() => {
-                    onKillTerminalFromTab(tab.terminalId)
+        {(() => {
+          /*-- 排序占位：同 pane 拖拽先摘除源 tab，异 pane 全量保留；
+               占位与 tab 同宽（basis 144px），兄弟 tab 被 flex 自然挤开即让位。
+               visualIndex 含占位在内，首位圆角只落在一个元素上。 --*/
+          if (tabInsertIndex == null) {
+            return leaf.tabs.map((tab, visualIndex) => renderPaneTab(tab, visualIndex))
+          }
+          const ordered = stripDraggedIsLocal && stripDraggedTabId
+            ? leaf.tabs.filter((tab) => tab.id !== stripDraggedTabId)
+            : leaf.tabs
+          const slots: ReactNode[] = []
+          for (let slot = 0; slot <= ordered.length; slot += 1) {
+            if (slot === tabInsertIndex) {
+              slots.push(
+                <div
+                  key={`tab-drop-placeholder-${leaf.id}`}
+                  aria-hidden="true"
+                  data-tab-placeholder="true"
+                  className="relative flex h-8 min-w-0 basis-[144px] shrink grow-0 items-center justify-center px-2.5"
+                  style={{
+                    background: 'rgba(255,120,48,0.10)',
+                    borderRight: '1px solid var(--shell-border-soft)',
+                    boxShadow: 'inset 0 0 0 1px rgba(255,120,48,0.55)',
+                    borderTopLeftRadius: slot === 0 ? (showFocusChrome ? 10 : 7) : 0,
+                    animation: 'pane-drop-hint-in 110ms ease-out',
                   }}
                 >
-                  <X size={12} strokeWidth={1.8} />
-                </HoldToConfirm>
-              ) : (
-                <ThemedTooltip label={t('terminal:tab.closeBrowser')}>
-                <span
-                  tabIndex={-1}
-                  className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
-                  style={{ color: 'var(--shell-muted)' }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
-                  }}
-                >
-                  <X size={12} strokeWidth={1.8} aria-hidden="true" />
-                </span>
-                </ThemedTooltip>
-              )}
-            </div>
-            </ThemedTooltip>
-          )
-        })}
+                  <span className="block h-[3px] w-10 rounded-full" style={{ background: 'rgba(255,120,48,0.75)' }} />
+                </div>
+              )
+            }
+            if (slot < ordered.length) {
+              slots.push(renderPaneTab(ordered[slot], slot + (slot >= tabInsertIndex ? 1 : 0)))
+            }
+          }
+          return slots
+        })()}
         <div className="ml-auto flex h-8 shrink-0 items-center gap-1 pl-1">
           <span
             aria-hidden="true"
@@ -1289,6 +1423,8 @@ export function TerminalArea() {
     splitPaneWithTerminal,
     moveBrowserToPane,
     splitPaneWithBrowser,
+    reorderPaneTab,
+    movePaneTabToIndex,
     closePaneTab,
     setTabDragInFlight,
   } = useWorkspaceStore(
@@ -1310,6 +1446,8 @@ export function TerminalArea() {
       splitPaneWithTerminal: s.splitPaneWithTerminal,
       moveBrowserToPane: s.moveBrowserToPane,
       splitPaneWithBrowser: s.splitPaneWithBrowser,
+      reorderPaneTab: s.reorderPaneTab,
+      movePaneTabToIndex: s.movePaneTabToIndex,
       closePaneTab: s.closePaneTab,
       setTabDragInFlight: s.setTabDragInFlight,
     }))
@@ -1498,6 +1636,21 @@ export function TerminalArea() {
       moveBrowserToPane(surfaceId, paneId)
     },
     [moveBrowserToPane, splitPaneWithBrowser]
+  )
+
+  /*-- tab 条内排序落点：同 pane 调整顺序，异 pane 按下标插入（画布中央落点仍走追加合并） --*/
+  const handleReorderTab = useCallback(
+    (paneId: string, tabId: string, targetIndex: number) => {
+      reorderPaneTab(paneId, tabId, targetIndex)
+    },
+    [reorderPaneTab]
+  )
+
+  const handleMoveTabToIndex = useCallback(
+    (contentId: string, paneId: string, targetIndex: number) => {
+      movePaneTabToIndex(contentId, paneId, targetIndex)
+    },
+    [movePaneTabToIndex]
   )
 
   useEffect(() => {
@@ -1704,6 +1857,8 @@ export function TerminalArea() {
                 onBrowserPopOut={handleBrowserPopOut}
                 onKillTerminal={handleKillTerminal}
                 onTerminalDrop={handleTerminalDrop}
+                onReorderTab={handleReorderTab}
+                onMoveTabToIndex={handleMoveTabToIndex}
                 onTerminalDragStart={(terminalId) => {
                   activeDragTerminalRef.current = terminalId
                   setActiveDragTerminalId(terminalId)

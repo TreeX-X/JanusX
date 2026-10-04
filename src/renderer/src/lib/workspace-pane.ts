@@ -394,6 +394,116 @@ export function retainWorkspacePaneContent(
   return pruneEmptyPanes(retain(node))
 }
 
+// Note: tab reorder keeps insertion-index-after-removal so the gap preview matches the drop result — see .agents/notes/2026-10-04-pane-tab-reorder--233a32a0.md
+function clampTabInsertIndex(length: number, index: number): number {
+  if (!Number.isFinite(index)) return length
+  return Math.min(length, Math.max(0, Math.floor(index)))
+}
+
+/*-- 按内容 id 取回 pane 内容对象：跨 pane 按下标移动时需要原 content 重新插入 --*/
+export function getPaneContentById(
+  node: WorkspacePaneNode | null,
+  contentId: string
+): PaneContent | null {
+  if (!node) return null
+  for (const leaf of getLeafPanes(node)) {
+    const tab = leaf.tabs.find((item) => item.id === contentId)
+    if (tab) return tab
+  }
+  return null
+}
+
+/*-- 同 pane 内 tab 排序：targetIndex 是摘除拖拽 tab 之后数组里的插入位，
+     与 tab 条占位渲染的视觉顺序一致；落点不变时返回原节点引用 --*/
+export function reorderPaneTab(
+  node: WorkspacePaneNode | null,
+  paneId: string,
+  tabId: string,
+  targetIndex: number
+): WorkspacePaneNode | null {
+  if (!node) return null
+  if (node.type === 'leaf') {
+    if (node.id !== paneId) return node
+    const from = node.tabs.findIndex((item) => item.id === tabId)
+    if (from < 0) return node
+    const dragged = node.tabs[from]
+    const rest = node.tabs.filter((item) => item.id !== tabId)
+    const clamped = clampTabInsertIndex(rest.length, targetIndex)
+    if (clamped === from) return node
+    return {
+      ...node,
+      tabs: [...rest.slice(0, clamped), dragged, ...rest.slice(clamped)],
+      activeTabId: dragged.id,
+    }
+  }
+
+  return {
+    ...node,
+    first: reorderPaneTab(node.first, paneId, tabId, targetIndex) ?? node.first,
+    second: reorderPaneTab(node.second, paneId, tabId, targetIndex) ?? node.second,
+  }
+}
+
+function insertContentIntoLeaf(
+  node: WorkspacePaneNode,
+  targetPaneId: string,
+  content: PaneContent,
+  targetIndex: number
+): WorkspacePaneNode {
+  if (node.type === 'leaf') {
+    if (node.id !== targetPaneId) return node
+    const clamped = clampTabInsertIndex(node.tabs.length, targetIndex)
+    return {
+      ...node,
+      tabs: [...node.tabs.slice(0, clamped), content, ...node.tabs.slice(clamped)],
+      activeTabId: content.id,
+    }
+  }
+
+  return {
+    ...node,
+    first: insertContentIntoLeaf(node.first, targetPaneId, content, targetIndex),
+    second: insertContentIntoLeaf(node.second, targetPaneId, content, targetIndex),
+  }
+}
+
+/*-- 把 tab 按下标放入目标 pane：同 pane 退化为 reorder；跨 pane 先摘除再插入，
+     落点 pane 被清空修剪时回退到首个可用 pane；拖拽 tab 保持激活 --*/
+export function insertPaneContentAtIndex(
+  node: WorkspacePaneNode | null,
+  targetPaneId: string | null,
+  content: PaneContent,
+  targetIndex: number,
+  fallbackPaneId: string
+): { tree: WorkspacePaneNode; focus: WorkspacePaneFocus } {
+  const focusFor = (paneId: string): WorkspacePaneFocus => ({
+    paneId,
+    tabId: content.id,
+    terminalId: content.type === 'terminal' ? content.terminalId : null,
+  })
+
+  const existing = findPaneContent(node, content.id)
+  if (existing.paneId && existing.tabId && existing.paneId === targetPaneId) {
+    const tree = reorderPaneTab(node, existing.paneId, content.id, targetIndex) ?? node!
+    return { tree, focus: focusFor(existing.paneId) }
+  }
+
+  const removed = removePaneContentFromTree(node, content.id)
+  const base = removed ?? createEmptyPaneLeaf(fallbackPaneId)
+  const targetPane = findLeafPane(base, targetPaneId) ?? getLeafPanes(base)[0]
+  if (!targetPane) {
+    const leaf: WorkspacePaneLeaf = {
+      ...createEmptyPaneLeaf(fallbackPaneId),
+      tabs: [content],
+      activeTabId: content.id,
+    }
+    return { tree: leaf, focus: focusFor(leaf.id) }
+  }
+
+  const tree = insertContentIntoLeaf(base, targetPane.id, content, targetIndex)
+  return { tree, focus: focusFor(targetPane.id) }
+}
+
 export function closePaneTab(
   node: WorkspacePaneNode | null,
   paneId: string,
