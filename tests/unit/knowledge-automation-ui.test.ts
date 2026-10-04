@@ -20,7 +20,8 @@ beforeAll(async () => {
     window.localResult='pass';window.resources={supported:true,phase:'idle',receivedBytes:0,totalBytes:0}
     const disabledLocal=()=>{window.config.automation.local.enabled=false;Object.values(window.config.automation.stages).forEach(stage=>{if(stage.provider==='local')stage.provider='off'})}
     const status=()=>({enabled:window.config.automation.enabled,running:false,counts,total:0,tasks:[]})
-    window.electron={llm:{getTerminalProviders:async()=>[{id:'external',name:'My provider',modelId:'chosen-reviewer',enabled:true}]},knowledge:{
+    window.featureWrites=[];window.featureSave='pass';window.settingsCloseCount=0
+    window.electron={experimental:{update:async partial=>{window.featureWrites.push(partial);if(window.featureSave==='wait')await new Promise(resolve=>window.finishFeatureSave=resolve);if(window.featureSave==='fail')throw new Error('save failed');return {...useExperimentalStore.getState(),...partial}}},llm:{getTerminalProviders:async()=>[{id:'external',name:'My provider',modelId:'chosen-reviewer',enabled:true}]},knowledge:{
       getPersonalSettings:async()=>window.personalSettings ?? {captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60},
       updatePersonalSettings:async partial=>{window.personalSettings={...await window.electron.knowledge.getPersonalSettings(),...partial};return window.personalSettings},
       userMemoryOverview:async()=>({profile:{identity:'Tree',formatPrefs:['Concise'],toolPrefs:[]},habits:[],recent:[],pendingHabitCount:0}),
@@ -36,11 +37,11 @@ beforeAll(async () => {
     i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge,settings,common,team}},interpolation:{escapeValue:false}}).then(()=>{
       window.root=createRoot(document.getElementById('root'))
       window.showMemory=()=>window.root.render(<KnowledgeWorkbench isOpen onClose={()=>window.root.render(null)}/>)
-      window.root.render(window.gates?<><AppSettingsModal isOpen initialTab='knowledge' onClose={()=>{}}/><RightDock effectiveCollapsed={false} effectiveMaxWidth={600} forcedCollapsed={false} onResizingChange={()=>{}}/></>:<KnowledgeSettingsPanel/>)
+      window.root.render(window.gates?<><AppSettingsModal isOpen initialTab='knowledge' onClose={()=>{window.settingsCloseCount++}}/><RightDock effectiveCollapsed={false} effectiveMaxWidth={600} forcedCollapsed={false} onResizingChange={()=>{}}/></>:<KnowledgeSettingsPanel/>)
     })
   ` }, loader: { '.svg': 'dataurl' }, bundle: true, write: false, outfile: 'automation-ui.js', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'fixtures', setup(builder) {
     builder.onLoad({ filter: /[/\\]i18n[/\\]index\.ts$/ }, () => ({ contents: "import i18n from 'i18next'; export default i18n;export const changeLanguage=()=>{}", loader: 'ts' }))
-    builder.onLoad({ filter: /[/\\](GeneralSettingsPanel|ExperimentalSettingsPanel|NotificationSettingsPanel|LlmConfigModal|ModelCatalogPanel|AgentSettingsPanel|UsageStatsPanel|HostedSettingsPanel|TeamSettingsPanel)\.tsx$/ }, args => {
+    builder.onLoad({ filter: /[/\\](GeneralSettingsPanel|NotificationSettingsPanel|LlmConfigModal|ModelCatalogPanel|AgentSettingsPanel|UsageStatsPanel|HostedSettingsPanel|TeamSettingsPanel)\.tsx$/ }, args => {
       const name = args.path.split(/[/\\]/).at(-1)!.replace('.tsx', '')
       return { contents: `import React from 'react';export function ${name}(){return <div>${name}</div>}`, loader: 'tsx' }
     })
@@ -154,6 +155,70 @@ it('groups settings navigation, hides empty memory groups and keeps narrow navig
     await page.getByText('HostedSettingsPanel', { exact: true }).waitFor()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/settings-groups-narrow.png', animations: 'disabled' })
+  } finally { await page.close() }
+})
+
+it('requires confirmation for both directions of every experimental feature and cancels without closing settings', async () => {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 850 } })
+  try {
+    await mount(page, true)
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark')
+    await page.locator('[data-tab="experimental"]').click()
+    for (const key of ['blueprint', 'knowledge', 'roundtable', 'persona', 'remoteControl', 'teamCollab']) {
+      for (const value of [true, false]) {
+        await page.evaluate(({ key, value }) => (window as any).features.getState().apply({ [key]: !value }), { key, value })
+        const input = page.getByRole('checkbox').nth(['blueprint', 'knowledge', 'roundtable', 'persona', 'remoteControl', 'teamCollab'].indexOf(key))
+        const before = await page.evaluate(() => (window as any).featureWrites.length)
+        // The visible switch track dispatches a real checkbox click.
+        await input.locator('..').click()
+        const dialog = page.locator('dialog')
+        await dialog.waitFor()
+        expect(await dialog.evaluate(element => element.matches(':modal'))).toBe(true)
+        expect(await input.isChecked()).toBe(!value)
+        expect(await page.evaluate(() => (window as any).featureWrites.length)).toBe(before)
+        if (key === 'blueprint' && value) {
+          expect(await dialog.innerText()).toContain('WorkflowX')
+          await page.screenshot({ path: 'artifacts/memory-domain-acceptance/experimental-confirm-dark.png', animations: 'disabled' })
+        }
+        await page.keyboard.press('Escape')
+        await expect.poll(() => dialog.count()).toBe(0)
+        expect(await page.evaluate(() => (window as any).settingsCloseCount)).toBe(0)
+        expect(await page.evaluate(() => (window as any).featureWrites.length)).toBe(before)
+        await input.locator('..').click()
+        await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+        expect(await input.isChecked()).toBe(!value)
+        await input.locator('..').click()
+        await dialog.getByRole('button', { name: value ? 'Enable feature' : 'Disable feature', exact: true }).click()
+        await expect.poll(() => input.isChecked()).toBe(value)
+        expect(await page.evaluate(() => (window as any).featureWrites.at(-1))).toEqual({ [key]: value })
+      }
+    }
+  } finally { await page.close() }
+})
+
+it('keeps feature state on save failure and prevents repeated submissions while saving', async () => {
+  const page = await browser.newPage({ viewport: { width: 640, height: 720 } })
+  try {
+    await mount(page, true)
+    await page.locator('[data-tab="experimental"]').click()
+    await page.evaluate(() => { (window as any).featureSave = 'wait'; document.documentElement.dataset.theme = 'planche' })
+    const input = page.getByRole('checkbox').first()
+    const original = await input.isChecked()
+    await input.locator('..').click()
+    const dialog = page.locator('dialog')
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/experimental-confirm-planche.png', animations: 'disabled' })
+    await dialog.getByRole('button', { name: original ? 'Disable feature' : 'Enable feature' }).click()
+    expect(await dialog.getByRole('button', { name: 'Cancel' }).isDisabled()).toBe(true)
+    await page.keyboard.press('Enter')
+    expect(await page.evaluate(() => (window as any).featureWrites.length)).toBe(1)
+    await page.evaluate(() => { (window as any).featureSave = 'fail'; (window as any).finishFeatureSave() })
+    await expect.poll(() => dialog.count()).toBe(0)
+    expect(await input.isChecked()).toBe(original)
+    await page.getByRole('alert').waitFor()
+    await page.evaluate(() => (window as any).featureSave = 'pass')
+    await input.locator('..').click()
+    await dialog.getByRole('button', { name: original ? 'Disable feature' : 'Enable feature' }).click()
+    await expect.poll(() => input.isChecked()).toBe(!original)
   } finally { await page.close() }
 })
 

@@ -110,10 +110,14 @@
         "note": "功能开发中，可能存在不稳定情况"
       }
     },
-    "blueprintConfirm": {
-      "title": "开启蓝图功能",
-      "description": "蓝图功能必须使用 WorkflowX Agent 工作才能输出正确的 note 格式。\n\n请确认您已了解此要求。",
-      "confirm": "我已了解，确认",
+    "badge": "实验",
+    "confirm": {
+      "enableTitle": "开启“{{name}}”？",
+      "disableTitle": "关闭“{{name}}”？",
+      "enableDescription": "此功能处于实验阶段，可能出现不稳定或部分功能不可用。确认后立即开启。",
+      "disableDescription": "确认后立即关闭此功能，对应入口将隐藏。具体影响如下：",
+      "enable": "确认开启",
+      "disable": "确认关闭",
       "cancel": "取消"
     },
     "error": {

@@ -30,6 +30,10 @@ tags: [memory, persona, right-dock, ui]
 
 设置导航按应用设置、知识与记忆、模型与用量、代理与协作分组，组内统一使用图标、标题、说明和选中指示。知识库与个人画像独立按创新开关显示，双域关闭时隐藏空分组；正在查看的领域关闭时回到通用设置。模型配置、模型目录与用量处于同组。桌面导航独立纵向滚动，窄窗口保留组名与分隔并横向滚动，键盘聚焦可到达末尾项目。
 
+创新功能入口在统一分组中保留强调色边框、浅渐变、星光图标与“实验”徽标，深色使用琥珀色，planche 使用主题强调色。该标识用于区分实验能力；选择其他页面后仍可见，不使用持续闪烁动画。
+
+创新功能六项开关的开启和关闭均先展示确认框，确认后才调用保存接口。弹窗展示对应功能影响及注意事项，蓝图保留 WorkflowX Agent 的格式要求。原生 dialog 通过 showModal 进入浏览器顶层，使用独立样式，不依赖蓝图工作台样式加载。取消或 Esc 不提交，Esc 不关闭父级设置窗口；保存期间禁止重复操作，失败保留原状态并显示错误，用户可重试。
+
 ## Alternatives considered
 
 保留三个入口具有一步直达优势，但不能减少右侧种类。只合并 Assist 和画像减少改动，但审核仍割裂更正流程。合并三者增加分区切换，因此保留数量提示和审核直达。
@@ -38,11 +42,15 @@ tags: [memory, persona, right-dock, ui]
 
 沿用平铺设置导航保留现有位置，但不能表达知识与画像、模型与用量的关联。折叠分组能缩短导航，却增加展开步骤和状态维护；固定组名与按需滚动让全部启用项目保持可达，代价是低高度窗口需要滚动。
 
+仅在开启蓝图时确认减少点击次数，但其他开关直接改变运行行为，不能满足双向确认要求。复用蓝图 PromptDialog 可减少样式代码，但把设置确认与蓝图样式及父层键盘事件耦合。局部原生 dialog 提供顶层显示和焦点约束，代价是维护一份设置确认样式，适用范围限定创新功能开关。
+
 ## Consequences
 
 右侧种类减少，完整画像具备分类和详情阅读能力。代价是两个尺寸的呈现组件和旧入口别名需要维护。审核数量是定期更新的显示信息，不是事务授权依据；真实操作仍读取并校验最新快照。卡片正文可截断，详情必须完整可读。
 
 ## Verification
+
+创新入口及确认流程：npx vitest run tests/unit/knowledge-automation-ui.test.ts tests/unit/experimental-features.test.ts --maxWorkers=2 --reporter=dot，共两文件 14 项通过。其中浏览器测试遍历六项功能的双向切换，检查确认前零写入、取消与 Esc、父窗口保留、原生顶层显示、保存失败原值保留及重试、保存中防重复提交。严格类型、隔离构建、i18n 与变更组件 ESLint 通过；截图 experimental-confirm-*.png 和 settings-groups-dark.png 位于 artifacts/memory-domain-acceptance/。
 
 设置分组与 Shell MCP 排除的定向检查：npx vitest run tests/unit/knowledge-automation-ui.test.ts tests/unit/assistant-ui.test.ts tests/unit/knowledge/external-mcp.test.ts tests/unit/knowledge/mcp-client-config.test.ts tests/unit/knowledge-ipc-contract.test.ts --maxWorkers=2 --reporter=dot，共五文件 34 项通过。分组测试检查领域四种组合、当前页禁用回退、模型与用量切换，以及 640×720 窗口末尾导航可达且没有页面横向溢出。截图 settings-groups-dark.png 与 settings-groups-narrow.png 位于 artifacts/memory-domain-acceptance/，使用真实导航组件与内容面板替身；截图不代替完整桌面验收。
 

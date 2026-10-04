@@ -178,6 +178,18 @@
   background: var(--shell-accent);
 }
 
+.tabButtonExperimental {
+  border: 1px solid rgba(var(--so-accent-rgb), 0.45);
+  background: linear-gradient(110deg, rgba(var(--so-accent-rgb), 0.12), transparent);
+}
+
+.tabButtonExperimental .tabIcon,
+.tabButtonExperimental .tabLabel { color: var(--so-accent-ink); }
+.tabButtonExperimental .tabLabel { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.tabButtonExperimental:hover,
+.tabButtonExperimental.tabButtonActive { border-color: var(--so-accent); box-shadow: inset 0 0 12px rgba(var(--so-accent-rgb), 0.1); }
+.tabBadge { padding: 2px 4px; border: 1px solid rgba(var(--so-accent-rgb), 0.5); border-radius: 4px; font-size: 9px; line-height: 1.2; font-weight: 650; }
+
 .tabLabel {
   width: 100%;
   color: inherit;

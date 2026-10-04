@@ -129,13 +129,13 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
                           key={tab}
                           type="button"
                           data-tab={tab}
-                          className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''}`}
+                          className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''} ${tab === 'experimental' ? styles.tabButtonExperimental : ''}`}
                           aria-current={activeTab === tab ? 'page' : undefined}
                           onClick={() => setActiveTab(tab)}
                         >
                           <Icon size={16} strokeWidth={1.7} aria-hidden="true" className={styles.tabIcon} />
                           <span className={styles.tabText}>
-                            <span className={styles.tabLabel}>{tabNav(tab)}</span>
+                            <span className={styles.tabLabel}>{tabNav(tab)}{tab === 'experimental' && <span className={styles.tabBadge}>{t('settings:experimental.badge')}</span>}</span>
                             <span className={styles.tabMeta}>{tabNavMeta(tab)}</span>
                           </span>
                         </button>

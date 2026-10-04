@@ -110,10 +110,14 @@
         "note": "Feature in development, may be unstable"
       }
     },
-    "blueprintConfirm": {
-      "title": "Enable Blueprint",
-      "description": "Blueprint must use WorkflowX Agent to output correct note format.\n\nPlease confirm you understand this requirement.",
-      "confirm": "I understand, confirm",
+    "badge": "LAB",
+    "confirm": {
+      "enableTitle": "Enable {{name}}?",
+      "disableTitle": "Disable {{name}}?",
+      "enableDescription": "This feature is experimental and may be unstable or incomplete. Confirm to enable it immediately.",
+      "disableDescription": "Confirm to disable this feature and hide its entry points immediately. The effects are described below.",
+      "enable": "Enable feature",
+      "disable": "Disable feature",
       "cancel": "Cancel"
     },
     "error": {
