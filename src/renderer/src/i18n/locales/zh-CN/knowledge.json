@@ -408,6 +408,8 @@
   "automation": {
     "configurationHint": "部分处理环节尚未配置模型，请在功能设置中选择。",
     "pausedHint": "请在功能设置中检查知识采集与自动处理开关。",
+    "workbenchConfigurationHint": "部分处理环节尚未配置模型，请前往左侧功能设置选择。",
+    "workbenchPausedHint": "请前往左侧功能设置检查知识采集与自动处理开关。",
     "backgroundHint": "Janus 运行时会在后台处理工程条目与 Wiki；个人记忆由你确认。",
     "processing": "正在检查处理任务",
     "partial": "部分自动处理已开启",

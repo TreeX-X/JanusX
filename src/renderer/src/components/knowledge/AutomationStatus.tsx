@@ -4,9 +4,9 @@ import { useI18n } from '@/i18n/useI18n'
 import { KNOWLEDGE_STAGES, type KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
 import styles from './AutomationStatus.module.css'
 
-// Note: mode, current work and human review have separate meanings — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
-export function AutomationStatus({ active, beforeRun, disabled = false, hidden = false, onChanged, onOpenSettings, onStatusChange }: {
-  active: boolean; disabled?: boolean; hidden?: boolean; beforeRun?: () => Promise<boolean>; onChanged?: () => void; onOpenSettings?: () => void
+// Note: workbench navigation owns settings; the sidebar keeps its shortcut — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+export function AutomationStatus({ active, beforeRun, disabled = false, hidden = false, showSettingsEntry = true, onChanged, onStatusChange }: {
+  active: boolean; disabled?: boolean; hidden?: boolean; showSettingsEntry?: boolean; beforeRun?: () => Promise<boolean>; onChanged?: () => void
   onStatusChange?: (status: KnowledgeAutomationStatus | null) => void
 }) {
   const { t } = useI18n('knowledge')
@@ -58,7 +58,11 @@ export function AutomationStatus({ active, beforeRun, disabled = false, hidden =
   const pending = queue.filter(task => task.status === 'pending').length
   const failed = queue.filter(task => task.status === 'failed').length
   const needsReview = queue.filter(task => task.status === 'needs-review').length
-  const openSettings = () => onOpenSettings ? onOpenSettings() : window.dispatchEvent(new Event('janusx:open-knowledge-settings'))
+  const hint = mode === 'paused'
+    ? showSettingsEntry ? 'knowledge:automation.pausedHint' : 'knowledge:automation.workbenchPausedHint'
+    : mode === 'unconfigured'
+      ? showSettingsEntry ? 'knowledge:automation.configurationHint' : 'knowledge:automation.workbenchConfigurationHint'
+      : 'knowledge:automation.backgroundHint'
   if (hidden) return null
   return <section className={styles.root} aria-label={t('knowledge:automation.progress')}>
     <div className={styles.overview}>
@@ -81,13 +85,13 @@ export function AutomationStatus({ active, beforeRun, disabled = false, hidden =
               : failed || needsReview ? t('knowledge:automation.waitingForReview') : t('knowledge:automation.idle')}
         </span>}
       </div>
-      <p className={styles.hint}>{t(mode === 'paused' ? 'knowledge:automation.pausedHint' : mode === 'unconfigured' ? 'knowledge:automation.configurationHint' : 'knowledge:automation.backgroundHint')}</p>
+      <p className={styles.hint}>{t(hint)}</p>
       {(failed > 0 || needsReview > 0) && <p className={styles.attention}>{t('knowledge:automation.attention', { failed, review: needsReview })}</p>}
       <details className={styles.configuration}>
         <summary>{t('knowledge:automation.stageDetails')}</summary>
         <ul>{KNOWLEDGE_STAGES.map(stage => <li key={stage}><span>{t(`knowledge:automation.stage.${stage}`)}</span><span>{t(`knowledge:automation.stageMode.${stages?.[stage] ?? 'unconfigured'}`)}</span></li>)}</ul>
       </details>
-      {!beforeRun && mode !== 'active' && <button type="button" onClick={openSettings}>{t('knowledge:domains.settings')}</button>}
+      {showSettingsEntry && !beforeRun && mode !== 'active' && <button type="button" onClick={() => window.dispatchEvent(new Event('janusx:open-knowledge-settings'))}>{t('knowledge:domains.settings')}</button>}
     </>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {beforeRun && <p className={styles.hint}>{t('knowledge:automation.backfillHint')}</p>}

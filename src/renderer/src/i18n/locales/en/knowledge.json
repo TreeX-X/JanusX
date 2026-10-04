@@ -408,6 +408,8 @@
   "automation": {
     "configurationHint": "Some stages have no model configured. Select a model in preferences.",
     "pausedHint": "Check the knowledge capture and automatic processing switches in preferences.",
+    "workbenchConfigurationHint": "Some stages have no model configured. Select a model in Preferences in the left sidebar.",
+    "workbenchPausedHint": "Check the knowledge capture and automatic processing switches in Preferences in the left sidebar.",
     "backgroundHint": "Project entries and Wiki run in the background while Janus is open. Personal memories need your confirmation.",
     "processing": "Checking processing tasks",
     "partial": "Partly automatic",
