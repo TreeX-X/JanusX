@@ -3,8 +3,9 @@ import { chromium, type Browser, type Page } from 'playwright'
 import { build } from 'esbuild'
 let browser: Browser, script: string, css: string
 beforeAll(async () => {
-  browser = await chromium.launch({ headless: true })
+  browser = await chromium.launch({ headless: true, ignoreDefaultArgs: ['--hide-scrollbars'] })
   const result = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
+    import './src/renderer/src/styles/globals.css'
     import './src/renderer/src/styles/themes.generated.css'
     import React from 'react'; import {createRoot} from 'react-dom/client'; import i18n from 'i18next'; import {initReactI18next} from 'react-i18next'
     import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'; import settings from './src/renderer/src/i18n/locales/en/settings.json'; import common from './src/renderer/src/i18n/locales/en/common.json'; import team from './src/renderer/src/i18n/locales/en/team.json'
@@ -134,6 +135,13 @@ it('groups settings navigation, hides empty memory groups and keeps narrow navig
     expect(await models.locator('[data-tab]').evaluateAll(elements => elements.map(element => element.getAttribute('data-tab')))).toEqual(['llm', 'models', 'usage'])
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark')
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/settings-groups-dark.png', animations: 'disabled' })
+    await page.setViewportSize({ width: 1200, height: 520 })
+    await navigation.locator('[data-tab="hosted"]').click()
+    expect(await navigation.evaluate(element => element.scrollTop)).toBeGreaterThan(0)
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/settings-scrollbar-dark.png', animations: 'disabled' })
+    await page.evaluate(() => document.documentElement.dataset.theme = 'planche')
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/settings-scrollbar-planche.png', animations: 'disabled' })
+    await page.setViewportSize({ width: 1200, height: 850 })
     await models.locator('[data-tab="llm"]').click()
     await page.getByText('LlmConfigModal', { exact: true }).waitFor()
     await models.locator('[data-tab="usage"]').click()
@@ -174,6 +182,10 @@ it('requires confirmation for both directions of every experimental feature and 
         const dialog = page.locator('dialog')
         await dialog.waitFor()
         expect(await dialog.evaluate(element => element.matches(':modal'))).toBe(true)
+        const bounds = (await dialog.boundingBox())!
+        const viewport = page.viewportSize()!
+        expect(Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2)).toBeLessThan(2)
+        expect(Math.abs(bounds.y + bounds.height / 2 - viewport.height / 2)).toBeLessThan(2)
         expect(await input.isChecked()).toBe(!value)
         expect(await page.evaluate(() => (window as any).featureWrites.length)).toBe(before)
         if (key === 'blueprint' && value) {
@@ -206,6 +218,9 @@ it('keeps feature state on save failure and prevents repeated submissions while 
     const original = await input.isChecked()
     await input.locator('..').click()
     const dialog = page.locator('dialog')
+    const bounds = (await dialog.boundingBox())!
+    expect(Math.abs(bounds.x + bounds.width / 2 - 320)).toBeLessThan(2)
+    expect(Math.abs(bounds.y + bounds.height / 2 - 360)).toBeLessThan(2)
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/experimental-confirm-planche.png', animations: 'disabled' })
     await dialog.getByRole('button', { name: original ? 'Disable feature' : 'Enable feature' }).click()
     expect(await dialog.getByRole('button', { name: 'Cancel' }).isDisabled()).toBe(true)

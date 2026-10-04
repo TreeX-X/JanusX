@@ -1,4 +1,8 @@
 .dialog {
+  /* Note: preserve centering under global resets — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md */
+  position: fixed;
+  inset: 0;
+  margin: auto;
   width: min(440px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);
   overflow: auto;

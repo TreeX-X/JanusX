@@ -70,7 +70,33 @@
 .navigation {
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
+  /* Keep Chromium's explicit 4px geometry instead of its native thin preset. */
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+.navigation::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.navigation::-webkit-scrollbar-track,
+.navigation::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.navigation::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--shell-muted) 24%, transparent);
+  border-radius: 4px;
+}
+
+.navigation:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--shell-muted) 38%, transparent);
+}
+
+.navigation::-webkit-scrollbar-thumb:hover,
+.navigation::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--shell-muted) 55%, transparent);
 }
 
 .navGroup + .navGroup {

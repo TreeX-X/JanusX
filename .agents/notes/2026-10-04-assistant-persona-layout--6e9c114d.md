@@ -30,9 +30,13 @@ tags: [memory, persona, right-dock, ui]
 
 设置导航按应用设置、知识与记忆、模型与用量、代理与协作分组，组内统一使用图标、标题、说明和选中指示。知识库与个人画像独立按创新开关显示，双域关闭时隐藏空分组；正在查看的领域关闭时回到通用设置。模型配置、模型目录与用量处于同组。桌面导航独立纵向滚动，窄窗口保留组名与分隔并横向滚动，键盘聚焦可到达末尾项目。
 
+导航滚动条在 Chromium 中使用明确的 4px 宽高、透明轨道与圆角滑块，颜色由 shell-muted 混合透明度生成，悬停时提高可见度。scrollbar-width 保持 auto，让 WebKit 伪元素的尺寸生效；设置 thin 会优先使用浏览器预设，无法保证四像素。
+
 创新功能入口在统一分组中保留强调色边框、浅渐变、星光图标与“实验”徽标，深色使用琥珀色，planche 使用主题强调色。该标识用于区分实验能力；选择其他页面后仍可见，不使用持续闪烁动画。
 
 创新功能六项开关的开启和关闭均先展示确认框，确认后才调用保存接口。弹窗展示对应功能影响及注意事项，蓝图保留 WorkflowX Agent 的格式要求。原生 dialog 通过 showModal 进入浏览器顶层，使用独立样式，不依赖蓝图工作台样式加载。取消或 Esc 不提交，Esc 不关闭父级设置窗口；保存期间禁止重复操作，失败保留原状态并显示错误，用户可重试。
+
+确认框显式设置 fixed、inset: 0 和 margin: auto，避免 globals.css 的通用 margin: 0 重置覆盖浏览器默认居中。宽高受视口安全边距约束，长内容在弹窗内滚动；组件测试加载真实全局样式，否则会遗漏应用外壳造成的定位差异。
 
 ## Alternatives considered
 
@@ -49,6 +53,8 @@ tags: [memory, persona, right-dock, ui]
 右侧种类减少，完整画像具备分类和详情阅读能力。代价是两个尺寸的呈现组件和旧入口别名需要维护。审核数量是定期更新的显示信息，不是事务授权依据；真实操作仍读取并校验最新快照。卡片正文可截断，详情必须完整可读。
 
 ## Verification
+
+居中回归在加载 globals.css 后复现修复前水平中心偏移 380px；修复后 npx vitest run tests/unit/knowledge-automation-ui.test.ts --maxWorkers=2 --reporter=dot 的 10 项通过，覆盖 1200×850 和 640×720 中心误差小于 2px、六项双向确认及 1200×520 导航滚动到末尾。证据位于 artifacts/memory-domain-acceptance/experimental-centering-before.log 和 settings-scroll-centering-tests.log；滚动条深浅主题截图使用 settings-scrollbar-*.png。
 
 创新入口及确认流程：npx vitest run tests/unit/knowledge-automation-ui.test.ts tests/unit/experimental-features.test.ts --maxWorkers=2 --reporter=dot，共两文件 14 项通过。其中浏览器测试遍历六项功能的双向切换，检查确认前零写入、取消与 Esc、父窗口保留、原生顶层显示、保存失败原值保留及重试、保存中防重复提交。严格类型、隔离构建、i18n 与变更组件 ESLint 通过；截图 experimental-confirm-*.png 和 settings-groups-dark.png 位于 artifacts/memory-domain-acceptance/。
 
