@@ -140,6 +140,7 @@ export function installElectronApiFallback(): void {
       diagnostics: () => unavailableKnowledge(),
       processNow: () => unavailableKnowledge(),
       processingStats: () => unavailableKnowledge(),
+      probeExternalMcp: () => unavailableKnowledge(),
       externalMcpStatus: () => unavailableKnowledge(),
       registerExternalMcp: () => unavailableKnowledge(),
       userMemoryOverview: () => unavailableKnowledge(),

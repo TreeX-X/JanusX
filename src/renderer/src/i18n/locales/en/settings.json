@@ -479,5 +479,19 @@
         "desc": "C/C++ code navigation (Go to Definition). Managed binary; installs on demand."
       }
     }
+  },
+  "mcpAccess": {
+    "description": "Export read-only project knowledge. Personal memories stay private. Configuration registration and service connectivity are checked separately; actual client approval may still be required.",
+    "refresh": "Refresh",
+    "copy": "Copy launch configuration",
+    "probe": "Test service connection",
+    "unverified": "Client MCP integration is not verified. No configuration will be written.",
+    "manual": "Shell is not an MCP client. Use the launch configuration in an MCP-capable application.",
+    "current": "Configuration matches · client connection not verified",
+    "stale": "Configuration needs updating",
+    "absent": "Not registered",
+    "repair": "Update configuration",
+    "passed": "Service handshake, five tools and query passed. External client connection is not verified.",
+    "failed": "Service check failed at {{stage}}"
   }
 }

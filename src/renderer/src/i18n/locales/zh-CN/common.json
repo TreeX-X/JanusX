@@ -119,7 +119,7 @@
     "tool": {
       "files": { "title": "文件", "shortTitle": "文件", "ariaLabel": "打开文件工具" },
       "git": { "title": "Git", "shortTitle": "Git", "ariaLabel": "打开 Git 工具" },
-      "assist": { "title": "Assist", "shortTitle": "Assist", "ariaLabel": "打开 Assist 工具" },
+      "assist": {"title":"助手","shortTitle":"助手","ariaLabel":"助手"},
       "persona": { "title": "画像", "shortTitle": "画像", "ariaLabel": "打开个人画像工具" },
       "review": { "title": "审核", "shortTitle": "审核", "ariaLabel": "打开记忆审核" },
       "sessions": { "title": "会话", "shortTitle": "会话", "ariaLabel": "打开会话工具" }

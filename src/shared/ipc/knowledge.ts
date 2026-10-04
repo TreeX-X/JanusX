@@ -105,6 +105,7 @@ export const KNOWLEDGE_CHANNELS = {
   processingStats: 'knowledge:processing-stats',
   externalMcpStatus: 'knowledge:external-mcp:status',
   registerExternalMcp: 'knowledge:external-mcp:register',
+  probeExternalMcp: 'knowledge:external-mcp:probe',
   userMemoryOverview: 'knowledge:user-memory:overview',
   personalProfileEditContext: 'knowledge:user-memory:profile-context',
   savePersonalProfile: 'knowledge:user-memory:profile-save',
@@ -290,20 +291,32 @@ export interface KnowledgeProcessingStats {  generatedAt: string
   lastMaintenanceAt: string | null
 }
 
-export type ExternalMcpClientId = 'cursor' | 'vscode' | 'claude-code'
+export type ExternalMcpClientId = 'cursor' | 'vscode' | 'claude-code' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh' | 'shell'
 
 export interface ExternalMcpClientStatus {
   id: ExternalMcpClientId
   label: string
   configPath: string
   registered: boolean
+  support?: 'automatic' | 'unverified' | 'manual'
+  current?: boolean
+  format?: string
+  error?: string
 }
 
 export interface ExternalMcpStatus {
   entry: string
   entryExists: boolean
+  launch?: { command: string; args: string[]; env?: Record<string, string> }
   isPackaged: boolean
   clients: ExternalMcpClientStatus[]
+}
+
+export interface ExternalMcpProbeResult {
+  ok: boolean
+  stage: 'start' | 'handshake' | 'tools' | 'query'
+  tools: string[]
+  error?: string
 }
 
 export interface ExternalMcpRegisterResult {
@@ -361,6 +374,7 @@ export interface KnowledgeAPI {
   processNow: (input?: KnowledgeProcessNowInput) => Promise<KnowledgeProcessNowResult>
   processingStats: () => Promise<KnowledgeProcessingStats>
   externalMcpStatus: () => Promise<ExternalMcpStatus>
+  probeExternalMcp: () => Promise<ExternalMcpProbeResult>
   registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
   userMemoryOverview: () => Promise<UserMemoryOverview>
   personalProfileEditContext: () => Promise<PersonalProfileEditContext>

@@ -1,3 +1,4 @@
+import { isKnowledgeMcpAllowed } from './mcp-access'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import * as z from 'zod/v4'
 import type {
@@ -33,7 +34,11 @@ const readOnlyAnnotations = {
 type ContextService = Pick<typeof knowledgeContextService, 'search'>
 type TruthService = Pick<typeof knowledgeTruthService, 'list'>
 
-const WORKSPACE_ID_SCHEMA = z.string().optional().describe('Filter to one workspace; omit to include all workspaces.')
+const WORKSPACE_ID_SCHEMA = z.string().optional().describe('Filter to one workspace. Cross-workspace reads require allowGlobal=true.')
+const GLOBAL_SCHEMA = z.boolean().optional().describe('Explicitly allow cross-workspace reads.')
+function requireScope(request: { workspaceId?: string; allowGlobal?: boolean }): void {
+  if (request.workspaceId?.trim() === 'user' || (!request.workspaceId?.trim() && !request.allowGlobal)) throw new Error('A project workspaceId or explicit allowGlobal=true is required')
+}
 
 function failure(error: unknown) {
   const text = error instanceof Error
@@ -69,6 +74,7 @@ function wikiListPayload(snapshot: KnowledgeTruthSnapshot, workspaceId?: string)
   const pages = snapshot.wikiPages
     .filter((page) => inWorkspace(workspaceId, page.workspaceId))
     .map((page) => ({
+      workspaceId: page.workspaceId,
       slug: page.slug,
       title: page.title,
       tags: page.tags,
@@ -129,14 +135,26 @@ export function registerKnowledgeMcpTools(
   server: McpServer,
   contextService: ContextService = knowledgeContextService,
   truthService: TruthService = knowledgeTruthService,
+  allowed: () => Promise<boolean> = isKnowledgeMcpAllowed,
 ): void {
+  const check = async () => { if (!await allowed()) throw new Error('Knowledge MCP is disabled') }
+  const readTruth = async () => {
+    await check()
+    const snapshot = await truthService.list()
+    await check()
+    const privateIds = new Set(snapshot.facts.filter(fact => fact.scope === 'user' || fact.provenance.workspaceId === 'user').map(fact => fact.id))
+    return { ...snapshot, facts: snapshot.facts.filter(fact => !privateIds.has(fact.id)),
+      wikiPages: snapshot.wikiPages.filter(page => page.workspaceId !== 'user' && !page.sourceFactIds.some(id => privateIds.has(id))) }
+  }
   server.registerTool('knowledge_search', {
     description: 'Search accepted JanusX truth and return ranked structured items with provenance.',
     inputSchema,
     annotations: readOnlyAnnotations,
   }, async (request: KnowledgeContextRequest) => {
     try {
+      await check()
       const payload = searchPayload(await contextService.search(request))
+      await check()
       return {
         content: [{ type: 'text', text: JSON.stringify(payload) }],
         structuredContent: payload,
@@ -152,7 +170,9 @@ export function registerKnowledgeMcpTools(
     annotations: readOnlyAnnotations,
   }, async (request: KnowledgeContextRequest) => {
     try {
+      await check()
       const result = await contextService.search(request)
+      await check()
       return {
         content: [{ type: 'text', text: result.compactContext }],
         structuredContent: { ...result },
@@ -164,11 +184,12 @@ export function registerKnowledgeMcpTools(
 
   server.registerTool('wiki_list', {
     description: 'List published JanusX wiki pages (slug index) for fast knowledge lookup. Read a page with wiki_get.',
-    inputSchema: { workspaceId: WORKSPACE_ID_SCHEMA },
+    inputSchema: { workspaceId: WORKSPACE_ID_SCHEMA, allowGlobal: GLOBAL_SCHEMA },
     annotations: readOnlyAnnotations,
-  }, async (request: { workspaceId?: string }) => {
+  }, async (request: { workspaceId?: string; allowGlobal?: boolean }) => {
     try {
-      const snapshot = await truthService.list()
+      requireScope(request)
+      const snapshot = await readTruth()
       return respond(wikiListPayload(snapshot, request.workspaceId?.trim() || undefined))
     } catch (error) {
       return failure(error)
@@ -180,12 +201,14 @@ export function registerKnowledgeMcpTools(
     inputSchema: {
       slug: z.string().describe('Wiki page slug from wiki_list.'),
       workspaceId: WORKSPACE_ID_SCHEMA,
+      allowGlobal: GLOBAL_SCHEMA,
       maxChars: z.number().int().min(0).optional().describe('Maximum markdown characters; longer pages report truncated=true.'),
     },
     annotations: readOnlyAnnotations,
-  }, async (request: { slug: string; workspaceId?: string; maxChars?: number }) => {
+  }, async (request: { slug: string; workspaceId?: string; allowGlobal?: boolean; maxChars?: number }) => {
     try {
-      const snapshot = await truthService.list()
+      requireScope(request)
+      const snapshot = await readTruth()
       const payload = wikiGetPayload(snapshot, request.slug, request.workspaceId?.trim() || undefined, request.maxChars)
       if (!payload) return failure(`Wiki page not found: ${request.slug}`)
       return respond(payload)
@@ -199,11 +222,13 @@ export function registerKnowledgeMcpTools(
     inputSchema: {
       id: z.string().describe('Memory fact id.'),
       workspaceId: WORKSPACE_ID_SCHEMA,
+      allowGlobal: GLOBAL_SCHEMA,
     },
     annotations: readOnlyAnnotations,
-  }, async (request: { id: string; workspaceId?: string }) => {
+  }, async (request: { id: string; workspaceId?: string; allowGlobal?: boolean }) => {
     try {
-      const snapshot = await truthService.list()
+      requireScope(request)
+      const snapshot = await readTruth()
       const payload = factGetPayload(snapshot, request.id, request.workspaceId?.trim() || undefined)
       if (!payload) return failure(`Settled fact not found: ${request.id}`)
       return respond(payload)
@@ -216,8 +241,9 @@ export function registerKnowledgeMcpTools(
 export function createKnowledgeMcpServer(
   contextService: ContextService = knowledgeContextService,
   truthService: TruthService = knowledgeTruthService,
+  allowed: () => Promise<boolean> = isKnowledgeMcpAllowed,
 ): McpServer {
   const server = new McpServer({ name: 'janusx-knowledge', version: '1.0.0' })
-  registerKnowledgeMcpTools(server, contextService, truthService)
+  registerKnowledgeMcpTools(server, contextService, truthService, allowed)
   return server
 }

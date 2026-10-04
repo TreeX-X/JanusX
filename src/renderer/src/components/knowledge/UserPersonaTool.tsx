@@ -1,3 +1,4 @@
+import { PersonalMemoryBoard } from './PersonalMemoryBoard'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UserMemoryOverview, UserMemoryOverviewHabit } from '../../../../shared/knowledge'
 import { getUserMemoryOverview } from '../../services/knowledge'
@@ -50,6 +51,7 @@ export function UserPersonaTool({ active = true, onOpenReview, expanded = false 
     return () => { generation.current += 1 }
   }, [active, refresh])
 
+  const Cards = expanded ? PersonalMemoryBoard : UserPersonaCards
   const openInbox = useCallback(() => {
     openTool('review')
   }, [openTool])
@@ -70,7 +72,7 @@ export function UserPersonaTool({ active = true, onOpenReview, expanded = false 
         </div>
       )}
       {loadState === 'ready' && overview && !correcting && !forgetting && !editingProfile && (
-        <UserPersonaCards overview={overview} onEditProfile={() => setEditingProfile(true)} onOpenInbox={reviewEnabled ? onOpenReview ?? openInbox : undefined} onForgetEpisode={episode => setForgetting({ ...episode, kind: 'episode' })} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
+        <Cards overview={overview} onEditProfile={() => setEditingProfile(true)} onOpenInbox={reviewEnabled ? onOpenReview ?? openInbox : undefined} onForgetEpisode={episode => setForgetting({ ...episode, kind: 'episode' })} onForget={setForgetting} onCorrect={setCorrecting} onRefresh={() => void refresh()} />
       )}
       {editingProfile && <PersonalProfileEditor onClose={() => { setEditingProfile(false); void refresh() }}
         onSaved={() => { setEditingProfile(false); void refresh() }} />}
@@ -79,7 +81,7 @@ export function UserPersonaTool({ active = true, onOpenReview, expanded = false 
         onForgotten={() => { setForgetting(null); void refresh() }} />}
       {correcting && <PersonalMemoryCorrectionForm memory={correcting}
         onClose={() => { setCorrecting(null); void refresh() }}
-        onSubmitted={status => { setCorrecting(null); void refresh(); if (status === 'proposed') openInbox() }} />}
+        onSubmitted={status => { setCorrecting(null); void refresh(); if (status === 'proposed') (onOpenReview ?? openInbox)() }} />}
     </section>
   )
 }

@@ -1,3 +1,4 @@
+import { useAssistantStore } from '@/stores/assistant'
 import { useExperimentalStore } from '@/stores/experimental'
 import { UserPersonaTool } from './UserPersonaTool'
 import { MemoryReviewTool } from './MemoryReviewTool'
@@ -97,7 +98,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const { t } = useI18n('knowledge')
   const engineeringEnabled = useExperimentalStore(s => s.knowledge)
   const personalEnabled = useExperimentalStore(s => s.persona)
-  const [chosenDomain, setDomain] = useState<'engineering' | 'personal'>('engineering')
+  const chosenDomain = useAssistantStore(s => s.workbenchDomain)
+  const setDomain = useAssistantStore(s => s.setWorkbenchDomain)
   const domain = chosenDomain === 'engineering' && engineeringEnabled || !personalEnabled ? 'engineering' : 'personal'
   const [personalView, setPersonalView] = useState<'profile' | 'review' | 'settings'>('profile')
   const TAB_LABELS: Record<KnowledgeWorkbenchTab, string> = {

@@ -87,6 +87,7 @@
     "execa": "^9.0.0",
     "i18next": "^26.3.6",
     "i18next-browser-languagedetector": "^8.2.1",
+    "jsonc-parser": "^3.3.1",
     "lucide-react": "^0.468.0",
     "node-pty": "^1.0.0",
     "react": "^18.3.1",
@@ -95,6 +96,7 @@
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "selfsigned": "^5.5.0",
+    "smol-toml": "^1.9.0",
     "zod": "^3.25.76",
     "zustand": "^5.0.0"
   },

@@ -90,3 +90,5 @@
 .root[data-expanded="true"] .rowSource { white-space: normal; overflow-wrap: anywhere; }
 
 .root[data-expanded="true"] .state { min-height: 64px; }
+
+.root[data-expanded="true"] { display: block; }

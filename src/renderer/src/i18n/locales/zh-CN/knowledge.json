@@ -530,5 +530,28 @@
     "retentionHint": "仅影响新记录，范围 30–90 天；不修改旧记录到期日，也不删除已确认的长期记忆。",
     "days": "{{count}} 天",
     "savedImmediately": "修改即时保存。个人记忆由人工确认；此处不会启用本地模型或自动放行。"
+  },
+  "assistant": {
+    "title": "助手",
+    "sections": "助手分区",
+    "engineering": "工程知识",
+    "personal": "个人画像",
+    "review": "待审核",
+    "open": "打开知识与记忆"
+  },
+  "personalBoard": {
+    "all": "概览",
+    "profile": "个人资料",
+    "confirmed": "已确认记忆",
+    "uncertain": "待确认内容",
+    "recent": "近期记忆",
+    "description": "查看 Janus 对你的记忆，随时补充、更正或遗忘。",
+    "categories": "记忆分类",
+    "search": "搜索个人记忆",
+    "details": "查看详情",
+    "close": "返回",
+    "updated": "更新于 {{date}}",
+    "empty": "当前分类或搜索没有匹配的记忆。",
+    "refresh": "刷新记忆"
   }
 }

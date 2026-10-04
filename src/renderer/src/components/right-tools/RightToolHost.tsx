@@ -2,9 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { SessionPanel } from '@/components/SessionPanel'
 import { FileExplorerTool } from '@/components/FileExplorerTool'
 import { GitPanel } from '@/components/GitPanel'
-import { KnowledgeAssist } from '@/components/knowledge'
-import { MemoryReviewTool } from '@/components/knowledge/MemoryReviewTool'
-import { UserPersonaTool } from '@/components/knowledge'
+import { AssistantTool } from '@/components/knowledge/AssistantTool'
 import type { RightToolId } from '@/right-tools/types'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './RightDock.module.css'
@@ -70,9 +68,7 @@ function ToolContent({
   if (toolId === 'files') return <FileExplorerTool active={active} />
   if (toolId === 'git') return <GitPanel active={active} />
   if (toolId === 'sessions') return <SessionPanel />
-  if (toolId === 'review') return <MemoryReviewTool active={active} />
-  if (toolId === 'persona') return <UserPersonaTool active={active} />
-  return <KnowledgeAssist workspaceId={workspaceId} workspacePath={workspacePath} />
+  return <AssistantTool active={active} workspaceId={workspaceId} workspacePath={workspacePath} />
 }
 
 interface ToolErrorBoundaryProps {

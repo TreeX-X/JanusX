@@ -37,10 +37,14 @@ export function clampRightToolPanelWidth(
   return Math.min(effectiveMaximum, Math.max(RIGHT_TOOL_PANEL_MIN_WIDTH, width))
 }
 
+export function canonicalRightToolId(id: unknown): unknown {
+  return id === 'persona' || id === 'review' ? 'assist' : id
+}
+
 export function normalizeRightToolIds(value: unknown): RightToolId[] {
   if (!Array.isArray(value)) return []
 
-  return [...new Set(value.filter(isRightToolId))].sort(
+  return [...new Set(value.map(canonicalRightToolId).filter(isRightToolId))].sort(
     (left, right) => TOOL_ORDER.get(left)! - TOOL_ORDER.get(right)!,
   )
 }
@@ -56,8 +60,8 @@ export function reconcileRightToolPreferences(value: unknown): RightToolPreferen
   }
 
   const openToolIds = normalizeRightToolIds(value.openToolIds)
-  const activeToolId = openToolIds.includes(value.activeToolId as RightToolId)
-    ? (value.activeToolId as RightToolId)
+  const activeToolId = openToolIds.includes(canonicalRightToolId(value.activeToolId) as RightToolId)
+    ? (canonicalRightToolId(value.activeToolId) as RightToolId)
     : (openToolIds[0] ?? null)
 
   return {
@@ -72,6 +76,7 @@ export function openRightTool(
   preferences: RightToolPreferencesV1,
   toolId: RightToolId,
 ): RightToolTransition {
+  toolId = canonicalRightToolId(toolId) as RightToolId
   const current = reconcileRightToolPreferences(preferences)
   const openToolIds = normalizeRightToolIds([...current.openToolIds, toolId])
 
@@ -82,6 +87,7 @@ export function activateRightTool(
   preferences: RightToolPreferencesV1,
   toolId: RightToolId,
 ): RightToolTransition {
+  toolId = canonicalRightToolId(toolId) as RightToolId
   const current = reconcileRightToolPreferences(preferences)
   if (!current.openToolIds.includes(toolId)) return transition(current)
 
@@ -92,6 +98,7 @@ export function closeRightTool(
   preferences: RightToolPreferencesV1,
   toolId: RightToolId,
 ): RightToolTransition {
+  toolId = canonicalRightToolId(toolId) as RightToolId
   const current = reconcileRightToolPreferences(preferences)
   const closingIndex = current.openToolIds.indexOf(toolId)
   if (closingIndex < 0) return transition(current)
@@ -113,6 +120,7 @@ export function toggleRightToolFromRail(
   preferences: RightToolPreferencesV1,
   toolId: RightToolId,
 ): RightToolTransition {
+  toolId = canonicalRightToolId(toolId) as RightToolId
   const current = reconcileRightToolPreferences(preferences)
   if (!current.openToolIds.includes(toolId)) return openRightTool(current, toolId)
   if (current.activeToolId !== toolId) return activateRightTool(current, toolId)

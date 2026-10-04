@@ -59,9 +59,9 @@ describe('external MCP client registration', () => {
 
     expect(status.entry).toBe(dirs.serverEntry)
     expect(status.entryExists).toBe(false)
-    expect(status.clients).toHaveLength(3)
+    expect(status.clients).toHaveLength(9)
     expect(status.clients.every((client) => !client.registered)).toBe(true)
-    expect(status.clients.map((client) => client.id)).toEqual(['cursor', 'vscode', 'claude-code'])
+    expect(status.clients.map((client) => client.id)).toEqual(['claude-code', 'codex', 'opencode', 'janus', 'pi', 'dsh', 'shell', 'cursor', 'vscode'])
   })
 
   it('refuses to register before the server entry is built', async () => {
@@ -69,6 +69,31 @@ describe('external MCP client registration', () => {
 
     expect(result.ok).toBe(false)
     expect(result.error).toContain('npm run build')
+  })
+
+  it('detects stale registrations and repairs them without changing unrelated servers', async () => {
+    await seedEntry()
+    await registerExternalMcpClient('cursor', dirs)
+    const moved = { ...dirs, serverEntry: join(root, 'out', 'moved.js') }
+    await writeFile(moved.serverEntry, '// new entry')
+    expect((await getExternalMcpStatus(moved)).clients.find(client => client.id === 'cursor')?.current).toBe(false)
+    expect((await registerExternalMcpClient('cursor', moved)).ok).toBe(true)
+    expect((await getExternalMcpStatus(moved)).clients.find(client => client.id === 'cursor')?.current).toBe(true)
+    expect((await registerExternalMcpClient('pi', dirs)).ok).toBe(false)
+  })
+
+  it('supports Codex and existing OpenCode JSONC without reporting manual clients as registered', async () => {
+    await seedEntry()
+    await mkdir(join(dirs.homeDir, '.config', 'opencode'), { recursive: true })
+    const jsonc = `${clientConfigPath('opencode', dirs)}c`
+    await writeFile(jsonc, '{\n // keep\n "theme":"system"\n}')
+    expect((await registerExternalMcpClient('opencode', dirs)).configPath).toBe(jsonc)
+    expect(await readFile(jsonc, 'utf8')).toContain('// keep')
+    expect((await registerExternalMcpClient('codex', dirs)).ok).toBe(true)
+    const clients = (await getExternalMcpStatus(dirs)).clients
+    expect(clients.find(client => client.id === 'codex')?.current).toBe(true)
+    expect(clients.find(client => client.id === 'opencode')?.current).toBe(true)
+    expect(clients.find(client => client.id === 'shell')).toMatchObject({ support: 'manual', registered: false })
   })
 
   it('writes cursor config and preserves existing servers', async () => {
@@ -102,7 +127,7 @@ describe('external MCP client registration', () => {
 
     await registerExternalMcpClient('vscode', dirs)
     const vscode = await readConfig('vscode')
-    expect(vscode.mcpServers[EXTERNAL_MCP_SERVER_KEY].args).toEqual([dirs.serverEntry])
+    expect(vscode.servers[EXTERNAL_MCP_SERVER_KEY].args).toEqual([dirs.serverEntry])
 
     await mkdir(dirs.homeDir, { recursive: true })
     await writeFile(
@@ -117,7 +142,7 @@ describe('external MCP client registration', () => {
     expect(claude.mcpServers[EXTERNAL_MCP_SERVER_KEY].command).toBe('node')
   })
 
-  it('backs up corrupt configs before rewriting', async () => {
+  it('preserves corrupt configs and reports failure', async () => {
     await seedEntry()
     const path = clientConfigPath('cursor', dirs)
     await mkdir(join(dirs.homeDir, '.cursor'), { recursive: true })
@@ -125,11 +150,8 @@ describe('external MCP client registration', () => {
 
     const result = await registerExternalMcpClient('cursor', dirs)
 
-    expect(result.ok).toBe(true)
-    expect(result.backedUpPath).toBeTruthy()
-    const backup = await readFile(result.backedUpPath!, 'utf8')
-    expect(backup).toBe('not-json{{{')
-    const config = await readConfig('cursor')
-    expect(config.mcpServers[EXTERNAL_MCP_SERVER_KEY]).toBeTruthy()
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('Invalid client configuration')
+    expect(await readFile(path, 'utf8')).toBe('not-json{{{')
   })
 })

@@ -530,5 +530,28 @@
     "retentionHint": "Applies to new records only (30?90 days). Existing expiry dates and confirmed long-term memories are unchanged.",
     "days": "{{count}} days",
     "savedImmediately": "Changes save immediately. Personal memories require human review; these settings do not enable local models or automatic admission."
+  },
+  "assistant": {
+    "title": "Assistant",
+    "sections": "Assistant sections",
+    "engineering": "Knowledge",
+    "personal": "Profile",
+    "review": "Review",
+    "open": "Open knowledge & memory"
+  },
+  "personalBoard": {
+    "all": "Overview",
+    "profile": "Personal details",
+    "confirmed": "Confirmed memories",
+    "uncertain": "Unconfirmed",
+    "recent": "Recent memories",
+    "description": "Review what Janus remembers about you and keep it accurate.",
+    "categories": "Memory categories",
+    "search": "Search personal memories",
+    "details": "Read details",
+    "close": "Back",
+    "updated": "Updated {{date}}",
+    "empty": "No memories match this view.",
+    "refresh": "Refresh memories"
   }
 }

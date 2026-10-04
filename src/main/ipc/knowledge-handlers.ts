@@ -27,7 +27,7 @@ import { migrateLegacyEpisodes } from '../knowledge/legacy-episode-migration'
 import { forgetPersonalMemory } from '../knowledge/personal-memory-forgetting'
 import { proposePersonalMemoryCorrection } from '../knowledge/personal-memory-correction'
 import { knowledgeDiagnosticsService } from '../knowledge/diagnostics-service'
-import { getExternalMcpStatus, registerExternalMcpClient } from '../knowledge/external-mcp'
+import { getExternalMcpStatus, registerExternalMcpClient, probeExternalMcp } from '../knowledge/external-mcp'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import {
   KNOWLEDGE_CHANNELS,
@@ -232,6 +232,8 @@ export function registerKnowledgeHandlers(): void {
     // lastRun, hiding LLM degradation from the status bar.
     return knowledgeProcessingQueue.processingStats()
   })
+
+  ipcMain.handle(KNOWLEDGE_CHANNELS.probeExternalMcp, () => probeExternalMcp())
 
   ipcMain.handle(KNOWLEDGE_CHANNELS.externalMcpStatus, async () => {
     return getExternalMcpStatus()

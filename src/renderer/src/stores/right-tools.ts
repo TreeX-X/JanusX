@@ -1,3 +1,4 @@
+import { useAssistantStore } from './assistant'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { PersistStorage, StateStorage } from 'zustand/middleware'
@@ -73,13 +74,20 @@ export const useRightToolStore = create<RightToolStore>()(
         set(result.preferences)
         applyPanelCollapseCommand(result.panelCollapseCommand)
       }
+      const route = (toolId: RightToolId, transition: typeof openRightTool): void => {
+        if (!isRightToolEnabled(toolId, useExperimentalStore.getState())) return
+        if (toolId === 'persona' || toolId === 'review') {
+          useAssistantStore.getState().setSection(toolId === 'persona' ? 'personal' : 'review')
+        }
+        applyTransition(transition(get(), toolId))
+      }
 
       return {
         ...defaults,
-        openTool: (toolId) => { if (isRightToolEnabled(toolId, useExperimentalStore.getState())) applyTransition(openRightTool(get(), toolId)) },
-        activateTool: (toolId) => { if (isRightToolEnabled(toolId, useExperimentalStore.getState())) applyTransition(activateRightTool(get(), toolId)) },
+        openTool: (toolId) => route(toolId, openRightTool),
+        activateTool: (toolId) => route(toolId, activateRightTool),
         closeTool: (toolId) => applyTransition(closeRightTool(get(), toolId)),
-        toggleFromRail: (toolId) => { if (isRightToolEnabled(toolId, useExperimentalStore.getState())) applyTransition(toggleRightToolFromRail(get(), toolId)) },
+        toggleFromRail: (toolId) => route(toolId, toggleRightToolFromRail),
         setPanelWidth: (panelWidth) => set({ panelWidth: clampRightToolPanelWidth(panelWidth) }),
         reconcile: () => set(reconcileRightToolPreferences(get())),
       }

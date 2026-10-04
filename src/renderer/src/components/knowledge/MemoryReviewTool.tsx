@@ -64,6 +64,7 @@ export function MemoryReviewTool({ active, domain }: { active: boolean; domain?:
       await (approve ? applyKnowledgeCandidate({ ...input, replacement }) : rejectKnowledgeCandidate(input))
       setCandidates(current => current.filter(item => item.type !== candidate.type || item.id !== candidate.id))
       await refresh()
+      window.dispatchEvent(new Event('janusx-memory-changed'))
     } catch (reason) {
       setError(t(reason instanceof Error && reason.message.includes('Personal correction')
         ? 'knowledge:review.correctionStale'
