@@ -4,6 +4,7 @@ import { build } from 'esbuild'
 
 let browser: Browser
 let script: string
+let css: string
 beforeAll(async () => {
   browser = await chromium.launch({ headless: true })
   const result = await build({
@@ -17,15 +18,20 @@ beforeAll(async () => {
       useExperimentalStore.setState({loaded:true,knowledge:true,persona:true})
       import {MemoryReviewTool} from './src/renderer/src/components/knowledge/MemoryReviewTool'
       import {reviewCandidateInput} from './src/shared/review-candidate-snapshot'
+      import {useAssistantPendingCount} from './src/renderer/src/components/knowledge/useAssistantPendingCount'
+      import './src/renderer/src/styles/globals.css'
+      import './src/renderer/src/styles/themes.generated.css'
       const candidate = (id, scope) => ({id,type:'fact',status:'proposed',derivation:'deterministic',evidence:{observationIds:['obs']},fact:{content:id,scope,kind:'preference',provenance:{workspaceId:scope==='user'?'user':'project-a',fileRefs:[]}}})
       window.items = [candidate('private-choice','user'),candidate('project-rule','project')]
       window.calls = []; window.failLoad = false; window.failAction = false; window.defer = false
+      window.autoStatus ??= {enabled:false,running:false,stages:{extraction:'rules-only',entryReview:'automatic',wikiGeneration:'automatic',wikiReview:'automatic'},queue:[],counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}
       const checkSnapshot = async input => {
         const current = window.items.find(item => item.id === input.id)
         if (!current || (await reviewCandidateInput(current)).candidateHash !== input.candidateHash) throw Error('Candidate changed')
       }
       window.electron = {knowledge:{
-        automationStatus:async()=>({enabled:false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
+        automationStatus:async()=>{if(window.failStatus)throw Error('unavailable');return structuredClone(window.autoStatus)},
+        automationRun:async()=>{window.calls.push('run')},
         factReviewContext:async()=>{if(window.failContext)throw Error('unavailable');return window.conflictContext ?? {targets:[],competing:[]}},
         candidateAction:async input=>{window.calls.push(input);if(window.defer)await new Promise(resolve=>window.finish=resolve)},
         importLegacyPersonalMemory:async()=>{window.imports=(window.imports||0)+1;window.items.push({...candidate('old-profile','user'),legacySource:{kind:'profile',id:'identity',hash:'source'}});return {created:1,remaining:0}},
@@ -34,7 +40,8 @@ beforeAll(async () => {
         applyCandidate:async input=>{window.calls.push(input);await checkSnapshot(input);if(window.failAction)throw Error(typeof window.failAction==='string'?window.failAction:'review failed');if(window.defer)await new Promise(resolve=>window.finish=resolve);window.items=window.items.filter(item=>item.id!==input.id)},
         rejectCandidate:async input=>{window.calls.push(input);await checkSnapshot(input);window.items=window.items.filter(item=>item.id!==input.id)}
       }}
-      i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge}},interpolation:{escapeValue:false}}).then(()=>createRoot(document.getElementById('root')).render(<MemoryReviewTool active={true}/>))
+      function Badge(){const count=useAssistantPendingCount();return <output hidden aria-label='Human review badge'>{count??'unknown'}</output>}
+      i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge}},interpolation:{escapeValue:false}}).then(()=>createRoot(document.getElementById('root')).render(<>{window.showBadge&&<Badge/>}<MemoryReviewTool active={true}/></>))
     ` },
     bundle: true, write: false, outfile: 'memory-review-test.js', jsx: 'automatic', format: 'iife',
     define: { 'process.env.NODE_ENV': '"test"' },
@@ -43,10 +50,97 @@ beforeAll(async () => {
     } }],
   })
   script = result.outputFiles.find(file => file.path.endsWith('.js'))!.text
+  css = result.outputFiles.find(file => file.path.endsWith('.css'))!.text
 })
 afterAll(async () => { await browser?.close() })
 
 describe('memory review browser interactions', () => {
+  it('separates automatic candidates and human counts, then follows failures and personal filtering', async () => {
+    const page = await browser.newPage({ viewport: { width: 320, height: 850 } })
+    page.setDefaultTimeout(4000)
+    try {
+      await page.clock.install()
+      await page.route('http://localhost/review', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
+      await page.goto('http://localhost/review')
+      await page.addStyleTag({ content: css + '\n#root{height:100vh}body{margin:0}*{box-sizing:border-box}' })
+      await page.evaluate(() => { (window as any).showBadge = true; document.documentElement.dataset.theme = 'dark' })
+      await page.addScriptTag({ content: script })
+      await page.getByRole('button', { name: 'All 2', exact: true }).waitFor()
+      await page.evaluate(() => {
+        const state = window as any
+        state.autoStatus.enabled = true
+        state.autoStatus.queue = [{stage:'entryReview',subject:'project-rule',status:'pending'}]
+      })
+      await page.clock.runFor(15050)
+      await page.getByRole('heading', { name: 'Needs your review · 1' }).waitFor()
+      expect(await page.getByLabel('Human review badge').innerText()).toBe('1')
+      await page.getByText('Waiting for new material', { exact: true }).waitFor({ state: 'hidden' })
+      expect(await page.getByText('Tasks queued · 1', { exact: true }).isVisible()).toBe(true)
+      expect(await page.getByRole('button', { name: 'Run once now', exact: true }).isVisible()).toBe(false)
+      await page.getByText('Processing automatically · 1', { exact: true }).click()
+      const automatic = page.locator('article').filter({ hasText: 'project-rule' })
+      expect(await automatic.getByRole('button').count()).toBe(0)
+      expect(await page.getByRole('button', { name: 'Approve', exact: true }).count()).toBe(1)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await page.screenshot({path:'artifacts/memory-domain-acceptance/review-automation-queued.png',animations:'disabled'})
+      await page.getByRole('button', { name: 'Personal memory 1', exact: true }).click()
+      expect(await page.getByRole('region', { name: 'Automation progress' }).count()).toBe(0)
+      await page.getByText('Personal memories need your confirmation and are excluded from automatic project review.', { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'All 2', exact: true }).click()
+      await page.evaluate(() => { (window as any).autoStatus.queue[0].status = 'needs-review' })
+      await page.clock.runFor(15050)
+      await page.getByRole('heading', { name: 'Needs your review · 2' }).waitFor()
+      expect(await page.getByLabel('Human review badge').innerText()).toBe('2')
+      expect(await page.getByText('Processing automatically · 1', { exact: true }).count()).toBe(0)
+      expect(await automatic.getByRole('button', { name: 'Approve', exact: true }).isEnabled()).toBe(true)
+      expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+    } finally { await page.close() }
+  })
+
+  it('shows configured stages, live execution and unknown status without treating historical failures as current', async () => {
+    const page = await browser.newPage({ viewport: { width: 320, height: 850 }, reducedMotion: 'reduce' })
+    page.setDefaultTimeout(4000)
+    try {
+      await page.clock.install()
+      await page.route('http://localhost/review', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
+      await page.goto('http://localhost/review')
+      await page.addStyleTag({ content: css + '\n#root{height:100vh}body{margin:0}*{box-sizing:border-box}' })
+      await page.addScriptTag({ content: script })
+      await page.getByRole('button', { name: 'All 2', exact: true }).waitFor()
+      await page.evaluate(() => {
+        const state = window as any
+        state.autoStatus.enabled = true
+        state.autoStatus.stages.wikiReview = 'manual'
+        state.autoStatus.running = true
+        state.autoStatus.queue = [{stage:'entryReview',subject:'project-rule',status:'running'}]
+        state.autoStatus.counts.failed = 8
+        document.documentElement.dataset.theme = 'planche'
+      })
+      await page.clock.runFor(5050)
+      const automation = page.getByRole('region', { name: 'Automation progress', exact: true })
+      await automation.getByText('Partly automatic', { exact: true }).waitFor()
+      expect(await automation.getByText('Processing: Entry review', { exact: true }).isVisible()).toBe(true)
+      expect(await automation.getByText(/Current tasks:/).count()).toBe(0)
+      await automation.getByText('Scope and processing stages', { exact: true }).click()
+      expect(await automation.getByText('Rule extraction (automatic)', { exact: true }).isVisible()).toBe(true)
+      expect(await automation.getByText('Manual', { exact: true }).isVisible()).toBe(true)
+      await automation.getByText('More actions', { exact: true }).click()
+      expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).isDisabled()).toBe(true)
+      expect(await automation.locator('svg').evaluateAll(items => items.every(item => getComputedStyle(item).animationName === 'none'))).toBe(true)
+      await page.screenshot({path:'artifacts/memory-domain-acceptance/review-automation-running.png',animations:'disabled'})
+      await page.evaluate(() => { (window as any).failStatus = true })
+      await page.clock.runFor(5050)
+      await automation.getByRole('alert').waitFor()
+      await page.getByRole('heading', { name: 'Pending candidates · 2' }).waitFor()
+      expect(await page.getByRole('button', { name: 'Approve', exact: true }).count()).toBe(2)
+      await page.evaluate(() => { const state=window as any; state.failStatus=false; state.autoStatus.enabled=false; state.autoStatus.running=false; state.autoStatus.queue=[] })
+      await page.clock.runFor(5050)
+      await automation.getByText('Automatic processing is off', { exact: true }).waitFor()
+      expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).isDisabled()).toBe(true)
+      await page.getByRole('heading', { name: 'Needs your review · 2' }).waitFor()
+    } finally { await page.close() }
+  })
+
   it('shows the old value and requires explicit replacement confirmation', async () => {
     const page = await browser.newPage()
     try {

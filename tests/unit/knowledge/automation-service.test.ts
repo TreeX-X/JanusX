@@ -46,6 +46,63 @@ async function candidate(index: number): Promise<CandidateFact> {
 }
 async function facts(items: MemoryFact[]) { await mkdir(join(root, 'facts'), { recursive: true }); await writeFile(join(root, 'facts/facts.jsonl'), items.map(item => JSON.stringify(item)).join('\n') + '\n') }
 describe('durable knowledge automation', () => {
+  it('projects all eligible review work without writing tasks or including personal and old candidates', async () => {
+    const seed = await candidate(0)
+    const snapshot = await deps.snapshot()
+    config.enabledSince = new Date(now - 120000).toISOString()
+    snapshot.candidates = Array.from({ length: 205 }, (_, index) => ({ ...seed, id: `queued-${index}` }))
+    snapshot.candidates.push({ ...seed, id: 'private', fact: { ...seed.fact, scope: 'user' } },
+      { ...seed, id: 'old', fact: { ...seed.fact, provenance: { ...seed.fact.provenance, createdAt: '2010-01-01T00:00:00.000Z' } } })
+    deps.snapshot = async () => snapshot
+    const status = await service.status()
+    expect(status.stages).toEqual({ extraction: 'rules-only', entryReview: 'automatic', wikiGeneration: 'automatic', wikiReview: 'automatic' })
+    expect(status.queue).toHaveLength(205)
+    expect(status.queue.every(task => task.stage === 'entryReview' && task.status === 'pending' && task.subject.startsWith('queued-'))).toBe(true)
+    expect(status.tasks).toEqual([])
+    await expect(readFile(join(root, 'processing/automation-tasks.json'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(review).not.toHaveBeenCalled()
+    allowed = false
+    expect((await service.status()).queue).toEqual([])
+  })
+
+  it('projects current manual, incomplete, failed and running work independently of historical records', async () => {
+    await candidate(1)
+    config.stages.entryReview.provider = 'off'
+    expect((await service.status()).queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'needs-review'}])
+    await service.run()
+    config.stages.entryReview = { provider: 'external', providerId: '', model: 'model', thinking: false }
+    expect((await service.status()).stages.entryReview).toBe('unconfigured')
+    expect((await service.status()).queue[0].status).toBe('needs-review')
+    config.stages.entryReview.providerId = 'configured-provider'
+    expect((await service.status()).queue[0].status).toBe('pending')
+    let finish!: () => void
+    let entered!: () => void
+    const started = new Promise<void>(resolve => { entered = resolve })
+    review.mockImplementationOnce(async () => {
+      entered()
+      await new Promise<void>(resolve => { finish = resolve })
+      return {verdict:'uncertain',reason:'evidence insufficient',complete:false,conflict:false,coveredIds:[]}
+    })
+    const running = service.run()
+    await started
+    try {
+      const status = await service.status()
+      expect(status.running).toBe(true)
+      expect(status.queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'running'}])
+    } finally { finish(); await running }
+    expect((await service.status()).queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'needs-review'}])
+    const ledgerPath = join(root, 'processing/automation-tasks.json')
+    const ledger = JSON.parse(await readFile(ledgerPath, 'utf8'))
+    const current = ledger.tasks.find(task => task.model.provider === 'external')
+    current.status = 'failed'
+    await writeFile(ledgerPath, JSON.stringify(ledger))
+    expect((await service.status()).queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'failed'}])
+    config.stages.entryReview.model = 'replacement-model'
+    const replaced = await service.status()
+    expect(replaced.counts.failed).toBe(1)
+    expect(replaced.queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'pending'}])
+  })
+
   it('captures, extracts, reviews, publishes a topic, updates it and preserves prior content', async () => {
     config.stages.extraction.provider = 'external'
     await knowledgeObservationService.capture({ workspaceId: 'project', workspaceName: 'Project', workspacePath: root, source: 'manual', type: 'user-note', content: 'Backups run nightly.' }, { speaker: 'user' })

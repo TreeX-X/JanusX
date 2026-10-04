@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useExperimentalStore } from '@/stores/experimental'
 import { loadReviewCandidates } from './MemoryReviewTool'
-import { isUserScopeCandidate } from './inboxScope'
+import { isUserScopeCandidate, splitReviewCandidates } from './inboxScope'
 
 export function useAssistantPendingCount(): number | null {
   const engineering = useExperimentalStore(s => s.knowledge)
@@ -15,8 +15,9 @@ export function useAssistantPendingCount(): number | null {
       if (running || document.visibilityState === 'hidden') return
       running = true
       try {
-        const items = await loadReviewCandidates(engineering)
-        if (!cancelled) setResult({ engineering, personal, count: items.filter(item => isUserScopeCandidate(item) ? personal : engineering).length })
+        const [items, automation] = await Promise.all([loadReviewCandidates(engineering), engineering ? window.electron.knowledge.automationStatus() : null])
+        const visible = items.filter(item => isUserScopeCandidate(item) ? personal : engineering)
+        if (!cancelled) setResult({ engineering, personal, count: splitReviewCandidates(visible, automation).manual.length })
       } catch { if (!cancelled) setResult({ engineering, personal, count: null }) }
       finally { running = false }
     }

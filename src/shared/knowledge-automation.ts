@@ -96,6 +96,10 @@ export interface KnowledgeAutomationTask {
 export interface KnowledgeAutomationStatus {
   running: boolean
   enabled: boolean
+  /** Configured behavior, independent of whether a provider is currently reachable. */
+  stages: Record<KnowledgeStage, 'automatic' | 'manual' | 'unconfigured' | 'rules-only'>
+  /** Current eligible work; historical records below are not an inbox. */
+  queue: Array<Pick<KnowledgeAutomationTask, 'stage' | 'subject'> & { status: 'pending' | 'running' | 'needs-review' | 'failed' }>
   tasks: KnowledgeAutomationTask[]
   total: number
   counts: Record<AutomationTaskStatus, number>

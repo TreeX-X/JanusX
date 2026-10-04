@@ -20,7 +20,7 @@ beforeAll(async () => {
     window.calls=[];window.config={enabled:true,mode:'deterministic-only',autoAcceptDeterministicFacts:false,automation:defaultKnowledgeAutomation()}
     window.localResult='pass';window.resources={supported:true,phase:'idle',receivedBytes:0,totalBytes:0}
     const disabledLocal=()=>{window.config.automation.local.enabled=false;Object.values(window.config.automation.stages).forEach(stage=>{if(stage.provider==='local')stage.provider='off'})}
-    const status=()=>({enabled:window.config.automation.enabled,running:false,counts,total:0,tasks:[]})
+    const status=()=>({enabled:window.config.automation.enabled,running:false,stages:{extraction:'rules-only',entryReview:'automatic',wikiGeneration:'automatic',wikiReview:'automatic'},queue:[],counts,total:0,tasks:[]})
     window.featureWrites=[];window.featureSave='pass';window.settingsCloseCount=0
     window.electron={experimental:{update:async partial=>{window.featureWrites.push(partial);if(window.featureSave==='wait')await new Promise(resolve=>window.finishFeatureSave=resolve);if(window.featureSave==='fail')throw new Error('save failed');return {...useExperimentalStore.getState(),...partial}}},llm:{getTerminalProviders:async()=>[{id:'external',name:'My provider',modelId:'chosen-reviewer',enabled:true}]},knowledge:{
       getPersonalSettings:async()=>window.personalSettings ?? {captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60},
@@ -80,7 +80,7 @@ it('configures all four stages, excludes Jev generation, saves before running an
     expect(await page.evaluate(() => (window as any).calls)).toEqual([])
     await page.getByRole('checkbox', { name: 'Enable automatic review and publication' }).check()
     await page.getByRole('region', { name: 'Automation progress', exact: true }).getByText('More actions', { exact: true }).click()
-    await page.getByRole('button', { name: 'Check now', exact: true }).click()
+    await page.getByRole('button', { name: 'Run once now', exact: true }).click()
     await expect.poll(() => page.evaluate(() => (window as any).calls)).toEqual(['save','run'])
     expect(await page.evaluate(() => Object.values((window as any).config.automation.stages).every((stage: any) => stage.provider === 'external' && stage.model === 'chosen-reviewer'))).toBe(true)
   } finally { await page.close() }

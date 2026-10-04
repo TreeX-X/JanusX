@@ -123,7 +123,26 @@ export class KnowledgeAutomationService {
     const [ledger, settings] = await Promise.all([this.read(), this.deps.settings()])
     const counts: KnowledgeAutomationStatus['counts'] = { pending: 0, running: 0, succeeded: 0, 'needs-review': 0, failed: 0, cancelled: 0 }
     for (const task of ledger.tasks) counts[task.status]++
-    return { running: this.running !== null, enabled: settings.allowed, counts, total: ledger.tasks.length,
+    // Note: current plans separate automatic work from human review — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+    const stages = Object.fromEntries(KNOWLEDGE_STAGES.map(stage => {
+      const model = settings.config.stages[stage]
+      return [stage, model.provider === 'off' ? stage === 'extraction' ? 'rules-only' : 'manual'
+        : !model.model || model.provider === 'external' && !model.providerId ? 'unconfigured' : 'automatic']
+    })) as KnowledgeAutomationStatus['stages']
+    const queue: KnowledgeAutomationStatus['queue'] = []
+    if (settings.allowed) {
+      const tasks = new Map(ledger.tasks.map(task => [task.id, task]))
+      for (const plan of (await this.plans(settings.config, ledger)).values()) {
+        const task = tasks.get(plan.task.id)
+        let status = task?.status ?? 'pending'
+        if (task && task.dependencyHash !== plan.task.dependencyHash && ['needs-review', 'failed'].includes(status)) status = 'pending'
+        if (status !== 'pending' && status !== 'running' && status !== 'needs-review' && status !== 'failed') continue
+        if (stages[plan.task.stage] !== 'automatic') status = 'needs-review'
+        if (status === 'running' && !this.running) status = 'pending'
+        queue.push({ stage: plan.task.stage, subject: plan.task.subject, status })
+      }
+    }
+    return { running: this.running !== null, enabled: settings.allowed, stages, queue, counts, total: ledger.tasks.length,
       tasks: [...ledger.tasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200) }
   }
   async retry(id: string): Promise<void> {

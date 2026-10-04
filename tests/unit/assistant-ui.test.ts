@@ -28,7 +28,7 @@ beforeAll(async () => {
       factReviewContext:async()=>({targets:[],competing:[],blocked:false}),
       personalProfileEditContext:async()=>({hash:'profile-hash',overrides:{identity:'Tree',formatPrefs:['Concise answers'],toolPrefs:['TypeScript']}}),
       savePersonalProfile:async input=>{window.calls.push(input)},
-      automationStatus:async()=>({enabled:window.autoEnabled??false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
+      automationStatus:async()=>({enabled:window.autoEnabled??false,running:false,stages:{extraction:'rules-only',entryReview:'automatic',wikiGeneration:'automatic',wikiReview:'automatic'},queue:[],counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
       automationRun:async()=>{window.calls.push('check')},
       getPersonalSettings:async()=>({captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60}),
       externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''},...[['claude-code','Claude Code'],['opencode','OpenCode'],['janus','Janus CLI'],['dsh','DeepSeek / dsh']].map(([id,label])=>({id,label,support:['claude-code','opencode'].includes(id)?'automatic':'unverified',registered:false,configPath:''}))]}),
@@ -189,7 +189,7 @@ it('shows background automation first, keeps manual checks secondary and separat
     await page.getByRole('button', { name: 'Review', exact: true }).click()
     const automation = page.getByRole('region', { name: 'Automation progress', exact: true })
     await automation.getByText('Background processing enabled', { exact: true }).waitFor()
-    expect(await automation.getByRole('button', { name: 'Check now', exact: true }).isVisible()).toBe(false)
+    expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).isVisible()).toBe(false)
     expect(await page.evaluate(() => (window as any).calls)).toEqual([])
     await page.getByRole('article').first().waitFor()
     const controlBounds = (await automation.boundingBox())!
@@ -197,7 +197,7 @@ it('shows background automation first, keeps manual checks secondary and separat
     expect(cardBounds.y - controlBounds.y - controlBounds.height).toBeGreaterThanOrEqual(13)
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/automation-background-sidebar.png', animations: 'disabled' })
     await automation.getByText('More actions', { exact: true }).click()
-    await automation.getByRole('button', { name: 'Check now', exact: true }).click()
+    await automation.getByRole('button', { name: 'Run once now', exact: true }).click()
     expect(await page.evaluate(() => (window as any).calls)).toEqual(['check'])
     await page.getByRole('button', { name: 'Profile', exact: true }).click()
     await page.evaluate(() => { (window as any).autoEnabled = false; document.documentElement.dataset.theme = 'planche' })
@@ -206,7 +206,7 @@ it('shows background automation first, keeps manual checks secondary and separat
     await automation.getByRole('button', { name: 'Preferences', exact: true }).click()
     expect(await page.evaluate(() => (window as any).settingsRequested)).toBe(1)
     await automation.getByText('More actions', { exact: true }).click()
-    expect(await automation.getByRole('button', { name: 'Check now', exact: true }).isDisabled()).toBe(true)
+    expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).isDisabled()).toBe(true)
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/automation-paused-sidebar.png', animations: 'disabled' })
   } finally { await page.close() }
 })
