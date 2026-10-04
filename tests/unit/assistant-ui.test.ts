@@ -17,6 +17,7 @@ beforeAll(async () => {
     import {useAssistantStore} from './src/renderer/src/stores/assistant'
     import {useRightToolStore} from './src/renderer/src/stores/right-tools'
     window.calls=[];window.features=useExperimentalStore;window.assistant=useAssistantStore;window.dock=useRightToolStore
+    window.settingsRequested=0;window.addEventListener('janusx:open-knowledge-settings',()=>window.settingsRequested++)
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true,load:async()=>{}})
     const candidate=(id,scope)=>({id,type:'fact',status:'proposed',derivation:'deterministic',evidence:{observationIds:[]},fact:{id,content:id,kind:'preference',scope,confidence:0.9,tags:[],concepts:[],provenance:{workspaceId:scope==='user'?'user':'project',sourceObservationIds:[],fileRefs:[],createdAt:'2026-10-04'}}})
     window.reviewItems=[];window.delayCandidates=false
@@ -27,7 +28,8 @@ beforeAll(async () => {
       factReviewContext:async()=>({targets:[],competing:[],blocked:false}),
       personalProfileEditContext:async()=>({hash:'profile-hash',overrides:{identity:'Tree',formatPrefs:['Concise answers'],toolPrefs:['TypeScript']}}),
       savePersonalProfile:async input=>{window.calls.push(input)},
-      automationStatus:async()=>({enabled:false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
+      automationStatus:async()=>({enabled:window.autoEnabled??false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
+      automationRun:async()=>{window.calls.push('check')},
       getPersonalSettings:async()=>({captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60}),
       externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''},...[['claude-code','Claude Code'],['opencode','OpenCode'],['janus','Janus CLI'],['dsh','DeepSeek / dsh']].map(([id,label])=>({id,label,support:['claude-code','opencode'].includes(id)?'automatic':'unverified',registered:false,configPath:''}))]}),
       registerExternalMcp:async id=>{window.calls.push(id);return {ok:true,configPath:'config.toml'}},
@@ -176,6 +178,36 @@ it('keeps sidebar profile editing and compact review usable at 320 pixels', asyn
     await page.getByText('Personal review one', { exact: true }).waitFor()
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/assistant-review-compact.png', animations: 'disabled' })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  } finally { await page.close() }
+})
+
+it('shows background automation first, keeps manual checks secondary and separates review cards', async () => {
+  const page = await browser.newPage({ viewport: { width: 320, height: 850 } })
+  try {
+    await mount(page, 'assist')
+    await page.evaluate(() => { (window as any).seedReview(); (window as any).autoEnabled = true; document.documentElement.dataset.theme = 'dark' })
+    await page.getByRole('button', { name: 'Review', exact: true }).click()
+    const automation = page.getByRole('region', { name: 'Automation progress', exact: true })
+    await automation.getByText('Background processing enabled', { exact: true }).waitFor()
+    expect(await automation.getByRole('button', { name: 'Check now', exact: true }).isVisible()).toBe(false)
+    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+    await page.getByRole('article').first().waitFor()
+    const controlBounds = (await automation.boundingBox())!
+    const cardBounds = (await page.getByRole('article').first().boundingBox())!
+    expect(cardBounds.y - controlBounds.y - controlBounds.height).toBeGreaterThanOrEqual(13)
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/automation-background-sidebar.png', animations: 'disabled' })
+    await automation.getByText('More actions', { exact: true }).click()
+    await automation.getByRole('button', { name: 'Check now', exact: true }).click()
+    expect(await page.evaluate(() => (window as any).calls)).toEqual(['check'])
+    await page.getByRole('button', { name: 'Profile', exact: true }).click()
+    await page.evaluate(() => { (window as any).autoEnabled = false; document.documentElement.dataset.theme = 'planche' })
+    await page.getByRole('button', { name: 'Review', exact: true }).click()
+    await automation.getByText('Automatic processing is off', { exact: true }).waitFor()
+    await automation.getByRole('button', { name: 'Preferences', exact: true }).click()
+    expect(await page.evaluate(() => (window as any).settingsRequested)).toBe(1)
+    await automation.getByText('More actions', { exact: true }).click()
+    expect(await automation.getByRole('button', { name: 'Check now', exact: true }).isDisabled()).toBe(true)
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/automation-paused-sidebar.png', animations: 'disabled' })
   } finally { await page.close() }
 })
 

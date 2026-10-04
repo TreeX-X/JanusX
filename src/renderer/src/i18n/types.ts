@@ -2,6 +2,10 @@
 // Regenerate via `npm run i18n:types` after changing locale JSON files.
 
 export type TypedI18nKey =
+  | 'knowledge:automation.backgroundHint'
+  | 'knowledge:automation.configurationHint'
+  | 'knowledge:automation.pausedHint'
+  | 'knowledge:automation.processing'
   | 'knowledge:review.moreActions'
   | 'blueprint:action.addChild'
   | 'blueprint:action.addFeature'

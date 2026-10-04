@@ -9,7 +9,10 @@
 .metric { display: inline-flex; gap: 5px; align-items: baseline; color: var(--shell-muted); font-size: 10px; }
 .metric b { font-size: 11px; font-weight: 600; color: var(--shell-text); font-variant-numeric: tabular-nums; }
 .root [data-attention='true'], .metric[data-attention='true'] b { color: var(--shell-accent); }
-.actions { display: flex; gap: 6px; margin-left: auto; }
+.actions { margin-left: auto; }
+.actions > summary { cursor: pointer; color: var(--shell-muted); font-size: 10px; padding: 4px; }
+.actions > summary:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+.actionButtons { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
 .root button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px; padding: 4px 8px; border: 1px solid var(--control-border); border-radius: 5px; background: transparent; color: var(--shell-text); font: inherit; cursor: pointer; }
 .root button:hover:not(:disabled) { background: var(--shell-hover); }
 .root button:disabled { cursor: default; opacity: .45; }

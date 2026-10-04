@@ -38,6 +38,8 @@ MemorySurface.module.css 提供两域共同的卡片边框、圆角、内边距�
 
 待审核卡片突出范围、正文、来源入口和审核动作，使用两域共用卡片表面；用途说明置于来源详情。评分、精炼与旧记录导入收进“更多操作”，降低窄侧栏的按钮密度。冲突检查、旧值展示和替换确认仍直接可见，不因视觉精简跳过确认或降低审核条件。
 
+自动处理区以后台状态与计数为主，区分已开启、运行中和未启用，并说明应用运行时无需手动启动。调度由主进程在启动、队列处理后及约每 60 秒触发；界面每五秒读取状态。手动“立即检查”位于“更多操作”，仅提前执行一次既有队列流程，不修改开关或替代后台调度；运行中和未启用时禁用该操作，设置页仍允许保存配置后触发。未启用时提示检查采集与自动处理开关，有 stage-not-configured 任务时提示配置模型。设置快捷入口在工作台内切换设置页，侧栏通过标题栏打开知识设置。自动处理区与审核列表之间保留 14px 外间距、12px 内留白及主题分隔线。
+
 设置页面按功能使用有边框、内边距、标题分隔和主题背景的卡片。知识库分为采集、自动处理与 MCP 接入，自动处理内部的四环节和连接配置有独立边界。个人设置分为记忆积累、对话使用和近期记忆保留三张卡片，保留即时保存与原有开关语义。卡片共享 KnowledgeSettingsPanel.module.css，完整工作台中的个人设置也使用同一布局。
 
 设置导航按应用设置、知识与记忆、模型与用量、代理与协作分组，组内统一使用图标、标题、说明和选中指示。知识库与个人画像独立按创新开关显示，双域关闭时隐藏空分组；正在查看的领域关闭时回到通用设置。模型配置、模型目录与用量处于同组。桌面导航独立纵向滚动，窄窗口保留组名与分隔并横向滚动，键盘聚焦可到达末尾项目。
@@ -69,6 +71,8 @@ MemorySurface.module.css 提供两域共同的卡片边框、圆角、内边距�
 右侧种类减少，完整画像具备分类和详情阅读能力。代价是两个尺寸的呈现组件和旧入口别名需要维护。审核数量是定期更新的显示信息，不是事务授权依据；真实操作仍读取并校验最新快照。卡片正文可截断，详情必须完整可读。
 
 ## Verification
+
+后台状态呈现与审核间距：npx vitest run tests/unit/assistant-ui.test.ts tests/unit/knowledge-automation-ui.test.ts tests/unit/memory-review-ui.test.ts --maxWorkers=2 --reporter=dot，三文件 24 项通过。验证默认不显示手动运行按钮、展开后执行一次检查、未启用时禁用检查及设置请求、自动处理区与首张审核卡片间距至少 13px；设置页保存后执行流程保持可用。类型、构建、i18n 和变更组件 ESLint 通过，Note 检查为 240 篇、0 结构错误、27 项既有链接诊断。日志位于 artifacts/memory-domain-acceptance/automation-background-*.log，深浅主题截图为 automation-background-sidebar.png 与 automation-paused-sidebar.png。
 
 设置快捷入口与右侧助手精简：npx vitest run tests/unit/assistant-ui.test.ts tests/unit/personal-profile-editor-ui.test.ts tests/unit/memory-review-ui.test.ts tests/unit/knowledge-automation-ui.test.ts --maxWorkers=2 --reporter=dot，四文件 28 项通过。覆盖工程设置直接打开和保存、个人领域保持启用、320px 侧栏编辑保存、快照过期阻止提交、遗忘失败恢复，以及展开辅助操作后的评分和旧记录导入。类型检查、隔离构建、i18n、六个变更组件 ESLint 通过。Note 检查为 240 篇、0 结构错误、27 项既有链接诊断。日志为 artifacts/memory-domain-acceptance/assistant-refine-*.log，截图为 assistant-profile-compact.png、assistant-profile-editor.png 和 assistant-review-compact.png；浏览器 IPC 使用替身。
 

@@ -45,6 +45,15 @@ export function Titlebar() {
   islandPinnedRef.current = islandPinned
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
+  useEffect(() => {
+    const openKnowledgeSettings = () => {
+      if (!useExperimentalStore.getState().knowledge) return
+      setSettingsInitialTab('knowledge')
+      setSettingsModalOpen(true)
+    }
+    window.addEventListener('janusx:open-knowledge-settings', openKnowledgeSettings)
+    return () => window.removeEventListener('janusx:open-knowledge-settings', openKnowledgeSettings)
+  }, [])
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 侧栏团队区请求打开设置 team 页（计数器变化即打开）。
   // 创新开关关闭时忽略请求：入口已隐藏，不应再弹出 team 页。

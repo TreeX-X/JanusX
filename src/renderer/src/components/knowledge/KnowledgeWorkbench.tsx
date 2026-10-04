@@ -383,7 +383,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
         <div className={styles.statusCard} style={cardStyle(1)}>
           {domain === 'personal' ? <div className={styles.personalStatus}><strong>{t('knowledge:domains.personal')}</strong><span>{t('knowledge:personalBoard.description')}</span></div> : <>
           <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
-          <AutomationStatus active={isOpen} onChanged={() => void refresh()} />
+          <AutomationStatus active={isOpen} onChanged={() => void refresh()} onOpenSettings={() => activateTab('settings')} />
           </>}
         </div>
         <main key={domain} className={styles.grid} data-domain={domain} data-detail-open={cardPlan.detailOpen ? 'true' : 'false'}>

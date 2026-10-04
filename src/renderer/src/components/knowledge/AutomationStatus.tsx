@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Activity, Play, RotateCw } from 'lucide-react'
+import { Activity, RotateCw } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
 import styles from './AutomationStatus.module.css'
 
-export function AutomationStatus({ active, beforeRun, disabled = false, onChanged }: {
-  active: boolean; disabled?: boolean; beforeRun?: () => Promise<boolean>; onChanged?: () => void
+// Note: background scheduling is primary; manual checks are secondary — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+export function AutomationStatus({ active, beforeRun, disabled = false, onChanged, onOpenSettings }: {
+  active: boolean; disabled?: boolean; beforeRun?: () => Promise<boolean>; onChanged?: () => void; onOpenSettings?: () => void
 }) {
   const { t } = useI18n('knowledge')
   const [status, setStatus] = useState<KnowledgeAutomationStatus | null>(null)
@@ -46,16 +47,22 @@ export function AutomationStatus({ active, beforeRun, disabled = false, onChange
     <div className={styles.overview}>
       <h4><Activity size={13} aria-hidden />{t('knowledge:automation.progress')}</h4>
       {status && !error && <div className={styles.metrics} role="status">
-        <span className={styles.state} data-enabled={status.enabled}>{t(status.enabled ? 'knowledge:automation.active' : 'knowledge:automation.paused')}</span>
+        <span className={styles.state} data-enabled={status.enabled}>{t(status.running ? 'knowledge:automation.processing' : status.enabled ? 'knowledge:automation.active' : 'knowledge:automation.paused')}</span>
         {(['pending', 'running', 'succeeded', 'needs-review', 'failed'] as const).map(name => <span className={styles.metric} key={name} data-attention={status.counts[name] > 0 && (name === 'failed' || name === 'needs-review')}>
           <span>{t(`knowledge:automation.status.${name}`)}</span><b>{status.counts[name]}</b>
         </span>)}
       </div>}
-      <div className={styles.actions}>
-        <button type="button" disabled={busy || disabled || !beforeRun && !status?.enabled} onClick={() => void run()}><Play size={12} aria-hidden />{t('knowledge:automation.run')}</button>
+      <details className={styles.actions}>
+        <summary>{t('knowledge:review.moreActions')}</summary>
+        <div className={styles.actionButtons}>
+        <button type="button" disabled={busy || disabled || status?.running || !beforeRun && !status?.enabled} onClick={() => void run()}><RotateCw size={12} aria-hidden />{t('knowledge:automation.run')}</button>
         {beforeRun && <button type="button" disabled={busy || disabled} onClick={() => void run(true)}>{t('knowledge:automation.backfill')}</button>}
-      </div>
+        </div>
+      </details>
     </div>
+    {status && !error && <p className={styles.hint}>{t(status.enabled ? 'knowledge:automation.backgroundHint' : 'knowledge:automation.pausedHint')}</p>}
+    {status?.tasks.some(task => task.status === 'needs-review' && task.reason === 'stage-not-configured') && <p className={styles.hint}>{t('knowledge:automation.configurationHint')}</p>}
+    {!beforeRun && status && (!status.enabled || status.tasks.some(task => task.reason === 'stage-not-configured' && task.status === 'needs-review')) && <button type="button" onClick={() => onOpenSettings ? onOpenSettings() : window.dispatchEvent(new Event('janusx:open-knowledge-settings'))}>{t('knowledge:domains.settings')}</button>}
     {error && <p className={styles.error} role="alert">{error}</p>}
     {beforeRun && <p className={styles.hint}>{t('knowledge:automation.backfillHint')}</p>}
     {!!status?.tasks.length && <details className={styles.records}><summary>{t('knowledge:automation.records')}</summary>

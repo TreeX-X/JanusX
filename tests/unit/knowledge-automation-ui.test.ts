@@ -79,7 +79,8 @@ it('configures all four stages, excludes Jev generation, saves before running an
     expect(await page.getByText('Disabled', { exact: true }).count()).toBeGreaterThan(0)
     expect(await page.evaluate(() => (window as any).calls)).toEqual([])
     await page.getByRole('checkbox', { name: 'Enable automatic review and publication' }).check()
-    await page.getByRole('button', { name: 'Process pending', exact: true }).click()
+    await page.getByRole('region', { name: 'Automation progress', exact: true }).getByText('More actions', { exact: true }).click()
+    await page.getByRole('button', { name: 'Check now', exact: true }).click()
     await expect.poll(() => page.evaluate(() => (window as any).calls)).toEqual(['save','run'])
     expect(await page.evaluate(() => Object.values((window as any).config.automation.stages).every((stage: any) => stage.provider === 'external' && stage.model === 'chosen-reviewer'))).toBe(true)
   } finally { await page.close() }
@@ -243,7 +244,7 @@ it('opens engineering settings directly inside the knowledge workbench', async (
     await mount(page, true)
     await page.evaluate(() => (window as any).showMemory())
     await page.getByRole('navigation', { name: 'Knowledge & memory', exact: true }).getByRole('button', { name: 'Project knowledge', exact: true }).click()
-    await page.getByRole('button', { name: 'Preferences', exact: true }).click()
+    await page.locator('[data-domain="engineering"] nav').getByRole('button', { name: 'Preferences', exact: true }).click()
     await page.getByRole('heading', { name: 'Knowledge automation', exact: true }).waitFor()
     const recording = page.getByRole('checkbox', { name: 'Enable knowledge recording', exact: true })
     await recording.uncheck()
