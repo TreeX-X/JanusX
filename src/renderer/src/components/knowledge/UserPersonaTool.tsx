@@ -1,5 +1,6 @@
 import { PersonalMemoryBoard } from './PersonalMemoryBoard'
 import { CardSkeleton } from '../shared/CardFrame'
+import surface from './MemorySurface.module.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UserMemoryOverview, UserMemoryOverviewHabit } from '../../../../shared/knowledge'
 import { getUserMemoryOverview } from '../../services/knowledge'
@@ -58,7 +59,7 @@ export function UserPersonaTool({ active = true, onOpenReview, expanded = false 
   }, [openTool])
 
   return (
-    <section className={styles.root} data-expanded={expanded || undefined} aria-busy={loadState === 'loading'} aria-label={t('knowledge:persona.toolAria')}>
+    <section key={editingProfile ? 'edit' : correcting ? 'correct' : forgetting ? 'forget' : 'overview'} className={`${styles.root} ${surface.enter}`} data-persona="true" data-expanded={expanded || undefined} aria-busy={loadState === 'loading'} aria-label={t('knowledge:persona.toolAria')}>
       {loadState === 'loading' && !correcting && !forgetting && !editingProfile && (
         <CardSkeleton lines={4} label={t('knowledge:state.loading.title')} />
       )}

@@ -237,6 +237,22 @@ it('keeps feature state on save failure and prevents repeated submissions while 
   } finally { await page.close() }
 })
 
+it('opens engineering settings directly inside the knowledge workbench', async () => {
+  const page = await browser.newPage({ viewport: { width: 1200, height: 850 } })
+  try {
+    await mount(page, true)
+    await page.evaluate(() => (window as any).showMemory())
+    await page.getByRole('navigation', { name: 'Knowledge & memory', exact: true }).getByRole('button', { name: 'Project knowledge', exact: true }).click()
+    await page.getByRole('button', { name: 'Preferences', exact: true }).click()
+    await page.getByRole('heading', { name: 'Knowledge automation', exact: true }).waitFor()
+    const recording = page.getByRole('checkbox', { name: 'Enable knowledge recording', exact: true })
+    await recording.uncheck()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => (window as any).config.enabled)).toBe(false)
+    expect(await page.evaluate(() => (window as any).features.getState().persona)).toBe(true)
+  } finally { await page.close() }
+})
+
 it('requires passing checks before offering local stages and disables immediately without Save', async () => {
   const page = await browser.newPage()
   try {

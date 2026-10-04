@@ -1761,6 +1761,7 @@
 .personalStatus { display: flex; flex-direction: column; gap: 6px; color: var(--shell-text); }
 .personalStatus span { color: var(--shell-muted); }
 .personalContent { min-height: 0; overflow: auto; }
+.settingsContent { min-height: 0; overflow: auto; }
 .personalContent > section { min-height: 0; flex: 1; }
 .grid { --card-enter-stagger: 0ms; --card-enter-duration: 180ms; }
 @media (max-width: 760px) {

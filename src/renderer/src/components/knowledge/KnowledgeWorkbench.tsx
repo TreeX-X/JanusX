@@ -3,6 +3,7 @@ import { useExperimentalStore } from '@/stores/experimental'
 import { UserPersonaTool } from './UserPersonaTool'
 import { MemoryReviewTool } from './MemoryReviewTool'
 import { PersonalMemorySettingsPanel } from '../PersonalMemorySettingsPanel'
+import { KnowledgeSettingsPanel } from '../KnowledgeSettingsPanel'
 import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
@@ -46,7 +47,7 @@ import '../shared/CardFrame.css'
 import surface from './MemorySurface.module.css'
 import styles from './KnowledgeWorkbench.module.css'
 
-export type KnowledgeWorkbenchTab = 'inbox' | 'library' | 'wiki' | 'graph' | 'search' | 'audit'
+export type KnowledgeWorkbenchTab = 'inbox' | 'library' | 'wiki' | 'graph' | 'search' | 'audit' | 'settings'
 type Candidate = CandidateFact | CandidateWikiPatch | CandidateGraphEdge
 
 /** §9.1: left-rail grouping mirrors the demo skeleton (workbench vs special views). */
@@ -110,6 +111,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     graph: t('knowledge:tab.graph'),
     search: t('knowledge:tab.search'),
     audit: t('knowledge:tab.audit'),
+    settings: t('knowledge:domains.settings'),
   }
   const [tab, setTab] = useState<KnowledgeWorkbenchTab>('inbox')
   const activeTabRef = useRef(tab)
@@ -234,7 +236,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   }, [isOpen, query, tab, domain, engineeringEnabled])
 
   const selected = useMemo(
-    () => tab === 'search' || tab === 'audit' || tab === 'graph'
+    () => tab === 'settings' ? null : tab === 'search' || tab === 'audit' || tab === 'graph'
       ? selectedSearch
       : snapshot ? resolveRecordForTab(snapshot, tab, selectedId) : null,
     [selectedId, selectedSearch, snapshot, tab],
@@ -317,6 +319,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     graph: snapshot?.graphCandidates.length ?? 0,
     search: searchCards.length,
     audit: snapshot?.auditEvents.length ?? 0,
+    settings: 0,
   }
   const paneCount = tabCounts[tab]
 
@@ -425,15 +428,17 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                 <span className={styles.paneCount}>{tabCounts[item]}</span>
               </button>
             ))}
+            <button type="button" className={`${styles.navButton} ${tab === 'settings' ? styles.navActive : ''}`} aria-current={tab === 'settings' ? 'page' : undefined} onClick={() => activateTab('settings')}>{TAB_LABELS.settings}</button>
           </nav>
-          <section key={tab} className={styles.stage} style={cardStyle(3)} aria-busy={loadState === 'loading'}>
+          <section key={tab} className={styles.stage} style={cardStyle(3)} aria-busy={tab !== 'settings' && loadState === 'loading'}>
             <div className={styles.paneHeader}>
               <div className={styles.paneTitle}>{paneTitle}</div>
-              <span className={styles.paneCount} aria-label={t('knowledge:aria.paneCount', { title: paneTitle })}>{paneCount}</span>
+              {tab !== 'settings' && <span className={styles.paneCount} aria-label={t('knowledge:aria.paneCount', { title: paneTitle })}>{paneCount}</span>}
             </div>
-            {loadState === 'loading' && <CardSkeleton lines={4} label={t('knowledge:state2.loadingRecords')} />}
-            {loadState === 'error' && <StateBlock title={t('knowledge:state2.workbenchUnavailable')} detail={loadError} />}
-            {loadState === 'idle' && snapshot && <>
+            {tab === 'settings' && <div className={styles.settingsContent}><KnowledgeSettingsPanel /></div>}
+            {tab !== 'settings' && loadState === 'loading' && <CardSkeleton lines={4} label={t('knowledge:state2.loadingRecords')} />}
+            {tab !== 'settings' && loadState === 'error' && <StateBlock title={t('knowledge:state2.workbenchUnavailable')} detail={loadError} />}
+            {tab !== 'settings' && loadState === 'idle' && snapshot && <>
               {tab === 'inbox' && <CardCollection title={t('knowledge:inbox.empty.title')} detail={t('knowledge:inbox.empty.detail')} cards={candidatesForTab(snapshot, 'inbox', 'engineering').map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'library' && <CardCollection title={t('knowledge:library.empty.title')} detail={t('knowledge:library.empty.detail')} cards={snapshot.libraryCards} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'search' && <SearchLab query={query} onQueryChange={setQuery} cards={searchCards} state={searchState} selectedId={selectedId} onSelect={(card) => { setSelectedSearch(recordFromCard(card)); setSelectedId(card.id) }} />}

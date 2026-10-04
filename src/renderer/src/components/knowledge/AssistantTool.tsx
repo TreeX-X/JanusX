@@ -6,6 +6,7 @@ import { KnowledgeAssist } from './KnowledgeAssist'
 import { UserPersonaTool } from './UserPersonaTool'
 import { MemoryReviewTool } from './MemoryReviewTool'
 import styles from './AssistantTool.module.css'
+import surface from './MemorySurface.module.css'
 
 export function AssistantTool({ active, workspaceId, workspacePath }: {
   active: boolean; workspaceId: string | null; workspacePath: string | null
@@ -21,7 +22,7 @@ export function AssistantTool({ active, workspaceId, workspacePath }: {
       {(['engineering', 'personal', 'review'] as const).filter(item => item === 'review' || (item === 'engineering' ? engineering : personal)).map(item =>
         <button key={item} type="button" aria-pressed={section === item} onClick={() => setSection(item)}>{t(`knowledge:assistant.${item}`)}</button>)}
     </nav>
-    <div className={styles.content}>
+    <div key={section} className={`${styles.content} ${surface.enter}`}>
       {section === 'engineering' && <KnowledgeAssist workspaceId={workspaceId} workspacePath={workspacePath} />}
       {section === 'personal' && <UserPersonaTool active={active} onOpenReview={() => setSection('review')} />}
       {section === 'review' && <MemoryReviewTool active={active} />}

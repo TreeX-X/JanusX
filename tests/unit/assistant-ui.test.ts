@@ -25,6 +25,8 @@ beforeAll(async () => {
       listCandidates:async()=>{if(window.delayCandidates)await new Promise(resolve=>window.finishCandidates=resolve);return structuredClone(window.reviewItems)},listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
       listObservations:async()=>[],listAudit:async()=>[],retentionStats:async()=>null,listTruth:async()=>({facts:[],wikiPages:[],graphEdges:[]}),getSettings:async()=>({mode:'deterministic-only'}),listConflicts:async()=>[],processingStats:async()=>null,
       factReviewContext:async()=>({targets:[],competing:[],blocked:false}),
+      personalProfileEditContext:async()=>({hash:'profile-hash',overrides:{identity:'Tree',formatPrefs:['Concise answers'],toolPrefs:['TypeScript']}}),
+      savePersonalProfile:async input=>{window.calls.push(input)},
       automationStatus:async()=>({enabled:false,running:false,counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
       getPersonalSettings:async()=>({captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60}),
       externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''},...[['claude-code','Claude Code'],['opencode','OpenCode'],['janus','Janus CLI'],['dsh','DeepSeek / dsh']].map(([id,label])=>({id,label,support:['claude-code','opencode'].includes(id)?'automatic':'unverified',registered:false,configPath:''}))]}),
@@ -149,6 +151,31 @@ it('shares the workbench shell across domains, isolates review queues and shows 
     await domains.getByRole('button', { name: 'Project knowledge', exact: true }).click()
     await page.getByRole('button').filter({ hasText: 'Engineering review item' }).waitFor()
     expect(await page.locator('[data-domain="engineering"]').evaluate(element => element.getAnimations({ subtree: true }).some(animation => animation.playState === 'running' && ['memory-content-in', 'knowledge-workbench-in'].some(name => (animation as CSSAnimation).animationName?.includes(name))))).toBe(false)
+  } finally { await page.close() }
+})
+
+it('keeps sidebar profile editing and compact review usable at 320 pixels', async () => {
+  const page = await browser.newPage({ viewport: { width: 320, height: 760 } })
+  try {
+    await mount(page, 'assist')
+    await page.evaluate(() => document.documentElement.dataset.theme = 'dark')
+    await page.getByRole('button', { name: 'Profile', exact: true }).click()
+    await page.getByText('Tree', { exact: true }).waitFor()
+    expect(await page.getByText('source-1', { exact: true }).isVisible()).toBe(false)
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/assistant-profile-compact.png', animations: 'disabled' })
+    await page.getByRole('button', { name: 'Edit personal profile', exact: true }).click()
+    const form = page.getByRole('form', { name: 'Edit personal profile', exact: true })
+    await form.getByRole('textbox').first().fill('Updated identity')
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/assistant-profile-editor.png', animations: 'disabled' })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await form.getByRole('button', { name: 'Save profile', exact: true }).click()
+    await page.getByText('Tree', { exact: true }).waitFor()
+    expect(await page.evaluate(() => (window as any).calls.at(-1))).toMatchObject({ expectedHash: 'profile-hash', overrides: { identity: 'Updated identity' } })
+    await page.evaluate(() => { (window as any).seedReview(); document.documentElement.dataset.theme = 'planche' })
+    await page.getByRole('button', { name: 'Review', exact: true }).click()
+    await page.getByText('Personal review one', { exact: true }).waitFor()
+    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/assistant-review-compact.png', animations: 'disabled' })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   } finally { await page.close() }
 })
 

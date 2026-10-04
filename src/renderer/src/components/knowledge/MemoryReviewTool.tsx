@@ -128,9 +128,11 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
       {!loading && <div className={expanded ? `${surface.grid} ${surface.enter}` : styles.reviewList}>{filterInboxByScope(visibleCandidates, selectedScope).map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} onDecision={candidate.type === 'fact' && !isUserScopeCandidate(candidate) ? action => void decide(candidate, action) : undefined} />)}</div>}
     </div>
     <footer className={styles.filters}>
-      {personal && <LegacyEpisodeMigrationControl />}
       <button type="button" disabled={busy || loading} onClick={() => void refresh()}>{t(domain === 'user' ? 'knowledge:personalBoard.refresh' : 'knowledge:action.refresh')}</button>
-      {personal && <button type="button" disabled={busy || loading} onClick={() => void importLegacy()}>{t('knowledge:review.importLegacy')}</button>}
+      {personal && <details className={styles.moreActions}><summary>{t('knowledge:review.moreActions')}</summary><div className={styles.filters}>
+        <LegacyEpisodeMigrationControl />
+        <button type="button" disabled={busy || loading} onClick={() => void importLegacy()}>{t('knowledge:review.importLegacy')}</button>
+      </div></details>}
     </footer>
   </section>
 }
@@ -142,7 +144,6 @@ export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, co
   const content = candidate.type === 'fact' ? candidate.fact.content : candidate.type === 'wiki-patch' ? candidate.patchMarkdown : `${candidate.edge.from} → ${candidate.edge.to} (${candidate.edge.type})`
   return <article className={`${styles.card} ${surface.card}`}>
     <strong>{t(personal ? 'knowledge:inbox.scope.personal' : 'knowledge:inbox.scope.engineering')}</strong>
-    <p>{t(personal ? 'knowledge:review.personalUse' : 'knowledge:review.engineeringUse')}</p>
     {candidate.type === 'fact' && candidate.legacySource && <p>{t('knowledge:review.legacySource')}</p>}
     {candidate.type === 'fact' && candidate.personalCorrection && <>
       <strong>{t('knowledge:review.correctionTitle')}</strong>
@@ -164,6 +165,7 @@ export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, co
     </details>}
     <details>
       <summary>{t('knowledge:inspector.provenance')}</summary>
+      <p>{t(personal ? 'knowledge:review.personalUse' : 'knowledge:review.engineeringUse')}</p>
       <p>{candidate.type === 'fact' ? candidate.fact.kind : candidate.type} · {candidate.derivation}</p>
       <p>{provenance?.workspaceName || provenance?.workspaceId || (candidate.type === 'graph-edge' ? candidate.edge.workspaceId : '')}</p>
       <p>{provenance?.fileRefs.join(' · ')}</p>
@@ -176,10 +178,10 @@ export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, co
     <div className={styles.filters}>
       {candidate.type === 'fact' ? <FactReviewControls candidate={candidate} disabled={disabled} onApprove={replacement => onReview(true, replacement)} /> : <button type="button" disabled={disabled} onClick={() => onReview(true)}>{t('knowledge:action.approve')}</button>}
       <button type="button" disabled={disabled} onClick={() => onReview(false)}>{t('knowledge:action.reject')}</button>
-      {onDecision && candidate.type === 'fact' && candidate.derivation === 'deterministic' && !candidate.legacySource && !candidate.personalCorrection && !candidate.id.startsWith('remember-candidate:') && <>
+      {onDecision && candidate.type === 'fact' && candidate.derivation === 'deterministic' && !candidate.legacySource && !candidate.personalCorrection && !candidate.id.startsWith('remember-candidate:') && <details className={styles.moreActions}><summary>{t('knowledge:review.moreActions')}</summary><div className={styles.filters}>
         <button type="button" disabled={disabled} onClick={() => onDecision('score')}>{t('knowledge:review.rescore')}</button>
         <button type="button" disabled={disabled} onClick={() => onDecision('refine')}>{t('knowledge:review.refine')}</button>
-      </>}
+      </div></details>}
     </div>
   </article>
 }

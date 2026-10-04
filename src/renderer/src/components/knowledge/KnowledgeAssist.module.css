@@ -92,3 +92,4 @@
 .root[data-expanded="true"] .state { min-height: 64px; }
 
 .root[data-expanded="true"] { display: block; }
+.root[data-persona="true"] { display: block; overflow: auto; }

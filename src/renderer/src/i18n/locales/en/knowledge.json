@@ -244,6 +244,7 @@
     "workbenchUnavailable": "Workbench unavailable"
   },
   "review": {
+    "moreActions": "More actions",
     "conflictLoadFailed": "Conflict check failed. Refresh before approving.",
     "checkingConflicts": "Checking current facts…",
     "singleValue": "Single-value fact",

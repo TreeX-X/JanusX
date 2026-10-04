@@ -244,6 +244,7 @@
     "workbenchUnavailable": "工作台不可用"
   },
   "review": {
+    "moreActions": "更多操作",
     "conflictLoadFailed": "冲突检查失败，请刷新后批准。",
     "checkingConflicts": "正在核对当前事实…",
     "singleValue": "单值事实",
