@@ -7,9 +7,14 @@ const mocks = vi.hoisted(() => ({
   scheduleImmediate: vi.fn(),
 }))
 
+vi.mock('../../../src/main/knowledge/capture-inbox', () => ({ knowledgeCaptureInbox: {
+  submit: async entries => Promise.all(entries.map(entry => mocks.capture(entry.input, entry.context))), drain: vi.fn(),
+} }))
+
 vi.mock('../../../src/main/knowledge/observation-service', () => ({
   knowledgeObservationService: {
     capture: mocks.capture,
+    listAll: async () => [],
   },
 }))
 
@@ -22,6 +27,7 @@ vi.mock('../../../src/main/knowledge/processing-queue', () => ({
 vi.mock('../../../src/main/config/service', () => ({
   configService: {
     getKnowledgeSettings: mocks.getKnowledgeSettings,
+    getExperimentalFeatures: async () => ({ knowledge: true }),
   },
 }))
 
@@ -95,6 +101,7 @@ describe('AgentTurnRecorder', () => {
           prompt: 'Implement knowledge capture',
         }),
       }),
+      expect.objectContaining({ speaker: 'unknown', sourceEventId: expect.any(String) }),
     )
   })
 

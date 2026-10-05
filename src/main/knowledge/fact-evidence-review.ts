@@ -24,10 +24,15 @@ export async function validateFactEvidence(candidate: CandidateFact): Promise<vo
     const sameOwner = current.workspaceId === candidate.fact.provenance.workspaceId && observationScope(current) === factScope(candidate.fact)
     if (!sameOwner && !(factScope(candidate.fact) === 'user' && isUserStatement(current))) throw new Error('Candidate source ownership does not match')
     const actual = sourceEvidence(current)
+    const fullContent = await knowledgeObservationService.resolveContent(current)
     if (!expected.contentHash) throw new Error('Candidate source content binding is missing; regenerate before reviewing')
     if (Object.keys({ ...expected, ...actual }).some(key => expected[key as keyof MemorySourceEvidence] !== actual[key as keyof MemorySourceEvidence])
-      || createHash('sha256').update(await knowledgeObservationService.resolveContent(current)).digest('hex') !== expected.contentHash) {
+      || createHash('sha256').update(fullContent).digest('hex') !== expected.contentHash) {
       throw new Error('Candidate source changed; regenerate before reviewing')
+    }
+    for (const quote of candidate.evidence.quotes ?? []) {
+      if (!ids.includes(quote.observationId) || !quote.quote.trim()) throw new Error('Candidate quote source is invalid')
+      if (quote.observationId === current.id && !fullContent.includes(quote.quote)) throw new Error('Candidate source quote changed')
     }
   }
 }

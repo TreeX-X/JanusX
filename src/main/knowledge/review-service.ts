@@ -194,7 +194,7 @@ export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<
 }
 
 /** Single fact admission path: producers propose, explicit review applies. */
-export async function proposeFactCandidates(candidates: CandidateFact[]): Promise<CandidateFact[]> {
+export async function proposeFactCandidates(candidates: CandidateFact[], mergeExact = false): Promise<CandidateFact[]> {
   if (candidates.length === 0) return []
   return withFactCandidatesLock(async () => {
     for (const candidate of candidates) await assertCandidateAllowed(candidate, 'propose')
@@ -204,7 +204,9 @@ export async function proposeFactCandidates(candidates: CandidateFact[]): Promis
     try { content = await readFile(file, 'utf8') } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
-    const ids = new Set(content.split('\n').filter((line) => line.trim()).map((line) => (JSON.parse(line) as CandidateFact).id))
+    const existing = content.split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line) as CandidateFact)
+    const ids = new Set(existing.map(candidate => candidate.id))
+    let merged = false
     const barrier = await readPersonalForgettingBarrier()
     const revocations = await readObservationRevocationBarrier()
     const fresh = candidates.filter((candidate) => {
@@ -213,11 +215,23 @@ export async function proposeFactCandidates(candidates: CandidateFact[]): Promis
       if (candidate.status !== 'proposed' || candidate.fact.status !== 'proposed') throw new Error('Candidates require review before applying')
       if (ids.has(candidate.id)) return false
       ids.add(candidate.id)
+      if (mergeExact) {
+        const target = existing.find(row => row.status === 'proposed' && isExactFactDuplicate(row.fact, candidate.fact))
+        if (target) {
+          target.fact = mergeFactEvidence(target.fact, candidate.fact)
+          target.evidence = { observationIds: target.fact.provenance.sourceObservationIds, sources: target.fact.provenance.sourceEvidence,
+            snippets: [...new Set([...(target.evidence.snippets ?? []), ...(candidate.evidence.snippets ?? [])])],
+            quotes: [...new Map([...(target.evidence.quotes ?? []), ...(candidate.evidence.quotes ?? [])].map(quote => [JSON.stringify(quote), quote])).values()] }
+          delete target.decision
+          merged = true
+          return false
+        }
+      }
+      existing.push(candidate)
       return true
     })
-    if (fresh.length) {
-      const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : ''
-      await writeTextAtomic(FACT_CANDIDATES_FILE, content + separator + fresh.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n')
+    if (fresh.length || merged) {
+      await writeTextAtomic(FACT_CANDIDATES_FILE, existing.map(candidate => JSON.stringify(candidate)).join('\n') + '\n')
     }
     return fresh
   })

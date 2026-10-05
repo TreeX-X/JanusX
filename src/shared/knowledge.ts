@@ -36,6 +36,8 @@ export interface CandidateEvidence {
   observationIds: string[]
   snippets?: string[]
   sources?: MemorySourceEvidence[]
+  /** Exact per-claim excerpts, verified against the complete source digest before review. */
+  quotes?: Array<{ observationId: string; quote: string }>
 }
 
 export type RetentionClass = 'noise' | 'operational' | 'evidence' | 'derived'

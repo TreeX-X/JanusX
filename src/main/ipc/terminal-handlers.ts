@@ -558,7 +558,11 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         })()
       }
       companionSessionState.handleHookPayload(payload)
-      agentTurnRecorder.handleHookPayload(payload)
+      await agentTurnRecorder.handleHookPayload({ ...payload, raw: {
+        ...(payload.raw && typeof payload.raw === 'object' ? payload.raw : {}),
+        transcriptPath: getRawString(payload.raw, ['transcript_path', 'transcriptPath'])
+          ?? agentSessionRegistry.transcriptPathForTerminal(terminal.terminalId),
+      } })
       if (payload.sessionId) {
         agentSessionRegistry.noteProviderSession(terminal.terminalId, payload.sessionId)
         const refresh = () => refreshRuntimeTelemetry(

@@ -9,9 +9,12 @@ import {
   matchesEngineEvents,
   normalizeHookEventName,
 } from '../notifications/agent-engine-capabilities'
+import { knowledgeCaptureInbox, type CaptureEntry } from './capture-inbox'
+import { SerialQueue } from '../lib/atomic-file'
+import { readKnowledgeTurn } from '../sessions/knowledge-transcript'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeProcessingQueue } from './processing-queue'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 
 interface ActiveTurn {
@@ -81,16 +84,34 @@ function timestampToMs(timestamp?: string): number | undefined {
 }
 
 class AgentTurnRecorder {
+  private readonly deliveryIds = new WeakMap<AgentHookPayload, string>()
+  private readonly queue = new SerialQueue()
+  private retryTimer?: ReturnType<typeof setInterval>
   private readonly terminals = new Map<string, TerminalContext>()
   private readonly activeTurns = new Map<string, ActiveTurn>()
   private eventSink?: (event: AgentTurnRecorderEvent) => void
 
   registerTerminal(terminal: TerminalContext): void {
     this.terminals.set(terminal.terminalId, terminal)
+    if (!this.retryTimer) {
+      this.retryTimer = setInterval(() => { void this.recover() }, 10000)
+      this.retryTimer.unref()
+      void this.recover()
+    }
+  }
+
+  private async recover(): Promise<void> {
+    try { if (await this.isEnabled()) await knowledgeCaptureInbox.drain() }
+    catch (error) { console.warn('[knowledge] capture recovery failed:', error instanceof Error ? error.message : String(error)) }
   }
 
   setEventSink(sink?: (event: AgentTurnRecorderEvent) => void): void {
     this.eventSink = sink
+    if (sink && !this.retryTimer) {
+      this.retryTimer = setInterval(() => { void this.recover() }, 10000)
+      this.retryTimer.unref()
+      void this.recover()
+    }
   }
 
   unregisterTerminal(terminalId: string): void {
@@ -99,12 +120,20 @@ class AgentTurnRecorder {
   }
 
   dispose(): void {
+    clearInterval(this.retryTimer)
+    this.retryTimer = undefined
     this.terminals.clear()
     this.activeTurns.clear()
   }
 
-  handleHookPayload(payload: AgentHookPayload): void {
-    void this.recordHookPayload(payload).catch((error) => {
+  handleHookPayload(payload: AgentHookPayload): Promise<void> {
+    const raw = payload.raw && typeof payload.raw === 'object' ? payload.raw as Record<string, unknown> : {}
+    if (!payload.timestamp && !raw.event_id && !raw.eventId && !raw.message_id && !raw.tool_use_id && !raw.call_id) {
+      let deliveryId = this.deliveryIds.get(payload)
+      if (!deliveryId) { deliveryId = randomUUID(); this.deliveryIds.set(payload, deliveryId) }
+      payload = { ...payload, raw: { ...raw, captureDeliveryId: deliveryId } }
+    }
+    return this.queue.run(() => this.recordHookPayload(payload)).catch((error) => {
       this.emit({
         type: 'failed',
         reason: error instanceof Error ? error.message : String(error),
@@ -122,8 +151,15 @@ class AgentTurnRecorder {
   }
 
   private async isEnabled(): Promise<boolean> {
-    const settings = await configService.getKnowledgeSettings()
-    return settings.enabled
+    const [settings, flags] = await Promise.all([configService.getKnowledgeSettings(), configService.getExperimentalFeatures()])
+    return settings.enabled && flags.knowledge
+  }
+
+  private eventId(payload: AgentHookPayload): string {
+    const raw = payload.raw && typeof payload.raw === 'object' ? payload.raw as Record<string, unknown> : {}
+    const identity = raw.event_id ?? raw.eventId ?? raw.message_id ?? raw.tool_use_id ?? raw.call_id ?? payload.timestamp ?? raw.captureDeliveryId
+    return createHash('sha256').update(JSON.stringify([payload.source, payload.sessionId ?? payload.terminalId,
+      payload.event, identity ?? payload.message ?? 'status'])).digest('hex')
   }
 
   private resolveTerminal(payload: AgentHookPayload): TerminalContext | null {
@@ -221,10 +257,11 @@ class AgentTurnRecorder {
   ): Promise<void> {
     const activeTurn = this.activeTurns.get(terminal.terminalId)
     const promptHash = hasText(payload.message) ? createHash('sha256').update(payload.message).digest('hex') : undefined
+    const eventId = this.eventId(payload)
     if (
       activeTurn &&
       (!hasText(payload.message) ||
-        (payload.sessionId === activeTurn.sessionId && promptHash === activeTurn.promptHash))
+        (payload.sessionId === activeTurn.sessionId && promptHash === activeTurn.promptHash && eventId === activeTurn.id))
     ) {
       return
     }
@@ -232,12 +269,12 @@ class AgentTurnRecorder {
     const now = timestampToMs(payload.timestamp) ?? Date.now()
     const startedAt = new Date(now).toISOString()
     const turn: ActiveTurn = {
-      id: `${terminal.terminalId}:${now}`,
+      id: eventId,
       terminalId: terminal.terminalId,
       engine: terminal.engine,
       workspaceId: terminal.workspaceId,
       workspacePath: terminal.cwd,
-      prompt: payload.message && redactHighConfidenceSecrets(payload.message).text,
+      prompt: payload.event === 'UserPromptSubmit' && payload.message ? redactHighConfidenceSecrets(payload.message).text : undefined,
       promptHash,
       sessionId: payload.sessionId,
       startedAt,
@@ -247,11 +284,9 @@ class AgentTurnRecorder {
 
     // Only an actual prompt-submission hook carries the user's words. Status messages do not.
     const userPrompt = payload.event === 'UserPromptSubmit' && hasText(payload.message)
-    const sourceEventId = payload.timestamp && timestampToMs(payload.timestamp) !== undefined
-      ? createHash('sha256').update(JSON.stringify([terminal.engine, payload.sessionId ?? terminal.terminalId,
-        payload.event, payload.timestamp, payload.message ?? ''])).digest('hex') : undefined
+    const sourceEventId = eventId
 
-    const observation = await knowledgeObservationService.capture({
+    const [observation] = await knowledgeCaptureInbox.submit([{ input: {
       workspaceId: terminal.workspaceId,
       workspacePath: terminal.cwd,
       source: 'agent-stream',
@@ -272,7 +307,7 @@ class AgentTurnRecorder {
         sessionId: payload.sessionId,
         startedAt,
       },
-    }, { speaker: userPrompt ? 'user' : 'unknown', sourceEventId, createdAt: startedAt })
+    }, context: { speaker: userPrompt ? 'user' : 'unknown', sourceEventId, createdAt: startedAt } }])
     this.emitCaptured(payload, terminal, observation.id)
   }
 
@@ -281,7 +316,7 @@ class AgentTurnRecorder {
     terminal: TerminalContext,
   ): Promise<void> {
     const activeTurn = this.activeTurns.get(terminal.terminalId)
-    const observation = await knowledgeObservationService.capture({
+    const [observation] = await knowledgeCaptureInbox.submit([{ input: {
       workspaceId: terminal.workspaceId,
       workspacePath: terminal.cwd,
       source: 'agent-stream',
@@ -299,7 +334,7 @@ class AgentTurnRecorder {
         hookEvent: payload.event,
         sessionId: payload.sessionId,
       },
-    })
+    }, context: { speaker: 'system', sourceEventId: this.eventId(payload) } }])
     this.emitCaptured(payload, terminal, observation.id)
   }
 
@@ -308,12 +343,41 @@ class AgentTurnRecorder {
     terminal: TerminalContext,
     failed: boolean,
   ): Promise<void> {
-    const activeTurn = this.activeTurns.get(terminal.terminalId)
+    let activeTurn = this.activeTurns.get(terminal.terminalId)
+    if (payload.sessionId && activeTurn?.sessionId !== payload.sessionId) activeTurn = undefined
+    if (!activeTurn && payload.sessionId) {
+      const sessionRows = (await knowledgeObservationService.listAll(true)).filter(row => row.workspaceId === terminal.workspaceId
+        && row.sessionId === payload.sessionId && row.agentId === terminal.engine)
+      const closed = new Set(sessionRows.filter(row => (row.tags.includes('turn-completed') || row.tags.includes('turn-failed'))
+        && row.sourceEvidence?.sourceEventId !== this.eventId(payload)).map(row => row.correlationId))
+      const starts = sessionRows.filter(row => row.tags.includes('turn-started') && !closed.has(row.correlationId)
+        && Date.parse(row.createdAt) <= (timestampToMs(payload.timestamp) ?? Date.now()))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      const start = starts[0]
+      if (start?.correlationId) activeTurn = { id: start.correlationId, terminalId: terminal.terminalId, engine: terminal.engine,
+        workspaceId: terminal.workspaceId, workspacePath: terminal.cwd, prompt: start.sourceEvidence?.speaker === 'user' ? await knowledgeObservationService.resolveContent(start) : undefined,
+        sessionId: payload.sessionId, startedAt: start.createdAt, startedAtMs: Date.parse(start.createdAt) }
+    }
     const endedAtMs = timestampToMs(payload.timestamp) ?? Date.now()
     const durationMs = activeTurn ? endedAtMs - activeTurn.startedAtMs : undefined
-    this.activeTurns.delete(terminal.terminalId)
-
-    const observation = await knowledgeObservationService.capture({
+    const raw = payload.raw && typeof payload.raw === 'object' ? payload.raw as Record<string, unknown> : {}
+    const transcriptPath = raw.transcript_path ?? raw.transcriptPath
+    const supplemental = !failed && typeof transcriptPath === 'string'
+      ? await readKnowledgeTurn(transcriptPath, terminal.engine, payload.sessionId ?? activeTurn?.sessionId, activeTurn?.prompt)
+      : { messages: [], reason: failed ? 'turn-failed' : 'transcript-path-unavailable' }
+    const correlationId = activeTurn?.id ?? this.eventId(payload)
+    const entries: CaptureEntry[] = supplemental.messages
+      .filter(message => !(message.speaker === 'user' && activeTurn?.prompt && redactHighConfidenceSecrets(message.content).text === activeTurn.prompt))
+      .map((message, index) => ({ input: {
+        workspaceId: terminal.workspaceId, workspacePath: terminal.cwd, source: 'agent-stream', type: 'conversation-turn',
+        content: message.content, actor: message.speaker, sessionId: payload.sessionId ?? activeTurn?.sessionId,
+        agentId: terminal.engine, correlationId, tags: ['terminal-transcript', 'turn-evidence', terminal.engine],
+        metadata: { terminalId: terminal.terminalId, transcriptPath: typeof transcriptPath === 'string' ? transcriptPath : undefined,
+          recordId: message.id, sourceOrder: index, sourceTimestamp: message.timestamp, completed: true },
+      }, context: { speaker: message.speaker, sourceEventId: createHash('sha256').update(JSON.stringify([
+        terminal.engine, payload.sessionId ?? activeTurn?.sessionId ?? transcriptPath, message.id])).digest('hex'),
+        createdAt: new Date(endedAtMs).toISOString() } }))
+    entries.push({ input: {
       workspaceId: terminal.workspaceId,
       workspacePath: terminal.cwd,
       source: 'agent-stream',
@@ -328,7 +392,7 @@ class AgentTurnRecorder {
         : `${terminal.engine} terminal task completed`,
       tags: ['terminal-hook', failed ? 'turn-failed' : 'turn-completed', terminal.engine],
       actor: terminal.engine,
-      correlationId: activeTurn?.id ?? `terminal:${terminal.terminalId}`,
+      correlationId,
       sessionId: payload.sessionId ?? activeTurn?.sessionId,
       agentId: terminal.engine,
       metadata: {
@@ -341,8 +405,13 @@ class AgentTurnRecorder {
         durationMs,
         failed,
         prompt: activeTurn?.prompt,
+        evidenceStatus: supplemental.reason ?? 'complete',
       },
-    })
+    }, context: { speaker: 'unknown', sourceEventId: this.eventId(payload), createdAt: new Date(endedAtMs).toISOString() } })
+    if (!(await this.isEnabled())) return
+    const observations = await knowledgeCaptureInbox.submit(entries)
+    const observation = observations[observations.length - 1]!
+    this.activeTurns.delete(terminal.terminalId)
     // Phase 5 (§6 gap close): the turn ended — bypass the capture debounce so
     // deterministic sedimentation runs promptly for this workspace.
     knowledgeProcessingQueue.scheduleImmediate(

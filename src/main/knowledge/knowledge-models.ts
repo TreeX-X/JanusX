@@ -47,7 +47,7 @@ export async function knowledgeModelJson({ stage, settings, system, input, signa
   const selected = settings.stages[stage]
   if (selected.provider === 'off' || !selected.model) throw new Error('model-not-configured')
   if (selected.provider === 'jev') throw new Error('provider-cannot-generate')
-  const maxTokens = stage === 'wikiGeneration' ? 3072 : stage === 'extraction' ? 2048 : 1024
+  const maxTokens = stage === 'wikiGeneration' ? 3072 : stage === 'extraction' ? 4096 : 1024
   const timeout = AbortSignal.any([signal, AbortSignal.timeout(180000)])
   let text: string
   try {

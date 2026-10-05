@@ -19,6 +19,7 @@ import type {
   KnowledgeWorkspaceDiagnostics,
 } from '../../shared/ipc/knowledge'
 import type { Observation } from '../../shared/knowledge'
+import { knowledgeCaptureInbox } from './capture-inbox'
 
 const DEFAULT_RECENT_LIMIT = 20
 const MAX_RECENT_LIMIT = 100
@@ -120,6 +121,7 @@ export class KnowledgeDiagnosticsService {
       },
       indexUpdatedAt,
       captureFailures: knowledgeCaptureFailureCount(),
+      captureRecovery: await knowledgeCaptureInbox.status(query.workspaceId),
     }
   }
 }

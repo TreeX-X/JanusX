@@ -239,6 +239,7 @@ export interface KnowledgeDiagnostics {
   /** Phase 5 (§6): recall 索引最近一次重建时间；从未构建为 null。 */
   indexUpdatedAt: string | null
   captureFailures: number
+  captureRecovery?: { batches: number; events: number; lastError?: string }
 }
 
 /** Phase 1-1: manual trigger input for the knowledge processing queue. */
