@@ -87,7 +87,7 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
         beforeSwitch={() => flushRef.current?.() ?? Promise.resolve(true)}
         getPortalContainer={selectPortal ? () => selectPortal : undefined} />
     </div>}
-    <BlueprintWorkspaceSetup workspace={workspace} state={state} loading={loading || (!!workspace && !ownsProjection)} hasNodes={hasNodes} />
+    <BlueprintWorkspaceSetup key={workspace?.id ?? 'none'} workspace={workspace} state={state} loading={loading || (!!workspace && !ownsProjection)} hasNodes={hasNodes} />
     {error && hasNodes && <div className="blueprint-toolbar__error" role="alert">{error}</div>}
     {hasNodes && currentBlueprint ? <BlueprintCanvas key={`${workspace?.id}:${currentBlueprint.id}`} blueprintId={currentBlueprint.id}
       onDetailOpenChange={onDetailOpenChange} onRegisterFlush={registerFlush} /> : null}

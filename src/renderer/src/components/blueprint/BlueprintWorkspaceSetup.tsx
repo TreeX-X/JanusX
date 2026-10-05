@@ -1,4 +1,6 @@
-import { useState } from 'react'
+// Note: workspace setup keeps technical diagnostics behind an explicit detail control — see .agents/notes/2026-10-04-blueprint-empty-init--4f49c9ba.md
+import { useEffect, useRef, useState } from 'react'
+import { Check, ChevronRight, FilePlus2, FolderOpen, LoaderCircle, Network, RefreshCw } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { useBlueprintStore, type BlueprintWorkspaceState } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -16,6 +18,9 @@ export function BlueprintWorkspaceSetup({ workspace, state, loading, hasNodes }:
   const [confirmed, setConfirmed] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<{ workspaceId: string; message: string } | null>(null)
+  const initializeRef = useRef<HTMLButtonElement>(null)
+  const previewHeadingRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => { if (preview) previewHeadingRef.current?.focus() }, [preview])
   if (!workspace) return null
   const currentPreview = preview?.workspaceId === workspace.id ? preview.value : null
   const receipt = receipts[workspace.id]
@@ -54,37 +59,62 @@ export function BlueprintWorkspaceSetup({ workspace, state, loading, hasNodes }:
   const draft = () => useBlueprintStore.getState().requestDraft(workspace.id)
   const errorText = error?.workspaceId === workspace.id ? error.message : null
   const stateName = loading || !state ? 'loading' : state.state
+  const needsRepair = stateName === 'invalid' || stateName === 'error'
+  const diagnostics = needsRepair ? [...new Map((state?.diagnostics ?? []).map(item =>
+    [JSON.stringify([item.code, item.path, item.message]), item])).values()] : []
+  const cancelPreview = () => {
+    setPreview(null)
+    requestAnimationFrame(() => initializeRef.current?.focus())
+  }
+  if (hasNodes && !receipt && !currentPreview && !busy && !errorText) return null
   return <section className={hasNodes ? 'blueprint-workspace-receipt' : 'blueprint-workspace-empty'} aria-live="polite">
     {receipt && <div className="blueprint-workspace-actions">
-      <span>{t('workspace.initialized')}</span>
-      <button type="button" disabled={!!busy} onClick={() => void undo()}>{t('workspace.undo')}</button>
-      <button type="button" onClick={draft}>{t('workspace.draft')}</button>
+      <span className="blueprint-workspace-success"><Check size={15} aria-hidden="true" />{t('workspace.initialized')}</span>
+      <button className="blueprint-setup-button blueprint-setup-button--quiet" type="button" disabled={!!busy} onClick={() => void undo()}>{t('workspace.undo')}</button>
+      <button className="blueprint-setup-button" type="button" onClick={draft}>{t('workspace.draft')}</button>
     </div>}
-    {!hasNodes && <>
-      <h2>{workspace.name}</h2>
-      <p>{t(`workspace.description.${stateName}`)}</p>
-      {!loading && !currentPreview && <div className="blueprint-workspace-actions">
-        {['not-found', 'foreign'].includes(stateName) && <button type="button" disabled={!!busy} onClick={() => void begin()}>{t('workspace.initialize')}</button>}
-        {stateName === 'empty' && <button type="button" onClick={draft}>{t('workspace.draft')}</button>}
-        <button type="button" disabled={!!busy} onClick={() => void run(refresh)}>{t('workspace.retry')}</button>
+    <div className="blueprint-workspace-content">
+      {!hasNodes && <>
+        <div className="blueprint-workspace-name"><FolderOpen size={14} aria-hidden="true" /><span>{workspace.name}</span></div>
+        {!currentPreview && <>
+          <div className="blueprint-workspace-symbol" aria-hidden="true">
+            {stateName === 'loading' ? <LoaderCircle className="blueprint-workspace-spinner" size={26} /> : <Network size={26} />}
+          </div>
+          <h2>{t(`workspace.title.${stateName}`)}</h2>
+          <p className="blueprint-workspace-description">{t(`workspace.description.${stateName}`)}</p>
+          {stateName !== 'loading' && <div className="blueprint-workspace-actions">
+            {['not-found', 'foreign'].includes(stateName) && <button ref={initializeRef} className="blueprint-setup-button blueprint-setup-button--primary" type="button" disabled={!!busy} onClick={() => void begin()}><FilePlus2 size={15} aria-hidden="true" />{t('workspace.initialize')}</button>}
+            {stateName === 'empty' && <button className="blueprint-setup-button blueprint-setup-button--primary" type="button" onClick={draft}>{t('workspace.draft')}<ChevronRight size={15} aria-hidden="true" /></button>}
+            <button className={`blueprint-setup-button ${needsRepair ? '' : 'blueprint-setup-button--quiet'}`} type="button" disabled={!!busy} onClick={() => void run(refresh)}><RefreshCw size={14} aria-hidden="true" />{t('workspace.retry')}</button>
+          </div>}
+          {diagnostics.length > 0 && <details className="blueprint-workspace-diagnostics">
+            <summary>{t('workspace.diagnostics')}</summary>
+            <ul>{diagnostics.map((diagnostic, index) => <li key={index}>
+              {diagnostic.path && <code>{diagnostic.path}</code>}
+              <span>{diagnostic.message}</span>
+              {diagnostic.path && /^\.agents\/[\w./-]+$/.test(diagnostic.path) && !diagnostic.path.split('/').includes('..') && <button className="blueprint-setup-button blueprint-setup-button--quiet" type="button"
+                onClick={() => void run(() => useEditorStore.getState().openFile(`${workspace.path}/${diagnostic.path}`, workspace.path))}>{t('workspace.openFile')}</button>}
+            </li>)}</ul>
+          </details>}
+        </>}
+      </>}
+      {currentPreview && <div className="blueprint-workspace-preview">
+        <h2 ref={previewHeadingRef} tabIndex={-1}>{t('workspace.preview')}</h2>
+        <p className="blueprint-workspace-description">{t('workspace.previewHint')}</p>
+        <div className="blueprint-workspace-files">
+          {currentPreview.files.map(file => <details key={file.path}><summary><FilePlus2 size={14} aria-hidden="true" /><span>{file.path}</span><ChevronRight className="blueprint-workspace-file-chevron" size={14} aria-hidden="true" /></summary><pre>{file.content}</pre></details>)}
+        </div>
+        {currentPreview.foreign && <label className="blueprint-workspace-confirm"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /><span>{t('workspace.confirmForeign')}</span></label>}
+        <div className="blueprint-workspace-actions">
+          <button className="blueprint-setup-button blueprint-setup-button--primary" type="button" disabled={!!busy || (currentPreview.foreign && !confirmed)} onClick={() => void apply()}>{t('workspace.confirm')}</button>
+          <button className="blueprint-setup-button blueprint-setup-button--quiet" type="button" disabled={!!busy} onClick={cancelPreview}>{t('workspace.cancel')}</button>
+        </div>
       </div>}
-      {state?.diagnostics.length ? <ul className="blueprint-workspace-diagnostics">{state.diagnostics.map((diagnostic, index) => <li key={index}>
-        <span>{diagnostic.path ? `${diagnostic.path}: ` : ''}{diagnostic.message}</span>
-        {diagnostic.path && /^\.agents\/[\w./-]+$/.test(diagnostic.path) && !diagnostic.path.split('/').includes('..') && <button type="button"
-          onClick={() => void run(() => useEditorStore.getState().openFile(`${workspace.path}/${diagnostic.path}`, workspace.path))}>{t('workspace.openFile')}</button>}
-      </li>)}</ul> : null}
-    </>}
-    {currentPreview && <div className="blueprint-workspace-preview">
-      <h3>{t('workspace.preview')}</h3>
-      <p>{t('workspace.previewHint')}</p>
-      {currentPreview.files.map(file => <details key={file.path} open><summary>{file.path}</summary><pre>{file.content}</pre></details>)}
-      {currentPreview.foreign && <label><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />{t('workspace.confirmForeign')}</label>}
-      <div className="blueprint-workspace-actions">
-        <button type="button" disabled={!!busy || (currentPreview.foreign && !confirmed)} onClick={() => void apply()}>{t('workspace.confirm')}</button>
-        <button type="button" disabled={!!busy} onClick={() => setPreview(null)}>{t('workspace.cancel')}</button>
-      </div>
-    </div>}
-    {busy === workspace.id && <p>{t('workspace.working')}</p>}
-    {errorText && <p role="alert">{errorText}</p>}
+      {busy === workspace.id && <p className="blueprint-workspace-progress"><LoaderCircle className="blueprint-workspace-spinner" size={14} aria-hidden="true" />{t('workspace.working')}</p>}
+      {errorText && <div className="blueprint-workspace-error">
+        <p role="alert">{t('workspace.actionFailed')}</p>
+        <details className="blueprint-workspace-diagnostics"><summary>{t('workspace.diagnostics')}</summary><p>{errorText}</p></details>
+      </div>}
+    </div>
   </section>
 }

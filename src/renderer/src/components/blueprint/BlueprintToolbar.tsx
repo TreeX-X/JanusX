@@ -16,6 +16,7 @@ import type { Blueprint, BlueprintNodeStatus } from '@/services/blueprint'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
 import { groupRootsByConnectivity, ISOLATED_HIDE_THRESHOLD } from '@/features/blueprint/canvas-navigation'
 import { useBlueprintStore } from '@/stores/blueprint'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from '@/i18n/useI18n'
 import { projectArchitecture, type BlueprintViewMode } from '@/features/blueprint/architecture-view'
 import { BlueprintViewSelector } from './BlueprintArchitecturePanel'
@@ -163,6 +164,8 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
   const structureMode = (viewMode ?? (architectureAvailable ? 'structure' : 'notes')) === 'structure'
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
+  const selectedWorkspaceId = useBlueprintStore((s) => s.selectedWorkspaceId)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
 
   const statusFilterOptions = useMemo(
     () => [
@@ -178,6 +181,10 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
     ],
     [t],
   )
+
+  // Note: canvas controls only apply to a loaded workspace graph — see .agents/notes/2026-10-04-blueprint-empty-init--4f49c9ba.md
+  // Keep the shell's second grid row empty while setup owns the surface.
+  if (!currentBlueprint?.nodeIds.length || selectedWorkspaceId !== activeWorkspaceId) return <div aria-hidden="true" />
 
   return (
     <div className="blueprint-toolbar blueprint-workbench-toolbar" role="toolbar" aria-label={t('blueprint:ariaLabel.focus')}>
