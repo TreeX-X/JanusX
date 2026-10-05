@@ -7,10 +7,15 @@
 .label, .hint { color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
 .hint { margin: 4px 0 12px; }
 .ranges { display: flex; padding: 3px; gap: 2px; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-card); }
-.ranges button, .types button { border: 0; background: transparent; color: var(--shell-muted); font: inherit; font-size: 11px; cursor: pointer; border-radius: 5px; padding: 6px 10px; transition: background 120ms, color 120ms; }
-.ranges button[aria-pressed='true'], .types button[aria-pressed='true'] { background: var(--shell-canvas); color: var(--shell-text); box-shadow: 0 0 0 1px var(--shell-border); }
-.ranges button:hover, .types button:hover { color: var(--shell-text); background: var(--shell-card); }
+.ranges button { border: 0; background: transparent; color: var(--shell-muted); font: inherit; font-size: 11px; cursor: pointer; border-radius: 5px; padding: 6px 10px; transition: background 120ms, color 120ms; }
+.ranges button[aria-pressed='true'] { background: var(--shell-canvas); color: var(--shell-text); box-shadow: 0 0 0 1px var(--shell-border); }
+.ranges button:hover { color: var(--shell-text); background: var(--shell-card); }
 .panel button:focus-visible, .chart rect:focus-visible, .dateField input:focus-visible { outline: 2px solid var(--shell-text); outline-offset: 3px; }
+/* 终端类型切换与 LLM 引擎 terminalTabs 同语言：顶部一行下划线，选中态 accent 下划线。 */
+.tabRow { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--shell-border-soft, var(--shell-border)); padding-bottom: 8px; }
+.tab { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -9px; background: transparent; color: var(--shell-dim); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: color 0.16s ease, border-color 0.16s ease; }
+.tab:hover { color: var(--shell-text); }
+.tabActive { color: var(--shell-text); border-bottom-color: var(--so-accent, var(--shell-accent)); }
 .customBar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
 .dateField { display: inline-flex; align-items: center; gap: 8px; color: var(--shell-muted); font-size: 11px; }
 .dateField input { min-height: var(--control-h, 30px); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--control-border, var(--shell-border)); padding: 6px 10px; border-radius: 6px; color: var(--shell-text); font: inherit; font-size: 12px; color-scheme: dark light; transition: border-color 0.18s ease, background 0.18s ease; }
@@ -18,9 +23,7 @@
 .dateSep { color: var(--shell-dim); }
 .error { margin: 0; width: 100%; color: #d78b92; font-size: 11px; line-height: 1.55; }
 .customMeta { margin: 0; color: var(--shell-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.types { display: flex; gap: 6px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid var(--shell-border); }
-.types button { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; }
-:global([data-theme='dark']) .types img[data-tool='codex'] { filter: invert(1); }
+:global([data-theme='dark']) .tabRow img[data-tool='codex'] { filter: invert(1); }
 .summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .summaryCell { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
 .summaryCell > svg { flex-shrink: 0; width: 88px; height: 88px; }
@@ -54,6 +57,17 @@
 .trend > .legend { justify-content: flex-end; margin-top: 8px; }
 .activeDate { margin-right: auto; font-variant-numeric: tabular-nums; }
 .empty { min-height: 170px; display: grid; place-items: center; color: var(--shell-muted); font-size: 12px; text-align: center; }
+.summaryEmpty .summaryCell > svg, .summaryEmpty .value { opacity: 0.45; }
+.summaryEmpty .legend { min-height: 0; }
+.emptyCard { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 220px; padding: 36px 20px 40px; text-align: center; animation: trend-in 280ms ease; }
+.emptyArt { margin-bottom: 10px; color: var(--shell-muted); }
+.emptyOrbit { stroke: var(--shell-border); }
+.emptyCore { fill: var(--shell-muted); opacity: 0.55; }
+.emptySat { fill: var(--shell-text); }
+.emptyTitle { margin: 0; color: var(--shell-text); font-size: 13px; font-weight: 650; line-height: 1.5; }
+.emptyDesc { margin: 0 0 12px; max-width: 420px; color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
+.emptyAction { border: 1px solid var(--shell-border); background: transparent; color: var(--shell-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 6px; padding: 7px 16px; min-height: var(--control-h, 30px); transition: background 0.18s ease, border-color 0.18s ease; }
+.emptyAction:hover { background: rgba(255, 255, 255, 0.045); border-color: rgba(255, 255, 255, 0.16); }
 .breakdown { display: flex; flex-direction: column; gap: 0; padding: 4px 16px 8px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
 .breakdown > .title { margin: 0; padding: 12px 0 10px; }
 .modelRow { display: grid; grid-template-columns: minmax(0, 1fr) 92px 76px 76px 76px; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid var(--shell-border-soft, var(--shell-border)); }
@@ -83,5 +97,5 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .panel button, .donutArc, .ioFillIn, .ioFillOut { transition: none; }
-  .chartEnter { animation: none; }
+  .chartEnter, .emptyCard { animation: none; }
 }

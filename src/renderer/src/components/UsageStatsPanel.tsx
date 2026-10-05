@@ -213,6 +213,27 @@ function CacheDonut({ hits, misses, rate, hasData, hitColor, missColor, trackCol
   )
 }
 
+function EmptyState({ title, desc, resetLabel, showReset, onReset }: {
+  title: string
+  desc: string
+  resetLabel: string
+  showReset: boolean
+  onReset: () => void
+}) {
+  return (
+    <div className={styles.emptyCard}>
+      <svg className={styles.emptyArt} width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
+        <circle className={styles.emptyOrbit} cx="36" cy="36" r="26" fill="none" strokeWidth="1.5" strokeDasharray="4 6" />
+        <circle className={styles.emptyCore} cx="36" cy="36" r="7" />
+        <circle className={styles.emptySat} cx="36" cy="10" r="3" />
+      </svg>
+      <p className={styles.emptyTitle}>{title}</p>
+      <p className={styles.emptyDesc}>{desc}</p>
+      {showReset && <button type="button" className={styles.emptyAction} onClick={onReset}>{resetLabel}</button>}
+    </div>
+  )
+}
+
 type TrendMetric = { key: 'hits' | 'misses' | 'unknown' | 'output'; label: string; color: string }
 
 function TrendLines({ series, range, metrics, label }: {
@@ -298,7 +319,21 @@ export function UsageStatsPanel() {
   const animatedOutput = useAnimatedNumber(view.outputTokens, reducedMotion)
   const ioTotal = view.inputTokens + view.outputTokens
   const outputShare = ioTotal > 0 ? view.outputTokens / ioTotal : undefined
-  const customErrorKey = normalized.error === 'invalid' ? 'customInvalid' : normalized.error === 'future' ? 'customFuture' : normalized.error === 'span' ? 'customSpan' : undefined
+  // 自定义区间的日期错误只在 custom 范围内生效，切回预设后不得劫持空文案。
+  const customErrorKey = range !== 'custom' ? undefined
+    : normalized.error === 'invalid' ? 'customInvalid' : normalized.error === 'future' ? 'customFuture' : normalized.error === 'span' ? 'customSpan' : undefined
+  const isEmpty = view.terminals === 0
+  const resetFilters = () => {
+    setRange('today')
+    setActiveType('all')
+  }
+  const emptyDesc = customErrorKey !== undefined
+    ? t('settings:usageStats.emptyHint')
+    : activeType !== 'all'
+      ? t('settings:usageStats.emptyFiltered')
+      : view.terminalsWithoutData > 0
+        ? t('settings:usageStats.emptyWaiting', { count: view.terminalsWithoutData })
+        : t('settings:usageStats.emptyHint')
   const metrics: TrendMetric[] = [
     { key: 'hits', label: t('settings:usageStats.hit'), color: hitColor },
     { key: 'misses', label: t('settings:usageStats.miss'), color: missColor },
@@ -337,18 +372,18 @@ export function UsageStatsPanel() {
             : <p className={styles.customMeta}>{formatRangeLabel(normalized.start, normalized.end)}{trendBucketHint ? ` · ${trendBucketHint}` : ''}</p>}
         </div>
       )}
-      <div className={styles.types} role="group" aria-label={t('settings:usageStats.terminalType')}>
-        <button type="button" aria-pressed={activeType === 'all'} onClick={() => setActiveType('all')}>{t('settings:usageStats.typeAll')}</button>
+      <div className={styles.tabRow} role="group" aria-label={t('settings:usageStats.terminalType')}>
+        <button type="button" className={`${styles.tab} ${activeType === 'all' ? styles.tabActive : ''}`} aria-pressed={activeType === 'all'} onClick={() => setActiveType('all')}>{t('settings:usageStats.typeAll')}</button>
         {EXTERNAL_CLI_TOOL_ORDER.map((toolId) => {
           const meta = EXTERNAL_CLI_TOOL_META[toolId]
-          return <button key={toolId} type="button" aria-pressed={toolId === activeType} onClick={() => setActiveType(toolId)}>
+          return <button key={toolId} type="button" className={`${styles.tab} ${toolId === activeType ? styles.tabActive : ''}`} aria-pressed={toolId === activeType} onClick={() => setActiveType(toolId)}>
             {iconFailed[toolId] ? <span className={llmStyles.terminalTabMonogram}>{meta.monogram}</span>
               : <img className={llmStyles.terminalTabIcon} data-tool={toolId} src={EXTERNAL_CLI_TOOL_ICONS[toolId]} alt="" onError={() => setIconFailed((prev) => ({ ...prev, [toolId]: true }))} />}
             {meta.displayName}
           </button>
         })}
       </div>
-      <div className={styles.summary}>
+      <div className={`${styles.summary} ${isEmpty ? styles.summaryEmpty : ''}`}>
         <div className={styles.summaryCell}>
           <OverallDonut rows={view.rows} total={view.totalTokens} trackColor={trackColor} label={t('settings:usageStats.overall')} />
           <div className={styles.summaryInfo}>
@@ -387,7 +422,15 @@ export function UsageStatsPanel() {
       <div className={styles.trendSection}>
         <div className={styles.toolbar}><h4 className={styles.title}>{t('settings:usageStats.trend')}</h4><span className={styles.label}>tokens{trendBucketHint ? ` · ${trendBucketHint}` : ''}</span></div>
         <p className={styles.hint}>{t('settings:usageStats.snapshotHint')}</p>
-        {view.terminals > 0 ? <TrendLines series={view.series} range={range} metrics={metrics} label={t('settings:usageStats.trend')} /> : <div className={styles.empty}>{t('settings:usageStats.empty')}</div>}
+        {view.terminals > 0
+          ? <TrendLines series={view.series} range={range} metrics={metrics} label={t('settings:usageStats.trend')} />
+          : <EmptyState
+            title={t('settings:usageStats.empty')}
+            desc={emptyDesc}
+            resetLabel={t('settings:usageStats.emptyReset')}
+            showReset={range !== 'today' || activeType !== 'all'}
+            onReset={resetFilters}
+          />}
       </div>
       {view.rows.length > 0 && <div className={styles.breakdown}>
         <h4 className={styles.title}>{t('settings:usageStats.breakdown')}</h4>
