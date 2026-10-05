@@ -1,11 +1,16 @@
 // Note: shared usage filters and cumulative snapshot curves — see .agents/notes/2026-10-02-usage-telemetry-fix-and-stats--61b5d05c.md
-import { useState } from 'react'
+// Note: custom date range with snapshot-bucket aggregation — see .agents/notes/2026-10-05-usage-stats-custom-range-detail--241cfe30.md
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useThemeStore } from '@/stores/theme'
 import {
   aggregateUsageStats,
   cacheSplitFor,
+  customBucketModeFor,
+  normalizeCustomRange,
+  parseDateInput,
+  toDateInputValue,
   type TimeBucket,
   type UsageRange,
   type UsagePresetRow,
@@ -17,16 +22,18 @@ import { getThemeDefinition } from '../../../shared/theme/registry'
 import llmStyles from './LlmConfigModal.module.css'
 import styles from './UsageStatsPanel.module.css'
 
-const RANGES: UsageRange[] = ['today', 'week', 'month']
-const RANGE_KEYS = { today: 'rangeToday', week: 'rangeWeek', month: 'rangeMonth' } as const
+const RANGES: UsageRange[] = ['today', 'week', 'month', 'custom']
+const RANGE_KEYS = { today: 'rangeToday', week: 'rangeWeek', month: 'rangeMonth', custom: 'rangeCustom' } as const
 const SHELL_COLOR = '#8a8a93'
+const DAY_MS = 86_400_000
 
 type TypeFilter = 'all' | ExternalCliToolId
 
 function formatCount(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`
-  return String(value)
+  const rounded = Math.round(value)
+  if (rounded >= 1_000_000) return `${(rounded / 1_000_000).toFixed(1)}M`
+  if (rounded >= 1000) return `${(rounded / 1000).toFixed(rounded >= 10_000 ? 0 : 1)}k`
+  return String(rounded)
 }
 
 function formatRate(rate: number | undefined): string {
@@ -39,6 +46,94 @@ function presetColor(preset: TerminalPreset): string {
 
 function presetName(preset: TerminalPreset): string {
   return EXTERNAL_CLI_TOOL_META[preset as ExternalCliToolId]?.displayName ?? preset
+}
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    setReduced(query.matches)
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  return reduced
+}
+
+/** 数字滚动：目标变化时在 260ms 内插值，降级时直接返回目标。 */
+function useAnimatedNumber(target: number, disabled: boolean): number {
+  const [display, setDisplay] = useState(target)
+  const fromRef = useRef(target)
+  useEffect(() => {
+    if (disabled || fromRef.current === target) {
+      fromRef.current = target
+      setDisplay(target)
+      return
+    }
+    const from = fromRef.current
+    let frame = 0
+    const startedAt = performance.now()
+    const duration = 260
+    const tick = (at: number) => {
+      const progress = Math.min(1, (at - startedAt) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      const value = from + (target - from) * eased
+      setDisplay(value)
+      if (progress < 1) frame = requestAnimationFrame(tick)
+      else fromRef.current = target
+    }
+    frame = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(frame)
+      fromRef.current = target
+    }
+  }, [target, disabled])
+  return display
+}
+
+/** 曲线插值：桶数量与键一致时逐帧过渡，否则直接切换并由 CSS 淡入承接。 */
+function useAnimatedSeries(series: TimeBucket[], disabled: boolean): { buckets: TimeBucket[]; generation: number } {
+  const [display, setDisplay] = useState(series)
+  const [generation, setGeneration] = useState(0)
+  const prevRef = useRef(series)
+  useEffect(() => {
+    const prev = prevRef.current
+    const sameShape = !disabled && prev.length === series.length && prev.every((bucket, index) => bucket.key === series[index].key)
+    if (!sameShape) {
+      prevRef.current = series
+      setDisplay(series)
+      setGeneration((value) => value + 1)
+      return
+    }
+    const from = prev
+    let frame = 0
+    const startedAt = performance.now()
+    const duration = 280
+    const tick = (at: number) => {
+      const progress = Math.min(1, (at - startedAt) / duration)
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplay(from.map((bucket, index) => {
+        const next = series[index]
+        const mix = (a: number, b: number) => a + (b - a) * eased
+        return {
+          ...next,
+          totalTokens: mix(bucket.totalTokens, next.totalTokens),
+          hits: mix(bucket.hits, next.hits),
+          misses: mix(bucket.misses, next.misses),
+          unknown: mix(bucket.unknown, next.unknown),
+          output: mix(bucket.output, next.output),
+        }
+      }))
+      if (progress < 1) frame = requestAnimationFrame(tick)
+      else prevRef.current = series
+    }
+    frame = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(frame)
+      prevRef.current = series
+    }
+  }, [series, disabled])
+  return { buckets: display, generation }
 }
 
 function OverallDonut({ rows, total, trackColor, label }: {
@@ -62,6 +157,7 @@ function OverallDonut({ rows, total, trackColor, label }: {
         return (
           <circle
             key={row.preset}
+            className={styles.donutArc}
             cx="48"
             cy="48"
             r={radius}
@@ -99,6 +195,7 @@ function CacheDonut({ hits, misses, rate, hasData, hitColor, missColor, trackCol
         <>
           <circle cx="48" cy="48" r={radius} fill="none" stroke={missColor} strokeWidth="10" />
           <circle
+            className={styles.donutArc}
             cx="48"
             cy="48"
             r={radius}
@@ -125,14 +222,18 @@ function TrendLines({ series, range, metrics, label }: {
   label: string
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
-  const ceiling = Math.max(1, ...series.flatMap((bucket) => metrics.map(({ key }) => bucket[key])))
-  const x = (index: number) => 52 + index * 620 / Math.max(1, series.length - 1)
+  const reducedMotion = usePrefersReducedMotion()
+  const { buckets, generation } = useAnimatedSeries(series, reducedMotion)
+  const ceiling = Math.max(1, ...buckets.flatMap((bucket) => metrics.map(({ key }) => bucket[key])))
+  const x = (index: number) => 52 + index * 620 / Math.max(1, buckets.length - 1)
   const y = (value: number) => 174 - value / ceiling * 146
-  const active = activeIndex === null ? undefined : series[activeIndex]
+  // 聚合每次渲染返回新数组，任何“series 变化即清零”的 effect 都会在数字滚动期间
+  // 反复吞掉悬停与键盘焦点；此处仅钳制越界下标，结构变化由 svg key 的淡入承接。
+  const active = activeIndex === null || activeIndex >= buckets.length ? undefined : buckets[activeIndex]
   const dateLabel = (bucket: TimeBucket) => range === 'today' ? `${bucket.label.padStart(2, '0')}:00` : bucket.label
   return (
     <div className={styles.trend}>
-      <svg viewBox="0 0 700 208" className={styles.chart} role="group" aria-label={label} onMouseLeave={() => setActiveIndex(null)}>
+      <svg key={generation} viewBox="0 0 700 208" className={`${styles.chart} ${styles.chartEnter}`} role="group" aria-label={label} onMouseLeave={() => setActiveIndex(null)}>
         {[0, 0.5, 1].map((fraction) => (
           <g key={fraction} className={styles.axis}>
             <line x1="52" x2="672" y1={y(ceiling * fraction)} y2={y(ceiling * fraction)} />
@@ -141,21 +242,21 @@ function TrendLines({ series, range, metrics, label }: {
         ))}
         {metrics.map(({ key, color }) => {
           // Horizontal control points keep each segment within its two measured values.
-          const path = series.map((bucket, index) => index === 0
+          const path = buckets.map((bucket, index) => index === 0
             ? `M ${x(index)} ${y(bucket[key])}`
-            : `C ${(x(index - 1) + x(index)) / 2} ${y(series[index - 1][key])}, ${(x(index - 1) + x(index)) / 2} ${y(bucket[key])}, ${x(index)} ${y(bucket[key])}`).join(' ')
+            : `C ${(x(index - 1) + x(index)) / 2} ${y(buckets[index - 1][key])}, ${(x(index - 1) + x(index)) / 2} ${y(bucket[key])}, ${x(index)} ${y(bucket[key])}`).join(' ')
           return <g key={key}>
             <path data-series={key} d={path} fill="none" stroke={color} strokeWidth="2" strokeDasharray={key === 'unknown' ? '4 4' : undefined} vectorEffect="non-scaling-stroke" />
-            {series.map((bucket, index) => bucket[key] > 0 && <circle key={bucket.key} cx={x(index)} cy={y(bucket[key])} r="3" fill={color} />)}
+            {buckets.map((bucket, index) => bucket[key] > 0.5 && <circle key={bucket.key} cx={x(index)} cy={y(bucket[key])} r="3" fill={color} />)}
           </g>
         })}
         {active && <line className={styles.cursor} x1={x(activeIndex!)} x2={x(activeIndex!)} y1="22" y2="174" />}
-        {series.map((bucket, index) => {
-          const showLabel = index === 0 || index === series.length - 1 || index % Math.max(1, Math.ceil(series.length / 6)) === 0
+        {buckets.map((bucket, index) => {
+          const showLabel = index === 0 || index === buckets.length - 1 || index % Math.max(1, Math.ceil(buckets.length / 6)) === 0
           return <g key={bucket.key}>
             {showLabel && <text className={styles.dateLabel} x={x(index)} y="199" textAnchor="middle">{dateLabel(bucket)}</text>}
-            <rect x={x(index) - 310 / Math.max(1, series.length - 1)} y="20" width={620 / Math.max(1, series.length - 1)} height="160" fill="transparent" tabIndex={0}
-              role="img" aria-label={`${dateLabel(bucket)}: ${metrics.map(({ key, label: name }) => `${name} ${bucket[key]}`).join(', ')}`}
+            <rect x={x(index) - 310 / Math.max(1, buckets.length - 1)} y="20" width={620 / Math.max(1, buckets.length - 1)} height="160" fill="transparent" tabIndex={0}
+              role="img" aria-label={`${dateLabel(bucket)}: ${metrics.map(({ key, label: name }) => `${name} ${Math.round(bucket[key])}`).join(', ')}`}
               onMouseEnter={() => setActiveIndex(index)} onFocus={() => setActiveIndex(index)} onBlur={() => setActiveIndex(null)} />
           </g>
         })}
@@ -176,25 +277,66 @@ export function UsageStatsPanel() {
   const hitColor = scale.stops[0]
   const missColor = scale.stops[2]
   const trackColor = scale.empty
+  const reducedMotion = usePrefersReducedMotion()
   const [range, setRange] = useState<UsageRange>('today')
   const [activeType, setActiveType] = useState<TypeFilter>('all')
   const [iconFailed, setIconFailed] = useState<Partial<Record<ExternalCliToolId, boolean>>>({})
-  const view = aggregateUsageStats(terminals, range, Date.now(), activeType === 'all' ? undefined : activeType)
+  const [startInput, setStartInput] = useState(() => toDateInputValue(Date.now() - 6 * DAY_MS))
+  const [endInput, setEndInput] = useState(() => toDateInputValue(Date.now()))
+  const now = Date.now()
+  const normalized = useMemo(
+    () => normalizeCustomRange(parseDateInput(startInput), parseDateInput(endInput), now),
+    // now 仅用于截断未来结束日期，避免每次渲染新建对象导致聚合抖动由调用方控制。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [startInput, endInput],
+  )
+  const customRange = range === 'custom' ? { start: normalized.start, end: normalized.end } : undefined
+  const view = aggregateUsageStats(terminals, range, now, activeType === 'all' ? undefined : activeType, customRange)
   const cache = cacheSplitFor(view.cacheReadTokens, view.inputTokens, view.cacheWriteTokens)
+  const animatedTotal = useAnimatedNumber(view.totalTokens, reducedMotion)
+  const animatedInput = useAnimatedNumber(view.inputTokens, reducedMotion)
+  const animatedOutput = useAnimatedNumber(view.outputTokens, reducedMotion)
+  const ioTotal = view.inputTokens + view.outputTokens
+  const outputShare = ioTotal > 0 ? view.outputTokens / ioTotal : undefined
+  const customErrorKey = normalized.error === 'invalid' ? 'customInvalid' : normalized.error === 'future' ? 'customFuture' : normalized.error === 'span' ? 'customSpan' : undefined
   const metrics: TrendMetric[] = [
     { key: 'hits', label: t('settings:usageStats.hit'), color: hitColor },
     { key: 'misses', label: t('settings:usageStats.miss'), color: missColor },
     { key: 'unknown', label: t('settings:usageStats.unknown'), color: 'var(--shell-muted)' },
     { key: 'output', label: t('settings:usageStats.output'), color: 'var(--shell-text)' },
   ]
+  const trendBucketHint = useMemo(() => {
+    if (range !== 'custom' || normalized.end < normalized.start) return undefined
+    const mode = customBucketModeFor(normalized.start, normalized.end)
+    return mode === 'hour' ? t('settings:usageStats.customHourly') : mode === 'week' ? t('settings:usageStats.customWeekly') : t('settings:usageStats.customDaily')
+  }, [range, normalized, t])
   return (
     <section className={styles.panel} aria-label={t('settings:usageStats.title')}>
-      <div className={styles.toolbar}>
-        <h3 className={styles.title}>{t('settings:usageStats.title')}</h3>
+      <div className={styles.head}>
+        <div className={styles.headInfo}>
+          <h3 className={styles.title}>{t('settings:usageStats.title')}</h3>
+          <p className={styles.subtitle}>{t('settings:usageStats.subtitle')}</p>
+        </div>
         <div className={styles.ranges} role="group" aria-label={t('settings:usageStats.timeRange')}>
           {RANGES.map((candidate) => <button key={candidate} type="button" aria-pressed={candidate === range} onClick={() => setRange(candidate)}>{t(`settings:usageStats.${RANGE_KEYS[candidate]}`)}</button>)}
         </div>
       </div>
+      {range === 'custom' && (
+        <div className={styles.customBar}>
+          <label className={styles.dateField}>
+            <span>{t('settings:usageStats.customStart')}</span>
+            <input type="date" value={startInput} max={endInput} onChange={(event) => setStartInput(event.target.value)} aria-label={t('settings:usageStats.customStart')} />
+          </label>
+          <span className={styles.dateSep} aria-hidden="true">–</span>
+          <label className={styles.dateField}>
+            <span>{t('settings:usageStats.customEnd')}</span>
+            <input type="date" value={endInput} min={startInput} onChange={(event) => setEndInput(event.target.value)} aria-label={t('settings:usageStats.customEnd')} />
+          </label>
+          {customErrorKey
+            ? <p className={styles.error} role="alert">{t(`settings:usageStats.${customErrorKey}`)}</p>
+            : <p className={styles.customMeta}>{formatRangeLabel(normalized.start, normalized.end)}{trendBucketHint ? ` · ${trendBucketHint}` : ''}</p>}
+        </div>
+      )}
       <div className={styles.types} role="group" aria-label={t('settings:usageStats.terminalType')}>
         <button type="button" aria-pressed={activeType === 'all'} onClick={() => setActiveType('all')}>{t('settings:usageStats.typeAll')}</button>
         {EXTERNAL_CLI_TOOL_ORDER.map((toolId) => {
@@ -211,7 +353,11 @@ export function UsageStatsPanel() {
           <OverallDonut rows={view.rows} total={view.totalTokens} trackColor={trackColor} label={t('settings:usageStats.overall')} />
           <div className={styles.summaryInfo}>
             <span className={styles.label}>{t('settings:usageStats.total')}</span>
-            <div className={styles.value} data-testid="usage-total">{formatCount(view.totalTokens)}<small>tokens</small></div>
+            <div className={styles.value} data-testid="usage-total">{formatCount(animatedTotal)}<small>tokens</small></div>
+            <div className={styles.ioSplit} data-testid="usage-io">
+              <span><i className={styles.ioDotIn} />{t('settings:usageStats.input')} <strong>{formatCount(animatedInput)}</strong></span>
+              <span><i className={styles.ioDotOut} />{t('settings:usageStats.output')} <strong data-testid="usage-output">{formatCount(animatedOutput)}</strong></span>
+            </div>
             <div className={styles.legend}>{view.rows.map((row) => <span key={row.preset}><i style={{ background: presetColor(row.preset) }} />{presetName(row.preset)} <strong>{view.totalTokens > 0 ? Math.round(row.totalTokens / view.totalTokens * 100) : 0}%</strong></span>)}</div>
           </div>
         </div>
@@ -223,11 +369,25 @@ export function UsageStatsPanel() {
             <div className={styles.legend}>{cache.hasData ? <><span><i style={{ background: hitColor }} />{t('settings:usageStats.hit')} <strong>{formatCount(cache.hits)}</strong></span><span><i style={{ background: missColor }} />{t('settings:usageStats.miss')} <strong>{formatCount(cache.misses)}</strong></span></> : t('settings:usageStats.noCacheData')}</div>
           </div>
         </div>
+        <div className={styles.summaryCell}>
+          <div className={styles.ioBar} role="img" aria-label={t('settings:usageStats.ioTitle')}>
+            <div className={styles.ioTrack}>
+              <div className={styles.ioFillIn} style={{ width: `${ioTotal > 0 ? (view.inputTokens / ioTotal) * 100 : 0}%` }} />
+              <div className={styles.ioFillOut} style={{ width: `${ioTotal > 0 ? (view.outputTokens / ioTotal) * 100 : 0}%` }} />
+            </div>
+            <span className={styles.ioShare}>{formatRate(outputShare)}</span>
+          </div>
+          <div className={styles.summaryInfo}>
+            <span className={styles.label}>{t('settings:usageStats.ioTitle')}</span>
+            <div className={styles.value} data-testid="usage-input">{formatCount(animatedInput)}<small>→ {formatCount(animatedOutput)}</small></div>
+            <div className={styles.legend}><span>{t('settings:usageStats.ioShare')} <strong>{formatRate(outputShare)}</strong></span><span>{view.terminals} {t('settings:usageStats.terminals')}</span></div>
+          </div>
+        </div>
       </div>
       <div className={styles.trendSection}>
-        <div className={styles.toolbar}><h4 className={styles.title}>{t('settings:usageStats.trend')}</h4><span className={styles.label}>tokens</span></div>
+        <div className={styles.toolbar}><h4 className={styles.title}>{t('settings:usageStats.trend')}</h4><span className={styles.label}>tokens{trendBucketHint ? ` · ${trendBucketHint}` : ''}</span></div>
         <p className={styles.hint}>{t('settings:usageStats.snapshotHint')}</p>
-        {view.terminals > 0 ? <TrendLines key={`${activeType}-${range}`} series={view.series} range={range} metrics={metrics} label={t('settings:usageStats.trend')} /> : <div className={styles.empty}>{t('settings:usageStats.empty')}</div>}
+        {view.terminals > 0 ? <TrendLines series={view.series} range={range} metrics={metrics} label={t('settings:usageStats.trend')} /> : <div className={styles.empty}>{t('settings:usageStats.empty')}</div>}
       </div>
       {view.rows.length > 0 && <div className={styles.breakdown}>
         <h4 className={styles.title}>{t('settings:usageStats.breakdown')}</h4>
@@ -239,10 +399,18 @@ export function UsageStatsPanel() {
               <div className={styles.models}>{row.models.length ? row.models.map((model) => <span key={model} title={model}>{model}</span>) : <span>{t('settings:usageStats.unknownModel')}</span>}</div>
             </div>
             <div className={styles.modelTotal}><span className={styles.label}>{t('settings:usageStats.total')}</span><strong>{formatCount(row.totalTokens)}</strong><small>tokens</small></div>
+            <div className={styles.modelIo}><span className={styles.label}>{t('settings:usageStats.input')}</span><strong>{formatCount(row.inputTokens)}</strong></div>
+            <div className={styles.modelIo}><span className={styles.label}>{t('settings:usageStats.output')}</span><strong>{formatCount(row.outputTokens)}</strong></div>
             <div className={styles.modelRate}><span className={styles.label}>{t('settings:usageStats.hitRate')}</span><strong>{formatRate(split.hasData ? split.rate : undefined)}</strong></div>
           </article>
         })}
       </div>}
     </section>
   )
+}
+
+function formatRangeLabel(start: number, end: number): string {
+  const from = new Date(start)
+  const to = new Date(Math.max(end, start))
+  return `${from.getMonth() + 1}/${from.getDate()} – ${to.getMonth() + 1}/${to.getDate()}`
 }
