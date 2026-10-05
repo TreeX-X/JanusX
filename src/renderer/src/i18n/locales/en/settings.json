@@ -443,6 +443,11 @@
     }
   },
   "usageStats": {
+    "timeRange": "Time range",
+    "terminalType": "Terminal type",
+    "snapshotHint": "Cumulative terminal snapshots grouped by last update time.",
+    "breakdown": "Terminal & model usage",
+    "unknownModel": "Model not reported",
     "title": "Usage statistics",
     "subtitle": "Aggregate token usage across terminals; live data for the current session",
     "rangeToday": "Today",

@@ -443,6 +443,11 @@
     }
   },
   "usageStats": {
+    "timeRange": "时间范围",
+    "terminalType": "终端类型",
+    "snapshotHint": "按终端最近更新时间分组的累计用量快照",
+    "breakdown": "终端与模型用量",
+    "unknownModel": "未报告模型",
     "title": "用量统计",
     "subtitle": "汇总各终端 token 用量；当前会话现场数据",
     "rangeToday": "今日",
