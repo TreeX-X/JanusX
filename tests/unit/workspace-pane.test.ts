@@ -323,6 +323,14 @@ describe('workspace pane tree', () => {
     ])
   })
 
+  it('preserves split tree identity when order does not change or the target is missing', () => {
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    expect(reorderPaneTab(split.tree, 'pane-1', 'terminal:terminal-1', 0)).toBe(split.tree)
+    expect(reorderPaneTab(split.tree, 'pane-missing', 'terminal:terminal-1', 0)).toBe(split.tree)
+    expect(reorderPaneTab(split.tree, 'pane-1', 'terminal:missing', 0)).toBe(split.tree)
+  })
+
   it('leaves the tree untouched for unknown panes or tabs', () => {
     const { tree } = seedPane()
 

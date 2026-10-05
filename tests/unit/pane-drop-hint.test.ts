@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPaneDropHint, paneDropHintLabel, SPLIT_RATIO_EQUAL } from '../../src/renderer/src/lib/pane-drop-hint'
+import { getPaneDropHint, midpointInsertIndex, paneDropHintLabel, SPLIT_RATIO_EQUAL } from '../../src/renderer/src/lib/pane-drop-hint'
 
 function fakeElement(width: number, height: number, left = 0, top = 0): HTMLElement {
   return {
@@ -61,5 +61,26 @@ describe('getPaneDropHint', () => {
 
   it('uses a fixed equal split ratio for edge drops (preview equals result)', () => {
     expect(SPLIT_RATIO_EQUAL).toBe(0.5)
+  })
+})
+
+describe('midpointInsertIndex', () => {
+  /*-- 三个 144px tab 紧排：中线分别在 72 / 216 / 360 --*/
+  const tabs = [
+    { left: 0, width: 144 },
+    { left: 144, width: 144 },
+    { left: 288, width: 144 },
+  ]
+
+  it('inserts before the tab whose midpoint the pointer precedes', () => {
+    expect(midpointInsertIndex(tabs, 10)).toBe(0)
+    expect(midpointInsertIndex(tabs, 100)).toBe(1)
+    expect(midpointInsertIndex(tabs, 300)).toBe(2)
+  })
+
+  it('appends past the last midpoint and handles empty strips', () => {
+    expect(midpointInsertIndex(tabs, 400)).toBe(3)
+    expect(midpointInsertIndex(tabs, 360)).toBe(3)
+    expect(midpointInsertIndex([], 50)).toBe(0)
   })
 })

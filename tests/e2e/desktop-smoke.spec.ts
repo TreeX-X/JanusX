@@ -382,7 +382,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await terminalInput.press('Enter')
     await expect(page.locator('.xterm-rows')).toContainText('JANUSX_DOCK_FIT', { timeout: 10_000 })
 
-    const terminalTabs = page.locator('main [role="button"][draggable="true"]')
+    const terminalTabs = page.locator('main [data-tab-id^="terminal:"]')
     await expect(terminalTabs).toHaveCount(1)
     const firstTerminalView = terminalScreen.locator('xpath=ancestor::*[@aria-hidden][1]')
     const firstTerminalElement = await terminalScreen.elementHandle()

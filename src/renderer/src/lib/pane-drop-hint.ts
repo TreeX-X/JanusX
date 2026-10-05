@@ -38,3 +38,16 @@ export function paneDropHintLabel(hint: PaneDropHint): string {
   if (hint === 'top' || hint === 'bottom') return '上下分屏'
   return '合并到此面板'
 }
+
+/*-- tab 条排序插入位：指针 X 落在哪个 tab 中线左侧就插到它前面，全在右侧则追加。
+     调用方先摘除被拖 tab 再传剩余顺序，语义与 reorderPaneTab 的摘除后下标一致。 --*/
+export function midpointInsertIndex(
+  items: ReadonlyArray<{ left: number; width: number }>,
+  clientX: number
+): number {
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index]
+    if (clientX < item.left + item.width / 2) return index
+  }
+  return items.length
+}

@@ -29,8 +29,6 @@ import { useI18n } from '@/i18n/useI18n'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import type { TerminalPreset, Terminal } from '@/types'
 import {
-  clearBrowserTabDragData,
-  clearTerminalDragData,
   getActiveBrowserTabDragId,
   getActiveTerminalDragId,
   hasBrowserTabDrag,
@@ -38,8 +36,6 @@ import {
   hasWorkspaceFileDrag,
   readBrowserTabDragData,
   readTerminalDragData,
-  setBrowserTabDragData,
-  setTerminalDragData,
 } from '@/lib/terminal-file-reference'
 import {
   getLeafPanes,
@@ -48,7 +44,8 @@ import {
   type WorkspacePaneNode,
   type WorkspacePaneSplit,
 } from '@/lib/workspace-pane'
-import { getPaneDropHint, paneDropHintLabel, SPLIT_RATIO_EQUAL, type PaneDropHint } from '@/lib/pane-drop-hint'
+import { getPaneDropHint, midpointInsertIndex, paneDropHintLabel, SPLIT_RATIO_EQUAL, type PaneDropHint } from '@/lib/pane-drop-hint'
+import { startPaneTabDrag } from '@/lib/pane-tab-drag'
 import { resolveContextWindows } from '@/lib/runtime-telemetry'
 import { getTerminalStatusVisual } from '@/lib/terminal-sidebar-visual'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
@@ -529,18 +526,12 @@ interface PaneTreeViewProps {
   onOpenBrowser: (paneId: string) => void
   onCloseBrowserTab: (paneId: string, tabId: string, surfaceId: string) => void
   onBrowserPopOut: (paneId: string, tabId: string, surfaceId: string) => void
-  onBrowserTabDragStart: (surfaceId: string) => void
   onBrowserTabDrop: (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
-  activeDragBrowserSurfaceId: string | null
-  activeDragBrowserSurfaceRef: React.MutableRefObject<string | null>
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
   onTerminalDrop: (terminalId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
   onReorderTab: (paneId: string, tabId: string, targetIndex: number) => void
   onMoveTabToIndex: (contentId: string, paneId: string, targetIndex: number) => void
-  onTerminalDragStart: (terminalId: string) => void
-  onTerminalDragEnd: () => void
-  activeDragTerminalId: string | null
-  activeDragTerminalRef: React.MutableRefObject<string | null>
+  onFluidCandidate: (contentId: string, paneId: string, event: React.PointerEvent) => void
   onResize: (splitId: string, ratio: number) => void
   terminalMenuPaneId: string | null
   onToggleTerminalMenu: (paneId: string) => void
@@ -848,18 +839,12 @@ function LeafPane({
   onOpenBrowser,
   onCloseBrowserTab,
   onBrowserPopOut,
-  onBrowserTabDragStart,
   onBrowserTabDrop,
-  activeDragBrowserSurfaceId,
-  activeDragBrowserSurfaceRef,
   onKillTerminal,
   onTerminalDrop,
   onReorderTab,
   onMoveTabToIndex,
-  onTerminalDragStart,
-  onTerminalDragEnd,
-  activeDragTerminalId,
-  activeDragTerminalRef,
+  onFluidCandidate,
   terminalMenuPaneId,
   onToggleTerminalMenu,
   onCloseTerminalMenu,
@@ -887,44 +872,45 @@ function LeafPane({
     [leaf.id, onToggleTerminalMenu]
   )
 
-  /*-- 从一次拖拽事件解析被拖 tab 的内容 id（terminal:/browser:），读不到 dataTransfer 时退回活跃拖拽态 --*/
+  /*-- 原生拖拽（仅侧栏终端拖入）解析被拖 tab 的内容 id；tab 条内排序走指针会话 --*/
   const resolveStripDraggedTabId = useCallback((event: React.DragEvent) => {
     const dragTerminalId =
-      readTerminalDragData(event.dataTransfer) ||
-      activeDragTerminalId ||
-      activeDragTerminalRef.current ||
-      getActiveTerminalDragId()
+      readTerminalDragData(event.dataTransfer) || getActiveTerminalDragId()
     if (dragTerminalId) return `terminal:${dragTerminalId}`
     const dragBrowserSurfaceId =
-      readBrowserTabDragData(event.dataTransfer) ||
-      activeDragBrowserSurfaceId ||
-      activeDragBrowserSurfaceRef.current ||
-      getActiveBrowserTabDragId()
+      readBrowserTabDragData(event.dataTransfer) || getActiveBrowserTabDragId()
     if (dragBrowserSurfaceId) return `browser:${dragBrowserSurfaceId}`
     return null
-  }, [activeDragTerminalId, activeDragBrowserSurfaceId, activeDragTerminalRef, activeDragBrowserSurfaceRef])
+  }, [])
 
-  /*-- 渲染期已知的被拖 tab：同 pane 拖拽时从视觉顺序里摘除它，空出的位置由占位补上（让位） --*/
-  const stripDraggedTabId =
-    activeDragTerminalId ?? activeDragTerminalRef.current
-      ? `terminal:${activeDragTerminalId ?? activeDragTerminalRef.current}`
-      : activeDragBrowserSurfaceId ?? activeDragBrowserSurfaceRef.current
-        ? `browser:${activeDragBrowserSurfaceId ?? activeDragBrowserSurfaceRef.current}`
-        : null
-  const stripDraggedIsLocal = stripDraggedTabId ? leaf.tabs.some((tab) => tab.id === stripDraggedTabId) : false
+  const nativeTerminalId = getActiveTerminalDragId()
+  const nativeBrowserId = getActiveBrowserTabDragId()
+  const stripDraggedTabId = nativeTerminalId ? `terminal:${nativeTerminalId}` : nativeBrowserId ? `browser:${nativeBrowserId}` : null
+  const stripDraggedIsLocal = leaf.tabs.some((tab) => tab.id === stripDraggedTabId)
 
-  /*-- 按指针 X 落在哪个 tab 中线左侧决定插入位；同 pane 拖拽按摘除后的顺序算 --*/
+  useEffect(() => {
+    const clear = () => { setTabInsertIndex(null); setDragHint(null) }
+    window.addEventListener('dragend', clear)
+    window.addEventListener('drop', clear)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('dragend', clear)
+      window.removeEventListener('drop', clear)
+      window.removeEventListener('blur', clear)
+    }
+  }, [])
+
+  /*-- 按指针 X 落在哪个 tab 中线左侧决定插入位；被拖 tab 先摘除再算 --*/
   const computeTabInsertIndex = useCallback((clientX: number, draggedId: string | null) => {
-    const visible = draggedId && leaf.tabs.some((tab) => tab.id === draggedId)
-      ? leaf.tabs.filter((tab) => tab.id !== draggedId)
-      : leaf.tabs
-    for (let index = 0; index < visible.length; index += 1) {
-      const node = tabNodeRefs.current.get(visible[index].id)
+    const rects: { left: number; width: number }[] = []
+    for (const tab of leaf.tabs) {
+      if (tab.id === draggedId) continue
+      const node = tabNodeRefs.current.get(tab.id)
       if (!node) continue
       const rect = node.getBoundingClientRect()
-      if (clientX < rect.left + rect.width / 2) return index
+      rects.push({ left: rect.left, width: rect.width })
     }
-    return visible.length
+    return midpointInsertIndex(rects, clientX)
   }, [leaf.tabs])
 
   const handleTabStripDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
@@ -961,24 +947,13 @@ function LeafPane({
     onMoveTabToIndex(draggedId, leaf.id, index)
   }, [computeTabInsertIndex, leaf.id, leaf.tabs, onMoveTabToIndex, onReorderTab, resolveStripDraggedTabId])
 
-  /*-- 拖拽会话结束（全局 dragend 已清活跃态）时收回本条占位，避免 Esc 中断后残留 --*/
-  useEffect(() => {
-    if (!activeDragTerminalId && !activeDragBrowserSurfaceId) setTabInsertIndex(null)
-  }, [activeDragTerminalId, activeDragBrowserSurfaceId])
-
   const handleDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
 
     const dragTerminalId =
-      readTerminalDragData(event.dataTransfer) ||
-      activeDragTerminalId ||
-      activeDragTerminalRef.current ||
-      getActiveTerminalDragId()
+      readTerminalDragData(event.dataTransfer) || getActiveTerminalDragId()
     const dragBrowserSurfaceId =
-      readBrowserTabDragData(event.dataTransfer) ||
-      activeDragBrowserSurfaceId ||
-      activeDragBrowserSurfaceRef.current ||
-      getActiveBrowserTabDragId()
+      readBrowserTabDragData(event.dataTransfer) || getActiveBrowserTabDragId()
     if (!hasTerminalDrag(event.dataTransfer) && !dragTerminalId && !hasBrowserTabDrag(event.dataTransfer) && !dragBrowserSurfaceId) return
     event.preventDefault()
     event.stopPropagation()
@@ -987,7 +962,7 @@ function LeafPane({
     /*-- 预览比例 = 松手后实际应用的比例（预览即结果）：落点分屏固定平分 --*/
     const ratio = SPLIT_RATIO_EQUAL
     setDragHint((current) => (current && current.zone === zone && current.ratio === ratio ? current : { zone, ratio }))
-  }, [activeDragTerminalId, activeDragBrowserSurfaceId])
+  }, [])
 
   const handleDragLeave = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
@@ -1001,15 +976,9 @@ function LeafPane({
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
 
     const dragTerminalId =
-      readTerminalDragData(event.dataTransfer) ||
-      activeDragTerminalId ||
-      activeDragTerminalRef.current ||
-      getActiveTerminalDragId()
+      readTerminalDragData(event.dataTransfer) || getActiveTerminalDragId()
     const dragBrowserSurfaceId =
-      readBrowserTabDragData(event.dataTransfer) ||
-      activeDragBrowserSurfaceId ||
-      activeDragBrowserSurfaceRef.current ||
-      getActiveBrowserTabDragId()
+      readBrowserTabDragData(event.dataTransfer) || getActiveBrowserTabDragId()
     if (!hasTerminalDrag(event.dataTransfer) && !dragTerminalId && !hasBrowserTabDrag(event.dataTransfer) && !dragBrowserSurfaceId) return
     event.preventDefault()
     event.stopPropagation()
@@ -1025,10 +994,13 @@ function LeafPane({
     const terminalId = dragTerminalId
     if (!terminalId) return
     onTerminalDrop(terminalId, leaf.id, edge, ratio)
-  }, [activeDragTerminalId, activeDragBrowserSurfaceId, leaf.id, onTerminalDrop, onBrowserTabDrop])
+  }, [leaf.id, onTerminalDrop, onBrowserTabDrop])
 
-  /*-- 单个 pane tab：visualIndex 是含占位在内的视觉位置，首位圆角跟随条底 --*/
-  const renderPaneTab = (tab: WorkspacePaneLeaf['tabs'][number], visualIndex: number) => {
+  /*-- 单个 pane tab：visualIndex 是含占位在内的视觉位置，首位圆角跟随条底。 --*/
+  const renderPaneTab = (
+    tab: WorkspacePaneLeaf['tabs'][number],
+    visualIndex: number,
+  ) => {
     const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
     const isActive = tab.id === activeTabId
     const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
@@ -1041,37 +1013,23 @@ function LeafPane({
       <div
         role="button"
         tabIndex={0}
-        draggable={tab.type === 'terminal' || tab.type === 'browser'}
+        draggable={false}
         data-tab-id={tab.id}
         ref={(node) => {
           if (node) tabNodeRefs.current.set(tab.id, node)
           else tabNodeRefs.current.delete(tab.id)
         }}
-        onDragStart={(event) => {
-          if (tab.type === 'terminal') {
-            setTerminalDragData(event.dataTransfer, tab.terminalId)
-            onTerminalDragStart(tab.terminalId)
-            return
-          }
-          if (tab.type === 'browser') {
-            setBrowserTabDragData(event.dataTransfer, tab.surfaceId)
-            onBrowserTabDragStart(tab.surfaceId)
-          }
-        }}
-        onDragEnd={() => {
-          setDragHint(null)
-          setTabInsertIndex(null)
-          onTerminalDragEnd()
-        }}
+        onPointerDown={(event) => onFluidCandidate(tab.id, leaf.id, event)}
         onClick={() => onTabSelect(leaf.id, tab.id)}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' && event.key !== ' ') return
           event.preventDefault()
           onTabSelect(leaf.id, tab.id)
         }}
-        className="pane-tab group/tab relative flex h-8 min-w-0 basis-[144px] shrink grow-0 cursor-pointer select-none items-center gap-1.5 border-0 px-2.5 text-left font-mono text-[11px] leading-none transition-colors"
+        className="pane-tab group/tab relative flex h-8 min-w-0 basis-[144px] shrink-0 grow-0 cursor-pointer select-none items-center gap-1.5 border-0 px-2.5 text-left font-mono text-[11px] leading-none transition-colors"
         data-active={isActive ? 'true' : 'false'}
         style={{
+          touchAction: 'none',
           color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
           /*-- 选中态与下方内容床同色，让 tab 与画布连成一体；不再是压在浅色条上的黑块。
                未选中态刻意不写 inline background —— 内联样式会盖过 hover 类，
@@ -1121,6 +1079,7 @@ function LeafPane({
           <ThemedTooltip label={t('terminal:tab.closeBrowser')}>
           <span
             tabIndex={-1}
+            data-tab-close="true"
             className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
             style={{ color: 'var(--shell-muted)' }}
             onClick={(event) => {
@@ -1139,6 +1098,7 @@ function LeafPane({
 
   return (
       <section
+      data-pane-id={leaf.id}
       className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden transition-[border-color,box-shadow,background,border-radius]"
       onPointerDownCapture={() => onPaneFocus(leaf.id)}
       onDragOver={handleDragOver}
@@ -1189,12 +1149,13 @@ function LeafPane({
         </div>
       )}
       <div
+        data-tab-strip={leaf.id}
         onDragOver={handleTabStripDragOver}
         onDragLeave={handleTabStripDragLeave}
         onDrop={handleTabStripDrop}
         /*-- 左侧贴边：首 tab 直接顶住条底左缘（只留右侧 pr-1 给动作按钮呼吸），
              左缘不留 4px chrome 缝，圆角由首 tab 自己的左上倒角一次成型。 --*/
-        className="flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto pl-0 pr-1"
+        className="relative flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto pl-0 pr-1"
         style={{
           /*-- tab 条吃实色 pane-chrome：与下方 canvas 内容床拉开一阶，
                两主题下选中 tab（canvas 底）与未选中（chrome 底）都有明确明度差；
@@ -1226,7 +1187,7 @@ function LeafPane({
                   key={`tab-drop-placeholder-${leaf.id}`}
                   aria-hidden="true"
                   data-tab-placeholder="true"
-                  className="relative flex h-8 min-w-0 basis-[144px] shrink grow-0 items-center justify-center px-2.5"
+                  className="relative flex h-8 min-w-0 basis-[144px] shrink-0 grow-0 items-center justify-center px-2.5"
                   style={{
                     background: 'rgba(255,120,48,0.10)',
                     borderRight: '1px solid var(--shell-border-soft)',
@@ -1245,6 +1206,11 @@ function LeafPane({
           }
           return slots
         })()}
+        <div data-tab-drag-spacer="" aria-hidden="true" style={{ width: 0, flexShrink: 0 }} />
+        <div data-tab-drag-slot="" aria-hidden="true" style={{
+          display: 'none', position: 'absolute', top: 0, height: '100%', pointerEvents: 'none',
+          background: 'rgba(255,120,48,.10)', boxShadow: 'inset 0 0 0 1px rgba(255,120,48,.4)',
+        }} />
         <div className="ml-auto flex h-8 shrink-0 items-center gap-1 pl-1">
           <span
             aria-hidden="true"
@@ -1466,10 +1432,7 @@ export function TerminalArea() {
   const drawerBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
   const drawerKeyboardResizeUntilRef = useRef(0)
   const [terminalMenuPaneId, setTerminalMenuPaneId] = useState<string | null>(null)
-  const [activeDragTerminalId, setActiveDragTerminalId] = useState<string | null>(null)
-  const activeDragTerminalRef = useRef<string | null>(null)
-  const [activeDragBrowserSurfaceId, setActiveDragBrowserSurfaceId] = useState<string | null>(null)
-  const activeDragBrowserSurfaceRef = useRef<string | null>(null)
+  const cancelTabDragRef = useRef<(() => void) | null>(null)
   // AC7: launching guard for handlePresetSelect, mirroring TerminalSelector's
   // launchingPreset pattern. Prevents double-click / rapid preset selection
   // from firing two concurrent terminal:create requests for the same preset.
@@ -1653,19 +1616,33 @@ export function TerminalArea() {
     [movePaneTabToIndex]
   )
 
-  useEffect(() => {
-    const onDragEnd = () => {
-      activeDragTerminalRef.current = null
-      setActiveDragTerminalId(null)
-      clearTerminalDragData()
-      activeDragBrowserSurfaceRef.current = null
-      setActiveDragBrowserSurfaceId(null)
-      clearBrowserTabDragData()
-      setTabDragInFlight(false)
-    }
-    window.addEventListener('dragend', onDragEnd)
-    return () => window.removeEventListener('dragend', onDragEnd)
-  }, [setTabDragInFlight])
+  useLayoutEffect(() => () => cancelTabDragRef.current?.(), [activeWorkspaceId, paneTree])
+
+  const handleFluidCandidate = useCallback((contentId: string, paneId: string, event: React.PointerEvent) => {
+    if (event.button !== 0 || !event.isPrimary || !terminalAreaRef.current) return
+    const source = event.currentTarget as HTMLElement
+    const control = (event.target as Element).closest('[data-tab-close], button, [role="button"]')
+    if (control && control !== source) return
+    cancelTabDragRef.current?.()
+    cancelTabDragRef.current = startPaneTabDrag({
+      root: terminalAreaRef.current,
+      source,
+      event: event.nativeEvent,
+      onActiveChange: setTabDragInFlight,
+      onDrop: (target) => {
+        if (target.index !== undefined) {
+          if (target.paneId === paneId) handleReorderTab(paneId, contentId, target.index)
+          else handleMoveTabToIndex(contentId, target.paneId, target.index)
+          // An unchanged insertion index must still select the dragged tab.
+          setPaneTab(target.paneId, contentId)
+          return
+        }
+        const edge = target.zone === 'center' ? null : target.zone
+        if (contentId.startsWith('terminal:')) handleTerminalDrop(contentId.slice(9), target.paneId, edge, SPLIT_RATIO_EQUAL)
+        else if (contentId.startsWith('browser:')) handleBrowserTabDrop(contentId.slice(8), target.paneId, edge, SPLIT_RATIO_EQUAL)
+      },
+    })
+  }, [setTabDragInFlight, handleReorderTab, handleMoveTabToIndex, setPaneTab, handleTerminalDrop, handleBrowserTabDrop])
 
   const handlePresetSelect = useCallback(
     async (preset: typeof PRESETS[number]) => {
@@ -1859,30 +1836,8 @@ export function TerminalArea() {
                 onTerminalDrop={handleTerminalDrop}
                 onReorderTab={handleReorderTab}
                 onMoveTabToIndex={handleMoveTabToIndex}
-                onTerminalDragStart={(terminalId) => {
-                  activeDragTerminalRef.current = terminalId
-                  setActiveDragTerminalId(terminalId)
-                  setTabDragInFlight(true)
-                }}
-                onTerminalDragEnd={() => {
-                  activeDragTerminalRef.current = null
-                  setActiveDragTerminalId(null)
-                  clearTerminalDragData()
-                  activeDragBrowserSurfaceRef.current = null
-                  setActiveDragBrowserSurfaceId(null)
-                  clearBrowserTabDragData()
-                  setTabDragInFlight(false)
-                }}
-                onBrowserTabDragStart={(surfaceId) => {
-                  activeDragBrowserSurfaceRef.current = surfaceId
-                  setActiveDragBrowserSurfaceId(surfaceId)
-                  setTabDragInFlight(true)
-                }}
+                onFluidCandidate={handleFluidCandidate}
                 onBrowserTabDrop={handleBrowserTabDrop}
-                activeDragBrowserSurfaceId={activeDragBrowserSurfaceId}
-                activeDragBrowserSurfaceRef={activeDragBrowserSurfaceRef}
-                activeDragTerminalId={activeDragTerminalId}
-                activeDragTerminalRef={activeDragTerminalRef}
                 onResize={resizePane}
                 terminalMenuPaneId={terminalMenuPaneId}
                 onToggleTerminalMenu={toggleTerminalMenu}

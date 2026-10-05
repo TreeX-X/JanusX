@@ -437,11 +437,9 @@ export function reorderPaneTab(
     }
   }
 
-  return {
-    ...node,
-    first: reorderPaneTab(node.first, paneId, tabId, targetIndex) ?? node.first,
-    second: reorderPaneTab(node.second, paneId, tabId, targetIndex) ?? node.second,
-  }
+  const first = reorderPaneTab(node.first, paneId, tabId, targetIndex) ?? node.first
+  const second = reorderPaneTab(node.second, paneId, tabId, targetIndex) ?? node.second
+  return first === node.first && second === node.second ? node : { ...node, first, second }
 }
 
 function insertContentIntoLeaf(
