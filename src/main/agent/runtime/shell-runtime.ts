@@ -23,5 +23,8 @@ const auditStore = new FilePolicyAuditStore()
 /** Shell runtime singleton (resolver injected by registerAgentRuntimeHandlers). */
 export const workspaceAgentRuntime = bindMemoryToolIdentity(createAgentRuntime({ auditStore }))
 
+/** Routes isolated execution activity to its owning conversation; approval identity stays on the child. */
+export const workflowSessionParents = new Map<string, string>()
+
 /** Default renderer-action authorizer (persistent audit, same as before). */
 export const authorizeRendererAction: RendererActionAuthorizer = createRendererActionAuthorizer(auditStore)

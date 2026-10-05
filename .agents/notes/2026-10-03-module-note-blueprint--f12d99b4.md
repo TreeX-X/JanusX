@@ -109,7 +109,7 @@ relations:
 
 交付路线见 [Note、wiki 与蓝图交付专题](./2026-09-23-blueprint-notev2-implementation-plan--e7c03317.md)，性能约束见 [蓝图性能专题](./2026-09-26-blueprint-performance--77fa3727.md)。相关工作包括历史方案和当前实现；列表中的存在或关联不代表已采纳、已交付或拥有写入权限。
 
-模块负责工程文档读取、投影、导航与界面呈现。共享 harness 包负责基础解析和索引；任务执行与回执仍由 Agent 执行入口负责。知识 wiki 的生成与审核属于记忆知识模块。
+模块负责工程文档投影、导航、蓝图关注与界面呈现。agentX 的共享 harness 包拥有 Note 读取快照、创建编辑、缓存索引、事务、监听、共享与撤销；Janus 的 HarnessNoteService 叠加组合投影和本地画布状态。任务执行与回执由共享 Agent 执行入口负责，知识 wiki 的生成与审核属于记忆知识模块。边界依据见 [agentX 复用边界](./2026-10-04-agentx-harness-inheritance--bd7fd0c6.md)。
 
 [架构师工作区设计](./2026-09-23-architect-workspace-model--41e93b25.md)说明跨仓组织的依据；[共同读取任务](./2026-09-25-note-blueprint-r2-read--fa17e06b.md)记录读取投影工作；[系统结构任务](./2026-10-03-module-structure-view--785a2a8e.md)记录模块视图的交付与验证。
 

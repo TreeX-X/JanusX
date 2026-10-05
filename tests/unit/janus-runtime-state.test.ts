@@ -18,6 +18,11 @@ const result: ToolResult = {
 }
 
 describe('Janus runtime activity state', () => {
+  it('routes child activity to the parent conversation while preserving approval identity', () => {
+    const event: AgentRuntimeEvent = { type: 'approval-requested', parentSessionId: 'parent', request: approval }
+    expect(runtimeEventSessionId(event)).toBe('parent')
+    expect(reduceJanusRuntimeState(EMPTY_JANUS_RUNTIME_STATE, event).pendingApprovals[0].sessionId).toBe('session-1')
+  })
   it('tracks approval, running and completion as one tool activity', () => {
     let state = reduceJanusRuntimeState(EMPTY_JANUS_RUNTIME_STATE, { type: 'approval-requested', request: approval })
     expect(state.pendingApprovals).toEqual([approval])

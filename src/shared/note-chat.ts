@@ -1,13 +1,5 @@
-export interface NoteChatChange {
-  id: string
-  conversationId: string
-  workspacePath: string
-  reason: string
-  createdAt: string
-  txId?: string
-  reverted?: boolean
-  files: Array<{ uri: string; title: string; before: string; after: string }>
-}
+// Note: Janus extends the shared agentX runtime — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+export type { NoteChatChange } from '@janus-agent/harness-node'
 
 export interface NoteScopeItem {
   uri: string

@@ -96,14 +96,7 @@ export function mapStatusToLifecycle(
   }
 }
 
-export const KIND_SECTIONS: Record<NoteKind, string[]> = {
-  idea: ['Background', 'Idea', 'Open questions'],
-  initiative: ['Goal', 'Scope', 'Acceptance criteria'],
-  requirement: ['Problem', 'Expected behavior', 'Scope', 'Acceptance criteria'],
-  decision: ['Problem', 'Proposal', 'Alternatives considered', 'Risks'],
-  task: ['Scope', 'Acceptance criteria', 'Verification'],
-}
-
+export { KIND_SECTIONS } from '@janus-agent/harness-core'
 export interface NodeFieldPatch {
   title?: string
   description?: string
@@ -128,12 +121,8 @@ export function checkWritablePatch(patch: Record<string, unknown>): { code: stri
   return null
 }
 
-export interface NoteEdit {
-  title?: string
-  sections: Record<string, string>
-  frontmatter: { tags?: string[]; parent?: string | null; lifecycle?: string }
-}
-
+import type { NoteEdit } from '@janus-agent/harness-core'
+export type { NoteEdit } from '@janus-agent/harness-core'
 /**
  * Translates a canvas field patch into a structured note edit. Frontmatter
  * writes (tags, parent, lifecycle) travel as data; the service merges them

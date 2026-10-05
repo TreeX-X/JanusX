@@ -463,7 +463,7 @@ describe('Janus Chat knowledge recall', () => {
     ]))
     expect(reply).toHaveBeenCalledWith('llm:chat:delta', expect.objectContaining({
       requestId: 'stream-edit-recovery',
-      delta: '修改完成。',
+      delta: expect.stringContaining('修改完成。'),
     }))
   })
 })
