@@ -41,7 +41,7 @@ if (params.has('untagged')) for (const node of Object.values(graph.nodes)) { nod
 installWorkbenchBoundary(() => graph, workspace.path)
 useWorkspaceStore.setState({ activeWorkspaceId: workspace.id, workspaces: [workspace as any] })
 useBlueprintMaintenanceStore.setState({ initialized: true })
-useBlueprintStore.setState({ currentBlueprint: graph, blueprints: [{ id: graph.id, name: graph.name, rootNodeId: root.id, nodeCount: graph.nodeIds.length } as any], blueprintWorkspace: { [graph.id]: workspace.path }, loading: false })
+useBlueprintStore.setState({ currentBlueprint: graph, blueprintWorkspace: { [graph.id]: workspace.path }, loading: false })
 ;(window as any).architectureFixture = {
   graph,
   refresh: () => {

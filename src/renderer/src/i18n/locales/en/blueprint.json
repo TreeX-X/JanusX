@@ -1,4 +1,40 @@
 {
+  "workspace": {
+    "select": "Switch workspace",
+    "noWorkspace": "Add a workspace to begin",
+    "current": "Current",
+    "state": {
+      "ok": "Blueprint ready",
+      "empty": "Empty blueprint",
+      "not-found": "Not initialized",
+      "foreign": "Setup needed",
+      "invalid": "Needs repair",
+      "error": "Read failed",
+      "loading": "Loading"
+    },
+    "description": {
+      "ok": "The blueprint is ready.",
+      "empty": "This project is initialized but has no Notes. Ask Janus to read the project and propose its first Notes for review.",
+      "not-found": "This workspace has no blueprint yet. Initialization creates a project identity and one starter Note.",
+      "foreign": "Existing .agents files were found. Initialization preserves them and adds the minimal blueprint files.",
+      "invalid": "Blueprint data needs repair. Review the problems below, then reload.",
+      "error": "The workspace blueprint could not be read. Check its path and file permissions, then retry.",
+      "loading": "Reading the workspace blueprint…"
+    },
+    "initialize": "Initialize blueprint",
+    "draft": "Ask Janus to draft Notes",
+    "retry": "Reload",
+    "openFile": "Open file",
+    "preview": "Initialization preview",
+    "previewHint": "Only the files below will be created. Existing files are preserved. The starter Note is a draft; ask Janus to analyze the project after initialization.",
+    "confirmForeign": "I reviewed the preview and confirm adding these files while preserving existing .agents files.",
+    "confirm": "Confirm initialization",
+    "cancel": "Cancel",
+    "undo": "Undo initialization",
+    "initialized": "Starter blueprint created",
+    "working": "Working…",
+    "draftPrompt": "Analyze the current workspace files and propose initial blueprint Notes. Only show proposals; do not create, modify or write any files. For each Note show its title, kind, source evidence and complete body. Use lifecycle draft and unchecked acceptance criteria. Do not invent unconfirmed requirements. Read existing Notes first to avoid duplicates. Wait for my individual approval before saving selected drafts through the Note tools."
+  },
   "status": {
     "notStarted": "Not Started",
     "planning": "Planning",

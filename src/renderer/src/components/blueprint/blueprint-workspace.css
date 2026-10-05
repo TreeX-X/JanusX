@@ -1,0 +1,16 @@
+.blueprint-workspace-empty { flex: 1; min-height: 0; overflow: auto; padding: 32px; color: var(--text); }
+.blueprint-workspace-empty h2 { margin: 0 0 12px; font-size: 20px; }
+.blueprint-workspace-empty > p { color: var(--text-secondary, #aaa); line-height: 1.7; }
+.blueprint-workspace-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+.blueprint-workspace-empty button, .blueprint-workspace-receipt button { border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; background: var(--bg-surface, #27272b); color: inherit; cursor: pointer; }
+.blueprint-workspace-empty button:disabled, .blueprint-workspace-receipt button:disabled { opacity: .5; cursor: default; }
+.blueprint-workspace-receipt:empty { display: none; }
+.blueprint-workspace-receipt { flex-shrink: 0; padding: 0 16px; }
+.blueprint-workspace-preview { max-width: 900px; }
+.blueprint-workspace-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: var(--bg-deep, #151517); font-size: 12px; max-height: 280px; overflow: auto; }
+.blueprint-workspace-preview details { margin: 12px 0; }
+.blueprint-workspace-preview label { display: flex; gap: 8px; align-items: start; }
+.blueprint-workspace-diagnostics { padding-left: 20px; overflow-wrap: anywhere; }
+.blueprint-workspace-diagnostics li { margin: 10px 0; }
+.blueprint-workspace-diagnostics button { margin-left: 12px; }
+.blueprint-bootstrap-chat { height: 50%; min-height: 220px; overflow: auto; border-top: 1px solid var(--border); }

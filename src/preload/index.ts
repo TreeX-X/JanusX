@@ -267,6 +267,10 @@ const janusAPI: JanusAPI = {
 }
 
 const harnessAPI: HarnessAPI = {
+  workspaceStatus: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.workspaceStatus, cwd),
+  initPreview: (cwd, name) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.initPreview, cwd, name),
+  initApply: (cwd, id, foreign) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.initApply, cwd, id, foreign),
+  initUndo: (cwd, id) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.initUndo, cwd, id),
   noteRead: (cwd, uri) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.noteRead, cwd, uri),
   taskRead: (cwd, uri) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskRead, cwd, uri),
   taskAdopt: (cwd, uri, expectedHash, contract) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskAdopt, cwd, uri, expectedHash, contract),

@@ -3,6 +3,10 @@ import type { WorkContract } from '@janus-agent/harness-core'
 import type { NoteReadSnapshot, NoteSourceRead } from '../notes'
 
 export const HARNESS_COMMAND_CHANNELS = {
+  workspaceStatus: 'harness:workspace:status',
+  initPreview: 'harness:init:preview',
+  initApply: 'harness:init:apply',
+  initUndo: 'harness:init:undo',
   noteChatChanges: 'harness:note:chat-changes',
   noteRead: 'harness:note:read',
   resolve: 'harness:resolve',
@@ -334,6 +338,10 @@ export interface HarnessTaskDraft {
 }
 
 export interface HarnessAPI {
+  workspaceStatus(cwd: string): Promise<HarnessWorkspaceStatus>
+  initPreview(cwd: string, name: string): Promise<HarnessInitPreview>
+  initApply(cwd: string, previewId: string, confirmForeign: boolean): Promise<{ refreshError?: string }>
+  initUndo(cwd: string, previewId: string): Promise<{ refreshError?: string }>
   noteRead(cwd: string, uri: string): Promise<NoteSourceRead>
   taskRead(cwd: string, uri: string): Promise<HarnessTaskDraft>
   taskAdopt(cwd: string, uri: string, expectedHash: string, contract: HarnessTaskContractInput): Promise<HarnessTaskDraft>
@@ -377,4 +385,19 @@ export interface HarnessAPI {
   runRebaseline(cwd: string, runId: string, authorization: { by: string; ref?: string } | null): Promise<{ state: string }>
   runAbort(cwd: string, runId: string): Promise<{ state: string }>
   onChanged(callback: (event: HarnessChangedEvent) => void): () => void
+}
+
+export interface HarnessWorkspaceStatus {
+  state: 'ok' | 'empty' | 'not-found' | 'foreign' | 'invalid' | 'error'
+  root: string
+  projectId?: string
+  noteCount: number
+  diagnostics: Array<{ code: string; message: string; path?: string }>
+}
+
+export interface HarnessInitPreview {
+  id: string
+  root: string
+  foreign: boolean
+  files: Array<{ path: string; content: string }>
 }

@@ -20,6 +20,7 @@ import {
 } from '../harness/artifact-producer'
 import { toNoteDoc } from '../notes/note-provider'
 import { harnessNoteService } from '../harness/service'
+import { workspaceBlueprintService } from '../harness/workspace-blueprint'
 import type { IncomingSnapshot } from '../harness/share-import'
 import { adoptTask, readTaskDraft } from '../harness/task-adoption'
 import { applyUndo, previewUndo } from '../harness/undo'
@@ -130,6 +131,18 @@ async function currentNote(root: string, uri: string): Promise<CurrentNote> {
 }
 
 export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): void {
+  const previewOwners = new Set<number>()
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.workspaceStatus, (_e, cwd: string) => workspaceBlueprintService.status(cwd))
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.initPreview, (event, cwd: string, name: string) => {
+    const owner = event.sender.id
+    if (!previewOwners.has(owner)) {
+      previewOwners.add(owner)
+      event.sender.once('destroyed', () => { previewOwners.delete(owner); workspaceBlueprintService.release(owner) })
+    }
+    return workspaceBlueprintService.preview(cwd, name, owner)
+  })
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.initApply, (event, cwd: string, id: string, foreign: boolean) => workspaceBlueprintService.apply(cwd, id, event.sender.id, foreign))
+  ipcMain.handle(HARNESS_COMMAND_CHANNELS.initUndo, (event, cwd: string, id: string) => workspaceBlueprintService.undo(cwd, id, event.sender.id))
   // Note: wiki and blueprint resolve the same source — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteRead, async (_e, cwd: string, uri: string) => {
     if (typeof uri !== 'string' || !uri.startsWith('note://')) throw new Error('A complete Note URI is required')

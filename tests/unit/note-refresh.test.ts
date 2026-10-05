@@ -4,10 +4,12 @@ const mocks = vi.hoisted(() => ({
   callback: null as null | ((event: HarnessChangedEvent) => void),
   off: vi.fn(), load: vi.fn(), set: vi.fn(), current: 'graph', loading: null as string | null,
   checkouts: [] as Array<{ path: string }>,
+  selectedWorkspaceId: null as string | null, loadWorkspace: vi.fn(),
 }))
 vi.mock('@/services/harness', () => ({ onHarnessChanged: (callback: typeof mocks.callback) => { mocks.callback = callback; return mocks.off } }))
 vi.mock('@/stores/blueprint', () => ({ useBlueprintStore: {
-  getState: () => ({ currentBlueprint: { id: mocks.current, composition: { checkouts: mocks.checkouts } }, loadBlueprint: mocks.load, loadingBlueprintId: mocks.loading }),
+  getState: () => ({ currentBlueprint: { id: mocks.current, composition: { checkouts: mocks.checkouts } }, loadBlueprint: mocks.load, loadingBlueprintId: mocks.loading,
+    selectedWorkspaceId: mocks.selectedWorkspaceId, loadWorkspace: mocks.loadWorkspace }),
   setState: mocks.set,
 } }))
 import { subscribeNoteRefresh } from '../../src/renderer/src/components/blueprint/useNoteRefresh'
@@ -19,9 +21,18 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.current = 'graph'; mocks.loading = null; mocks.load.mockResolvedValue(undefined)
   mocks.checkouts = []
+  mocks.selectedWorkspaceId = null
 })
 afterEach(() => { stop?.(); stop = undefined; vi.useRealTimers(); vi.unstubAllGlobals() })
 describe('mounted Note view refresh', () => {
+  it('refreshes the selected workspace state when a composed checkout changes', async () => {
+    mocks.selectedWorkspaceId = 'workspace'
+    mocks.checkouts = [{ path: 'C:/work/dependency' }]
+    stop = subscribeNoteRefresh('graph', 'C:/work/notes')
+    send('C:/work/dependency'); await vi.advanceTimersByTimeAsync(160)
+    expect(mocks.loadWorkspace).toHaveBeenCalledWith('workspace')
+    expect(mocks.load).not.toHaveBeenCalled()
+  })
   it('refreshes the architecture graph when an explicitly bound checkout changes', async () => {
     mocks.checkouts = [{ path: 'C:/work/dependency' }]
     stop = subscribeNoteRefresh('graph', 'C:/work/notes')
