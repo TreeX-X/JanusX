@@ -30,6 +30,10 @@
 .legend > span { display: inline-flex; align-items: center; gap: 5px; }
 .legend strong { color: var(--shell-text); font-weight: 500; font-variant-numeric: tabular-nums; }
 .legend i, .modelName i { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+/* 图例即筛选器：点击显隐对应曲线，关闭态降透明度。 */
+.chip { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 4px; background: transparent; color: var(--shell-muted); font: inherit; font-size: 10px; line-height: 1.6; cursor: pointer; padding: 2px 6px; margin: -2px -6px; transition: background 120ms, color 120ms, opacity 120ms; }
+.chip:hover { color: var(--shell-text); background: rgba(255, 255, 255, 0.045); }
+.chipOff { opacity: 0.4; }
 .ioSplit { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 8px; color: var(--shell-muted); font-size: 10px; line-height: 1.6; }
 .ioSplit > span { display: inline-flex; align-items: center; gap: 5px; }
 .ioSplit strong { color: var(--shell-text); font-weight: 500; font-variant-numeric: tabular-nums; }
@@ -52,18 +56,9 @@
 .cursor { stroke: var(--shell-muted); stroke-dasharray: 3 4; opacity: 0.6; }
 .trend > .legend { justify-content: flex-end; margin-top: 8px; }
 .activeDate { margin-right: auto; font-variant-numeric: tabular-nums; }
-.empty { min-height: 170px; display: grid; place-items: center; color: var(--shell-muted); font-size: 12px; text-align: center; }
 .summaryEmpty .summaryCell > svg, .summaryEmpty .value { opacity: 0.45; }
 .summaryEmpty .legend { min-height: 0; }
-.emptyCard { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 220px; padding: 36px 20px 40px; text-align: center; animation: trend-in 280ms ease; }
-.emptyArt { margin-bottom: 10px; color: var(--shell-muted); }
-.emptyOrbit { stroke: var(--shell-border); }
-.emptyCore { fill: var(--shell-muted); opacity: 0.55; }
-.emptySat { fill: var(--shell-text); }
-.emptyTitle { margin: 0; color: var(--shell-text); font-size: 13px; font-weight: 650; line-height: 1.5; }
-.emptyDesc { margin: 0 0 12px; max-width: 420px; color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
-.emptyAction { border: 1px solid var(--shell-border); background: transparent; color: var(--shell-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 6px; padding: 7px 16px; min-height: var(--control-h, 30px); transition: background 0.18s ease, border-color 0.18s ease; }
-.emptyAction:hover { background: rgba(255, 255, 255, 0.045); border-color: rgba(255, 255, 255, 0.16); }
+.emptyWatermark { fill: var(--shell-muted); font-size: 12px; opacity: 0.8; }
 .breakdown { display: flex; flex-direction: column; gap: 0; padding: 4px 16px 8px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
 .breakdown > .title { margin: 0; padding: 12px 0 10px; }
 .modelRow { display: grid; grid-template-columns: minmax(0, 1fr) 92px 76px 76px 76px; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid var(--shell-border-soft, var(--shell-border)); }
@@ -92,6 +87,6 @@
   .axis text, .dateLabel { font-size: 17px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .panel button, .donutArc, .ioFillIn, .ioFillOut { transition: none; }
-  .chartEnter, .emptyCard { animation: none; }
+  .panel button, .donutArc, .ioFillIn, .ioFillOut, .chip { transition: none; }
+  .chartEnter { animation: none; }
 }

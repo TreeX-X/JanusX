@@ -39,9 +39,10 @@ test('usage filters update both donuts, curves and model groups', async ({ page 
   await expect(page.getByTestId('usage-total')).toHaveText('0tokens')
   await expect(page.getByTestId('usage-cache-rate')).toHaveText('–')
   await expect(page.getByText('该范围内暂无带用量遥测的终端。')).toBeVisible()
-  await expect(page.getByText('当前类型筛选中暂无数据')).toBeVisible()
-  await page.getByRole('button', { name: '回到今日' }).click()
-  await expect(page.getByTestId('usage-total')).toHaveText('16ktokens')
+  await expect(page.locator('[data-series]')).toHaveCount(4)
+  await page.getByRole('button', { name: '命中', exact: true }).click()
+  await expect(page.locator('[data-series]')).toHaveCount(3)
+  await page.getByRole('button', { name: '命中', exact: true }).click()
   await expect(page.locator('[data-series]')).toHaveCount(4)
 })
 

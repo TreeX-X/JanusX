@@ -213,39 +213,25 @@ function CacheDonut({ hits, misses, rate, hasData, hitColor, missColor, trackCol
   )
 }
 
-function EmptyState({ title, desc, resetLabel, showReset, onReset }: {
-  title: string
-  desc: string
-  resetLabel: string
-  showReset: boolean
-  onReset: () => void
-}) {
-  return (
-    <div className={styles.emptyCard}>
-      <svg className={styles.emptyArt} width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
-        <circle className={styles.emptyOrbit} cx="36" cy="36" r="26" fill="none" strokeWidth="1.5" strokeDasharray="4 6" />
-        <circle className={styles.emptyCore} cx="36" cy="36" r="7" />
-        <circle className={styles.emptySat} cx="36" cy="10" r="3" />
-      </svg>
-      <p className={styles.emptyTitle}>{title}</p>
-      <p className={styles.emptyDesc}>{desc}</p>
-      {showReset && <button type="button" className={styles.emptyAction} onClick={onReset}>{resetLabel}</button>}
-    </div>
-  )
-}
-
 type TrendMetric = { key: 'hits' | 'misses' | 'unknown' | 'output'; label: string; color: string }
 
-function TrendLines({ series, range, metrics, label }: {
+function TrendLines({ series, range, metrics, label, emptyLabel }: {
   series: TimeBucket[]
   range: UsageRange
   metrics: TrendMetric[]
   label: string
+  emptyLabel?: string
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
+  const [hidden, setHidden] = useState<readonly string[]>([])
   const reducedMotion = usePrefersReducedMotion()
   const { buckets, generation } = useAnimatedSeries(series, reducedMotion)
-  const ceiling = Math.max(1, ...buckets.flatMap((bucket) => metrics.map(({ key }) => bucket[key])))
+  const visible = metrics.filter(({ key }) => !hidden.includes(key))
+  const maxValue = Math.max(0, ...buckets.flatMap((bucket) => visible.map(({ key }) => bucket[key])))
+  const ceiling = Math.max(1, maxValue)
+  // 全零（空表）只画基线，不画 0.5 这类无意义刻度。
+  const ticks = maxValue > 0 ? [0, 0.5, 1] : [0]
+  const toggle = (key: string) => setHidden((prev) => prev.includes(key) ? prev.filter((candidate) => candidate !== key) : [...prev, key])
   const x = (index: number) => 52 + index * 620 / Math.max(1, buckets.length - 1)
   const y = (value: number) => 174 - value / ceiling * 146
   // 聚合每次渲染返回新数组，任何“series 变化即清零”的 effect 都会在数字滚动期间
@@ -255,13 +241,13 @@ function TrendLines({ series, range, metrics, label }: {
   return (
     <div className={styles.trend}>
       <svg key={generation} viewBox="0 0 700 208" className={`${styles.chart} ${styles.chartEnter}`} role="group" aria-label={label} onMouseLeave={() => setActiveIndex(null)}>
-        {[0, 0.5, 1].map((fraction) => (
+        {ticks.map((fraction) => (
           <g key={fraction} className={styles.axis}>
             <line x1="52" x2="672" y1={y(ceiling * fraction)} y2={y(ceiling * fraction)} />
             <text x="40" y={y(ceiling * fraction) + 4} textAnchor="end">{formatCount(ceiling * fraction)}</text>
           </g>
         ))}
-        {metrics.map(({ key, color }) => {
+        {visible.map(({ key, color }) => {
           // Horizontal control points keep each segment within its two measured values.
           const path = buckets.map((bucket, index) => index === 0
             ? `M ${x(index)} ${y(bucket[key])}`
@@ -271,6 +257,7 @@ function TrendLines({ series, range, metrics, label }: {
             {buckets.map((bucket, index) => bucket[key] > 0.5 && <circle key={bucket.key} cx={x(index)} cy={y(bucket[key])} r="3" fill={color} />)}
           </g>
         })}
+        {emptyLabel !== undefined && maxValue <= 0 && <text x="362" y="100" textAnchor="middle" className={styles.emptyWatermark}>{emptyLabel}</text>}
         {active && <line className={styles.cursor} x1={x(activeIndex!)} x2={x(activeIndex!)} y1="22" y2="174" />}
         {buckets.map((bucket, index) => {
           const showLabel = index === 0 || index === buckets.length - 1 || index % Math.max(1, Math.ceil(buckets.length / 6)) === 0
@@ -284,7 +271,12 @@ function TrendLines({ series, range, metrics, label }: {
       </svg>
       <div className={styles.legend} aria-live="polite">
         {active && <span className={styles.activeDate}>{dateLabel(active)}</span>}
-        {metrics.map(({ key, color, label: name }) => <span key={key}><i style={{ background: color }} />{name}{active && <strong>{formatCount(active[key])}</strong>}</span>)}
+        {metrics.map(({ key, color, label: name }) => {
+          const off = hidden.includes(key)
+          return <button key={key} type="button" className={`${styles.chip} ${off ? styles.chipOff : ''}`} aria-pressed={!off} onClick={() => toggle(key)}>
+            <i style={{ background: color }} />{name}{active && !off && <strong>{formatCount(active[key])}</strong>}
+          </button>
+        })}
       </div>
     </div>
   )
@@ -323,17 +315,6 @@ export function UsageStatsPanel() {
   const customErrorKey = range !== 'custom' ? undefined
     : normalized.error === 'invalid' ? 'customInvalid' : normalized.error === 'future' ? 'customFuture' : normalized.error === 'span' ? 'customSpan' : undefined
   const isEmpty = view.terminals === 0
-  const resetFilters = () => {
-    setRange('today')
-    setActiveType('all')
-  }
-  const emptyDesc = customErrorKey !== undefined
-    ? t('settings:usageStats.emptyHint')
-    : activeType !== 'all'
-      ? t('settings:usageStats.emptyFiltered')
-      : view.terminalsWithoutData > 0
-        ? t('settings:usageStats.emptyWaiting', { count: view.terminalsWithoutData })
-        : t('settings:usageStats.emptyHint')
   const metrics: TrendMetric[] = [
     { key: 'hits', label: t('settings:usageStats.hit'), color: hitColor },
     { key: 'misses', label: t('settings:usageStats.miss'), color: missColor },
@@ -422,15 +403,13 @@ export function UsageStatsPanel() {
       <div className={styles.trendSection}>
         <div className={styles.toolbar}><h4 className={styles.title}>{t('settings:usageStats.trend')}</h4><span className={styles.label}>tokens{trendBucketHint ? ` · ${trendBucketHint}` : ''}</span></div>
         <p className={styles.hint}>{t('settings:usageStats.snapshotHint')}</p>
-        {view.terminals > 0
-          ? <TrendLines series={view.series} range={range} metrics={metrics} label={t('settings:usageStats.trend')} />
-          : <EmptyState
-            title={t('settings:usageStats.empty')}
-            desc={emptyDesc}
-            resetLabel={t('settings:usageStats.emptyReset')}
-            showReset={range !== 'today' || activeType !== 'all'}
-            onReset={resetFilters}
-          />}
+        <TrendLines
+          series={view.series}
+          range={range}
+          metrics={metrics}
+          label={t('settings:usageStats.trend')}
+          emptyLabel={view.terminals === 0 ? t('settings:usageStats.empty') : undefined}
+        />
       </div>
       {view.rows.length > 0 && <div className={styles.breakdown}>
         <h4 className={styles.title}>{t('settings:usageStats.breakdown')}</h4>
