@@ -13,6 +13,7 @@ import {
 
 function makeKnowledgeApi() {
   return {
+    getSettings: vi.fn().mockResolvedValue({mode:'auto'}),
     listObservations: vi.fn().mockResolvedValue([{ id: 'observation-marker' }]),
     listCandidates: vi.fn().mockResolvedValue([]),
     listWikiPatchCandidates: vi.fn().mockResolvedValue([]),
@@ -79,7 +80,7 @@ describe('loadKnowledgeWorkbenchSnapshot', () => {
     expect(knowledge.listTruth).toHaveBeenCalledWith()
   })
 
-  it('isolates every parallel workbench read failure', async () => {
+  it('reports each parallel read failure instead of showing an empty collection', async () => {
     const cases = [
       { method: 'listObservations', field: 'observations', fallback: [] },
       { method: 'listCandidates', field: 'factCandidates', fallback: [] },
@@ -90,23 +91,16 @@ describe('loadKnowledgeWorkbenchSnapshot', () => {
       { method: 'listTruth', field: 'libraryCards', fallback: [] },
     ] as const
 
-    for (const { method, field, fallback } of cases) {
+    for (const { method } of cases) {
       const knowledge = makeKnowledgeApi()
       knowledge[method].mockRejectedValueOnce(new Error(`${method} unavailable`))
       vi.stubGlobal('window', { electron: { knowledge } })
 
-      const snapshot = await loadKnowledgeWorkbenchSnapshot()
-
-      expect(snapshot[field]).toEqual(fallback)
-      if (method === 'listObservations') {
-        expect(snapshot.auditEvents).toEqual([{ id: 'audit-marker' }])
-      } else {
-        expect(snapshot.observations).toEqual([{ id: 'observation-marker' }])
-      }
+      await expect(loadKnowledgeWorkbenchSnapshot()).rejects.toThrow(method + ' unavailable')
     }
   })
 
-  it('isolates conflict failures by workspace', async () => {
+  it('reports conflict read failures instead of hiding conflicts', async () => {
     const knowledge = makeKnowledgeApi()
     knowledge.listCandidates.mockResolvedValue([
       { fact: { provenance: { workspaceId: 'workspace-a' } } },
@@ -118,11 +112,7 @@ describe('loadKnowledgeWorkbenchSnapshot', () => {
     })
     vi.stubGlobal('window', { electron: { knowledge } })
 
-    const snapshot = await loadKnowledgeWorkbenchSnapshot()
-
-    expect(knowledge.listConflicts).toHaveBeenCalledWith('workspace-a')
-    expect(knowledge.listConflicts).toHaveBeenCalledWith('workspace-b')
-    expect(snapshot.conflicts).toEqual([{ id: 'conflict-b', workspaceId: 'workspace-b' }])
+    await expect(loadKnowledgeWorkbenchSnapshot()).rejects.toThrow('workspace-a unavailable')
   })
 
   it('propagates direct wrapper rejections unchanged', async () => {

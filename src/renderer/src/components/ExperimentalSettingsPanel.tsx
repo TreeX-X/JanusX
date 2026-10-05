@@ -1,16 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useI18n } from '@/i18n/useI18n'
 import { updateExperimentalFeatures } from '@/services/experimental-features'
 import { useExperimentalStore } from '@/stores/experimental'
-import { PromptDialog } from './blueprint/PromptDialog'
 import type { ExperimentalFeatures } from '../../../shared/ipc/experimental'
 import styles from './NotificationSettingsPanel.module.css'
+import confirmationStyles from './ExperimentalSettingsPanel.module.css'
 
 type FeatureKey = keyof ExperimentalFeatures
 
-const PREVIEW_FEATURES: FeatureKey[] = ['blueprint', 'knowledge']
-const DEV_FEATURES: FeatureKey[] = ['roundtable', 'persona', 'remoteControl', 'teamCollab']
+const PREVIEW_FEATURES: FeatureKey[] = ['blueprint', 'knowledge', 'persona']
+const DEV_FEATURES: FeatureKey[] = ['roundtable', 'remoteControl', 'teamCollab']
 
+// Note: every feature transition requires explicit confirmation — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
 export function ExperimentalSettingsPanel() {
   const { t } = useI18n('settings')
   const loaded = useExperimentalStore((s) => s.loaded)
@@ -24,7 +26,8 @@ export function ExperimentalSettingsPanel() {
   const teamCollab = useExperimentalStore((s) => s.teamCollab)
   const [savingKey, setSavingKey] = useState<FeatureKey | null>(null)
   const [error, setError] = useState('')
-  const [showBlueprintConfirm, setShowBlueprintConfirm] = useState(false)
+  const [pending, setPending] = useState<{ key: FeatureKey; value: boolean } | null>(null)
+  const saving = useRef(false)
 
   useEffect(() => {
     void load()
@@ -32,19 +35,16 @@ export function ExperimentalSettingsPanel() {
 
   const checked: Record<FeatureKey, boolean> = { blueprint, knowledge, roundtable, persona, remoteControl, teamCollab }
   const apiMissing = typeof window.electron?.experimental === 'undefined'
-  const busy = !loaded || savingKey !== null
+  const busy = !loaded || savingKey !== null || pending !== null
 
-  const toggle = async (key: FeatureKey, value: boolean) => {
-    if (savingKey !== null) return
-    if (key === 'blueprint' && value && !blueprint) {
-      setShowBlueprintConfirm(true)
-      return
-    }
-    await doToggle(key, value)
+  const toggle = (key: FeatureKey, value: boolean) => {
+    if (busy || apiMissing || checked[key] === value) return
+    setPending({ key, value })
   }
 
   const doToggle = async (key: FeatureKey, value: boolean) => {
-    if (savingKey !== null) return
+    if (saving.current) return
+    saving.current = true
     setSavingKey(key)
     setError('')
     try {
@@ -53,17 +53,10 @@ export function ExperimentalSettingsPanel() {
     } catch {
       setError(t('settings:experimental.error.save'))
     } finally {
+      saving.current = false
       setSavingKey(null)
+      setPending(null)
     }
-  }
-
-  const handleBlueprintConfirm = () => {
-    setShowBlueprintConfirm(false)
-    void doToggle('blueprint', true)
-  }
-
-  const handleBlueprintCancel = () => {
-    setShowBlueprintConfirm(false)
   }
 
   return (
@@ -106,20 +99,48 @@ export function ExperimentalSettingsPanel() {
           />
         ))}
         {savingKey && <div className={styles.status}>{t('settings:footer.saving')}</div>}
-        {error && <div className={`${styles.status} ${styles.statusError}`}>{error}</div>}
+        {error && <div role="alert" className={`${styles.status} ${styles.statusError}`}>{error}</div>}
       </section>
 
-      <PromptDialog
-        open={showBlueprintConfirm}
-        title={t('settings:experimental.blueprintConfirm.title')}
-        description={t('settings:experimental.blueprintConfirm.description')}
-        confirmOnly
-        confirmText={t('settings:experimental.blueprintConfirm.confirm')}
-        cancelText={t('settings:experimental.blueprintConfirm.cancel')}
-        onConfirm={handleBlueprintConfirm}
-        onCancel={handleBlueprintCancel}
-      />
+      {pending && <FeatureConfirmation
+        title={t(`settings:experimental.confirm.${pending.value ? 'enableTitle' : 'disableTitle'}`, { name: t(`settings:experimental.toggle.${pending.key}.label`) })}
+        description={t(`settings:experimental.confirm.${pending.value ? 'enableDescription' : 'disableDescription'}`)}
+        hint={t(`settings:experimental.toggle.${pending.key}.hint`)}
+        note={t(`settings:experimental.toggle.${pending.key}.note`)}
+        confirmText={savingKey ? t('settings:footer.saving') : t(`settings:experimental.confirm.${pending.value ? 'enable' : 'disable'}`)}
+        cancelText={t('settings:experimental.confirm.cancel')}
+        busy={savingKey !== null}
+        onConfirm={() => void doToggle(pending.key, pending.value)}
+        onCancel={() => { if (!saving.current) setPending(null) }}
+      />}
     </div>
+  )
+}
+
+function FeatureConfirmation({ title, description, hint, note, confirmText, cancelText, busy, onConfirm, onCancel }: {
+  title: string; description: string; hint: string; note: string; confirmText: string; cancelText: string
+  busy: boolean; onConfirm: () => void; onCancel: () => void
+}) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = ref.current!
+    dialog.showModal()
+    return () => dialog.close()
+  }, [])
+  return createPortal(
+    <dialog ref={ref} className={confirmationStyles.dialog} aria-labelledby="experimental-confirm-title"
+      aria-describedby="experimental-confirm-description" aria-busy={busy}
+      onKeyDown={(event) => event.stopPropagation()}
+      onCancel={(event) => { event.preventDefault(); onCancel() }}>
+      <h2 id="experimental-confirm-title">{title}</h2>
+      <p id="experimental-confirm-description">{description}</p>
+      <p>{hint}</p>
+      <p className={confirmationStyles.note}>{note}</p>
+      <div className={confirmationStyles.actions}>
+        <button type="button" autoFocus disabled={busy} onClick={onCancel}>{cancelText}</button>
+        <button type="button" disabled={busy} className={confirmationStyles.confirm} onClick={onConfirm}>{confirmText}</button>
+      </div>
+    </dialog>, document.body,
   )
 }
 
@@ -147,6 +168,7 @@ function SettingSwitch({ label,
       <label className={styles.switch}>
         <input
           type="checkbox"
+          aria-label={label}
           checked={checked}
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}

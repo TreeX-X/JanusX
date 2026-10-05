@@ -293,8 +293,13 @@ export async function searchUserMemory(
   }
 }
 
+let personalRecallAllowed: (() => Promise<boolean>) | undefined
+export function configurePersonalRecallPolicy(policy: () => Promise<boolean>): void { personalRecallAllowed = policy }
+
 /** Production wiring over the M1 singleton stores. */
 export async function searchUserMemoryDefault(query: string): Promise<UserRecallResult> {
+  const empty: UserRecallResult = { items: [], compactContext: '', truncated: false, eligibleCount: 0, maxItems: USER_RECALL_MAX_ITEMS, maxChars: USER_RECALL_MAX_CHARS }
+  if (personalRecallAllowed && !await personalRecallAllowed()) return empty
   const sourcesBefore = await readObservationRevocationBarrier()
   const before = await readPersonalForgettingBarrier()
   const result = await searchUserMemory(query, {
@@ -307,6 +312,7 @@ export async function searchUserMemoryDefault(query: string): Promise<UserRecall
     loadProfile: () => userProfileService.load(),
     listActiveEpisodes: () => userEpisodeService.listActive(Date.now()),
   })
+  if (personalRecallAllowed && !await personalRecallAllowed()) return empty
   const after = await readPersonalForgettingBarrier()
   if (JSON.stringify(sourcesBefore.records) !== JSON.stringify((await readObservationRevocationBarrier()).records)) return { ...result, delivery: undefined, items: [], compactContext: '', eligibleCount: 0, truncated: false }
   if (JSON.stringify(before.records) !== JSON.stringify(after.records)) return { ...result, delivery: undefined, items: [], compactContext: '', eligibleCount: 0, truncated: false }

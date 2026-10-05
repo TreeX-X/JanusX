@@ -3,11 +3,21 @@ import { expect, test } from '@playwright/test'
 for (const mode of ['', '?workbench']) test(`current structure and original-source details ${mode || 'embedded'}`, async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message))
   await page.goto('/blueprint-architecture.html' + mode)
+  await expect(page.getByRole('group', { name: '蓝图视图', exact: true })).toHaveCount(1)
+  const selectorHost = page.locator(mode ? '.blueprint-workbench-toolbar' : '.blueprint-canvas-main')
+  await expect(selectorHost.getByRole('button', { name: '系统结构', exact: true })).toBeVisible()
+  await expect(selectorHost.getByRole('button', { name: '全部 Note', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '系统结构', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.react-flow__node')).toHaveCount(3)
   await expect(page.locator('.bp-node-card__progress')).toHaveCount(0)
   await expect(page.locator('.react-flow__edge').filter({ hasText: 'read' })).toHaveCount(1)
   await expect.poll(() => page.locator(mode ? '.blueprint-workbench-shell' : 'main').evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.effect?.getTiming().iterations !== Infinity && animation.playState === 'running').length)).toBe(0)
+  const information = page.locator('.bp-architecture-overview details').filter({ has: page.locator('summary', { hasText: /^蓝图信息$/ }) })
+  await expect(information).not.toHaveAttribute('open', '')
+  await expect(information.locator('section')).not.toBeVisible()
+  await information.locator('summary').click()
+  await expect(information.locator('section')).toContainText('检出范围')
+  await information.locator('summary').click()
   await expect.poll(() => page.locator('.react-flow').evaluate(canvas => {
     const viewport = canvas.getBoundingClientRect()
     return [...canvas.querySelectorAll('.bp-node-card')].every(card => {

@@ -4,6 +4,7 @@ import { memoryKey, readPersonalForgettingBarrier } from './personal-forgetting-
 import { profileContentHash } from './profile-projection'
 import { memoryStrength } from '../../shared/memory-strength'
 import { assertFactReviewReady } from './fact-review-recovery'
+import { assertWikiReviewReady } from './wiki-review-recovery'
 import { replacementHash } from './fact-conflicts'
 import type {
   CandidateFact,
@@ -436,7 +437,7 @@ function wikiDocument(page: WikiPage, facts: MemoryFact[]): KnowledgeRecallDocum
   // Pages carry no file/observation provenance of their own; inherit it from
   // the settled facts they summarize so filters and context stay truthful.
   // Bonus: a real workspacePath makes path-scoped queries match wiki hits.
-  const linked = facts.filter((fact) => page.sourceFactIds.includes(fact.id))
+  const linked = facts.filter((fact) => fact.provenance.workspaceId === page.workspaceId && page.sourceFactIds.includes(fact.id))
   const fileRefs = [...new Set(linked.flatMap((fact) => [...fact.files, ...fact.provenance.fileRefs]))]
   const sourceObservationIds = [...new Set(linked.flatMap((fact) => fact.provenance.sourceObservationIds))]
   const workspacePath = linked.find((fact) => fact.provenance.workspaceId === page.workspaceId)
@@ -456,6 +457,7 @@ function wikiDocument(page: WikiPage, facts: MemoryFact[]): KnowledgeRecallDocum
     fileRefs,
     sourceObservationIds,
     createdAt: page.updatedAt,
+    expiresAt: linked.map(fact => fact.ttl).filter((ttl): ttl is string => !!ttl).sort()[0],
     status: 'active',
   }
   return {
@@ -619,7 +621,7 @@ export class KnowledgeRecallService {
       names
         .filter((name) => {
           const top = String(name).split(/[\\/]/)[0]
-          return top !== 'blobs' && top !== 'audit'
+          return top !== 'blobs' && top !== 'audit' && !/^wiki[\\/]history(?:[\\/]|$)/.test(String(name))
         })
         .sort()
         .map(async (name) => {
@@ -663,6 +665,7 @@ export class KnowledgeRecallService {
 
   async recall(request: KnowledgeRecallRequest): Promise<KnowledgeRecallResult> {
     const reviewRevision = await assertFactReviewReady()
+    const wikiRevision = await assertWikiReviewReady()
     const query = request.query.trim()
     if (!query) return this.emptyResult('empty-query')
     if (request.requireWorkspace && !request.allowGlobal && !request.workspaceId && !request.workspacePath) {
@@ -670,10 +673,14 @@ export class KnowledgeRecallService {
     }
 
     const { fingerprint, documents: allDocuments } = await this.cachedDocumentsWithFingerprint(request.layer)
+    // Note checkouts live outside the knowledge store fingerprint; validate current pages on recall.
+    const wikiKeys = allDocuments.some(document => document.hit.type === 'wiki-page')
+      ? new Set((await this.sources.listTruth()).wikiPages.map(page => JSON.stringify([page.workspaceId, page.slug]))) : null
     const barrier = await readPersonalForgettingBarrier()
     const revocations = await readObservationRevocationBarrier()
     const documents = allDocuments.filter((document) => {
       const hit = document.hit
+      if (hit.type === 'wiki-page' && !wikiKeys?.has(JSON.stringify([hit.workspaceId, hit.id]))) return false
       if (document.factSnapshot && revocations.blocksFact(document.factSnapshot)
         || document.candidateSnapshot && revocations.blocksCandidate(document.candidateSnapshot)
         || revocations.blocksObservations(hit.workspaceId, hit.sourceObservationIds)
@@ -705,6 +712,7 @@ export class KnowledgeRecallService {
       })
       .sort((left, right) => right.score - left.score || compareText(left.key, right.key))
     await assertFactReviewReady(reviewRevision)
+    await assertWikiReviewReady(wikiRevision)
     return { documents: ranked, indexStats: index.stats() }
   }
 

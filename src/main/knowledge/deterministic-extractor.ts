@@ -87,6 +87,7 @@ export interface DeterministicStageDeps {
   /** Accepted graph edges, used to skip already-linked truth pairs. */
   listTruthEdges: () => Promise<GraphEdge[]>
   listHabitObservations: () => Promise<Observation[]>
+  allowHabitSource?: (observation: Observation) => Promise<boolean>
   nowIso: () => string
 }
 
@@ -629,8 +630,12 @@ export async function runDeterministicStage(
       habitInputs.push({ ...observation, content: normalizeObservationText(raw).text })
     }
   }
+  const allowedHabitInputs: Observation[] = []
+  for (const observation of habitInputs) {
+    if (!deps.allowHabitSource || await deps.allowHabitSource(observation)) allowedHabitInputs.push(observation)
+  }
   const habitPromotions = await deriveHabitPromotions(
-    habitInputs,
+    allowedHabitInputs,
     nowIso,
   )
   const habitCandidates = await proposeFactCandidates(habitPromotions.map((promotion) => habitPromotionToCandidate(promotion, nowIso)))

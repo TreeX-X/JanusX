@@ -25,8 +25,8 @@ function preferences(
 }
 
 describe('right tool registry', () => {
-  it('defines the five single-instance while-open tools in stable order', () => {
-    expect(RIGHT_TOOL_IDS).toEqual(['files', 'git', 'assist', 'persona', 'review', 'sessions'])
+  it('defines the four single-instance while-open tools in stable order', () => {
+    expect(RIGHT_TOOL_IDS).toEqual(['files', 'git', 'assist', 'sessions'])
     expect(RIGHT_TOOL_REGISTRY.every(({ instancePolicy }) => instancePolicy === 'single')).toBe(true)
     expect(RIGHT_TOOL_REGISTRY.every(({ mountPolicy }) => mountPolicy === 'while-open')).toBe(true)
     expect(RIGHT_TOOL_REGISTRY.some(({ id }) => (id as string) === 'office')).toBe(false)
@@ -88,6 +88,12 @@ describe('right tool transitions', () => {
 })
 
 describe('right tool reconciliation', () => {
+  it('migrates legacy persona and review panels to one assistant', () => {
+    const state = reconcileRightToolPreferences(preferences(['files', 'persona', 'review', 'assist'], 'review'))
+    expect(state.openToolIds).toEqual(['files', 'assist'])
+    expect(state.activeToolId).toBe('assist')
+    expect(openRightTool(state, 'persona').preferences.activeToolId).toBe('assist')
+  })
   it('filters unknown IDs, deduplicates and restores registry order', () => {
     expect(normalizeRightToolIds(['assist', 'git', 'unknown', 'git', 'files'])).toEqual([
       'files',

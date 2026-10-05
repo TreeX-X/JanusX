@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { PersonalProfileEditContext, PersonalProfileOverrides } from '../../../../shared/ipc/knowledge'
 import { useI18n } from '@/i18n/useI18n'
-import styles from './MemoryReviewTool.module.css'
+import styles from './PersonalProfileEditor.module.css'
+import { CardSkeleton } from '../shared/CardFrame'
+import surface from './MemorySurface.module.css'
 import { PersonalMemoryForgetForm } from './PersonalMemoryForgetForm'
 
 export function PersonalProfileEditor({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
@@ -76,17 +78,19 @@ export function PersonalProfileEditor({ onClose, onSaved }: { onClose: () => voi
     onForgotten={() => { setForgetting(null); void load() }} />
   const forgetButton = (id: string, content: string | undefined) => content && context && <button type="button" disabled={busy}
     onClick={() => setForgetting({ id, content, contentHash: context.hash, kind: 'override' })}>{t('knowledge:persona.forgetMemory')}</button>
-  return <form className={styles.body} onSubmit={event => void submit(event)} aria-label={t('knowledge:persona.overrides.edit')}>
-    <p>{t('knowledge:persona.overrides.detail')}</p>
+  return <form className={`${styles.root} ${surface.enter}`} onSubmit={event => void submit(event)} aria-label={t('knowledge:persona.overrides.edit')} aria-busy={busy}>
+    <header className={styles.header}><h3>{t('knowledge:persona.overrides.edit')}</h3><p>{t('knowledge:persona.overrides.detail')}</p></header>
+    <div className={styles.body}>
+    {!context && busy && <CardSkeleton lines={4} label={t('knowledge:state.loading.title')} />}
     {context && <>
-      <label>{t('knowledge:persona.overrides.identity')}<textarea className={styles.editor} maxLength={500} disabled={busy}
+      <section className={styles.field}><label>{t('knowledge:persona.overrides.identity')}<textarea rows={3} className={styles.editor} maxLength={500} disabled={busy}
         value={draft.identity ?? ''} onChange={event => setDraft({ ...draft, identity: event.target.value })} /></label>
-      {forgetButton('identity', context.overrides.identity)}
+      {forgetButton('identity', context.overrides.identity)}</section>
       {(['formatPrefs', 'toolPrefs'] as const).map(field => <fieldset key={field} disabled={busy}>
         <legend>{t(field === 'formatPrefs' ? 'knowledge:persona.overrides.formatPrefs' : 'knowledge:persona.overrides.toolPrefs')}</legend>
         {(draft[field] ?? []).map((value, index) => <label key={index}>
           {t('knowledge:persona.overrides.entry', { index: index + 1 })}
-          <textarea className={styles.editor} maxLength={500} value={value} onChange={event => setDraft({ ...draft,
+          <textarea rows={2} className={styles.editor} maxLength={500} value={value} onChange={event => setDraft({ ...draft,
             [field]: draft[field]!.map((item, i) => i === index ? event.target.value : item) })} />
           {forgetButton(`${field}:${index}`, context.overrides[field]?.[index])}
         </label>)}
@@ -95,10 +99,11 @@ export function PersonalProfileEditor({ onClose, onSaved }: { onClose: () => voi
       </fieldset>)}
     </>}
     {error && <p role="alert">{error}</p>}
-    <div className={styles.filters}>
+    </div>
+    <footer className={styles.footer}>
       <button type="submit" disabled={!context || !valid || busy || stale}>{t('knowledge:persona.overrides.save')}</button>
       {(!context || stale) && <button type="button" disabled={busy} onClick={() => void load()}>{t('knowledge:persona.overrides.reload')}</button>}
       <button type="button" onClick={onClose}>{t('knowledge:action.close')}</button>
-    </div>
+    </footer>
   </form>
 }

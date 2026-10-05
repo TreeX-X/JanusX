@@ -178,6 +178,7 @@ export function reduceChatAgentEvent(state: JanusRuntimeState, event: ChatAgentE
 }
 
 export function runtimeEventSessionId(event: AgentRuntimeEvent): string | null {
+  if (event.parentSessionId) return event.parentSessionId
   if (event.type === 'session-created' || event.type === 'session-updated' || event.type === 'session-ended') return event.session.id
   if (event.type === 'approval-requested') return event.request.sessionId
   if (event.type === 'policy-decided') return event.decision.sessionId

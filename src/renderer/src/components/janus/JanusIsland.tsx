@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Download } from 'lucide-react'
 import { useAppStore } from '@/stores/app'
 import { useBlueprintStore } from '@/stores/blueprint'
@@ -667,7 +668,20 @@ export function JanusIsland({
     }
   }, [janusRunning, hasRunning])
 
+  // The veil is a viewport backdrop (position:fixed inset:0). It must live at
+  // body level: any transformed ancestor (shell translateX, cluster centering,
+  // drag offset) would trap it into a shell-sized square with sharp corners
+  // painting above the panel instead of a full-viewport dim below it.
+  const veil = stage === 'expanded' && typeof document !== 'undefined'
+    ? createPortal(
+      <div className="janus-veil" aria-hidden="true" style={{ zIndex: 1999 }} />,
+      document.body,
+    )
+    : null
+
   return (
+    <>
+      {veil}
     <div
       ref={shellRef}
       className={`janus-island-shell ${faceClass(mode)}`}
@@ -685,7 +699,6 @@ export function JanusIsland({
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
-      {stage === 'expanded' && <div className="janus-veil" />}
       <div ref={pullHintRef} className="pull-hint" />
       <div className="burst-ripple" />
       <div
@@ -883,5 +896,6 @@ export function JanusIsland({
         </JanusAuxiliaryIsland>
       ) : null}
     </div>
+    </>
   )
 }

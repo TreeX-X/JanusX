@@ -56,7 +56,7 @@ beforeAll(async () => {
         window.root.render(<div className={shell.panel} style={{display:'block',width:'100%',height:'auto',overflow:'visible'}}><div className={shell.body}>{window.fullPanel?<KnowledgeSettingsPanel/>:<Panel/>}</div></div>)
       })
     ` },
-    bundle: true, write: false, outfile: 'laya-settings-test.js', jsx: 'automatic', format: 'iife',
+    loader: { '.svg': 'dataurl' }, bundle: true, write: false, outfile: 'laya-settings-test.js', jsx: 'automatic', format: 'iife',
     define: { 'process.env.NODE_ENV': '"test"' },
     plugins: [{ name: 'i18n', setup(builder) {
       builder.onLoad({ filter: /[/\\]i18n[/\\]index\.ts$/ }, () => ({ contents: "import i18n from 'i18next'; export default i18n; export const changeLanguage = lang => i18n.changeLanguage(lang)", loader: 'ts' }))
@@ -140,47 +140,10 @@ it('recovers from status errors and does not start after a failed save', async (
   } finally { await page.close() }
 })
 
-it('respects the knowledge switch in the real parent panel and keeps its ordering', async () => {
-  const page = await browser.newPage()
-  try {
-    await mount(page, { fullPanel: true, masterEnabled: false })
-    expect(await page.getByRole('switch').isDisabled()).toBe(true)
-    expect(await page.getByLabel('Python environment', { exact: true }).isDisabled()).toBe(true)
-    expect(await page.getByRole('button', { name: 'Load model', exact: true }).isDisabled()).toBe(true)
-    const headings = await page.getByRole('heading', { level: 3 }).allTextContents()
-    expect(headings[1]).toBe('Laya local assistance')
-    await page.getByRole('checkbox').first().press('Space')
-    expect(await page.getByRole('switch').isEnabled()).toBe(true)
-  } finally { await page.close() }
-})
-
-it('saves before downloading, locks parent settings and supports loading and release', async () => {
-  const page = await browser.newPage()
-  try {
-    await mount(page, { fullPanel: true, deferPrepare: true })
-    await page.getByLabel('Model storage', { exact: true }).fill('C:/models/custom-laya')
-    await page.getByRole('button', { name: 'Download and verify', exact: true }).click()
-    await expect.poll(() => page.evaluate(() => typeof (window as any).finishOperation)).toBe('function')
-    expect(await page.evaluate(() => (window as any).config.laya.modelPath)).toBe('C:/models/custom-laya')
-    await expect.poll(() => page.getByRole('checkbox').first().isDisabled()).toBe(true)
-    await expect.poll(() => page.locator('button[aria-haspopup="listbox"]').isDisabled()).toBe(true)
-    await expect.poll(() => page.getByRole('button', { name: 'Save', exact: true }).isDisabled()).toBe(true)
-    await expect.poll(() => page.getByRole('button', { name: 'Cancel operation', exact: true }).isEnabled()).toBe(true)
-    await page.evaluate(() => (window as any).finishOperation())
-    await expect.poll(() => page.getByRole('status').textContent()).toBe('Not loaded')
-    await page.getByRole('button', { name: 'Load model', exact: true }).click()
-    await expect.poll(() => page.getByRole('status').textContent()).toBe('Ready')
-    await page.getByRole('button', { name: 'Release memory', exact: true }).click()
-    await expect.poll(() => page.getByRole('status').textContent()).toBe('Not loaded')
-    expect(await page.evaluate(() => (window as any).calls.filter((action: string) => action !== 'status'))).toEqual(['prepare', 'warm', 'stop'])
-    await expect.poll(() => page.locator('button[aria-haspopup="listbox"]').isEnabled()).toBe(true)
-  } finally { await page.close() }
-})
-
 it.each(['planche', 'dark'])('keeps Chinese controls within the panel at wide and narrow widths in %s', async theme => {
   const page = await browser.newPage()
   try {
-    await mount(page, { language: 'zh-CN', fullPanel: true, runtime: { phase: 'stopped', reason: 'prepared', modelRevision: 'e4e9ddf21a7b1903b7acffd8814ad4307bf63a67' } })
+    await mount(page, { language: 'zh-CN', fullPanel: false, runtime: { phase: 'stopped', reason: 'prepared', modelRevision: 'e4e9ddf21a7b1903b7acffd8814ad4307bf63a67' } })
     expect(await page.getByRole('heading', { level: 3 }).allTextContents()).toContain('Laya 本地辅助判断')
     await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme)
     for (const width of [760, 390]) {

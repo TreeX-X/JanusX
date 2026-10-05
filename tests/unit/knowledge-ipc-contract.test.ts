@@ -10,6 +10,11 @@ import type {
   StructuredCloneValue,
 } from '../../src/shared/knowledge'
 import { installElectronApiFallback } from '../../src/renderer/src/lib/electron-api-fallback'
+import { defaultKnowledgeAutomation } from '../../src/shared/knowledge-automation'
+import { normalizeKnowledgeSettings } from '../../src/shared/knowledge-settings'
+import * as localEnvironment from '../../src/main/knowledge/knowledge-local-environment'
+import { configureKnowledgeLocalModel, disableKnowledgeLocalModel, startKnowledgeLocalResources, updateKnowledgeSettingsFromRenderer } from '../../src/main/knowledge/knowledge-local-settings'
+import { knowledgeLocalResources } from '../../src/main/knowledge/knowledge-local-resources'
 import {
   getKnowledgeSettings,
   updateKnowledgeSettings,
@@ -42,6 +47,9 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../src/main/knowledge/laya-runtime', () => ({ controlLaya: vi.fn(), syncLayaSettings: vi.fn(async () => {}) }))
+vi.mock('../../src/main/knowledge/automation-service', () => ({ knowledgeAutomationService: { stop: vi.fn() } }))
+vi.mock('../../src/main/knowledge/knowledge-models', () => ({ stopKnowledgeLocalModel: vi.fn() }))
+vi.mock('../../src/main/knowledge/knowledge-credentials', () => ({ getJevKey: vi.fn(), setJevKey: vi.fn() }))
 vi.mock('../../src/main/knowledge/contract-service', () => ({ knowledgeContractService: {} }))
 vi.mock('../../src/main/knowledge/audit-service', () => ({ knowledgeAuditService: {} }))
 vi.mock('../../src/main/knowledge/observation-service', () => ({ knowledgeObservationService: {} }))
@@ -56,6 +64,7 @@ vi.mock('../../src/main/knowledge/processing-queue', () => ({ knowledgeProcessin
 vi.mock('../../src/main/config/service', () => ({
   configService: {
     getKnowledgeSettings: mocks.getKnowledgeSettings,
+    getExperimentalFeatures: async () => ({ knowledge: true }),
     updateKnowledgeSettings: mocks.updateKnowledgeSettings,
   },
 }))
@@ -87,7 +96,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(46)
+    expect(channels).toHaveLength(61)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -143,8 +152,9 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.diagnostics({ workspaceId: 'workspace-1', recentLimit: 5 })
     await knowledgeApi.processNow({ workspaceId: 'workspace-1' })
     await knowledgeApi.processingStats()
+    await knowledgeApi.probeExternalMcp()
     await knowledgeApi.externalMcpStatus()
-    await knowledgeApi.registerExternalMcp('cursor')
+    await knowledgeApi.registerExternalMcp('claude-code')
     await knowledgeApi.userMemoryOverview()
     await knowledgeApi.personalProfileEditContext()
     await knowledgeApi.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: { identity: 'Tree' } })
@@ -188,8 +198,9 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.diagnostics, { workspaceId: 'workspace-1', recentLimit: 5 }],
       [KNOWLEDGE_CHANNELS.processNow, { workspaceId: 'workspace-1' }],
       [KNOWLEDGE_CHANNELS.processingStats],
+      [KNOWLEDGE_CHANNELS.probeExternalMcp],
       [KNOWLEDGE_CHANNELS.externalMcpStatus],
-      [KNOWLEDGE_CHANNELS.registerExternalMcp, 'cursor'],
+      [KNOWLEDGE_CHANNELS.registerExternalMcp, 'claude-code'],
       [KNOWLEDGE_CHANNELS.userMemoryOverview],
       [KNOWLEDGE_CHANNELS.personalProfileEditContext],
       [KNOWLEDGE_CHANNELS.savePersonalProfile, { expectedHash: 'a'.repeat(64), overrides: { identity: 'Tree' } }],
@@ -244,15 +255,72 @@ describe('Knowledge IPC contract', () => {
 
     await expect(getHandler({})).resolves.toBe(raw)
     await expect(updateHandler({}, undefined)).resolves.toBe(raw)
-    expect(mocks.updateKnowledgeSettings).toHaveBeenLastCalledWith({})
+    expect(mocks.updateKnowledgeSettings).toHaveBeenLastCalledWith({ automation: undefined })
     await expect(updateHandler({}, { enabled: false })).resolves.toBe(raw)
-    expect(mocks.updateKnowledgeSettings).toHaveBeenLastCalledWith({ enabled: false })
+    expect(mocks.updateKnowledgeSettings).toHaveBeenLastCalledWith({ enabled: false, automation: undefined })
 
     const failure = new Error('config unavailable')
     mocks.getKnowledgeSettings.mockRejectedValueOnce(failure)
     mocks.updateKnowledgeSettings.mockRejectedValueOnce(failure)
     await expect(getHandler({})).rejects.toBe(failure)
     await expect(updateHandler({}, { enabled: true })).rejects.toBe(failure)
+  })
+
+  it('persists opt-in only after host checks and prevents stale Save or detection from reversing disable', async () => {
+    let stored = normalizeKnowledgeSettings({ automation: defaultKnowledgeAutomation() })
+    mocks.getKnowledgeSettings.mockImplementation(async () => structuredClone(stored))
+    mocks.updateKnowledgeSettings.mockImplementation(async partial => { stored = normalizeKnowledgeSettings({ ...stored, ...partial }); return structuredClone(stored) })
+    const local = { ...defaultKnowledgeAutomation().local, enabled: true }
+    const report = { ok: true, mode: 'gpu' as const, availableMemoryMiB: 16000, modelContextTokens: 262144,
+      recommendedContextTokens: 65536, selectedContextTokens: 65536, supportedContextTokens: [32768, 65536] }
+    const detect = vi.spyOn(localEnvironment, 'detectLocalEnvironment').mockResolvedValue({ ...report, ok: false, reason: 'local-memory-insufficient' })
+    expect((await configureKnowledgeLocalModel(local)).report.ok).toBe(false)
+    expect(stored.automation!.local.enabled).toBe(false)
+    detect.mockResolvedValue(report)
+    expect((await configureKnowledgeLocalModel(local)).settings.automation!.local.enabled).toBe(true)
+    const stale = structuredClone(stored)
+    stale.automation!.stages.entryReview.provider = 'local'
+    await disableKnowledgeLocalModel()
+    await updateKnowledgeSettingsFromRenderer(stale)
+    expect(stored.automation!.local.enabled).toBe(false)
+    expect(stored.automation!.stages.entryReview.provider).toBe('off')
+    let finish!: (value: typeof report) => void
+    detect.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const pending = configureKnowledgeLocalModel(local)
+    const rejected = expect(pending).rejects.toThrow()
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'))
+    await disableKnowledgeLocalModel()
+    finish(report)
+    await rejected
+    expect(stored.automation!.local.enabled).toBe(false)
+    // Cancellation also wins if the host is still reading settings before detection begins.
+    const beforeRead = configureKnowledgeLocalModel(local)
+    const cancelled = expect(beforeRead).rejects.toThrow()
+    await disableKnowledgeLocalModel()
+    await cancelled
+    expect(stored.automation!.local.enabled).toBe(false)
+    detect.mockRestore()
+  })
+
+  it('routes resource operations and cancels pending setup before it can start a download', async () => {
+    await knowledgeApi.installLocalResources()
+    expect(mocks.invoke).toHaveBeenLastCalledWith(KNOWLEDGE_CHANNELS.localResourcesInstall)
+    await knowledgeApi.localResourcesStatus()
+    expect(mocks.invoke).toHaveBeenLastCalledWith(KNOWLEDGE_CHANNELS.localResourcesStatus)
+    mocks.getKnowledgeSettings.mockResolvedValue(normalizeKnowledgeSettings({ automation: defaultKnowledgeAutomation() }))
+    const start = vi.spyOn(knowledgeLocalResources, 'start')
+    const cancel = vi.spyOn(knowledgeLocalResources, 'cancel')
+    try {
+      const pending = startKnowledgeLocalResources()
+      const rejected = expect(pending).rejects.toThrow()
+      await disableKnowledgeLocalModel()
+      await rejected
+      expect(start).not.toHaveBeenCalled()
+      expect(cancel).toHaveBeenCalledOnce()
+      mocks.getKnowledgeSettings.mockResolvedValue({ automation: { ...defaultKnowledgeAutomation(), local: { ...defaultKnowledgeAutomation().local, enabled: true } } })
+      await expect(startKnowledgeLocalResources()).rejects.toThrow('local-model-already-enabled')
+      expect(start).not.toHaveBeenCalled()
+    } finally { start.mockRestore(); cancel.mockRestore() }
   })
 
   it('constrains public extensible values to structured-clone-safe data', () => {
@@ -319,6 +387,18 @@ describe('Knowledge IPC contract', () => {
     }
     const api = window.electron.knowledge
     const calls: Array<() => Promise<unknown>> = [
+      () => api.automationStatus(),
+      () => api.automationRun({ backfill: false }),
+      () => api.automationRetry('task'),
+      () => api.setJevCredential(''),
+      () => api.jevCredentialStatus(),
+      () => api.stopLocalModel(),
+      () => api.installLocalResources(),
+      () => api.localResourcesStatus(),
+      () => api.configureLocalModel({ enabled: true, endpoint: '', modelPath: '', serverPath: '', contextTokens: 0 }),
+      () => api.wikiHistory({ workspaceId: 'w', slug: 'a' }),
+      () => api.wikiRevision({ workspaceId: 'w', slug: 'a', version: 1 }),
+      () => api.pinWikiRevision({ workspaceId: 'w', slug: 'a', version: 1, contentHash: 'a'.repeat(64), pinned: true }),
       () => api.noteWikiPages({ rootPath: 'C:\\work', uri: 'note://repo/a' }),
       () => api.prepareNoteWiki({ rootPath: 'C:\\work', uris: ['note://repo/a'], pageSlug: 'a', reviewMode: 'incremental', expectedVersion: 1 }),
       () => api.proposeNoteWiki({ draftId: 'draft-1', title: 't', markdown: 'm', rationale: 'r' }),
@@ -349,8 +429,9 @@ describe('Knowledge IPC contract', () => {
       () => api.diagnostics(),
       () => api.processNow({ workspaceId: 'workspace' }),
       () => api.processingStats(),
+      () => api.probeExternalMcp(),
       () => api.externalMcpStatus(),
-      () => api.registerExternalMcp('cursor'),
+      () => api.registerExternalMcp('claude-code'),
       () => api.userMemoryOverview(),
       () => api.importLegacyPersonalMemory(),
       () => api.layaControl('status'),
@@ -367,8 +448,9 @@ describe('Knowledge IPC contract', () => {
     calls.push(() => api.personalProfileEditContext())
     calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
     calls.push(() => api.migrateLegacyEpisodes())
-    expect(Object.keys(api)).toHaveLength(46)
-    expect(calls).toHaveLength(46)
+    calls.push(() => api.getPersonalSettings(), () => api.updatePersonalSettings({ useInChat: false }))
+    expect(Object.keys(api)).toHaveLength(61)
+    expect(calls).toHaveLength(61)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

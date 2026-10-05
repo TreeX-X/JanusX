@@ -84,7 +84,10 @@ export function installWorkbenchBoundary(readGraph: () => Blueprint, cwd: string
       return fixture.graph()
     },
   })
-  Object.assign(window.electron.harness, { noteRead: async (path: string, uri: string) => {
+  Object.assign(window.electron.harness, {
+    workspaceStatus: async (path: string) => ({ root: path, state: path === cwd ? 'ok' : 'not-found',
+      ...(path === cwd ? { projectId: readGraph().id } : {}), noteCount: path === cwd ? readGraph().nodeIds.length : 0, diagnostics: [] }),
+    noteRead: async (path: string, uri: string) => {
     fixture.reads.push({ cwd: path, uri })
     const value = Object.values(readGraph().nodes).find(node => node.sourceUri === uri)
     if (path !== cwd || !value?.note) throw new Error('Note outside authorized checkout')

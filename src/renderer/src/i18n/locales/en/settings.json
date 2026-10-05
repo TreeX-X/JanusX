@@ -1,6 +1,12 @@
 {
   "title": "Settings",
   "brand": "Settings",
+  "groups": {
+    "application": "Application",
+    "memory": "Knowledge & memory",
+    "models": "Models & usage",
+    "collaboration": "Agents & collaboration"
+  },
   "tab": {
     "general": {
       "title": "General",
@@ -80,8 +86,8 @@
       },
       "knowledge": {
         "label": "Knowledge",
-        "hint": "Show the knowledge workbench entry. Turning off hides the title-bar switcher and the workbench.",
-        "note": "Requires Laya engine support, please ensure it is installed and configured"
+        "hint": "Enable project knowledge capture, processing, recall and management. Turning off retains data; personal memory is independent.",
+        "note": "Rules and human review need no model. Local models require separate activation in detailed settings."
       },
       "roundtable": {
         "label": "Roundtable",
@@ -90,8 +96,8 @@
       },
       "persona": {
         "label": "Persona",
-        "hint": "Show the persona tool in the right dock plus island memory reminders. Turning off hides the entries.",
-        "note": "Feature in development, may be unstable"
+        "hint": "Enable personal memory and profile. Turning off stops personal capture, processing and chat recall while retaining data.",
+        "note": "Detailed settings control capture, inferred project habits, chat recall and retention."
       },
       "remoteControl": {
         "label": "Remote collaboration",
@@ -104,10 +110,14 @@
         "note": "Feature in development, may be unstable"
       }
     },
-    "blueprintConfirm": {
-      "title": "Enable Blueprint",
-      "description": "Blueprint must use WorkflowX Agent to output correct note format.\n\nPlease confirm you understand this requirement.",
-      "confirm": "I understand, confirm",
+    "badge": "LAB",
+    "confirm": {
+      "enableTitle": "Enable {{name}}?",
+      "disableTitle": "Disable {{name}}?",
+      "enableDescription": "This feature is experimental and may be unstable or incomplete. Confirm to enable it immediately.",
+      "disableDescription": "Confirm to disable this feature and hide its entry points immediately. The effects are described below.",
+      "enable": "Enable feature",
+      "disable": "Disable feature",
       "cancel": "Cancel"
     },
     "error": {
@@ -433,11 +443,27 @@
     }
   },
   "usageStats": {
+    "timeRange": "Time range",
+    "terminalType": "Terminal type",
+    "snapshotHint": "Cumulative terminal snapshots grouped by last update time.",
+    "breakdown": "Terminal & model usage",
+    "unknownModel": "Model not reported",
     "title": "Usage statistics",
     "subtitle": "Aggregate token usage across terminals; live data for the current session",
     "rangeToday": "Today",
     "rangeWeek": "This week",
     "rangeMonth": "This month",
+    "rangeCustom": "Custom",
+    "customStart": "From",
+    "customEnd": "To",
+    "customInvalid": "Start date must not be after end date.",
+    "customFuture": "Start date is in the future; no data yet.",
+    "customSpan": "Range exceeds 366 days; narrow it down.",
+    "customDaily": "daily",
+    "customHourly": "hourly",
+    "customWeekly": "weekly",
+    "ioTitle": "Input & output",
+    "ioShare": "Output share",
       "empty": "No terminal with usage telemetry in this range yet.",
       "typeAll": "All",
       "overall": "Overall",
@@ -479,5 +505,18 @@
         "desc": "C/C++ code navigation (Go to Definition). Managed binary; installs on demand."
       }
     }
+  },
+  "mcpAccess": {
+    "description": "Export read-only project knowledge. Personal memories stay private. Configuration registration and service connectivity are checked separately; actual client approval may still be required.",
+    "refresh": "Refresh",
+    "copy": "Copy launch configuration",
+    "probe": "Test service connection",
+    "unverified": "Client MCP integration is not verified. No configuration will be written.",
+    "current": "Configuration matches · client connection not verified",
+    "stale": "Configuration needs updating",
+    "absent": "Not registered",
+    "repair": "Update configuration",
+    "passed": "Service handshake, five tools and query passed. External client connection is not verified.",
+    "failed": "Service check failed at {{stage}}"
   }
 }

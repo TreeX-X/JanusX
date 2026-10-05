@@ -1,7 +1,7 @@
 /**
  * src/renderer/src/components/NotificationSettingsPanel.module.css
  *
- * 通知/知识库设置面板（KnowledgeSettingsPanel 复用同一套类名）。
+ * 通知设置面板。
  * 视觉规则见 AppSettingsModal.module.css 顶部注释：表面走 --shell-* 阶梯，
  * 橙色只做 1px 边框与文字，分组靠发丝线。
  */

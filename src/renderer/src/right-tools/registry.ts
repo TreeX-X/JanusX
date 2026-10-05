@@ -1,5 +1,13 @@
 // Note: rail plus singleton tools with shared icon taxonomy — see .agents/notes/2026-07-19-right-dock--a73f2f05.md
 import type { RightToolDefinition, RightToolId } from './types'
+import type { ExperimentalFeatures } from '../../../shared/ipc/experimental'
+
+// Note: either enabled domain can use its review queue — see .agents/notes/2026-10-04-memory-domain-controls--908d675a.md
+export function isRightToolEnabled(toolId: RightToolId, features: Pick<ExperimentalFeatures, 'knowledge' | 'persona'>): boolean {
+  if (toolId === 'assist' || toolId === 'review') return features.knowledge || features.persona
+  if (toolId === 'persona') return features.persona
+  return true
+}
 
 export const RIGHT_TOOL_REGISTRY = [
   {
@@ -29,26 +37,6 @@ export const RIGHT_TOOL_REGISTRY = [
     ariaLabelKey: 'common:rightTool.tool.assist.ariaLabel',
     icon: 'assist',
     order: 3,
-    instancePolicy: 'single',
-    mountPolicy: 'while-open',
-  },
-  {
-    id: 'persona',
-    titleKey: 'common:rightTool.tool.persona.title',
-    shortTitleKey: 'common:rightTool.tool.persona.shortTitle',
-    ariaLabelKey: 'common:rightTool.tool.persona.ariaLabel',
-    icon: 'persona',
-    order: 4,
-    instancePolicy: 'single',
-    mountPolicy: 'while-open',
-  },
-  {
-    id: 'review',
-    titleKey: 'common:rightTool.tool.review.title',
-    shortTitleKey: 'common:rightTool.tool.review.shortTitle',
-    ariaLabelKey: 'common:rightTool.tool.review.ariaLabel',
-    icon: 'review',
-    order: 5,
     instancePolicy: 'single',
     mountPolicy: 'while-open',
   },

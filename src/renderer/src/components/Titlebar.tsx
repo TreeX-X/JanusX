@@ -20,6 +20,7 @@ import { useProductWorkspaceStore } from '@/stores/productWorkspace'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useTeamStore } from '@/stores/team'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
+import { useWorkflowXDetection } from './janus/useWorkflowXDetection'
 import { useI18n } from '@/i18n/useI18n'
 
 /*-- P4: 蓝图工作台（@xyflow 画布链）按需分包，未打开蓝图工作台时不加载 --*/
@@ -36,6 +37,7 @@ const BlueprintWorkbench = lazy(() =>
 export function Titlebar() {
   const { t } = useI18n('common')
   useGlobalRunning()
+  useWorkflowXDetection()
   const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const { stage: islandStage, knowledge: knowledgePeek } = island
   // Pinned island window (owned by JanusIsland): while pinned, a terminal
@@ -45,6 +47,15 @@ export function Titlebar() {
   islandPinnedRef.current = islandPinned
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
+  useEffect(() => {
+    const openKnowledgeSettings = () => {
+      if (!useExperimentalStore.getState().knowledge) return
+      setSettingsInitialTab('knowledge')
+      setSettingsModalOpen(true)
+    }
+    window.addEventListener('janusx:open-knowledge-settings', openKnowledgeSettings)
+    return () => window.removeEventListener('janusx:open-knowledge-settings', openKnowledgeSettings)
+  }, [])
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   // 侧栏团队区请求打开设置 team 页（计数器变化即打开）。
   // 创新开关关闭时忽略请求：入口已隐藏，不应再弹出 team 页。
@@ -82,7 +93,7 @@ export function Titlebar() {
 
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
-  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
+  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge || s.persona)
   const blueprintEnabled = useExperimentalStore((s) => s.blueprint)
   const loadExperimental = useExperimentalStore((s) => s.load)
 

@@ -1,6 +1,7 @@
+import { useAssistantPendingCount } from '@/components/knowledge/useAssistantPendingCount'
 // Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/2026-09-16-right-dock-empty-collapse--9f855a20.md
 import { ListChecks, Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
-import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
+import { isRightToolEnabled, RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
@@ -28,8 +29,10 @@ export function RightToolRail({
 }: RightToolRailProps) {
   const { t } = useI18n('common')
   const personaEnabled = useExperimentalStore((s) => s.persona)
+  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
+  const pending = useAssistantPendingCount()
   const panelToggle = onTogglePanel ?? onExpandPanel
-  const visibleTools = RIGHT_TOOL_REGISTRY.filter((tool) => tool.id !== 'persona' || personaEnabled)
+  const visibleTools = RIGHT_TOOL_REGISTRY.filter((tool) => isRightToolEnabled(tool.id, { persona: personaEnabled, knowledge: knowledgeEnabled }))
   const hasOpenTools = openToolIds.length > 0
   const panelToggleLabel = collapsed
     ? t('common:rightDock.expandAria')
@@ -72,6 +75,7 @@ export function RightToolRail({
               onClick={() => onToggleTool(tool.id)}
             >
               <ToolIcon toolId={tool.id} />
+              {tool.id === 'assist' && pending !== null && pending > 0 && <span className={styles.railBadge}>{pending > 99 ? '99+' : pending}</span>}
               <span className={styles.railState} aria-hidden="true" />
             </button>
             </ThemedTooltip>

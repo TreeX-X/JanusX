@@ -1,0 +1,92 @@
+.panel { container-type: inline-size; display: flex; flex-direction: column; gap: 16px; color: var(--shell-text); }
+.head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.headInfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.title { margin: 0; font-size: 13px; font-weight: 650; line-height: 1.5; }
+.subtitle { margin: 0; color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.label, .hint { color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
+.hint { margin: 4px 0 12px; }
+.panel button:focus-visible, .chart rect:focus-visible, .dateField input:focus-visible { outline: 2px solid var(--shell-text); outline-offset: 3px; }
+/* 终端类型切换与 LLM 引擎 terminalTabs 同语言：顶部一行下划线，选中态 accent 下划线。 */
+.tabRow { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--shell-border-soft, var(--shell-border)); padding-bottom: 8px; }
+.tab { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -9px; background: transparent; color: var(--shell-dim); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: color 0.16s ease, border-color 0.16s ease; }
+.tab:hover { color: var(--shell-text); }
+.tabActive { color: var(--shell-text); border-bottom-color: var(--so-accent, var(--shell-accent)); }
+.customBar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
+.dateField { display: inline-flex; align-items: center; gap: 8px; color: var(--shell-muted); font-size: 11px; }
+.dateField input { min-height: var(--control-h, 30px); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--control-border, var(--shell-border)); padding: 6px 10px; border-radius: 6px; color: var(--shell-text); font: inherit; font-size: 12px; color-scheme: dark light; transition: border-color 0.18s ease, background 0.18s ease; }
+.dateField input:hover { border-color: rgba(255, 255, 255, 0.16); }
+.dateSep { color: var(--shell-dim); }
+.error { margin: 0; width: 100%; color: #d78b92; font-size: 11px; line-height: 1.55; }
+.customMeta { margin: 0; color: var(--shell-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+:global([data-theme='dark']) .tabRow img[data-tool='codex'] { filter: invert(1); }
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.summaryCell { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
+.summaryCell > svg { flex-shrink: 0; width: 88px; height: 88px; }
+.summaryInfo { min-width: 0; }
+.value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 3px 0 8px; font-size: 30px; font-weight: 600; letter-spacing: -1px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.value small, .modelTotal small { font-size: 10px; color: var(--shell-muted); font-weight: 400; letter-spacing: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--shell-muted); font-size: 10px; line-height: 1.6; min-height: 20px; }
+.legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.legend strong { color: var(--shell-text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.legend i, .modelName i { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+/* 图例即筛选器：点击显隐对应曲线，关闭态降透明度。 */
+.chip { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 4px; background: transparent; color: var(--shell-muted); font: inherit; font-size: 10px; line-height: 1.6; cursor: pointer; padding: 2px 6px; margin: -2px -6px; transition: background 120ms, color 120ms, opacity 120ms; }
+.chip:hover { color: var(--shell-text); background: rgba(255, 255, 255, 0.045); }
+.chipOff { opacity: 0.4; }
+.ioSplit { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 8px; color: var(--shell-muted); font-size: 10px; line-height: 1.6; }
+.ioSplit > span { display: inline-flex; align-items: center; gap: 5px; }
+.ioSplit strong { color: var(--shell-text); font-weight: 500; font-variant-numeric: tabular-nums; }
+.ioDotIn, .ioDotOut { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ioDotIn { background: var(--shell-text); opacity: 0.55; }
+.ioDotOut { background: var(--shell-text); }
+.ioBar { display: flex; flex-shrink: 0; flex-direction: column; align-items: center; gap: 8px; width: 88px; }
+.ioTrack { display: flex; width: 100%; height: 10px; overflow: hidden; border-radius: 999px; background: var(--shell-canvas); box-shadow: inset 0 0 0 1px var(--shell-border); }
+.ioFillIn, .ioFillOut { height: 100%; transition: width 280ms ease; }
+.ioFillIn { background: var(--shell-muted); opacity: 0.65; border-radius: 999px 0 0 999px; }
+.ioFillOut { background: var(--shell-text); border-radius: 0 999px 999px 0; }
+.ioShare { color: var(--shell-muted); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.donutArc { transition: stroke-dasharray 380ms ease, stroke-dashoffset 380ms ease; }
+.trendSection { border: 1px solid var(--shell-border); border-radius: 10px; padding: 16px; background: var(--shell-card); }
+.chart { display: block; width: 100%; overflow: hidden; }
+.chartEnter { animation: trend-in 280ms ease; }
+@keyframes trend-in { from { opacity: 0.25; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.axis line { stroke: var(--shell-border); stroke-dasharray: 3 5; }
+.axis text, .dateLabel { fill: var(--shell-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.cursor { stroke: var(--shell-muted); stroke-dasharray: 3 4; opacity: 0.6; }
+.trend > .legend { justify-content: flex-end; margin-top: 8px; }
+.activeDate { margin-right: auto; font-variant-numeric: tabular-nums; }
+.summaryEmpty .summaryCell > svg, .summaryEmpty .value { opacity: 0.45; }
+.summaryEmpty .legend { min-height: 0; }
+.emptyWatermark { fill: var(--shell-muted); font-size: 12px; opacity: 0.8; }
+.breakdown { display: flex; flex-direction: column; gap: 0; padding: 4px 16px 8px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
+.breakdown > .title { margin: 0; padding: 12px 0 10px; }
+.modelRow { display: grid; grid-template-columns: minmax(0, 1fr) 92px 76px 76px 76px; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid var(--shell-border-soft, var(--shell-border)); }
+.modelInfo { min-width: 0; }
+.modelName { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 12px; font-weight: 600; }
+.modelName > span { font-size: 10px; color: var(--shell-muted); font-weight: 400; margin-left: 3px; }
+.models { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 7px; font-size: 14px; line-height: 1.5; font-weight: 500; overflow-wrap: anywhere; }
+.modelTotal, .modelRate, .modelIo { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; font-variant-numeric: tabular-nums; }
+.modelTotal > .label, .modelRate > .label, .modelIo > .label { width: 100%; }
+.modelTotal strong { font-size: 24px; font-weight: 550; line-height: 1.3; letter-spacing: -0.6px; }
+.modelRate strong, .modelIo strong { font-size: 17px; font-weight: 550; line-height: 1.3; }
+@container (max-width: 860px) {
+  .summary { grid-template-columns: 1fr 1fr; }
+  .summaryCell:last-child { grid-column: 1 / -1; }
+  .modelRow { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .modelInfo { grid-column: 1 / -1; }
+}
+@container (max-width: 560px) {
+  .summary { grid-template-columns: 1fr; gap: 12px; }
+  .summaryCell:last-child { grid-column: auto; }
+  .modelRow { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+  .modelInfo { grid-column: 1 / -1; }
+  .modelTotal strong { font-size: 21px; }
+  .modelIo strong, .modelRate strong { font-size: 16px; }
+  .trendSection { padding: 12px; }
+  .axis text, .dateLabel { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel button, .donutArc, .ioFillIn, .ioFillOut, .chip { transition: none; }
+  .chartEnter { animation: none; }
+}

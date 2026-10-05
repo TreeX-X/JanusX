@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url'
 const REQUIRED_TREE_EXCLUSIONS = [
   'src',
   'tests',
-  'docs',
   'wiki',
   'design',
   'artifacts',

@@ -5,6 +5,7 @@ import { Select } from './ui/Select'
 import { LanguageServiceManager } from './LanguageServiceManager'
 import { EXTERNAL_CLI_TOOL_ORDER } from '../../../shared/ipc/external-cli'
 import { ExternalCliManager } from './ExternalCliManager'
+import { WorkflowXStatus } from './janus/WorkflowXMonitor'
 import { UpdaterSettings } from './UpdaterSettings'
 import { useThemeStore } from '@/stores/theme'
 import { listThemeDefinitions } from '../../../shared/theme/registry'
@@ -84,6 +85,16 @@ export function GeneralSettingsPanel() {
         </div>
         <div className={styles.generalControlCol}>
           <LanguageServiceManager />
+        </div>
+      </div>
+
+      <div className={styles.generalRow}>
+        <div className={styles.generalLabelCol}>
+          <div className={styles.generalLabel}>WorkflowX</div>
+          <div className={styles.generalHelp}>{t('janus:workflowx.settingsHelp')}</div>
+        </div>
+        <div className={styles.generalControlCol}>
+          <WorkflowXStatus surface="settings" />
         </div>
       </div>
 

@@ -152,6 +152,8 @@ describe('KnowledgeTruthService', () => {
       }),
     )
 
+    await expect(new KnowledgeTruthService().list()).rejects.toMatchObject({ code: 'ENOENT' })
+    await write('wiki/pages-index.json', JSON.stringify({ version: 1, pages: [] }))
     await expect(new KnowledgeTruthService().list()).resolves.toEqual({
       facts: [validFact],
       wikiPages: [],

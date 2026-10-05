@@ -14,6 +14,9 @@ import {
   findTerminalPane,
   getBrowserPaneContent,
   getLeafPanes,
+  getPaneContentById,
+  insertPaneContentAtIndex,
+  reorderPaneTab as reorderPaneTabInTree,
   removePaneContentFromTree,
   removeTerminalFromPaneTree,
   retainWorkspacePaneContent,
@@ -73,6 +76,8 @@ interface WorkspaceStore {
   collapsePaneLayout: () => void
   resizePane: (splitId: string, ratio: number) => void
   closePaneTab: (paneId: string, tabId: string) => void
+  reorderPaneTab: (paneId: string, tabId: string, targetIndex: number) => void
+  movePaneTabToIndex: (contentId: string, paneId: string, targetIndex: number) => void
   moveTerminalToPane: (terminalId: string, paneId: string) => void
   splitPaneWithTerminal: (terminalId: string, paneId: string, edge: PaneDropEdge, ratio?: number) => void
   moveBrowserToPane: (surfaceId: string, paneId: string) => void
@@ -503,6 +508,42 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         focusedPaneId: focus.paneId,
         focusedTabId: focus.tabId,
         activeTerminalId: focus.terminalId,
+      }
+    }),
+  /*-- 同 pane 内 tab 排序：落点不变时不产生新树，避免无意义重渲染 --*/
+  reorderPaneTab: (paneId, tabId, targetIndex) =>
+    set((s) => {
+      const paneTree = reorderPaneTabInTree(s.paneTree, paneId, tabId, targetIndex)
+      if (!paneTree || paneTree === s.paneTree) return {}
+      const focus = resolvePaneFocus(paneTree, paneId, tabId)
+      return {
+        paneTree,
+        focusedPaneId: focus.paneId,
+        focusedTabId: focus.tabId,
+        activeTerminalId: focus.terminalId,
+      }
+    }),
+  movePaneTabToIndex: (contentId, paneId, targetIndex) =>
+    set((s) => {
+      /*-- 侧栏拖入的终端可能尚无 pane 视图：为其建内容后按下标插入 --*/
+      let content = getPaneContentById(s.paneTree, contentId)
+      let terminals = s.terminals
+      if (!content) {
+        if (!contentId.startsWith('terminal:')) return {}
+        const terminalId = contentId.slice('terminal:'.length)
+        const terminal = findTerminalInState(s, terminalId)
+        if (!terminal || terminal.workspaceId !== s.activeWorkspaceId) return {}
+        terminals = ensureTerminalInCurrentView(s.terminals, terminal)
+        content = createTerminalPaneContent(terminal.id, terminal.workspaceId)
+      }
+      const result = insertPaneContentAtIndex(s.paneTree, paneId, content, targetIndex, createPaneId())
+      if (result.tree === s.paneTree && terminals === s.terminals) return {}
+      return {
+        terminals,
+        paneTree: result.tree,
+        focusedPaneId: result.focus.paneId,
+        focusedTabId: result.focus.tabId,
+        activeTerminalId: result.focus.terminalId,
       }
     }),
   moveTerminalToPane: (terminalId, paneId) =>

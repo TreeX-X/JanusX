@@ -5,6 +5,7 @@ import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
 import { BlueprintMaintenancePanel, BLUEPRINT_PANEL_VIEW_REF } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
 import { BlueprintWorkbench } from '../../../src/renderer/src/components/blueprint/BlueprintWorkbench'
 import { createWorkbenchGraph, installWorkbenchBoundary } from './workbench-fixture'
+import { installBootstrapFixture } from './bootstrap-fixture'
 import { HarnessRunPanel } from '../../../src/renderer/src/components/janus/HarnessRunPanel'
 import { useBlueprintStore } from '../../../src/renderer/src/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '../../../src/renderer/src/stores/blueprint-maintenance'
@@ -51,7 +52,13 @@ if (workbench && new URLSearchParams(location.search).has('isolated')) {
 const secondWorkspace = { ...workspace, id: 'ws-b', path: 'C:/fixture-b', name: 'Checkout B' }
 const twoCheckouts = new URLSearchParams(location.search).has('two-checkouts')
 const switchWorkspaceMode = new URLSearchParams(location.search).has('switch-workspace')
-const workspaces = twoCheckouts || switchWorkspaceMode ? [workspace, secondWorkspace] : [workspace]
+const bootstrapMode = new URLSearchParams(location.search).has('bootstrap')
+const workspaces = twoCheckouts || switchWorkspaceMode || bootstrapMode ? [workspace, secondWorkspace] : [workspace]
+if (bootstrapMode) workspaces.push(
+  { ...workspace, id: 'ws-empty', path: 'C:/fixture-empty', name: 'Empty project' },
+  { ...workspace, id: 'ws-invalid', path: 'C:/fixture-invalid', name: 'Invalid project' },
+  { ...workspace, id: 'ws-error', path: 'C:/fixture-error', name: 'Unreadable project' },
+)
 if (twoCheckouts) {
   const alternateId = 'checkout-b:' + id
   blueprint.nodeIds.push(alternateId)
@@ -266,6 +273,7 @@ Object.assign(window.electron.harness, {
 
 const maintenance = installMaintenanceFixture(blueprint as never, workspace)
 if (workbench) installWorkbenchBoundary(maintenance.graph, workspace.path)
+if (bootstrapMode) installBootstrapFixture(blueprint as never)
 if (twoCheckouts) maintenance.checkoutViews[secondWorkspace.path] = {
   ...blueprint, id: blueprint.id + ':checkout-b', nodeIds: [id], nodes: { [id]: { ...blueprint.nodes[id], title: 'Task checkout B', sourceHash: 'd'.repeat(64) } }, composition: undefined,
 } as never

@@ -1,0 +1,33 @@
+.panel { min-width: 0; font-size: 12px; line-height: 1.5; }
+.panel fieldset { min-width: 0; margin: 0; }
+.panel legend { display: flex; align-items: center; gap: 7px; padding: 0; color: var(--shell-text); font-size: 11px; font-weight: 600; }
+.panel input:not([type='checkbox']) { box-sizing: border-box; min-width: 0; height: 30px; padding: 0 9px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--shell-text); background: var(--so-field, var(--shell-canvas)); font: inherit; font-size: 12px; }
+.panel input:not([type='checkbox']):focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 1px; }
+.panel input::placeholder { color: var(--shell-muted); }
+.panel input:not([type='checkbox']):disabled { opacity: .45; }
+.panel p { margin: 0; overflow-wrap: anywhere; }
+.stages { display: grid; gap: 14px; }
+.stage { padding: 12px; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-pane); }
+.stage legend { padding: 0 5px; }
+.step { color: var(--shell-muted); font-size: 10px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.stageFields { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.provider { width: 154px; flex: 0 1 154px; }
+.externalProvider { width: auto; flex: 1 1 150px; }
+.stageFields .model { flex: 1 1 160px; width: 160px; }
+.thinking { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; font-size: 11px; white-space: nowrap; color: var(--shell-muted); cursor: pointer; }
+.stage > p { margin-top: 5px; }
+.connection { min-width: 0; border: 1px solid var(--shell-border); border-radius: 8px; padding: 12px; background: var(--shell-pane); }
+.connection summary { display: flex; align-items: center; gap: 7px; min-height: 28px; color: var(--shell-muted); cursor: pointer; list-style: none; }
+.connection summary::before { content: '›'; font-size: 16px; width: 10px; transition: transform 120ms ease; }
+.connection[open] summary::before { transform: rotate(90deg); }
+.connection summary span { color: var(--shell-text); font-size: 11px; font-weight: 500; }
+.connection summary small { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: 10px; }
+.connection summary:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+.connection fieldset { display: grid; gap: 10px; padding: 10px 0 0; border: 0; }
+.connection fieldset > button { justify-self: start; }
+.connection > div { margin-top: 10px; }
+.connection > p { margin-top: 6px; }
+.connectionField { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(0, 1.6fr); align-items: center; gap: 12px; font-size: 11px; color: var(--shell-muted); }
+.connectionField input { width: 100%; }
+.credential { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--shell-border); border-radius: 5px; }
+@media (prefers-reduced-motion: reduce) { .connection summary::before { transition: none; } }

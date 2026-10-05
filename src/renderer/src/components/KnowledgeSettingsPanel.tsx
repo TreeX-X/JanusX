@@ -1,18 +1,22 @@
-import { LayaSettingsPanel } from './LayaSettingsPanel'
-import { useEffect, useState } from 'react'
+import { ExternalMcpPanel } from './ExternalMcpPanel'
+// Note: compact knowledge controls share explicit typography and theme tokens — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+import { KnowledgeAutomationPanel } from './KnowledgeAutomationPanel'
+import { Database } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { defaultKnowledgeAutomation, normalizeKnowledgeAutomation, type KnowledgeLocalSettings } from '../../../shared/knowledge-automation'
 import {
   getKnowledgeSettings,
   updateKnowledgeSettings,
   type KnowledgeSettings,
 } from '@/services/knowledge-settings'
-import { getExternalMcpStatus, registerExternalMcp } from '@/services/knowledge'
 import { DEFAULT_KNOWLEDGE_SETTINGS, type KnowledgeProcessingMode } from '../../../shared/knowledge-settings'
-import type { ExternalMcpClientId, ExternalMcpStatus } from '../../../shared/ipc/knowledge'
 import { useI18n } from '@/i18n/useI18n'
 import { Select } from './ui/Select'
-import styles from './NotificationSettingsPanel.module.css'
+import styles from './KnowledgeSettingsPanel.module.css'
 
 type StatusState = 'idle' | 'loading' | 'saving' | 'saved' | 'error'
+const applyLocal = (current: KnowledgeSettings, local: KnowledgeLocalSettings): KnowledgeSettings => ({ ...current,
+  automation: normalizeKnowledgeAutomation({ ...(current.automation ?? defaultKnowledgeAutomation()), local }) })
 
 export function KnowledgeSettingsPanel() {
   const { t } = useI18n('settings')
@@ -20,19 +24,23 @@ export function KnowledgeSettingsPanel() {
   const [draft, setDraft] = useState<KnowledgeSettings>(DEFAULT_KNOWLEDGE_SETTINGS)
   const [status, setStatus] = useState<StatusState>('loading')
   const [error, setError] = useState('')
-  const [mcpStatus, setMcpStatus] = useState<ExternalMcpStatus | null>(null)
-  const [mcpBusy, setMcpBusy] = useState(false)
-  const [mcpMsg, setMcpMsg] = useState('')
-  const [mcpOk, setMcpOk] = useState(true)
-  const [layaBusy, setLayaBusy] = useState(false)
+  const localRevision = useRef(0)
+  const latestLocal = useRef<KnowledgeLocalSettings>()
+  const localPersisted = (local: KnowledgeLocalSettings) => {
+    localRevision.current++; latestLocal.current = local
+    setDraft(current => applyLocal(current, local))
+    setSettings(current => applyLocal(current, local))
+  }
 
   useEffect(() => {
     let cancelled = false
+    const revision = localRevision.current
 
     setStatus('loading')
     getKnowledgeSettings()
       .then((next) => {
         if (cancelled) return
+        if (revision !== localRevision.current && latestLocal.current) next = applyLocal(next, latestLocal.current)
         setSettings(next)
         setDraft(next)
         setStatus('idle')
@@ -48,19 +56,6 @@ export function KnowledgeSettingsPanel() {
     }
   }, [t])
 
-  useEffect(() => {
-    let cancelled = false
-    getExternalMcpStatus()
-      .then((next) => {
-        if (!cancelled) setMcpStatus(next)
-      })
-      .catch(() => {
-        if (!cancelled) setMcpStatus(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const updateDraft = (enabled: boolean) => {
     setDraft((current) => ({ ...current, enabled }))
@@ -84,52 +79,13 @@ export function KnowledgeSettingsPanel() {
     setError('')
   }
 
-  const refreshMcpStatus = async () => {
-    try {
-      setMcpStatus(await getExternalMcpStatus())
-    } catch {
-      setMcpStatus(null)
-    }
-  }
-
-  const handleCopyEntry = async () => {
-    if (!mcpStatus) return
-    try {
-      await navigator.clipboard.writeText(`node "${mcpStatus.entry}"`)
-      setMcpMsg(t('settings:knowledge.mcp.copied'))
-      setMcpOk(true)
-    } catch (err) {
-      setMcpMsg(t('settings:knowledge.mcp.failed', { error: err instanceof Error ? err.message : String(err) }))
-      setMcpOk(false)
-    }
-  }
-
-  const handleRegisterClient = async (client: ExternalMcpClientId) => {
-    setMcpBusy(true)
-    setMcpMsg('')
-    try {
-      const result = await registerExternalMcp(client)
-      await refreshMcpStatus()
-      if (result.ok) {
-        setMcpMsg(t('settings:knowledge.mcp.saved', { path: result.configPath }))
-        setMcpOk(true)
-      } else {
-        setMcpMsg(t('settings:knowledge.mcp.failed', { error: result.error ?? result.configPath }))
-        setMcpOk(false)
-      }
-    } catch (err) {
-      setMcpMsg(t('settings:knowledge.mcp.failed', { error: err instanceof Error ? err.message : String(err) }))
-      setMcpOk(false)
-    } finally {
-      setMcpBusy(false)
-    }
-  }
-
   const handleSave = async () => {
+    const revision = localRevision.current
     setStatus('saving')
     setError('')
     try {
-      const next = await updateKnowledgeSettings(draft)
+      let next = await updateKnowledgeSettings(draft)
+      if (revision !== localRevision.current && latestLocal.current) next = applyLocal(next, latestLocal.current)
       setSettings(next)
       setDraft(next)
       setStatus('saved')
@@ -141,7 +97,7 @@ export function KnowledgeSettingsPanel() {
     }
   }
 
-  const isBusy = status === 'loading' || status === 'saving' || layaBusy
+  const isBusy = status === 'loading' || status === 'saving'
   const modeOptions = [
     { value: 'auto', label: t('settings:knowledge.row.mode.auto') },
     { value: 'deterministic-only', label: t('settings:knowledge.row.mode.deterministicOnly') },
@@ -157,7 +113,7 @@ export function KnowledgeSettingsPanel() {
   return (
     <div className={styles.panel}>
       <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.capture')}</h3>
+        <h3 className={styles.sectionTitle}><Database size={14} aria-hidden />{t('settings:knowledge.section.capture')}</h3>
         <SettingSwitch
           label={t('settings:knowledge.toggle.enable.label')}
           hint={t('settings:knowledge.toggle.enable.hint')}
@@ -173,7 +129,7 @@ export function KnowledgeSettingsPanel() {
             </span>
           </div>
         </div>
-        <div className={styles.row}>
+        {!draft.automation?.enabled && <div className={styles.row}>
           <div className={styles.label}>
             <span className={styles.labelText}>{t('settings:knowledge.row.mode.label')}</span>
             <span className={styles.hint}>
@@ -187,60 +143,17 @@ export function KnowledgeSettingsPanel() {
             options={modeOptions}
             ariaLabel={t('settings:knowledge.row.mode.label')}
           />
-        </div>
+        </div>}
       </section>
 
-      <LayaSettingsPanel value={draft.laya} knowledgeEnabled={draft.enabled} onChange={laya => {
-        setDraft(current => ({ ...current, laya }))
+      <KnowledgeAutomationPanel value={draft.automation} knowledgeEnabled={draft.enabled} onChange={automation => {
+        setDraft(current => ({ ...current, automation }))
         if (status === 'saved' || status === 'error') { setStatus('idle'); setError('') }
-      }} onSave={handleSave} disabled={isBusy} onBusyChange={setLayaBusy} />
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>{t('settings:knowledge.section.externalMcp')}</h3>
-        <div className={styles.row}>
-          <div className={styles.label}>
-            <span className={styles.labelText}>{t('settings:knowledge.mcp.entry.label')}</span>
-            <span className={styles.hint}>
-              {mcpStatus
-                ? (mcpStatus.entryExists ? mcpStatus.entry : t('settings:knowledge.mcp.notBuilt'))
-                : t('settings:knowledge.mcp.unavailable')}
-            </span>
-          </div>
-          <button
-            type="button"
-            className={`${styles.button} ${styles.ghostButton}`}
-            disabled={!mcpStatus?.entryExists || mcpBusy}
-            onClick={() => void handleCopyEntry()}
-          >
-            {t('settings:knowledge.mcp.copy')}
-          </button>
-        </div>
-        {mcpStatus?.clients.map((client) => (
-          <div className={styles.row} key={client.id}>
-            <div className={styles.label}>
-              <span className={styles.labelText}>{client.label}</span>
-              <span className={styles.hint}>{client.configPath}</span>
-            </div>
-            <button
-              type="button"
-              className={`${styles.button} ${styles.ghostButton}`}
-              disabled={!mcpStatus.entryExists || mcpBusy || client.registered}
-              onClick={() => void handleRegisterClient(client.id)}
-            >
-              {client.registered
-                ? t('settings:knowledge.mcp.registered')
-                : t('settings:knowledge.mcp.register')}
-            </button>
-          </div>
-        ))}
-        {mcpMsg && (
-          <div className={`${styles.status} ${mcpOk ? styles.statusSuccess : styles.statusError}`}>
-            {mcpMsg}
-          </div>
-        )}
-      </section>
+      }} onSave={handleSave} onLocalPersist={localPersisted} disabled={isBusy} />
+      <ExternalMcpPanel />
 
       <div className={styles.footer}>
-        <div className={statusClass}>
+        <div className={statusClass} role="status">
           {status === 'loading' && t('settings:footer.loading')}
           {status === 'saving' && t('settings:footer.saving')}
           {status === 'saved' && t('settings:footer.saved')}

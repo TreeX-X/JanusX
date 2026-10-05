@@ -14,7 +14,7 @@ import { readObservationRevocationBarrier } from './observation-revocation-barri
  *  - 不触碰 extract 提示词、search 算法、vector/MCP。
  */
 import { rename, writeFile, mkdir, readFile, unlink } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import type {
   AuditEvent,
@@ -30,6 +30,10 @@ import type {
 } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
+import { prepareWikiHistory, wikiContentHash } from './wiki-history'
+import { prepareWikiReview, recoverPendingWikiReview } from './wiki-review-recovery'
+import { wikiFreshness } from './wiki-freshness'
+import type { KnowledgeStageModel } from '../../shared/knowledge-automation'
 import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
 import { candidateDecisionHash } from './decision-scorer'
 import { reviewedFactHash } from './profile-projection'
@@ -61,6 +65,9 @@ interface WikiPagesIndex {
 }
 
 interface WikiPageIndexEntry {
+  sourceFactRefs?: WikiPage['sourceFactRefs']
+  managed?: boolean
+  generationHash?: string
   slug: string
   title: string
   relativePath: string
@@ -116,12 +123,19 @@ function assertReviewedSnapshot(candidate: ReviewCandidate, input: ReviewCandida
   }
 }
 
+let candidateAllowed: ((candidate: ReviewCandidate, operation: 'propose' | 'review') => Promise<boolean>) | undefined
+export function configureCandidateDomainPolicy(policy: NonNullable<typeof candidateAllowed>): void { candidateAllowed = policy }
+async function assertCandidateAllowed(candidate: ReviewCandidate, operation: 'propose' | 'review' = 'review'): Promise<void> {
+  if (candidateAllowed && !await candidateAllowed(candidate, operation)) throw new Error('memory-domain-disabled')
+}
+
 export async function proposeDerivedCandidates(candidates: Array<CandidateWikiPatch | CandidateGraphEdge>): Promise<void> {
   for (const type of ['wiki-patch', 'graph-edge'] as const) {
     const incoming = candidates.filter(candidate => candidate.type === type)
     if (!incoming.length) continue
     const path = candidateRelativePath(type)
     await withMutationLock(path, async () => {
+      for (const candidate of incoming) await assertCandidateAllowed(candidate, 'propose')
       const records = await readJsonl<CandidateWikiPatch | CandidateGraphEdge>(path)
       const revocations = await readObservationRevocationBarrier()
       const ids = new Set(records.map(candidate => candidate.id))
@@ -163,10 +177,11 @@ async function withMutationLock<T>(key: string, operation: () => Promise<T>): Pr
   await previous
   try {
     if (key === FACT_CANDIDATES_FILE) await recoverPendingFactReview()
+    if (key === WIKI_PATCHES_FILE) await recoverPendingWikiReview()
     return await operation()
   } finally {
-    release()
-    if (mutationQueues.get(key) === queued) mutationQueues.delete(key)
+    try { if (key === WIKI_PATCHES_FILE) await recoverPendingWikiReview() }
+    finally { release(); if (mutationQueues.get(key) === queued) mutationQueues.delete(key) }
   }
 }
 
@@ -179,16 +194,19 @@ export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<
 }
 
 /** Single fact admission path: producers propose, explicit review applies. */
-export async function proposeFactCandidates(candidates: CandidateFact[]): Promise<CandidateFact[]> {
+export async function proposeFactCandidates(candidates: CandidateFact[], mergeExact = false): Promise<CandidateFact[]> {
   if (candidates.length === 0) return []
   return withFactCandidatesLock(async () => {
+    for (const candidate of candidates) await assertCandidateAllowed(candidate, 'propose')
     const file = absolute(FACT_CANDIDATES_FILE)
     await ensureParent(file)
     let content = ''
     try { content = await readFile(file, 'utf8') } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
-    const ids = new Set(content.split('\n').filter((line) => line.trim()).map((line) => (JSON.parse(line) as CandidateFact).id))
+    const existing = content.split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line) as CandidateFact)
+    const ids = new Set(existing.map(candidate => candidate.id))
+    let merged = false
     const barrier = await readPersonalForgettingBarrier()
     const revocations = await readObservationRevocationBarrier()
     const fresh = candidates.filter((candidate) => {
@@ -197,11 +215,23 @@ export async function proposeFactCandidates(candidates: CandidateFact[]): Promis
       if (candidate.status !== 'proposed' || candidate.fact.status !== 'proposed') throw new Error('Candidates require review before applying')
       if (ids.has(candidate.id)) return false
       ids.add(candidate.id)
+      if (mergeExact) {
+        const target = existing.find(row => row.status === 'proposed' && isExactFactDuplicate(row.fact, candidate.fact))
+        if (target) {
+          target.fact = mergeFactEvidence(target.fact, candidate.fact)
+          target.evidence = { observationIds: target.fact.provenance.sourceObservationIds, sources: target.fact.provenance.sourceEvidence,
+            snippets: [...new Set([...(target.evidence.snippets ?? []), ...(candidate.evidence.snippets ?? [])])],
+            quotes: [...new Map([...(target.evidence.quotes ?? []), ...(candidate.evidence.quotes ?? [])].map(quote => [JSON.stringify(quote), quote])).values()] }
+          delete target.decision
+          merged = true
+          return false
+        }
+      }
+      existing.push(candidate)
       return true
     })
-    if (fresh.length) {
-      const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : ''
-      await writeTextAtomic(FACT_CANDIDATES_FILE, content + separator + fresh.map((candidate) => JSON.stringify(candidate)).join('\n') + '\n')
+    if (fresh.length || merged) {
+      await writeTextAtomic(FACT_CANDIDATES_FILE, existing.map(candidate => JSON.stringify(candidate)).join('\n') + '\n')
     }
     return fresh
   })
@@ -335,19 +365,6 @@ async function readWikiIndex(): Promise<WikiPagesIndex> {
   }
 }
 
-async function writeWikiIndex(index: WikiPagesIndex): Promise<void> {
-  const filePath = absolute(WIKI_PAGES_INDEX)
-  await ensureParent(filePath)
-  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`
-  try {
-    await writeFile(tempPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8')
-    await rename(tempPath, filePath)
-  } catch (error) {
-    await unlink(tempPath).catch(() => undefined)
-    throw error
-  }
-}
-
 async function writeTextAtomic(relativePath: string, content: string): Promise<void> {
   const filePath = absolute(relativePath)
   await ensureParent(filePath)
@@ -380,6 +397,16 @@ function mergeWikiMarkdown(existing: string | null, title: string, patchMarkdown
 }
 
 export class KnowledgeReviewService {
+  /** Host-only entry. IPC exposes applyCandidate and cannot supply this capability or validator. */
+  async applyAutomaticCandidate(input: ReviewCandidateInput, authorization: { taskId: string; model: KnowledgeStageModel; validate: () => Promise<boolean> }): Promise<ReviewResult> {
+    if (authorization.model.provider === 'off' || !authorization.taskId) throw new Error('automatic-review-not-authorized')
+    const commit = () => withMutationLock(candidateRelativePath(input.type), async () => {
+      if (!await authorization.validate()) throw new Error('automatic-review-snapshot-changed')
+      try { return await this.applyLocked({ ...input, actor: 'auto-policy' }, authorization) }
+      finally { if (input.type === 'fact') await recoverPendingFactReview() }
+    })
+    return input.type === 'wiki-patch' ? withFactCandidatesLock(commit) : commit()
+  }
   async factReviewContext(input: ReviewCandidateInput) {
     if (input.type !== 'fact') throw new Error('Fact review requires a fact candidate')
     return withFactCandidatesLock(async () => {
@@ -422,6 +449,7 @@ export class KnowledgeReviewService {
     }
 
     const current = records[index]!
+    await assertCandidateAllowed(current)
     assertReviewedSnapshot(current, input)
     if (current.status === 'rejected') {
       return { candidate: current, auditEvents: [] }
@@ -455,13 +483,14 @@ export class KnowledgeReviewService {
   async applyCandidate(input: ReviewCandidateInput): Promise<ReviewResult> {
     // Note: offline candidates always require explicit review — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
     if (input.actor === 'auto-policy') throw new Error('Automatic acceptance is unavailable; explicit review is required')
-    return withMutationLock(candidateRelativePath(input.type), async () => {
+    const commit = () => withMutationLock(candidateRelativePath(input.type), async () => {
       try { return await this.applyLocked(input) }
       finally { if (input.type === 'fact') await recoverPendingFactReview() }
     })
+    return input.type === 'wiki-patch' ? withFactCandidatesLock(commit) : commit()
   }
 
-  private async applyLocked(input: ReviewCandidateInput): Promise<ReviewResult> {
+  private async applyLocked(input: ReviewCandidateInput, automatic?: { taskId: string; model: KnowledgeStageModel }): Promise<ReviewResult> {
     const { type, id, reviewNotes } = input
     const relativePath = candidateRelativePath(type)
     const records = await readJsonl<ReviewCandidate>(relativePath)
@@ -471,6 +500,10 @@ export class KnowledgeReviewService {
     }
 
     const current = records[index]!
+    await assertCandidateAllowed(current)
+    if (automatic && (current.type === 'graph-edge' || current.type === 'fact' && (factScope(current.fact) !== 'project' || current.legacySource || current.personalCorrection))) {
+      throw new Error('candidate-requires-human-review')
+    }
     assertReviewedSnapshot(current, input)
     if (type === 'fact' && (await readPersonalForgettingBarrier()).blocksCandidate(current as CandidateFact)) {
       throw new Error('Personal memory has been forgotten')
@@ -485,9 +518,10 @@ export class KnowledgeReviewService {
     let rollback: () => Promise<void>
     let supersededFact: { id: string; version: number } | undefined
     let reviewId: string | undefined
+    let wikiChanged = false
     if (type === 'fact') {
       const nextCandidates = records.map((record, i) => i === index ? { ...record, status: 'applied', ...(reviewNotes !== undefined ? { reviewNotes } : {}) } : record)
-      const transaction = await this.applyFact(current as CandidateFact, input, nextCandidates)
+      const transaction = await this.applyFact(current as CandidateFact, input, nextCandidates, automatic)
       reviewId = transaction.reviewId
       applied = { fact: transaction.value }
       rollback = transaction.rollback
@@ -497,9 +531,12 @@ export class KnowledgeReviewService {
       applied = { edge: transaction.value }
       rollback = transaction.rollback
     } else {
-      const transaction = await this.applyWikiPatch(current as CandidateWikiPatch)
+      const nextCandidates = records.map((record, i) => i === index ? { ...record, status: 'applied', ...(reviewNotes !== undefined ? { reviewNotes } : {}) } : record)
+      const transaction = await this.applyWikiPatch(current as CandidateWikiPatch, input, nextCandidates, Boolean(automatic))
+      reviewId = transaction.reviewId
       applied = { page: transaction.value }
       rollback = transaction.rollback
+      wikiChanged = transaction.changed
     }
 
     const updated = {
@@ -511,7 +548,7 @@ export class KnowledgeReviewService {
     try {
       await writeJsonlAtomic(relativePath, records)
     } catch (error) {
-      if (type !== 'fact') await rollback!()
+      if (type === 'graph-edge') await rollback!()
       throw error
     }
 
@@ -524,11 +561,12 @@ export class KnowledgeReviewService {
       targetId: id,
       before: { status: current.status },
       after: { status: 'applied', reviewNotes: reviewNotes ?? null,
+        ...(automatic ? { taskId: automatic.taskId, provider: automatic.model.provider, model: automatic.model.model } : {}),
         ...(input.replacement ? { replacementId: input.replacement.id, replacementHash: input.replacement.hash } : {}) },
       provenance,
     }]
 
-    if (type === 'wiki-patch' && applied?.page) {
+    if (type === 'wiki-patch' && applied?.page && wikiChanged) {
       auditInputs.push({
         action: 'wiki_updated',
         targetType: 'wiki',
@@ -574,7 +612,7 @@ export class KnowledgeReviewService {
 
     return { candidate: updated, auditEvents, applied }
     } catch (error) {
-      if (type !== 'fact') {
+      if (type === 'graph-edge' || type === 'wiki-patch' && !reviewId) {
         records[index] = current
         await writeJsonlAtomic(relativePath, records)
         await rollback!()
@@ -583,7 +621,7 @@ export class KnowledgeReviewService {
     }
   }
 
-  private async applyFact(candidate: CandidateFact, input: ReviewCandidateInput, nextCandidates: unknown[]): Promise<{
+  private async applyFact(candidate: CandidateFact, input: ReviewCandidateInput, nextCandidates: unknown[], automatic?: { taskId: string; model: KnowledgeStageModel }): Promise<{
     value: MemoryFact
     reviewId: string
     rollback: () => Promise<void>
@@ -657,7 +695,8 @@ export class KnowledgeReviewService {
     if (duplicates.length > 1) throw new Error('Multiple identical facts already exist; resolve them before merging evidence')
     const duplicate = duplicates[0]
     if (duplicate) fact = mergeFactEvidence(duplicate, fact)
-    fact.confirmation = { kind: 'human-review', contentHash: reviewedFactHash(fact), confirmedAt: new Date().toISOString() }
+    fact.confirmation = { kind: automatic ? 'model-review' : 'human-review', contentHash: reviewedFactHash(fact), confirmedAt: new Date().toISOString(),
+      ...(automatic ? { taskId: automatic.taskId, model: automatic.model.model } : {}) }
     const next = duplicate ? base.map(item => item === duplicate ? fact : item) : [...base, fact]
     const reviewId = await prepareFactReview(next, nextCandidates)
     await writeJsonlAtomic(FACTS_FILE, next)
@@ -680,28 +719,26 @@ export class KnowledgeReviewService {
     return { value: edge, rollback: () => restoreJsonl(EDGES_FILE, previous) }
   }
 
-  private async applyWikiPatch(candidate: CandidateWikiPatch): Promise<{
+  private async applyWikiPatch(candidate: CandidateWikiPatch, input: ReviewCandidateInput, nextCandidates: unknown[], automatic = false): Promise<{
     value: WikiPage
+    reviewId?: string
     rollback: () => Promise<void>
+    changed: boolean
   }> {
     const slug = sanitizePageSlug(candidate.pageSlug)
     const workspaceId = candidate.provenance.workspaceId
     const index = await readWikiIndex()
-    const previousIndex = { version: 1 as const, pages: [...index.pages] }
     const samePage = (page: WikiPageIndexEntry) => page.slug === slug && page.workspaceId === workspaceId
     const existingEntry = index.pages.find(samePage)
     const fullReview = candidate.reviewMode === 'full-page'
     if ((fullReview || candidate.sourceNoteRefs?.length) && candidate.expectedVersion !== (existingEntry?.version ?? 0)) {
       throw new Error('Wiki page version changed; create a new proposal from the current full page')
     }
-    const refs = new Map((existingEntry?.sourceNoteRefs ?? []).map(ref => [ref.uri, ref]))
+    const refs = new Map((fullReview ? [] : existingEntry?.sourceNoteRefs ?? []).map(ref => [ref.uri, ref]))
     for (const ref of candidate.sourceNoteRefs ?? []) {
       const old = refs.get(ref.uri)
       if (old && old.sourceHash !== ref.sourceHash && !fullReview) throw new Error('Note source changed; full-page review is required: ' + ref.uri)
       refs.set(ref.uri, ref)
-    }
-    if (fullReview && (existingEntry?.sourceNoteRefs ?? []).some(ref => !candidate.sourceNoteRefs?.some(next => next.uri === ref.uri))) {
-      throw new Error('Full-page review must include every recorded Note source')
     }
     if (candidate.sourceNoteRefs?.length) {
       const { assertWikiSources } = await import('./note-sources')
@@ -711,14 +748,12 @@ export class KnowledgeReviewService {
     const relativePath = existingEntry && !sharedPath ? existingEntry.relativePath : wikiPageRelativePath(slug, workspaceId)
     const existingMarkdown = existingEntry ? await readWikiMarkdown(existingEntry.relativePath) : null
     if (existingEntry && existingMarkdown === null) throw new Error('Existing wiki content is missing; restore it before review')
-    const previousTarget = await readWikiMarkdown(relativePath)
     const patch = candidate.patchMarkdown.trim()
     if (!patch) throw new Error('Wiki content is empty')
     const alreadyMaterialized = !fullReview && (existingMarkdown?.includes(patch) ?? false)
     const markdown = fullReview ? patch + String.fromCharCode(10) : alreadyMaterialized && existingMarkdown !== null
       ? existingMarkdown
       : mergeWikiMarkdown(existingMarkdown, candidate.title, patch)
-    await writeTextAtomic(relativePath, markdown)
     const now = new Date().toISOString()
     const version = (existingEntry?.version ?? 0) + 1
     const entry: WikiPageIndexEntry = {
@@ -729,28 +764,19 @@ export class KnowledgeReviewService {
       status: 'published',
       // 沉淀 Wiki 与其总结的事实挂钩：新补丁带来的 sourceFactIds 并入已有集合。
       sourceFactIds: [...new Set([
-        ...(existingEntry?.sourceFactIds ?? []),
+        ...(fullReview ? [] : existingEntry?.sourceFactIds ?? []),
         ...(candidate.sourceFactIds ?? []),
       ])],
       updatedAt: now,
       version,
       workspaceId,
       workspacePath: candidate.provenance.workspacePath || existingEntry?.workspacePath,
+      sourceFactRefs: candidate.sourceFactRefs ?? (fullReview ? undefined : existingEntry?.sourceFactRefs),
+      managed: automatic && candidate.managed === true,
+      generationHash: automatic ? candidate.generationHash : undefined,
       ...(refs.size ? { sourceNoteRefs: [...refs.values()] } : {}),
     }
-    index.pages = [...index.pages.filter((page) => !samePage(page)), entry]
-    try {
-      await writeWikiIndex(index)
-    } catch (error) {
-      if (previousTarget === null) {
-        await unlink(absolute(relativePath)).catch(() => undefined)
-      } else {
-        await writeTextAtomic(relativePath, previousTarget)
-      }
-      throw error
-    }
-
-    const page = {
+    const page: WikiPage = {
       slug,
       title: entry.title,
       markdown,
@@ -758,21 +784,42 @@ export class KnowledgeReviewService {
       status: entry.status,
       sourceFactIds: entry.sourceFactIds,
       sourceNoteRefs: entry.sourceNoteRefs,
+      sourceFactRefs: entry.sourceFactRefs, managed: entry.managed, generationHash: entry.generationHash,
       workspacePath: entry.workspacePath,
       updatedAt: entry.updatedAt,
       version: entry.version,
       workspaceId: entry.workspaceId,
     }
+    const previousPage: WikiPage | undefined = existingEntry && existingMarkdown !== null ? {
+      slug, title: existingEntry.title, markdown: existingMarkdown, tags: existingEntry.tags,
+      status: existingEntry.status, sourceFactIds: existingEntry.sourceFactIds,
+      sourceNoteRefs: existingEntry.sourceNoteRefs, workspacePath: existingEntry.workspacePath,
+      sourceFactRefs: existingEntry.sourceFactRefs, managed: existingEntry.managed, generationHash: existingEntry.generationHash,
+      updatedAt: existingEntry.updatedAt, version: existingEntry.version, workspaceId,
+    } : undefined
+    if (candidate.sourceFactRefs) {
+      const facts = await readJsonl<MemoryFact>(FACTS_FILE)
+      if (wikiFreshness(page, facts) === 'stale' || page.sourceFactIds.length !== candidate.sourceFactRefs.length
+        || candidate.sourceFactRefs.some(ref => !page.sourceFactIds.includes(ref.id))) throw new Error('Wiki fact sources changed; regenerate the page')
+    }
+    if (previousPage?.status === 'published' && wikiContentHash(previousPage) === wikiContentHash(page)) {
+      return { value: previousPage, changed: false, rollback: async () => undefined }
+    }
+    const history = await prepareWikiHistory(previousPage, page, {
+      actor: input.actor ?? 'knowledge-review', reason: input.reviewNotes ?? candidate.rationale, candidateId: candidate.id,
+    })
+    index.pages = [...index.pages.filter((page) => !samePage(page)), entry]
+    const reviewId = await prepareWikiReview([
+      { path: relativePath.replace(/\\/g, '/'), after: markdown },
+      { path: 'wiki/pages-index.json', after: JSON.stringify(index, null, 2) + '\n' },
+      { path: relative(knowledgeRootPath(), history.path).replace(/\\/g, '/'), after: history.after },
+      { path: 'wiki/patches.jsonl', after: nextCandidates.map(item => JSON.stringify(item)).join('\n') + '\n' },
+    ])
     return {
       value: page,
-      rollback: async () => {
-        if (previousTarget === null) {
-          await unlink(absolute(relativePath)).catch(() => undefined)
-        } else {
-          await writeTextAtomic(relativePath, previousTarget)
-        }
-        await writeWikiIndex(previousIndex)
-      },
+      reviewId,
+      changed: true,
+      rollback: recoverPendingWikiReview,
     }
   }
 }

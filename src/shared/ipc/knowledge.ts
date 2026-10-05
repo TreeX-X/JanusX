@@ -54,6 +54,18 @@ export interface ObservationRevocationsPage {
 }
 
 export const KNOWLEDGE_CHANNELS = {
+  automationStatus: 'knowledge:automation:status',
+  automationRun: 'knowledge:automation:run',
+  automationRetry: 'knowledge:automation:retry',
+  jevCredential: 'knowledge:jev:credential',
+  jevCredentialStatus: 'knowledge:jev:credential-status',
+  localModelStop: 'knowledge:local-model:stop',
+  localModelConfigure: 'knowledge:local-model:configure',
+  localResourcesInstall: 'knowledge:local-model:install',
+  localResourcesStatus: 'knowledge:local-model:resources-status',
+  wikiHistory: 'knowledge:wiki:history',
+  wikiRevision: 'knowledge:wiki:revision',
+  pinWikiRevision: 'knowledge:wiki:pin-revision',
   layaControl: 'knowledge:laya:control',
   candidateAction: 'knowledge:candidate:action',
   noteWikiPages: 'knowledge:note-wiki:pages',
@@ -93,6 +105,7 @@ export const KNOWLEDGE_CHANNELS = {
   processingStats: 'knowledge:processing-stats',
   externalMcpStatus: 'knowledge:external-mcp:status',
   registerExternalMcp: 'knowledge:external-mcp:register',
+  probeExternalMcp: 'knowledge:external-mcp:probe',
   userMemoryOverview: 'knowledge:user-memory:overview',
   personalProfileEditContext: 'knowledge:user-memory:profile-context',
   savePersonalProfile: 'knowledge:user-memory:profile-save',
@@ -100,6 +113,8 @@ export const KNOWLEDGE_CHANNELS = {
   migrateLegacyEpisodes: 'knowledge:user-memory:migrate-episodes',
   forgetPersonalMemory: 'knowledge:user-memory:forget',
   proposePersonalMemoryCorrection: 'knowledge:user-memory:correct',
+  getPersonalSettings: 'settings:personal-memory:get',
+  updatePersonalSettings: 'settings:personal-memory:update',
   getSettings: 'settings:knowledge:get',
   updateSettings: 'settings:knowledge:update',
 } as const
@@ -224,6 +239,7 @@ export interface KnowledgeDiagnostics {
   /** Phase 5 (§6): recall 索引最近一次重建时间；从未构建为 null。 */
   indexUpdatedAt: string | null
   captureFailures: number
+  captureRecovery?: { batches: number; events: number; lastError?: string }
 }
 
 /** Phase 1-1: manual trigger input for the knowledge processing queue. */
@@ -276,20 +292,32 @@ export interface KnowledgeProcessingStats {  generatedAt: string
   lastMaintenanceAt: string | null
 }
 
-export type ExternalMcpClientId = 'cursor' | 'vscode' | 'claude-code'
+export type ExternalMcpClientId = 'claude-code' | 'codex' | 'opencode' | 'janus' | 'pi' | 'dsh'
 
 export interface ExternalMcpClientStatus {
   id: ExternalMcpClientId
   label: string
   configPath: string
   registered: boolean
+  support?: 'automatic' | 'unverified'
+  current?: boolean
+  format?: string
+  error?: string
 }
 
 export interface ExternalMcpStatus {
   entry: string
   entryExists: boolean
+  launch?: { command: string; args: string[]; env?: Record<string, string> }
   isPackaged: boolean
   clients: ExternalMcpClientStatus[]
+}
+
+export interface ExternalMcpProbeResult {
+  ok: boolean
+  stage: 'start' | 'handshake' | 'tools' | 'query'
+  tools: string[]
+  error?: string
 }
 
 export interface ExternalMcpRegisterResult {
@@ -301,6 +329,18 @@ export interface ExternalMcpRegisterResult {
 }
 
 export interface KnowledgeAPI {
+  automationStatus: () => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
+  automationRun: (input?: { backfill?: boolean }) => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
+  automationRetry: (id: string) => Promise<void>
+  setJevCredential: (key: string) => Promise<void>
+  jevCredentialStatus: () => Promise<{ configured: boolean }>
+  stopLocalModel: () => Promise<void>
+  installLocalResources: () => Promise<import('../knowledge-automation').KnowledgeLocalResources>
+  localResourcesStatus: () => Promise<import('../knowledge-automation').KnowledgeLocalResources>
+  configureLocalModel: (input: import('../knowledge-automation').KnowledgeLocalSettings) => Promise<{ settings: KnowledgeSettings; report: import('../knowledge-automation').KnowledgeLocalEnvironment }>
+  wikiHistory: (input: import('../wiki-history').WikiHistoryQuery) => Promise<import('../wiki-history').WikiHistoryPage>
+  wikiRevision: (input: import('../wiki-history').WikiRevisionQuery) => Promise<import('../wiki-history').WikiRevision>
+  pinWikiRevision: (input: import('../wiki-history').WikiRevisionPinInput) => Promise<void>
   noteWikiPages: (input: { rootPath: string; uri: string }) => Promise<NoteWikiPage[]>
   prepareNoteWiki: (input: PrepareNoteWikiInput) => Promise<NoteWikiDraft>
   proposeNoteWiki: (input: { draftId: string; title: string; markdown: string; rationale: string }) => Promise<CandidateWikiPatch>
@@ -335,6 +375,7 @@ export interface KnowledgeAPI {
   processNow: (input?: KnowledgeProcessNowInput) => Promise<KnowledgeProcessNowResult>
   processingStats: () => Promise<KnowledgeProcessingStats>
   externalMcpStatus: () => Promise<ExternalMcpStatus>
+  probeExternalMcp: () => Promise<ExternalMcpProbeResult>
   registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
   userMemoryOverview: () => Promise<UserMemoryOverview>
   personalProfileEditContext: () => Promise<PersonalProfileEditContext>
@@ -345,6 +386,8 @@ export interface KnowledgeAPI {
   candidateAction: (input: { candidateId: string; candidateHash: string; action: 'score' | 'refine' }) => Promise<void>
   forgetPersonalMemory: (input: { targetId: string; targetHash: string; kind?: 'fact' | 'episode' | 'override' }) => Promise<void>
   proposePersonalMemoryCorrection: (input: { targetId: string; targetHash: string; content: string }) => Promise<{ candidateId: string; status: CandidateFact['status'] }>
+  getPersonalSettings: () => Promise<import('../personal-memory-settings').PersonalMemorySettings>
+  updatePersonalSettings: (settings: Partial<import('../personal-memory-settings').PersonalMemorySettings>) => Promise<import('../personal-memory-settings').PersonalMemorySettings>
   getSettings: () => Promise<KnowledgeSettings>
   updateSettings: (settings: Partial<KnowledgeSettings>) => Promise<KnowledgeSettings>
 }

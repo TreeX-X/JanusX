@@ -296,13 +296,16 @@ body.is-running[data-theme='planche'] {
   background: #DCCFA8;
 }
 
-/* ── 展开态 shell：纸面板 + 墨线 + 硬偏移影 ── */
+/* ── 展开态单框模型：外层彻底透明穿透（与 14 同值、(0,4,0) 压住），
+   内层独占纸面板；双框同尺寸重叠 + radius 差是圆框后灰圈的来源 ── */
 [data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-island {
-  background: #EFE4C5;
-  border: 1px solid #1C343B;
-  box-shadow: 3px 3px 0 #1C343B;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  pointer-events: none;
 }
 
 [data-theme='planche'] .janus-island-shell.mode-running .janus-island,
@@ -312,10 +315,15 @@ body.is-running[data-theme='planche'] {
   box-shadow: 3px 3px 0 #1C343B;
 }
 
-/* ── 展开态内容面：纸底墨字，黑块逐个点名 ── */
+/* ── 展开态内容面：单纸面板（墨线 + 硬偏移影，去白边黑 blur）── */
 [data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-expanded-shell {
   background: #EFE4C5;
   color: #1C343B;
+  border: 1px solid #1C343B;
+  border-radius: 26px;
+  box-shadow: 3px 3px 0 #1C343B;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 [data-theme='planche'] .janus-expanded-topbar,
@@ -667,21 +675,34 @@ body.is-running[data-theme='planche'] {
    特异性逐条压过深色规则；dark 原样不动。
    ════════════════════════════════════════════════════════════ */
 
-/* ── 外壳：纸面 + 墨线 + 硬偏移影，任何 mode/黄金变体不再漏黑 blur ── */
+/* ── 外壳：单框模型，外层彻底透明穿透（(0,4,0)/(0,5,0) 压住 14 同值），
+   任何 mode 下都不再漏纸底墨线 + 硬阴影双框 ── */
 [data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-island,
 [data-theme='planche'] .janus-island-shell[data-stage='expanded'].mode-running .janus-island,
 [data-theme='planche'] .janus-island-shell[data-stage='expanded'].mode-analytics .janus-island,
 [data-theme='planche'] .janus-island-shell[data-stage='expanded'].mode-order .janus-island {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: none;
+}
+
+/* ── 内层独占纸面板：(0,5,0) 压过 14 的 mode 变体 dark 边/影（13 先于 14 引入，
+   同 (0,4,0) 会输给后加载的 14），全 mode 统一纸 + 墨线 + 硬偏移影 ── */
+[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-expanded-shell,
+[data-theme='planche'] .janus-island-shell.mode-running[data-stage='expanded'] .janus-expanded-shell,
+[data-theme='planche'] .janus-island-shell.mode-analytics[data-stage='expanded'] .janus-expanded-shell,
+[data-theme='planche'] .janus-island-shell.mode-order[data-stage='expanded'] .janus-expanded-shell {
   background: var(--paper, #EFE4C5);
+  color: var(--ink, #1C343B);
   border: 1px solid var(--line, #1C343B);
+  border-radius: 26px;
   box-shadow: 3px 3px 0 var(--line, #1C343B);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-}
-
-[data-theme='planche'] .janus-island-shell[data-stage='expanded'] .janus-expanded-shell {
-  background: var(--paper, #EFE4C5);
-  color: var(--ink, #1C343B);
 }
 
 /* ── 顶栏：品牌 / tab / 说明 / 胶囊（压过 05 的 (0,3,0)/(0,4,0) 白字） ── */

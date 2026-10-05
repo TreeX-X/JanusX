@@ -22,10 +22,12 @@ import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
 import type { ChatAgentEvent, ChatAnswerQuestionPayload, ChatQuestionAnswer, ChatWorkspaceResource } from '../../shared/ipc/llm'
-import { workspaceAgentRuntime } from '../agent/runtime/shell-runtime'
+import { workspaceAgentRuntime, workflowSessionParents } from '../agent/runtime/shell-runtime'
 import { streamText } from './ai-runtime'
 import {
   runChatTurn,
+  resolveWorkflowXMode,
+  parseWorkflowXCommand,
   type ChatTurnPorts,
 } from '@janus-agent/janus-agent'
 import { AgentSteeringPort } from '@janus-agent/agent-core'
@@ -314,6 +316,12 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
     },
     getMaxTurns: () => configService.getAgentMaxSteps().catch(() => CHAT_MAX_STEPS),
     getAgentSession: (agentSessionId) => workspaceAgentRuntime.getSession(agentSessionId),
+    forkAgentSession: async (parentId, caller) => {
+      const child = await workspaceAgentRuntime.forkSession(parentId, caller)
+      workflowSessionParents.set(child.id, parentId)
+      return { sessionId: child.id, ...child.workspace, status: child.status }
+    },
+    closeAgentSession: async id => { try { await workspaceAgentRuntime.cancelSession(id) } finally { workflowSessionParents.delete(id) } },
     executeFunctionCall: (input, caller) => workspaceAgentRuntime.executeFunctionCall(input, caller),
     listRegistryTools: () => workspaceAgentRuntime.registry.list(),
     listRegistryManifests: () => workspaceAgentRuntime.registry.listManifests?.(),
@@ -445,6 +453,17 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
   try {
     const callerId = `renderer:${event.sender?.id ?? 'unknown'}`
     const ports = defaultChatTurnPorts(callerId, requestId, domain, conversationId)
+    const modeCommand = parseWorkflowXCommand([...messages].reverse().find(message => message.role === 'user')?.content ?? '')
+    if (modeCommand && !modeCommand.prompt && !request.maintenanceTaskId) {
+      await runChatTurn({ requestId, messages, providerId, modelId, sourceTag }, ports, { onEvent: agentEvent => {
+        sendAgentEvent(agentEvent)
+        if (agentEvent.type === 'text_delta') queueDelta(agentEvent.delta)
+      } }, controller.signal)
+      flushDelta()
+      sendEvent(LLM_CHANNELS.delta, { requestId, delta: '', done: true })
+      sendEvent(LLM_CHANNELS.done, { requestId })
+      return
+    }
     const chatSession = getChatSession(conversationId ?? requestId)
     const endpoint = await ports.model.resolve(providerId, modelId)
     ports.model.resolve = async () => endpoint
@@ -532,6 +551,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       {
         requestId,
         messages: turnMessages,
+        workflowMode: resolveWorkflowXMode(messages),
         providerId,
         modelId,
         sourceTag,
@@ -546,7 +566,6 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         compactionSummarizer: summarize,
         ...(projectContext ? {
           systemPromptPrefix: projectContext,
-          toolAllowlist: ['note_list', 'note_read', 'note_write', 'note_focus', 'note_scope', 'workspace_list', 'workspace_search', 'workspace_read', 'project_detect', 'project_list_processes', 'project_process_output', 'git_status', 'git_log', 'git_diff', 'ask_user', 'todo_write'],
         } : {}),
       },
       ports,

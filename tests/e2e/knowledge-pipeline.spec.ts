@@ -6,6 +6,7 @@ import type { KnowledgeAPI } from '../../src/shared/ipc/knowledge'
 import { createDesktopTestEnv } from './desktop-test-env'
 import { createHash } from 'node:crypto'
 import { reviewCandidateSnapshot } from '../../src/shared/review-candidate-snapshot'
+import { defaultKnowledgeAutomation } from '../../src/shared/knowledge-automation'
 
 type KnowledgeWindow = Window & { electron: { knowledge: KnowledgeAPI } }
 
@@ -33,7 +34,7 @@ async function closeApplication(application: ElectronApplication | undefined): P
 }
 
 test('knowledge pipeline: observe → propose → review → truth → search → context', async () => {
-  const entry = resolve('out/main/index.js')
+  const entry = resolve(process.env.JANUSX_DESKTOP_ENTRY ?? 'out/main/index.js')
   let fixtureRoot: string | undefined
   let application: ElectronApplication | undefined
   let page: Page | undefined
@@ -67,6 +68,23 @@ test('knowledge pipeline: observe → propose → review → truth → search �
       return typeof api?.knowledge?.observe === 'function' && typeof api?.knowledge?.processNow === 'function'
     })
     await expect(page.locator('body')).toBeVisible()
+
+    // Local authorization belongs to the host; ordinary saves cannot opt in.
+    const localGate = await page.evaluate(async automation => {
+      const { knowledge, experimental } = window.electron
+      const originalFlags = await experimental.get()
+      await experimental.update({ knowledge: true })
+      const saved = await knowledge.updateSettings({ automation: { ...automation, local: { ...automation.local, enabled: true } } })
+      const checked = await knowledge.configureLocalModel({ ...automation.local, enabled: true, serverPath: 'relative.exe' })
+      await knowledge.stopLocalModel()
+      const stopped = await knowledge.getSettings()
+      await experimental.update(originalFlags)
+      return { saved: saved.automation!.local.enabled, checked: checked.report, stopped: stopped.automation!.local.enabled }
+    }, defaultKnowledgeAutomation())
+    await page.evaluate(() => window.electron.experimental.update({ knowledge: true, persona: true }))
+    expect(localGate.saved).toBe(false)
+    expect(localGate.checked).toMatchObject({ ok: false, reason: 'invalid-local-model-path' })
+    expect(localGate.stopped).toBe(false)
 
     // 1. 采集：决策句（高精度 proposal）+ git 事实 + 普通笔记（仅索引）。
     const observed = await page.evaluate(
@@ -188,6 +206,32 @@ test('knowledge pipeline: observe → propose → review → truth → search �
     const backupDirectory = join(fixtureRoot, 'knowledge', 'migration', 'episodes')
     const [backup] = await readdir(backupDirectory)
     expect(await readFile(join(backupDirectory, backup), 'utf8')).toBe(legacyBytes)
+    const controls = await page.evaluate(async ({ workspacePath, workspaceId }) => {
+      const { knowledge, experimental } = window.electron
+      const originalSettings = await knowledge.getSettings()
+      await knowledge.updatePersonalSettings({ useInChat: false, episodeTtlDays: 30 })
+      const saved = await knowledge.getPersonalSettings()
+      const projectSettings = await knowledge.getSettings()
+      const capture = async (personal: boolean) => {
+        try {
+          await knowledge.observe({ workspaceId: personal ? 'user' : workspaceId,
+            workspacePath: personal ? 'user' : workspacePath, source: 'manual', type: 'user-note', content: 'Domain controls fixture' })
+          return true
+        } catch { return false }
+      }
+      const combinations: Array<{ knowledge: boolean; persona: boolean; projectCaptured: boolean; personalCaptured: boolean }> = []
+      for (const flags of [{ knowledge: true, persona: false }, { knowledge: false, persona: true }, { knowledge: false, persona: false }, { knowledge: true, persona: true }]) {
+        await experimental.update(flags)
+        combinations.push({ ...flags, projectCaptured: await capture(false), personalCaptured: await capture(true) })
+      }
+      return { saved, engineeringUnchanged: JSON.stringify(projectSettings) === JSON.stringify(originalSettings), combinations }
+    }, { workspacePath, workspaceId: WS_ID })
+    expect(controls.saved).toMatchObject({ useInChat: false, episodeTtlDays: 30 })
+    expect(controls.engineeringUnchanged).toBe(true)
+    for (const result of controls.combinations) {
+      expect(result.projectCaptured).toBe(result.knowledge)
+      expect(result.personalCaptured).toBe(result.persona)
+    }
   } finally {
     await closeApplication(application).catch(() => undefined)
     if (fixtureRoot) {

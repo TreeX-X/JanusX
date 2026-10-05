@@ -7,6 +7,7 @@ import {
   type PointerEvent,
 } from 'react'
 import type { RightToolId } from '@/right-tools/types'
+import { isRightToolEnabled } from '@/right-tools/registry'
 import { useAppStore } from '@/stores/app'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useRightToolStore } from '@/stores/right-tools'
@@ -42,8 +43,8 @@ export function RightDock({
   onResizingChange,
 }: RightDockProps) {
   const { t } = useI18n('common')
-  const openToolIds = useRightToolStore((state) => state.openToolIds)
-  const activeToolId = useRightToolStore((state) => state.activeToolId)
+  const storedOpenToolIds = useRightToolStore((state) => state.openToolIds)
+  const storedActiveToolId = useRightToolStore((state) => state.activeToolId)
   const panelWidth = useRightToolStore((state) => state.panelWidth)
   const activateTool = useRightToolStore((state) => state.activateTool)
   const closeTool = useRightToolStore((state) => state.closeTool)
@@ -51,6 +52,10 @@ export function RightDock({
   const setPanelWidth = useRightToolStore((state) => state.setPanelWidth)
   const togglePanel = useAppStore((state) => state.togglePanel)
   const personaEnabled = useExperimentalStore((state) => state.persona)
+  const knowledgeEnabled = useExperimentalStore((state) => state.knowledge)
+  const features = { persona: personaEnabled, knowledge: knowledgeEnabled }
+  const openToolIds = storedOpenToolIds.filter(toolId => isRightToolEnabled(toolId, features))
+  const activeToolId = storedActiveToolId && isRightToolEnabled(storedActiveToolId, features) ? storedActiveToolId : null
   const loadExperimental = useExperimentalStore((state) => state.load)
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const workspaces = useWorkspaceStore((state) => state.workspaces)
@@ -95,12 +100,12 @@ export function RightDock({
     void loadExperimental()
   }, [loadExperimental])
 
-  // 创新开关关闭个人画像时，若 persona 工具正开着则关闭，避免悬空态。
+  // Close disabled tools as well as hiding them so re-enabling starts closed.
   useEffect(() => {
-    if (!personaEnabled && useRightToolStore.getState().openToolIds.includes('persona')) {
-      useRightToolStore.getState().closeTool('persona')
+    for (const toolId of storedOpenToolIds) {
+      if (!isRightToolEnabled(toolId, { persona: personaEnabled, knowledge: knowledgeEnabled })) closeTool(toolId)
     }
-  }, [personaEnabled, openToolIds])
+  }, [personaEnabled, knowledgeEnabled, storedOpenToolIds, closeTool])
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return

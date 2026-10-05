@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CandidateWikiPatch, WikiNoteStatus, WikiPage } from '../../../../shared/knowledge'
 import type { NoteWikiDraft, NoteWikiPage } from '../../../../shared/ipc/knowledge'
 import styles from './NoteWikiLinks.module.css'
+import { WikiHistory } from './WikiHistory'
 
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
 
@@ -90,6 +91,7 @@ export function WikiPageDetail({ page, onOpenNote }: { page: WikiPage; onOpenNot
     <pre>{page.markdown}</pre><p>Source facts: {page.sourceFactIds.join(', ') || 'None recorded'}</p>
     <button type="button" onClick={() => setRefresh(value => value + 1)}>Refresh source status</button>
     <WikiSourceList sources={sources} onOpenNote={onOpenNote} />{error && <p role="alert">{error}</p>}
+    <WikiHistory key={JSON.stringify([page.workspaceId, page.slug, page.version, 'history'])} workspaceId={page.workspaceId} slug={page.slug} />
     <NoteWikiEditor key={JSON.stringify([page.workspaceId, page.slug, page.version])} rootPath={page.workspacePath} initialUris={page.sourceNoteRefs?.map(ref => ref.uri)} page={page} />
   </section>
 }

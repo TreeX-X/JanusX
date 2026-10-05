@@ -7,6 +7,8 @@ import { DEFAULT_APP_THEME } from '../../../src/shared/ipc/theme'
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
 import { JanusRunOrbs } from '../../../src/renderer/src/components/janus/JanusRunOrbs'
 import { useGlobalRunning } from '../../../src/renderer/src/components/janus/useGlobalRunning'
+import { useWorkflowXDetection } from '../../../src/renderer/src/components/janus/useWorkflowXDetection'
+import type { WorkflowXSnapshot } from '../../../src/shared/ipc/workflowx'
 import { JanusChatProvider, useJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import {
@@ -22,6 +24,7 @@ import '../../../src/renderer/src/styles/themes.generated.css'
 import '../../../src/renderer/src/components/janus/janus-island.css'
 
 installElectronApiFallback()
+const SettingsModal = React.lazy(() => import('../../../src/renderer/src/components/AppSettingsModal').then(module => ({ default: module.AppSettingsModal })))
 document.documentElement.dataset.theme = DEFAULT_APP_THEME
 
 const streamListeners = {
@@ -265,6 +268,8 @@ const approvalFixture: ApprovalRequest = {
 }
 
 function Harness() {
+  useWorkflowXDetection()
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const providerStreamMode = new URLSearchParams(window.location.search).get('providerStream') === '1'
   const runOrbsMode = new URLSearchParams(window.location.search).get('runOrbs') === '1'
   const activeConversation = useJanusChatController()
@@ -378,6 +383,8 @@ function Harness() {
     >
       <button data-testid="replace-single" onClick={() => setCallbackVersion(2)}>Replace single callback</button>
       <button data-testid="reopen-island" onClick={() => dispatch({ type: 'double-activate' })}>Reopen Island</button>
+      <button data-testid="open-general-settings" onClick={() => setSettingsOpen(true)}>Open general settings</button>
+      {settingsOpen && <React.Suspense fallback={null}><SettingsModal isOpen onClose={() => setSettingsOpen(false)} /></React.Suspense>}
       <button data-testid="toggle-streaming" onClick={() => setIsStreaming((value) => !value)}>Toggle streaming</button>
       <button data-testid="start-provider-stream" onClick={() => streamingConversation.send('Keep provider stream pending')}>Start provider stream</button>
       <button data-testid="fail-provider-thread" onClick={() => errorConversation.send('Create error status')}>Fail provider thread</button>
@@ -415,6 +422,28 @@ function Harness() {
 }
 
 async function boot() {
+  const workflowxMode = new URLSearchParams(location.search).get('workflowx')
+  if (workflowxMode) {
+    const fixture = {
+      calls: [] as (string | null)[],
+      opened: 0,
+      status: workflowxMode === 'global' ? 'detected' : workflowxMode as WorkflowXSnapshot['status'],
+      fail: false,
+      sourceScope: 'global' as 'global' | 'workspace',
+      setWorkspace: (id: string | null) => useWorkspaceStore.setState({ activeWorkspaceId: id, activeTerminalId: null, terminals: [] }),
+    }
+    Object.assign(window, { workflowxFixture: fixture })
+    if (workflowxMode === 'global') useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null, activeTerminalId: null, terminals: [] })
+    window.electron.workflowx = {
+      detect: async workspaceId => {
+        fixture.calls.push(workspaceId)
+        if (fixture.fail) throw new Error("Error invoking remote method 'workflowx:detect': [object Object]")
+        return { workspaceId, checkedAt: Date.now(), status: fixture.status, sources: fixture.status === 'detected'
+          ? [{ format: 'codex', scope: fixture.sourceScope, path: fixture.sourceScope === 'global' ? 'C:/Users/Developer/.codex/skills/orchestrateX/SKILL.md' : `C:/Projects/${workspaceId}/.codex/skills/orchestrateX/SKILL.md`, status: 'detected', reason: 'skill' }] : [] }
+      },
+      openRepository: async () => { fixture.opened++; return true },
+    }
+  }
   // Specs assert English copy; pin the language so host locale cannot flip it.
   await initI18n()
   await changeLanguage('en')

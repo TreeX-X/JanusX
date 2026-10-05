@@ -34,6 +34,7 @@ import { HOSTED_CHANNELS, type HostedAPI } from '../shared/ipc/hosted'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { EXTERNAL_CLI_CHANNELS, type ExternalCliAPI } from '../shared/ipc/external-cli'
+import { WORKFLOWX_CHANNELS, type WorkflowXAPI } from '../shared/ipc/workflowx'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
 import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } from '../shared/ipc/harness'
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
@@ -150,6 +151,18 @@ const browserAPI: BrowserAPI = {
 }
 
 const knowledgeAPI: KnowledgeAPI = {
+  automationStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationStatus),
+  automationRun: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationRun, input),
+  automationRetry: (id) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationRetry, id),
+  setJevCredential: (key) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredential, key),
+  jevCredentialStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredentialStatus),
+  stopLocalModel: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localModelStop),
+  installLocalResources: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localResourcesInstall),
+  localResourcesStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localResourcesStatus),
+  configureLocalModel: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localModelConfigure, input),
+  wikiHistory: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.wikiHistory, input),
+  wikiRevision: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.wikiRevision, input),
+  pinWikiRevision: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.pinWikiRevision, input),
   noteWikiPages: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.noteWikiPages, input),
   prepareNoteWiki: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.prepareNoteWiki, input),
   proposeNoteWiki: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.proposeNoteWiki, input),
@@ -184,6 +197,7 @@ const knowledgeAPI: KnowledgeAPI = {
   diagnostics: (query) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.diagnostics, query),
   processNow: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.processNow, input),
   processingStats: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.processingStats),
+  probeExternalMcp: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.probeExternalMcp),
   externalMcpStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.externalMcpStatus),
   registerExternalMcp: (client) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.registerExternalMcp, client),
   userMemoryOverview: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.userMemoryOverview),
@@ -195,6 +209,8 @@ const knowledgeAPI: KnowledgeAPI = {
   candidateAction: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.candidateAction, input),
   forgetPersonalMemory: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.forgetPersonalMemory, input),
   proposePersonalMemoryCorrection: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.proposePersonalMemoryCorrection, input),
+  getPersonalSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getPersonalSettings),
+  updatePersonalSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updatePersonalSettings, settings),
   getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
   updateSettings: (settings) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.updateSettings, settings),
 }
@@ -252,6 +268,10 @@ const janusAPI: JanusAPI = {
 }
 
 const harnessAPI: HarnessAPI = {
+  workspaceStatus: (cwd) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.workspaceStatus, cwd),
+  initPreview: (cwd, name) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.initPreview, cwd, name),
+  initApply: (cwd, id, foreign) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.initApply, cwd, id, foreign),
+  initUndo: (cwd, id) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.initUndo, cwd, id),
   noteRead: (cwd, uri) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.noteRead, cwd, uri),
   taskRead: (cwd, uri) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskRead, cwd, uri),
   taskAdopt: (cwd, uri, expectedHash, contract) => ipcRenderer.invoke(HARNESS_COMMAND_CHANNELS.taskAdopt, cwd, uri, expectedHash, contract),
@@ -350,6 +370,11 @@ const llmAPI: LlmAPI = {
   onAgentEvent: (callback) => subscribeIpcEvent(LLM_CHANNELS.agentEvent, callback),
   onRecallTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.recallTrace, callback),
   onToolTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.toolTrace, callback),
+}
+
+const workflowxAPI: WorkflowXAPI = {
+  detect: (workspaceId, refresh) => ipcRenderer.invoke(WORKFLOWX_CHANNELS.detect, workspaceId, refresh),
+  openRepository: () => ipcRenderer.invoke(WORKFLOWX_CHANNELS.openRepository),
 }
 
 const externalCliAPI: ExternalCliAPI = {
@@ -618,6 +643,7 @@ contextBridge.exposeInMainWorld('electron', {
   office: officeAPI,
   llm: llmAPI,
   externalCli: externalCliAPI,
+  workflowx: workflowxAPI,
   janusChat: janusChatAPI,
   roundtable: roundtableAPI,
   agent: agentAPI,

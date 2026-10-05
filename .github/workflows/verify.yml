@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/janus-agentX
-          ref: 043552b1dd0932e29e09b95a60bde7c4e2660ee7
+          ref: 6feb575bab1b067e6e4d8abc54d1f1d11a7bee23
           path: janus-agentX
 
       # S1.2 相容测试与 Note 外链检查按相对路径 ../WorkFlowX 读取标准与
@@ -67,7 +67,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run build --workspace=@janus-agent/agent-core --workspace=@janus-agent/harness-core --if-present
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run build --workspace=@janus-agent/chat-core --workspace=@janus-agent/node-hosts --workspace=@janus-agent/harness-node --workspace=@janus-agent/notes-cli --if-present
+          npm run build --workspace=@janus-agent/chat-core --workspace=@janus-agent/harness-node --workspace=@janus-agent/node-hosts --workspace=@janus-agent/notes-cli --if-present
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run build --workspace=@janus-agent/janus-agent --if-present
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

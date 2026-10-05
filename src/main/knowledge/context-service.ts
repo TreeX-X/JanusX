@@ -49,6 +49,8 @@ function emptyResult(
 
 export class KnowledgeContextService {
   private readonly recallService: Pick<KnowledgeRecallService, 'recall'>
+  private projectAllowed?: () => Promise<boolean>
+  configureProjectPolicy(policy: () => Promise<boolean>): void { this.projectAllowed = policy }
   private readonly searchUser: (query: string) => Promise<UserRecallResult>
 
   constructor(
@@ -76,6 +78,7 @@ export class KnowledgeContextService {
   async search(request: KnowledgeContextRequest): Promise<KnowledgeContextResult> {
     const maxItems = boundedInteger(request.maxItems, DEFAULT_MAX_ITEMS)
     const maxChars = boundedInteger(request.maxChars, DEFAULT_MAX_CHARS)
+    if (this.projectAllowed && !await this.projectAllowed()) return emptyResult(maxItems, maxChars)
     const recalled = await this.recallService.recall({
       query: request.query,
       layer: 'truth',
@@ -108,6 +111,7 @@ export class KnowledgeContextService {
       sections.push(section)
       if (item.kind === 'fact' && document.factHash) deliveredFacts.push({ id: item.id, workspaceId: item.workspaceId, hash: document.factHash })
     }
+    if (this.projectAllowed && !await this.projectAllowed()) return emptyResult(maxItems, maxChars)
     return {
       items,
       projectMemoryDelivery: { scope: 'project', capturedAt: Date.now(), section: sections.join('\n\n'), facts: deliveredFacts },

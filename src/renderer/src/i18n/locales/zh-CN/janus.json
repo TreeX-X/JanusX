@@ -1,4 +1,36 @@
 {
+  "workflowx": {
+    "settingsHelp": "查看当前环境的 WorkflowX 导入情况，与 Island 监控保持同步。",
+    "currentWorkspace": "当前工作区：{{name}}",
+    "globalEnvironment": "全局环境",
+    "globalScope": "检测全局 Claude / Codex 配置，任一导入即可。",
+    "detectedSources": "来源：{{sources}}",
+    "status": {
+      "detected": "已检测到",
+      "missing": "未检测到",
+      "uncertain": "待确认",
+      "checking": "检测中…"
+    },
+    "sources": "查看 WorkflowX 来源",
+    "refresh": "重新检测",
+    "repository": "打开 WorkflowX 仓库",
+    "scope": "检测全局与当前工作区的 Claude / Codex 配置，任一导入即可。",
+    "limits": "仅识别导入配置；实际执行和 Note 维护由开发工具负责。",
+    "missingHint": "可从 WorkflowX 仓库导入 Claude 或 Codex 配置，让外部开发工具按工作流维护 Note。",
+    "unavailable": "暂时无法完成检测，可稍后重试。",
+    "global": "全局",
+    "workspace": "工作区",
+    "reason": {
+      "entry": "指令入口",
+      "skill": "工作流技能",
+      "plugin": "插件配置",
+      "reference": "存在相关配置，待确认",
+      "unreadable": "无法读取配置",
+      "cache": "插件文件，启用情况待确认",
+      "disabled": "插件已停用"
+    },
+    "linkFailed": "无法打开浏览器，请访问 github.com/TreeX-X/WorkFlowX。"
+  },
   "chat": {
     "context": {
       "usage": "上下文 ≈ {{used}} / {{limit}} tokens", "configured": "手动配置", "catalog": "模型目录", "registry": "模型资料", "estimated": "窗口为估算值",

@@ -88,8 +88,9 @@ function truthSnapshot(): KnowledgeTruthSnapshot {
 async function connect(
   search = vi.fn(async () => result),
   list = vi.fn(async () => truthSnapshot()),
+  allowed = async () => true,
 ) {
-  const server = createKnowledgeMcpServer({ search }, { list })
+  const server = createKnowledgeMcpServer({ search }, { list }, allowed)
   const client = new Client({ name: 'knowledge-mcp-test', version: '1.0.0' })
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   await server.connect(serverTransport)
@@ -103,6 +104,34 @@ afterEach(async () => {
 })
 
 describe('JanusX Knowledge MCP tools', () => {
+  it('blocks all five tools when disabled and rejects results if disabled during a read', async () => {
+    const search = vi.fn(async () => result)
+    const list = vi.fn(async () => truthSnapshot())
+    const { client } = await connect(search, list, async () => false)
+    for (const [name, args] of [
+      ['knowledge_search', { query: 'x', workspaceId: 'workspace-a' }],
+      ['knowledge_context', { query: 'x', workspaceId: 'workspace-a' }],
+      ['wiki_list', { workspaceId: 'workspace-a' }],
+      ['wiki_get', { workspaceId: 'workspace-a', slug: 'persistence-design' }],
+      ['fact_get', { workspaceId: 'workspace-a', id: 'fact-1' }],
+    ] as const) expect((await client.callTool({ name, arguments: args })).isError).toBe(true)
+    expect(search).not.toHaveBeenCalled()
+    expect(list).not.toHaveBeenCalled()
+    let enabled = true
+    const late = await connect(vi.fn(async () => { enabled = false; return result }), list, async () => enabled)
+    expect((await late.client.callTool({ name: 'knowledge_context', arguments: { query: 'x', workspaceId: 'workspace-a' } })).isError).toBe(true)
+  })
+
+  it('requires explicit scope and excludes personal facts from direct reads and linked pages', async () => {
+    const snapshot = truthSnapshot()
+    snapshot.facts[0].scope = 'user'
+    const { client } = await connect(undefined, vi.fn(async () => snapshot))
+    expect((await client.callTool({ name: 'wiki_list', arguments: {} })).isError).toBe(true)
+    expect((await client.callTool({ name: 'fact_get', arguments: { id: snapshot.facts[0].id, allowGlobal: true } })).isError).toBe(true)
+    const pages = await client.callTool({ name: 'wiki_list', arguments: { allowGlobal: true } })
+    expect((pages.structuredContent as any).pages.map((page: any) => page.slug)).toEqual(['other-page'])
+  })
+
   it('registers five read-only tools: search, context, wiki list/get, fact get', async () => {
     const { client } = await connect()
     const listed = await client.listTools()
@@ -176,12 +205,13 @@ describe('JanusX Knowledge MCP tools', () => {
   it('lists the wiki slug index with workspace scoping', async () => {
     const { client, list } = await connect()
 
-    const all = await client.callTool({ name: 'wiki_list', arguments: {} })
+    const all = await client.callTool({ name: 'wiki_list', arguments: { allowGlobal: true } })
     expect(list).toHaveBeenCalledTimes(1)
     expect(all.isError).toBeFalsy()
     expect(all.structuredContent).toEqual({
       pages: [
         {
+          workspaceId: 'workspace-b',
           slug: 'other-page',
           title: 'Other',
           tags: ['design'],
@@ -190,6 +220,7 @@ describe('JanusX Knowledge MCP tools', () => {
           factCount: 0,
         },
         {
+          workspaceId: 'workspace-a',
           slug: 'persistence-design',
           title: 'Persistence Design',
           tags: ['design'],
@@ -205,6 +236,7 @@ describe('JanusX Knowledge MCP tools', () => {
     expect(scoped.structuredContent).toEqual({
       pages: [
         {
+          workspaceId: 'workspace-a',
           slug: 'persistence-design',
           title: 'Persistence Design',
           tags: ['design'],
@@ -220,7 +252,7 @@ describe('JanusX Knowledge MCP tools', () => {
   it('reads a wiki page with linked settled facts and honors maxChars', async () => {
     const { client } = await connect()
 
-    const full = await client.callTool({ name: 'wiki_get', arguments: { slug: 'persistence-design' } })
+    const full = await client.callTool({ name: 'wiki_get', arguments: { allowGlobal: true, slug: 'persistence-design' } })
     expect(full.isError).toBeFalsy()
     expect(full.structuredContent).toEqual(expect.objectContaining({
       slug: 'persistence-design',
@@ -230,13 +262,13 @@ describe('JanusX Knowledge MCP tools', () => {
       linkedFacts: [{ id: 'fact-1', content: 'Settled content of fact-1.', confidence: 0.9 }],
     }))
 
-    const cut = await client.callTool({ name: 'wiki_get', arguments: { slug: 'persistence-design', maxChars: 10 } })
+    const cut = await client.callTool({ name: 'wiki_get', arguments: { allowGlobal: true, slug: 'persistence-design', maxChars: 10 } })
     expect(cut.structuredContent).toEqual(expect.objectContaining({
       markdown: '# Persiste',
       truncated: true,
     }))
 
-    const missing = await client.callTool({ name: 'wiki_get', arguments: { slug: 'ghost-page' } })
+    const missing = await client.callTool({ name: 'wiki_get', arguments: { allowGlobal: true, slug: 'ghost-page' } })
     expect(missing.isError).toBe(true)
     expect(missing.content).toEqual([{ type: 'text', text: 'Wiki page not found: ghost-page' }])
   })
@@ -244,7 +276,7 @@ describe('JanusX Knowledge MCP tools', () => {
   it('reads a settled fact by id with workspace scoping', async () => {
     const { client } = await connect()
 
-    const found = await client.callTool({ name: 'fact_get', arguments: { id: 'fact-1' } })
+    const found = await client.callTool({ name: 'fact_get', arguments: { allowGlobal: true, id: 'fact-1' } })
     expect(found.isError).toBeFalsy()
     expect(found.structuredContent).toEqual(expect.objectContaining({
       id: 'fact-1',
@@ -252,16 +284,16 @@ describe('JanusX Knowledge MCP tools', () => {
       referencingPages: [{ slug: 'persistence-design', title: 'Persistence Design' }],
     }))
 
-    const unreferenced = await client.callTool({ name: 'fact_get', arguments: { id: 'fact-2' } })
+    const unreferenced = await client.callTool({ name: 'fact_get', arguments: { allowGlobal: true, id: 'fact-2' } })
     expect(unreferenced.structuredContent).toEqual(expect.objectContaining({
       id: 'fact-2',
       referencingPages: [],
     }))
 
-    const wrongScope = await client.callTool({ name: 'fact_get', arguments: { id: 'fact-1', workspaceId: 'workspace-b' } })
+    const wrongScope = await client.callTool({ name: 'fact_get', arguments: { allowGlobal: true, id: 'fact-1', workspaceId: 'workspace-b' } })
     expect(wrongScope.isError).toBe(true)
 
-    const missing = await client.callTool({ name: 'fact_get', arguments: { id: 'ghost-fact' } })
+    const missing = await client.callTool({ name: 'fact_get', arguments: { allowGlobal: true, id: 'ghost-fact' } })
     expect(missing.isError).toBe(true)
     expect(missing.content).toEqual([{ type: 'text', text: 'Settled fact not found: ghost-fact' }])
   })

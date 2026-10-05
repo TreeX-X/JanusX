@@ -13,9 +13,10 @@ coverage/
 .nyc_output/
 playwright-report/
 test-results/
-artifacts/screenshots/
+/artifacts/
 
 # Tool caches
+__pycache__/
 .vite/
 .cache/
 .parcel-cache/
@@ -75,5 +76,3 @@ AGENTS.md
 # Design & Documentation (prototypes, tech proposals, local-only)
 design-mockups/
 /design/
-/docs/
-docs/*

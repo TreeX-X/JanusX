@@ -205,7 +205,9 @@ async function bootstrapApp(): Promise<void> {
     cancelBlueprintMaintenance: () => blueprintMaintenanceService.cancelAll(),
     killTerminals: () => terminalManager.killAll(),
     killAgents: () => agentStreamManager.killAll(),
-    stopProjects: () => stopAllProjects(),
+    stopProjects: async () => {
+      await Promise.all([stopAllProjects(), import('./ipc/agent-runtime-handlers').then(module => module.closeAgentMcp())])
+    },
     stopLanguageServices: () => clangdManager.disposeAll(),
     stopOfficeWatches: () => officeWatchPool.stopAll(),
     disposeOfficeArtifactIndexes: () => officeArtifactIndex.disposeAll(),

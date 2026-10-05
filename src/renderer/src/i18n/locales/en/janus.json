@@ -1,4 +1,36 @@
 {
+  "workflowx": {
+    "settingsHelp": "WorkflowX imports available in this environment, shared with the Island monitor.",
+    "currentWorkspace": "Current workspace: {{name}}",
+    "globalEnvironment": "Global environment",
+    "globalScope": "Checks global Claude / Codex configuration. Either import is sufficient.",
+    "detectedSources": "Sources: {{sources}}",
+    "status": {
+      "detected": "Detected",
+      "missing": "Not detected",
+      "uncertain": "Needs confirmation",
+      "checking": "Checking…"
+    },
+    "sources": "View WorkflowX sources",
+    "refresh": "Check again",
+    "repository": "Open WorkflowX repository",
+    "scope": "Checks global and current workspace Claude / Codex configuration. Either import is sufficient.",
+    "limits": "Identifies imported configuration only. Execution and Note maintenance depend on the development tool.",
+    "missingHint": "Import Claude or Codex configuration from WorkflowX to guide external tools in maintaining Notes.",
+    "unavailable": "Detection is temporarily unavailable. Try again later.",
+    "global": "Global",
+    "workspace": "Workspace",
+    "reason": {
+      "entry": "Instruction entry",
+      "skill": "Workflow skill",
+      "plugin": "Plugin configuration",
+      "reference": "Related configuration, unconfirmed",
+      "unreadable": "Configuration unreadable",
+      "cache": "Plugin files, activation unconfirmed",
+      "disabled": "Plugin disabled"
+    },
+    "linkFailed": "Could not open the browser. Visit github.com/TreeX-X/WorkFlowX."
+  },
   "chat": {
     "context": {
       "usage": "Context ≈ {{used}} / {{limit}} tokens", "configured": "Configured", "catalog": "Model catalog", "registry": "Model registry", "estimated": "Estimated window",

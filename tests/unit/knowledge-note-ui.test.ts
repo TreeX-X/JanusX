@@ -13,6 +13,7 @@ beforeAll(async () => {
     stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: [
       "import React from 'react'",
       "import {createRoot} from 'react-dom/client'",
+      "import i18n from 'i18next';import {initReactI18next} from 'react-i18next';import en from './src/renderer/src/i18n/locales/en/knowledge.json';i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge:en}},initImmediate:false})",
       "import {NoteWikiLinks, WikiPageDetail} from './src/renderer/src/components/knowledge/NoteWikiLinks'",
       'const uri = ' + JSON.stringify(uri),
       "const wikiPage = {workspaceId:'workspace-A',workspacePath:'/checkout-A',slug:'design',title:'Design',markdown:'# Whole published page\\n' + 'full text '.repeat(50) + 'END-OF-PAGE',sourceFactIds:['fact-1'],sourceNoteRefs:[{uri,sourceHash:'old-hash'}],version:7,status:'published',tags:[],updatedAt:'2026-09-25'}",
@@ -32,6 +33,7 @@ beforeAll(async () => {
     ].join('\n') },
     bundle: true, write: false, outfile: 'test-bundle.js', jsx: 'automatic', format: 'iife',
     define: { 'process.env.NODE_ENV': '"test"' },
+    plugins: [{ name: 'fixture-i18n', setup(builder) { builder.onLoad({ filter: /[/\\]i18n[/\\]index\.ts$/ }, () => ({ contents: "import i18n from 'i18next';export default i18n;export const changeLanguage=()=>{}", loader: 'ts' })) } }],
   })
   script = result.outputFiles.find(file => file.path.endsWith('.js'))!.text
   css = result.outputFiles.find(file => file.path.endsWith('.css'))?.text ?? ''

@@ -64,6 +64,10 @@ Use the installed harness-core dependency because the sibling janus-agentX packa
 
 ## Results
 
+2026-10-05: Each blueprint surface exposes one system-structure/all-Notes selector. The workbench places it in the shared toolbar; the embedded canvas retains its local selector. The canvas information disclosure is labeled “Blueprint information” and stays folded by default, with structure counts, checkout coverage and diagnostics inside. Repeating the view name on that disclosure makes metadata look like another switching control.
+
+`npx playwright test tests/e2e/blueprint-architecture.spec.ts --workers=1` passes all three browser cases, including selector count and placement on both surfaces, folded information, view switching and source navigation. `npx vitest run tests/unit/blueprint-architecture.test.ts --maxWorkers=1 --minWorkers=1` passes eight cases. Typecheck, i18n validation and ESLint for `BlueprintArchitecturePanel.tsx` pass. Browser checks use mocked IPC; the workbench screenshot is manually inspected.
+
 2026-10-03: Implemented and independently evaluated: PASS. Current structure uses the existing shared Note snapshot and optional initiative tags. The embedded and workbench canvases preserve all-Notes navigation, exact source checkout identity and Task operations; structure layout remains ephemeral.
 
 Independent verification passes 75 unit cases covering projection, layout, navigation, checkout resolution and execution-adapter baseline/receipt/stale-contract behavior, plus 12 browser cases covering architecture, Note focus and composition navigation. Typecheck and i18n checks pass. The composition browser test explicitly closes its expanded overlay before normal canvas navigation; exact checkout assertions remain intact.

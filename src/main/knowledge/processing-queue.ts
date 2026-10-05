@@ -209,11 +209,20 @@ interface CursorFileShape {
 
 export class KnowledgeProcessingQueue {
   private readonly queue = new SerialQueue()
+  private processingAllowed?: (workspaceId: string) => Promise<boolean>
+  configureDomainPolicy(policy: (workspaceId: string) => Promise<boolean>): void { this.processingAllowed = policy }
   private handler: DeterministicBatchHandler | null = null
   private llmHandler: LlmBatchHandler | null = null
   private refinementHandler: ((workspaceId?: string) => Promise<RefinementRunResult>) | null = null
   private refinementTimer: ReturnType<typeof setInterval> | null = null
   private refinementTickPending = false
+  private automationHandler: (() => Promise<void>) | null = null
+
+  /** The queue owns scheduling; long provider requests run outside its mutation lock. */
+  configureAutomationHandler(handler: () => Promise<void>): void { this.automationHandler = handler }
+  private scheduleAutomation(): void {
+    void this.automationHandler?.().catch(() => console.error('[knowledge] automation scheduling failed; inspect task status'))
+  }
   private candidateActionHandler: ((input: unknown) => Promise<void>) | null = null
   private refinementStats: (() => Promise<RefinementTaskStats>) | undefined
   private maintenanceHandler: MaintenanceHandler | null = null
@@ -277,6 +286,7 @@ export class KnowledgeProcessingQueue {
   startRefinementLoop(intervalMs = 60000): void {
     if (this.refinementTimer) clearInterval(this.refinementTimer)
     this.refinementTimer = setInterval(() => {
+      this.scheduleAutomation()
       if (this.refinementTickPending) return
       this.refinementTickPending = true
       void this.processRefinementsNow().catch((error: unknown) => {
@@ -494,6 +504,7 @@ export class KnowledgeProcessingQueue {
     let processed = 0
     let failed = 0
     for (const batch of batches) {
+      if (this.processingAllowed && !await this.processingAllowed(batch.workspaceId)) continue
       try {
         await this.handler(batch)
       } catch (error) {
@@ -534,6 +545,7 @@ export class KnowledgeProcessingQueue {
       processed += batch.observations.length
     }
     if (advancedWorkspaces.length > 0) await this.writeCursors(cursors)
+    this.scheduleAutomation()
 
     // Independent task recovery must run even when all observation cursors are current.
     if (this.refinementHandler) await this.refinementHandler(workspaceId)

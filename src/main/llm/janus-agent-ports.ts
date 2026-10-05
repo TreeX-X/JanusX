@@ -56,6 +56,8 @@ export interface JanusChatTurnPortsDeps {
   resolveModelMetadata?: (modelId: string) => Promise<AiModelRegistryEntry | undefined>
   getMaxTurns: () => Promise<number>
   getAgentSession: (agentSessionId: string) => JanusAgentSessionShape | null | undefined
+  forkAgentSession?: NonNullable<ChatTurnPorts['sessions']['forkSession']>
+  closeAgentSession?: NonNullable<ChatTurnPorts['sessions']['closeSession']>
   executeFunctionCall: (input: ExecuteToolInput, callerId: string) => Promise<ToolResult>
   listRegistryTools: () => ToolDefinition[]
   listRegistryManifests: () => ToolManifest[] | undefined
@@ -115,6 +117,8 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
       getMaxTurns: () => deps.getMaxTurns(),
     },
     sessions: {
+      ...(deps.forkAgentSession ? { forkSession: deps.forkAgentSession } : {}),
+      ...(deps.closeAgentSession ? { closeSession: deps.closeAgentSession } : {}),
       getSession: (agentSessionId) => {
         const session = deps.getAgentSession(agentSessionId)
         if (!session) return null

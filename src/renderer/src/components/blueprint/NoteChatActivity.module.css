@@ -1,4 +1,12 @@
-.activity { display: grid; gap: 12px; min-width: 0; }
+.activity { display: grid; gap: 12px; min-width: 0; font-size: 12px; line-height: 1.6; }
+.notice { padding: 10px 12px; border: 1px solid var(--shell-border); border-radius: 6px; background: var(--shell-pane); color: var(--shell-muted); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+.notice p { margin: 0; font-size: 12px; font-weight: 400; }
+.notice button { margin-top: 6px; padding: 4px 8px; border: 1px solid var(--shell-border); border-radius: 4px; background: var(--shell-chrome); color: var(--shell-text); font: inherit; cursor: pointer; }
+.notice button:hover { background: var(--shell-hover); }
+.notice details { margin-top: 6px; }
+.notice summary { cursor: pointer; }
+.notice button:focus-visible, .notice summary:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+.notice pre { margin-top: 8px; max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.6; }
 .card { padding: 12px; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-card); color: var(--shell-text); font-size: 12px; line-height: 1.6; }
 .card p { margin: 6px 0; }
 .card ul { padding-left: 20px; }

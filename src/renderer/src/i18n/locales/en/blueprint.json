@@ -1,4 +1,51 @@
 {
+  "workspace": {
+    "select": "Switch workspace",
+    "noWorkspace": "Add a workspace to begin",
+    "current": "Current",
+    "state": {
+      "ok": "Blueprint ready",
+      "empty": "Empty blueprint",
+      "not-found": "Not initialized",
+      "foreign": "Setup needed",
+      "invalid": "Needs repair",
+      "error": "Read failed",
+      "loading": "Loading"
+    },
+    "title": {
+      "ok": "Your blueprint is ready",
+      "empty": "Draft your first blueprint",
+      "not-found": "Create a project blueprint",
+      "foreign": "Create a project blueprint",
+      "invalid": "This blueprint needs repair",
+      "error": "Unable to read the blueprint",
+      "loading": "Opening your blueprint"
+    },
+    "diagnostics": "View diagnostic details",
+    "actionFailed": "The action could not be completed. Review the details and try again.",
+    "description": {
+      "ok": "The blueprint is ready.",
+      "empty": "Let Janus read your project and propose its structure and tasks for your review.",
+      "not-found": "Start with a project configuration and draft, then map out structure, requirements and tasks. Preview the files before creating them.",
+      "foreign": "This project already has configuration files. Preview the additions before creating a starter blueprint. Existing files will be preserved.",
+      "invalid": "Some project files could not be recognized. Review the diagnostic details, repair the files and reload.",
+      "error": "The workspace blueprint could not be read. Check its path and file permissions, then retry.",
+      "loading": "Reading the workspace blueprint…"
+    },
+    "initialize": "Initialize blueprint",
+    "draft": "Ask Janus to draft Notes",
+    "retry": "Reload",
+    "openFile": "Open file",
+    "preview": "Initialization preview",
+    "previewHint": "The files below will be added, preserving existing content. Expand a file to review it, then confirm to create the project configuration and starter draft.",
+    "confirmForeign": "I reviewed the preview and confirm adding these files while preserving existing .agents files.",
+    "confirm": "Confirm initialization",
+    "cancel": "Cancel",
+    "undo": "Undo initialization",
+    "initialized": "Starter blueprint created",
+    "working": "Working…",
+    "draftPrompt": "Analyze the current workspace files and propose initial blueprint Notes. Only show proposals; do not create, modify or write any files. For each Note show its title, kind, source evidence and complete body. Use lifecycle draft and unchecked acceptance criteria. Do not invent unconfirmed requirements. Read existing Notes first to avoid duplicates. Wait for my individual approval before saving selected drafts through the Note tools."
+  },
   "status": {
     "notStarted": "Not Started",
     "planning": "Planning",
@@ -270,6 +317,8 @@
     "rejectFailed": "Reject failed: candidate not found"
   },
   "noteChat": {
+    "historyLoadFailed": "Change history is temporarily unavailable. You can keep chatting.",
+    "reloadHistory": "Reload history",
     "applied": "Updated {{count}} Notes",
     "reverted": "Change reverted",
     "viewChanges": "View changes",
@@ -503,6 +552,7 @@
     "unavailable": "Not available in this canvas: {{names}}"
   },
   "architecture": {
+    "info": "Blueprint information",
     "project": "Project",
     "module": "Module",
     "view": "Blueprint view",

@@ -40,7 +40,8 @@ export function subscribeNoteRefresh(blueprintId: string, root: string): () => v
           const state = useBlueprintStore.getState()
           if (state.currentBlueprint?.id !== blueprintId) break
           const alreadyLoading = state.loadingBlueprintId === blueprintId
-          await state.loadBlueprint(blueprintId)
+          if (state.selectedWorkspaceId) await state.loadWorkspace(state.selectedWorkspaceId)
+          else await state.loadBlueprint(blueprintId)
           if (alreadyLoading) pending = true
         }
       } catch (error) {

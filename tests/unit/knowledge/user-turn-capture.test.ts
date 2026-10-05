@@ -3,6 +3,11 @@ import { mkdtemp, rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
+vi.mock('../../../src/main/config/service', () => ({ configService: {
+  getExperimentalFeatures: async () => ({ persona: true, knowledge: true }),
+  getKnowledgeSettings: async () => ({ enabled: true }),
+  getPersonalMemorySettings: async () => ({ captureConversations: true, useInChat: true, inferEngineeringHabits: false, episodeTtlDays: 60 }),
+} }))
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 
 import {

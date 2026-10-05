@@ -8,6 +8,7 @@
  * answers while harvest plus the rolling working set bound growth. Every
  * path fails open: capture must never break chat completion.
  */
+import { memoryDomainPolicy } from './memory-domain-policy'
 import { USER_MEMORY_WORKSPACE_ID, USER_MEMORY_WORKSPACE_PATH } from './constants'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeProcessingQueue } from './processing-queue'
@@ -32,10 +33,12 @@ export async function capturePersonChatTurn(input: PersonTurnCaptureInput): Prom
   const assistantText = input.assistantText?.trim() ?? ''
   if (!userText && !assistantText) return
   try {
+    const policy = await memoryDomainPolicy()
+    if (!policy.capturePersonal) return
     if (userText) {
       await userEpisodeService.capture({
         content: userText,
-        ttlDays: PERSON_TURN_EPISODE_TTL_DAYS,
+        ttlDays: policy.episodeTtlDays,
         tags: ['janus-chat', 'user'],
         sourceEventId: input.correlationId,
         sessionId: input.sessionId,
@@ -71,9 +74,11 @@ export async function capturePersonEpisodeFromTurn(input: Pick<PersonTurnCapture
   const userText = input.userText?.trim() ?? ''
   if (!userText) return
   try {
+    const policy = await memoryDomainPolicy()
+    if (!policy.capturePersonal) return
     await userEpisodeService.capture({
       content: userText,
-      ttlDays: PERSON_TURN_EPISODE_TTL_DAYS,
+      ttlDays: policy.episodeTtlDays,
       tags: ['janus-chat'],
       sessionId: input.sessionId,
       sourceEventId: input.correlationId,

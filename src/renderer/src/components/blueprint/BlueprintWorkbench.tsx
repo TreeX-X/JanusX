@@ -8,7 +8,7 @@ import { useOptionalJanusChatController } from '@/components/janus/JanusChatProv
 import { BlueprintView } from './BlueprintView'
 import { BlueprintToolbar, BlueprintToolbarProvider } from './BlueprintToolbar'
 import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
-import { Select } from '../ui/Select'
+import { BlueprintWorkspaceSelect } from './BlueprintWorkspaceSelect'
 import { BlueprintDetailPortalContext } from './blueprintDetailPortal'
 import { BlueprintMaintenancePanel, BLUEPRINT_PANEL_VIEW_REF } from './BlueprintMaintenancePanel'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
@@ -39,10 +39,10 @@ interface WorkbenchCardPlan {
 export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps) {
   const { t } = useI18n('blueprint')
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
-  const blueprints = useBlueprintStore((s) => s.blueprints)
-  const blueprintWorkspace = useBlueprintStore((s) => s.blueprintWorkspace)
-  const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
-  const activeWorkspacePath = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === s.activeWorkspaceId)?.path ?? null)
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const draftRequest = useBlueprintStore((s) => s.draftRequest)
+  const flushRef = useRef<(() => Promise<boolean>) | null>(null)
+  const registerFlush = useCallback((flush: () => Promise<boolean>) => { flushRef.current = flush }, [])
   const chat = useOptionalJanusChatController({ ...BLUEPRINT_PANEL_VIEW_REF })
   const projectChat = chat?.engineeringContext?.viewRef?.viewId === BLUEPRINT_PANEL_VIEW_REF.viewId ? chat : null
   const maintenanceTasks = useBlueprintMaintenanceStore((s) => s.tasks)
@@ -103,6 +103,10 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   }, [isOpen, openRequest])
 
   useEffect(() => {
+    if (draftRequest?.workspaceId === activeWorkspaceId) setMaintenanceOpen(true)
+  }, [draftRequest, activeWorkspaceId])
+
+  useEffect(() => {
     if (isOpen && !maintenanceInitialized) void initializeMaintenance()
   }, [initializeMaintenance, isOpen, maintenanceInitialized])
 
@@ -137,7 +141,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const janusAnim = useAnimatedOpen(planJanusOpen)
 
   if (phase === 'hidden') return null
-  const cardPlan = isClosing ? closingPlan : { detailOpen, janusOpen: maintenanceOpen }
+  const cardPlan = isClosing ? closingPlan : { detailOpen: detailOpen && !!currentBlueprint?.nodeIds.length, janusOpen: maintenanceOpen }
   const cardCount = 2 + Number(cardPlan.janusOpen) + Number(cardPlan.detailOpen)
   const exitDuration = WORKBENCH_CARD_EXIT_DURATION_MS
     + Math.max(0, cardCount - 1) * WORKBENCH_CARD_EXIT_STAGGER_MS
@@ -183,21 +187,8 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
           </button>
           {/* 高保真 bp-switch：默认当前工作区，下拉切其他（选中=直线左光条，见 Select） */}
           <div className="blueprint-workbench-switch" title={currentBlueprint?.name ?? t('blueprint:workbench.breadcrumb')}>
-            <Select
-              value={currentBlueprint?.id ?? ''}
-              onChange={(id) => { if (id && id !== currentBlueprint?.id) void loadBlueprint(id) }}
-              disabled={blueprints.length === 0}
-              placeholder={t('blueprint:workbench.breadcrumb')}
-              options={
-                blueprints.length === 0
-                  ? [{ value: '', label: t('blueprint:view.noBlueprints') }]
-                  : blueprints.map((b) => ({
-                    value: b.id,
-                    label: blueprintWorkspace[b.id] && blueprintWorkspace[b.id] === activeWorkspacePath
-                      ? `${b.name} · 当前`
-                      : b.name,
-                  }))
-              }
+            <BlueprintWorkspaceSelect
+              beforeSwitch={() => flushRef.current?.() ?? Promise.resolve(true)}
               className="blueprint-select blueprint-workbench-switch__select"
               getPortalContainer={selectPortalNode ? () => selectPortalNode : undefined}
             />
@@ -207,16 +198,16 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
               type="button"
               className="blueprint-janus-capsule"
               data-state={maintenanceState.tone}
-              disabled={!currentBlueprint}
+              disabled={!activeWorkspaceId}
               aria-label={t('blueprint:workbench.copilotOpenAria', { state: maintenanceState.label })}
               aria-expanded={maintenanceOpen}
               onClick={() => {
-                if (!currentBlueprint) return
+                if (!activeWorkspaceId) return
                 if (maintenanceOpen) {
                   setMaintenanceOpen(false)
                   return
                 }
-                requestOpen({ blueprintId: currentBlueprint.id })
+                if (currentBlueprint) requestOpen({ blueprintId: currentBlueprint.id })
                 setMaintenanceOpen(true)
               }}
             >
@@ -260,7 +251,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
             style={cardStyle(1)}
           />
           <div className="blueprint-workbench-card blueprint-workbench-card--canvas" style={cardStyle(canvasCardIndex)}>
-            <BlueprintView density="workbench" onDetailOpenChange={setDetailOpen} />
+            <BlueprintView density="workbench" onDetailOpenChange={setDetailOpen} onRegisterFlush={registerFlush} />
           </div>
           {janusAnim.rendered ? (
             <div

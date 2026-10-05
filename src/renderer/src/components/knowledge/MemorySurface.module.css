@@ -1,0 +1,26 @@
+/* Note: shared card geometry across memory domains — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md */
+.card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--shell-border);
+  border-radius: 8px;
+  background: var(--shell-card);
+  color: var(--shell-text);
+  overflow-wrap: anywhere;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  align-content: start;
+  align-items: start;
+  min-height: 0;
+}
+
+.enter { animation: memory-content-in 180ms ease-out both; }
+@keyframes memory-content-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .enter { animation: none; } }

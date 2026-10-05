@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   removeListener: vi.fn(),
   expose: vi.fn(),
   send: vi.fn(),
+  changes: vi.fn(),
 }))
 
 let harnessApi: HarnessAPI
@@ -52,6 +53,8 @@ vi.mock('../../src/main/harness/service', () => ({
     onChange: vi.fn(),
   },
 }))
+
+vi.mock('../../src/main/harness/note-chat', () => ({ listNoteChatChanges: mocks.changes }))
 
 vi.mock('../../src/main/harness/execution-adapter', () => ({
   cancelTaskRun: vi.fn(),
@@ -141,6 +144,29 @@ describe('harness IPC contract', () => {
       expect(handlers.has(channel), channel).toBe(true)
     }
     expect(Object.keys(HARNESS_EVENT_CHANNELS)).toContain('changed')
+  })
+
+  it('preserves structured root failures as Error messages across the history IPC boundary', async () => {
+    await loadAll()
+    const { harnessNoteService } = await import('../../src/main/harness/service')
+    vi.mocked(harnessNoteService.resolveRoot).mockResolvedValue({ ok: false, diagnostics: [{ code: 'NOT_FOUND', message: 'No project notes here' }] })
+    const read = handlers.get(HARNESS_COMMAND_CHANNELS.noteChatChanges)!
+    await expect(read({}, 'C:/empty', 'conversation')).rejects.toBeInstanceOf(Error)
+    await expect(read({}, 'C:/empty', 'conversation')).rejects.toThrow('NOT_FOUND: No project notes here')
+    await expect(read({}, 'C:/empty', '')).rejects.toThrow('SCHEMA_INVALID: Invalid conversation id')
+  })
+
+  it('preserves history records and real I/O failures without converting them to empty history', async () => {
+    await loadAll()
+    const { harnessNoteService } = await import('../../src/main/harness/service')
+    vi.mocked(harnessNoteService.resolveRoot).mockResolvedValue({ ok: true, root: 'C:/project', diagnostics: [] })
+    const read = handlers.get(HARNESS_COMMAND_CHANNELS.noteChatChanges)!
+    const records = [{ id: 'change', conversationId: 'conversation' }]
+    mocks.changes.mockResolvedValue(records)
+    await expect(read({}, 'C:/project', 'conversation')).resolves.toEqual(records)
+    expect(mocks.changes).toHaveBeenLastCalledWith('C:/project', 'conversation')
+    mocks.changes.mockRejectedValue(new Error('EACCES: history is unreadable'))
+    await expect(read({}, 'C:/project', 'conversation')).rejects.toThrow('EACCES: history is unreadable')
   })
 
   it('exposes the full renderer API through preload', async () => {

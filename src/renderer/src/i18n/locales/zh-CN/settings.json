@@ -1,6 +1,12 @@
 {
   "title": "设置中心",
   "brand": "设置中心",
+  "groups": {
+    "application": "应用设置",
+    "memory": "知识与记忆",
+    "models": "模型与用量",
+    "collaboration": "代理与协作"
+  },
   "tab": {
     "general": {
       "title": "通用",
@@ -80,8 +86,8 @@
       },
       "knowledge": {
         "label": "知识库",
-        "hint": "显示知识库工作台入口。关闭后标题栏切换器与工作台同时隐藏。",
-        "note": "需要 Laya 引擎支持，请确保已安装并配置"
+        "hint": "启用工程知识的采集、处理、召回与管理。关闭保留已有内容；个人画像独立控制。",
+        "note": "规则与人工审核无需模型；本地模型须在详细设置中单独启用"
       },
       "roundtable": {
         "label": "圆桌",
@@ -90,8 +96,8 @@
       },
       "persona": {
         "label": "个人画像",
-        "hint": "显示右侧 Dock 的个人画像工具与灵动岛记忆提醒。关闭后入口隐藏。",
-        "note": "功能开发中，可能存在不稳定情况"
+        "hint": "启用个人记忆与画像。关闭后停止个人采集、处理和对话召回，保留已有资料。",
+        "note": "可在详细设置中调整采集、工程习惯提取、对话使用与保留期"
       },
       "remoteControl": {
         "label": "远程协作控制",
@@ -104,10 +110,14 @@
         "note": "功能开发中，可能存在不稳定情况"
       }
     },
-    "blueprintConfirm": {
-      "title": "开启蓝图功能",
-      "description": "蓝图功能必须使用 WorkflowX Agent 工作才能输出正确的 note 格式。\n\n请确认您已了解此要求。",
-      "confirm": "我已了解，确认",
+    "badge": "实验",
+    "confirm": {
+      "enableTitle": "开启“{{name}}”？",
+      "disableTitle": "关闭“{{name}}”？",
+      "enableDescription": "此功能处于实验阶段，可能出现不稳定或部分功能不可用。确认后立即开启。",
+      "disableDescription": "确认后立即关闭此功能，对应入口将隐藏。具体影响如下：",
+      "enable": "确认开启",
+      "disable": "确认关闭",
       "cancel": "取消"
     },
     "error": {
@@ -433,11 +443,27 @@
     }
   },
   "usageStats": {
+    "timeRange": "时间范围",
+    "terminalType": "终端类型",
+    "snapshotHint": "按终端最近更新时间分组的累计用量快照",
+    "breakdown": "终端与模型用量",
+    "unknownModel": "未报告模型",
     "title": "用量统计",
     "subtitle": "汇总各终端 token 用量；当前会话现场数据",
     "rangeToday": "今日",
     "rangeWeek": "本周",
     "rangeMonth": "本月",
+    "rangeCustom": "自定义",
+    "customStart": "开始",
+    "customEnd": "结束",
+    "customInvalid": "开始日期不能晚于结束日期。",
+    "customFuture": "开始日期在未来，该区间暂无数据。",
+    "customSpan": "区间超过 366 天，请缩小范围。",
+    "customDaily": "按日",
+    "customHourly": "按小时",
+    "customWeekly": "按周",
+    "ioTitle": "输入与输出",
+    "ioShare": "输出占比",
       "empty": "该范围内暂无带用量遥测的终端。",
       "typeAll": "全部",
       "overall": "整体",
@@ -479,5 +505,18 @@
         "desc": "C/C++ 代码导航（转到定义）。托管二进制，按需安装。"
       }
     }
+  },
+  "mcpAccess": {
+    "description": "导出只读工程知识，个人记忆保持私有。配置注册与服务连通分别检查，实际客户端可能仍需批准连接。",
+    "refresh": "刷新状态",
+    "copy": "复制启动配置",
+    "probe": "检测服务连通",
+    "unverified": "尚未验证该客户端的 MCP 接入方式，不写入配置。",
+    "current": "配置一致 · 客户端连通未验证",
+    "stale": "配置需要更新",
+    "absent": "未注册",
+    "repair": "更新配置",
+    "passed": "服务握手、五个工具发现与查询通过；外部客户端连通仍需验证。",
+    "failed": "服务检测失败：{{stage}}"
   }
 }

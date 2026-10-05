@@ -57,12 +57,6 @@
   --so-body-pad-y: 22px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tabBadge {
-    animation: none;
-  }
-}
-
 .sidebar {
   display: flex;
   flex-direction: column;
@@ -71,6 +65,70 @@
   background: var(--shell-chrome);
   border-right: 1px solid var(--shell-border);
   min-height: 0;
+}
+
+.navigation {
+  min-height: 0;
+  overflow-y: auto;
+  /* Keep Chromium's explicit 4px geometry instead of its native thin preset. */
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+
+.navigation::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.navigation::-webkit-scrollbar-track,
+.navigation::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.navigation::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--shell-muted) 24%, transparent);
+  border-radius: 4px;
+}
+
+.navigation:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--shell-muted) 38%, transparent);
+}
+
+.navigation::-webkit-scrollbar-thumb:hover,
+.navigation::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--shell-muted) 55%, transparent);
+}
+
+.navGroup + .navGroup {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--shell-border);
+}
+
+.groupTitle {
+  margin: 0;
+  padding: 0 12px 6px;
+  color: var(--shell-dim);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.groupItems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tabIcon {
+  flex-shrink: 0;
+}
+
+.tabText {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
 .brand {
@@ -100,9 +158,8 @@
 .tabButton {
   position: relative;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   min-height: 46px;
   border: 0;
@@ -110,7 +167,7 @@
   background: transparent;
   color: var(--shell-muted);
   cursor: pointer;
-  padding: 0 10px 0 12px;
+  padding: 7px 10px 7px 12px;
   text-align: left;
   transition: background 0.16s ease, color 0.16s ease;
 }
@@ -147,70 +204,17 @@
   background: var(--shell-accent);
 }
 
-/* 创新功能是 JanusX 的野心入口：唯一允许破格的导航项。
-   纪律内表达——只用 1px 边框 + 强调色文字 + 微光，不做实心填充色块：
-   边框琥珀色、label 琥珀色发光、NEW 描边徽章、选中条用橙→金渐变 + 外发光。 */
 .tabButtonExperimental {
-  border: 1px solid rgba(var(--so-accent-rgb), 0.38);
-  background: linear-gradient(135deg, rgba(var(--so-accent-rgb), 0.1), transparent 65%);
+  border: 1px solid rgba(var(--so-accent-rgb), 0.45);
+  background: linear-gradient(110deg, rgba(var(--so-accent-rgb), 0.12), transparent);
 }
 
-.tabButtonExperimental:hover {
-  border-color: rgba(var(--so-accent-rgb), 0.65);
-  background: linear-gradient(135deg, rgba(var(--so-accent-rgb), 0.16), transparent 65%);
-  color: var(--so-accent-hover);
-  box-shadow: 0 0 12px rgba(var(--so-accent-rgb), 0.12);
-}
-
-.tabButtonExperimental.tabButtonActive,
-.tabButtonExperimental.tabButtonActive:hover {
-  border-color: rgba(var(--so-accent-rgb), 0.7);
-  background: linear-gradient(135deg, rgba(var(--so-accent-rgb), 0.18), var(--shell-active) 70%);
-  box-shadow: 0 0 16px rgba(var(--so-accent-rgb), 0.18);
-}
-
-.tabButtonExperimental.tabButtonActive::before {
-  background: linear-gradient(180deg, var(--so-accent-hover), var(--so-accent));
-  box-shadow: 0 0 8px rgba(var(--so-accent-rgb), 0.8);
-}
-
-.tabButtonExperimental .tabLabel {
-  color: var(--so-accent-ink);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  text-shadow: 0 0 12px rgba(var(--so-accent-rgb), 0.35);
-}
-
-.tabButtonExperimental:hover .tabLabel,
-.tabButtonExperimental.tabButtonActive .tabLabel {
-  color: var(--so-accent-hover);
-}
-
-.tabSpark {
-  flex-shrink: 0;
-  color: var(--so-accent);
-  filter: drop-shadow(0 0 4px rgba(var(--so-accent-rgb), 0.7));
-}
-
-.tabBadge {
-  flex-shrink: 0;
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  line-height: 1;
-  padding: 3px 5px;
-  border-radius: 4px;
-  border: 1px solid rgba(var(--so-accent-rgb), 0.55);
-  color: var(--so-accent-ink);
-  background: transparent;
-  animation: tab-badge-pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes tab-badge-pulse {
-  0%, 100% { box-shadow: 0 0 0 rgba(var(--so-accent-rgb), 0); }
-  50% { box-shadow: 0 0 8px rgba(var(--so-accent-rgb), 0.45); }
-}
+.tabButtonExperimental .tabIcon,
+.tabButtonExperimental .tabLabel { color: var(--so-accent-ink); }
+.tabButtonExperimental .tabLabel { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.tabButtonExperimental:hover,
+.tabButtonExperimental.tabButtonActive { border-color: var(--so-accent); box-shadow: inset 0 0 12px rgba(var(--so-accent-rgb), 0.1); }
+.tabBadge { padding: 2px 4px; border: 1px solid rgba(var(--so-accent-rgb), 0.5); border-radius: 4px; font-size: 9px; line-height: 1.2; font-weight: 650; }
 
 .tabLabel {
   width: 100%;
@@ -304,10 +308,31 @@
   .sidebar {
     flex-direction: row;
     align-items: center;
-    overflow-x: auto;
+    overflow: hidden;
     padding: 10px 12px;
     border-right: 0;
     border-bottom: 1px solid var(--shell-border);
+  }
+
+  .navigation {
+    display: flex;
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  .navGroup {
+    flex-shrink: 0;
+  }
+
+  .navGroup + .navGroup {
+    margin: 0 0 0 10px;
+    padding: 0 0 0 10px;
+    border-top: 0;
+    border-left: 1px solid var(--shell-border);
+  }
+
+  .groupItems {
+    flex-direction: row;
   }
 
   .brand {

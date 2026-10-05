@@ -15,27 +15,61 @@ tags: [memory, knowledge, unification, laya, qwen, jev, decision-model]
 
 JanusX 的 observation → candidate → review → truth → BM25 管线承载工程与个人两域。个人保存、Habit、新 Episode 和旧事件迁移使用同一观察存储；Profile 由独立人工字段及确认事实派生。审核、显式替代、遗忘、来源撤回和 Janus 交付增强均有宿主约束。缺少这些约束时，重复事件会累计习惯证据，模型文字可能被误认为本人陈述，旧版本或已遗忘材料可能重入召回。
 
-[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，[审核服务](../../src/main/knowledge/review-service.ts)负责人工确认及事实恢复日志。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)保留工程来源及用户归因；工程内容本身不授予个人偏好资格。[个人资料编辑器](../../src/renderer/src/components/knowledge/PersonalProfileEditor.tsx)支持人工字段编辑与独立遗忘，未确认记忆在画像中单列。Laya 运行时与精修路径可用，真实模型的合成样例结果不足以证明生产质量；真实脱敏标注、固定质量策略及独立留出验收仍未完成。
+[确定性阶段](../../src/main/knowledge/deterministic-extractor.ts)只提出候选，[审核服务](../../src/main/knowledge/review-service.ts)负责人工或受宿主约束的模型确认及发布恢复日志。[Habit 聚合](../../src/main/knowledge/habit-aggregator.ts)保留工程来源及用户归因；工程内容本身不授予个人偏好资格。[个人资料编辑器](../../src/renderer/src/components/knowledge/PersonalProfileEditor.tsx)支持人工字段编辑与独立遗忘，未确认记忆在画像中单列。Laya 运行时与精修路径可用，真实模型的合成样例结果不足以证明生产质量；真实脱敏标注、固定质量策略及独立留出验收仍未完成。
 
 现有实现基线（2026-09-28）：知识库与个人画像统一底层机制；知识库服务工程事实、决策、流程、文件引用、Wiki 与图谱，参考 AgentMemory 的工程记忆设计和 MaiBot 的画像机制；Laya 成为启用后的主要决策分流器，LLM 退为可选精修；无 Laya 时规则加 BM25 加人工审核仍完整可用。用户在 2026-09-30 明确的本地自动审核目标见下文，不能用该基线的完成状态代替新目标验收。
 
 [queue 管线](./2026-09-03-knowledge-pipeline--dcc5e8a0.md)继续拥有结算、游标、失败记录与恢复。[个人与工程分离](./2026-09-15-personal-vs-engineering-memory--4515fa0e.md)及[首片落地](./2026-09-18-personal-engineering-separation--296ddf52.md)提供视图与共享边界。本提案拟替换[旧 Laya 提案](./2026-09-22-laya-decision-model-knowledge-confidence--673865a1.md)中“LLM 默认主路、Laya 仅作补充”的方向；旧文的模型资料只作背景，具体实施与验收以本篇为依据。本文保持 draft，完成状态以文末 AC 为准；运行时可用不等于真实数据质量验收通过。
 
-当前验收（2026-09-30）：功能完成范围以各 AC、实际验证及本文边界为准。跨批次事实合证据、普通候选来源复核、画像到期过滤、待审读取报错、长证据分块和校准产物接入有对应实现；Laya 设置页提供主题适配、路径提示、明确的运行操作及状态反馈。AC-8 仍缺真实脱敏人工标注数据、事先固定的质量策略及独立留出实测。自动接受保持关闭。
+当前验收（2026-10-03）：[工程知识自动处理与 Wiki 手册](./2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md)具备四环节模型设置、自动审核入库、主题更新、完整发布历史、历史积压回补和创新开关联动。新管线默认关闭，用户启用后审核通过且宿主校验通过的 project 内容可自动提交，个人记忆仍人工审核。此前跨批次合证据、来源复核、画像到期过滤、待审读取报错及校准产物接入继续由对应机制维护。AC-8 仍缺真实脱敏人工标注数据、事先固定的质量策略及独立留出实测。
 
 ## Expected behavior
+
+### Python 测试资产与复验（2026-10-03）
+
+`tests/laya` 常驻保留 [test_sidecar.py](../../tests/laya/test_sidecar.py) 的 7 项协议与文件校验测试，因为 [sidecar](../../resources/laya/sidecar.py) 仍是应用发布的兼容资源。8 个评测工具测试文件、共 55 项用例以本节的方法和结果记录为归档，完整源码由 Git 保存，不另建测试副本。评测脚本、固定标准、样例及原始模型报告继续保留；Python 的 `__pycache__` 属于忽略的生成缓存。
+
+清理前基线为提交 `7713065def15ae167a93899ff0e8eff1fdbd0b8f`。2026-10-03 在该基线工作区执行 `artifacts/qwen-review/.venv/Scripts/python.exe -B -m unittest discover -s tests/laya -v`，9 个文件、62 项全部通过，unittest 报告耗时 0.687 秒，无跳过。下表“通过”均指这次确定性测试；它们使用固定样例、构造响应、替身和临时文件，不加载模型权重、不调用真实云端接口，Jev 子进程只运行无网络预览。
+
+| 文件及去向 | 被测入口与测试方法 | 基线结果 |
+| --- | --- | --- |
+| `test_evaluation.py`，Git 归档 | `scripts/evaluate-laya.py`：修改留出集标签，确认温度拟合不变；构造非法概率、重复来源和跨语言泄漏；核对准确率、Brier、ECE；合成数据或未固定策略不能通过质量门槛。 | 7/7 通过 |
+| `test_evaluation_reporting.py`，Git 归档 | `scripts/evaluate-laya.py`：缺题、重复题、非法概率和弃答仍计入尝试分母；99% 多数类准确率必须显示零正类召回；缺类别、局部覆盖不足不能验收；报告定位错题与置信度；48 条诊断数据按语言覆盖标签，分流漏检与多余精修分别统计。 | 10/10 通过 |
+| `test_admission_probe.py`，Git 归档 | `scripts/probe-laya-admission.py`：构造宿主门控失败、低置信度、临时或无依据内容，断言不写入；显式替代与未决冲突分开；空上下文不依赖旧关系；零写入不算完美精度，错误替代计入错误写入，noul 方向独立于所选答案置信度。 | 7/7 通过 |
+| `test_reviewer_benchmark.py`，Git 归档 | `scripts/benchmark-knowledge-reviewers.py`：用人工构造概率验证支持方向、非法值、弃答、误放与漏放；整页 Wiki 必须全部断言通过，缺失断言保持待审；固定标准包含独立验证与整页用例。Qwen、Jev、Nimble 和重复诊断仍复用此脚本。 | 6/6 通过 |
+| `test_jev_benchmark.py`，Git 归档 | `scripts/benchmark-jev-reviewer.py`：构造 noul 响应和调用替身，拒绝模型漂移、非法 usage；请求不带金标；预算停止、HTTP 失败和重复不一致保留分母；重定向和错误文本不泄露凭据。 | 7/7 通过 |
+| `test_jev_repeat_analysis.py`，Git 归档 | `scripts/analyze-jev-repeat-results.py`：扩展标准预览为 136 样例，验证集分类合计 112、长上下文 32、Wiki 8 页；区分概率波动、分类翻转和过审核阈值的动作翻转；保留每次重复及原摘要，拒绝缺重复和标签变化。 | 4/4 通过 |
+| `test_qwen_benchmark.py`，Git 归档 | `scripts/benchmark-qwen-reviewer.py`：构造 chat completion 响应，截断、非法结论和 usage 不放行；缺重复仍在分母；请求不含标签，非思考输出上限 160、思考上限 1536 token；只保留思考字符数。 | 4/4 通过 |
+| `test_nimble_reviewer.py`，Git 归档 | `scripts/benchmark-nimble-reviewer.py`：构造响应核对冻结问题与证据、模型身份、概率、usage 和上下文上限；缺失与失败保留分母，数值不稳定不能被动作一致掩盖；显存 768 MiB、可用内存 3072 MiB 为测试中的资源下限，拒绝重定向。 | 10/10 通过 |
+| `test_sidecar.py`，常驻保留 | `resources/laya/sidecar.py`：临时 checkpoint 改写不污染下载；规范化概率方向与舍入；拒绝缺题、选项坍缩、非法置信度与错误 choice；相同大小但不同字节、缺失文件均不能通过哈希校验。 | 7/7 通过 |
+
+当前日常命令仍为 `artifacts/qwen-review/.venv/Scripts/python.exe -B -m unittest discover -s tests/laya -v`，只覆盖保留的 7 项。它不是默认 `npm run verify` 的一部分。生产知识库的自动入库、模型适配、Wiki 历史及开关联动继续由 `tests/unit/knowledge/` 等现有 TypeScript 测试覆盖，实施结果见[自动处理需求](./2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md)。本篇其余小节的 14～62 项 Python 结果均是历史快照，不能把当前 7 项运行解释为重跑了这些历史测试。
+
+需要审计原始断言时，可在仓库根目录使用以下 PowerShell 命令，将固定基线及其脚本、数据解压到独立临时目录复验。Python 3.12 标准库即可执行；示例使用本机现有解释器，迁移机器时替换解释器路径。复原代码只用于历史复验，不能证明随后修改过的评测脚本仍满足原断言。
+
+```powershell
+$archiveDir = Join-Path ([IO.Path]::GetTempPath()) ('janusx-knowledge-tests-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $archiveDir | Out-Null
+git archive --format=zip --output="$archiveDir/baseline.zip" 7713065def15ae167a93899ff0e8eff1fdbd0b8f tests/laya scripts resources/laya tests/fixtures
+Expand-Archive -LiteralPath "$archiveDir/baseline.zip" -DestinationPath $archiveDir
+& 'artifacts/qwen-review/.venv/Scripts/python.exe' -B -m unittest discover -s "$archiveDir/tests/laya" -v
+```
+
+真实模型的测试方法与结果继续以本篇各模型实验小节及链接的 JSON 报告为准：固定样例和模型身份、逐次保留重复、统计误放/漏放、整页断言、延迟与资源占用；历史结果不能代替真实脱敏数据的质量验收。当前脚本可用 `scripts/evaluate-laya.py --validate-only`、`scripts/probe-laya-admission.py --validate-only`、`scripts/benchmark-knowledge-reviewers.py --validate-only` 和 `scripts/benchmark-jev-reviewer.py` 做无推理的数据/预览检查；每条命令前加上述 Python 路径。它们只能检查输入或预览，不能替代被归档的行为断言。真实 Qwen、Jev 或旧模型复验按下文命令和资源前提执行，本次整理不重跑真实推理。
+
+整理验证（2026-10-03）：当前目录的 7 项测试全部通过，耗时 0.024 秒；上述 Git 归档命令在系统临时目录实际复原后，62 项全部通过，耗时 0.849 秒。四条数据/预览命令均成功：Laya 数据 24 条、准入场景 24 条、统一标准 52 条（开发 24、验证 28），Jev 预览 52 条、最多 156 请求且无网络调用。`npm run check:notes` 检查 234 篇、0 错误、27 项既有显式链接诊断；`git diff --check` 通过。此次变更仅清理测试文件、补充说明和忽略缓存，未运行应用构建或全量 TypeScript 测试。
 
 ### 按环节选择模型与部署收敛（2026-09-30）
 
 用户确认后续知识库按环节独立选择模型：知识条目审核默认使用 Qwen3.5-4B 非思考模式，Wiki 生成与整理默认使用 Qwen3.5-4B 思考模式。此选择优先兼顾知识审核延迟和本地模型多用途复用；此前推荐审核使用有限思考的建议不再作为产品默认。思考模式审核的实测优势及非思考模式的已知误放行仍保留在下文，不能将用户选择默认模式解释为质量已经验收。Wiki 生成的思考预算需要专项测试，不能直接把审核用的256 token预算认定为生成任务的合适预算。
 
-拟在知识库设置中分别配置候选提取、知识条目审核、Wiki生成/整理、Wiki审核等环节的提供方、模型及其支持的思考选项。设置应复用提供方配置并按能力约束选择：本地Qwen与用户接入的外部生成型LLM可参与生成和审核；Jev保留独立API Key输入与接口配置，用于判断和审核，不能作为Wiki正文生成器。Wiki审核可以与生成选用不同模型，Jev不是强制复核依赖；模型判断与宿主写入、来源、版本、冲突约束分开，人工与自动操作均应进入历史记录。密钥通过应用的凭据配置保存，Note、评测报告和普通日志不得保存明文Key。
+知识库设置分别配置候选提取、知识条目审核、Wiki生成/整理、Wiki审核的提供方和模型；本地模型可按环节配置思考，外部模型的推理行为由所选提供方决定。设置应复用提供方配置并按能力约束选择：本地Qwen与用户接入的外部生成型LLM可参与生成和审核；Jev保留独立API Key输入与接口配置，用于判断和审核，不能作为Wiki正文生成器。Wiki审核可以与生成选用不同模型，Jev不是强制复核依赖；模型判断与宿主写入、来源、版本、冲突约束分开，人工与自动操作均应进入历史记录。密钥通过应用的凭据配置保存，Note、评测报告和普通日志不得保存明文Key。
 
 必须支持仅使用用户自己的外部LLM接口：不启用本地部署、不配置Jev也能完成已配置的模型环节；仅配置Jev时不能假定已有生成能力。纯外部模式不得自动下载本地权重、安装Python/torch、加载本地服务或强制请求Jev Key。这里的低负担指没有本地模型的磁盘、显存和常驻进程开销，外部API调用费用与网络依赖仍由所选提供方决定。无任何模型配置时保留规则提取、搜索及人工审核；某环节未配置、不可用或返回非法结果时应明确暂存/报错，不得隐式切换到未授权提供方或自动批准。
 
 本地部署拟只保留Qwen权重与必要运行依赖，非思考审核和思考Wiki复用同一Qwen3.5-4B服务及任务队列，按任务传递模式和预算，避免分别常驻两份权重。Laya、mDeBERTa、MiniLM和Nimble不再保留本机部署资产；其固定模型标识、统一测试标准、评测脚本与报告继续保留，尤其保留下文Nimble的准确率、缓存、显存及误放行记录。历史复验命令对应实验当时的路径，清理后重新运行这些非Qwen模型需要显式重新部署，不能默默下载。
 
-本次交付范围为更新设计和清理本机部署残留；按环节设置界面、提供方适配、Qwen模式调度、Jev凭据入口及生产自动入库仍待实施。以下实验小节保留当时的模型、建议及运行路径，当前产品默认和部署状态以本节为准；知识库重构保持draft。
+四环节设置界面、提供方适配、Qwen 模式调度、Jev 凭据入口及工程知识自动入库的实现与边界见[自动处理需求](./2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md)。以下实验小节保留当时的模型、建议及运行路径，当前产品默认和部署状态以本节为准；知识库重构保持draft。
 
 本机清理结果：`artifacts/laya-eval-runtime/`（Laya权重及旧Python/torch环境）、`artifacts/knowledge-review-models/mdeberta/`、`artifacts/knowledge-review-models/minilm/`、`artifacts/nimble-review/models/`及`runtime/`均已移出部署目录，同时移除了Nimble未完成下载、两份Qwen CUDA未完成下载和下载探测文件。共9,495,659,166字节（约9.50GB/8.84GiB）移入Windows回收站，所有目标路径复查均不存在。永久递归删除命令被自动审批检查以`blocked by policy`拦截，未提供更具体原因，因此采用可恢复的回收站方式；尚未清空回收站，不将逻辑移除量写成已释放磁盘空间。少数目录的系统整目录回收接口报不支持，逐文件回收及空目录回收成功。路径验证限定在本工作区`artifacts/`，确认无受Git跟踪的文件、路径联接或正在使用目标的模型进程。
 
@@ -476,7 +510,7 @@ Laya 拟位于候选提取与正式知识提交之间，比较候选、证据与
 
 不考虑置信度门槛的证据支持答案正确数分别为 11/24、14/24、14/24；13 个有旧条目的关系答案正确数分别为 6/13、5/13、4/13。明确证据“已确认 Atlas 生产服务配置：端口为 9443，长期生效”支持候选“Atlas 生产服务端口为 9443”，六题组仍以 99.32% 置信度回答不支持，两套聚焦模板也以 97.11% 回答不支持。仅调整分流位置、减少问题或翻译模板尚未解决基础语义错误；这组结果不支持当前部署模型独立自动审核，也不能证明所有本地模型或 Laya 的其他适配方式不可行。
 
-验证命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/probe-laya-admission.py --validate-only` 验证 24 条场景；同一 Python 执行 `scripts/probe-laya-admission.py --model-dir artifacts/laya-eval-runtime/model --output tests/fixtures/laya-admission-probe-windows.json` 完成真实推理；`-m unittest discover -s tests/laya -v` 通过 31 项测试，其中[准入策略测试](../../tests/laya/test_admission_probe.py)覆盖冲突与替代、来源门控失败、低置信度、无旧条目、错误写入、零写入及概率方向。输出不可用保留在分母，错误的新增/合并/替代动作计为错误写入。
+验证命令：`artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/probe-laya-admission.py --validate-only` 验证 24 条场景；同一 Python 执行 `scripts/probe-laya-admission.py --model-dir artifacts/laya-eval-runtime/model --output tests/fixtures/laya-admission-probe-windows.json` 完成真实推理；`-m unittest discover -s tests/laya -v` 通过 31 项测试，其中归档的准入策略测试（方法与结果见本篇 Python 测试资产节）覆盖冲突与替代、来源门控失败、低置信度、无旧条目、错误写入、零写入及概率方向。输出不可用保留在分母，错误的新增/合并/替代动作计为错误写入。
 
 本次仅验证本地语义评分与模拟策略；来源校验假定通过，模型输入是已经整理好的候选，未执行真实提取、宿主事务、历史展示、搜索交付或 Wiki 生成。后续还需从原始记录验证候选完整性、限定条件、证据归因，并验证重复合证据、冲突暂存、版本替代、来源失效和实际检索；Wiki 的模板组织与自由长文生成需分别定义验收。现阶段保留模型可替换的判断接口，Laya 可继续用于辅助分析和针对性验证，不能将当前失败结果作为启用自动批准的依据。AC-20、AC-21、AC-22 保持未完成。
 
@@ -490,7 +524,7 @@ Laya 拟位于候选提取与正式知识提交之间，比较候选、证据与
 
 CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 及 mDeBERTa 量化 ONNX，各 4 个计算线程、单条 batch、一次预热、每样例连续三次计时。准确率每样例仅计一次，重复只检查稳定性并测 P50/P95。内存为每 20ms 采样的进程 RSS 峰值，包括运行时、加载和推理；不是显存或纯权重大小。加载时间包含导入与校验，不保证磁盘冷缓存；ONNX 版仍通过 Python/Transformers 分词，不能把其测量当成最小原生运行时成本。
 
-权重保存在 `artifacts/knowledge-review-models`，Laya 复用原评测目录，均不提交仓库。下载固定 revision，检查文件大小及 LFS SHA-256 或 Git blob 身份，再记录每个文件 SHA-256；推理离线且重新核验所需文件。环境扩展由[依赖文件](../../scripts/requirements-reviewer-benchmark.txt)固定，下载失败可有限重试。执行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-knowledge-reviewers.py --prepare` 准备资源，`--validate-only` 检查数据，去掉这两个参数运行完整对照。[指标测试](../../tests/laya/test_reviewer_benchmark.py)覆盖概率方向、非法值、零放行、不可用、漏放与误放分离，以及 Wiki 单处错误不可被平均分掩盖。
+权重保存在 `artifacts/knowledge-review-models`，Laya 复用原评测目录，均不提交仓库。下载固定 revision，检查文件大小及 LFS SHA-256 或 Git blob 身份，再记录每个文件 SHA-256；推理离线且重新核验所需文件。环境扩展由[依赖文件](../../scripts/requirements-reviewer-benchmark.txt)固定，下载失败可有限重试。执行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-knowledge-reviewers.py --prepare` 准备资源，`--validate-only` 检查数据，去掉这两个参数运行完整对照。归档的指标测试（方法与结果见本篇 Python 测试资产节）覆盖概率方向、非法值、零放行、不可用、漏放与误放分离，以及 Wiki 单处错误不可被平均分掩盖。
 
 [Windows 对照报告](../../tests/fixtures/knowledge-review-benchmark-windows.json)在 Ryzen 9 7945HX、16 核/32 线程、约 32 GiB 内存机器上完成，所有推理限制为 CPU 4 线程。4 种部署各 52 条样例、每条 3 次，共 624 次计时推理，另有每部署一次预热；无不可用或重复不稳定结果。以下质量数据仅取 28 条新验证陈述（18 条支持、10 条不支持），耗时取全部 52 条的重复测量：
 
@@ -519,7 +553,7 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 默认结果文件为 `artifacts/jev-review-benchmark.json`，保留标准、开发样例、适配器和指标脚本的摘要，避免覆盖本地模型报告。Jev 时延包含网络和服务端时间，没有可比的服务器 CPU/RSS；官方分词器未在本地提供，因此只能保证输入文字一致，不能宣称已核验 512-token 分词预算完全一致。API 不增加预热调用，首次请求包含在时延内；这些差异须随最终对照报告呈现。
 
-准备验证：运行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-jev-reviewer.py` 输出 52 样例、最多 156 请求的无网络预览；`-m unittest discover -s tests/laya` 通过 44 项测试。[接入测试](../../tests/laya/test_jev_benchmark.py)覆盖 noul 方向、模型漂移、非法 usage、预算和失败后保留分母、重复不稳定及重定向/错误消息的凭证保护。提供凭证后使用同一 Python 执行 `scripts/benchmark-jev-reviewer.py --run --key-file <仓库外密钥文件>`，或在已配置环境变量时仅加 `--run`。截至接入交付没有真实 Jev 请求，不能将替身测试通过解释为服务可用或模型质量通过。
+准备验证：运行 `artifacts/laya-eval-runtime/.venv/Scripts/python.exe scripts/benchmark-jev-reviewer.py` 输出 52 样例、最多 156 请求的无网络预览；`-m unittest discover -s tests/laya` 通过 44 项测试。归档的接入测试（方法与结果见本篇 Python 测试资产节）覆盖 noul 方向、模型漂移、非法 usage、预算和失败后保留分母、重复不稳定及重定向/错误消息的凭证保护。提供凭证后使用同一 Python 执行 `scripts/benchmark-jev-reviewer.py --run --key-file <仓库外密钥文件>`，或在已配置环境变量时仅加 `--run`。截至接入交付没有真实 Jev 请求，不能将替身测试通过解释为服务可用或模型质量通过。
 
 ### Jev 真实调用与重复稳定性诊断（2026-09-30）
 
@@ -531,7 +565,7 @@ CPU 基线采用独立子进程依次加载 Laya、mDeBERTa FP32、MiniLM FP32 �
 
 52 条样例没有发生跨 0.5 的分类翻转；开发集 `preference-update` 的概率为 0.89/0.91/0.89，导致放行与暂存切换，其他开发样例及全部新验证样例的动作一致。验证集概率最大范围为 0.03，开发集为 0.04。补充诊断是在观察到波动后增加，不能代替预先确定的验收标准。后续可讨论将语义正确率、动作稳定性和数值稳定性分别验收，并对临界概率设置复核规则；本次不修改既有标准或启用自动批准。
 
-同样的新验证陈述上，Jev 的三次原始判断均优于本地模型，值得作为后续自动审核的优先验证候选；这一结论只适用于当前中文合成短样例，不证明真实资料、长 Wiki、完整性、来源变化和全流程安全。独立人工标注、额外边界样例以及稳定性验收仍缺失。运行 `scripts/analyze-jev-repeat-results.py --input tests/fixtures/jev-review-benchmark-live.json --output tests/fixtures/jev-review-repeat-diagnostics.json` 可复现补充统计；`-m unittest discover -s tests/laya` 通过 47 项测试，包括[波动诊断测试](../../tests/laya/test_jev_repeat_analysis.py)。知识库重构及自动审核验收继续未完成。
+同样的新验证陈述上，Jev 的三次原始判断均优于本地模型，值得作为后续自动审核的优先验证候选；这一结论只适用于当前中文合成短样例，不证明真实资料、长 Wiki、完整性、来源变化和全流程安全。独立人工标注、额外边界样例以及稳定性验收仍缺失。运行 `scripts/analyze-jev-repeat-results.py --input tests/fixtures/jev-review-benchmark-live.json --output tests/fixtures/jev-review-repeat-diagnostics.json` 可复现补充统计；`-m unittest discover -s tests/laya` 通过 47 项测试，包括归档的波动诊断测试（方法与结果见本篇 Python 测试资产节）。知识库重构及自动审核验收继续未完成。
 
 ### Jev 扩展样本实测（2026-09-30）
 
@@ -644,6 +678,8 @@ source 按会话或原始来源分组，翻译及同事件变体共用 scenario�
 
 ## Alternatives considered
 
+- 保留全部 9 个 Python 测试文件能持续复查评测工具的统计与异常处理；按用户当前的资产精简要求，选择将其中 8 个文件的方法和结果集中归档，只常驻保留随产品发布的 sidecar 测试。把全部用例合并成一个大文件虽能减少文件数，仍需维护同样的实验断言；删除全部测试则会失去 sidecar 的直接协议保障，因此均不采用。
+
 - 只在原观察详情显示撤回状态：实现最小，但来源退出召回或文件被清理后就无法找到记录。把全部正文复制进撤回日志便于离线查看，却扩大敏感内容留存；采用原回执加现存来源解析，以明确缺失/变化状态承担历史正文不可恢复的边界。
 
 - 撤回时删除所有关联原文件：清理直观，但会破坏来源追溯，并需要观察归档、候选、事实、Wiki、图边与任务之间的跨文件事务。沿用普通事实归档最省实现，却不能约束来源重放；采用单一撤回屏障与受约束视图，保留原始证据，并明确承担入口一致性和全量扫描成本。
@@ -685,15 +721,17 @@ source 按会话或原始来源分组，翻译及同事件变体共用 scenario�
 - [x] AC-18: 撤回记录可管理 — 审计页分页展示撤回回执与历史影响数量，来源缺失、变化和歧义分别可见；当前正文预览有上限，失败不显示假空列表，刷新忽略旧响应；浏览不写数据、不解除撤回，不加入 MCP 共享面。
 - [x] AC-19: Laya 设置可用性 — 总开关与运行操作联动，路径有明确校验及默认目录说明，下载/加载/释放语义清楚，保存失败和状态读取失败可见；旧响应不能覆盖新操作结果，中英文及浅深色窄窗口可用，启动无需人工标注集。
 
-- [ ] AC-20: 可配置模型自动审核 — 明确范围内的后续候选由该环节所选的本地Qwen、Jev或用户外部LLM结合宿主策略完成入库，无需逐条人工批准；本地路径可独立于云端运行，外部路径不依赖本地部署。默认知识条目审核使用Qwen3.5-4B非思考模式，保留来源/版本核验及可追溯的模型审核记录；失败与暂存、旧数据处理和生产自动入库尚待实施与验收。
+- [ ] AC-20: 可配置模型自动审核 — 工程知识的提供方配置、宿主自动提交、失败暂存和历史积压处理已由[自动处理需求](./2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md)实现。真实模型质量与独立资料验收仍待完成，不能将适配器测试视为生产质量通过；个人记忆继续人工确认。
 - [ ] AC-21: 自动审核质量验收 — 用固定版本、明确知识范围和独立评估样本同时核验自动接受准确率、错误接受率、覆盖率和不确定候选处理；质量门槛待定，原有分流测试及零次接受结果不能替代该验收。
 
-- [ ] AC-22: 知识库使用与沉淀体验 — 简化导航并保留搜索及人工收件审核；以历史记录呈现可追溯的人工与自动操作，明确知识条目和 Wiki 的职责，验证原始记录到可检索、可更新、可复用知识的完整场景；Wiki 预期、导航方案、历史覆盖范围与具体验收方式仍待讨论，本项未实施。
+- [ ] AC-22: 知识库使用与沉淀体验 — 搜索、人工收件审核、发布历史与稳定主题 Wiki 已有实现；[共用入口与分域界面](./2026-10-04-memory-domain-controls--908d675a.md)提供个人画像、个人审核及功能设置。实际长资料质量、长期维护和整体简洁性验收尚未完成，不能将界面接入等同于沉淀体验完全通过。
 
-- [ ] AC-23: 环节级模型配置 — 知识库设置允许独立选择提取、条目审核、Wiki生成/整理、Wiki审核的提供方与模型，并提供模型支持的思考选项；条目审核默认非思考Qwen3.5-4B，Wiki生成/整理默认思考Qwen3.5-4B。保留Jev API Key及用户外部LLM接入，决策模型不能被选为正文生成器；配置持久化、模式传递、队列资源与失败反馈须端到端验证。
-- [ ] AC-24: 无本地部署模式 — 不安装任何本地模型、未配置Jev时，仅使用用户外部LLM配置即可完成所选知识和Wiki环节；不得自动下载、启动本地推理或强制输入Jev Key。未配置环节可见且不误放行；完全无模型时规则加人工路径仍可用。仅本地、仅外部及混合提供方均须独立验证。
+- [ ] AC-23: 环节级模型配置 — 四环节的独立提供方、模型、思考配置及 Jev 凭据入口已实现，Jev 不可生成正文；配置与路由已有自动化回归。本地 Qwen 已有真实调用，全部提供方组合的真实接口端到端验收仍待完成，不能用合成 IPC 结果替代。
+- [ ] AC-24: 无本地部署模式 — 纯外部配置、未配置环节暂存、规则加人工及不自动下载本地资源已有实现与替身测试。仅本地实机路径已验证；纯外部和混合提供方的真实服务验收仍待完成。
 
 ## Risks
+
+评测工具的 55 项归档断言不再随当前源码常驻运行，Note 中的通过记录不能发现未来回归。修改 `scripts/evaluate-laya.py`、`probe-laya-admission.py`、`benchmark-*-reviewer*.py` 或重复统计时，需从固定 Git 基线取回相关断言并针对当前源码复验，或增加该次变更必要的验证；出现持续维护需求时再恢复对应小套件。sidecar 完全退出产品发布后，其余 7 项测试可随运行时一并清理。
 
 来源核验与审核状态会增加数据字段和迁移成本，但它们分别回答“谁说的、证据是否匹配、是否允许采纳”，不能合并成一个 confidence。人工确认只能证明采纳意图，不能保证陈述永远正确；后续冲突仍须暴露。
 

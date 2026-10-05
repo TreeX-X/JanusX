@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { configService } from '../config/service'
 import type { OfficeArtifactIndex } from '../office/office-artifact-index'
 import type { OfficeWatchPool } from '../office/office-watch-pool'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
@@ -35,10 +36,15 @@ import { registerPeerHandlers, registerRemoteHandlers } from './remote-handlers'
 import { handleTerminalHostWindowClosed, registerTerminalHandlers } from './terminal-handlers'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeObservationService } from '../knowledge/observation-service'
+import { installMemoryDomainControls } from '../knowledge/memory-domain-controls'
+import { memoryDomainPolicy } from '../knowledge/memory-domain-policy'
+import { observationScope } from '../knowledge/memory-evidence'
 import { runDeterministicStage } from '../knowledge/deterministic-extractor'
 import { registerLayaScorer } from '../knowledge/laya-runtime'
 import { runCandidateAction } from '../knowledge/candidate-actions'
 import { runLlmStage } from '../knowledge/llm-stage'
+import { knowledgeAutomationService } from '../knowledge/automation-service'
+import { appShutdown } from '../shutdown/AppShutdown'
 import { knowledgeRefinementTasks } from '../knowledge/refinement-tasks'
 import { terminalManager } from '../terminal/manager'
 import { analyzer } from '../janus/analyzer'
@@ -47,6 +53,7 @@ import { subAgentRunRegistry } from '../janus-runner/subagent-run-registry'
 import { ipcMain } from 'electron'
 import { registerAgentRuntimeHandlers } from './agent-runtime-handlers'
 import { registerExternalCliHandlers } from './external-cli-handlers'
+import { registerWorkflowXHandlers } from './workflowx-handlers'
 export interface RegisterApplicationIpcOptions {
   mainWindow: BrowserWindow
   getAllowedWindows: () => BrowserWindow[]
@@ -115,6 +122,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerProjectHandlers()
   registerLlmHandlers()
   registerExternalCliHandlers({ getAllowedWindows: options.getAllowedWindows })
+  registerWorkflowXHandlers(options)
   registerJanusHandlers()
   registerHarnessHandlers(getCurrentMainWindow)
   registerJanusChatHandlers()
@@ -136,14 +144,24 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   // Phase 1-2: plug the deterministic stage into the processing queue and
   // report unprocessed ranges from the persisted cursor on startup.
   // Persist plans after deterministic batches; recover model tasks independently of cursors.
+  installMemoryDomainControls()
   registerLayaScorer()
   knowledgeProcessingQueue.configureCandidateActionHandler(runCandidateAction)
   knowledgeProcessingQueue.configureDeterministicHandler((batch) =>
-    runDeterministicStage(batch).then(() => undefined),
+    runDeterministicStage(batch, { allowHabitSource: async observation => {
+      const policy = await memoryDomainPolicy()
+      return observationScope(observation) === 'user' ? policy.personal : policy.inferEngineeringHabits
+    } }).then(() => undefined),
   )
-  knowledgeProcessingQueue.configureLlmHandler((batch) => runLlmStage(batch))
+  knowledgeProcessingQueue.configureAutomationHandler(() => knowledgeAutomationService.run())
+  appShutdown.configure({ stopKnowledge: () => knowledgeAutomationService.shutdown() })
+  knowledgeProcessingQueue.configureLlmHandler(async (batch) => {
+    if ((await configService.getKnowledgeSettings()).automation) return { skipped: true, skippedReason: 'no-refinement', processed: 0, proposed: 0, merged: 0 }
+    return runLlmStage(batch)
+  })
   knowledgeProcessingQueue.configureRefinementHandler(
-    (workspaceId) => knowledgeRefinementTasks.runDue(workspaceId),
+    async (workspaceId) => (await configService.getKnowledgeSettings()).automation
+      ? { processed: 0, failed: 0, cancelled: 0, deferred: 0 } : knowledgeRefinementTasks.runDue(workspaceId),
     () => knowledgeRefinementTasks.stats(),
   )
   knowledgeProcessingQueue.startRefinementLoop()
@@ -161,6 +179,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
     .then(async ({ pendingTotal }) => {
       if (pendingTotal > 0) console.log(`[knowledge] processing queue restored with ${pendingTotal} pending observations`)
       await knowledgeProcessingQueue.processRefinementsNow()
+      await knowledgeAutomationService.run()
     })
     .catch((error: unknown) => {
       console.error(`[knowledge] queue startup restore failed: ${error instanceof Error ? error.message : String(error)}`)

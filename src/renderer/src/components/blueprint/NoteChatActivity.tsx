@@ -44,8 +44,10 @@ function ChangeCard({ change }: { change: NoteChatChange }) {
 }
 
 export function NoteChatActivity({ conversationId, workspacePath }: { conversationId: string; workspacePath: string }) {
+  const { t } = useI18n('blueprint')
   const changes = useNoteChatStore(state => state.changes)
   const [error, setError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let active = true
     const initial = new Map(useNoteChatStore.getState().changes.map(change => [change.id, change]))
@@ -61,11 +63,15 @@ export function NoteChatActivity({ conversationId, workspacePath }: { conversati
       })
     }).catch(reason => { if (active) setError(String(reason?.message ?? reason)) })
     return () => { active = false }
-  }, [workspacePath, conversationId])
+  }, [workspacePath, conversationId, attempt])
   const matching = changes.filter(change => change.conversationId === conversationId && sameCheckoutPath(change.workspacePath, workspacePath))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   return <div className={styles.activity} aria-live="polite">
     {matching.map(change => <ChangeCard key={change.id} change={change} />)}
-    {error && <p role="alert">{error}</p>}
+    {error && <div className={styles.notice}>
+      <p role="status">{t('blueprint:noteChat.historyLoadFailed')}</p>
+      <button type="button" onClick={() => setAttempt(value => value + 1)}>{t('blueprint:noteChat.reloadHistory')}</button>
+      <details><summary>{t('blueprint:workspace.diagnostics')}</summary><pre>{error}</pre></details>
+    </div>}
   </div>
 }

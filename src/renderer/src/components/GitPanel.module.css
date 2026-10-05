@@ -1,0 +1,103 @@
+/**
+ * GitPanel.module.css
+ *
+ * 右侧 Git 栏浮层表面：修改记录悬浮预览卡 + push/pull 确认弹窗。
+ * 底座一律吃主题令牌，纸面只在加法层翻投影（与 team/TeamFooter.popover 同构）：
+ *  - 背景用 --shell-chrome-raised：dark 比 chrome 高一阶，planche 是纸深 #DCCFA8，
+ *    在纸面上有可见台阶（--shell-card 在 planche 里与纸同值，当浮层底等于没画）。
+ *  - 边框用 --shell-accent-border：保留原来的“强调色描边”意图，dark 是橙、planche 是朱红。
+ *  - 行 hover / 组头底 / 分隔线用 color-mix 朝 --shell-text 混出，不再写死
+ *    rgba(255,255,255,*)（落在纸面上是几乎透明的亮斑）。
+ */
+
+.commitPreview {
+  position: fixed;
+  z-index: 1100;
+  width: 280px;
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  background: var(--shell-chrome-raised);
+  border: 1px solid var(--shell-accent-border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color: var(--shell-text);
+  animation: git-preview-in 120ms ease-out;
+}
+
+.previewDivider {
+  border-top: 1px solid var(--shell-border-soft);
+}
+
+/* 提交列表行：hover 只抬底色，文字色不变，避免闪烁（与 pane-tab 同语言）。 */
+.commitRow:hover {
+  background: color-mix(in srgb, var(--shell-text) 6%, transparent);
+}
+
+.commitRow:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+  background: color-mix(in srgb, var(--shell-text) 6%, transparent);
+}
+
+/* 分组头（Staged / Changes / History）：自带 4% 纸深/白底，两主题都可见。 */
+.sectionHeader {
+  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
+}
+
+/* 文件行 hover：同上走令牌混色。 */
+.fileRow:hover {
+  background: color-mix(in srgb, var(--shell-text) 5%, transparent);
+}
+
+/* push/pull 确认弹窗：与悬浮卡片同底座同描边，尺寸走行内 width。 */
+.confirmDialog {
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--shell-chrome-raised);
+  border: 1px solid var(--shell-accent-border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation: island-expand-modal 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* 弹窗内信息盒 / 提示盒：走令牌，不写死白底与 #b8896d 暖灰字。 */
+.dialogInfoBox {
+  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
+  border: 1px solid var(--shell-border-soft);
+}
+
+.dialogHintBox {
+  background: var(--shell-accent-soft);
+  border: 1px solid var(--shell-accent-border);
+  color: var(--shell-muted);
+}
+
+@keyframes git-preview-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commitPreview,
+  .confirmDialog {
+    animation: none;
+  }
+}
+
+/* ── planche：纸面浮层（加法层，dark 原样不动）──
+ * 黑硬影在纸面上过脏，换石板套印偏移影（与 TeamFooter.popover 同口径）。 */
+:global([data-theme='planche']) .commitPreview {
+  box-shadow: 3px 3px 0 var(--line, #1c343b);
+}
+
+:global([data-theme='planche']) .confirmDialog {
+  box-shadow: 3px 3px 0 var(--line, #1c343b);
+}

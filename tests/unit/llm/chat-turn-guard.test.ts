@@ -55,6 +55,7 @@ vi.mock('../../../src/main/agent/runtime/shell-runtime', () => ({
 }))
 
 import { abortChatStream, answerChatQuestion, handleChatStream, prepareJanusChatRecall, steerChatStream } from '../../../src/main/llm/chat-orchestrator'
+import { llmService } from '../../../src/main/llm/LlmService'
 
 const emptyResult: KnowledgeContextResult = {
   items: [],
@@ -76,6 +77,16 @@ function immediateStream(text: string) {
 }
 
 describe('chat turn guard (S6-a)', () => {
+  it('switches WorkflowX mode without resolving a provider or starting a model stream', async () => {
+    vi.mocked(llmService.getLanguageModel).mockClear()
+    streamText.mockClear()
+    const reply = vi.fn()
+    await handleChatStream({ reply } as never, { requestId: 'mode-switch', providerId: '', sourceTag: 'janus-chat', messages: [{ role: 'user', content: '/xflow' }] })
+    expect(llmService.getLanguageModel).not.toHaveBeenCalled()
+    expect(streamText).not.toHaveBeenCalled()
+    expect(reply).toHaveBeenCalledWith('llm:chat:delta', expect.objectContaining({ delta: 'WorkflowX: xflow' }))
+    expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'mode-switch' })
+  })
   it('shares proposal turn ownership, consumes steering once and streams the result through chat events', async () => {
     let release!: () => void
     proposeForConversation.mockReset().mockImplementationOnce(async () => {

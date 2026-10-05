@@ -453,7 +453,7 @@ describe('planche theme contract', () => {
     const tsx = read('components/knowledge/KnowledgeWorkbench.tsx')
     const css = read('components/knowledge/KnowledgeWorkbench.module.css')
     // 红灯必须是 .header 的第一个子节点（标题之前），不是右侧动作组的末位
-    const header = tsx.slice(tsx.indexOf('<header className={styles.header}'), tsx.indexOf('</header>'))
+    const header = tsx.slice(tsx.indexOf('<header className={styles.header}'), tsx.indexOf('</header>', tsx.indexOf('<header className={styles.header}')))
     expect(header.indexOf('styles.closeButton')).toBeGreaterThan(-1)
     expect(header.indexOf('styles.closeButton')).toBeLessThan(header.indexOf('styles.breadcrumb'))
     // 关闭从动作组里移走，那一组只剩刷新一类动作

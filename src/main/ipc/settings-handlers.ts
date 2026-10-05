@@ -1,4 +1,6 @@
 import { syncLayaSettings } from '../knowledge/laya-runtime'
+import { knowledgeAutomationService } from '../knowledge/automation-service'
+import { cancelKnowledgeLocalSetup, updateKnowledgeSettingsFromRenderer } from '../knowledge/knowledge-local-settings'
 import { BrowserWindow, ipcMain } from 'electron'
 import { configService } from '../config/service'
 import { remoteNotificationDispatcher } from '../remote-notifications/dispatcher'
@@ -76,6 +78,17 @@ export function registerSettingsHandlers(): void {
     return feishuInboundRuntime.getControlStatus()
   })
 
+  ipcMain.handle(KNOWLEDGE_CHANNELS.getPersonalSettings, () => configService.getPersonalMemorySettings())
+  ipcMain.handle(KNOWLEDGE_CHANNELS.updatePersonalSettings, async (_event, settings) => {
+    const { z } = await import('zod')
+    const input = z.object({ captureConversations: z.boolean().optional(), inferEngineeringHabits: z.boolean().optional(),
+      useInChat: z.boolean().optional(), episodeTtlDays: z.number().int().min(30).max(90).optional() }).strict().parse(settings)
+    const result = await configService.updatePersonalMemorySettings(input)
+    const { settleMemoryMutations } = await import('../knowledge/memory-domain-controls')
+    await settleMemoryMutations()
+    return result
+  })
+
   ipcMain.handle(KNOWLEDGE_CHANNELS.getSettings, async () => {
     return configService.getKnowledgeSettings()
   })
@@ -83,7 +96,9 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(
     KNOWLEDGE_CHANNELS.updateSettings,
     async (_event, settings: Partial<KnowledgeSettings>) => {
-      const next = await configService.updateKnowledgeSettings(settings ?? {})
+      const current = await configService.getKnowledgeSettings()
+      const next = await updateKnowledgeSettingsFromRenderer(settings ?? {})
+      if (JSON.stringify(current) !== JSON.stringify(next)) knowledgeAutomationService.stop()
       await syncLayaSettings()
       return next
     },
@@ -96,7 +111,12 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(
     EXPERIMENTAL_CHANNELS.update,
     async (_event, settings: Partial<ExperimentalFeatures>) => {
-      return configService.updateExperimentalFeatures(settings ?? {})
+      const next = await configService.updateExperimentalFeatures(settings ?? {})
+      if (!next.knowledge) { knowledgeAutomationService.stop(); await cancelKnowledgeLocalSetup() }
+      const { settleMemoryMutations } = await import('../knowledge/memory-domain-controls')
+      await settleMemoryMutations()
+      await syncLayaSettings()
+      return next
     },
   )
 

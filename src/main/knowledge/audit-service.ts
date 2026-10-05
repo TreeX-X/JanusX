@@ -33,7 +33,8 @@ async function ensureAuditFile(): Promise<string> {
   await mkdir(dirname(absolutePath), { recursive: true })
   try {
     await readFile(absolutePath, 'utf8')
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     await appendFile(absolutePath, '', 'utf8')
   }
   return absolutePath
@@ -77,13 +78,8 @@ export class KnowledgeAuditService {
   }
 
   async list(query: AuditQuery = {}): Promise<AuditEvent[]> {
-    const absolutePath = await ensureAuditFile()
-    let content: string
-    try {
-      content = await readFile(absolutePath, 'utf8')
-    } catch {
-      return []
-    }
+    // Windows readers must release their handle before the atomic audit replacement.
+    const content = await serialized(async () => readFile(await ensureAuditFile(), 'utf8'))
 
     const events: AuditEvent[] = []
     for (const line of content.split('\n')) {
@@ -104,13 +100,7 @@ export class KnowledgeAuditService {
   }
 
   async stats(): Promise<AuditStats> {
-    const absolutePath = await ensureAuditFile()
-    let content: string
-    try {
-      content = await readFile(absolutePath, 'utf8')
-    } catch {
-      return { total: 0, byAction: {} }
-    }
+    const content = await serialized(async () => readFile(await ensureAuditFile(), 'utf8'))
 
     const byAction: Record<string, number> = {}
     let total = 0

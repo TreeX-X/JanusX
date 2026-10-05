@@ -60,6 +60,7 @@ export interface GlobalConfig {
   registeredCLIs: CLIRegistration[]
   recentWorkspaces: string[]
   notificationSettings: AgentNotificationSettings
+  personalMemorySettings?: import('../../shared/personal-memory-settings').PersonalMemorySettings
   knowledgeSettings: KnowledgeSettings
   /** 自动更新偏好；缺席即默认（自动检查开启），兼容旧配置。 */
   updaterSettings?: UpdaterSettings

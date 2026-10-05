@@ -1,4 +1,51 @@
 {
+  "workspace": {
+    "select": "切换工作区",
+    "noWorkspace": "请先添加工作区",
+    "current": "当前",
+    "state": {
+      "ok": "有蓝图",
+      "empty": "空蓝图",
+      "not-found": "未初始化",
+      "foreign": "待初始化",
+      "invalid": "需要修复",
+      "error": "读取失败",
+      "loading": "读取中"
+    },
+    "title": {
+      "ok": "蓝图已就绪",
+      "empty": "从项目生成第一份蓝图",
+      "not-found": "为项目创建蓝图",
+      "foreign": "为项目创建蓝图",
+      "invalid": "蓝图需要修复",
+      "error": "暂时无法读取蓝图",
+      "loading": "正在打开蓝图"
+    },
+    "diagnostics": "查看诊断详情",
+    "actionFailed": "操作未完成，请查看详情后重试。",
+    "description": {
+      "ok": "蓝图已就绪。",
+      "empty": "让 Janus 阅读项目，梳理结构与待办，起草蓝图供你确认。",
+      "not-found": "创建项目配置和起始草稿，逐步梳理项目结构、需求与任务。你可以先预览，再确认创建。",
+      "foreign": "这个项目已有配置文件。你可以先预览新增内容，确认后创建起始蓝图，已有文件会保留。",
+      "invalid": "部分项目文件暂时无法识别。查看诊断详情，修复后重新读取。",
+      "error": "无法读取这个工作区的蓝图，请检查路径或文件权限后重试。",
+      "loading": "正在读取工作区蓝图…"
+    },
+    "initialize": "初始化蓝图",
+    "draft": "让 Janus 起草蓝图",
+    "retry": "重新读取",
+    "openFile": "打开文件",
+    "preview": "预览初始化内容",
+    "previewHint": "将新增以下文件，已有内容会保留。展开可查看内容，确认后创建项目配置和起始草稿。",
+    "confirmForeign": "我已查看预览，确认保留已有 .agents 文件并添加上述文件。",
+    "confirm": "确认初始化",
+    "cancel": "取消",
+    "undo": "撤销初始化",
+    "initialized": "已创建起始蓝图",
+    "working": "正在处理…",
+    "draftPrompt": "请分析当前工作区的项目文件，起草初始蓝图的 Note 提案。只展示提案，不要创建、修改或写入任何文件。逐条给出标题、类型、来源依据和完整正文；所有 Note 的生命周期为 draft，验收项保持未勾选，不推测尚未确认的需求。先阅读已有 Note，避免重复。等待我逐条确认后，才通过 Note 工具保存选中的草稿。"
+  },
   "status": {
     "notStarted": "未开始",
     "planning": "规划中",
@@ -270,6 +317,8 @@
     "rejectFailed": "拒绝失败：候选需求不存在"
   },
   "noteChat": {
+    "historyLoadFailed": "修改记录暂时无法加载，你仍可继续对话。",
+    "reloadHistory": "重新加载记录",
     "applied": "已更新 {{count}} 篇 Note",
     "reverted": "已撤销此次修改",
     "viewChanges": "查看修改",
@@ -503,6 +552,7 @@
     "unavailable": "当前画布不可用：{{names}}"
   },
   "architecture": {
+    "info": "蓝图信息",
     "project": "项目",
     "module": "模块",
     "view": "蓝图视图",

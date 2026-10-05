@@ -1,12 +1,33 @@
-.detail, .editor { display: grid; gap: 10px; min-width: 0; padding: 12px 0; }
-.editor { border-top: 1px solid var(--border-color, #5554); }
-.detail pre, .editor pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 55vh; overflow: auto; padding: 10px; background: var(--bg-secondary, #8881); }
-.editor label { display: grid; gap: 5px; }
-.editor input:not([type=checkbox]), .editor textarea { width: 100%; box-sizing: border-box; padding: 8px; background: var(--bg-secondary, #8881); color: inherit; border: 1px solid var(--border-color, #5554); border-radius: 5px; }
+.detail, .editor { display: grid; gap: 10px; min-width: 0; padding: 12px 0; color: var(--shell-text); font-size: 12px; line-height: 1.6; }
+.detail h3, .detail h4, .editor h3, .editor h4 { margin: 0; font-size: 12px; font-weight: 600; }
+.detail p, .editor p { margin: 0; overflow-wrap: anywhere; }
+.editor { border-top: 1px solid var(--shell-border); }
+.detail pre, .editor pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 55vh; overflow: auto; margin: 0; padding: 10px; border: 1px solid var(--shell-border-soft); border-radius: 5px; background: var(--shell-card); font: inherit; line-height: 1.75; }
+.editor label { display: grid; gap: 5px; font-size: 11px; color: var(--shell-muted); }
+.editor input:not([type=checkbox]), .editor textarea { width: 100%; min-width: 0; box-sizing: border-box; min-height: 30px; padding: 6px 8px; background: var(--shell-canvas); color: var(--shell-text); border: 1px solid var(--control-border); border-radius: 5px; font: inherit; font-size: 12px; }
 .editor textarea { resize: vertical; }
 .editor .confirm { display: flex; align-items: flex-start; gap: 8px; }
-.sources { display: grid; gap: 9px; padding-left: 18px; }
+.sources { display: grid; gap: 7px; margin: 0; padding-left: 18px; color: var(--shell-muted); font-size: 11px; }
 .sources li { overflow-wrap: anywhere; }
 .sources small, .sources span { display: block; }
 .sources small { opacity: .75; }
-.actions { display: flex; gap: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.detail button, .editor button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; justify-self: start; max-width: 100%; min-height: 28px; padding: 4px 9px; border: 1px solid var(--control-border); border-radius: 5px; background: transparent; color: var(--shell-text); font: inherit; font-size: 11px; line-height: 1.5; cursor: pointer; }
+.detail button:hover:not(:disabled), .editor button:hover:not(:disabled) { background: var(--shell-hover); }
+.detail button:disabled, .editor button:disabled { opacity: .45; cursor: default; }
+.detail button:focus-visible, .editor :is(button, input, textarea):focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+.detail input[type='checkbox'], .editor input[type='checkbox'] { accent-color: var(--shell-accent); }
+.detail [role='alert'], .editor [role='alert'] { color: var(--shell-diff-del); font-size: 11px; }
+.history { border-top: 1px solid var(--shell-border); padding: 10px 0; }
+.history .historyToggle { width: 100%; justify-self: stretch; justify-content: flex-start; border: 0; padding: 3px 0; font-weight: 600; }
+.historyToggle svg:last-child { margin-left: auto; transition: transform 140ms ease; }
+.historyToggle[aria-expanded='true'] svg:last-child { transform: rotate(180deg); }
+.meta { color: var(--shell-muted); font-size: 11px; }
+.revisionList { display: grid; gap: 3px; padding: 0; margin: 0; list-style: none; }
+.history .revisionButton { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px 12px; width: 100%; min-height: 34px; text-align: left; border-color: transparent; }
+.revisionButton time { font-size: 10px; color: var(--shell-muted); font-variant-numeric: tabular-nums; }
+.history .revisionButton[aria-pressed='true'] { border-color: var(--shell-accent-border); background: var(--shell-accent-soft); }
+.pinBadge { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--shell-accent); }
+.revisionPreview { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--shell-border-soft); }
+.revisionPreview > p { font-size: 11px; color: var(--shell-muted); }
+@media (prefers-reduced-motion: reduce) { .historyToggle svg:last-child { transition: none; } }

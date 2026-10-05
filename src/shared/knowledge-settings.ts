@@ -1,4 +1,5 @@
 import type { LayaSettings } from './laya'
+import { normalizeKnowledgeAutomation, type KnowledgeAutomationSettings } from './knowledge-automation'
 /** Rules always run. Legacy auto/llm-preferred enable scorer-gated refinement only. */
 export type KnowledgeProcessingMode = 'auto' | 'deterministic-only' | 'llm-preferred'
 
@@ -8,6 +9,7 @@ export interface KnowledgeSettings {
   /** Legacy setting, normalized to false; candidates require explicit review. */
   autoAcceptDeterministicFacts: boolean
   laya?: LayaSettings
+  automation?: KnowledgeAutomationSettings
 }
 
 const PROCESSING_MODES: ReadonlySet<KnowledgeProcessingMode> = new Set([
@@ -36,6 +38,7 @@ export function normalizeKnowledgeSettings(
         ? (source.mode as KnowledgeProcessingMode)
         : DEFAULT_KNOWLEDGE_SETTINGS.mode,
     autoAcceptDeterministicFacts: false,
+    ...(source.automation ? { automation: normalizeKnowledgeAutomation(source.automation) } : {}),
     ...(source.laya ? { laya: {
       enabled: source.laya.enabled === true,
       pythonPath: typeof source.laya.pythonPath === 'string' ? source.laya.pythonPath.trim() : '',

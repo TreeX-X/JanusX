@@ -1,7 +1,16 @@
-// Note: settings-global usage aggregation over live terminals — see .agents/notes/2026-10-02-usage-telemetry-fix-and-stats--61b5d05c.md
+// Note: shared usage filters and cumulative snapshot curves — see .agents/notes/2026-10-02-usage-telemetry-fix-and-stats--61b5d05c.md
+// Note: custom date range with snapshot-bucket aggregation — see .agents/notes/2026-10-05-usage-stats-custom-range-detail--241cfe30.md
 import type { Terminal, TerminalPreset } from '@/types'
 
-export type UsageRange = 'today' | 'week' | 'month'
+export type UsageRange = 'today' | 'week' | 'month' | 'custom'
+
+/** 自定义日期区间输入（毫秒时间戳，聚合前按本地日边界归一化）。 */
+export interface CustomDateRange {
+  start: number
+  end: number
+}
+
+export type CustomRangeError = 'invalid' | 'future' | 'span'
 
 export interface UsagePresetRow {
   preset: TerminalPreset
@@ -18,6 +27,7 @@ export interface UsagePresetRow {
 export interface UsageStatsSummary {
   range: UsageRange
   rangeStart: number
+  rangeEnd: number
   rows: UsagePresetRow[]
   series: TimeBucket[]
   totalTokens: number
@@ -46,8 +56,66 @@ export function cacheSplitFor(cacheReadTokens: number, inputTokens: number, cach
 }
 
 const DAY_MS = 86_400_000
+const HOUR_MS = 3_600_000
 
-export function rangeStartFor(range: UsageRange, now: number): number {
+/** 自定义区间允许的最大跨度（366 天，覆盖整年对账）。 */
+export const MAX_CUSTOM_SPAN_MS = 366 * DAY_MS
+
+export function startOfDay(ts: number): number {
+  const cursor = new Date(ts)
+  cursor.setHours(0, 0, 0, 0)
+  return cursor.getTime()
+}
+
+export function endOfDay(ts: number): number {
+  const cursor = new Date(ts)
+  cursor.setHours(23, 59, 59, 999)
+  return cursor.getTime()
+}
+
+/** 日期输入框值（`yyyy-MM-dd`，本地时区）与时间戳互转。 */
+export function toDateInputValue(ts: number): string {
+  const date = new Date(ts)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+export function parseDateInput(value: string): number | undefined {
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return undefined
+  const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (!Number.isFinite(parsed.getTime())) return undefined
+  // 溢出日期（如 2026-02-30）会被 Date 回绕，需回校验。
+  if (parsed.getMonth() !== Number(match[2]) - 1 || parsed.getDate() !== Number(match[3])) return undefined
+  return parsed.getTime()
+}
+
+export interface NormalizedCustomRange {
+  start: number
+  end: number
+  error?: CustomRangeError
+}
+
+/**
+ * 自定义区间归一化：起止按本地日边界展开，结束超过 now 按 now 截断。
+ * 非法格式、开始晚于结束返回 `invalid`；开始在未来返回 `future`；跨度超限返回 `span`。
+ */
+export function normalizeCustomRange(startInput: number | undefined, endInput: number | undefined, now: number): NormalizedCustomRange {
+  if (startInput === undefined || endInput === undefined || !Number.isFinite(startInput) || !Number.isFinite(endInput)) {
+    return { start: startOfDay(now), end: now, error: 'invalid' }
+  }
+  const start = startOfDay(startInput)
+  let end = endOfDay(endInput)
+  if (start > end) return { start, end, error: 'invalid' }
+  if (start > now) return { start, end: now, error: 'future' }
+  if (end > now) end = now
+  if (end - start > MAX_CUSTOM_SPAN_MS) return { start, end, error: 'span' }
+  return { start, end }
+}
+
+export function rangeStartFor(range: UsageRange, now: number, custom?: CustomDateRange): number {
+  if (range === 'custom' && custom) return startOfDay(custom.start)
   const cursor = new Date(now)
   if (range === 'today') {
     cursor.setHours(0, 0, 0, 0)
@@ -59,6 +127,11 @@ export function rangeStartFor(range: UsageRange, now: number): number {
     return cursor.getTime() - mondayOffset * DAY_MS
   }
   return new Date(cursor.getFullYear(), cursor.getMonth(), 1).getTime()
+}
+
+export function rangeEndFor(range: UsageRange, now: number, custom?: CustomDateRange): number {
+  if (range === 'custom' && custom) return Math.min(endOfDay(custom.end), now)
+  return now
 }
 
 /** 终端是否有可用的缓存计数（PTY 文本不报告缓存字段，全零代表无数据）。 */
@@ -75,7 +148,7 @@ function hasUsageData(terminal: Terminal): boolean {
   )
 }
 
-/** 时间分桶：today 按小时，week 按日（周一到周日），month 按日期。 */
+/** 时间分桶：today 按小时，week/month 按日，custom 按跨度自适应（≤48h 按小时，否则按日，>62 天按周）。 */
 export interface TimeBucket {
   key: string
   label: string
@@ -86,20 +159,85 @@ export interface TimeBucket {
   output: number
 }
 
-function bucketKeyFor(range: UsageRange, at: number): { key: string; label: string } {
+export type CustomBucketMode = 'hour' | 'day' | 'week'
+
+export function customBucketModeFor(start: number, end: number): CustomBucketMode {
+  const span = end - start
+  if (span <= 2 * DAY_MS) return 'hour'
+  if (span <= 62 * DAY_MS) return 'day'
+  return 'week'
+}
+
+function dayLabel(at: number): string {
+  const date = new Date(at)
+  return `${date.getMonth() + 1}/${date.getDate()}`
+}
+
+function bucketKeyFor(range: UsageRange, at: number, custom?: CustomDateRange, now: number = Date.now()): { key: string; label: string } {
   const date = new Date(at)
   if (range === 'today') {
     const hour = date.getHours()
     return { key: `h${hour}`, label: String(hour) }
+  }
+  if (range === 'custom' && custom) {
+    const start = startOfDay(custom.start)
+    const mode = customBucketModeFor(start, Math.min(endOfDay(custom.end), now))
+    if (mode === 'hour') {
+      const index = Math.max(0, Math.floor((at - start) / HOUR_MS))
+      const label = `${dayLabel(at)} ${String(date.getHours()).padStart(2, '0')}:00`
+      return { key: `ch${index}`, label }
+    }
+    if (mode === 'week') {
+      const index = Math.max(0, Math.floor((startOfDay(at) - start) / (7 * DAY_MS)))
+      return { key: `cw${index}`, label: dayLabel(start + index * 7 * DAY_MS) }
+    }
+    return { key: `cd${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`, label: dayLabel(at) }
   }
   const month = date.getMonth() + 1
   const day = date.getDate()
   return { key: `d${month}-${day}`, label: `${month}/${day}` }
 }
 
-function bucketKeysFor(range: UsageRange, now: number): Array<{ key: string; label: string }> {
+function bucketKeysFor(range: UsageRange, now: number, custom?: CustomDateRange): Array<{ key: string; label: string }> {
   if (range === 'today') {
     return Array.from({ length: 24 }, (_, hour) => ({ key: `h${hour}`, label: String(hour) }))
+  }
+  if (range === 'custom' && custom) {
+    const start = startOfDay(custom.start)
+    const end = Math.min(endOfDay(custom.end), now)
+    if (end < start) return []
+    const mode = customBucketModeFor(start, end)
+    if (mode === 'hour') {
+      const count = Math.min(72, Math.floor((end - start) / HOUR_MS) + 1)
+      return Array.from({ length: count }, (_, index) => {
+        const at = start + index * HOUR_MS
+        const date = new Date(at)
+        return { key: `ch${index}`, label: `${dayLabel(at)} ${String(date.getHours()).padStart(2, '0')}:00` }
+      })
+    }
+    if (mode === 'week') {
+      const keys: Array<{ key: string; label: string }> = []
+      let index = 0
+      let cursor = start
+      while (cursor <= end && index < 60) {
+        keys.push({ key: `cw${index}`, label: dayLabel(cursor) })
+        index += 1
+        cursor += 7 * DAY_MS
+      }
+      return keys
+    }
+    const keys: Array<{ key: string; label: string }> = []
+    const cursor = new Date(start)
+    cursor.setHours(12, 0, 0, 0)
+    const last = new Date(end)
+    last.setHours(12, 0, 0, 0)
+    while (cursor.getTime() <= last.getTime() && keys.length < 400) {
+      const at = cursor.getTime()
+      const date = new Date(at)
+      keys.push({ key: `cd${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`, label: dayLabel(at) })
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    return keys
   }
   const start = rangeStartFor(range, now)
   const end = new Date(now)
@@ -120,18 +258,20 @@ export function aggregateUsageStats(
   range: UsageRange,
   now: number = Date.now(),
   preset?: TerminalPreset,
+  custom?: CustomDateRange,
 ): UsageStatsSummary {
-  const rangeStart = rangeStartFor(range, now)
+  const rangeStart = rangeStartFor(range, now, custom)
+  const rangeEnd = rangeEndFor(range, now, custom)
   const byPreset = new Map<TerminalPreset, UsagePresetRow>()
   const seriesMap = new Map<string, TimeBucket>(
-    bucketKeysFor(range, now).map(({ key, label }) => [key, { key, label, totalTokens: 0, hits: 0, misses: 0, unknown: 0, output: 0 }]),
+    bucketKeysFor(range, now, custom).map(({ key, label }) => [key, { key, label, totalTokens: 0, hits: 0, misses: 0, unknown: 0, output: 0 }]),
   )
   let terminalsWithoutData = 0
 
   for (const terminal of terminals) {
     if (preset !== undefined && terminal.preset !== preset) continue
     const observedAt = terminal.telemetryUpdatedAt ?? terminal.updatedAt ?? 0
-    if (observedAt < rangeStart) continue
+    if (observedAt < rangeStart || observedAt > rangeEnd) continue
     if (!hasUsageData(terminal)) {
       terminalsWithoutData += 1
       continue
@@ -161,7 +301,7 @@ export function aggregateUsageStats(
     if (terminal.detectedModel && !row.models.includes(terminal.detectedModel)) {
       row.models.push(terminal.detectedModel)
     }
-    const bucket = seriesMap.get(bucketKeyFor(range, observedAt).key)
+    const bucket = seriesMap.get(bucketKeyFor(range, observedAt, custom, now).key)
     if (bucket) {
       const input = terminal.inputTokens ?? 0
       const write = terminal.cacheWriteTokens ?? 0
@@ -183,6 +323,7 @@ export function aggregateUsageStats(
   return {
     range,
     rangeStart,
+    rangeEnd,
     rows,
     series: [...seriesMap.values()],
     totalTokens: rows.reduce((sum, row) => sum + row.totalTokens, 0),
