@@ -5,11 +5,11 @@ kind: task
 lifecycle: proposed
 created: 2026-10-02
 class: feature
-tags: [cliproxy, llm, codex, external-cli, windows, 0.9.1]
+tags: [cliproxy, llm, codex, external-cli, windows, 0.9.1, dashboard, multi-account]
 work:
   scope:
     - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
-      paths: [src/main/cliproxy/, src/shared/ipc/cliproxy.ts, src/main/ipc/cliproxy-handlers.ts, src/preload/index.ts, src/renderer/src/services/cliproxy.ts, src/renderer/src/components/CliProxyPanel.tsx, src/renderer/src/i18n/locales/zh-CN/cliproxy.json, src/renderer/src/i18n/locales/en/cliproxy.json, src/main/external-cli/, src/main/llm/ConfigStore.ts, tests/unit/cliproxy/, .agents/notes/]
+      paths: [src/main/cliproxy/, src/shared/ipc/cliproxy.ts, src/main/ipc/cliproxy-handlers.ts, src/preload/index.ts, src/renderer/src/services/cliproxy.ts, src/renderer/src/components/CliProxyPanel.tsx, src/renderer/src/components/CliProxyAccountsPanel.tsx, src/renderer/src/i18n/locales/zh-CN/cliproxy.json, src/renderer/src/i18n/locales/en/cliproxy.json, src/main/external-cli/, src/main/llm/ConfigStore.ts, tests/unit/cliproxy/, .agents/notes/]
   acceptanceRefs:
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/23372e89-e580-446d-b345-05c8a5c31d87
       criterionId: AC-1
@@ -23,6 +23,10 @@ work:
       criterionId: AC-5
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/23372e89-e580-446d-b345-05c8a5c31d87
       criterionId: AC-6
+    - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/23372e89-e580-446d-b345-05c8a5c31d87
+      criterionId: AC-7
+    - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/23372e89-e580-446d-b345-05c8a5c31d87
+      criterionId: AC-8
   verification:
     - id: V-1
       kind: command
@@ -48,11 +52,13 @@ P2 config plus login orchestration: generate `userData/janusx/cliproxy/config.ya
 
 P3 Janus-internal consumption (no sharing): expose the gateway as an ordinary `api-key` provider entry inside each terminal's own collection via the existing `llmService.saveTerminalProvider` path (`src/main/llm/ConfigStore.ts`, `src/main/llm/config-document.ts` unchanged in shape). Provide one-click "write gateway provider into this terminal" per tab (`janus` first, then `codex`/`claude` as needed), each writing `baseURL=http://127.0.0.1:8317/v1`, `apiKey=<local gateway key>`, `modelId=<gateway model alias>` into that terminal only. No pool, no binding map, no cross-terminal reference; editing one terminal never touches another. This extends [the per-terminal collections design](./2026-09-18-terminal-provider-collections--51ac8035.md) without reopening it.
 
-P4 external Codex CLI pointing: extend the existing per-format projectors (`src/main/external-cli/terminal-projectors.ts`) with a `model_providers.cliproxyapi` TOML block writer for `~/.codex/config.toml` (`base_url=http://127.0.0.1:8317/v1`, `experimental_bearer_token=<local key>`, `wire_api=responses`), keeping the current `model`-key projector, backup-plus-verify, and rollback semantics. Never write `~/.codex/auth.json`; OAuth stays inside CPA `auth-dir`. Out of scope for 0.9.1: Claude/Gemini/Grok login flows, multi-account round-robin UI, quota dashboard, LAN exposure.
+P4 external Codex CLI pointing: extend the existing per-format projectors (`src/main/external-cli/terminal-projectors.ts`) with a `model_providers.cliproxyapi` TOML block writer for `~/.codex/config.toml` (`base_url=http://127.0.0.1:8317/v1`, `experimental_bearer_token=<local key>`, `wire_api=responses`), keeping the current `model`-key projector, backup-plus-verify, and rollback semantics. Never write `~/.codex/auth.json`; OAuth stays inside CPA `auth-dir`. Out of scope for 0.9.1: LAN exposure. Multi-provider login flows move to P6 below.
 
-P5 UI plus packaging: Settings gateway card with four states (not-installed / stopped / running / broken), actions (download, start, stop, login-codex, open-management, copy-gateway-key), port status line, and zh-CN/en copy in a new `cliproxy` i18n namespace. IPC chain follows the house pattern (`src/shared/ipc/cliproxy.ts` to `src/main/ipc/cliproxy-handlers.ts` to preload bridge to renderer service). No `extraResources` binary in 0.9.1; on-demand download only. Show the subscription-ToS risk notice before first login.
+P5 UI plus packaging: Settings gateway card with four states (not-installed / stopped / running / broken), actions (download, start, stop, login-codex, open-management, copy-gateway-key), port status line, and zh-CN/en copy in a new `cliproxy` i18n namespace. IPC chain follows the house pattern (`src/shared/ipc/cliproxy.ts` to `src/main/ipc/cliproxy-handlers.ts` to preload bridge to renderer service). No `extraResources` binary in 0.9.1; on-demand download only. Show the subscription-ToS risk notice before first login. The card keeps an `open-management` fallback (native `http://127.0.0.1:8317/management.html`) for long-tail features without reimplementing them.
 
-Non-goals for 0.9.1: bundling the exe into the installer, TS port of Codex/Claude translators, Management API quota UI, `allow-remote:true`, auto-update of the sidecar, Linux/macOS packaging sign-off (code must not break them, but verification is Windows-first plus typecheck).
+P6 full account cards (CPA-Dashboard parity, Janus-native reimplementation, no Python bundle): new `CliProxyAccountsPanel` mounted at the top of the Settings `llm` tab above `CliSyncSection` (general tab keeps only the P5 one-line health row). Visual and interaction parity with `dongshuyan/CPA-Dashboard` account page, rebuilt in React with Janus tokens plus the `cliproxy` i18n namespace — never an iframe or bundled `app.py`. Sections: (a) service control row (start/stop/restart, PID plus service dir plus log path, log view with auto-refresh plus clear); (b) stats overview (total plus per-type plus ULTRA/PRO plus needs-relogin counts); (c) account card grid, one card per credential from `GET /v0/management/auth-files` (local `auth-dir` JSON read as offline fallback): email, provider tag (Antigravity, Gemini CLI, Codex, Claude, Qwen, iFlow, Kimi), membership (ULTRA/PRO/FREE), status (active versus needs-relogin), quota bar plus reset countdown where the provider exposes realtime quota (Antigravity) else the static model list synced with CPA `model_definitions_static_data.go`; (d) per-card actions (refresh-quota, delete with confirm, Codex refresh additionally probes Models API and marks needs-relogin on 401); (e) top-level actions (refresh-all with 1-32 concurrency default 4 plus persisted quota cache, add-account OAuth wizard covering all 7 providers with callback ports `51121/8085/1455/54545/55998` plus device-code for Qwen/Kimi, batch-delete needs-relogin with double confirm); (f) type filter (all plus 7 providers plus ULTRA/PRO) combined with needs-relogin-only toggle; (g) connection info block (Base URL, local gateway key count, copyable cURL/Python/OpenAI-SDK examples). Data path is main-side only: Management API with `Bearer <management-key>` over `127.0.0.1` (`/auth-files`, quota switches, `/reset-quota`, `/logs`, `/api-call`), `SerialQueue` plus quota-cache atomic write, tokens never reach logs or renderer state beyond display-masked email. Full login coverage (all 7 OAuth flows) lands here, not in P2.
+
+Non-goals for 0.9.1: bundling the exe into the installer, TS port of Codex/Claude translators, `allow-remote:true`, auto-update of the sidecar, Linux/macOS packaging sign-off (code must not break them, but verification is Windows-first plus typecheck).
 
 ## Acceptance criteria
 
@@ -62,11 +68,13 @@ Non-goals for 0.9.1: bundling the exe into the installer, TS port of Codex/Claud
 - [ ] AC-4: No shared pool is introduced: gateway credentials reach terminals only as independent per-terminal `api-key` entries; deleting or editing one terminal leaves the others untouched, and `janus` internal features keep resolving the `janus` collection.
 - [ ] AC-5: External Codex CLI can be pointed at the gateway through the projector with backup plus verify plus rollback, without touching `auth.json`; rollback restores the newest backup and refuses loudly when none exists.
 - [ ] AC-6: UI shows the four gateway states with working download/start/stop/login actions, port-conflict and broken-binary diagnostics, zh-CN/en copy, and the ToS notice; `npm run typecheck`, unit suites, and `npm run i18n:check` stay green.
+- [ ] AC-7: Settings `llm` tab shows the full account grid with CPA-Dashboard parity (service row, stats, per-card email plus provider plus membership plus status plus quota-or-static-list, refresh plus delete, refresh-all concurrency, 7-provider add wizard, type plus needs-relogin filters, batch-delete-invalid with confirm, connection examples); no Python runtime, no iframe, Janus tokens plus `cliproxy` namespace.
+- [ ] AC-8: Quota path is main-side only with cache plus concurrency 1-32 default 4, Codex 401 marks needs-relogin, offline falls back to `auth-dir` JSON read, management key stays localhost-only and out of logs/renderer secrets.
 
 ## Verification
 
 - `npm run typecheck` (V-1, required).
-- `npx vitest run tests/unit/cliproxy` (new: download-verify, config-template, port-conflict, provider-writer, projector-block suites; network and OAuth flows mocked, no live subscription in unit).
+- `npx vitest run tests/unit/cliproxy` (new: download-verify, config-template, port-conflict, provider-writer, projector-block, auth-files-parse, quota-cache-concurrency, card-filter suites; network and OAuth flows mocked, no live subscription in unit).
 - `npx vitest run tests/unit/external-cli tests/unit/llm` (regression: terminal collections and projectors untouched in shape).
 - `npm run i18n:check` (new `cliproxy` namespace in sync).
 - Manual Windows-only: official exe download, `--codex-login` plus device fallback, daemon start, Janus chat call through the gateway provider, `codex CLI` call through `model_providers.cliproxyapi`, stop plus rollback; record release version and ports in Results. No live credentials in the repo.
@@ -77,6 +85,8 @@ Non-goals for 0.9.1: bundling the exe into the installer, TS port of Codex/Claud
 - Reimplement Codex OAuth plus translators in TypeScript — strongest case is zero binary and full control. The driver that rules it out is maintenance: Codex cloaking, Claude betas, and quota semantics track upstream constantly; the sidecar buys all of it for one process-supervision module.
 - Point every terminal at one shared gateway provider record — strongest case is single-copy secret. The driver that rules it out is the adopted [per-terminal collections decision](./2026-09-18-terminal-provider-collections--51ac8035.md): independent `{providers, defaultId}` per terminal with one-time copy, never references; sharing reopens sprawl and cross-terminal delete propagation.
 - Depend on an external EasyCLIProxyAPI install only — strongest case is zero Janus code beyond docs. The driver that rules it out is UX: detection plus guided install stays, but login, daemon supervision, and one-click provider wiring are the 0.9.1 value; external-only remains the fallback when the managed download is unavailable.
+- Bundle or iframe CPA-Dashboard (`dongshuyan/CPA-Dashboard` Flask `app.py` on `:5000`) — strongest case is instant full cards with zero React work. The driver that rules it out is stack and trust cost: extra Python venv plus pip plus second supervised port, theme plus i18n plus ToS-gate mismatch, management key in browser localStorage reversible-obfuscation instead of Electron main-side custody, no one-click write into per-terminal collections, and no published license file for bundling; Dashboard stays the product-pattern reference plus the `open-management` fallback, never a runtime dependency.
+- Embed the official `management.html` (`:8317/management.html`) in a webview — strongest case is zero parity drift. The driver that rules it out is the same custody gap (localStorage key, no Janus tokens/i18n, no house backup plus verify patterns); keep it as the linked fallback behind `open-management`.
 - Do nothing / keep hand-edited `baseURL=http://127.0.0.1:8317/v1` — costs nothing now. The cost is the gap above: manual binary, YAML, login, daemon, and per-terminal wiring with no safety net on Windows.
 
 ## Results

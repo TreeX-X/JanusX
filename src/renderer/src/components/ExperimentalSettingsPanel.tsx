@@ -9,8 +9,8 @@ import confirmationStyles from './ExperimentalSettingsPanel.module.css'
 
 type FeatureKey = keyof ExperimentalFeatures
 
-const PREVIEW_FEATURES: FeatureKey[] = ['blueprint', 'knowledge']
-const DEV_FEATURES: FeatureKey[] = ['roundtable', 'persona', 'remoteControl', 'teamCollab']
+const PREVIEW_FEATURES: FeatureKey[] = ['blueprint', 'knowledge', 'persona']
+const DEV_FEATURES: FeatureKey[] = ['roundtable', 'remoteControl', 'teamCollab']
 
 // Note: every feature transition requires explicit confirmation — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
 export function ExperimentalSettingsPanel() {

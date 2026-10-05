@@ -31,6 +31,16 @@ body.desktop-toast-body {
 
 /* 文本选中颜色走主题 definition（::selection，见 themes.generated.css） */
 
+/* 输入提示色走主题 dim 令牌：行内样式输入（会话搜索、Git 提交框、文件树搜索等）
+   没有自己的 ::placeholder 声明时会吃到 Tailwind preflight 的冷灰 #9ca3af，
+   落在纸面主题上发白难读；这里统一兜底。已有类级声明的
+   （如 .searchInput::placeholder）特异性更高，照旧优先。 */
+input::placeholder,
+textarea::placeholder {
+  color: var(--shell-dim);
+  opacity: 1;
+}
+
 /* Monaco 编辑器选中颜色 — CSS 层面兜底 */
 .monaco-editor .selected-text,
 .monaco-editor .focused .selected-text {

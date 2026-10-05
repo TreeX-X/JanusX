@@ -707,6 +707,8 @@ export function Sidebar() {
   const setLoadState = useAppStore((s) => s.setLoadState)
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
+  // 删除确认弹窗主题分支：底座走语义令牌，纸面点睛（硬套印影）走分支，与 ⋯ 菜单同构
+  const plancheModal = useThemeStore((s) => s.theme) === 'planche'
 
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null)
   const [configTarget, setConfigTarget] = useState<Workspace | null>(null)
@@ -1588,7 +1590,9 @@ export function Sidebar() {
           }}
         />
       )}
-      {/* 删除确认弹窗 — portal 到 body 级别，居窗口中央 */}
+      {/* 删除确认弹窗 — portal 到 body 级别，居窗口中央。
+          遮罩沿用共享 scrim（rgba(8,8,10,0.62)+blur，与 ModalFrame/新建任务盘一致，纸面不翻淡）；
+          面板底座/描边/分隔线一律走语义令牌，纸面点睛走 plancheModal 硬套印影。 */}
       {deleteTarget && createPortal(
         <div
           className="fixed inset-0 flex items-center justify-center"
@@ -1602,10 +1606,12 @@ export function Sidebar() {
             className="overflow-hidden"
             style={{
               width: 380,
-              background: 'rgba(22,22,22,0.98)',
-              border: '1px solid rgba(255,88,88,0.2)',
+              background: 'var(--shell-chrome)',
+              border: '1px solid var(--shell-accent-border)',
               borderRadius: 8,
-              boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+              boxShadow: plancheModal
+                ? '3px 3px 0 #E8A08A'
+                : '0 20px 50px rgba(0,0,0,0.8)',
               animation: 'island-expand-modal 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
             }}
           >
@@ -1614,7 +1620,7 @@ export function Sidebar() {
               className="flex justify-between items-center"
               style={{
                 padding: '12px 16px',
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
+                borderBottom: '1px solid var(--control-border)',
               }}
             >
               <div
@@ -1636,11 +1642,11 @@ export function Sidebar() {
               <div
                 style={{
                   padding: '8px 10px',
-                  background: 'rgba(255,88,88,0.06)',
-                  border: '1px solid rgba(255,88,88,0.12)',
+                  background: 'var(--shell-accent-soft)',
+                  border: '1px solid var(--shell-accent-border)',
                   borderRadius: 4,
                   fontSize: 11,
-                  color: '#c0848a',
+                  color: 'var(--shell-muted)',
                   lineHeight: 1.5,
                 }}
               >
@@ -1654,7 +1660,7 @@ export function Sidebar() {
               className="flex justify-end"
               style={{
                 padding: '10px 16px',
-                borderTop: '1px solid rgba(255,255,255,0.06)',
+                borderTop: '1px solid var(--control-border)',
                 gap: 8,
               }}
             >
@@ -1665,8 +1671,8 @@ export function Sidebar() {
                   height: 28,
                   padding: '0 14px',
                   fontSize: 11,
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'transparent',
+                  border: '1px solid var(--control-border)',
                   color: 'var(--shell-muted)',
                 }}
               >
@@ -1679,8 +1685,8 @@ export function Sidebar() {
                   height: 28,
                   padding: '0 14px',
                   fontSize: 11,
-                  background: 'rgba(255,88,88,0.12)',
-                  border: '1px solid rgba(255,88,88,0.3)',
+                  background: 'var(--shell-accent-soft)',
+                  border: '1px solid var(--shell-accent-border)',
                   color: 'var(--shell-diff-del)',
                 }}
               >

@@ -173,10 +173,10 @@ it('requires confirmation for both directions of every experimental feature and 
     await mount(page, true)
     await page.evaluate(() => document.documentElement.dataset.theme = 'dark')
     await page.locator('[data-tab="experimental"]').click()
-    for (const key of ['blueprint', 'knowledge', 'roundtable', 'persona', 'remoteControl', 'teamCollab']) {
+    for (const key of ['blueprint', 'knowledge', 'persona', 'roundtable', 'remoteControl', 'teamCollab']) {
       for (const value of [true, false]) {
         await page.evaluate(({ key, value }) => (window as any).features.getState().apply({ [key]: !value }), { key, value })
-        const input = page.getByRole('checkbox').nth(['blueprint', 'knowledge', 'roundtable', 'persona', 'remoteControl', 'teamCollab'].indexOf(key))
+        const input = page.getByRole('checkbox').nth(['blueprint', 'knowledge', 'persona', 'roundtable', 'remoteControl', 'teamCollab'].indexOf(key))
         const before = await page.evaluate(() => (window as any).featureWrites.length)
         // The visible switch track dispatches a real checkbox click.
         await input.locator('..').click()

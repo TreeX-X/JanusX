@@ -816,6 +816,11 @@ body.is-running {
   transition: color 0.4s;
 }
 
+/* Viewport dim for the expanded stage. Must be mounted at body level
+   (see JanusIsland veil portal): any transformed ancestor (shell translateX,
+   cluster centering, drag offset) traps position:fixed into a shell-sized
+   square that paints above the panel instead of a full-viewport dim below it.
+   Inline z-index 1999 keeps it below the panel cluster (2000) and above page. */
 .janus-veil {
   position: fixed;
   inset: 0;
