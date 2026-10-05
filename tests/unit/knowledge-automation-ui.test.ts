@@ -30,7 +30,9 @@ beforeAll(async () => {
       getSettings:async()=>window.config,updateSettings:async(value)=>{window.calls.push('save');value.automation.local=window.config.automation.local;window.config=value;return structuredClone(value)},externalMcpStatus:async()=>null,
       automationStatus:async()=>status(),automationRun:async()=>{window.calls.push('run');return status()},automationRetry:async()=>{},
       localResourcesStatus:async()=>structuredClone(window.resources),installLocalResources:async()=>{window.calls.push('install');window.resources.phase='downloading';window.resources.totalBytes=100;return structuredClone(window.resources)},
-      jevCredentialStatus:async()=>({configured:false}),setJevCredential:async()=>{},stopLocalModel:async()=>{window.calls.push('stop');disabledLocal();if(['checking','downloading','verifying','extracting'].includes(window.resources.phase))window.resources.phase='cancelled'},
+      jevCredentialStatus:async()=>{if(window.credentialLoadError)throw new Error('load-failed');return {configured:Boolean(window.savedCredential)}},
+      revealJevCredential:async()=>{window.calls.push('reveal');if(window.credentialRevealError)throw new Error('read-failed');return window.savedCredential??null},
+      setJevCredential:async key=>{window.calls.push('credential');if(window.credentialWait)await new Promise(resolve=>window.finishCredential=resolve);if(window.credentialError)throw new Error(window.credentialError);window.savedCredential=key.trim()},stopLocalModel:async()=>{window.calls.push('stop');disabledLocal();if(['checking','downloading','verifying','extracting'].includes(window.resources.phase))window.resources.phase='cancelled'},
       configureLocalModel:async(local)=>{window.calls.push('check');if(window.localResult==='wait')await new Promise(resolve=>window.finishCheck=resolve);const ok=window.localResult!=='fail';if(ok)window.config.automation.local=local;return {settings:structuredClone(window.config),report:{ok,reason:ok?undefined:'local-memory-insufficient',mode:'gpu',availableMemoryMiB:16000,availableVramMiB:6000,modelContextTokens:262144,recommendedContextTokens:32768,selectedContextTokens:32768,supportedContextTokens:[32768]}}}
     }}
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true,load:async()=>{}})
@@ -51,6 +53,74 @@ beforeAll(async () => {
   script = result.outputFiles.find(file => file.path.endsWith('.js'))!.text; css = result.outputFiles.find(file => file.path.endsWith('.css'))!.text
 })
 afterAll(async () => { await browser?.close() })
+async function openJev(page: Page) {
+  await page.getByRole('button', { name: 'Entry review', exact: true }).scrollIntoViewIfNeeded()
+  await page.waitForTimeout(100)
+  await page.getByRole('button', { name: 'Entry review', exact: true }).click()
+  await page.getByRole('option', { name: 'Jev review', exact: true }).click()
+}
+it('shows save progress, masks persisted credentials and reveals only on demand across remounts', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page); await openJev(page)
+    const input = page.getByLabel('Jev credential', { exact: true })
+    await input.fill('test-secret')
+    await page.evaluate(() => { (window as any).credentialWait = true })
+    await page.getByRole('button', { name: 'Save credential', exact: true }).click()
+    expect(await page.getByRole('button', { name: 'Saving credential…' }).isDisabled()).toBe(true)
+    expect(await page.getByRole('button', { name: 'Show credential' }).isDisabled()).toBe(true)
+    await page.evaluate(() => { (window as any).finishCredential(); (window as any).credentialWait = false })
+    await page.getByText('Credential saved successfully and encrypted', { exact: true }).waitFor()
+    expect(await input.inputValue()).toBe('')
+    expect(await input.getAttribute('placeholder')).toBe('••••••••••••')
+    expect(await page.evaluate(() => (window as any).calls)).toEqual(['credential'])
+    await page.getByRole('button', { name: 'Show credential' }).click()
+    await expect.poll(() => input.inputValue()).toBe('test-secret')
+    expect(await input.getAttribute('type')).toBe('text')
+    await page.getByRole('button', { name: 'Hide credential' }).click()
+    expect(await input.inputValue()).toBe('')
+    expect(await input.getAttribute('type')).toBe('password')
+    await page.getByRole('button', { name: 'Entry review', exact: true }).scrollIntoViewIfNeeded()
+    await page.waitForTimeout(100)
+    await page.getByRole('button', { name: 'Entry review', exact: true }).click()
+    await page.getByRole('option', { name: 'Off · manual handling', exact: true }).click()
+    await openJev(page)
+    await page.getByText('Credential stored encrypted', { exact: true }).waitFor()
+    expect(await input.getAttribute('placeholder')).toBe('••••••••••••')
+    expect(await page.evaluate(() => (window as any).calls.filter((call: string) => call === 'reveal').length)).toBe(1)
+    await page.getByRole('button', { name: 'Delete credential', exact: true }).click()
+    await page.getByText('Credential cleared', { exact: true }).waitFor()
+    expect(await input.getAttribute('placeholder')).toBe('')
+  } finally { await page.close() }
+})
+it('preserves failed edits for retry and keeps reveal failures distinct from save failures', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page)
+    await page.evaluate(() => { (window as any).savedCredential = 'stored-secret' })
+    await openJev(page)
+    await page.getByText('Credential stored encrypted', { exact: true }).waitFor()
+    await page.evaluate(() => { (window as any).credentialRevealError = true })
+    await page.getByRole('button', { name: 'Show credential' }).click()
+    await page.getByRole('alert').getByText('Could not read the saved credential. Please retry.').waitFor()
+    const input = page.getByLabel('Jev credential', { exact: true })
+    await input.fill('replacement-secret')
+    await page.getByRole('button', { name: 'Show credential' }).click()
+    expect(await input.inputValue()).toBe('replacement-secret')
+    expect(await input.getAttribute('type')).toBe('text')
+    await page.getByRole('button', { name: 'Hide credential' }).click()
+    expect(await input.inputValue()).toBe('replacement-secret')
+    await page.evaluate(() => { (window as any).credentialError = 'credential-encryption-unavailable' })
+    await page.getByRole('button', { name: 'Save credential', exact: true }).click()
+    await page.getByRole('alert').getByText('System encryption is unavailable. Credential was not saved.').waitFor()
+    expect(await input.inputValue()).toBe('replacement-secret')
+    expect(await page.evaluate(() => (window as any).savedCredential)).toBe('stored-secret')
+    await page.evaluate(() => { (window as any).credentialError = '' })
+    await page.getByRole('button', { name: 'Save credential', exact: true }).click()
+    await page.getByText('Credential saved successfully and encrypted', { exact: true }).waitFor()
+    expect(await page.evaluate(() => (window as any).savedCredential)).toBe('replacement-secret')
+  } finally { await page.close() }
+})
 async function mount(page: Page, gates = false) {
   page.setDefaultTimeout(4000); await page.setContent('<div id="root"></div>'); await page.addStyleTag({ content: css + '\n:root{--shell-accent:#ff7830;--so-body-pad-x:16px;--so-body-pad-y:16px}*{box-sizing:border-box}body{margin:0;padding:16px}#root{max-width:800px}' })
   await page.evaluate(value => { (window as any).gates = value }, gates); await page.addScriptTag({ content: script })

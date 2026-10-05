@@ -59,6 +59,7 @@ export const KNOWLEDGE_CHANNELS = {
   automationRetry: 'knowledge:automation:retry',
   jevCredential: 'knowledge:jev:credential',
   jevCredentialStatus: 'knowledge:jev:credential-status',
+  jevCredentialReveal: 'knowledge:jev:credential-reveal',
   localModelStop: 'knowledge:local-model:stop',
   localModelConfigure: 'knowledge:local-model:configure',
   localResourcesInstall: 'knowledge:local-model:install',
@@ -333,6 +334,7 @@ export interface KnowledgeAPI {
   automationRun: (input?: { backfill?: boolean }) => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
   automationRetry: (id: string) => Promise<void>
   setJevCredential: (key: string) => Promise<void>
+  revealJevCredential: () => Promise<string | null>
   jevCredentialStatus: () => Promise<{ configured: boolean }>
   stopLocalModel: () => Promise<void>
   installLocalResources: () => Promise<import('../knowledge-automation').KnowledgeLocalResources>

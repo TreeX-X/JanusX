@@ -60,6 +60,7 @@ export function registerKnowledgeHandlers(): void {
   ipcMain.handle(KNOWLEDGE_CHANNELS.automationRetry, async (_event, id: string) => { await assertEnabled(); await knowledgeAutomationService.retry(id) })
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredential, async (_event, input: unknown) => { await assertEnabled(); knowledgeAutomationService.stop(); return setJevKey(input) })
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredentialStatus, async () => ({ configured: Boolean(await getJevKey()) }))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredentialReveal, async () => { await assertEnabled(); return getJevKey() })
   ipcMain.handle(KNOWLEDGE_CHANNELS.localModelConfigure, (_event, input: unknown) => configureKnowledgeLocalModel(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.localResourcesInstall, () => startKnowledgeLocalResources())
   ipcMain.handle(KNOWLEDGE_CHANNELS.localResourcesStatus, () => knowledgeLocalResources.status())

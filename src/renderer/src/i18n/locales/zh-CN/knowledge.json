@@ -499,7 +499,7 @@
     "key": "Jev 密钥",
     "saveKey": "保存密钥",
     "clearKey": "删除密钥",
-    "credentialFailed": "密钥保存失败，请检查系统加密服务。",
+    "credentialFailed": "密钥保存失败，请重试。",
     "loadFailed": "自动处理状态或配置读取失败，请刷新重试。",
     "actionFailed": "操作失败，请检查配置与任务记录。",
     "progress": "自动处理进度",
@@ -534,7 +534,22 @@
       "extracting": "正在安装 GPU 运行程序…",
       "ready": "资源已就绪。点击“检测并启用”后，流程中才可选择本地模型。",
       "cancelled": "已取消，保留已校验的完整文件；重试时复用。"
-    }
+    },
+    "keySaving": "正在保存密钥…",
+    "keyClearing": "正在清除密钥…",
+    "keyLoading": "正在读取密钥状态…",
+    "keyRevealing": "正在读取密钥…",
+    "keySaved": "密钥保存成功，已加密存储",
+    "keyCleared": "密钥已清除",
+    "keyUnsaved": "密钥有未保存的修改",
+    "showKey": "显示密钥",
+    "hideKey": "隐藏密钥",
+    "credentialLoadFailed": "无法读取密钥状态，请重新打开设置重试。",
+    "credentialRevealFailed": "无法读取已保存的密钥，请重试。",
+    "credentialClearFailed": "密钥清除失败，请重试。",
+    "credentialEncryptionFailed": "系统加密服务不可用，密钥未保存。",
+    "credentialDisabled": "请先开启知识库功能，再保存密钥。",
+    "credentialInvalid": "密钥格式无效，请检查后重试。"
   },
   "domains": {
     "title": "知识与记忆",

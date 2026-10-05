@@ -156,6 +156,7 @@ const knowledgeAPI: KnowledgeAPI = {
   automationRetry: (id) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationRetry, id),
   setJevCredential: (key) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredential, key),
   jevCredentialStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredentialStatus),
+  revealJevCredential: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredentialReveal),
   stopLocalModel: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localModelStop),
   installLocalResources: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localResourcesInstall),
   localResourcesStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.localResourcesStatus),

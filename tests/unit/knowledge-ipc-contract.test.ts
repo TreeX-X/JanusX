@@ -15,6 +15,7 @@ import { normalizeKnowledgeSettings } from '../../src/shared/knowledge-settings'
 import * as localEnvironment from '../../src/main/knowledge/knowledge-local-environment'
 import { configureKnowledgeLocalModel, disableKnowledgeLocalModel, startKnowledgeLocalResources, updateKnowledgeSettingsFromRenderer } from '../../src/main/knowledge/knowledge-local-settings'
 import { knowledgeLocalResources } from '../../src/main/knowledge/knowledge-local-resources'
+import { getJevKey } from '../../src/main/knowledge/knowledge-credentials'
 import {
   getKnowledgeSettings,
   updateKnowledgeSettings,
@@ -26,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
   getKnowledgeSettings: vi.fn(),
   updateKnowledgeSettings: vi.fn(),
+  knowledgeEnabled: true,
 }))
 
 let knowledgeApi: KnowledgeAPI
@@ -64,7 +66,7 @@ vi.mock('../../src/main/knowledge/processing-queue', () => ({ knowledgeProcessin
 vi.mock('../../src/main/config/service', () => ({
   configService: {
     getKnowledgeSettings: mocks.getKnowledgeSettings,
-    getExperimentalFeatures: async () => ({ knowledge: true }),
+    getExperimentalFeatures: async () => ({ knowledge: mocks.knowledgeEnabled }),
     updateKnowledgeSettings: mocks.updateKnowledgeSettings,
   },
 }))
@@ -88,6 +90,7 @@ describe('Knowledge IPC contract', () => {
     mocks.invoke.mockResolvedValue(undefined)
     mocks.getKnowledgeSettings.mockReset()
     mocks.updateKnowledgeSettings.mockReset()
+    mocks.knowledgeEnabled = true
   })
 
   it('defines and registers exactly the public channel set without maintenance exposure', () => {
@@ -96,7 +99,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(61)
+    expect(channels).toHaveLength(62)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -104,6 +107,19 @@ describe('Knowledge IPC contract', () => {
       'knowledge:observations:archive',
       'knowledge:observations:compact',
     ]))
+  })
+
+  it('reveals credentials through an explicit gated call while status returns only configuration', async () => {
+    await knowledgeApi.revealJevCredential()
+    expect(mocks.invoke).toHaveBeenCalledWith(KNOWLEDGE_CHANNELS.jevCredentialReveal)
+    const handler = (channel: string) => mocks.handle.mock.calls.find(([name]) => name === channel)![1]
+    vi.mocked(getJevKey).mockReset().mockResolvedValue('test-secret')
+    expect(await handler(KNOWLEDGE_CHANNELS.jevCredentialStatus)()).toEqual({ configured: true })
+    expect(await handler(KNOWLEDGE_CHANNELS.jevCredentialReveal)()).toBe('test-secret')
+    vi.mocked(getJevKey).mockClear()
+    mocks.knowledgeEnabled = false
+    await expect(handler(KNOWLEDGE_CHANNELS.jevCredentialReveal)()).rejects.toThrow('knowledge-disabled')
+    expect(getJevKey).not.toHaveBeenCalled()
   })
 
   it('routes all typed operations with their existing argument order', async () => {
@@ -392,6 +408,7 @@ describe('Knowledge IPC contract', () => {
       () => api.automationRetry('task'),
       () => api.setJevCredential(''),
       () => api.jevCredentialStatus(),
+      () => api.revealJevCredential(),
       () => api.stopLocalModel(),
       () => api.installLocalResources(),
       () => api.localResourcesStatus(),
@@ -449,8 +466,8 @@ describe('Knowledge IPC contract', () => {
     calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
     calls.push(() => api.migrateLegacyEpisodes())
     calls.push(() => api.getPersonalSettings(), () => api.updatePersonalSettings({ useInChat: false }))
-    expect(Object.keys(api)).toHaveLength(61)
-    expect(calls).toHaveLength(61)
+    expect(Object.keys(api)).toHaveLength(62)
+    expect(calls).toHaveLength(62)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

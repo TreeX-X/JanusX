@@ -5,6 +5,7 @@ import { useI18n } from '@/i18n/useI18n'
 import { defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeProvider, type KnowledgeStage } from '../../../shared/knowledge-automation'
 import { KnowledgeLocalModelPanel } from './KnowledgeLocalModelPanel'
 import { Select } from './ui/Select'
+import { JevCredentialFields } from './knowledge/JevCredentialFields'
 import { AutomationStatus } from './knowledge/AutomationStatus'
 import styles from './KnowledgeSettingsPanel.module.css'
 import automationStyles from './KnowledgeAutomationPanel.module.css'
@@ -17,25 +18,16 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
   const { t } = useI18n('knowledge')
   const config = value ?? defaultKnowledgeAutomation()
   const [providers, setProviders] = useState<Array<{ id: string; name: string; models: string[] }>>([])
-  const [configured, setConfigured] = useState(false)
-  const [key, setKey] = useState('')
   const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
   useEffect(() => {
     let alive = true
-    void Promise.resolve().then(() => Promise.all([window.electron.llm.getTerminalProviders('janus'), window.electron.knowledge.jevCredentialStatus()]))
-      .then(([items, credential]) => { if (alive) { setProviders(items.filter(item => item.enabled !== false).map(item => ({ id: item.id, name: item.name, models: item.models ?? (item.modelId ? [item.modelId] : []) }))); setConfigured(credential.configured) } })
+    void Promise.resolve().then(() => window.electron.llm.getTerminalProviders('janus'))
+      .then(items => { if (alive) { setProviders(items.filter(item => item.enabled !== false).map(item => ({ id: item.id, name: item.name, models: item.models ?? (item.modelId ? [item.modelId] : []) }))) } })
       .catch(() => { if (alive) setError(t('knowledge:automation.loadFailed')) })
     return () => { alive = false }
   }, [t])
   const updateStage = (stage: KnowledgeStage, changes: Partial<KnowledgeAutomationSettings['stages'][KnowledgeStage]>) =>
     onChange({ ...config, stages: { ...config.stages, [stage]: { ...config.stages[stage], ...changes } } })
-  const credential = async (clear = false) => {
-    setBusy(true); setError('')
-    try { await window.electron.knowledge.setJevCredential(clear ? '' : key); setKey(''); setConfigured(!clear) }
-    catch { setError(t('knowledge:automation.credentialFailed')) }
-    finally { setBusy(false) }
-  }
   return <section className={`${styles.section} ${automationStyles.panel}`} aria-label={t('knowledge:automation.title')}>
     <h3 className={styles.sectionTitle}><Workflow size={14} aria-hidden />{t('knowledge:automation.title')}</h3>
     <p className={styles.hint}>{t('knowledge:automation.description')}</p>
@@ -76,16 +68,11 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
       </fieldset>
     })}</div>
     <KnowledgeLocalModelPanel value={config.local} disabled={disabled} onPersist={onLocalPersist} />
-    {KNOWLEDGE_STAGES.some(stage => config.stages[stage].provider === 'jev') && <fieldset className={automationStyles.credential} disabled={disabled || busy}>
+    {KNOWLEDGE_STAGES.some(stage => config.stages[stage].provider === 'jev') && <fieldset className={automationStyles.credential} disabled={disabled}>
       <legend><KeyRound size={14} aria-hidden />Jev</legend>
       <label className={automationStyles.connectionField}><span>{t('knowledge:automation.jevEndpoint')}</span><input value={config.jev.endpoint}
         onChange={event => onChange({ ...config, jev: { ...config.jev, endpoint: event.target.value } })} /></label>
-      <p className={styles.hint}>{t(configured ? 'knowledge:automation.keyConfigured' : 'knowledge:automation.keyMissing')}</p>
-      <label className={automationStyles.connectionField}><span>{t('knowledge:automation.key')}</span><input type="password" autoComplete="off" value={key} onChange={event => setKey(event.target.value)} /></label>
-      <div className={styles.actions}>
-      <button type="button" className={styles.button} disabled={!key.trim()} onClick={() => void credential()}>{t('knowledge:automation.saveKey')}</button>
-      <button type="button" className={styles.button} disabled={!configured} onClick={() => void credential(true)}>{t('knowledge:automation.clearKey')}</button>
-      </div>
+      <JevCredentialFields disabled={disabled} />
     </fieldset>}
     {error && <p className={`${styles.status} ${styles.statusError}`} role="alert">{error}</p>}
     <AutomationStatus active beforeRun={onSave} disabled={disabled || !knowledgeEnabled || !config.enabled} />

@@ -499,7 +499,7 @@
     "key": "Jev credential",
     "saveKey": "Save credential",
     "clearKey": "Delete credential",
-    "credentialFailed": "Could not save credential. Check system encryption.",
+    "credentialFailed": "Could not save credential. Please retry.",
     "loadFailed": "Could not load automation state or configuration. Refresh to retry.",
     "actionFailed": "Operation failed. Check configuration and task records.",
     "progress": "Automation progress",
@@ -534,7 +534,22 @@
       "extracting": "Installing GPU runtime…",
       "ready": "Resources ready. Check and enable to make the local model available in workflows.",
       "cancelled": "Cancelled. Complete verified files are kept for reuse on retry."
-    }
+    },
+    "keySaving": "Saving credential…",
+    "keyClearing": "Clearing credential…",
+    "keyLoading": "Loading credential status…",
+    "keyRevealing": "Reading credential…",
+    "keySaved": "Credential saved successfully and encrypted",
+    "keyCleared": "Credential cleared",
+    "keyUnsaved": "Credential has unsaved changes",
+    "showKey": "Show credential",
+    "hideKey": "Hide credential",
+    "credentialLoadFailed": "Could not load credential status. Reopen settings to retry.",
+    "credentialRevealFailed": "Could not read the saved credential. Please retry.",
+    "credentialClearFailed": "Could not clear credential. Please retry.",
+    "credentialEncryptionFailed": "System encryption is unavailable. Credential was not saved.",
+    "credentialDisabled": "Enable knowledge before saving a credential.",
+    "credentialInvalid": "Invalid credential. Check the value and retry."
   },
   "domains": {
     "title": "Knowledge & memory",
