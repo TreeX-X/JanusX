@@ -27,7 +27,7 @@ export const demos = {
   split: { script: 'record-split-quad.mjs', asset: 'feature-split', title: '终端分屏' },
   browser: { script: 'record-browser.mjs', asset: 'feature-browser', title: '内置浏览器' },
   markdown: { script: 'record-markdown.mjs', asset: 'feature-markdown', title: 'Quick Note' },
-  blueprint: { script: 'record-blueprint.mjs', asset: 'feature-blueprint', title: '蓝图' },
+  blueprint: { script: 'record-blueprint.mjs', asset: 'feature-blueprint-workbench', title: '蓝图' },
   island: { script: 'record-island.mjs', asset: 'feature-island', title: 'Island' },
   product: { script: 'record-product.mjs', asset: 'feature-product', title: '产物工作区' },
 };

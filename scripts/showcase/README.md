@@ -15,7 +15,7 @@
 | `split` | `record-split-quad.mjs` | `feature-split` |
 | `browser` | `record-browser.mjs` | `feature-browser` |
 | `markdown` | `record-markdown.mjs` | `feature-markdown` |
-| `blueprint` | `record-blueprint.mjs` | `feature-blueprint` |
+| `blueprint` | `record-blueprint.mjs` | `feature-blueprint-workbench` |
 | `island` | `record-island.mjs` | `feature-island` |
 | `product` | `record-product.mjs` | `feature-product` |
 
@@ -52,7 +52,7 @@ node scripts/showcase/compose.mjs --manifest .cache/showcase/product-xxxxxx --ou
 
 原始帧和包含字幕、鼠标位置的 `manifest.json` 保存在 `.cache/showcase/<功能>-<随机后缀>/`。成功录制才更新 `.cache/showcase/<功能>-latest.json`；失败返回非零退出码，`build` 随即停止，不会拿旧帧合成。合成只写指定功能的 GIF 与末帧 PNG。旧版缺少字幕的 manifest 需重新录制，已提交 GIF 不受影响。
 
-各录制实例使用独立的临时用户目录。涉及 CLI 的脚本需要对应 CLI 已安装；`split` 需要 Claude、Codex、OpenCode、Pi，`session` 需要 Claude。现有 `seedFixture` 会复制本机 Claude / OpenCode 登录文件到临时目录，结束后清理。`product` 只用本地文件和 Shell，不复制登录文件，也不调用模型。蓝图默认只输入和悬停；显式设置 `JANUSX_LIVE_MAINTENANCE=1` 才会借用本机模型配置并发送真实请求。
+各录制实例使用独立的临时用户目录。涉及 CLI 的脚本需要对应 CLI 已安装；`split` 需要 Claude、Codex、OpenCode、Pi，`session` 需要 Claude。现有 `seedFixture` 会复制本机 Claude / OpenCode 登录文件到临时目录，结束后清理。`product` 只用本地文件和 Shell，不复制登录文件，也不调用模型。`blueprint` 在临时配置中开启蓝图，以五篇本地 Note 展示系统结构、模块接口、关联决策和全部 Note；最后逐字输入维护指令但不发送，不复制登录文件或调用模型。
 
 ## 调整公共参数
 

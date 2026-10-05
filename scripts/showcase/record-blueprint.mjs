@@ -79,5 +79,5 @@ await runRecord(async ctx => {
   await typeSnap(composer, instruction, 'bp-5');
   await expect(composer).toHaveValue(instruction);
   await rest('bp-5', 260);
-  await saveManifest(recordingRoot, { captions, name: 'feature-blueprint', frames, createdAt: new Date().toISOString() });
+  await saveManifest(recordingRoot, { captions, name: 'feature-blueprint-workbench', frames, createdAt: new Date().toISOString() });
 });
