@@ -6,10 +6,6 @@
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .label, .hint { color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
 .hint { margin: 4px 0 12px; }
-.ranges { display: flex; padding: 3px; gap: 2px; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-card); }
-.ranges button { border: 0; background: transparent; color: var(--shell-muted); font: inherit; font-size: 11px; cursor: pointer; border-radius: 5px; padding: 6px 10px; transition: background 120ms, color 120ms; }
-.ranges button[aria-pressed='true'] { background: var(--shell-canvas); color: var(--shell-text); box-shadow: 0 0 0 1px var(--shell-border); }
-.ranges button:hover { color: var(--shell-text); background: var(--shell-card); }
 .panel button:focus-visible, .chart rect:focus-visible, .dateField input:focus-visible { outline: 2px solid var(--shell-text); outline-offset: 3px; }
 /* 终端类型切换与 LLM 引擎 terminalTabs 同语言：顶部一行下划线，选中态 accent 下划线。 */
 .tabRow { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--shell-border-soft, var(--shell-border)); padding-bottom: 8px; }

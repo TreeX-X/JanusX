@@ -352,9 +352,9 @@ export function UsageStatsPanel() {
           <h3 className={styles.title}>{t('settings:usageStats.title')}</h3>
           <p className={styles.subtitle}>{t('settings:usageStats.subtitle')}</p>
         </div>
-        <div className={styles.ranges} role="group" aria-label={t('settings:usageStats.timeRange')}>
-          {RANGES.map((candidate) => <button key={candidate} type="button" aria-pressed={candidate === range} onClick={() => setRange(candidate)}>{t(`settings:usageStats.${RANGE_KEYS[candidate]}`)}</button>)}
-        </div>
+      </div>
+      <div className={styles.tabRow} role="group" aria-label={t('settings:usageStats.timeRange')}>
+        {RANGES.map((candidate) => <button key={candidate} type="button" className={`${styles.tab} ${candidate === range ? styles.tabActive : ''}`} aria-pressed={candidate === range} onClick={() => setRange(candidate)}>{t(`settings:usageStats.${RANGE_KEYS[candidate]}`)}</button>)}
       </div>
       {range === 'custom' && (
         <div className={styles.customBar}>
