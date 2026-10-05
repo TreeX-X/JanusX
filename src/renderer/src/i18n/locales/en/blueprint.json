@@ -552,6 +552,7 @@
     "unavailable": "Not available in this canvas: {{names}}"
   },
   "architecture": {
+    "info": "Blueprint information",
     "project": "Project",
     "module": "Module",
     "view": "Blueprint view",

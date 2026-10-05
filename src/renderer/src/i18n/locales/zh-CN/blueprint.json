@@ -552,6 +552,7 @@
     "unavailable": "当前画布不可用：{{names}}"
   },
   "architecture": {
+    "info": "蓝图信息",
     "project": "项目",
     "module": "模块",
     "view": "蓝图视图",

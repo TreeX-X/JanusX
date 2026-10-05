@@ -11,14 +11,16 @@ export function BlueprintViewSelector({ value, available, onChange }: { value: B
   </div>
 }
 
+// Note: one view selector per surface; canvas information stays folded — see .agents/notes/2026-10-03-module-structure-view--785a2a8e.md
 export function BlueprintArchitecturePanel({ source, projection, nodeId, onSelect }: { source: Blueprint; projection: ArchitectureProjection; nodeId?: string; onSelect: (id: string) => void }) {
   const { t } = useI18n('blueprint')
   const related = nodeId ? projection.related[nodeId] ?? [] : []
   const snapshots = [source.noteSnapshot, ...(source.composition?.checkouts.map(row => row.snapshot) ?? [])].filter(value => !!value)
   return <div className="bp-architecture-panel">
     {!nodeId && <details className="bp-composition">
-      <summary>{t('blueprint:architecture.structure')} · {projection.graph.nodeIds.length} · {t('blueprint:architecture.coverage')}</summary>
+      <summary>{t('blueprint:architecture.info')}</summary>
       <section>
+        <p>{t('blueprint:architecture.structure')} · {projection.graph.nodeIds.length} · {t('blueprint:architecture.coverage')}</p>
         <p>{t('blueprint:architecture.currentOnly')}</p>
         {snapshots.map((snapshot, index) => <p key={index}>{snapshot.coverage.checkoutRoot} · {snapshot.coverage.status}</p>)}
         {source.invalidNotes?.map((note, index) => <p className="bp-note-warning" key={index}>{note.relPath}: {note.diagnostics.map(item => item.message).join('; ')}</p>)}
