@@ -47,6 +47,11 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const activeWorkspace = workspaces.find(item => item.id === activeWorkspaceId) ?? null
   const blueprint = useBlueprintStore(state => state.currentBlueprint)
   const ownerPath = useBlueprintStore(state => blueprint ? state.blueprintWorkspace[blueprint.id] ?? null : null)
+  const workspaceState = useBlueprintStore(state => activeWorkspaceId ? state.workspaceStates[activeWorkspaceId] : undefined)
+  // Note: uninitialized workspaces have no Note history to load — see .agents/notes/2026-10-04-blueprint-empty-init--4f49c9ba.md
+  const noteHistoryReady = !!activeWorkspace && (workspaceState
+    ? sameCheckoutPath(workspaceState.workspacePath, activeWorkspace.path) && ['ok', 'empty'].includes(workspaceState.state)
+    : !!blueprint && !!ownerPath && sameCheckoutPath(ownerPath, activeWorkspace.path))
   const selection = useBlueprintMaintenanceStore(state => state.contextSelection)
   const draftRequest = useBlueprintStore(state => state.draftRequest)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
@@ -154,7 +159,8 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
         renderTurnFooter={turnId => <NoteTurnActivity key={turnId ?? 'live'} conversationId={chat.conversationId}
           workspacePath={activeWorkspace.path} turnId={turnId ?? chat.activeTurnId} live={!turnId} />}
-        discussionFooter={<NoteChatActivity conversationId={chat.conversationId} workspacePath={activeWorkspace.path} />}
+        discussionFooter={noteHistoryReady ? <NoteChatActivity key={`${activeWorkspace.id}:${activeWorkspace.path}:${chat.conversationId}`}
+          conversationId={chat.conversationId} workspacePath={activeWorkspace.path} /> : null}
         pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
         modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
         resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}

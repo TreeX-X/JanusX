@@ -317,6 +317,8 @@
     "rejectFailed": "Reject failed: candidate not found"
   },
   "noteChat": {
+    "historyLoadFailed": "Change history is temporarily unavailable. You can keep chatting.",
+    "reloadHistory": "Reload history",
     "applied": "Updated {{count}} Notes",
     "reverted": "Change reverted",
     "viewChanges": "View changes",

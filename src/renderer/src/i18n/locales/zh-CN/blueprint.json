@@ -317,6 +317,8 @@
     "rejectFailed": "拒绝失败：候选需求不存在"
   },
   "noteChat": {
+    "historyLoadFailed": "修改记录暂时无法加载，你仍可继续对话。",
+    "reloadHistory": "重新加载记录",
     "applied": "已更新 {{count}} 篇 Note",
     "reverted": "已撤销此次修改",
     "viewChanges": "查看修改",

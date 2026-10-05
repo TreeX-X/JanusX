@@ -141,3 +141,70 @@ test('foreign-file confirmation remains required and failed actions keep details
   await expect(page.locator('.blueprint-workspace-preview')).toBeVisible()
   expect(await page.evaluate(() => (window as any).bootstrapFixture.applies)).toEqual([])
 })
+
+test('uninitialized workspaces keep chat usable without loading Note change history', async ({ page }) => {
+  await page.evaluate(() => {
+    ;(window as any).historyReads = []
+    window.electron.harness.noteChatChanges = async (cwd: string) => {
+      ;(window as any).historyReads.push(cwd)
+      if (cwd === 'C:/fixture-b') throw new Error("Error invoking remote method 'harness:note:chat-changes': [object Object]")
+      return []
+    }
+  })
+  await select(page, 'Checkout B')
+  const chat = page.locator('.blueprint-workbench-janus-slot')
+  await expect(chat.locator('textarea')).toBeVisible()
+  await chat.locator('textarea').fill('分析这个项目，不要修改文件')
+  await chat.locator('textarea').press('Enter')
+  await expect.poll(() => page.evaluate(() => (window as any).projectFixture.streams.length)).toBe(1)
+  await expect(chat.getByRole('alert')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as any).historyReads)).not.toContain('C:/fixture-b')
+  await page.evaluate(() => (window as any).projectFixture.finishStream())
+  // The same panel must start reading history as soon as initialization succeeds.
+  await page.evaluate(() => {
+    window.electron.harness.noteChatChanges = async (cwd: string) => {
+      ;(window as any).historyReads.push(cwd)
+      return []
+    }
+  })
+  await page.getByRole('button', { name: '初始化蓝图', exact: true }).click()
+  await page.getByRole('button', { name: '确认初始化', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => (window as any).historyReads)).toContain('C:/fixture-b')
+})
+
+test('history failures use compact copy, expandable diagnostics and a working retry', async ({ page }, testInfo) => {
+  await page.evaluate(() => {
+    window.electron.harness.noteChatChanges = async () => {
+      throw new Error("Error invoking remote method 'harness:note:chat-changes': EACCES: cannot read history")
+    }
+  })
+  await select(page, 'Empty project')
+  const chat = page.locator('.blueprint-workbench-janus-slot')
+  const notice = chat.getByText('修改记录暂时无法加载，你仍可继续对话。', { exact: true })
+  await expect(notice).toBeVisible()
+  expect(await notice.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeLessThanOrEqual(12)
+  await expect(chat.getByText(/Error invoking remote method/)).not.toBeVisible()
+  await expect(chat.locator('textarea')).toBeInViewport()
+  await page.screenshot({ path: testInfo.outputPath('history-unavailable.png') })
+  await chat.getByText('查看诊断详情', { exact: true }).click()
+  await expect(chat.getByText(/EACCES: cannot read history/)).toBeVisible()
+  await page.evaluate(() => { window.electron.harness.noteChatChanges = async () => [] })
+  await chat.getByRole('button', { name: '重新加载记录', exact: true }).click()
+  await expect(notice).toHaveCount(0)
+  await expect(chat.getByText(/Error invoking remote method/)).toHaveCount(0)
+})
+
+test('a late history failure cannot follow the user into another workspace', async ({ page }) => {
+  await page.evaluate(() => {
+    window.electron.harness.noteChatChanges = async () => new Promise((_, reject) => {
+      ;(window as any).rejectHistory = () => reject(new Error('Late history failure'))
+    })
+  })
+  await select(page, 'Empty project')
+  await expect.poll(() => page.evaluate(() => typeof (window as any).rejectHistory)).toBe('function')
+  await select(page, 'Checkout B')
+  await page.evaluate(() => (window as any).rejectHistory())
+  const chat = page.locator('.blueprint-workbench-janus-slot')
+  await expect(chat.getByText(/Late history failure|修改记录暂时无法加载/)).toHaveCount(0)
+  await expect(chat.locator('textarea')).toBeVisible()
+})

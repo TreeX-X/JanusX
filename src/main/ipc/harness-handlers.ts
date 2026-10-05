@@ -792,8 +792,16 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   )
 
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteChatChanges, async (_e, cwd: string, conversationId: string) => {
-    if (typeof conversationId !== 'string' || !conversationId.trim() || conversationId.length > 128) throwFailure('SCHEMA_INVALID', 'Invalid conversation id')
-    return listNoteChatChanges(await withRoot(cwd), conversationId)
+    // Note: preserve useful diagnostics through Electron's Error serialization — see .agents/notes/2026-10-04-blueprint-empty-init--4f49c9ba.md
+    try {
+      if (typeof conversationId !== 'string' || !conversationId.trim() || conversationId.length > 128) throwFailure('SCHEMA_INVALID', 'Invalid conversation id')
+      return await listNoteChatChanges(await withRoot(cwd), conversationId)
+    } catch (error) {
+      if (error instanceof Error) throw error
+      const failure = error as Partial<HarnessFailure> | null
+      const code = failure?.code ?? 'IO_ERROR'
+      throw Object.assign(new Error(`${code}: ${failure?.message ?? 'Cannot read Note change history'}`), { code })
+    }
   })
 
   // ── managed undo (S8-JanusX, legacy-loop equivalence): preview then apply ──
