@@ -1,5 +1,61 @@
 import { expect, test } from '@playwright/test'
 
+test('general settings reuses global detection and refreshes the Island result', async ({ page }) => {
+  await page.goto('/?workflowx=global')
+  await expect.poll(() => page.evaluate(() => (window as any).workflowxFixture?.calls.length)).toBe(1)
+  await page.getByTestId('open-general-settings').click()
+  const settings = page.getByTestId('workflowx-settings')
+  await expect(settings.getByText('Global environment', { exact: true })).toBeVisible()
+  await expect(settings.getByText('Detected', { exact: true })).toBeVisible()
+  await expect(settings.getByText('Sources: Global · Codex')).toBeVisible()
+  // Mounting settings consumes the same snapshot without starting another scan.
+  expect(await page.evaluate(() => (window as any).workflowxFixture.calls)).toEqual([null])
+  await settings.getByRole('button', { name: 'View WorkflowX sources' }).click()
+  await expect(settings).toContainText('Checks global Claude / Codex configuration')
+  await expect(settings.locator('code')).toContainText('.codex/skills/orchestrateX/SKILL.md')
+  await settings.getByRole('button', { name: 'Open WorkflowX repository' }).click()
+  expect(await page.evaluate(() => (window as any).workflowxFixture.opened)).toBe(1)
+  await page.screenshot({ path: test.info().outputPath('workflowx-settings-global.png') })
+  await page.evaluate(() => { (window as any).workflowxFixture.status = 'missing' })
+  await settings.getByRole('button', { name: 'Check again' }).click()
+  await expect(settings.getByText('Not detected', { exact: true })).toBeVisible()
+  await expect(settings.getByText('Sources: Global · Codex')).toHaveCount(0)
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByTestId('reopen-island').click()
+  await page.locator('.janus-expanded-view-button[data-view="monitor"]').click()
+  await expect(page.getByTestId('workflowx-monitor').getByText('Not detected', { exact: true })).toBeVisible()
+})
+
+test('general settings follows workspace changes and contains unavailable results', async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 720 })
+  await page.goto('/?workflowx=detected')
+  await page.getByTestId('open-general-settings').click()
+  const settings = page.getByTestId('workflowx-settings')
+  await expect(settings).toContainText('Current workspace: Workspace One')
+  await page.evaluate(() => {
+    (window as any).workflowxFixture.sourceScope = 'workspace'
+    ;(window as any).workflowxFixture.setWorkspace('workspace-3')
+  })
+  await expect(settings).toContainText('Current workspace: Workspace Three')
+  await expect(settings).toContainText('Sources: Workspace · Codex')
+  await expect(settings).not.toContainText('Sources: Global · Codex')
+  await settings.getByRole('button', { name: 'View WorkflowX sources' }).click()
+  await expect(settings.locator('code')).toContainText('/workspace-3/')
+  await settings.scrollIntoViewIfNeeded()
+  for (const button of await settings.getByRole('button').all()) {
+    const bounds = await button.boundingBox()
+    expect(bounds!.x).toBeGreaterThanOrEqual(0)
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(1000)
+  }
+  await page.screenshot({ path: test.info().outputPath('workflowx-settings-workspace.png') })
+  await page.evaluate(() => { (window as any).workflowxFixture.fail = true })
+  await settings.getByRole('button', { name: 'Check again' }).click()
+  await expect(settings.getByText('Needs confirmation', { exact: true })).toBeVisible()
+  await expect(settings).toContainText('Detection is temporarily unavailable')
+  await expect(settings).not.toContainText('Error invoking remote method')
+})
+
 test('detects global configuration with no workspace before opening Island; sources stay quiet', async ({ page }) => {
   await page.goto('/?workflowx=global')
   await expect.poll(() => page.evaluate(() => (window as any).workflowxFixture?.calls)).toEqual([null])

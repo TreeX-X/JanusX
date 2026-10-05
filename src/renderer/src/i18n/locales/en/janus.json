@@ -1,5 +1,10 @@
 {
   "workflowx": {
+    "settingsHelp": "WorkflowX imports available in this environment, shared with the Island monitor.",
+    "currentWorkspace": "Current workspace: {{name}}",
+    "globalEnvironment": "Global environment",
+    "globalScope": "Checks global Claude / Codex configuration. Either import is sufficient.",
+    "detectedSources": "Sources: {{sources}}",
     "status": {
       "detected": "Detected",
       "missing": "Not detected",

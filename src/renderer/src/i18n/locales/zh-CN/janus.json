@@ -1,5 +1,10 @@
 {
   "workflowx": {
+    "settingsHelp": "查看当前环境的 WorkflowX 导入情况，与 Island 监控保持同步。",
+    "currentWorkspace": "当前工作区：{{name}}",
+    "globalEnvironment": "全局环境",
+    "globalScope": "检测全局 Claude / Codex 配置，任一导入即可。",
+    "detectedSources": "来源：{{sources}}",
     "status": {
       "detected": "已检测到",
       "missing": "未检测到",

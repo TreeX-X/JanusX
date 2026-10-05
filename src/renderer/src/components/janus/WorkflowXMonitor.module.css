@@ -13,3 +13,11 @@
 .actions button { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
 .actions button:hover { color: var(--text); }
 .actions button:disabled { opacity: .5; cursor: default; }
+
+.settings { z-index: auto; width: 100%; border: 0; color: var(--shell-muted); font-size: 11px; }
+.settings .summary { padding: 0; cursor: default; font-size: 12px; align-items: flex-start; }
+.target { min-width: 0; overflow-wrap: anywhere; color: var(--shell-text); }
+.sourceSummary, .feedback { margin: 7px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.settings .actions { padding-top: 9px; gap: 6px 14px; }
+.settings .details { position: static; margin-top: 10px; padding: 8px 0 0; border: 0; border-top: 1px solid var(--shell-border-soft); border-radius: 0; background: none; box-shadow: none; }
+@media (max-width: 600px) { .settings .summary { flex-wrap: wrap; gap: 6px; } }

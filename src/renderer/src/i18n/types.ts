@@ -2,6 +2,11 @@
 // Regenerate via `npm run i18n:types` after changing locale JSON files.
 
 export type TypedI18nKey =
+  | 'janus:workflowx.currentWorkspace'
+  | 'janus:workflowx.detectedSources'
+  | 'janus:workflowx.globalEnvironment'
+  | 'janus:workflowx.globalScope'
+  | 'janus:workflowx.settingsHelp'
   | 'janus:workflowx.global'
   | 'janus:workflowx.limits'
   | 'janus:workflowx.linkFailed'
