@@ -7,6 +7,8 @@ import { DEFAULT_APP_THEME } from '../../../src/shared/ipc/theme'
 import { JanusIsland } from '../../../src/renderer/src/components/janus'
 import { JanusRunOrbs } from '../../../src/renderer/src/components/janus/JanusRunOrbs'
 import { useGlobalRunning } from '../../../src/renderer/src/components/janus/useGlobalRunning'
+import { useWorkflowXDetection } from '../../../src/renderer/src/components/janus/useWorkflowXDetection'
+import type { WorkflowXSnapshot } from '../../../src/shared/ipc/workflowx'
 import { JanusChatProvider, useJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import {
@@ -265,6 +267,7 @@ const approvalFixture: ApprovalRequest = {
 }
 
 function Harness() {
+  useWorkflowXDetection()
   const providerStreamMode = new URLSearchParams(window.location.search).get('providerStream') === '1'
   const runOrbsMode = new URLSearchParams(window.location.search).get('runOrbs') === '1'
   const activeConversation = useJanusChatController()
@@ -415,6 +418,27 @@ function Harness() {
 }
 
 async function boot() {
+  const workflowxMode = new URLSearchParams(location.search).get('workflowx')
+  if (workflowxMode) {
+    const fixture = {
+      calls: [] as (string | null)[],
+      opened: 0,
+      status: workflowxMode === 'global' ? 'detected' : workflowxMode as WorkflowXSnapshot['status'],
+      fail: false,
+      setWorkspace: (id: string | null) => useWorkspaceStore.setState({ activeWorkspaceId: id, activeTerminalId: null, terminals: [] }),
+    }
+    Object.assign(window, { workflowxFixture: fixture })
+    if (workflowxMode === 'global') useWorkspaceStore.setState({ workspaces: [], activeWorkspaceId: null, activeTerminalId: null, terminals: [] })
+    window.electron.workflowx = {
+      detect: async workspaceId => {
+        fixture.calls.push(workspaceId)
+        if (fixture.fail) throw new Error("Error invoking remote method 'workflowx:detect': [object Object]")
+        return { workspaceId, checkedAt: Date.now(), status: fixture.status, sources: fixture.status === 'detected'
+          ? [{ format: 'codex', scope: 'global', path: 'C:/Users/Developer/.codex/skills/orchestrateX/SKILL.md', status: 'detected', reason: 'skill' }] : [] }
+      },
+      openRepository: async () => { fixture.opened++; return true },
+    }
+  }
   // Specs assert English copy; pin the language so host locale cannot flip it.
   await initI18n()
   await changeLanguage('en')

@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/janus-agentX
-          ref: d3a8a3200bc81d5448adbe93ed4a549c998508a8
+          ref: 6feb575bab1b067e6e4d8abc54d1f1d11a7bee23
           path: janus-agentX
 
       - name: Setup Node

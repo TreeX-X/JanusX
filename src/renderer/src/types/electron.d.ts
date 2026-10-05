@@ -16,6 +16,7 @@ import type { HostedAPI } from '../../../shared/ipc/hosted'
 import type { GitAPI } from '../../../shared/ipc/git'
 import type { LlmAPI } from '../../../shared/ipc/llm'
 import type { ExternalCliAPI } from '../../../shared/ipc/external-cli'
+import type { WorkflowXAPI } from '../../../shared/ipc/workflowx'
 import type { JanusChatAPI } from '../../../shared/ipc/janus-chat'
 import type { RoundtableAPI } from '../../../shared/ipc/roundtable'
 import type { AgentSettingsAPI, NotificationSettingsAPI } from '../../../shared/ipc/settings'
@@ -43,6 +44,7 @@ interface ElectronAPI {
   office: OfficeAPI
   llm: LlmAPI
   externalCli: ExternalCliAPI
+  workflowx: WorkflowXAPI
   janusChat?: JanusChatAPI
   roundtable: RoundtableAPI
   agent: AgentAPI

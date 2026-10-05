@@ -20,6 +20,7 @@ import { useProductWorkspaceStore } from '@/stores/productWorkspace'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useTeamStore } from '@/stores/team'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
+import { useWorkflowXDetection } from './janus/useWorkflowXDetection'
 import { useI18n } from '@/i18n/useI18n'
 
 /*-- P4: 蓝图工作台（@xyflow 画布链）按需分包，未打开蓝图工作台时不加载 --*/
@@ -36,6 +37,7 @@ const BlueprintWorkbench = lazy(() =>
 export function Titlebar() {
   const { t } = useI18n('common')
   useGlobalRunning()
+  useWorkflowXDetection()
   const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
   const { stage: islandStage, knowledge: knowledgePeek } = island
   // Pinned island window (owned by JanusIsland): while pinned, a terminal

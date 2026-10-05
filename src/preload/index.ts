@@ -34,6 +34,7 @@ import { HOSTED_CHANNELS, type HostedAPI } from '../shared/ipc/hosted'
 import { GIT_CHANNELS, type GitAPI } from '../shared/ipc/git'
 import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { EXTERNAL_CLI_CHANNELS, type ExternalCliAPI } from '../shared/ipc/external-cli'
+import { WORKFLOWX_CHANNELS, type WorkflowXAPI } from '../shared/ipc/workflowx'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
 import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } from '../shared/ipc/harness'
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
@@ -371,6 +372,11 @@ const llmAPI: LlmAPI = {
   onToolTrace: (callback) => subscribeIpcEvent(LLM_CHANNELS.toolTrace, callback),
 }
 
+const workflowxAPI: WorkflowXAPI = {
+  detect: (workspaceId, refresh) => ipcRenderer.invoke(WORKFLOWX_CHANNELS.detect, workspaceId, refresh),
+  openRepository: () => ipcRenderer.invoke(WORKFLOWX_CHANNELS.openRepository),
+}
+
 const externalCliAPI: ExternalCliAPI = {
   detect: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.detect, toolId),
   latest: (toolId) => ipcRenderer.invoke(EXTERNAL_CLI_CHANNELS.latest, toolId),
@@ -637,6 +643,7 @@ contextBridge.exposeInMainWorld('electron', {
   office: officeAPI,
   llm: llmAPI,
   externalCli: externalCliAPI,
+  workflowx: workflowxAPI,
   janusChat: janusChatAPI,
   roundtable: roundtableAPI,
   agent: agentAPI,

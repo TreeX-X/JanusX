@@ -250,6 +250,10 @@ export function installElectronApiFallback(): void {
       reloadPreview: unavailable, buildPrompt: unavailable,
       onFilesChanged: () => () => {}, onWatchEvicted: () => () => {},
     },
+    workflowx: {
+      detect: (workspaceId: string | null) => Promise.resolve({ workspaceId, status: 'uncertain' as const, sources: [], checkedAt: Date.now(), unavailable: true }),
+      openRepository: () => Promise.resolve(false),
+    },
     externalCli: {
       detect: () => Promise.resolve({ toolId: 'claude' as const, installed: false, runnable: false, hint: 'Electron API is unavailable' }),
       latest: () => Promise.resolve({ toolId: 'claude' as const }),

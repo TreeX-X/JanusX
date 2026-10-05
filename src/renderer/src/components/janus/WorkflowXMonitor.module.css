@@ -1,0 +1,15 @@
+.root { position: relative; z-index: 100; grid-column: 1 / -1; min-width: 0; border-top: 1px solid var(--border-soft); }
+.summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 0 2px; border: 0; background: none; color: var(--text-secondary); font: inherit; font-size: 11px; cursor: pointer; }
+.summary:focus-visible, .actions button:focus-visible { outline: 1px solid var(--text-secondary); outline-offset: 3px; border-radius: 3px; }
+.state { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; white-space: nowrap; }
+.state i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .45; }
+.state[data-status='detected'] i { background: var(--status-success, #87ad97); opacity: .8; }
+.details { position: absolute; bottom: calc(100% + 6px); left: 0; right: 0; z-index: 2; max-height: 240px; overflow-y: auto; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-elevated); box-shadow: 0 4px 16px #0002; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
+.details p { margin: 5px 0; }
+.details ul { list-style: none; padding: 0; margin: 8px 0; max-height: 140px; overflow: auto; }
+.details li + li { margin-top: 8px; }
+.details code { display: block; overflow-wrap: anywhere; white-space: normal; color: var(--text-secondary); font-size: 10px; line-height: 1.5; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px 12px; padding-top: 5px; }
+.actions button { display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.actions button:hover { color: var(--text); }
+.actions button:disabled { opacity: .5; cursor: default; }

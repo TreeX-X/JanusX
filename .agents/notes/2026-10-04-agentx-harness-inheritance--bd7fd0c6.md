@@ -46,7 +46,9 @@ note.focus 和 note.scope 属于 Janus 的产品扩展。Note 读取及修改后
 
 ## Consequences
 
-Janus 的构建依赖 agentX 修订 d3a8a3200bc81d5448adbe93ed4a549c998508a8，CI 固定同一来源提交并按依赖顺序构建。桌面安装不再修补 agentX 的构建产物。通用服务修复在 agentX 完成，Janus 通过消费测试保证蓝图和 IPC 兼容；应用启动配置和进程界面的适配仍在 Janus。
+Janus 的构建依赖 agentX 修订 6feb575bab1b067e6e4d8abc54d1f1d11a7bee23，CI 固定同一来源提交并按依赖顺序构建。桌面安装不再修补 agentX 的构建产物。通用服务修复在 agentX 完成，Janus 通过消费测试保证蓝图和 IPC 兼容；应用启动配置和进程界面的适配仍在 Janus。
+
+[外部 WorkflowX 导入检测](./2026-10-04-workflowx-onboarding--b69b7ec5.md)消费 agentX node-hosts 的检测接口，Janus 负责注册工作区解析、IPC、刷新和 Island 展示。
 
 xdo 采用回执提示，不把提示消失等同于完整验收。委派模式的验证与 Git 落地各有证据，无法提供子会话或结构化评审时明确失败。最小初始化提供共享预览、应用与撤销 API；启动检测、设置中的完整接入、蓝图空态和圆桌扩展不属于本决策的实现范围。
 

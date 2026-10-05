@@ -10,6 +10,7 @@ import { useExperimentalStore } from '@/stores/experimental'
 import { useSubAgentRunStore } from '@/stores/subagent-run'
 import { useI18n } from '@/i18n/useI18n'
 import { JanusIdentityCore } from './JanusIdentityCore'
+import { WorkflowXMonitor } from './WorkflowXMonitor'
 import { getJanusAgentIdentity } from './janusIdentity'
 import { JanusChat } from './JanusChat'
 import { JanusRoundtablePane } from './JanusRoundtablePane'
@@ -418,6 +419,7 @@ export function JanusIslandExpandedShell({
                                 : monitorStatusText}
                           </strong>
                         </div>
+                        <WorkflowXMonitor />
                       </div>
                     </div>
                     <div className="janus-monitor-right">

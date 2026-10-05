@@ -53,6 +53,7 @@ import { subAgentRunRegistry } from '../janus-runner/subagent-run-registry'
 import { ipcMain } from 'electron'
 import { registerAgentRuntimeHandlers } from './agent-runtime-handlers'
 import { registerExternalCliHandlers } from './external-cli-handlers'
+import { registerWorkflowXHandlers } from './workflowx-handlers'
 export interface RegisterApplicationIpcOptions {
   mainWindow: BrowserWindow
   getAllowedWindows: () => BrowserWindow[]
@@ -121,6 +122,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerProjectHandlers()
   registerLlmHandlers()
   registerExternalCliHandlers({ getAllowedWindows: options.getAllowedWindows })
+  registerWorkflowXHandlers(options)
   registerJanusHandlers()
   registerHarnessHandlers(getCurrentMainWindow)
   registerJanusChatHandlers()

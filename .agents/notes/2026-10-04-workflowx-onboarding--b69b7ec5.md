@@ -2,31 +2,52 @@
 schema: harness-note/1
 id: b69b7ec5-cbf6-4242-bd29-3b48703979c5
 kind: requirement
-lifecycle: proposed
+lifecycle: accepted
 created: 2026-10-04
 class: feature
-tags: [workflowx, onboarding, settings, janus]
+tags: [workflowx, configuration, island, janus]
+codeRefs:
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/main/ipc/workflowx-handlers.ts
+    role: entry
+  - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
+    path: src/renderer/src/components/janus/WorkflowXMonitor.tsx
+    role: implementation
 ---
 
-# WorkflowX 接入放在启动与设置，蓝图只呈现结果
+# 在 Island 监控中轻量检测 WorkflowX 导入
 
 ## Problem
 
-WorkflowX 维护者状态（L0 无维护者 / L1 半维护者 / L2 完整）长期无处安放：蓝图画布只关心投影有无，装不下安装与版本问题；Note 质量产生于平时干活时刻（终端收尾、会话还原点、提交前），蓝图里的提醒触达不到；一直靠 Janus 事后分析补 Note 是逆流程，又贵又不准。分层不清导致生产端问题挤进消费者（蓝图），越做越重。
+外部终端开发依靠导入的 WorkflowX 约束维护 Note。工作区没有这些约束时，蓝图只能呈现已有结果，无法帮助开发工具在日常工作中维护记录。用户也可能使用全局配置，或者让一种终端读取另一种工具的配置，因此终端类型、蓝图初始化和配置目录存在都不能单独证明导入情况。
 
 ## Expected behavior
 
-生产端接入归启动与设置，蓝图只呈现结果：启动时一次非阻塞检测（扫文件名与 `harness.json digest`，不解析），有缺口给一条可关闭横幅；设置页常驻“维护者”区，按工作区列状态，给 [Janus 托管] [完整 WorkflowX] 两档选择与停用；日常只在工作触点限频轻推（被关两次静默一周）。Janus 兜底退化成安全网，主力是选定的维护方式本身。
+Janus 从通用界面自动检测全局与当前工作区的 Claude/Codex WorkflowX 配置。任一格式被识别即可显示“已检测到”，不要求同时安装，也不按当前终端类型匹配。没有工作区或终端仍检测全局。导入或切换工作区、工作区路径变更、窗口重新获得焦点或恢复可见时立即检测；可见期间每 30 秒复查一次，覆盖外部编辑配置的变化。后台结果按请求代次隔离，旧工作区结果不能覆盖当前工作区。
+
+Island 监控页提供一行 11px 状态：“已检测到”“未检测到”“待确认”，首次读取显示“检测中”。用户展开后查看来源、重新检测或打开 [WorkflowX 仓库](https://github.com/TreeX-X/WorkFlowX)。说明文字明确检测只识别导入配置，实际工作流执行与 Note 维护由开发工具负责。缺失或失败不展开 Island、不闪烁、不产生横幅、弹窗或终端阻断；IPC 和文件异常转成简短文案，不将原始异常带入界面。
 
 ## Scope
 
-2026-10-05 范围约束：本篇保持 proposed，以下维护者档位与提醒是待重新明确的旧方案。WorkflowX 已在 agentX 内置并默认执行，不需要提醒用户安装或开启；后续接入仅讨论项目配置和外部工具。工作区切换与蓝图初始化先行，本篇不是其前置。
+通用检测逻辑及结果类型由 [agentX 的检测接口](note://62b44166-82f0-41ff-838d-e2b02388ed06/844d119b-8dd7-423c-9981-fba6b7726ec6)维护，Janus 负责注册工作区解析、IPC、刷新时机和展示。主进程只接受已注册的工作区身份，读取结果短暂缓存 15 秒，手动刷新和切换绕过缓存。仓库跳转使用固定地址，检测过程只读且不联网。
 
-旧提案范围：启动检测横幅、设置维护者区（状态、两档接入、版本、停用）、日常轻推频控。Non-goals：启动弹窗拦截、自动安装、蓝图画布内承载 WorkflowX 安装流程、一 workspace 多蓝图选择。隶属总纲：[Janus 生态 Note 链路整体优化](./2026-10-04-janus-ecosystem-note-optimization--24617149.md)；本篇排在工作区切换与初始化生成之后，具体实施范围仍待确认。
+识别稳定的指令标记、部署的工作流技能或有安装/启用记录的插件身份。不校验 WorkflowX 版本、完整技能清单、文件摘要或 Note 初始化状态；旧配置、孤立插件缓存、读取失败保留“待确认”。不提供自动安装、修复、停用、维护者档位、使用合规证明或 Note 维护成功保证。Janus 内置 WorkflowX 的默认执行独立于外部配置状态。
+
+隶属 [Janus 生态 Note 链路整体优化](./2026-10-04-janus-ecosystem-note-optimization--24617149.md)。[工作区切换与蓝图初始化](./2026-10-04-blueprint-empty-init--4f49c9ba.md)独立运行，不把 WorkflowX 导入作为前置条件。
 
 ## Acceptance criteria
 
-- [ ] AC-1: 启动检测不阻塞启动、可关闭，缺口工作区可一键跳转设置。
-- [ ] AC-2: 设置页按工作区显示 L0/L1/L2 状态，支持两档接入与停用，已有配置只 merge 不覆盖。
-- [ ] AC-3: 日常轻推仅出现在工作触点且限频，连续关闭后静默，不打断工作。
-- [ ] AC-4: 蓝图内不出现 WorkflowX 安装流程，只呈现既定维护方式下的结果与“由谁维护”角标。
+- [x] AC-1: 通用界面启动即检测；无工作区、无终端和 Island 关闭时仍生效。导入或切换工作区、窗口恢复和配置轮询触发复查，过期请求不能污染当前状态。
+- [x] AC-2: 合并全局与工作区 Claude/Codex 证据，任一导入即已检测到，不按终端类型匹配。普通目录、README 和代码示例不能冒充安装；不确定及读取失败有独立状态。
+- [x] AC-3: Island 监控以小字静态状态展示，支持查看来源、重新检测和仓库跳转，无横幅、弹窗、闪烁、自动展开或原始错误文本。
+- [x] AC-4: 检测与蓝图初始化独立，不安装或更改用户配置，不校验版本和完整文件清单，不将识别结果描述为运行时已加载或 Note 已维护。
+
+## Alternatives considered
+
+复用启动横幅和设置档位有明确的配置入口，但会增加不必要的打扰，并把内置工作流与外部工具导入混为一谈。按终端类型校验可以提供更具体的适配说明，却无法表达 OpenCode 复用 Claude 配置等情况。保持无检测最简单，但无法提示外部开发约束缺口。监控状态行提供按需查看的入口，代价是用户需要主动展开了解详情。
+
+## Verification
+
+`tests/unit/workflowx.test.ts` 的 7 项测试验证 IPC、工作区身份、缓存刷新、固定链接、异常收敛与异步结果隔离。`tests/e2e/workflowx-monitor.spec.ts` 的浏览器用例验证全局检测、Island 默认收起、来源、刷新、窗口焦点、工作区切换、周期检测和错误文案；使用真实组件与模拟 IPC，不证明 Electron 或外部工具的实际加载。共享规则的文件系统证据见 agentX 检测 Note。
+
+2026-10-05 机器验证：WorkflowX、harness IPC 和构建加载测试共 13 项通过；WorkflowX 浏览器测试 3 项通过，包含主窗口允许的最小宽度 1000px。类型、修改文件 ESLint、国际化、构建和 Janus Note 检查通过，Note 检查保留 27 项明确的历史外链诊断。扩大 Island 回归检查为 28/31，通过临时替换检测 hook 与监控组件为空实现作对照，知识空态、聊天停靠和会话切换的相同 3 项失败仍存在；本功能的验证不将其计为通过。
