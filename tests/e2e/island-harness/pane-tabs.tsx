@@ -36,6 +36,7 @@ Object.assign(window.electron.terminal, {
 })
 Object.values(surfaces).forEach((surface) => useBrowserStore.getState().applySurfaceState(surface))
 const overflow = new URLSearchParams(location.search).has('overflow')
+const transformed = new URLSearchParams(location.search).has('transformed')
 const left = {
   type: 'leaf' as const, id: 'left', activeTabId: 'terminal:a',
   tabs: ['a', 'b', 'c'].map((id) => createTerminalPaneContent(id, 'ws')),
@@ -69,7 +70,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div draggable onDragStart={(event) => setTerminalDragData(event.dataTransfer, 'sidebar')} onDragEnd={clearTerminalDragData} data-sidebar-terminal style={{ height: 32 }}>Sidebar terminal</div>
-      <main style={{ display: 'flex', flex: 1, minHeight: 0 }}><TerminalArea /></main>
+      <main style={{ display: 'flex', flex: 1, minHeight: 0, ...(transformed ? { marginLeft: 180, marginTop: 40, perspective: 1500 } : {}) }}>
+        <div style={{ display: 'flex', flex: 1, minWidth: 0, ...(transformed ? { transform: 'rotateX(0deg)', transformStyle: 'preserve-3d' } : {}) }}>
+          <TerminalArea />
+        </div>
+      </main>
     </div>
   </React.StrictMode>,
 )

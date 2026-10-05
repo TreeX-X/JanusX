@@ -29,6 +29,7 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
   let frame = 0
   let previousTime = 0
   let target: PaneTabDrop | null = null
+  let overlay: HTMLElement | null = null
   let clone: HTMLElement | null = null
   let hint: HTMLElement | null = null
   let strips: Strip[] = []
@@ -78,8 +79,7 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
     document.removeEventListener('visibilitychange', visibility)
     source.removeEventListener('lostpointercapture', cleanup)
     if (source.hasPointerCapture(pointerId)) source.releasePointerCapture(pointerId)
-    clone?.remove()
-    hint?.remove()
+    overlay?.remove()
     restore()
     if (active) {
       onActiveChange(false)
@@ -104,6 +104,20 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
       return
     }
     active = true
+    // App's perspective/rotateX ancestors establish a fixed containing block.
+    // Keep viewport-coordinate visuals under body and carry their inherited theme.
+    overlay = document.createElement('div')
+    overlay.setAttribute('data-tab-drag-overlay', '')
+    overlay.setAttribute('aria-hidden', 'true')
+    overlay.inert = true
+    const theme = getComputedStyle(source)
+    for (const property of theme) {
+      if (property.startsWith('--')) overlay.style.setProperty(property, theme.getPropertyValue(property))
+    }
+    Object.assign(overlay.style, {
+      position: 'fixed', inset: '0', zIndex: '10000', pointerEvents: 'none', fontFamily: theme.fontFamily,
+    })
+    document.body.appendChild(overlay)
     clone = source.cloneNode(true) as HTMLElement
     clone.removeAttribute('data-tab-id')
     clone.removeAttribute('id')
@@ -116,7 +130,7 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
       margin: '0', zIndex: '10000', pointerEvents: 'none', transition: 'none',
       background: 'var(--shell-canvas)', boxShadow: '0 6px 20px rgba(0,0,0,.3)', opacity: '.95',
     })
-    root.appendChild(clone)
+    overlay.appendChild(clone)
     hint = document.createElement('div')
     hint.setAttribute('data-tab-drag-hint', '')
     hint.setAttribute('aria-hidden', 'true')
@@ -126,7 +140,7 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
       borderRadius: '8px', alignItems: 'center', justifyContent: 'center',
       color: 'var(--shell-text)', fontSize: '12px',
     })
-    root.appendChild(hint)
+    overlay.appendChild(hint)
     for (const strip of strips) {
       remember(strip.slot)
       remember(strip.spacer)

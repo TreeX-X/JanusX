@@ -182,3 +182,34 @@ test('moving the final tab prunes its source pane without losing content', async
   expect(result.kills).toBe(0)
   expect(result.creates).toBe(0)
 })
+
+test('keeps the grab point and canvas hint aligned inside the transformed workspace', async ({ page }) => {
+  await page.goto('/pane-tabs.html?transformed')
+  const source = tab(page, 'terminal:a')
+  await expect(source).toBeVisible()
+  const box = (await source.boundingBox())!
+  const origin = await start(page, 'terminal:a')
+  const grab = { x: origin.x - box.x, y: origin.y - box.y }
+  const clone = page.locator('[data-tab-drag-clone]')
+  const aligned = async (pointer: { x: number; y: number }) => {
+    await expect.poll(async () => {
+      const rect = (await clone.boundingBox())!
+      return Math.max(Math.abs(rect.x + grab.x - pointer.x), Math.abs(rect.y + grab.y - pointer.y))
+    }).toBeLessThan(1)
+  }
+  await aligned({ x: origin.x + 8, y: origin.y })
+  const destination = await point(page, '[data-pane-id="right"]', .97, .5)
+  await move(page, destination)
+  await aligned(destination)
+  const pane = (await page.locator('[data-pane-id="right"]').boundingBox())!
+  const hint = page.locator('[data-tab-drag-hint]')
+  await expect(hint).toHaveAttribute('data-zone', 'right')
+  await expect.poll(async () => {
+    const rect = (await hint.boundingBox())!
+    return Math.max(Math.abs(rect.x - pane.x - pane.width / 2), Math.abs(rect.y - pane.y), Math.abs(rect.width - pane.width / 2), Math.abs(rect.height - pane.height))
+  }).toBeLessThan(1)
+  await page.keyboard.press('Escape')
+  await page.mouse.up()
+  await clean(page)
+  await expect(page.locator('[data-tab-drag-overlay]')).toHaveCount(0)
+})
