@@ -28,6 +28,8 @@ relations:
 
 agentX 拥有通用工程开发能力，Janus 通过共享包复用。Note 创建与结构化编辑由 harness-core 提供，读取缓存、事务、监听、共享导入和撤销由 harness-node 提供。Janus 的 HarnessNoteService 继承 NoteService，只叠加蓝图组合、画布布局和视图状态。artifact-producer、Note provider、索引增量更新和撤销模块直接导出共享实现，notes-cli 也消费同一 Note 创建逻辑。
 
+HarnessNoteService 的兼容函数导出通过共享模块命名空间上的本地常量绑定提供。`assertNoLocalLeak`、`claimsHarnessSchema` 和 `stripRemoteCreds` 与 agentX 导出的函数保持对象身份一致。当前主进程打包链路在动态导入命名空间时，会为直接转导出的外部函数生成缺少导入的引用，造成模块求值阶段的 ReferenceError；本地常量绑定使生成的命名空间具有真实运行时值。类型检查与构建成功不能替代产物加载验证。
+
 命令与 Git 工具从 node-hosts 注册；Janus 的后台命令通过 ProjectRunner 适配以保留进程界面。MCP 使用 agentX 的连接和 runtime 审批。ManagedChatSession 与上下文类型从 chat-core 导入，Janus 不维护独立压缩实现。通用 IPC 契约从 agent-core 的浏览器安全入口导入；Janus 仅增加子会话事件归属字段，审批仍保留实际子会话身份。
 
 工程会话默认执行 WorkflowX xdo，通过 /xdo、/xdel、/xflow 主动切换。Janus 在历史压缩前解析用户选择，将可信模式交给共享入口；项目会话允许共享工程工具，蓝图维护讨论继续按自己的工具限制执行。xdel 和 xflow 使用共享任务执行器，Janus 提供隔离子会话、审批与取消接线。
@@ -49,3 +51,7 @@ Janus 的构建依赖 agentX 修订 d3a8a3200bc81d5448adbe93ed4a549c998508a8，C
 xdo 采用回执提示，不把提示消失等同于完整验收。委派模式的验证与 Git 落地各有证据，无法提供子会话或结构化评审时明确失败。最小初始化提供共享预览、应用与撤销 API；启动检测、设置中的完整接入、蓝图空态和圆桌扩展不属于本决策的实现范围。
 
 验证包括 Janus 的 harness-service、harness-note-index-patch、harness-share-import、harness-undo、note-chat、command-tools、git-tools、janus-agent-ports、managed-chat-session 和 janus-runtime-state，共 101 项通过。追加的蓝图维护与 harness 分组有 221 项通过、1 项按环境跳过，裸模式切换与记忆召回回归也通过。千 Note 场景的 projectView 实测约 3.3 秒，位于原测试预算内。严格未使用检查与生产构建验证宿主接线；共享层测试证据见 agentX 决策。
+
+`tests/unit/harness-bundle-load.test.ts` 使用仓库的开发与生产主进程配置，实际打包含静态和动态服务导入的入口，再用原生 Node ESM 加载产物并校验共享函数身份。开发产物还通过 Electron 的 `scripts/dev-entry.mjs --smoke-test=module-graph` 检查，成功标记为 `[module-graph-smoke] ok`；此检查使用隔离用户目录且不打开应用窗口。SQLite 的 ExperimentalWarning 不影响模块加载检查的成功退出。
+
+`npx vitest run tests/unit/harness-bundle-load.test.ts tests/unit/harness-service.test.ts tests/unit/harness-share-import.test.ts tests/unit/harness-s9-acceptance.test.ts --maxWorkers=1 --minWorkers=1`：25 项通过，包含开发与生产配置下的两项产物加载测试。

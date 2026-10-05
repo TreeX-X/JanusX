@@ -5,11 +5,16 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import type { Diagnostic } from '@janus-agent/harness-core'
 import { NoteService, indexEntries, toSlimSnapshot } from '@janus-agent/harness-node'
+import * as sharedHarness from '@janus-agent/harness-node'
 import { projectGraph, projectGraphId } from '../notes/note-to-blueprint'
 import { composeBlueprint, type BlueprintCheckoutInput } from '../blueprint/blueprint-composition'
 import { ADAPTER_VERSION } from '../notes/note-types'
 import type { Blueprint } from '../../shared/janus/types'
-export { assertNoLocalLeak, claimsHarnessSchema, stripRemoteCreds, type ResolveResult, type ShareSelection, type ShareSnapshot, type BindingRecord, type ChangeListener } from '@janus-agent/harness-node'
+// Keep value exports bound locally: the main bundle materializes this module's namespace during dynamic import.
+export const assertNoLocalLeak = sharedHarness.assertNoLocalLeak
+export const claimsHarnessSchema = sharedHarness.claimsHarnessSchema
+export const stripRemoteCreds = sharedHarness.stripRemoteCreds
+export type { ResolveResult, ShareSelection, ShareSnapshot, BindingRecord, ChangeListener } from '@janus-agent/harness-node'
 
 export interface ProjectView {
   blueprint: Blueprint
