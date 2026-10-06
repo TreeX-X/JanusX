@@ -38,6 +38,7 @@ import { knowledgeTruthService } from './truth-service'
 import { proposeDerivedCandidates, proposeFactCandidates } from './review-service'
 import { isActiveObservation, isUserStatement, observationEventKey, observationScope, sourceEvidence } from './memory-evidence'
 import { isRuntimeNotification, personalPreferenceText, personalStatementText } from './personal-memory-content'
+import { isRawConversationEvidence, isRawKnowledgeContent } from './knowledge-content'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 
 const DERIVED_DIR = join('processing', 'derived')
@@ -53,7 +54,7 @@ const FILE_TOKEN_RE = /(?:^|[\s"'`([{])([a-zA-Z]:[\\/][\w.~\-/\\]+|[\w.~\-/\\]*\
 const TIME_TAG_RE = /\b\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?\b/g
 
 const DECISION_RE = /决定|采用|弃用|决议|we decided|decided to|use [\w.~-]+ instead of/i
-const PREFERENCE_RE = /我习惯|不要用|别用|always|never|prefer/i
+const PREFERENCE_RE = /我习惯|不要用|别用|\b(?:always|never|prefer)\b/i
 const COMMAND_OR_ERROR_RE = /(^|\n)\s*[$#>]\s*\S|error|fail|exception|\bE[A-Z0-9-]{2,}\b|exit code \d+/i
 
 export interface NormalizedText {
@@ -241,6 +242,7 @@ export function classifyDeterministic(
   normalizedText: string,
   signalRepeats: number,
 ): PatternMatch | null {
+  if (isRawKnowledgeContent(normalizedText)) return null
   const slot = factSlot(normalizedText)
   if (slot) return { kind: slot.factKey === 'release.command' ? 'procedure' : 'preference', confidence: 0.7 }
   if (observationType === 'git-event' || observationType === 'checkpoint-event') {
@@ -468,12 +470,14 @@ export async function runDeterministicStage(
   // Repeat counts (§4.4 procedure) observe every occurrence, duplicates included.
   const signalCounts = new Map<string, number>()
   for (const item of prepared) {
+    if (isRawConversationEvidence(item.observation) || isRawKnowledgeContent(item.text)) continue
     if (observationScope(item.observation) === 'user' && !isUserStatement(item.observation)) continue
     const signal = firstLine(item.text)
     if (signal) signalCounts.set(signal, (signalCounts.get(signal) ?? 0) + 1)
   }
   const signalMembers = new Map<string, string[]>()
   for (const item of prepared) {
+    if (isRawConversationEvidence(item.observation) || isRawKnowledgeContent(item.text)) continue
     if (observationScope(item.observation) === 'user' && !isUserStatement(item.observation)) continue
     const signal = firstLine(item.text)
     if (!signal) continue
@@ -502,7 +506,8 @@ export async function runDeterministicStage(
   }
 
   const groups = clusterNearDuplicates(
-    unique.filter((item) => item.observation.memoryIntent !== 'remember' && (observationScope(item.observation) !== 'user'
+    unique.filter((item) => !isRawConversationEvidence(item.observation) && !isRawKnowledgeContent(item.text)
+      && item.observation.memoryIntent !== 'remember' && (observationScope(item.observation) !== 'user'
       || isUserStatement(item.observation) && !item.truncated && !item.observation.truncated && item.text.trim())).sort((a, b) =>
       a.observation.createdAt.localeCompare(b.observation.createdAt)
       || a.observation.id.localeCompare(b.observation.id),
@@ -559,6 +564,7 @@ export async function runDeterministicStage(
       : match.kind === 'procedure'
         ? signal
         : matchedLine(primary.text, match.kind === 'decision' ? DECISION_RE : PREFERENCE_RE))
+    if (isRawKnowledgeContent(content)) continue
     const scope = observationScope(primary.observation)
     const identity = createHash('sha256').update(JSON.stringify([
       scope, batch.workspaceId, match.kind, content, [...evidenceIds].sort(),

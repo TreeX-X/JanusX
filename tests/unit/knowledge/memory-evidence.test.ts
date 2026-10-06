@@ -8,7 +8,7 @@ import { knowledgeObservationService, resetObservationServiceEphemeralState } fr
 import { deriveHabitPromotions, habitPromotionToCandidate, mergeHabitEvidence, proposeHabitCandidates } from '../../../src/main/knowledge/habit-aggregator'
 import { runDeterministicStage } from '../../../src/main/knowledge/deterministic-extractor'
 import { knowledgeExtractService } from '../../../src/main/knowledge/extract-service'
-import { knowledgeReviewService, proposeFactCandidates } from '../../../src/main/knowledge/review-service'
+import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
 import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service'
 import { knowledgeRecallService } from '../../../src/main/knowledge/recall-service'
 import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
@@ -113,7 +113,9 @@ describe('host memory evidence boundary', () => {
       content: taskNotification(`legacy-${index}`) }, { speaker: 'user', sourceEventId: `legacy-${index}` }))
     const candidate = habitPromotionToCandidate({ key: 'legacy', content: history[3].content, frequency: 4, strength: 0.7,
       evidenceObservationIds: history.map(item => item.id), sources: history.map(sourceEvidence), lastSeenAt: now })
-    await proposeFactCandidates([candidate])
+    // Persist a pre-fix fixture in the isolated test root; admission now rejects it.
+    await mkdir(join(root, 'facts'), { recursive: true })
+    await writeFile(join(root, 'facts', 'candidates.jsonl'), JSON.stringify(candidate) + '\n')
     await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id, reviewNotes: 'Runtime notification, not a personal preference' }))
     for (let pass = 0; pass < 2; pass++) await runDeterministicStage({ workspaceId: 'user', observations: history })
     expect(await knowledgeExtractService.listFactCandidates()).toMatchObject([{ id: candidate.id, status: 'rejected' }])
@@ -263,7 +265,7 @@ describe('host memory evidence boundary', () => {
   })
 
   it('does not recreate a rejected deterministic candidate on replay', async () => {
-    const observation = await knowledgeObservationService.capture({ ...input, workspaceId: 'project-a', workspacePath: 'C:/project-a' })
+    const observation = await knowledgeObservationService.capture({ ...input, workspaceId: 'project-a', workspacePath: 'C:/project-a' }, { speaker: 'user', sourceEventId: 'project-preference' })
     const batch = { workspaceId: 'project-a', observations: [observation] }
     await runDeterministicStage(batch)
     const [candidate] = await knowledgeExtractService.listFactCandidates()

@@ -4,8 +4,10 @@ import type { CandidateFact, MemoryFact, MemorySourceEvidence } from '../../shar
 import { knowledgeObservationService } from './observation-service'
 import { factScope, isActiveObservation, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
 import { sameFactDomain } from './fact-conflicts'
+import { isRawKnowledgeContent } from './knowledge-content'
 
 export async function validateFactEvidence(candidate: CandidateFact): Promise<void> {
+  if (isRawKnowledgeContent(candidate.fact.content)) throw new Error('Raw execution evidence cannot be accepted as knowledge')
   if (candidate.legacySource || candidate.personalCorrection) return
   const sources = candidate.evidence?.sources ?? candidate.fact.provenance.sourceEvidence ?? []
   // Legacy candidates without attribution remain reviewable, but cannot claim a verified source.

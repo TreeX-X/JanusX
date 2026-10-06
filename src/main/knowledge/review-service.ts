@@ -40,6 +40,7 @@ import { reviewedFactHash } from './profile-projection'
 import { readLegacyJsonl, validateLegacyCandidate } from './legacy-memory-source'
 import { validatePersonalCorrection } from './personal-correction-source'
 import { isExactFactDuplicate, mergeFactEvidence, validateFactEvidence } from './fact-evidence-review'
+import { isRawKnowledgeContent } from './knowledge-content'
 import type { MemoryDecisionAnnotation } from '../../shared/memory-decision'
 import type {
   ReviewCandidateInput,
@@ -196,6 +197,7 @@ export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<
 /** Single fact admission path: producers propose, explicit review applies. */
 export async function proposeFactCandidates(candidates: CandidateFact[], mergeExact = false): Promise<CandidateFact[]> {
   if (candidates.length === 0) return []
+  if (candidates.some(candidate => isRawKnowledgeContent(candidate.fact.content))) throw new Error('Raw execution evidence cannot be proposed as knowledge')
   return withFactCandidatesLock(async () => {
     for (const candidate of candidates) await assertCandidateAllowed(candidate, 'propose')
     const file = absolute(FACT_CANDIDATES_FILE)

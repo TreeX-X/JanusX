@@ -146,6 +146,29 @@ describe('KnowledgeReviewService', () => {
     expect(stored[0]?.reviewNotes).toBe('not durable enough')
   })
 
+  it('rejects an entire proposal batch containing raw tool evidence before any writes', async () => {
+    const valid = makeFactCandidate()
+    const raw = makeFactCandidate({ id: 'raw' })
+    raw.fact.content = JSON.stringify({ chunk_id: 'fixture', wall_time_seconds: 0.5, exit_code: 0, output: 'we decided to use sqlite' })
+    const { proposeFactCandidates } = await loadService()
+    await seedJsonl('facts/candidates.jsonl', [])
+    await expect(proposeFactCandidates([valid, raw])).rejects.toThrow('Raw execution evidence')
+    expect(await readJsonl('facts/candidates.jsonl')).toEqual([])
+  })
+
+  it('blocks approval of a legacy raw source candidate but allows audited rejection', async () => {
+    const candidate = makeFactCandidate()
+    candidate.fact.content = '2255\t@media (prefers-reduced-motion: reduce) {'
+    await seedJsonl('facts/candidates.jsonl', [candidate])
+    const { knowledgeReviewService } = await loadService()
+    const input = await reviewFixture({ type: 'fact', id: candidate.id })
+    await expect(knowledgeReviewService.applyCandidate(input)).rejects.toThrow('Raw execution evidence')
+    expect((await readJsonl<CandidateFact>('facts/candidates.jsonl'))[0].status).toBe('proposed')
+    const result = await knowledgeReviewService.rejectCandidate({ ...input, reviewNotes: 'Raw source listing, not durable knowledge' })
+    expect(result.candidate.status).toBe('rejected')
+    expect(result.auditEvents[0]?.action).toBe('candidate_rejected')
+  })
+
   it('applies a proposed fact into facts.jsonl with approved+applied audits', async () => {
     const candidate = makeFactCandidate()
     await seedJsonl('facts/candidates.jsonl', [candidate])

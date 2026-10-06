@@ -50,6 +50,42 @@ async function candidate(index: number): Promise<CandidateFact> {
 }
 async function facts(items: MemoryFact[]) { await mkdir(join(root, 'facts'), { recursive: true }); await writeFile(join(root, 'facts/facts.jsonl'), items.map(item => JSON.stringify(item)).join('\n') + '\n') }
 describe('durable knowledge automation', () => {
+  it.each(['extraction', 'curation'])('blocks raw tool content returned by %s without partial admission', async stage => {
+    config.stages.extraction = { provider: 'external', providerId: 'test', model: 'test', thinking: false }
+    config.stages.entryReview.provider = 'off'
+    const raw = JSON.stringify({ chunk_id: 'fixture', wall_time_seconds: 0.5, exit_code: 0, output: 'Keep backups for 7 days.' })
+    const source = await knowledgeObservationService.capture({ workspaceId: 'project', workspacePath: root, source: 'agent-stream', type: 'tool-result', content: raw }, { speaker: 'tool' })
+    json.mockResolvedValue({ complete: true, facts: ['Keep backups for 7 days.', stage === 'extraction' ? raw : 'Backup retention is seven days.'].map(content => ({
+      content, kind: 'procedure', concepts: ['backup'], citations: [{ observationId: source.id, quote: raw }],
+    })) })
+    if (stage === 'curation') curate.mockReturnValue({ complete: true, selections: [
+      { index: 0, action: 'keep', equivalentTo: null, duplicateOf: null },
+      { index: 1, action: 'keep', content: raw, equivalentTo: null, duplicateOf: null },
+    ] })
+    await service.run()
+    expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
+    expect((await knowledgeTruthService.list()).facts).toEqual([])
+    expect((await service.status()).tasks[0].reason).toBe('processing-failed')
+    expect(await knowledgeObservationService.resolveContent(source)).toBe(raw)
+  })
+
+  it('extracts a supported durable statement from an intact raw tool envelope', async () => {
+    config.stages.extraction = { provider: 'external', providerId: 'test', model: 'test', thinking: false }
+    config.stages.entryReview.provider = 'off'
+    const raw = JSON.stringify({ chunk_id: 'fixture', wall_time_seconds: 0.5, exit_code: 0, output: 'Backup policy: keep backups for 7 days.' })
+    const source = await knowledgeObservationService.capture({ workspaceId: 'project', workspacePath: root, source: 'agent-stream', type: 'tool-result', content: raw }, { speaker: 'tool' })
+    json.mockImplementation(async request => {
+      expect(request.input.evidence[0]).toMatchObject({ content: raw, authority: 'tool-observed' })
+      return { complete: true, facts: [{ content: 'Keep backups for 7 days.', kind: 'procedure', concepts: ['backup'], citations: [{ observationId: source.id, quote: 'Backup policy: keep backups for 7 days.' }] }] }
+    })
+    await service.run()
+    const candidates = await knowledgeExtractService.listFactCandidates()
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].fact.content).toBe('Keep backups for 7 days.')
+    expect(candidates[0].evidence.quotes).toEqual([{ observationId: source.id, quote: 'Backup policy: keep backups for 7 days.' }])
+    expect(await knowledgeObservationService.resolveContent(source)).toBe(raw)
+  })
+
   it('curates mixed status, merges duplicate evidence and discards temporary statements', async () => {
     config.stages.extraction = { provider: 'external', providerId: 'test', model: 'test', thinking: false }
     config.stages.entryReview.provider = 'off'
