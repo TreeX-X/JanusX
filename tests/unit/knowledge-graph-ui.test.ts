@@ -86,7 +86,7 @@ describe('Wiki graph in Chromium', () => {
       expect(paths[0]!.stroke).not.toBe('none')
       expect(paths[0]!.opacity).not.toBe('0')
       await page.getByTitle('Source page', { exact: true }).click()
-      await page.locator('pre').filter({ hasText: 'Complete Wiki body.' }).waitFor()
+      await page.locator('[data-knowledge-markdown]').filter({ hasText: 'Complete Wiki body.' }).waitFor()
       expect(await page.locator('.react-flow__node').count()).toBe(2)
       expect(await page.getByRole('button', { name: 'Trace sources' }).count()).toBe(1)
       await page.screenshot({ path: `artifacts/knowledge-g1-browser/wiki-${theme}.png` })

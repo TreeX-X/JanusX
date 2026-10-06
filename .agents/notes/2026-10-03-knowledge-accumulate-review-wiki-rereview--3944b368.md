@@ -126,7 +126,7 @@ Jev 设置仅在状态文字中标记已配置，可以复用最少控件，但�
 
 ## Verification
 
-2026-10-06 补充核查：[知识库优化需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)记录审核详情与旧动作问题，以及用户确认的沉淀流程和 Wiki 主图定位；页间关系审核与同版本发布已由 W1 实现，默认 Wiki 主图和来源追溯已由 G1 实现，图谱阅读与布局仍待 G2。本文既有四环节与控件测试不覆盖这些新增场景；后续按[实施任务](./2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md)逐项细化并验收，不把已勾选的软件接入条款扩展解释为当前整体体验或 Wiki 关系闭环已经完成。
+2026-10-06 补充核查：[知识库优化需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)记录审核详情与旧动作问题，以及用户确认的沉淀流程和 Wiki 主图定位；页间关系审核与同版本发布已由 W1 实现，默认 Wiki 主图和来源追溯已由 G1 实现，审核卡片与详情阅读已由 S2 实现；图谱阅读与布局仍待 G2。本文既有四环节与控件测试不覆盖这些新增场景；后续按[实施任务](./2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md)逐项细化并验收，不把已勾选的软件接入条款扩展解释为当前整体体验或 Wiki 关系闭环已经完成。
 
 `npm run test:unit -- --run tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts` 提供浏览器交互与 IPC 替身验证，覆盖等待、成功、失败重试、重新挂载、显隐、清除及读取门禁。密钥交互的两项浏览器测试通过，IPC 合同的 11 项测试通过；原有其余 11 项界面测试通过。`npm run typecheck` 通过。这些验证不证明真实系统加密或 Jev 鉴权可用。
 

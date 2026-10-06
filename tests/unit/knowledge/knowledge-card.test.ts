@@ -69,6 +69,7 @@ describe('toKnowledgeCard', () => {
     expect(card.summary.length).toBe(240)
     expect(card.summary.endsWith('…')).toBe(true)
     expect(card.summary.startsWith('x'.repeat(239))).toBe(true)
+    expect(card.fullContent).toBe(long)
   })
 
   it('maps a hit list via toKnowledgeCards', () => {

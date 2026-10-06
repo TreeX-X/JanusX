@@ -31,3 +31,11 @@
 .revisionPreview { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--shell-border-soft); }
 .revisionPreview > p { font-size: 11px; color: var(--shell-muted); }
 @media (prefers-reduced-motion: reduce) { .historyToggle svg:last-child { transition: none; } }
+
+
+.comparison { min-width: 0; border-top: 1px solid var(--shell-border); padding-top: 8px; margin-top: 12px; }
+.comparison summary { cursor: pointer; color: var(--shell-muted); }
+.comparison summary:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+.comparison p { overflow-wrap: anywhere; }
+.comparison [role=alert] { color: var(--shell-diff-del); }
+.comparison h4 { font-size: 12px; margin: 12px 0 8px; }

@@ -1,9 +1,10 @@
-import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
+import { reviewCandidateInput, reviewCandidateSnapshot } from '../../../../shared/review-candidate-snapshot'
 // Note: wiki proposals use host source receipts — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
 import { useEffect, useRef, useState } from 'react'
 import type { CandidateWikiPatch, WikiNoteStatus, WikiPage } from '../../../../shared/knowledge'
 import type { NoteWikiDraft, NoteWikiPage } from '../../../../shared/ipc/knowledge'
 import styles from './NoteWikiLinks.module.css'
+import { KnowledgeMarkdown } from './KnowledgeMarkdown'
 import { WikiHistory } from './WikiHistory'
 import { useI18n } from '@/i18n/useI18n'
 import { wikiPageUri, wikiRelationKey } from '../../../../shared/wiki-relations'
@@ -19,6 +20,10 @@ export function WikiRelations({ relations, issues = [] }: { relations: WikiPage[
         <strong>{t(`knowledge:relations.type.${relation.type}`)} → {relation.target.title}</strong>
         <span>{t('knowledge:relations.targetVersion', { version: relation.target.version })}</span>
         <p>{relation.reason}</p>
+        <details><summary>{t('knowledge:reviewContent.relationSources')}</summary>
+          <code>{wikiPageUri(relation.target.workspaceId, relation.target.slug)}</code>
+          <p>{t('knowledge:reviewContent.sourceFacts')}: {relation.sourceFactIds.join(', ') || t('knowledge:inspector.none')}</p>
+        </details>
         {issue && <p role="status">{t(`knowledge:relations.status.${issue.status}`)}</p>}
       </li>
     })}</ul>
@@ -87,7 +92,7 @@ export function NoteWikiEditor({ rootPath = '', initialUris = [], page, onPropos
       <button type="button" disabled={busy || !reviewed || !markdown.trim() || !title.trim() || !rationale.trim()} onClick={() => void propose()}>Submit for wiki approval</button>
       <button type="button" disabled={busy} onClick={() => { setDraft(null); setReviewed(false) }}>Read sources again</button>
     </>}
-    {candidate && <><h4>Proposed full page · {candidate.status}</h4><pre>{candidate.patchMarkdown}</pre><WikiRelations relations={candidate.relations} /><WikiSourceList sources={(candidate.sourceNoteRefs ?? []).map(ref => ({ ...ref, status: 'unknown', detail: 'Sources are checked again at approval' }))} />
+    {candidate && <><h4>Proposed full page · {candidate.status}</h4><KnowledgeMarkdown content={candidate.patchMarkdown} /><WikiRelations relations={candidate.relations} /><WikiSourceList sources={(candidate.sourceNoteRefs ?? []).map(ref => ({ ...ref, status: 'unknown', detail: 'Sources are checked again at approval' }))} />
       <div className={styles.actions}><button type="button" disabled={busy || candidate.status !== 'proposed'} onClick={() => void act(async () => { const result = await window.electron.knowledge.applyCandidate(await reviewCandidateInput(candidate)); if (mounted.current) { setCandidate(result.candidate as CandidateWikiPatch); setNotice('Published through the existing wiki approval and audit path.') } })}>Approve and publish</button>
       <button type="button" disabled={busy || candidate.status !== 'proposed'} onClick={() => void act(async () => { const result = await window.electron.knowledge.rejectCandidate(await reviewCandidateInput(candidate)); if (mounted.current) setCandidate(result.candidate as CandidateWikiPatch) })}>Reject proposal</button></div>
     </>}
@@ -108,7 +113,7 @@ export function WikiPageDetail({ page, onOpenNote }: { page: WikiPage; onOpenNot
   }, [page.workspaceId, page.slug, page.version, refresh])
   return <section className={styles.detail}>
     <p>Workspace: {page.workspaceId} {page.workspacePath} · Page: {page.slug} · Version: {page.version}</p>
-    <pre>{page.markdown}</pre><p>Source facts: {page.sourceFactIds.join(', ') || 'None recorded'}</p>
+    <KnowledgeMarkdown content={page.markdown} /><p>Source facts: {page.sourceFactIds.join(', ') || 'None recorded'}</p>
     <p>{t('knowledge:relations.pageReference')} <code>{wikiPageUri(page.workspaceId, page.slug)}</code></p>
     <WikiRelations relations={page.relations} issues={page.relationIssues} />
     <button type="button" onClick={() => setRefresh(value => value + 1)}>Refresh source status</button>
@@ -118,16 +123,70 @@ export function WikiPageDetail({ page, onOpenNote }: { page: WikiPage; onOpenNot
   </section>
 }
 
-export function WikiCandidateSources({ candidate }: { candidate: CandidateWikiPatch }) {
+export function WikiCandidateSources({ candidate, onBlocked }: { candidate: CandidateWikiPatch; onBlocked?: (blocked: boolean) => void }) {
+  const { t } = useI18n('knowledge')
   const [sources, setSources] = useState<WikiNoteStatus[]>([])
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [refresh, setRefresh] = useState(0)
+  const snapshot = reviewCandidateSnapshot(candidate)
   useEffect(() => {
     let current = true
-    setSources([]); setError('')
-    window.electron.knowledge.noteWikiStatuses({ candidateId: candidate.id }).then(result => { if (current) setSources(result) }, e => { if (current) setError(errorText(e)) })
+    const refs = candidate.sourceNoteRefs ?? []
+    setSources([]); setError(''); setLoading(Boolean(refs.length)); onBlocked?.(Boolean(refs.length))
+    if (!refs.length) return
+    void window.electron.knowledge.noteWikiStatuses({ candidateId: candidate.id }).then(result => {
+      if (!current) return
+      const complete = refs.every(ref => result.some(source => source.uri === ref.uri && source.sourceHash === ref.sourceHash))
+      setSources(result); setLoading(false)
+      if (!complete) setError(t('knowledge:reviewContent.sourceUnavailable'))
+      onBlocked?.(!complete || result.some(source => source.status !== 'fresh'))
+    }, e => {
+      if (current) { setError(errorText(e)); setLoading(false); onBlocked?.(true) }
+    })
     return () => { current = false }
-  }, [candidate.id])
-  return <section className={styles.detail}><p>Workspace: {candidate.provenance.workspaceId} · {candidate.provenance.workspacePath}</p><p>Review: {candidate.reviewMode ?? 'incremental'} · Expected page version: {candidate.expectedVersion ?? 'not recorded'}</p><pre>{candidate.patchMarkdown}</pre><p>Rationale: {candidate.rationale}</p><p>Source facts: {candidate.sourceFactIds?.join(', ') || 'None recorded'}</p><WikiSourceList sources={sources} />{error && <p role="alert">{error}</p>}</section>
+  }, [candidate.id, snapshot, candidate.sourceNoteRefs, onBlocked, refresh, t])
+  return <section className={styles.detail}>
+    <h4>{t('knowledge:reviewContent.wikiSources')}</h4>
+    <p>{t('knowledge:reviewContent.sourceFacts')}: {candidate.sourceFactIds?.join(', ') || t('knowledge:inspector.none')}</p>
+    {loading && <p role="status">{t('knowledge:reviewContent.loadingSource')}</p>}
+    <WikiSourceList sources={sources} />{error && <p role="alert">{error}</p>}
+    {!!candidate.sourceNoteRefs?.length && <button type="button" disabled={loading} onClick={() => setRefresh(value => value + 1)}>{t('knowledge:reviewContent.refreshSource')}</button>}
+  </section>
+}
+
+export function WikiCandidateComparison({ candidate, onBlocked }: { candidate: CandidateWikiPatch; onBlocked?: (blocked: boolean) => void }) {
+  const { t } = useI18n('knowledge')
+  const [open, setOpen] = useState(false)
+  const [loaded, setLoaded] = useState<{ page?: WikiPage; ambiguous: boolean }>()
+  const [error, setError] = useState(false)
+  const snapshot = reviewCandidateSnapshot(candidate)
+  useEffect(() => {
+    let current = true
+    setLoaded(undefined); setError(false)
+    if (open) { onBlocked?.(true); void window.electron.knowledge.listTruth().then(truth => {
+      const pages = truth.wikiPages.filter(page => page.workspaceId === candidate.provenance.workspaceId && page.slug === candidate.pageSlug)
+      if (current) { setLoaded({ page: pages.length === 1 ? pages[0] : undefined, ambiguous: pages.length > 1 }); onBlocked?.(pages.length > 1 || candidate.expectedVersion !== undefined && candidate.expectedVersion !== (pages[0]?.version ?? 0)) }
+    }).catch(() => { if (current) { setError(true); onBlocked?.(true) } }) }
+    return () => { current = false }
+  }, [open, snapshot, candidate.pageSlug, candidate.provenance.workspaceId, candidate.expectedVersion, onBlocked])
+  return <details className={styles.comparison} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary>{t('knowledge:reviewContent.compareWiki')}</summary>
+    <p>{t('knowledge:reviewContent.expectedVersion', { version: candidate.expectedVersion ?? t('knowledge:inspector.none') })}</p>
+    {error && <p role="alert">{t('knowledge:reviewContent.comparisonFailed')}</p>}
+    {!loaded && !error && <p>{t('knowledge:reviewContent.loadingSource')}</p>}
+    {loaded?.ambiguous && <p role="alert">{t('knowledge:reviewContent.comparisonFailed')}</p>}
+    {loaded && !loaded.page && !loaded.ambiguous && <p>{t(candidate.expectedVersion === 0 ? 'knowledge:reviewContent.newPage' : 'knowledge:reviewContent.baselineUnavailable')}</p>}
+    {loaded?.page && <>
+      {candidate.expectedVersion !== undefined && loaded.page.version !== candidate.expectedVersion && <p role="alert">{t('knowledge:reviewContent.versionChanged')}</p>}
+      <h4>{t('knowledge:reviewContent.publishedVersion', { version: loaded.page.version })}</h4>
+      <KnowledgeMarkdown content={loaded.page.markdown} />
+      <WikiRelations relations={loaded.page.relations} issues={loaded.page.relationIssues} />
+      <h4>{t(candidate.reviewMode === 'full-page' ? 'knowledge:reviewContent.replacementPage' : 'knowledge:reviewContent.incrementalPatch')}</h4>
+      <KnowledgeMarkdown content={candidate.patchMarkdown} />
+      <WikiRelations relations={candidate.relations} />
+    </>}
+  </details>
 }
 
 export function NoteWikiLinks(props: { rootPath: string; uri: string; onOpenNote?: (uri: string) => void }) {

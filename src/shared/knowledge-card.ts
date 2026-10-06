@@ -36,6 +36,7 @@ export function toKnowledgeCard(hit: KnowledgeSearchHit): KnowledgeCard {
     kind: KIND_BY_TYPE[hit.type],
     title: hit.title,
     summary: truncateSummary(hit.content ?? ''),
+    fullContent: hit.content,
     score,
     tags: hit.tags ?? [],
     workspaceId: hit.workspaceId || undefined,
@@ -60,6 +61,7 @@ function factToKnowledgeCard(fact: MemoryFact): KnowledgeCard {
     id: fact.id,
     kind: 'fact',
     title: fact.content,
+    fullContent: fact.content,
     summary: fact.concepts.join(' - '),
     score: fact.confidence,
     tags: fact.tags,
@@ -70,7 +72,7 @@ function factToKnowledgeCard(fact: MemoryFact): KnowledgeCard {
       fileRefs: fact.provenance.fileRefs,
     },
     createdAt: fact.provenance.createdAt,
-    status: 'active',
+    status: fact.status,
     rawType: 'memory-fact',
   }
 }

@@ -1,4 +1,4 @@
-import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
+import { reviewCandidateInput, reviewCandidateSnapshot } from '../../../../shared/review-candidate-snapshot'
 import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { FactReviewControls } from './FactReviewControls'
 import { AutomationStatus } from './AutomationStatus'
@@ -12,7 +12,9 @@ import { useCandidateReviewState, assertCandidateCanReview } from './candidateRe
 import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
 import { applyKnowledgeCandidate, rejectKnowledgeCandidate } from '../../services/knowledge'
 import { competingCorrections, countInboxScopes, filterInboxByScope, isUserScopeCandidate, type InboxCandidate, type InboxScopeFilter } from './inboxScope'
-import { WikiCandidateSources, WikiRelations } from './NoteWikiLinks'
+import { WikiCandidateSources, WikiRelations, WikiCandidateComparison } from './NoteWikiLinks'
+import { KnowledgeMarkdown } from './KnowledgeMarkdown'
+import { CandidateEvidence } from './CandidateEvidence'
 import surface from './MemorySurface.module.css'
 import styles from './MemoryReviewTool.module.css'
 import { CardSkeleton } from '../shared/CardFrame'
@@ -133,12 +135,31 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
   </section>
 }
 
-export function MemoryReviewCard({ candidate, disabled, onReview, competing = 0, automation }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean, replacement?: ReviewCandidateInput['replacement']) => void; competing?: number; automation: KnowledgeAutomationStatus | null }) {
+
+interface ReviewCardProps {
+  candidate: InboxCandidate
+  disabled: boolean
+  onReview: (approve: boolean, replacement?: ReviewCandidateInput['replacement']) => void
+  competing?: number
+  automation: KnowledgeAutomationStatus | null
+  detail?: boolean
+}
+
+// Note: both review entrances share content, evidence and applicable actions — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+export function MemoryReviewCard(props: ReviewCardProps) {
+  return <ReviewCardContent key={reviewCandidateSnapshot(props.candidate)} {...props} />
+}
+
+function ReviewCardContent({ candidate, disabled, onReview, competing = 0, automation, detail = false }: ReviewCardProps) {
   const { t } = useI18n('knowledge')
   const personal = isUserScopeCandidate(candidate)
   const state = useCandidateReviewState(candidate, automation)
   const [retrying, setRetrying] = useState(false)
   const [retryError, setRetryError] = useState(false)
+  const [evidenceBlocked, setEvidenceBlocked] = useState(false)
+  const [wikiBlocked, setWikiBlocked] = useState(false)
+  const [notesBlocked, setNotesBlocked] = useState(false)
+  const sourceBlocked = evidenceBlocked || wikiBlocked || notesBlocked
   const retryLock = useRef(false)
   const retry = async () => {
     if (!state.taskId || retryLock.current) return
@@ -148,48 +169,72 @@ export function MemoryReviewCard({ candidate, disabled, onReview, competing = 0,
     finally { retryLock.current = false; setRetrying(false) }
   }
   const provenance = candidate.type === 'fact' ? candidate.fact.provenance : candidate.type === 'wiki-patch' ? candidate.provenance : undefined
+  const type = candidate.type === 'fact' ? 'fact' : candidate.type === 'wiki-patch' ? 'wikiDraft' : 'legacyGraph'
   const content = candidate.type === 'fact' ? candidate.fact.content : candidate.type === 'wiki-patch' ? candidate.patchMarkdown : `${candidate.edge.from} → ${candidate.edge.to} (${candidate.edge.type})`
-  return <article className={`${styles.card} ${surface.card}`}>
-    <strong>{t(personal ? 'knowledge:inbox.scope.personal' : 'knowledge:inbox.scope.engineering')}</strong>
-    <span className={styles.automaticState} data-review-state={state.status}>{t(`knowledge:review.currentState.${state.status}`)}</span>
-    {state.reason && <p>{state.reason === 'stage-not-configured' ? t('knowledge:automation.configurationHint') : state.reason}</p>}
-    {state.taskId && <button type="button" disabled={disabled || retrying} onClick={() => void retry()}>{t('knowledge:automation.retry')}</button>}
-    {retryError && <p role="alert">{t('knowledge:automation.actionFailed')}</p>}
-    {candidate.type === 'fact' && candidate.legacySource && <p>{t('knowledge:review.legacySource')}</p>}
-    {candidate.type === 'fact' && candidate.personalCorrection && <>
-      <strong>{t('knowledge:review.correctionTitle')}</strong>
-      <p>{t('knowledge:persona.correctionOriginal')}: {candidate.personalCorrection.previousContent}</p>
-      {competing > 0 && <p>{t('knowledge:review.correctionCompeting', { count: competing })}</p>}
-    </>}
-    {personal && candidate.id.startsWith('remember-candidate:') && <p>{t('knowledge:review.explicitMemory')}</p>}
-    {personal && candidate.id.startsWith('habit-candidate:') && <p>{t('knowledge:review.inferredHabit')}</p>}
-    <p>{content}</p>
-    {candidate.type === 'wiki-patch' && <WikiRelations relations={candidate.relations} />}
-    {candidate.type === 'fact' && candidate.decision && <details>
-      <summary>{t('knowledge:review.historicalScoring')}</summary>
-      <p>{candidate.decision.scorer.provider} · {candidate.decision.status} · {candidate.decision.reason}</p>
-      <p>{t('knowledge:review.scoreCaution')}</p>
-      <ul>{candidate.decision.answers.map(answer => <li key={answer.question}>{answer.question}: {String(answer.answer)} ({Math.round(answer.answer_confidence * 100)}%)</li>)}</ul>
-      {candidate.decision.chunks?.map((chunk, index) => <details key={index}>
-        <summary>{t('knowledge:inspector.sourceRefs')}: {chunk.evidenceRanges.map(range => `${range.observationId} [${range.start}, ${range.end})`).join(', ')}</summary>
-        <ul>{chunk.answers.map(answer => <li key={answer.question}>{answer.question}: {String(answer.answer)} ({Math.round(answer.answer_confidence * 100)}%)</li>)}</ul>
-      </details>)}
-    </details>}
-    <details>
-      <summary>{t('knowledge:inspector.provenance')}</summary>
-      <p>{t(personal ? 'knowledge:review.personalUse' : 'knowledge:review.engineeringUse')}</p>
-      <p>{candidate.type === 'fact' ? candidate.fact.kind : candidate.type} · {candidate.derivation}</p>
-      <p>{provenance?.workspaceName || provenance?.workspaceId || (candidate.type === 'graph-edge' ? candidate.edge.workspaceId : '')}</p>
-      <p>{provenance?.fileRefs.join(' · ')}</p>
-      <p>{t('knowledge:card.sourceRefs', { count: candidate.evidence.observationIds.length })}: {candidate.evidence.observationIds.join(', ')}</p>
-      {(candidate.evidence.sources ?? provenance?.sourceEvidence)?.map((source, index) => <blockquote key={index}><p>{source.excerpt}</p><small>{source.speaker} · {source.authority} · {source.workspaceId} · {source.observationId}</small></blockquote>)}
-      {candidate.type === 'wiki-patch' && <WikiCandidateSources candidate={candidate} />}
-      {candidate.type === 'fact' && candidate.fact.supersedes && <p>{t('knowledge:review.supersedes', { id: candidate.fact.supersedes })}</p>}
+  const title = candidate.type === 'wiki-patch' ? candidate.title : `${t(`knowledge:reviewContent.types.${type}`)} · ${content.split('\n')[0]?.slice(0, 90)}`
+  return <article className={`${styles.card} ${detail ? styles.detailCard : surface.card}`} data-review-type={candidate.type}>
+    <header className={styles.cardHeader}>
+      <div className={styles.cardMeta}><span>{t(`knowledge:reviewContent.types.${type}`)}</span><span>{t(personal ? 'knowledge:inbox.scope.personal' : 'knowledge:inbox.scope.engineering')}</span></div>
+      <h3>{title}</h3>
+      <span className={styles.automaticState} data-review-state={state.status}>{t(`knowledge:review.currentState.${state.status}`)}</span>
+      {state.reason && <p>{state.reason === 'stage-not-configured' ? t('knowledge:automation.configurationHint') : state.reason}</p>}
+    </header>
+    <div className={styles.cardContent} tabIndex={0} aria-label={t('knowledge:reviewContent.reading')}>
+      {(state.status === 'pending' || state.status === 'running' || state.status === 'failed' || state.status === 'needs-review') && <details className={styles.diagnostics}>
+        <summary>{t('knowledge:reviewContent.processingRecord')}</summary>
+        <p>{t(candidate.type === 'wiki-patch' ? 'knowledge:automation.stage.wikiReview' : 'knowledge:automation.stage.entryReview')} · {t(`knowledge:review.currentState.${state.status}`)}</p>
+
+      </details>}
+      {candidate.type === 'graph-edge' && <p>{t('knowledge:reviewContent.legacyGraphHint')}</p>}
+      {candidate.type === 'fact' && candidate.legacySource && <p>{t('knowledge:review.legacySource')}</p>}
+      {candidate.type === 'fact' && candidate.personalCorrection && <section className={styles.section}>
+        <h4>{t('knowledge:review.correctionTitle')}</h4>
+        <p>{t('knowledge:persona.correctionOriginal')}: {candidate.personalCorrection.previousContent}</p>
+        {competing > 0 && <p>{t('knowledge:review.correctionCompeting', { count: competing })}</p>}
+      </section>}
+      {personal && candidate.id.startsWith('remember-candidate:') && <p>{t('knowledge:review.explicitMemory')}</p>}
+      {personal && candidate.id.startsWith('habit-candidate:') && <p>{t('knowledge:review.inferredHabit')}</p>}
+      <section className={styles.section} aria-label={t('knowledge:reviewContent.body')}>
+        <h4>{t('knowledge:reviewContent.body')}</h4>
+        {candidate.type === 'wiki-patch' ? <KnowledgeMarkdown content={content} /> : <p>{content}</p>}
+      </section>
+      {candidate.type === 'wiki-patch' && <>
+        <section className={styles.section}><h4>{t('knowledge:reviewContent.rationale')}</h4><p>{candidate.rationale}</p></section>
+        <WikiRelations relations={candidate.relations} />
+        <WikiCandidateComparison candidate={candidate} onBlocked={setWikiBlocked} />
+        <WikiCandidateSources candidate={candidate} onBlocked={setNotesBlocked} />
+      </>}
+      <CandidateEvidence candidate={candidate} provenance={provenance} onBlocked={setEvidenceBlocked} />
       {!!candidate.conflicts?.length && <p>{t('knowledge:inspector.conflict', { detail: candidate.conflicts.join(', ') })}</p>}
-    </details>
-    {state.canReview && <div className={styles.filters}>
-      {candidate.type === 'fact' ? <FactReviewControls candidate={candidate} disabled={disabled || retrying} onApprove={replacement => onReview(true, replacement)} /> : <button type="button" disabled={disabled || retrying} onClick={() => onReview(true)}>{t('knowledge:action.approve')}</button>}
-      <button type="button" disabled={disabled || retrying} onClick={() => onReview(false)}>{t('knowledge:action.reject')}</button>
-    </div>}
+      {candidate.type === 'fact' && candidate.fact.supersedes && <p>{t('knowledge:review.supersedes', { id: candidate.fact.supersedes })}</p>}
+      <details className={styles.diagnostics}>
+        <summary>{t('knowledge:reviewContent.diagnostics')}</summary>
+        <p>{t(personal ? 'knowledge:review.personalUse' : 'knowledge:review.engineeringUse')}</p>
+        <p>{candidate.id} · {candidate.derivation}</p>
+        <p>{provenance?.workspaceName || provenance?.workspaceId || (candidate.type === 'graph-edge' ? candidate.edge.workspaceId : '')}</p>
+        <p>{provenance?.fileRefs.join(' · ')}</p>
+        {provenance?.model && <p>{provenance.model}</p>}
+        <p>{t('knowledge:reviewContent.scoreMeaning')}</p>
+      </details>
+      {candidate.type === 'fact' && candidate.decision && <details className={styles.diagnostics}>
+        <summary>{t('knowledge:review.historicalScoring')}</summary>
+        <p>{candidate.decision.scorer.provider} · {candidate.decision.status} · {candidate.decision.reason}</p>
+        <p>{t('knowledge:review.scoreCaution')}</p>
+        <ul>{candidate.decision.answers.map(answer => <li key={answer.question}>{answer.question}: {String(answer.answer)} ({Math.round(answer.answer_confidence * 100)}%)</li>)}</ul>
+        {candidate.decision.chunks?.map((chunk, index) => <details key={index}>
+          <summary>{t('knowledge:inspector.sourceRefs')}: {chunk.evidenceRanges.map(range => `${range.observationId} [${range.start}, ${range.end})`).join(', ')}</summary>
+          <ul>{chunk.answers.map(answer => <li key={answer.question}>{answer.question}: {String(answer.answer)} ({Math.round(answer.answer_confidence * 100)}%)</li>)}</ul>
+        </details>)}
+      </details>}
+    </div>
+    {(state.canReview || state.taskId || state.status === 'unknown') && <footer className={styles.reviewFooter}>
+      {retryError && <p role="alert">{t('knowledge:automation.actionFailed')}</p>}
+      {sourceBlocked && <p role="alert">{t('knowledge:reviewContent.checkSources')}</p>}
+      {state.canReview && (candidate.type === 'fact'
+        ? <FactReviewControls key={String(sourceBlocked)} candidate={candidate} disabled={disabled || retrying} approvalBlocked={sourceBlocked} onApprove={replacement => onReview(true, replacement)} onReject={() => onReview(false)} />
+        : <div className={styles.actionButtons}><button className={styles.primaryAction} type="button" disabled={disabled || retrying || sourceBlocked} onClick={() => onReview(true)}>{t('knowledge:reviewContent.publishWiki')}</button><button className={styles.destructiveAction} type="button" disabled={disabled || retrying} onClick={() => onReview(false)}>{t('knowledge:action.reject')}</button></div>)}
+      {state.taskId && <button type="button" disabled={disabled || retrying} onClick={() => void retry()}>{t('knowledge:automation.retry')}</button>}
+      {state.status === 'unknown' && <button type="button" disabled={disabled} onClick={() => { void refreshKnowledgeAutomation(); window.dispatchEvent(new Event('janusx-memory-changed')) }}>{t('knowledge:action.refresh')}</button>}
+    </footer>}
   </article>
 }
