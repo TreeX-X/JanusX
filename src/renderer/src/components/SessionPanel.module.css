@@ -27,21 +27,19 @@
 
 @media (prefers-reduced-motion: reduce) {
   .expand,
-  .expandInner {
+  .expandInner,
+  .foldBtn svg {
     transition: none;
   }
 }
 
-/* 会话面板表面三阶（A 方案高保真逐值）：地 → 卡 → 内卡。
-   planche：灰地 #E8E6E2 → 牛皮卡 #E2D9BD → 暖白纸内卡 #F8F2E0；
-   dark：v6 HiFi 画布 #151517 → 卡 #1c1c1f → 内卡提亮块。
+/* 会话面板表面三阶：地 → 卡 → 内卡。
+   地吃 --shell-canvas：planche 解析为纸面 #EFE4C5（= 软件底色），dark 为 v6 HiFi 画布 #151517。
+   卡/内卡仍走 A 方案高保真逐值：牛皮卡 #E2D9BD → 暖白纸内卡 #F8F2E0；
+   dark：卡 #1c1c1f → 内卡提亮块。
    见 .agents/notes/2026-09-29-session-card-surface--764d5d26.md */
 .panelGround {
-  background: #E8E6E2;
-}
-
-:global([data-theme='dark']) .panelGround {
-  background: #151517;
+  background: var(--shell-canvas);
 }
 
 .cardSurface {
@@ -63,4 +61,42 @@
 
 :global([data-theme='dark']) .sheet {
   background: color-mix(in srgb, var(--shell-chrome) 88%, white);
+}
+
+/* 卡片折叠控件：右缘发丝线框 chevron 按钮。常驻可见（不做 hover-only），
+   透明底 + 1px 发丝线框，hover/聚焦走强调描边与强调色字形，不吃填充色块。
+   字形旋转 180° 与卡片展开同一条 240ms 曲线。 */
+.foldBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--shell-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-muted);
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.foldBtn:hover {
+  color: var(--shell-accent);
+  border-color: var(--shell-accent-border);
+}
+
+.foldBtn:focus-visible {
+  outline: none;
+  color: var(--shell-accent);
+  border-color: var(--shell-accent-strong);
+}
+
+.foldBtn svg {
+  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.foldBtn[data-open='true'] svg {
+  transform: rotate(180deg);
 }

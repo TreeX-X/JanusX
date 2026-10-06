@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { ChevronDown } from 'lucide-react'
 import { useSessionStore, type AgentSessionDetail, type AgentSessionSummary } from '@/stores/session'
 import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary, type ConflictInfo } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -55,7 +56,7 @@ function formatSize(bytes: number): string {
 }
 
 // Note: 会话表面混色档位只服务详情窗（turn 卡/孤儿卡/diff 面）；右栏列表面板的
-// 地/卡/内卡三阶走 A 方案高保真逐值，在 SessionPanel.module.css — 见
+// 地走 --shell-canvas 令牌、卡/内卡走 A 方案高保真逐值，在 SessionPanel.module.css — 见
 // .agents/notes/2026-09-29-session-card-surface--764d5d26.md
 //
 // 为什么不能直接用 --shell-card / --shell-chrome：planche 的 --shell-void /
@@ -893,7 +894,7 @@ function SessionCard({
         opacity: session.archived ? 0.62 : 1,
       }}
     >
-      <ThemedTooltip label={t('terminal:checkpoint.expand')}>
+      <ThemedTooltip label={expanded ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}>
       <div
         className="flex items-center"
         style={{ gap: 7, cursor: 'pointer' }}
@@ -932,17 +933,21 @@ function SessionCard({
             whiteSpace: 'nowrap',
           }}
         >
-          {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)} ·{' '}
-          <span
-            style={{
-              display: 'inline-block',
-              transform: expanded ? 'rotate(180deg)' : 'none',
-              transition: 'transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-            }}
-          >
-            ▾
-          </span>
+          {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)}
         </span>
+        <button
+          type="button"
+          className={styles.foldBtn}
+          data-open={expanded}
+          aria-expanded={expanded}
+          aria-label={expanded ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle()
+          }}
+        >
+          <ChevronDown size={13} strokeWidth={2} aria-hidden="true" />
+        </button>
       </div>
       </ThemedTooltip>
 
