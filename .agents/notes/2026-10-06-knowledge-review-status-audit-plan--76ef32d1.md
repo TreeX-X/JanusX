@@ -309,4 +309,8 @@ S5 文档检查使用 npm run check:notes，247 篇 Note、0 errors、27 项既�
 
 `npm run test:unit -- --run tests/unit/knowledge-audit-ui.test.ts tests/unit/knowledge-automation-summary-ui.test.ts tests/unit/assistant-ui.test.ts --maxWorkers=2 --reporter=dot` 为 3 个文件、34 项通过，0 跳过。既有浏览器用例覆盖方向键循环、Home/End、焦点、页签与面板关联、鼠标切换，以及处理筛选和审计分页。`npm run typecheck:strict-unused`、KnowledgeWorkbench.tsx 的 ESLint 及 `npx electron-vite build --outDir artifacts/knowledge-record-tabs-build` 通过；构建使用现有 llm-core 产物。人工核对 dark/planche、640px 窄窗口与 1280px 桌面截图，产物在 `artifacts/knowledge-record-tabs/`，日志前缀为 `artifacts/knowledge-record-tabs-`。本次只交付代码与隔离构建，S5 便携包保留原哈希，尚未纳入此次样式细化；当前用户进程没有重启。
 
-?? check:notes ?? 247 ? Note?0 errors?27 ??????????git diff --check ???
+本次 check:notes 检查 247 篇 Note，0 errors、27 项既有外部链接诊断；git diff --check 通过。
+
+2026-10-06：用户授权日期免安装预览包，交付 `release/preview-2026-10-06/JanusX-0.9.0-preview-2026-10-06-x64-portable.exe`。功能代码固定于 `5f4a2110cefc8d924602e05e7dcfd338e47d1c76`，包含本任务全部阶段与记录 Tab 细化；程序基础版本仍为 0.9.0，日期和 preview 标记用于识别产物。可执行文件 112083504 字节，SHA-256 为 `70c2c9afc8500b8120f67d9070c33376c554c21783a94a7c190d330199d6f504`；同目录 README-preview.txt、SHA256SUMS.txt 和 preview-manifest.json 保存使用说明、校验值及构建来源。
+
+打包使用 `npx electron-builder --config artifacts/knowledge-preview-2026-10-06-builder.cjs --win portable --x64 --publish never`，将已验证的 artifacts/knowledge-record-tabs-build 映射到包内 out；209 个构建文件逐一校验一致。包内不含工作区缓存目录，构建前已有的 builder 配置及 blueprint 样式等四项工作区差异保持原样，哈希记录在 manifest。`npm run check:package-boundary` 通过；`node scripts/check-packaged-runtime.mjs --release-dir artifacts/knowledge-preview-2026-10-06 --portable` 退出码 0，覆盖仓库外运行、便携载荷及启动器。ASAR 有效载荷 171.0 MiB、解包依赖 11.1 MiB、便携文件 106.9 MiB，均在现有预算内。以 JANUSX_DESKTOP_EXECUTABLE 指向新包的 win-unpacked/JanusX.exe 运行 knowledge-pipeline.spec.ts，2 项通过、0 跳过，存储与用户配置隔离。带日期的交付副本与已验收的便携文件 SHA-256 相同。打包日志前缀为 artifacts/knowledge-preview-2026-10-06-；当前用户运行进程和在线知识数据未切换，Scope 中独立模型质量等后续事项仍保留。
