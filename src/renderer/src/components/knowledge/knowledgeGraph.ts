@@ -51,24 +51,6 @@ export interface KnowledgeGraphView {
 
 export const KNOWLEDGE_GRAPH_NODE_LIMIT = 500
 
-/** Obsidian-style dot caption: short first-line label shown under the dot. */
-export const GRAPH_NODE_CAPTION_LENGTH = 24
-
-export function graphNodeCaption(label: string, max: number = GRAPH_NODE_CAPTION_LENGTH): string {
-  const line = label.split('\n').map((entry) => entry.trim()).find((entry) => entry.length > 0) ?? ''
-  return line.length <= max ? line : `${line.slice(0, Math.max(0, max - 1))}…`
-}
-
-/** Obsidian-style dot diameter (px): grows with connection degree, capped. */
-export const GRAPH_DOT_BASE_SIZE = 10
-export const GRAPH_DOT_SIZE_PER_DEGREE = 2
-export const GRAPH_DOT_MAX_SIZE = 22
-
-export function graphNodeDotSize(degree: number): number {
-  return Math.min(GRAPH_DOT_MAX_SIZE, GRAPH_DOT_BASE_SIZE + Math.max(0, Math.floor(degree)) * GRAPH_DOT_SIZE_PER_DEGREE)
-}
-
-
 export interface GraphEvidence {
   id: string
   workspaceId: string
@@ -219,113 +201,86 @@ export function buildKnowledgeGraphView(snapshot: KnowledgeWorkbenchSnapshot, op
     diagnostics: [...new Map(diagnostics.map(item => [JSON.stringify(item), item])).values()] }
 }
 
-/** Obsidian-style spread layout: deterministic force relaxation per connected
- * component (circular seed, fixed-iteration repulsion + springs + gravity).
- * No randomness anywhere, so the same snapshot always yields the same map;
- * renderer-side stored positions still overlay on top (user drags win). */
 export interface GraphPosition {
   x: number
   y: number
 }
 
-export const GRAPH_SPREAD_ITERATIONS = 60
-export const GRAPH_SPREAD_TARGET_EDGE = 130
-export const GRAPH_SPREAD_REPULSION = 9000
-export const GRAPH_SPREAD_MAX_PUSH = 40
-export const GRAPH_SPREAD_GRAVITY = 0.02
-export const GRAPH_SPREAD_COMPONENT_GAP = 260
+export const GRAPH_CARD_WIDTH = 208
+export const GRAPH_CARD_HEIGHT = 84
+export const GRAPH_LOCAL_NEIGHBORS = 12
 
-export function layoutKnowledgeGraph(
-  nodes: KnowledgeGraphNode[],
-  edges: KnowledgeGraphEdge[],
-): Map<string, GraphPosition> {
-  const ids = nodes.map((node) => node.id).sort()
-  const neighbors = new Map<string, string[]>(ids.map((id) => [id, []]))
+/** A bounded, explicit reading scope; selection never changes its root. */
+export function localKnowledgeGraph(nodes: KnowledgeGraphNode[], edges: KnowledgeGraphEdge[], root: string) {
+  const neighbors = new Set<string>()
+  for (const edge of edges) {
+    if (edge.from === root && edge.to !== root) neighbors.add(edge.to)
+    if (edge.to === root && edge.from !== root) neighbors.add(edge.from)
+  }
+  const ids = new Set([root, ...[...neighbors].sort().slice(0, GRAPH_LOCAL_NEIGHBORS)])
+  return { nodes: nodes.filter(node => ids.has(node.id)), totalNeighbors: neighbors.size }
+}
+
+/** Choose the best-connected page once per snapshot, independently of detail selection. */
+export function defaultGraphRoot(nodes: KnowledgeGraphNode[], edges: KnowledgeGraphEdge[]): string | undefined {
+  const degree = new Map<string, number>()
+  for (const edge of edges) {
+    degree.set(edge.from, (degree.get(edge.from) ?? 0) + 1)
+    degree.set(edge.to, (degree.get(edge.to) ?? 0) + 1)
+  }
+  return [...nodes].sort((a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) || a.id.localeCompare(b.id))[0]?.id
+}
+
+/** Center the reading root so a narrow viewport can pan without losing its anchor. */
+export function layoutLocalKnowledgeGraph(nodes: KnowledgeGraphNode[], root: string): Map<string, GraphPosition> {
+  const neighbors = nodes.filter(node => node.id !== root).sort((a, b) => a.id.localeCompare(b.id))
+  const rows = Math.ceil(neighbors.length / 2)
+  const positions = new Map<string, GraphPosition>()
+  if (nodes.some(node => node.id === root)) positions.set(root, { x: 340, y: Math.max(0, rows - 1) * 60 })
+  neighbors.forEach((node, index) => positions.set(node.id, { x: index % 2 === 0 ? 680 : 0, y: Math.floor(index / 2) * 120 }))
+  return positions
+}
+
+// Note: readable cards use bounded component grids and two-dimensional packing — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+export function layoutKnowledgeGraph(nodes: KnowledgeGraphNode[], edges: KnowledgeGraphEdge[]): Map<string, GraphPosition> {
+  const ids = nodes.map(node => node.id).sort()
+  const neighbors = new Map<string, Set<string>>(ids.map(id => [id, new Set()]))
   for (const edge of edges) {
     if (edge.from === edge.to || !neighbors.has(edge.from) || !neighbors.has(edge.to)) continue
-    neighbors.get(edge.from)!.push(edge.to)
-    neighbors.get(edge.to)!.push(edge.from)
+    neighbors.get(edge.from)!.add(edge.to)
+    neighbors.get(edge.to)!.add(edge.from)
   }
-  for (const list of neighbors.values()) list.sort()
-
-  // Connected components in deterministic seed order.
-  const componentOf = new Map<string, number>()
+  const visited = new Set<string>()
   const components: string[][] = []
   for (const id of ids) {
-    if (componentOf.has(id)) continue
-    const members: string[] = []
-    const stack = [id]
-    componentOf.set(id, components.length)
-    while (stack.length > 0) {
-      const current = stack.pop()!
-      members.push(current)
-      for (const next of neighbors.get(current)!) {
-        if (!componentOf.has(next)) {
-          componentOf.set(next, components.length)
-          stack.push(next)
-        }
+    if (visited.has(id)) continue
+    const queue = [id]
+    visited.add(id)
+    for (let index = 0; index < queue.length; index++) {
+      for (const next of [...neighbors.get(queue[index]!)!].sort()) {
+        if (!visited.has(next)) { visited.add(next); queue.push(next) }
       }
     }
-    members.sort()
-    components.push(members)
+    components.push(queue)
   }
-  // Largest cluster first so the eye lands on the dense region.
-  components.sort((a, b) => b.length - a.length || (a[0]! < b[0]! ? -1 : 1))
-
+  components.sort((a, b) => b.length - a.length || a[0]!.localeCompare(b[0]!))
+  const stepX = GRAPH_CARD_WIDTH + 132, stepY = GRAPH_CARD_HEIGHT + 80, gap = 96
+  const boxes = components.map(members => {
+    const columns = Math.ceil(Math.sqrt(members.length))
+    return { members, columns, width: (columns - 1) * stepX + GRAPH_CARD_WIDTH,
+      height: (Math.ceil(members.length / columns) - 1) * stepY + GRAPH_CARD_HEIGHT }
+  })
+  const area = boxes.reduce((sum, box) => sum + (box.width + gap) * (box.height + gap), 0)
+  const rowWidth = Math.max(0, ...boxes.map(box => box.width), Math.sqrt(area * 1.5))
   const positions = new Map<string, GraphPosition>()
-  let cursorX = 0
-  for (const members of components) {
-    const count = members.length
-    const radius = count === 1 ? 0 : Math.max(90, count * 26)
-    for (let index = 0; index < count; index++) {
-      const angle = (2 * Math.PI * index) / count
-      positions.set(members[index]!, {
-        x: cursorX + radius + Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-      })
-    }
-    const centerX = cursorX + radius
-    for (let iter = 0; iter < GRAPH_SPREAD_ITERATIONS; iter++) {
-      for (let i = 0; i < count; i++) {
-        const id = members[i]!
-        const point = positions.get(id)!
-        let fx = 0
-        let fy = 0
-        for (let j = 0; j < count; j++) {
-          if (i === j) continue
-          const other = positions.get(members[j]!)!
-          let dx = point.x - other.x
-          let dy = point.y - other.y
-          if (dx === 0 && dy === 0) {
-            // Deterministic nudge so stacked seeds separate.
-            dx = (i < j ? -1 : 1) * 0.5
-            dy = 0.5
-          }
-          const dist = Math.sqrt(dx * dx + dy * dy)
-          const push = Math.min(GRAPH_SPREAD_REPULSION / (dist * dist), GRAPH_SPREAD_MAX_PUSH)
-          fx += (dx / dist) * push
-          fy += (dy / dist) * push
-        }
-        for (const next of neighbors.get(id)!) {
-          const other = positions.get(next)!
-          if (!other) continue
-          const dx = other.x - point.x
-          const dy = other.y - point.y
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1
-          const pull = (dist - GRAPH_SPREAD_TARGET_EDGE) * 0.05
-          fx += (dx / dist) * pull
-          fy += (dy / dist) * pull
-        }
-        fx += (centerX - point.x) * GRAPH_SPREAD_GRAVITY
-        fy -= point.y * GRAPH_SPREAD_GRAVITY
-        point.x += fx
-        point.y += fy
-      }
-    }
-    cursorX += radius * 2 + GRAPH_SPREAD_COMPONENT_GAP
-  }
-  for (const [id, point] of positions) {
-    positions.set(id, { x: Math.round(point.x), y: Math.round(point.y) })
+  let x = 0, y = 0, rowHeight = 0
+  for (const box of boxes) {
+    if (x > 0 && x + box.width > rowWidth) { x = 0; y += rowHeight + gap; rowHeight = 0 }
+    box.members.forEach((id, index) => positions.set(id, {
+      x: x + (index % box.columns) * stepX, y: y + Math.floor(index / box.columns) * stepY,
+    }))
+    x += box.width + gap
+    rowHeight = Math.max(rowHeight, box.height)
   }
   return positions
 }
@@ -380,17 +335,16 @@ export function layoutWorkspaceFor(nodes: KnowledgeGraphNode[]): string {
   return workspaces.size === 1 ? [...workspaces][0]! : 'global'
 }
 
-export function graphLayoutStorageKey(workspaceId: string): string {
-  // v2: force-spread era. v1 stored BFS-layered coordinates (vertical stacks
-  // for edgeless graphs) and must not override the new computed layout.
-  return `janusx:knowledge-graph-layout:v2:${workspaceId || 'global'}`
+export function graphLayoutStorageKey(workspaceId: string, scope = 'overview'): string {
+  // Card dimensions invalidate dot coordinates; local, overview and trace drags stay separate.
+  return `janusx:knowledge-graph-layout:v3:${JSON.stringify([workspaceId || 'global', scope])}`
 }
 
 export type StoredGraphLayout = Record<string, GraphPosition>
 
-export function loadStoredLayout(workspaceId: string): StoredGraphLayout | null {
+export function loadStoredLayout(workspaceId: string, scope = 'overview'): StoredGraphLayout | null {
   try {
-    const raw = localStorage.getItem(graphLayoutStorageKey(workspaceId))
+    const raw = localStorage.getItem(graphLayoutStorageKey(workspaceId, scope))
     if (!raw) return null
     const parsed = JSON.parse(raw) as unknown
     if (typeof parsed !== 'object' || parsed === null) return null

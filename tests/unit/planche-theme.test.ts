@@ -346,7 +346,7 @@ describe('planche theme contract', () => {
       ":global([data-theme='planche']) .graphCanvas",
       ":global([data-theme='planche']) .reviewCard",
       ":global([data-theme='planche']) .inspectorTitle",
-      ":global([data-theme='planche']) .dotKindProposal",
+      ":global([data-theme='planche']) .graphCard",
       ":global([data-theme='planche']) .actionRow button:not(:disabled)",
     ]) {
       expect(wb, selector).toContain(selector)

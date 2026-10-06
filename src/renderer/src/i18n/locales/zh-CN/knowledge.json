@@ -355,7 +355,12 @@
       "detail": "Wiki 审核发布后显示页面，连线来自随页面发布的关系。"
     },
     "canvas": {
-      "searchPlaceholder": "搜索节点定位…",
+      "localPage": "局部页面",
+      "overview": "全部页面",
+      "focusSelected": "聚焦所选页面",
+      "localCapped": "当前显示 {{total}} 个邻居中的 {{shown}} 个；可切换“全部页面”继续浏览。",
+      "noMatchingEdges": "当前筛选下没有匹配的关系，符合条件的页面仍然显示。",
+      "searchPlaceholder": "筛选当前视图…",
       "kindFilter": "节点",
       "edgeFilter": "关系",
       "all": "全部",
@@ -365,7 +370,7 @@
       "capped": "仅显示 {{shown}} / {{total}} 个节点",
       "noMatch": "无节点匹配当前筛选",
       "noEdges": "当前没有可显示的已发布页间关系；页面可独立存在。",
-      "hint": "单击打开 Wiki，双击聚焦邻居；通过“查看来源追溯”读取条目和证据。",
+      "hint": "单击标题阅读 Wiki；用“聚焦所选页面”或“全部页面”切换范围，拖动画布浏览。",
       "legend": {
         "stored": "已存关系",
         "derived": "派生 / 取代",

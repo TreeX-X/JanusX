@@ -4,8 +4,10 @@ import {
   graphWikiId,
   graphSourceId,
   graphLayoutStorageKey,
-  graphNodeCaption,
-  graphNodeDotSize,
+  GRAPH_CARD_WIDTH,
+  GRAPH_CARD_HEIGHT,
+  defaultGraphRoot,
+  localKnowledgeGraph,
   layoutKnowledgeGraph,
   layoutWorkspaceFor,
   loadStoredLayout,
@@ -220,40 +222,51 @@ describe('knowledge graph layout + persistence', () => {
     }
   })
 
-  it('keeps linked nodes closer than nodes from other components', () => {
-    const view = trace(snapshot({
-      truthFacts: [fact('a'), fact('b'), fact('lone')],
-      truthEdges: [{
-        id: 'e1', from: 'a', to: 'b', type: 'depends_on', confidence: 0.7,
-        sourceFactIds: [], workspaceId: 'ws-1', createdAt: '2026-07-12T00:00:00.000Z',
-      }],
+  it.each([20, 500])('packs %i isolated Wiki cards in two dimensions without overlap', count => {
+    const view = buildKnowledgeGraphView(snapshot({ wikiPages: Array.from({ length: count }, (_, i) => wiki(`page-${i}`)) }))
+    const positions = [...layoutKnowledgeGraph(view.nodes, []).values()]
+    expect(new Set(positions.map(p => p.x)).size).toBeGreaterThan(1)
+    expect(new Set(positions.map(p => p.y)).size).toBeGreaterThan(1)
+    const width = Math.max(...positions.map(p => p.x)) + GRAPH_CARD_WIDTH
+    const height = Math.max(...positions.map(p => p.y)) + GRAPH_CARD_HEIGHT
+    expect(width / height).toBeGreaterThan(0.5)
+    expect(width / height).toBeLessThan(3)
+    positions.forEach((a, i) => positions.slice(i + 1).forEach(b => {
+      expect(Math.abs(a.x - b.x) >= GRAPH_CARD_WIDTH || Math.abs(a.y - b.y) >= GRAPH_CARD_HEIGHT).toBe(true)
     }))
+  })
+
+  it('packs multiple connected components deterministically when input order changes', () => {
+    const pages = Array.from({ length: 20 }, (_, i) => wiki(`page-${i}`))
+    for (let i = 0; i < 15; i += 3) pages[i]!.relations = [relation(pages[i + 1]!), relation(pages[i + 2]!)]
+    const view = buildKnowledgeGraphView(snapshot({ wikiPages: pages }))
     const layout = layoutKnowledgeGraph(view.nodes, view.edges)
-    const distance = (x: string, y: string) => {
-      const a = layout.get(x)!
-      const b = layout.get(y)!
-      return Math.hypot(a.x - b.x, a.y - b.y)
-    }
-
-    expect(distance(sourceId('a'), sourceId('b'))).toBeLessThan(distance(sourceId('a'), sourceId('lone')))
+    expect(layoutKnowledgeGraph([...view.nodes].reverse(), [...view.edges].reverse())).toEqual(layout)
+    const points = [...layout.values()]
+    points.forEach((a, i) => points.slice(i + 1).forEach(b => {
+      expect(Math.abs(a.x - b.x) >= GRAPH_CARD_WIDTH || Math.abs(a.y - b.y) >= GRAPH_CARD_HEIGHT).toBe(true)
+    }))
   })
 
-  it('derives short dot captions and degree-sized dots', () => {
-    expect(graphNodeCaption('short label')).toBe('short label')
-    expect(graphNodeCaption(`\n  spaced title  \nsecond line`)).toBe('spaced title')
-    expect(graphNodeCaption('x'.repeat(40))).toBe(`${'x'.repeat(23)}…`)
-    expect(graphNodeCaption('')).toBe('')
-
-    expect(graphNodeDotSize(0)).toBe(10)
-    expect(graphNodeDotSize(3)).toBe(16)
-    expect(graphNodeDotSize(100)).toBe(22)
+  it('chooses a stable local root and reports neighbors outside the reading limit', () => {
+    const pages = Array.from({ length: 21 }, (_, i) => wiki(`page-${i}`))
+    pages[0]!.relations = pages.slice(1).map(page => relation(page))
+    const view = buildKnowledgeGraphView(snapshot({ wikiPages: pages }))
+    const root = graphWikiId(pages[0]!)
+    expect(defaultGraphRoot(view.nodes, view.edges)).toBe(root)
+    expect(defaultGraphRoot([...view.nodes].reverse(), [...view.edges].reverse())).toBe(root)
+    const local = localKnowledgeGraph(view.nodes, view.edges, root)
+    expect(local.totalNeighbors).toBe(20)
+    expect(local.nodes).toHaveLength(13)
+    expect(local.nodes.some(n => n.id === root)).toBe(true)
   })
-
   it('resolves a single layout workspace and stable storage keys', () => {
     const view = trace(snapshot({ truthFacts: [fact('a')] }))
     expect(layoutWorkspaceFor(view.nodes)).toBe('ws-1')
     expect(layoutWorkspaceFor([...view.nodes, { ...view.nodes[0]!, id: 'fact:x', workspaceId: 'ws-2' }])).toBe('global')
-    expect(graphLayoutStorageKey('ws-1')).toBe('janusx:knowledge-graph-layout:v2:ws-1')
+    expect(graphLayoutStorageKey('ws-1')).toContain(':v3:')
+    expect(graphLayoutStorageKey('ws-1', 'local:page')).not.toBe(graphLayoutStorageKey('ws-1', 'trace:page'))
+    expect(graphLayoutStorageKey('ws-1')).not.toBe(graphLayoutStorageKey('ws-2'))
   })
 
   it('merges stored positions only for known nodes with finite coordinates', () => {

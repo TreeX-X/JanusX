@@ -355,7 +355,12 @@
       "detail": "Reviewed Wiki pages appear here with their published relationships."
     },
     "canvas": {
-      "searchPlaceholder": "Search nodes to locate…",
+      "localPage": "Local page",
+      "overview": "All pages",
+      "focusSelected": "Focus selected page",
+      "localCapped": "Showing {{shown}} of {{total}} neighbors. Choose All pages to explore the rest.",
+      "noMatchingEdges": "No relationships match the current filters. Matching pages remain visible.",
+      "searchPlaceholder": "Filter this view…",
       "kindFilter": "Nodes",
       "edgeFilter": "Relations",
       "all": "All",
@@ -365,7 +370,7 @@
       "capped": "Showing {{shown}} of {{total}} nodes",
       "noMatch": "No nodes match the current filters",
       "noEdges": "No published page relationships are visible. Pages may stand alone.",
-      "hint": "Click to open a Wiki page; double-click to focus neighbors. Trace sources to read facts and evidence.",
+      "hint": "Click a title to read the Wiki. Use Focus selected page or All pages to change the view; drag the canvas to explore.",
       "legend": {
         "stored": "Published / stored relationship",
         "derived": "Derived / supersedes",
