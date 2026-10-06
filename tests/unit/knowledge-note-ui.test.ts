@@ -29,6 +29,7 @@ beforeAll(async () => {
       "const root = createRoot(document.getElementById('root'))",
       "window.renderLinks = (selectedUri = uri) => root.render(<NoteWikiLinks rootPath='/checkout-A' uri={selectedUri} onOpenNote={value => window.calls.push(['open',value])}/>)",
       "window.renderPage = () => root.render(<WikiPageDetail page={wikiPage}/>)",
+      "window.renderRelatedPage = () => root.render(<WikiPageDetail page={{...wikiPage,relations:[{type:'depends_on',target:{workspaceId:'workspace-A',slug:'policy',title:'Retention policy',version:3,contentHash:'a'.repeat(64)},reason:'Backups follow the retention policy.',sourceFactIds:['fact-1']}],relationIssues:[{type:'depends_on',targetSlug:'policy',status:'changed'}]}}/>)",
       'window.renderLinks()',
     ].join('\n') },
     bundle: true, write: false, outfile: 'test-bundle.js', jsx: 'automatic', format: 'iife',
@@ -50,6 +51,18 @@ async function open(): Promise<Page> {
 }
 
 describe('Note wiki reachable UI', () => {
+  it('shows relationship evidence and target version changes in the published page', async () => {
+    const page = await open()
+    try {
+      await page.evaluate(() => (window as any).renderRelatedPage())
+      const relations = page.getByRole('region', { name: 'Page relationships' })
+      await relations.getByText('Depends on → Retention policy').waitFor()
+      expect(await relations.innerText()).toContain('Target version: 3')
+      expect(await relations.innerText()).toContain('Backups follow the retention policy.')
+      expect(await relations.innerText()).toContain('Target page changed')
+      expect(await relations.getByRole('button').count()).toBe(0)
+    } finally { await page.close() }
+  })
   it('opens the full published page, source statuses and explicit complete-page editor', async () => {
     const page = await open()
     try {

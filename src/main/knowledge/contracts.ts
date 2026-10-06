@@ -160,6 +160,7 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'ttl',
     ],
     wikiPage: [
+      'topicKey', 'relations', 'relationIssues',
       'sourceFactRefs', 'managed', 'generationHash', 'freshness',
       'slug',
       'title',
@@ -193,6 +194,7 @@ export const KNOWLEDGE_SCHEMA_CONTRACT: KnowledgeSchemaContract = {
       'provenance',
     ],
     candidateWikiPatch: [
+      'topicKey', 'relations',
       'sourceFactRefs', 'managed', 'generationHash', 'generatedSections',
       'id',
       'type',

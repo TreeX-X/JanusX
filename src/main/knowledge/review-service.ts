@@ -33,6 +33,7 @@ import { knowledgeAuditService } from './audit-service'
 import { prepareWikiHistory, wikiContentHash } from './wiki-history'
 import { prepareWikiReview, recoverPendingWikiReview } from './wiki-review-recovery'
 import { wikiFreshness } from './wiki-freshness'
+import { assertWikiRelations, normalizeWikiRelations } from './wiki-relations'
 import type { KnowledgeStageModel } from '../../shared/knowledge-automation'
 import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
 import { candidateDecisionHash } from './decision-scorer'
@@ -66,6 +67,8 @@ interface WikiPagesIndex {
 }
 
 interface WikiPageIndexEntry {
+  topicKey?: string
+  relations?: WikiPage['relations']
   sourceFactRefs?: WikiPage['sourceFactRefs']
   managed?: boolean
   generationHash?: string
@@ -733,9 +736,10 @@ export class KnowledgeReviewService {
     const workspaceId = candidate.provenance.workspaceId
     const index = await readWikiIndex()
     const samePage = (page: WikiPageIndexEntry) => page.slug === slug && page.workspaceId === workspaceId
+    if (index.pages.filter(samePage).length > 1) throw new Error('Wiki page identity is ambiguous; resolve duplicate records before review')
     const existingEntry = index.pages.find(samePage)
     const fullReview = candidate.reviewMode === 'full-page'
-    if ((fullReview || candidate.sourceNoteRefs?.length) && candidate.expectedVersion !== (existingEntry?.version ?? 0)) {
+    if ((fullReview || candidate.sourceNoteRefs?.length || candidate.relations !== undefined || existingEntry?.relations?.length) && candidate.expectedVersion !== (existingEntry?.version ?? 0)) {
       throw new Error('Wiki page version changed; create a new proposal from the current full page')
     }
     const refs = new Map((fullReview ? [] : existingEntry?.sourceNoteRefs ?? []).map(ref => [ref.uri, ref]))
@@ -761,6 +765,8 @@ export class KnowledgeReviewService {
     const now = new Date().toISOString()
     const version = (existingEntry?.version ?? 0) + 1
     const entry: WikiPageIndexEntry = {
+      topicKey: existingEntry?.topicKey ?? candidate.topicKey,
+      relations: normalizeWikiRelations([...(fullReview ? [] : existingEntry?.relations ?? []), ...(candidate.relations ?? [])]),
       slug,
       title: candidate.title || existingEntry?.title || slug,
       relativePath: relativePath.replace(/\\/g, '/'),
@@ -781,6 +787,7 @@ export class KnowledgeReviewService {
       ...(refs.size ? { sourceNoteRefs: [...refs.values()] } : {}),
     }
     const page: WikiPage = {
+      topicKey: entry.topicKey, relations: entry.relations,
       slug,
       title: entry.title,
       markdown,
@@ -795,6 +802,7 @@ export class KnowledgeReviewService {
       workspaceId: entry.workspaceId,
     }
     const previousPage: WikiPage | undefined = existingEntry && existingMarkdown !== null ? {
+      topicKey: existingEntry.topicKey, relations: existingEntry.relations,
       slug, title: existingEntry.title, markdown: existingMarkdown, tags: existingEntry.tags,
       status: existingEntry.status, sourceFactIds: existingEntry.sourceFactIds,
       sourceNoteRefs: existingEntry.sourceNoteRefs, workspacePath: existingEntry.workspacePath,
@@ -806,6 +814,9 @@ export class KnowledgeReviewService {
       if (wikiFreshness(page, facts) === 'stale' || page.sourceFactIds.length !== candidate.sourceFactRefs.length
         || candidate.sourceFactRefs.some(ref => !page.sourceFactIds.includes(ref.id))) throw new Error('Wiki fact sources changed; regenerate the page')
     }
+    // The Wiki and fact locks cover target revisions, source withdrawal and publication together.
+    const { knowledgeTruthService } = await import('./truth-service')
+    assertWikiRelations(page, page.relations?.length ? (await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages : [])
     if (previousPage?.status === 'published' && wikiContentHash(previousPage) === wikiContentHash(page)) {
       return { value: previousPage, changed: false, rollback: async () => undefined }
     }

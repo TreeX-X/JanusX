@@ -12,7 +12,7 @@ import { useCandidateReviewState, assertCandidateCanReview } from './candidateRe
 import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
 import { applyKnowledgeCandidate, rejectKnowledgeCandidate } from '../../services/knowledge'
 import { competingCorrections, countInboxScopes, filterInboxByScope, isUserScopeCandidate, type InboxCandidate, type InboxScopeFilter } from './inboxScope'
-import { WikiCandidateSources } from './NoteWikiLinks'
+import { WikiCandidateSources, WikiRelations } from './NoteWikiLinks'
 import surface from './MemorySurface.module.css'
 import styles from './MemoryReviewTool.module.css'
 import { CardSkeleton } from '../shared/CardFrame'
@@ -164,6 +164,7 @@ export function MemoryReviewCard({ candidate, disabled, onReview, competing = 0,
     {personal && candidate.id.startsWith('remember-candidate:') && <p>{t('knowledge:review.explicitMemory')}</p>}
     {personal && candidate.id.startsWith('habit-candidate:') && <p>{t('knowledge:review.inferredHabit')}</p>}
     <p>{content}</p>
+    {candidate.type === 'wiki-patch' && <WikiRelations relations={candidate.relations} />}
     {candidate.type === 'fact' && candidate.decision && <details>
       <summary>{t('knowledge:review.historicalScoring')}</summary>
       <p>{candidate.decision.scorer.provider} · {candidate.decision.status} · {candidate.decision.reason}</p>

@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { KnowledgeAutomationService, type AutomationDeps } from '../../../src/main/knowledge/automation-service'
 import { defaultKnowledgeAutomation } from '../../../src/shared/knowledge-automation'
-import type { CandidateFact, MemoryFact } from '../../../src/shared/knowledge'
+import type { CandidateFact, CandidateWikiPatch, MemoryFact } from '../../../src/shared/knowledge'
+import { wikiPageUri } from '../../../src/shared/wiki-relations'
 import { knowledgeObservationService } from '../../../src/main/knowledge/observation-service'
 import { knowledgeExtractService } from '../../../src/main/knowledge/extract-service'
 import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service'
@@ -38,12 +39,12 @@ beforeEach(async () => {
   service = new KnowledgeAutomationService(deps)
 })
 afterEach(async () => { service.stop(); vi.restoreAllMocks(); vi.unstubAllEnvs(); await rm(root, { recursive: true, force: true }) })
-async function candidate(index: number): Promise<CandidateFact> {
+async function candidate(index: number, concept = 'workflow'): Promise<CandidateFact> {
   const observation = await knowledgeObservationService.capture({ workspaceId: 'project', workspaceName: 'Project', workspacePath: root,
     source: 'manual', type: 'user-note', content: `Module ${index} uses the documented backup workflow.`, tags: [] }, { speaker: 'user', createdAt: new Date(now - 60000).toISOString() })
   const evidence = sourceEvidence(observation)
   const item: CandidateFact = { id: `candidate-${index}`, type: 'fact', status: 'proposed', derivation: 'llm', evidence: { observationIds: [observation.id], sources: [evidence] },
-    fact: { id: `fact-${index}`, content: observation.content, kind: 'procedure', scope: 'project', status: 'proposed', confidence: 0, concepts: ['workflow'], files: [], tags: [], version: 1,
+    fact: { id: `fact-${index}`, content: observation.content, kind: 'procedure', scope: 'project', status: 'proposed', confidence: 0, concepts: [concept], files: [], tags: [], version: 1,
       provenance: { workspaceId: 'project', workspaceName: 'Project', workspacePath: root, source: 'manual', actor: 'tester', createdAt: observation.createdAt,
         sourceObservationIds: [observation.id], sourceEvidence: [evidence], fileRefs: [] } } }
   await proposeFactCandidates([item]); return item
@@ -273,12 +274,13 @@ describe('durable knowledge automation', () => {
     await service.run(); now += 60000; await service.run()
     const first = await knowledgeTruthService.list()
     expect(first.facts[0].confirmation?.kind).toBe('model-review')
-    expect(first.wikiPages[0]).toMatchObject({ slug: 'workflows', managed: true, version: 1, freshness: 'current' })
-    expect((await listWikiHistory({ workspaceId: 'project', slug: 'workflows' })).total).toBe(1)
+    expect(first.wikiPages[0]).toMatchObject({ slug: expect.stringMatching(/^workflows\//), managed: true, version: 1, freshness: 'current' })
+    const slug = first.wikiPages[0].slug
+    expect((await listWikiHistory({ workspaceId: 'project', slug })).total).toBe(1)
     config.stages.extraction.provider = 'off'
-    await candidate(2); await service.run(); now += 60000; await service.run()
+    await candidate(2, 'backups'); await service.run(); now += 60000; await service.run()
     expect((await knowledgeTruthService.list()).wikiPages[0].version).toBe(2)
-    expect((await listWikiHistory({ workspaceId: 'project', slug: 'workflows' })).total).toBe(2)
+    expect((await listWikiHistory({ workspaceId: 'project', slug })).total).toBe(2)
     expect((await service.status()).counts.failed).toBe(0)
     expect(await readFile(join(root, 'audit/audit.jsonl'), 'utf8')).toContain('auto-policy')
     const ledgerPath = join(root, 'processing/automation-tasks.json')
@@ -286,7 +288,7 @@ describe('durable knowledge automation', () => {
     const applied = ledger.tasks.find(task => task.stage === 'wikiReview' && task.status === 'succeeded')
     applied.status = 'running'; await writeFile(ledgerPath, JSON.stringify(ledger))
     service = new KnowledgeAutomationService(deps); await service.run()
-    expect((await listWikiHistory({ workspaceId: 'project', slug: 'workflows' })).total).toBe(2)
+    expect((await listWikiHistory({ workspaceId: 'project', slug })).total).toBe(2)
     expect((await service.status()).tasks.find(task => task.id === applied.id)?.status).toBe('succeeded')
   })
   it('processes more than 20 candidates over restarts without cursor loss', async () => {
@@ -325,8 +327,8 @@ describe('durable knowledge automation', () => {
     expect((await knowledgeTruthService.list()).facts).toHaveLength(2)
     const truth = await knowledgeTruthService.list()
     await facts(truth.facts.map(fact => fact.id === item.fact.id ? { ...fact, ttl: '2020-01-01' } : fact))
-    expect((await knowledgeTruthService.list()).wikiPages.some(page => page.slug === 'workflows')).toBe(false)
-    expect((await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages.find(page => page.slug === 'workflows')?.freshness).toBe('stale')
+    expect((await knowledgeTruthService.list()).wikiPages.some(page => page.sourceFactIds.includes(item.fact.id))).toBe(false)
+    expect((await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages.find(page => page.sourceFactIds.includes(item.fact.id))?.freshness).toBe('stale')
     // The host's public entry cannot grant automatic acceptance.
     await expect(knowledgeReviewService.applyCandidate({ ...await reviewCandidateInput(item), actor: 'auto-policy' })).rejects.toThrow('Automatic acceptance')
   })
@@ -342,5 +344,67 @@ describe('durable knowledge automation', () => {
     await mkdir(join(root, 'processing')); await writeFile(join(root, 'processing/automation-tasks.json'), '{broken')
     await expect(service.run()).rejects.toThrow(); await expect(service.status()).rejects.toThrow()
     expect(review).not.toHaveBeenCalled()
+  })
+  it('generates page relationships inside a Wiki proposal, preserves rejection and publishes new evidence together', async () => {
+    const item = await candidate(90, 'backup')
+    await facts([{ ...item.fact, status: 'active' }])
+    config.stages.entryReview.provider = 'off'; config.stages.wikiReview.provider = 'off'
+    const target: CandidateWikiPatch = { id: 'policy', type: 'wiki-patch', status: 'proposed', pageSlug: 'policy', title: 'Policy',
+      patchMarkdown: 'The backup workflow depends on this policy.', rationale: 'Reviewed', sourceFactIds: [], reviewMode: 'full-page', expectedVersion: 0,
+      confidence: 0, derivation: 'llm', evidence: { observationIds: [] }, provenance: item.fact.provenance }
+    await proposeDerivedCandidates([target]); await knowledgeReviewService.applyCandidate(await reviewCandidateInput(target))
+    json.mockImplementation(async request => ({ markdown: request.input.knowledge.map(item => item.content).join('\n\n') + `\n\n[Policy](${wikiPageUri('project', 'policy')})`,
+      relations: [{ targetSlug: 'policy', type: 'depends_on', reason: 'This workflow depends on the policy.', sourceFactIds: [item.fact.id] }] }))
+    await service.run()
+    const proposed = (await knowledgeExtractService.listWikiPatchCandidates()).find(patch => patch.managed)!
+    expect(proposed.relations?.map(relation => relation.type).sort()).toEqual(['depends_on', 'references'])
+    expect((await knowledgeTruthService.list()).wikiPages).toHaveLength(1)
+    await knowledgeReviewService.rejectCandidate(await reviewCandidateInput(proposed))
+    config.stages.wikiGeneration.model = 'another-generation-model'
+    await service.run(); service = new KnowledgeAutomationService(deps); await service.run()
+    expect((await knowledgeExtractService.listWikiPatchCandidates()).filter(patch => patch.managed)).toHaveLength(1)
+    await facts([{ ...item.fact, content: 'The backup workflow depends on the policy; retain copies for 7 days.', status: 'active', version: 2 }])
+    config.stages.wikiReview.provider = 'local'
+    await service.run()
+    const page = (await knowledgeTruthService.list()).wikiPages.find(page => page.slug === proposed.pageSlug)!
+    expect(page.markdown).toContain('7 days')
+    expect(page.relations).toHaveLength(2)
+    expect(page.relationIssues).toEqual([])
+    expect(review.mock.calls.some(([request]) => request.input.required?.[0]?.id === 'relation:0')).toBe(true)
+    expect(await knowledgeExtractService.listGraphCandidates()).toEqual([])
+  })
+  it('publishes a topic before the next generation reads its relationship targets', async () => {
+    const first = await candidate(92, 'backup'), second = await candidate(93, 'deployment')
+    await facts([first, second].map(item => ({ ...item.fact, status: 'active' })))
+    config.stages.entryReview.provider = 'off'
+    json.mockImplementation(async request => ({ markdown: request.input.knowledge.map(item => item.content).join('\n\n')
+      + (request.input.publishedPages[0] ? `\n\n[Related instructions](${request.input.publishedPages[0].uri})` : '') }))
+    await service.run()
+    const pages = (await knowledgeTruthService.list()).wikiPages
+    expect(pages).toHaveLength(2)
+    expect(pages.flatMap(page => page.relations ?? [])).toHaveLength(1)
+    expect(pages.flatMap(page => page.relationIssues ?? [])).toEqual([])
+  })
+  it.each(['unsupported', 'target-update'] as const)('does not publish a relationship on %s during Wiki review', async mode => {
+    const item = await candidate(91, 'backup')
+    await facts([{ ...item.fact, status: 'active' }]); config.stages.entryReview.provider = 'off'
+    const target: CandidateWikiPatch = { id: 'target', type: 'wiki-patch', status: 'proposed', pageSlug: 'policy', title: 'Policy',
+      patchMarkdown: 'Policy before review', rationale: 'Reviewed', sourceFactIds: [], reviewMode: 'full-page', expectedVersion: 0,
+      confidence: 0, derivation: 'llm', evidence: { observationIds: [] }, provenance: item.fact.provenance }
+    await proposeDerivedCandidates([target]); await knowledgeReviewService.applyCandidate(await reviewCandidateInput(target))
+    json.mockImplementation(async request => ({ markdown: request.input.knowledge.map(item => item.content).join('\n\n') + `\n\n[Policy](${wikiPageUri('project', 'policy')})` }))
+    review.mockImplementation(async (request, required) => {
+      if (required[0]?.id.startsWith('relation:')) {
+        if (mode === 'unsupported') return { verdict: 'unsupported', reason: 'Unsupported relation', complete: false, conflict: false, coveredIds: [] }
+        const update = { ...target, id: 'updated', expectedVersion: 1, patchMarkdown: 'Policy after review' }
+        await proposeDerivedCandidates([update]); await knowledgeReviewService.applyCandidate(await reviewCandidateInput(update))
+      }
+      return { verdict: 'supported', reason: 'supported', complete: true, conflict: false, coveredIds: required.map(item => item.id) }
+    })
+    await service.run()
+    expect((await knowledgeTruthService.list()).wikiPages.map(page => page.slug)).toEqual(['policy'])
+    const reviewTask = (await service.status()).queue.find(task => task.stage === 'wikiReview')!
+    expect(reviewTask.status).toBe('needs-review')
+    expect(reviewTask.reason).toContain(mode === 'unsupported' ? 'Unsupported relation' : 'wiki-relation-target-changed')
   })
 })

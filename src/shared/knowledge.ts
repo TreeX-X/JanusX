@@ -349,6 +349,10 @@ export interface WikiNoteStatus {
   detail?: string
 }
 export interface WikiPage {
+  topicKey?: string
+  relations?: WikiPageRelation[]
+  /** Derived from current published targets; never saved as review evidence. */
+  relationIssues?: WikiRelationIssue[]
   /** Host-owned dependencies and topic ownership for maintained project pages. */
   sourceFactRefs?: Array<{ id: string; contentHash: string }>
   managed?: boolean
@@ -371,6 +375,19 @@ export interface WikiPage {
   projectId?: string | null
   ownerUserId?: string | null
   updatedBy?: string | null
+}
+
+// Note: relationships publish with their owning Wiki revision — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+export interface WikiPageRelation {
+  type: 'references' | 'depends_on' | 'conflicts_with'
+  target: { workspaceId: string; slug: string; title: string; version: number; contentHash: string }
+  reason: string
+  sourceFactIds: string[]
+}
+export interface WikiRelationIssue {
+  targetSlug: string
+  type: WikiPageRelation['type']
+  status: 'missing' | 'ambiguous' | 'changed' | 'stale' | 'invalid'
 }
 
 export interface GraphEdge {
@@ -537,6 +554,8 @@ export interface CandidateFact {
 }
 
 export interface CandidateWikiPatch {
+  topicKey?: string
+  relations?: WikiPageRelation[]
   generatedSections?: Array<{ markdown: string; ids: string[] }>
   sourceFactRefs?: Array<{ id: string; contentHash: string }>
   managed?: boolean

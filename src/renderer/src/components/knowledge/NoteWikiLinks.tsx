@@ -5,6 +5,25 @@ import type { CandidateWikiPatch, WikiNoteStatus, WikiPage } from '../../../../s
 import type { NoteWikiDraft, NoteWikiPage } from '../../../../shared/ipc/knowledge'
 import styles from './NoteWikiLinks.module.css'
 import { WikiHistory } from './WikiHistory'
+import { useI18n } from '@/i18n/useI18n'
+import { wikiPageUri, wikiRelationKey } from '../../../../shared/wiki-relations'
+
+export function WikiRelations({ relations, issues = [] }: { relations: WikiPage['relations']; issues?: WikiPage['relationIssues'] }) {
+  const { t } = useI18n('knowledge')
+  if (!relations?.length) return null
+  return <section aria-label={t('knowledge:relations.title')}>
+    <h4>{t('knowledge:relations.title')}</h4>
+    <ul className={styles.sources}>{relations.map(relation => {
+      const issue = issues.find(item => item.type === relation.type && item.targetSlug === relation.target.slug)
+      return <li key={wikiRelationKey(relation)}>
+        <strong>{t(`knowledge:relations.type.${relation.type}`)} → {relation.target.title}</strong>
+        <span>{t('knowledge:relations.targetVersion', { version: relation.target.version })}</span>
+        <p>{relation.reason}</p>
+        {issue && <p role="status">{t(`knowledge:relations.status.${issue.status}`)}</p>}
+      </li>
+    })}</ul>
+  </section>
+}
 
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
 
@@ -68,7 +87,7 @@ export function NoteWikiEditor({ rootPath = '', initialUris = [], page, onPropos
       <button type="button" disabled={busy || !reviewed || !markdown.trim() || !title.trim() || !rationale.trim()} onClick={() => void propose()}>Submit for wiki approval</button>
       <button type="button" disabled={busy} onClick={() => { setDraft(null); setReviewed(false) }}>Read sources again</button>
     </>}
-    {candidate && <><h4>Proposed full page · {candidate.status}</h4><pre>{candidate.patchMarkdown}</pre><WikiSourceList sources={(candidate.sourceNoteRefs ?? []).map(ref => ({ ...ref, status: 'unknown', detail: 'Sources are checked again at approval' }))} />
+    {candidate && <><h4>Proposed full page · {candidate.status}</h4><pre>{candidate.patchMarkdown}</pre><WikiRelations relations={candidate.relations} /><WikiSourceList sources={(candidate.sourceNoteRefs ?? []).map(ref => ({ ...ref, status: 'unknown', detail: 'Sources are checked again at approval' }))} />
       <div className={styles.actions}><button type="button" disabled={busy || candidate.status !== 'proposed'} onClick={() => void act(async () => { const result = await window.electron.knowledge.applyCandidate(await reviewCandidateInput(candidate)); if (mounted.current) { setCandidate(result.candidate as CandidateWikiPatch); setNotice('Published through the existing wiki approval and audit path.') } })}>Approve and publish</button>
       <button type="button" disabled={busy || candidate.status !== 'proposed'} onClick={() => void act(async () => { const result = await window.electron.knowledge.rejectCandidate(await reviewCandidateInput(candidate)); if (mounted.current) setCandidate(result.candidate as CandidateWikiPatch) })}>Reject proposal</button></div>
     </>}
@@ -77,6 +96,7 @@ export function NoteWikiEditor({ rootPath = '', initialUris = [], page, onPropos
 }
 
 export function WikiPageDetail({ page, onOpenNote }: { page: WikiPage; onOpenNote?: (uri: string) => void }) {
+  const { t } = useI18n('knowledge')
   const [sources, setSources] = useState<WikiNoteStatus[]>([])
   const [error, setError] = useState('')
   const [refresh, setRefresh] = useState(0)
@@ -89,6 +109,8 @@ export function WikiPageDetail({ page, onOpenNote }: { page: WikiPage; onOpenNot
   return <section className={styles.detail}>
     <p>Workspace: {page.workspaceId} {page.workspacePath} · Page: {page.slug} · Version: {page.version}</p>
     <pre>{page.markdown}</pre><p>Source facts: {page.sourceFactIds.join(', ') || 'None recorded'}</p>
+    <p>{t('knowledge:relations.pageReference')} <code>{wikiPageUri(page.workspaceId, page.slug)}</code></p>
+    <WikiRelations relations={page.relations} issues={page.relationIssues} />
     <button type="button" onClick={() => setRefresh(value => value + 1)}>Refresh source status</button>
     <WikiSourceList sources={sources} onOpenNote={onOpenNote} />{error && <p role="alert">{error}</p>}
     <WikiHistory key={JSON.stringify([page.workspaceId, page.slug, page.version, 'history'])} workspaceId={page.workspaceId} slug={page.slug} />

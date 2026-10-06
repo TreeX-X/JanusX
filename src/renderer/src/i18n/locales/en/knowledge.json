@@ -1,4 +1,17 @@
 {
+  "relations": {
+    "title": "Page relationships",
+    "pageReference": "Page reference:",
+    "targetVersion": "Target version: {{version}}",
+    "type": { "references": "References", "depends_on": "Depends on", "conflicts_with": "Conflicts with" },
+    "status": {
+      "missing": "Target page is unavailable; this relationship needs review.",
+      "ambiguous": "Target page identity is ambiguous; this relationship needs review.",
+      "changed": "Target page changed; review this relationship against its new version.",
+      "stale": "Target page sources are stale; this relationship is unavailable.",
+      "invalid": "Invalid page relationship; review is required."
+    }
+  },
   "wikiHistory": {
     "title": "Publication history",
     "hint": "Keeps the latest 20 published versions and pinned versions. History is for reference and is excluded from current Agent knowledge.",

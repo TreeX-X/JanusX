@@ -1,4 +1,17 @@
 {
+  "relations": {
+    "title": "页面关系",
+    "pageReference": "页面引用地址：",
+    "targetVersion": "目标版本：{{version}}",
+    "type": { "references": "引用", "depends_on": "依赖", "conflicts_with": "存在冲突" },
+    "status": {
+      "missing": "目标页面不可用，此关系需要重新审核。",
+      "ambiguous": "目标页面身份不唯一，此关系需要重新审核。",
+      "changed": "目标页面已更新，请依据新版本重新审核此关系。",
+      "stale": "目标页面的来源已失效，此关系暂不可用。",
+      "invalid": "页面关系无效，需要重新审核。"
+    }
+  },
   "wikiHistory": {
     "title": "发布历史",
     "hint": "保留最近 20 个发布版本及标记的重要版本。历史仅供查阅，不用于 Agent 的当前知识。",
