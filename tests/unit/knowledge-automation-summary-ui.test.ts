@@ -29,7 +29,7 @@ beforeAll(async () => {
       automationRetry:async id=>{window.calls.push(['retry',id]);if(window.failRetry)throw Error('stale');window.current.queue=window.current.queue.map(task=>task.id===id?{...task,status:'pending',canRetry:false}:task)},
       automationRun:async()=>window.calls.push(['run']),
       listCandidates:async()=>[],listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],listObservations:async()=>[],
-      listAudit:async()=>[],observationRevocations:async()=>({total:0,items:[]}),retentionStats:async()=>({}),listTruth:async()=>({facts:[],wikiPages:[],graphEdges:[]}),listConflicts:async()=>[],
+      listAudit:async()=>[],auditPage:async()=>({items:[],total:0,byAction:{},workspaces:[]}),observationRevocations:async()=>({total:0,items:[]}),retentionStats:async()=>({}),listTruth:async()=>({facts:[],wikiPages:[],graphEdges:[]}),listConflicts:async()=>[],
       getSettings:async()=>({enabled:true,mode:'auto',automation:{...defaultKnowledgeAutomation(),enabled:true}}),processingStats:async()=>null,
       externalMcpStatus:async()=>null,localResourcesStatus:async()=>({supported:true,phase:'idle',receivedBytes:0,totalBytes:0}),
       userMemoryOverview:async()=>({profile:{identity:'Tester',formatPrefs:[],toolPrefs:[]},habits:[],recent:[],pendingHabitCount:0}),

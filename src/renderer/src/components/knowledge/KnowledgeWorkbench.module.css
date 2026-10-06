@@ -699,7 +699,6 @@
 }
 
 .viewStack,
-.timeline,
 .searchResults {
   display: flex;
   flex-direction: column;
@@ -707,8 +706,7 @@
 }
 
 .wikiPageButton,
-.resultRow,
-.auditEvent {
+.resultRow {
   width: 100%;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -720,16 +718,14 @@
 }
 
 .wikiPageButton:hover,
-.resultRow:hover,
-.auditEvent:hover {
+.resultRow:hover {
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
 }
 
 .cardFoot,
 .wikiPageButton small,
-.resultRow small,
-.auditEvent small {
+.resultRow small {
   overflow: hidden;
   color: #707078;
   font-size: 10px;
@@ -775,7 +771,6 @@
 
 .stage > .wikiSections,
 .stage > .searchLab,
-.stage > .timeline,
 .stage > .graphWrap {
   flex: 1 1 auto;
   min-height: 0;
@@ -1074,46 +1069,6 @@
   font-size: 12px;
 }
 
-.timeline {
-  height: 100%;
-  overflow-y: auto;
-}
-
-.auditEvent {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border-color: rgba(255, 255, 255, 0.055);
-  background: rgba(255, 255, 255, 0.026);
-}
-
-.auditDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #3b82f6;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
-}
-
-.auditEvent span:not(.auditDot) {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.auditEvent strong {
-  color: #f4f4f5;
-  font-size: 12px;
-}
-
-.auditEvent time {
-  color: #6f6f76;
-  font-size: 10px;
-}
-
 .inspector {
   display: flex;
   height: 100%;
@@ -1195,7 +1150,6 @@
 .navButton:focus-visible,
 .detailClose:focus-visible,
 .reviewCard:focus-visible,
-.auditEvent:focus-visible,
 .graphNode:focus-visible,
 .actionRow button:focus-visible {
   outline: 2px solid rgba(59, 130, 246, 0.68);
@@ -1577,22 +1531,19 @@
 
 /* 列表行 / 候选卡 / 标签 */
 :global([data-theme='planche']) .wikiPageButton,
-:global([data-theme='planche']) .resultRow,
-:global([data-theme='planche']) .auditEvent {
+:global([data-theme='planche']) .resultRow {
   color: var(--ink, #1C343B);
 }
 
 :global([data-theme='planche']) .wikiPageButton:hover,
-:global([data-theme='planche']) .resultRow:hover,
-:global([data-theme='planche']) .auditEvent:hover {
+:global([data-theme='planche']) .resultRow:hover {
   background: var(--paper-deep, #DCCFA8);
   color: var(--ink, #1C343B);
 }
 
 :global([data-theme='planche']) .cardFoot,
 :global([data-theme='planche']) .wikiPageButton small,
-:global([data-theme='planche']) .resultRow small,
-:global([data-theme='planche']) .auditEvent small {
+:global([data-theme='planche']) .resultRow small {
   color: var(--ink-soft, rgba(28, 52, 59, 0.62));
 }
 
@@ -1665,24 +1616,6 @@
   color: var(--ink, #1C343B);
 }
 
-:global([data-theme='planche']) .auditEvent {
-  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
-  background: var(--paper, #EFE4C5);
-}
-
-:global([data-theme='planche']) .auditDot {
-  background: var(--planche-red, #D43D2A);
-  box-shadow: none;
-}
-
-:global([data-theme='planche']) .auditEvent strong {
-  color: var(--ink, #1C343B);
-}
-
-:global([data-theme='planche']) .auditEvent time {
-  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
-}
-
 :global([data-theme='planche']) .inspectorTitle {
   color: var(--ink, #1C343B);
 }
@@ -1723,7 +1656,6 @@
 :global([data-theme='planche']) .navButton:focus-visible,
 :global([data-theme='planche']) .detailClose:focus-visible,
 :global([data-theme='planche']) .reviewCard:focus-visible,
-:global([data-theme='planche']) .auditEvent:focus-visible,
 :global([data-theme='planche']) .graphNode:focus-visible,
 :global([data-theme='planche']) .actionRow button:focus-visible,
 :global([data-theme='planche']) .closeButton:focus-visible {

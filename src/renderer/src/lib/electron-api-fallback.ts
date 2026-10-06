@@ -124,6 +124,7 @@ export function installElectronApiFallback(): void {
       resolveObservationContent: () => unavailableKnowledge(),
       retentionStats: () => unavailableKnowledge(),
       listAudit: () => unavailableKnowledge(),
+      auditPage: () => unavailableKnowledge(),
       auditStats: () => unavailableKnowledge(),
       listCandidates: () => unavailableKnowledge(),
       listGraphCandidates: () => unavailableKnowledge(),

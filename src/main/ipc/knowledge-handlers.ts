@@ -32,6 +32,7 @@ import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import {
   KNOWLEDGE_CHANNELS,
   type AuditQuery,
+  type AuditPageQuery,
   type ExternalMcpClientId,
   type KnowledgeDiagnosticsQuery,
   type ReviewCandidateInput,
@@ -126,8 +127,10 @@ export function registerKnowledgeHandlers(): void {
     return knowledgeAuditService.list(query ?? {})
   })
 
-  ipcMain.handle(KNOWLEDGE_CHANNELS.auditStats, async () => {
-    return knowledgeAuditService.stats()
+  ipcMain.handle(KNOWLEDGE_CHANNELS.auditPage, async (_event, query?: AuditPageQuery) => knowledgeAuditService.page(query))
+
+  ipcMain.handle(KNOWLEDGE_CHANNELS.auditStats, async (_event, query?: AuditQuery) => {
+    return knowledgeAuditService.stats(query)
   })
 
   ipcMain.handle(

@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   getKnowledgeSettings: vi.fn(),
   updateKnowledgeSettings: vi.fn(),
   knowledgeEnabled: true,
+  auditPage: vi.fn(),
 }))
 
 let knowledgeApi: KnowledgeAPI
@@ -53,7 +54,7 @@ vi.mock('../../src/main/knowledge/automation-service', () => ({ knowledgeAutomat
 vi.mock('../../src/main/knowledge/knowledge-models', () => ({ stopKnowledgeLocalModel: vi.fn() }))
 vi.mock('../../src/main/knowledge/knowledge-credentials', () => ({ getJevKey: vi.fn(), setJevKey: vi.fn() }))
 vi.mock('../../src/main/knowledge/contract-service', () => ({ knowledgeContractService: {} }))
-vi.mock('../../src/main/knowledge/audit-service', () => ({ knowledgeAuditService: {} }))
+vi.mock('../../src/main/knowledge/audit-service', () => ({ knowledgeAuditService: { page: mocks.auditPage } }))
 vi.mock('../../src/main/knowledge/observation-service', () => ({ knowledgeObservationService: {} }))
 vi.mock('../../src/main/knowledge/extract-service', () => ({ knowledgeExtractService: {} }))
 vi.mock('../../src/main/knowledge/review-service', () => ({ knowledgeReviewService: {} }))
@@ -85,6 +86,14 @@ afterEach(() => {
 })
 
 describe('Knowledge IPC contract', () => {
+  it('forwards the audit page query and preserves its event snapshots and cursor', async () => {
+    const query = { domain: 'engineering', workspaceId: 'project', cursor: 'opaque', limit: 30 }
+    const result = { items: [{ id: 'audit-event', before: { content: 'old' }, after: { content: 'new' } }], total: 35, nextCursor: 'next', byAction: {}, workspaces: [] }
+    mocks.auditPage.mockResolvedValueOnce(result)
+    const handler = mocks.handle.mock.calls.find(([channel]) => channel === KNOWLEDGE_CHANNELS.auditPage)![1]
+    expect(await handler({}, query)).toBe(result)
+    expect(mocks.auditPage).toHaveBeenCalledWith(query)
+  })
   beforeEach(() => {
     mocks.invoke.mockReset()
     mocks.invoke.mockResolvedValue(undefined)
@@ -99,7 +108,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(62)
+    expect(channels).toHaveLength(63)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -151,7 +160,9 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.resolveObservationContent(observation)
     await knowledgeApi.retentionStats()
     await knowledgeApi.listAudit({ limit: 5 })
+    await knowledgeApi.auditPage({ domain: 'engineering', limit: 30, cursor: 'cursor' })
     await knowledgeApi.auditStats()
+    await knowledgeApi.auditStats({ domain: 'engineering', workspaceId: 'workspace-1' })
     await knowledgeApi.listCandidates()
     await knowledgeApi.listGraphCandidates()
     await knowledgeApi.listWikiPatchCandidates()
@@ -197,7 +208,9 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.resolveObservationContent, observation],
       [KNOWLEDGE_CHANNELS.retentionStats],
       [KNOWLEDGE_CHANNELS.listAudit, { limit: 5 }],
+      [KNOWLEDGE_CHANNELS.auditPage, { domain: 'engineering', limit: 30, cursor: 'cursor' }],
       [KNOWLEDGE_CHANNELS.auditStats],
+      [KNOWLEDGE_CHANNELS.auditStats, { domain: 'engineering', workspaceId: 'workspace-1' }],
       [KNOWLEDGE_CHANNELS.listCandidates],
       [KNOWLEDGE_CHANNELS.listGraphCandidates],
       [KNOWLEDGE_CHANNELS.listWikiPatchCandidates],
@@ -429,6 +442,7 @@ describe('Knowledge IPC contract', () => {
       () => api.resolveObservationContent(observation),
       () => api.retentionStats(),
       () => api.listAudit({ limit: 1 }),
+      () => api.auditPage({ domain: 'engineering' }),
       () => api.auditStats(),
       () => api.listCandidates(),
       () => api.listGraphCandidates(),
@@ -466,8 +480,8 @@ describe('Knowledge IPC contract', () => {
     calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
     calls.push(() => api.migrateLegacyEpisodes())
     calls.push(() => api.getPersonalSettings(), () => api.updatePersonalSettings({ useInChat: false }))
-    expect(Object.keys(api)).toHaveLength(62)
-    expect(calls).toHaveLength(62)
+    expect(Object.keys(api)).toHaveLength(63)
+    expect(calls).toHaveLength(63)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

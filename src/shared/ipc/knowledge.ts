@@ -85,6 +85,7 @@ export const KNOWLEDGE_CHANNELS = {
   resolveObservationContent: 'knowledge:observations:resolve-content',
   retentionStats: 'knowledge:retention:stats',
   listAudit: 'knowledge:audit:list',
+  auditPage: 'knowledge:audit:page',
   auditStats: 'knowledge:audit:stats',
   // Phase 5: `knowledge:extract` direct IPC removed — LLM enhancement runs only
   // via the processing queue (`runLlmStage` → `knowledgeExtractService.extract`).
@@ -129,10 +130,21 @@ export interface KnowledgeBootstrapResult {
 }
 
 export interface AuditQuery {
-  action?: AuditAction
+  action?: AuditAction | (string & {})
+  domain?: 'all' | 'engineering' | 'personal'
+  workspaceId?: string
   targetType?: AuditEvent['targetType']
   targetId?: string
   limit?: number
+}
+
+// Note: audit pages bind filters and preserve event snapshots — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+export interface AuditPageQuery extends AuditQuery { cursor?: string }
+export interface AuditRecord extends AuditEvent { displayTitle?: string }
+export interface AuditPage extends AuditStats {
+  items: AuditRecord[]
+  nextCursor?: string
+  workspaces: Array<{ id: string; name: string }>
 }
 
 export interface AuditStats {
@@ -359,7 +371,8 @@ export interface KnowledgeAPI {
   resolveObservationContent: (observation: Observation) => Promise<string>
   retentionStats: () => Promise<RetentionStats>
   listAudit: (query?: AuditQuery) => Promise<AuditEvent[]>
-  auditStats: () => Promise<AuditStats>
+  auditPage: (query?: AuditPageQuery) => Promise<AuditPage>
+  auditStats: (query?: AuditQuery) => Promise<AuditStats>
   listCandidates: () => Promise<CandidateFact[]>
   listGraphCandidates: () => Promise<CandidateGraphEdge[]>
   listWikiPatchCandidates: () => Promise<CandidateWikiPatch[]>
