@@ -38,6 +38,8 @@ export interface CandidateEvidence {
   sources?: MemorySourceEvidence[]
   /** Exact per-claim excerpts, verified against the complete source digest before review. */
   quotes?: Array<{ observationId: string; quote: string }>
+  /** Host-bound task context, including constraints and corrections not selected as citations. */
+  contextSources?: MemorySourceEvidence[]
 }
 
 export type RetentionClass = 'noise' | 'operational' | 'evidence' | 'derived'

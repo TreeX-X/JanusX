@@ -227,6 +227,9 @@ export async function proposeFactCandidates(candidates: CandidateFact[], mergeEx
         if (target) {
           target.fact = mergeFactEvidence(target.fact, candidate.fact)
           target.evidence = { observationIds: target.fact.provenance.sourceObservationIds, sources: target.fact.provenance.sourceEvidence,
+            ...((target.evidence.contextSources || candidate.evidence.contextSources) ? { contextSources: [...new Map([
+              ...(target.evidence.contextSources ?? []), ...(candidate.evidence.contextSources ?? []),
+            ].map(source => [JSON.stringify([source.workspaceId, source.observationId]), source])).values()] } : {}),
             snippets: [...new Set([...(target.evidence.snippets ?? []), ...(candidate.evidence.snippets ?? [])])],
             quotes: [...new Map([...(target.evidence.quotes ?? []), ...(candidate.evidence.quotes ?? [])].map(quote => [JSON.stringify(quote), quote])).values()] }
           delete target.decision

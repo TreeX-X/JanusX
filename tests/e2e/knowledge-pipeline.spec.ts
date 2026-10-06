@@ -268,9 +268,11 @@ test('knowledge settlement: extraction and both reviews gate Wiki publication, u
       const input = JSON.parse(body.messages.at(-1).content)
       calls.push(body.model)
       let output: unknown
-      if (body.model === 'extraction' && input.candidates) {
+      if (body.model === 'extraction' && input.evidence?.[0]?.key) {
+        output = { complete: true, coveredEvidenceIds: input.evidence.map((part: { key: string }) => part.key), missing: [], invalidCandidateIds: [], reason: 'All fixture source parts are covered.' }
+      } else if (body.model === 'extraction' && input.candidates) {
         output = { complete: true, selections: input.candidates.map((candidate: { content: string }, index: number) => ({
-          index, action: 'keep', equivalentTo: input.existingKnowledge.find((item: { content: string }) => item.content === candidate.content)?.id ?? null, duplicateOf: null,
+          index, action: 'keep', equivalentTo: input.existingKnowledge.find((item: { content: string }) => item.content === candidate.content)?.id ?? null, duplicateOf: null, reason: 'Durable fixture policy.',
         })) }
       } else if (body.model === 'extraction') {
         output = { complete: true, facts: input.evidence.flatMap((source: { id: string; content: string }) => statements.filter(text => source.content.includes(text)).map(content => ({

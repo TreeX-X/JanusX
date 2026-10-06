@@ -19,6 +19,15 @@ export async function validateFactEvidence(candidate: CandidateFact): Promise<vo
     throw new Error('Candidate source references do not match; regenerate before reviewing')
   }
   const observations = await knowledgeObservationService.listAll(true)
+  for (const expected of candidate.evidence.contextSources ?? []) {
+    const matches = observations.filter(row => row.id === expected.observationId && row.workspaceId === candidate.fact.provenance.workspaceId)
+    const current = matches[0]
+    if (matches.length !== 1 || !current || !isActiveObservation(current) || observationScope(current) !== factScope(candidate.fact)
+      || JSON.stringify(sourceEvidence(current)) !== JSON.stringify(expected)
+      || createHash('sha256').update(await knowledgeObservationService.resolveContent(current)).digest('hex') !== expected.contentHash) {
+      throw new Error('Candidate task context changed; regenerate before reviewing')
+    }
+  }
   for (const expected of sources) {
     const matches = observations.filter(row => row.id === expected.observationId && row.workspaceId === expected.workspaceId)
     const current = matches[0]

@@ -11,7 +11,7 @@ import {
 } from '../notifications/agent-engine-capabilities'
 import { knowledgeCaptureInbox, type CaptureEntry } from './capture-inbox'
 import { SerialQueue } from '../lib/atomic-file'
-import { readKnowledgeTurn } from '../sessions/knowledge-transcript'
+import { knowledgeTranscriptRecovery } from './transcript-recovery'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeProcessingQueue } from './processing-queue'
 import { createHash, randomUUID } from 'node:crypto'
@@ -20,6 +20,7 @@ import { isRuntimeNotification } from './personal-memory-content'
 
 interface ActiveTurn {
   id: string
+  observationId?: string
   terminalId: string
   engine: AgentEngine
   workspaceId?: string
@@ -102,7 +103,10 @@ class AgentTurnRecorder {
   }
 
   private async recover(): Promise<void> {
-    try { if (await this.isEnabled()) await knowledgeCaptureInbox.drain() }
+    try { if (await this.isEnabled()) {
+      await knowledgeCaptureInbox.drain()
+      for (const observation of await knowledgeTranscriptRecovery.drain(() => this.isEnabled())) knowledgeProcessingQueue.scheduleImmediate(observation.workspaceId)
+    } }
     catch (error) { console.warn('[knowledge] capture recovery failed:', error instanceof Error ? error.message : String(error)) }
   }
 
@@ -315,6 +319,7 @@ class AgentTurnRecorder {
         startedAt,
       },
     }, context: { speaker: userPrompt ? 'user' : 'unknown', sourceEventId, createdAt: startedAt } }])
+    turn.observationId = observation.id
     this.emitCaptured(payload, terminal, observation.id)
   }
 
@@ -355,15 +360,18 @@ class AgentTurnRecorder {
     if (!activeTurn && payload.sessionId) {
       const sessionRows = (await knowledgeObservationService.listAll(true)).filter(row => row.workspaceId === terminal.workspaceId
         && row.sessionId === payload.sessionId && row.agentId === terminal.engine)
+      const eventId = this.eventId(payload)
+      const replay = sessionRows.find(row => row.sourceEvidence?.sourceEventId === `${eventId}:transcript-complete`)
+      if (replay) { this.emitCaptured(payload, terminal, replay.id); return }
       const closed = new Set(sessionRows.filter(row => (row.tags.includes('turn-completed') || row.tags.includes('turn-failed'))
-        && row.sourceEvidence?.sourceEventId !== this.eventId(payload)).map(row => row.correlationId))
+        && ![eventId, `${eventId}:transcript-pending`].includes(row.sourceEvidence?.sourceEventId ?? '')).map(row => row.correlationId))
       const starts = sessionRows.filter(row => row.tags.includes('turn-started') && !closed.has(row.correlationId)
         && Date.parse(row.createdAt) <= (timestampToMs(payload.timestamp) ?? Date.now()))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       for (const start of starts) {
         const prompt = start.sourceEvidence?.speaker === 'user' ? await knowledgeObservationService.resolveContent(start) : undefined
         if (!start.correlationId || prompt && isRuntimeNotification(prompt)) continue
-        activeTurn = { id: start.correlationId, terminalId: terminal.terminalId, engine: terminal.engine,
+        activeTurn = { id: start.correlationId, observationId: start.id, terminalId: terminal.terminalId, engine: terminal.engine,
           workspaceId: terminal.workspaceId, workspacePath: terminal.cwd, prompt,
           sessionId: payload.sessionId, startedAt: start.createdAt, startedAtMs: Date.parse(start.createdAt) }
         break
@@ -373,22 +381,8 @@ class AgentTurnRecorder {
     const durationMs = activeTurn ? endedAtMs - activeTurn.startedAtMs : undefined
     const raw = payload.raw && typeof payload.raw === 'object' ? payload.raw as Record<string, unknown> : {}
     const transcriptPath = raw.transcript_path ?? raw.transcriptPath
-    const supplemental = !failed && typeof transcriptPath === 'string'
-      ? await readKnowledgeTurn(transcriptPath, terminal.engine, payload.sessionId ?? activeTurn?.sessionId, activeTurn?.prompt)
-      : { messages: [], reason: failed ? 'turn-failed' : 'transcript-path-unavailable' }
     const correlationId = activeTurn?.id ?? this.eventId(payload)
-    const entries: CaptureEntry[] = supplemental.messages
-      .filter(message => !(message.speaker === 'user' && activeTurn?.prompt && redactHighConfidenceSecrets(message.content).text === activeTurn.prompt))
-      .map((message, index) => ({ input: {
-        workspaceId: terminal.workspaceId, workspacePath: terminal.cwd, source: 'agent-stream', type: 'conversation-turn',
-        content: message.content, actor: message.speaker, sessionId: payload.sessionId ?? activeTurn?.sessionId,
-        agentId: terminal.engine, correlationId, tags: ['terminal-transcript', 'turn-evidence', terminal.engine],
-        metadata: { terminalId: terminal.terminalId, transcriptPath: typeof transcriptPath === 'string' ? transcriptPath : undefined,
-          recordId: message.id, sourceOrder: index, sourceTimestamp: message.timestamp, completed: true },
-      }, context: { speaker: message.speaker, sourceEventId: createHash('sha256').update(JSON.stringify([
-        terminal.engine, payload.sessionId ?? activeTurn?.sessionId ?? transcriptPath, message.id])).digest('hex'),
-        createdAt: new Date(endedAtMs).toISOString() } }))
-    entries.push({ input: {
+    const end: CaptureEntry = { input: {
       workspaceId: terminal.workspaceId,
       workspacePath: terminal.cwd,
       source: 'agent-stream',
@@ -416,13 +410,17 @@ class AgentTurnRecorder {
         durationMs,
         failed,
         prompt: activeTurn?.prompt,
-        evidenceStatus: supplemental.reason ?? 'complete',
+        evidenceStatus: failed ? 'turn-failed' : 'transcript-path-unavailable',
       },
-    }, context: { speaker: 'unknown', sourceEventId: this.eventId(payload), createdAt: new Date(endedAtMs).toISOString() } })
+    }, context: { speaker: 'unknown', sourceEventId: this.eventId(payload), createdAt: new Date(endedAtMs).toISOString(),
+      relatedObservationIds: activeTurn?.observationId ? [activeTurn.observationId] : undefined } }
     if (!(await this.isEnabled())) return
-    const observations = await knowledgeCaptureInbox.submit(entries)
+    const observations = !failed && typeof transcriptPath === 'string'
+      ? await knowledgeTranscriptRecovery.submit({ end, path: transcriptPath, engine: terminal.engine, prompt: activeTurn?.prompt }, () => this.isEnabled())
+      : await knowledgeCaptureInbox.submit([end])
     const observation = observations[observations.length - 1]!
     this.activeTurns.delete(terminal.terminalId)
+    if (!observation) return // A revoked parent cancels the persisted reread.
     // Phase 5 (§6 gap close): the turn ended — bypass the capture debounce so
     // deterministic sedimentation runs promptly for this workspace.
     knowledgeProcessingQueue.scheduleImmediate(

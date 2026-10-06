@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../src/main/knowledge/capture-inbox', () => ({ knowledgeCaptureInbox: {
   submit: async entries => Promise.all(entries.map(entry => mocks.capture(entry.input, entry.context))), drain: vi.fn(),
 } }))
+vi.mock('../../../src/main/knowledge/transcript-recovery', () => ({ knowledgeTranscriptRecovery: { drain: vi.fn().mockResolvedValue([]), submit: vi.fn() } }))
 
 vi.mock('../../../src/main/knowledge/observation-service', () => ({
   knowledgeObservationService: {

@@ -47,6 +47,7 @@ export class ObservationRevocationBarrier {
     if (candidate.type === 'fact') return this.blocksFact(candidate.fact)
       || this.blocksObservations(candidate.fact.provenance.workspaceId, candidate.evidence?.observationIds ?? [])
       || (candidate.evidence?.sources ?? []).some(source => this.blocksObservations(source.workspaceId, [source.observationId]))
+      || (candidate.evidence?.contextSources ?? []).some(source => this.blocksObservations(source.workspaceId, [source.observationId]))
     if (candidate.type === 'graph-edge') return this.blocksFactIds(candidate.edge.workspaceId, candidate.edge.sourceFactIds)
     return this.blocksFactIds(candidate.provenance.workspaceId, candidate.sourceFactIds ?? [])
       || this.blocksObservations(candidate.provenance.workspaceId, candidate.provenance.sourceObservationIds)

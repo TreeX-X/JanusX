@@ -9,6 +9,22 @@ beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'knowledge-transcri
 afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 const claude = (role: string, content: unknown, uuid: string) => ({ type: role, uuid, message: { role, content } })
 async function rows(items: unknown[]) { await writeFile(path, items.map(JSON.stringify).join('\n') + '\n') }
+it('binds a delayed reread to the original completion when a later prompt repeats', async () => {
+  await rows([
+    { ...claude('user', 'Fix cache', 'u1'), timestamp: '2026-10-06T00:00:00Z' },
+    { ...claude('assistant', 'First answer', 'a1'), timestamp: '2026-10-06T00:00:11Z' },
+    { ...claude('user', 'Fix cache', 'u2'), timestamp: '2026-10-06T00:01:00Z' },
+    { ...claude('assistant', 'Unrelated later answer', 'a2'), timestamp: '2026-10-06T00:01:10Z' },
+  ])
+  const result = await readKnowledgeTurn(path, 'claude', 'session', 'Fix cache', '2026-10-06T00:00:10Z')
+  expect(result.messages.map(message => message.content)).toEqual(['Fix cache', 'First answer'])
+})
+it('does not guess between repeated prompts without timestamps during delayed capture', async () => {
+  await rows([claude('user', 'Fix cache', 'u1'), claude('assistant', 'First answer', 'a1'),
+    claude('user', 'Fix cache', 'u2'), claude('assistant', 'Later answer', 'a2')])
+  const result = await readKnowledgeTurn(path, 'claude', 'session', 'Fix cache', '2026-10-06T00:00:10Z')
+  expect(result).toEqual({ messages: [], reason: 'transcript-turn-boundary-ambiguous' })
+})
 it('captures full user, assistant and tool evidence for the matching turn, excluding later requests', async () => {
   const answer = 'result '.repeat(900)
   await rows([claude('user', 'Implement B', 'u1'), claude('assistant', [{ type: 'text', text: answer }], 'a1'),

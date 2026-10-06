@@ -254,6 +254,7 @@ export interface KnowledgeDiagnostics {
   indexUpdatedAt: string | null
   captureFailures: number
   captureRecovery?: { batches: number; events: number; lastError?: string }
+  transcriptRecovery?: { pending: number; lastError?: string }
 }
 
 /** Phase 1-1: manual trigger input for the knowledge processing queue. */

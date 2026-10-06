@@ -13,18 +13,20 @@ import { knowledgeReviewService, proposeFactCandidates, proposeDerivedCandidates
 import { sourceEvidence } from '../../../src/main/knowledge/memory-evidence'
 import { listWikiHistory } from '../../../src/main/knowledge/wiki-history'
 import { reviewCandidateInput } from '../../../src/shared/review-candidate-snapshot'
+import { COVERAGE_SYSTEM } from '../../../src/main/knowledge/extraction-context'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 vi.mock('../../../src/main/knowledge/contract-service', () => ({ knowledgeContractService: { bootstrapWorkspace: vi.fn() } }))
 vi.mock('../../../src/main/knowledge/processing-queue', () => ({ knowledgeProcessingQueue: { schedule: vi.fn() } }))
 let root: string, now: number, allowed: boolean
 let config: ReturnType<typeof defaultKnowledgeAutomation>, deps: AutomationDeps, service: KnowledgeAutomationService
-const json = vi.fn(), review = vi.fn(), curate = vi.fn()
+const json = vi.fn(), review = vi.fn(), curate = vi.fn(), coverage = vi.fn()
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'automation-')); vi.stubEnv('JANUSX_KNOWLEDGE_ROOT', root)
   now = Date.now(); allowed = true; config = defaultKnowledgeAutomation(); config.enabled = true; config.enabledSince = '2020-01-01T00:00:00.000Z'
   config.local.enabled = true
   for (const stage of ['entryReview', 'wikiGeneration', 'wikiReview'] as const) config.stages[stage].provider = 'local'
   json.mockReset(); review.mockReset()
+  coverage.mockReset().mockImplementation(input => ({ complete: true, coveredEvidenceIds: input.evidence.map(part => part.key), missing: [], invalidCandidateIds: [], reason: 'All supplied evidence and retained conditions checked.' }))
   curate.mockReset().mockImplementation(input => ({ complete: true, selections: input.candidates.map((_item, index) => ({ index, action: 'keep', equivalentTo: null, duplicateOf: null })) }))
   review.mockImplementation(async (_request, required) => ({ verdict: 'supported', reason: 'evidence supported', complete: true, conflict: false, coveredIds: required.map(item => item.id) }))
   json.mockImplementation(async request => ({ markdown: request.input.knowledge.map(item => item.content).join('\n\n') }))
@@ -34,7 +36,12 @@ beforeEach(async () => {
       patches: await knowledgeExtractService.listWikiPatchCandidates(), facts: truth.facts, pages: truth.wikiPages }
   }, content: observation => knowledgeObservationService.resolveContent(observation), json: request => {
     const input = request.input as { candidates?: unknown[] }
-    return input.candidates ? Promise.resolve(curate(input)) : json(request)
+    if (request.system === COVERAGE_SYSTEM) return Promise.resolve(coverage(input))
+    if (input.candidates) {
+      const result = curate(input)
+      return Promise.resolve({ ...result, selections: result.selections.map(item => ({ reason: 'Fixture curation rationale.', ...item })) })
+    }
+    return json(request)
   }, review, now: () => now }
   service = new KnowledgeAutomationService(deps)
 })
@@ -241,14 +248,12 @@ describe('durable knowledge automation', () => {
     config.stages.entryReview.provider = 'off'
     const content = 'context '.repeat(4000) + 'Retain backups for 7 days.'
     const source = await knowledgeObservationService.capture({ workspaceId: 'project', workspacePath: root, source: 'manual', type: 'user-note', content }, { speaker: 'user' })
-    let reconciled = false
     json.mockImplementation(async request => {
       expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(0)
-      if (request.input.drafts) reconciled = true
-      else expect(request.input.evidence.reduce((n, row) => n + row.content.length, 0)).toBeLessThanOrEqual(18000)
+      expect(request.input.evidence.reduce((n, row) => n + row.content.length, 0)).toBeLessThanOrEqual(18000)
       return { complete: true, facts: [{ content: 'Retain backups for 7 days.', kind: 'procedure', concepts: ['backup'], citations: [{ observationId: source.id, quote: 'Retain backups for 7 days.' }] }] }
     })
-    await service.run(); expect(reconciled).toBe(true)
+    await service.run(); expect(curate).toHaveBeenCalled(); expect(coverage).toHaveBeenCalled()
     expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(1)
   })
   it('keeps incomplete coverage pending human review without publishing partial knowledge', async () => {
@@ -257,6 +262,66 @@ describe('durable knowledge automation', () => {
     json.mockResolvedValue({ complete: false, facts: [] })
     await service.run(); expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(0)
     expect((await service.status()).tasks[0]).toMatchObject({ status: 'needs-review', reason: 'extraction-incomplete-coverage' })
+  })
+  it.each(['empty extraction', 'mistaken discard'])('recovers durable knowledge from %s using independent coverage', async mode => {
+    config.stages.extraction = { provider: 'external', providerId: 'test', model: 'test', thinking: false }
+    config.stages.entryReview.provider = 'off'
+    const source = await knowledgeObservationService.capture({ workspaceId: 'project', workspacePath: root, source: 'manual', type: 'user-note', content: 'Production backups must be kept for seven days.' }, { speaker: 'user' })
+    const fact = { content: source.content, kind: 'decision', concepts: ['backup'], citations: [{ observationId: source.id, quote: source.content }] }
+    json.mockResolvedValue({ complete: true, facts: mode === 'empty extraction' ? [] : [fact] })
+    if (mode === 'mistaken discard') curate.mockImplementation(input => ({ complete: true, selections: [{ index: 0, action: input.coverageRepair ? 'keep' : 'ephemeral', equivalentTo: null, duplicateOf: null }] }))
+    coverage.mockImplementation(input => ({ complete: true, coveredEvidenceIds: input.evidence.map(part => part.key),
+      missing: input.candidates.length ? [] : [fact], invalidCandidateIds: [], reason: 'The backup retention rule is durable and must be retained.' }))
+    await service.run()
+    expect((await knowledgeExtractService.listFactCandidates()).map(item => item.fact.content)).toEqual([source.content])
+    expect(coverage).toHaveBeenCalledTimes(2)
+    const task = (await service.status()).tasks.find(item => item.stage === 'extraction')!
+    expect(task.status).toBe('succeeded')
+    const journal = JSON.parse(await readFile(join(root, 'processing/extraction', task.id + '.json'), 'utf8'))
+    expect(journal.records.some(record => record.phase === 'coverage' && record.result.missing.length === 1)).toBe(true)
+    if (mode === 'mistaken discard') expect(journal.records.some(record => record.phase === 'curation' && record.selections[0].action === 'ephemeral')).toBe(true)
+  })
+  it('blocks a claimed complete audit that omits an evidence part', async () => {
+    config.stages.extraction = { provider: 'external', providerId: 'test', model: 'test', thinking: false }
+    await knowledgeObservationService.capture({ workspaceId: 'project', workspacePath: root, source: 'manual', type: 'user-note', content: 'A durable project constraint.' }, { speaker: 'user' })
+    json.mockResolvedValue({ complete: true, facts: [] })
+    coverage.mockReturnValue({ complete: true, coveredEvidenceIds: [], missing: [], invalidCandidateIds: [], reason: 'Nothing found.' })
+    await service.run()
+    expect((await service.status()).tasks[0]).toMatchObject({ status: 'needs-review', reason: 'extraction-incomplete-coverage' })
+    expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(0)
+  })
+  it('subdivides a dense extraction and admits more than twenty audited facts atomically', async () => {
+    config.stages.extraction = { provider: 'external', providerId: 'test', model: 'test', thinking: false }
+    config.stages.entryReview.provider = 'off'
+    const statements = Array.from({ length: 25 }, (_, index) => `Module-${index} requires backup verification before restoring production data.`)
+    const source = await knowledgeObservationService.capture({ workspaceId: 'project', workspacePath: root, source: 'manual', type: 'user-note', content: statements.join('\n') }, { speaker: 'user' })
+    json.mockImplementation(async request => {
+      expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(0)
+      const matching = statements.filter(statement => request.input.evidence.some(part => part.content.includes(statement)))
+      return { complete: matching.length < 20, facts: matching.slice(0, 20).map(content => ({ content, kind: 'procedure', concepts: ['backup'], citations: [{ observationId: source.id, quote: content }] })) }
+    })
+    await service.run()
+    expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(25)
+    expect((await service.status()).tasks.find(item => item.stage === 'extraction')?.status).toBe('succeeded')
+  })
+  it('includes uncited later corrections in entry review and rejects an obsolete proposal', async () => {
+    const item = await candidate(1)
+    // Persist a real same-session pair, then bind the candidate to the earlier source only.
+    const capture = (content: string, at: number) => knowledgeObservationService.capture({ workspaceId: 'project', workspacePath: root, source: 'agent-stream', type: 'conversation-turn', content,
+      sessionId: 'cache-session', correlationId: 'cache-task', agentId: 'codex', tags: ['terminal-transcript'] }, { speaker: 'user', createdAt: new Date(now + at).toISOString(), sourceEventId: content })
+    const earlier = await capture('Use Redis for the application cache.', -2000)
+    const correction = await capture('Correction: avoid Redis; use an in-process cache only in development.', -1000)
+    item.fact.content = earlier.content
+    item.fact.provenance.sourceObservationIds = [earlier.id]; item.fact.provenance.sourceEvidence = [sourceEvidence(earlier)]
+    item.evidence = { observationIds: [earlier.id], sources: [sourceEvidence(earlier)], quotes: [{ observationId: earlier.id, quote: earlier.content }] }
+    await writeFile(join(root, 'facts/candidates.jsonl'), JSON.stringify(item) + '\n')
+    review.mockImplementation(async request => {
+      expect(request.input.context.map(row => row.id)).toContain(correction.id)
+      return { verdict: 'unsupported', complete: true, conflict: true, coveredIds: [item.id], reason: 'Later user correction supersedes Redis.' }
+    })
+    await service.run()
+    expect((await knowledgeTruthService.list()).facts).toHaveLength(0)
+    expect((await service.status()).tasks[0]).toMatchObject({ status: 'needs-review', reason: 'Later user correction supersedes Redis.' })
   })
   it('projects all eligible review work without writing tasks or including personal and old candidates', async () => {
     const seed = await candidate(0)
