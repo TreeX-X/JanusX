@@ -14,7 +14,12 @@ import { getRawHeader, listPackage } from '@electron/asar'
 
 const root = process.cwd()
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const releaseDirectory = join(root, 'release', packageJson.version)
+// Note: staged delivery verifies a separate output directory — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+const releaseArg = process.argv.indexOf('--release-dir')
+if (releaseArg !== -1 && (!process.argv[releaseArg + 1] || process.argv[releaseArg + 1].startsWith('--'))) {
+  throw new Error('--release-dir requires a directory')
+}
+const releaseDirectory = releaseArg === -1 ? join(root, 'release', packageJson.version) : resolve(process.argv[releaseArg + 1])
 const appAsar = join(releaseDirectory, 'win-unpacked', 'resources', 'app.asar')
 const unpackedExecutable = join(releaseDirectory, 'win-unpacked', 'JanusX.exe')
 const portableExecutable = join(releaseDirectory, `JanusX-${packageJson.version}-x64-portable.exe`)
@@ -235,6 +240,7 @@ async function runSmoke(executable, mode, stage, label) {
       const child = spawn(resolve(executable), [`--smoke-test=${mode}`, `--user-data-dir=${profile}`], {
         stdio: 'inherit',
         windowsHide: true,
+        env: { ...process.env, JANUSX_KNOWLEDGE_ROOT: join(profile, 'knowledge') },
       })
       const timeout = setTimeout(() => {
         child.kill()
@@ -307,6 +313,7 @@ async function verifyPortableStub(stage) {
     const stub = spawn(resolve(portableExecutable), [`--smoke-test=module-graph`, `--user-data-dir=${profile}`], {
       stdio: 'ignore',
       windowsHide: true,
+      env: { ...process.env, JANUSX_KNOWLEDGE_ROOT: join(profile, 'knowledge') },
     })
     const deadline = Date.now() + STARTUP_TIMEOUT_MS
     let started = null

@@ -152,6 +152,10 @@ it('shares the workbench shell across domains, isolates review queues and shows 
     const after = (await shell.boundingBox())!
     expect(after).toEqual(before)
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/unified-engineering.png', animations: 'disabled' })
+    await domains.getByRole('button', { name: 'Project knowledge', exact: true }).focus()
+    await page.keyboard.press('Escape')
+    await expect.poll(() => page.getByRole('article').count()).toBe(0)
+    expect(await shell.isVisible()).toBe(true)
     await domains.getByRole('button', { name: 'Personal profile', exact: true }).click()
     await page.getByRole('searchbox').waitFor()
     await page.getByRole('navigation', { name: 'Personal profile', exact: true }).getByRole('button', { name: 'Personal memory review', exact: true }).click()

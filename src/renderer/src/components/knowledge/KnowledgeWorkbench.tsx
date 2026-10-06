@@ -221,14 +221,6 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     return () => { loadGeneration.current += 1; window.removeEventListener('janusx-memory-changed', changed) }
   }, [isOpen, domain, engineeringEnabled, refresh])
 
-  useEffect(() => {
-    if (!isOpen) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) requestClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [isOpen, requestClose])
 
   useEffect(() => {
     if (!isOpen || domain !== 'engineering' || !engineeringEnabled || tab !== 'search') return
@@ -271,6 +263,27 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   // collapses in parallel while the last record fades/slides out.
   const auditSelected = tab === 'audit' && recordTab === 'audit' ? selectedAudit : null
   const detailOpen = domain === 'engineering' && (selected != null || auditSelected != null)
+  const clearDetail = useCallback(() => {
+    const auditId = selectedAudit?.id
+    setSelectedAudit(null)
+    setSelectedSearch(null)
+    setSelectedId('')
+    if (auditId) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-audit-id="${CSS.escape(auditId)}"]`)?.focus())
+  }, [selectedAudit])
+
+  // Note: Escape dismisses the active detail even when the graph owns focus — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+  useEffect(() => {
+    if (!isOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      event.preventDefault()
+      if (detailOpen) clearDetail()
+      else requestClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, detailOpen, clearDetail, requestClose])
+
   const planDetailOpen = isClosing ? closingPlan.detailOpen : detailOpen
   const detailAnim = useAnimatedOpen(planDetailOpen)
   const prevRecordRef = useRef<InspectorRecord | null>(null)
@@ -378,13 +391,6 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     + Math.max(0, cardCount - 1) * WORKBENCH_CARD_EXIT_STAGGER_MS
     + WORKBENCH_EXIT_BUFFER_MS
 
-  const clearDetail = () => {
-    const auditId = selectedAudit?.id
-    setSelectedAudit(null)
-    setSelectedSearch(null)
-    setSelectedId('')
-    if (auditId) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-audit-id="${CSS.escape(auditId)}"]`)?.focus())
-  }
 
   return createPortal(
     <div
