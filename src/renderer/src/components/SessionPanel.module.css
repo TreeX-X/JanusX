@@ -31,3 +31,16 @@
     transition: none;
   }
 }
+
+/* 内容卡浅纸面（首轮提示 / 最近轮次）：planche 为暖白纸 #F8F2E0（浅纸卡
+   变体 A），dark 为提亮浮起块。表面阶梯唯一带填充的例外，见
+   .agents/notes/2026-09-29-session-card-surface--764d5d26.md */
+.sheet {
+  background: #F8F2E0;
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+}
+
+:global([data-theme='dark']) .sheet {
+  background: color-mix(in srgb, var(--shell-chrome) 88%, white);
+}

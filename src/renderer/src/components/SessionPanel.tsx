@@ -410,6 +410,12 @@ function baseNameOf(path: string): string {
   return path.split(/[/\\]/).filter(Boolean).at(-1) ?? path
 }
 
+/** L1 标题：首轮提示的首个短句（HiFi v6 收缩态「」标题），无提示时回落 engine。 */
+function promptTitle(prompt: string): string {
+  const first = prompt.split(/[，。！？；、,!?;\n]/)[0]?.trim() ?? ''
+  return first.length > 24 ? `${first.slice(0, 24)}…` : first
+}
+
 // Note: session-owned checkpoints with review-gated restore absorb the retired
 // standalone checkpoints tool — see
 // .agents/notes/2026-09-21-session-checkpoint-migration--bb3ef36c.md
@@ -876,6 +882,8 @@ function SessionCard({
 
   // Note: expand motion keeps the body mounted and animates grid rows; the
   // closed body is inert — see .agents/notes/2026-10-06-session-card-expand-motion--106b60b4.md
+  // Note: L1 summary rows (header / prompt preview / meta) follow the v6 HiFi
+  // collapsed design — see .agents/notes/2026-10-06-session-card-l1-summary--cca3e58f.md
 
   return (
     <div
@@ -895,6 +903,9 @@ function SessionCard({
         onClick={onToggle}
       >
         <TerminalPresetIcon preset={iconPreset} alt={session.engine} style={{ width: 14, height: 14 }} />
+        <span style={{ fontSize: 11, color: 'var(--shell-muted)', flexShrink: 0, textTransform: 'capitalize' }}>
+          {session.engine}
+        </span>
         {session.external === true && (
           <span
             style={{
@@ -913,40 +924,52 @@ function SessionCard({
           className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap"
           style={{ fontSize: 12, color: 'var(--shell-text)', fontWeight: 500 }}
         >
-          {session.firstPrompt || session.engine}
+          {session.firstPrompt ? `「${promptTitle(session.firstPrompt)}」` : session.engine}
         </span>
         <span
           style={{
-            display: 'flex',
-            color: 'var(--shell-muted)',
-            transform: expanded ? 'rotate(90deg)' : 'none',
-            transition: 'transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+            fontFamily: "'SF Mono', monospace",
+            fontSize: 10,
+            color: 'var(--shell-dim)',
             flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
         >
-          <svg viewBox="0 0 24 24" style={{ width: 12, height: 12, stroke: 'currentColor', fill: 'none', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
-            <path d="m9 18 6-6-6-6" />
-          </svg>
+          {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)} ·{' '}
+          <span
+            style={{
+              display: 'inline-block',
+              transform: expanded ? 'rotate(180deg)' : 'none',
+              transition: 'transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+            }}
+          >
+            ▾
+          </span>
         </span>
       </div>
       </ThemedTooltip>
+
+      {session.firstPrompt && (
+        <div style={{ marginTop: 5, fontSize: 12, lineHeight: 1.5, color: 'var(--shell-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {session.firstPrompt}
+        </div>
+      )}
+      <div style={{ marginTop: 4, fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
+        {t('terminal:agentSession.turns', { count: session.turnCount })} ·{' '}
+        {session.external === true
+          ? <span style={{ color: 'var(--shell-dim)' }}>{t('terminal:agentSession.noCheckpointExternal')}</span>
+          : t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}{' '}
+        · {formatDate(session.updatedAt, t)}
+      </div>
 
       <div className={styles.expand} data-open={expanded}>
         <div className={styles.expandInner} {...(!expanded ? { inert: '' } : {})}>
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: CARD_BORDER_SOFT }}>
             <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', lineHeight: 1.8 }}>
-              <div>
-                {session.engine} · {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)} ·{' '}
-                {t('terminal:agentSession.turns', { count: session.turnCount })} ·{' '}
-                {session.external === true
-                  ? <span style={{ color: 'var(--shell-dim)' }}>{t('terminal:agentSession.noCheckpointExternal')}</span>
-                  : t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}{' '}
-                · {formatDate(session.updatedAt, t)}
-              </div>
               <div>…/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''}</div>
             </div>
             {session.firstPrompt && (
-              <div style={{ marginTop: 8, border: '1px solid var(--shell-border)', borderRadius: 6, padding: '9px 10px' }}>
+              <div className={styles.sheet} style={{ marginTop: 8, padding: '9px 10px' }}>
                 <div className="flex items-center" style={{ gap: 8, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginBottom: 6 }}>
                   <span>{t('terminal:agentSession.firstPrompt')}</span>
                   <span style={{ marginLeft: 'auto' }}>
@@ -958,7 +981,7 @@ function SessionCard({
                 </div>
               </div>
             )}
-            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', border: '1px solid var(--shell-border)', borderRadius: 6, padding: '2px 10px' }}>
+            <div className={styles.sheet} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', padding: '2px 10px' }}>
               <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', padding: '8px 0 0' }}>
                 {t('terminal:agentSession.recentTurns')}
               </div>
