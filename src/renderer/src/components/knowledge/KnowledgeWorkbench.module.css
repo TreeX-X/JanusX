@@ -569,33 +569,56 @@
   margin-top: 12px;
 }
 
+/* Note: Match settings navigation states across themes — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md */
 .navButton {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  padding: 10px 10px 10px 12px;
+  border: 0;
+  border-radius: 5px;
   background: transparent;
-  color: #c7c7cc;
+  color: var(--shell-muted);
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
   text-align: left;
-  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.navButton::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: transparent;
+  transition: background 0.16s ease;
 }
 
 .navButton:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--shell-text);
 }
 
-.navActive {
-  border-color: rgba(59, 130, 246, 0.3);
-  background: rgba(59, 130, 246, 0.1);
-  color: #fff;
+.navButton:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+}
+
+.navActive,
+.navActive:hover {
+  background: var(--shell-active);
+  color: var(--shell-text);
+}
+
+.navActive::before {
+  background: var(--shell-accent);
 }
 
 /* Detail header: single provenance row with an explicit close entry. */
@@ -1107,7 +1130,6 @@
   background: rgba(59, 130, 246, 0.18);
 }
 
-.navButton:focus-visible,
 .detailClose:focus-visible,
 .reviewCard:focus-visible,
 .graphNode:focus-visible,
@@ -1430,19 +1452,17 @@
   color: var(--ink-soft, rgba(28, 52, 59, 0.62));
 }
 
-:global([data-theme='planche']) .navButton {
-  color: var(--ink, #1C343B);
-}
-
 :global([data-theme='planche']) .navButton:hover {
   background: var(--paper-deep, #DCCFA8);
-  color: var(--ink, #1C343B);
 }
 
-:global([data-theme='planche']) .navActive {
-  border-color: var(--shell-accent-border);
-  background: var(--shell-accent-soft);
-  color: var(--planche-red, #D43D2A);
+:global([data-theme='planche']) .navActive,
+:global([data-theme='planche']) .navActive:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .navActive::before {
+  background: var(--planche-red, #D43D2A);
 }
 
 :global([data-theme='planche']) .detailClose {
@@ -1584,7 +1604,6 @@
   background: var(--shell-accent-soft);
 }
 
-:global([data-theme='planche']) .navButton:focus-visible,
 :global([data-theme='planche']) .detailClose:focus-visible,
 :global([data-theme='planche']) .reviewCard:focus-visible,
 :global([data-theme='planche']) .graphNode:focus-visible,
