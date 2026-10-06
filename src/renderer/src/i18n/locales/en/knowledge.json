@@ -514,6 +514,8 @@
       "timeout": "Request timed out; check the network. Initial local model loading can take longer",
       "invalid-response": "Response format is invalid or output is incomplete; check model support",
       "unavailable": "Request could not complete; check the service, network and model configuration",
+      "runtime-outdated": "The test service is out of date. Fully restart the app; in development, rerun npm run dev. Reloading the page is not enough",
+      "test-service-unavailable": "Could not call the app's test service. Restart the app and retry",
       "local-unavailable": "Local model unavailable; check environment, paths and resources, then run detection again",
       "busy": "Local model is processing another task; retry later",
       "knowledge-disabled": "Enable engineering knowledge in feature settings first"

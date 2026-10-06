@@ -6,6 +6,7 @@ import { KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeConfi
 import styles from '../KnowledgeSettingsPanel.module.css'
 import automationStyles from '../KnowledgeAutomationPanel.module.css'
 
+// Note: hot-reloaded settings may outlive their main/preload API — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
 type TestRow = KnowledgeConfigurationTestResult | { status: 'waiting' | 'testing' }
 export function KnowledgeConfigurationTest({ config, credential, disabled }: {
   config: KnowledgeAutomationSettings; credential: { key?: string; revision: number }; disabled: boolean
@@ -34,9 +35,15 @@ export function KnowledgeConfigurationTest({ config, credential, disabled }: {
         if (next[stage]?.status === 'skipped') continue
         next[stage] = { status: 'testing' }; setRows({ ...next })
         try {
-          next[stage] = await window.electron.knowledge.testConfiguration({ stage, model: config.stages[stage],
-            jevEndpoint: config.jev.endpoint, ...(config.stages[stage].provider !== 'jev' || credential.key === undefined ? {} : { jevKey: credential.key }) })
-        } catch { next[stage] = { status: 'failed', reason: 'unavailable' } }
+          const api = window.electron?.knowledge
+          next[stage] = typeof api?.testConfiguration !== 'function' ? { status: 'failed', reason: 'runtime-outdated' }
+            : await api.testConfiguration({ stage, model: config.stages[stage],
+              jevEndpoint: config.jev.endpoint, ...(config.stages[stage].provider !== 'jev' || credential.key === undefined ? {} : { jevKey: credential.key }) })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+          next[stage] = { status: 'failed', reason: /No handler registered for ['"]knowledge:configuration:test['"]/.test(message)
+            ? 'runtime-outdated' : 'test-service-unavailable' }
+        }
         if (!mounted.current || latest.current.revision !== revision) break
         setRows({ ...next })
       }

@@ -25,6 +25,7 @@ export type KnowledgeConfigurationTestReason = 'rules-only' | 'manual' | 'model-
   | 'provider-unavailable' | 'provider-incomplete' | 'endpoint-missing' | 'endpoint-invalid' | 'key-missing' | 'local-disabled'
   | 'provider-unsupported' | 'credential-unavailable' | 'auth-failed' | 'rate-limited'
   | 'model-or-endpoint-not-found' | 'timeout' | 'invalid-response' | 'unavailable' | 'local-unavailable' | 'busy' | 'knowledge-disabled'
+  | 'runtime-outdated' | 'test-service-unavailable'
 export interface KnowledgeConfigurationTestResult {
   status: 'passed' | 'failed' | 'incomplete' | 'skipped'
   reason?: KnowledgeConfigurationTestReason

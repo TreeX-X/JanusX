@@ -1751,6 +1751,8 @@ export type TypedI18nKey =
   | 'knowledge:configurationTest.reason.provider-unsupported'
   | 'knowledge:configurationTest.reason.rate-limited'
   | 'knowledge:configurationTest.reason.rules-only'
+  | 'knowledge:configurationTest.reason.runtime-outdated'
+  | 'knowledge:configurationTest.reason.test-service-unavailable'
   | 'knowledge:configurationTest.reason.timeout'
   | 'knowledge:configurationTest.reason.unavailable'
   | 'knowledge:configurationTest.running'

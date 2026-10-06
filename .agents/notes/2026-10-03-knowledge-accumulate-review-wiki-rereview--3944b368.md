@@ -78,6 +78,7 @@ Jev 设置仅在状态文字中标记已配置，可以复用最少控件，但�
 - [x] AC-15: 发布包不内置模型与推理程序；Windows x64 可由应用首次下载、校验并自动填入路径，后续复用；进度、取消、失败重试、关闭保留文件及升级复用可用，下载本身不得启用模型。
 - [x] AC-16: 托管部署按可用 GPU 显存推荐上下文，明确指定 GPU 启动；GPU 缺失、显存未知或不足时不运行且不回退 CPU。已有外部本机服务的 GPU 配置由外部服务负责。
 - [x] AC-17: 设置页一键测试按四环节当前配置调用 Jev、本地或外部模型，显示逐项进度、耗时与结果；缺项提醒补全，关闭环节明确跳过，全关闭不显示测试成功。测试不保存配置或处理真实知识，配置及密钥变更后旧结果失效，失败不泄露凭据。
+- [x] AC-18: 页面热更新后若预加载接口或后台处理器仍为旧版，测试须明确提示完整重启应用，开发模式重新运行 npm run dev；应用测试服务调用失败与实际模型请求失败须分别反馈，不能提示用户修改模型配置。
 
 ## Risks
 
@@ -86,6 +87,8 @@ Jev 设置仅在状态文字中标记已配置，可以复用最少控件，但�
 模型判断不能替代宿主的来源、归属、版本与冲突校验，同模型自审可能重复同一错误，多模型一致也不保证事实正确。Qwen 思考预算只在审核任务上验证过，Wiki 生成的预算必须另测，不能复用 256 token 结论。Jev 为云端闭源模型，调用带来网络依赖与费用。网络不可用时任务暂存并显示失败原因；用户可显式改选本地模型或关闭该环节，运行时不隐式换用提供方。
 
 ## Expected behavior
+
+开发模式的页面热更新可以与旧主进程、旧预加载桥同时存在。配置测试检查 `testConfiguration` 方法是否存在，并识别后台缺少 `knowledge:configuration:test` 处理器的错误；任一情况提示完全重启应用，开发模式重新运行 `npm run dev`，刷新页面不足以加载后台新接口。其他 IPC 拒绝只显示应用测试服务不可用；只有后台返回的模型请求失败才提示检查服务、网络和模型配置。原始 IPC 错误不进入界面，避免携带凭据或内部详情。
 
 [配置测试入口](../../src/main/knowledge/knowledge-configuration-test.ts)通过 `knowledge:configuration:test` 验证单个环节，设置页串行调用并逐项反馈。输入只包含环节、模型选择、Jev 地址及可选临时密钥；不接受任意本地程序路径或用户知识。未提供临时密钥时只在宿主读取已加密凭据。云端每项请求最多 30 秒，本地最多 120 秒以覆盖冷启动；本地占用时反馈稍后重试，不抢占正在执行的任务。审核环节检查审核响应结构，生成环节检查固定 JSON 样本；通过仅证明短请求的接口与响应可用，不证明完整提取、Wiki 生成或真实审核质量。配置变更和页面卸载会丢弃迟到结果并停止发起后续环节；在途请求按自身超时结束。外部调用可能产生少量费用，测试没有持久结果，也不自动启用后台处理。
 
@@ -130,6 +133,8 @@ Jev 设置仅在状态文字中标记已配置，可以复用最少控件，但�
 [自动处理状态](../../src/renderer/src/components/knowledge/AutomationStatus.tsx)以紧凑标题、启停指示、分类计数和操作按钮呈现；需要人工处理与失败用主题强调色提示，含状态文字。近期任务默认收起，展开后列表高度限制为 220px 与 28vh 的较小值，避免大量任务挤占知识正文。工作台的处理状态独占整行；收件箱范围使用横向筛选按钮，选中状态由 `aria-pressed` 表达。[Wiki 历史](../../src/renderer/src/components/knowledge/WikiHistory.tsx)按版本列表显示日期、重要标记及选中项，正文与来源在列表下方阅读，分页与标记仍调用原历史接口。正文保持 12px 与独立行距，不随状态文字缩小。
 
 ## Verification
+
+2026-10-06 开发运行态回归：本机 dev 主进程与 `.cache/preload/index.mjs` 均为 19:29 启动或生成，预加载产物没有 `testConfiguration` 与 `knowledge:configuration:test`，页面已包含新按钮；失败发生在接口调用前。`npm run test:unit -- --run tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts` 通过 2 个文件、32 项，新增 3 项浏览器用例分别复现缺少预加载方法、后台处理器未注册和其他 IPC 拒绝；验证明确重启提示、原始错误不泄露及没有模型调用。`npm run typecheck`、修改源文件的 ESLint 和 `npm run i18n:check` 通过。未重启用户正在运行的 dev，也未以真实密钥发起模型请求；重启后的模型可用性仍由实际测试结果决定。
 
 2026-10-06 配置测试验证：`npm run test:unit -- --run tests/unit/knowledge/knowledge-configuration-test.test.ts tests/unit/knowledge/knowledge-models.test.ts tests/unit/knowledge-ipc-contract.test.ts tests/unit/knowledge-automation-ui.test.ts` 通过 4 个文件、55 项测试，其中配置测试服务 15 项、浏览器新增交互 3 项、IPC 新增门禁与转发 1 项。覆盖临时与已保存 Jev 密钥、各提供方缺项、HTTP 鉴权与限流、非法响应、云端超时、本地宿主授权与占用、混合环节逐项结果、失败重试、重复点击及配置改回原值后的迟到结果失效。`npm run typecheck`、修改源文件的 ESLint、`npm run i18n:check`、`npm run build:check` 和 `npm run check:package-boundary` 通过。`npm run check:notes` 为 0 错误，保留 27 条既有跨库链接诊断。浏览器截图人工检查覆盖 390px 的深色与 planche 主题，结果区域无横向溢出；截图位于忽略目录 `artifacts/knowledge-configuration-test/`。模型接口使用受控替身，未使用用户真实凭据调用云端或启动真实 GPU 模型。
 

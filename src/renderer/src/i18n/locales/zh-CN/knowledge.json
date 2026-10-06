@@ -514,6 +514,8 @@
       "timeout": "请求超时，请检查网络；本地模型首次加载可能较慢",
       "invalid-response": "响应格式不符合要求或输出不完整，请检查模型支持",
       "unavailable": "无法完成请求，请检查服务、网络和模型配置",
+      "runtime-outdated": "测试服务尚未更新，请完全重启应用；开发模式请重新运行 npm run dev，仅刷新页面无效",
+      "test-service-unavailable": "无法调用应用的测试服务，请重新启动应用后重试",
       "local-unavailable": "本地模型不可用，请检查环境、路径和资源后重新检测",
       "busy": "本地模型正在处理任务，请稍后重试",
       "knowledge-disabled": "请先在功能设置中开启工程知识库"

@@ -64,6 +64,33 @@ async function openJev(page: Page) {
   await page.getByRole('button', { name: 'Entry review', exact: true }).click()
   await page.getByRole('option', { name: 'Jev review', exact: true }).click()
 }
+it.each(['missing-preload', 'missing-handler', 'ipc-failure'])('reports %s as an app service issue instead of a model failure', async mode => {
+  const page = await browser.newPage()
+  try {
+    await mount(page); await openJev(page)
+    await page.getByLabel('Jev credential', { exact: true }).fill('draft-key')
+    await page.evaluate(value => {
+      const api = (window as any).electron.knowledge
+      if (value === 'missing-preload') delete api.testConfiguration
+      else api.testConfiguration = async () => {
+        throw new Error(value === 'missing-handler'
+          ? "Error invoking remote method 'knowledge:configuration:test': Error: No handler registered for 'knowledge:configuration:test'"
+          : 'private-error-details draft-key')
+      }
+    }, mode)
+    const panel = page.getByRole('region', { name: 'Configuration availability test' })
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByRole('alert').waitFor()
+    const result = await panel.locator('[data-test-stage="entryReview"]').innerText()
+    expect(result).toContain(mode === 'ipc-failure' ? "Could not call the app's test service" : 'rerun npm run dev')
+    expect(result).not.toContain('check the service, network and model configuration')
+    expect(result).not.toContain('draft-key')
+    expect(await page.evaluate(() => (window as any).testCalls)).toEqual([])
+    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+    expect(await panel.locator('[data-test-stage="extraction"]').getAttribute('data-test-status')).toBe('skipped')
+  } finally { await page.close() }
+})
+
 it('reminds users about missing configuration and tests unsaved Jev input without saving or processing knowledge', async () => {
   const page = await browser.newPage()
   try {
