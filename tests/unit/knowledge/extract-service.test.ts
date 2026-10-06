@@ -7,7 +7,6 @@ import { candidateDecisionHash } from '../../../src/main/knowledge/decision-scor
 import { personalObservation, taskNotification } from './memory-observation.fixture'
 import type {
   CandidateFact,
-  CandidateGraphEdge,
   CandidateWikiPatch,
   Observation,
 } from '../../../src/shared/knowledge'
@@ -231,13 +230,7 @@ describe('KnowledgeExtractService', () => {
       'obs-evidence-2',
     ])
 
-    expect(result.graphEdges).toHaveLength(1)
-    const edge = result.graphEdges[0] as CandidateGraphEdge
-    expect(edge.type).toBe('graph-edge')
-    expect(edge.edge.from).toBe('persistence')
-    expect(edge.edge.to).toBe('postgres')
-    expect(edge.edge.type).toBe('implemented_in')
-    expect(edge.edge.workspaceId).toBe('ws-id')
+    expect(result.graphEdges).toEqual([])
 
     // candidate files written
     const factFile = await readFile(join(knowledgeRoot, 'facts/candidates.jsonl'), 'utf8')
@@ -245,8 +238,7 @@ describe('KnowledgeExtractService', () => {
     expect(factFile).not.toContain('"supersedes"') // sanity: not a fact.jsonl record
     const patchFile = await readFile(join(knowledgeRoot, 'wiki/patches.jsonl'), 'utf8')
     expect(patchFile).toContain(patch.id)
-    const graphFile = await readFile(join(knowledgeRoot, 'graph/candidates.jsonl'), 'utf8')
-    expect(graphFile).toContain(edge.id)
+    await expect(readFile(join(knowledgeRoot, 'graph/candidates.jsonl'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
 
     // audit trail
     const auditFile = await readFile(join(knowledgeRoot, 'audit/audit.jsonl'), 'utf8')
@@ -378,7 +370,7 @@ describe('KnowledgeExtractService', () => {
     expect(factCandidates).toHaveLength(1)
     expect(factCandidates[0]?.type).toBe('fact')
     const graphCandidates = await knowledgeExtractService.listGraphCandidates()
-    expect(graphCandidates).toHaveLength(1)
+    expect(graphCandidates).toHaveLength(0)
     const patchCandidates = await knowledgeExtractService.listWikiPatchCandidates()
     expect(patchCandidates).toHaveLength(0)
   })

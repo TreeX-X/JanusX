@@ -50,6 +50,22 @@ async function candidate(index: number): Promise<CandidateFact> {
 }
 async function facts(items: MemoryFact[]) { await mkdir(join(root, 'facts'), { recursive: true }); await writeFile(join(root, 'facts/facts.jsonl'), items.map(item => JSON.stringify(item)).join('\n') + '\n') }
 describe('durable knowledge automation', () => {
+  it('binds current review status to the proposal and rejects retries after it changes', async () => {
+    const item = await candidate(1)
+    review.mockResolvedValue({ verdict: 'uncertain', reason: 'Need source context', complete: false, conflict: false, coveredIds: [] })
+    await service.run()
+    const status = await service.status()
+    const current = status.queue.find(task => task.subject === item.id)!
+    expect(status.reviewStateVersion).toBe(1)
+    expect(current).toMatchObject({ candidateHash: (await reviewCandidateInput(item)).candidateHash, workspaceId: 'project', status: 'needs-review', canRetry: true, reason: 'Need source context' })
+    item.fact.content = 'The proposal has changed.'
+    await writeFile(join(root, 'facts/candidates.jsonl'), JSON.stringify(item) + '\n')
+    const changed = (await service.status()).queue.find(task => task.subject === item.id)!
+    expect(changed.candidateHash).not.toBe(current.candidateHash)
+    expect(changed).toMatchObject({ status: 'pending', canRetry: false })
+    expect(changed.reason).toBeUndefined()
+    await expect(service.retry(current.id!)).rejects.toThrow('task-no-longer-current')
+  })
   it.each(['extraction', 'curation'])('blocks raw tool content returned by %s without partial admission', async stage => {
     config.stages.extraction = { provider: 'external', providerId: 'test', model: 'test', thinking: false }
     config.stages.entryReview.provider = 'off'
@@ -214,7 +230,7 @@ describe('durable knowledge automation', () => {
   it('projects current manual, incomplete, failed and running work independently of historical records', async () => {
     await candidate(1)
     config.stages.entryReview.provider = 'off'
-    expect((await service.status()).queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'needs-review'}])
+    expect((await service.status()).queue).toEqual([expect.objectContaining({stage:'entryReview',subject:'candidate-1',status:'needs-review'})])
     await service.run()
     config.stages.entryReview = { provider: 'external', providerId: '', model: 'model', thinking: false }
     expect((await service.status()).stages.entryReview).toBe('unconfigured')
@@ -234,19 +250,19 @@ describe('durable knowledge automation', () => {
     try {
       const status = await service.status()
       expect(status.running).toBe(true)
-      expect(status.queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'running'}])
+      expect(status.queue).toEqual([expect.objectContaining({stage:'entryReview',subject:'candidate-1',status:'running'})])
     } finally { finish(); await running }
-    expect((await service.status()).queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'needs-review'}])
+    expect((await service.status()).queue).toEqual([expect.objectContaining({stage:'entryReview',subject:'candidate-1',status:'needs-review'})])
     const ledgerPath = join(root, 'processing/automation-tasks.json')
     const ledger = JSON.parse(await readFile(ledgerPath, 'utf8'))
     const current = ledger.tasks.find(task => task.model.provider === 'external')
     current.status = 'failed'
     await writeFile(ledgerPath, JSON.stringify(ledger))
-    expect((await service.status()).queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'failed'}])
+    expect((await service.status()).queue).toEqual([expect.objectContaining({stage:'entryReview',subject:'candidate-1',status:'failed'})])
     config.stages.entryReview.model = 'replacement-model'
     const replaced = await service.status()
     expect(replaced.counts.failed).toBe(1)
-    expect(replaced.queue).toEqual([{stage:'entryReview',subject:'candidate-1',status:'pending'}])
+    expect(replaced.queue).toEqual([expect.objectContaining({stage:'entryReview',subject:'candidate-1',status:'pending'})])
   })
 
   it('captures, extracts, reviews, publishes a topic, updates it and preserves prior content', async () => {

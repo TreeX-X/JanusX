@@ -7,11 +7,11 @@ import { readObservationRevocationBarrier } from './observation-revocation-barri
  * @description
  *  - 输入：retentionClass='evidence' 的 Observation 批次（队列按 workspace 交付，每批 ≤ 50）。
  *  - 调用 LLM（对齐 analyzer.ts:409-433 的 callLLM 模式）以 `generateObject` + zod schema
- *    结构化抽取 CandidateFact / CandidateWikiPatch / CandidateGraphEdge。
+ *    结构化抽取 CandidateFact / CandidateWikiPatch，兼容读取旧图关系。
  *  - Phase 2：输出 schema 带 `kind` + `supersedes`；单次调用 60s 超时、失败重试 ≤ 2 次
  *    带退避；单批字符预算；与同批确定性候选按内容 Jaccard ≥ 0.7 合并为
  *    `derivation='merged'`；LLM 候选同样做候选阶段冲突标记。
- *  - 候选只 append 到 `facts/candidates.jsonl` / `wiki/patches.jsonl` / `graph/candidates.jsonl`，
+ *  - 新候选只 append 到 `facts/candidates.jsonl` / `wiki/patches.jsonl`，
  *    绝不直接写入 `facts/facts.jsonl` / `graph/edges.jsonl` / 正式 wiki 页面。
  *    唯一的例外是合并改写：命中的确定性候选在 review 锁下原位升级为 merged，
  *    不产生第二条 Inbox 条目。
@@ -157,7 +157,7 @@ function buildSystemPrompt(): string {
     '【知识引擎候选提炼】',
     '你的职责是从给定的观察记录中只产出"候选"知识，绝不直接断言真相。',
     '规则：',
-    '- 仅产出你能在观察中找到直接证据的事实、wiki 补丁、图边。',
+    '- 仅产出你能在观察中找到直接证据的事实和 wiki 补丁。graphEdges 保持空数组，不独立提议图关系。',
     '- 置信度保守取值；信息不足时 confidence 取低值。',
     '- 不要编造证据；不要引用未给出的观察 ID。',
     '- 输出严格遵循 schema；无依据的项留空数组，不要硬凑。',
@@ -269,32 +269,6 @@ function mapWikiPatchCandidate(
     derivation: 'llm',
     evidence: { observationIds: provenance.sourceObservationIds },
     sourceFactIds,
-  }
-}
-
-function mapGraphEdgeCandidate(
-  raw: ExtractResult['graphEdges'][number],
-  provenance: KnowledgeProvenance,
-): CandidateGraphEdge {
-  const edgeId = randomUUID()
-  const candidateId = randomUUID()
-  return {
-    id: candidateId,
-    type: 'graph-edge',
-    status: 'proposed',
-    edge: {
-      id: edgeId,
-      from: raw.from,
-      to: raw.to,
-      type: raw.type,
-      confidence: raw.confidence,
-      sourceFactIds: [],
-      workspaceId: provenance.workspaceId,
-      createdAt: provenance.createdAt,
-    },
-    reviewNotes: undefined,
-    derivation: 'llm',
-    evidence: { observationIds: provenance.sourceObservationIds },
   }
 }
 
@@ -641,7 +615,6 @@ export class KnowledgeExtractService {
       mapFactCandidate(raw, provenance, knownTruthIds, truthTargets, observationScope(budgeted.observations[0]!)),
     )
     const wikiPatchCandidates = refinementCandidates ? [] : result.wikiPatches.map((raw) => mapWikiPatchCandidate(raw, provenance, knownTruthIds))
-    const graphEdgeCandidates = refinementCandidates ? [] : result.graphEdges.map((raw) => mapGraphEdgeCandidate(raw, provenance))
 
     const batchIds = new Set(budgeted.observations.map((observation) => observation.id))
     const mergeable = (await this.listFactCandidates()).filter((candidate) =>
@@ -697,12 +670,12 @@ export class KnowledgeExtractService {
 
     // 10. 落盘候选
     await proposeFactCandidates(appendedFacts)
-    await proposeDerivedCandidates([...wikiPatchCandidates, ...graphEdgeCandidates])
+    await proposeDerivedCandidates(wikiPatchCandidates)
 
     // 11. 写一条批次级 candidate_proposed audit
     let auditEventId: string | undefined
     const totalCandidates =
-      appendedFacts.length + wikiPatchCandidates.length + graphEdgeCandidates.length
+      appendedFacts.length + wikiPatchCandidates.length
     if (totalCandidates > 0 || mergedIds.length > 0) {
       const audit = await knowledgeAuditService.record({
         action: 'candidate_proposed',
@@ -712,7 +685,7 @@ export class KnowledgeExtractService {
         after: {
           factCandidateIds: appendedFacts.map((candidate) => candidate.id),
           wikiPatchCandidateIds: wikiPatchCandidates.map((patch) => patch.id),
-          graphEdgeCandidateIds: graphEdgeCandidates.map((edge) => edge.id),
+          graphEdgeCandidateIds: [],
           mergedFactCandidateIds: mergedIds,
           sourceObservationIds,
         },
@@ -724,7 +697,7 @@ export class KnowledgeExtractService {
     return {
       facts: appendedFacts,
       wikiPatches: wikiPatchCandidates,
-      graphEdges: graphEdgeCandidates,
+      graphEdges: [],
       auditEventId,
       mergedFactCandidateIds: mergedIds,
       ...(budgeted.droppedObservationIds.length > 0
@@ -741,7 +714,7 @@ export class KnowledgeExtractService {
     return records.map(candidate => revocations.candidate(barrier.candidate(candidate)))
   }
 
-  /** 读取 graph/candidates.jsonl（追加写）。 */
+  /** 读取历史 graph/candidates.jsonl。 */
   async listGraphCandidates(): Promise<CandidateGraphEdge[]> {
     const revocations = await readObservationRevocationBarrier()
     return (await this.readJsonl<CandidateGraphEdge>(GRAPH_CANDIDATES_FILE)).map(candidate => revocations.candidate(candidate))

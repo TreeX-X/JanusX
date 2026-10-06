@@ -13,15 +13,13 @@
  *              uses review-service; this stage never applies truth.
  */
 
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { canMergeFactText, factSlot } from '../../shared/fact-slot'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
   CandidateFact,
-  CandidateGraphEdge,
   FactKind,
-  GraphEdge,
   KnowledgeProvenance,
   KnowledgeSource,
   MemoryFact,
@@ -35,7 +33,7 @@ export { observationDedupeKey } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { deriveHabitPromotions, habitPromotionToCandidate } from './habit-aggregator'
 import { knowledgeTruthService } from './truth-service'
-import { proposeDerivedCandidates, proposeFactCandidates } from './review-service'
+import { proposeFactCandidates } from './review-service'
 import { isActiveObservation, isUserStatement, observationEventKey, observationScope, sourceEvidence } from './memory-evidence'
 import { isRuntimeNotification, personalPreferenceText, personalStatementText } from './personal-memory-content'
 import { isRawConversationEvidence, isRawKnowledgeContent } from './knowledge-content'
@@ -86,8 +84,6 @@ export interface DeterministicStageResult {
 export interface DeterministicStageDeps {
   resolveContent: (observation: Observation) => Promise<string>
   listTruthFacts: () => Promise<MemoryFact[]>
-  /** Accepted graph edges, used to skip already-linked truth pairs. */
-  listTruthEdges: () => Promise<GraphEdge[]>
   listHabitObservations: () => Promise<Observation[]>
   allowHabitSource?: (observation: Observation) => Promise<boolean>
   nowIso: () => string
@@ -98,7 +94,6 @@ function defaultDeps(): DeterministicStageDeps {
     listHabitObservations: () => knowledgeObservationService.list({ limit: 200 }),
     resolveContent: (observation) => knowledgeObservationService.resolveContent(observation),
     listTruthFacts: async () => (await knowledgeTruthService.list()).facts,
-    listTruthEdges: async () => (await knowledgeTruthService.list()).graphEdges,
     nowIso: () => new Date().toISOString(),
   }
 }
@@ -323,64 +318,6 @@ async function writeDerived(derived: DerivedObservation): Promise<void> {
   const file = derivedFilePath(derived.observationId)
   await mkdir(dirname(file), { recursive: true })
   await writeFileAtomic(file, `${JSON.stringify(derived)}\n`)
-}
-
-const appendCandidateGraphEdges = proposeDerivedCandidates
-
-/**
- * Truth–truth `mentions` proposals: settled facts in one workspace sharing a
- * file ref with no stored edge between them (either direction, any type).
- * Human-gated through the normal candidate flow; keeps the stored graph from
- * depending solely on the LLM ever emitting edges.
- */
-export const MAX_DETERMINISTIC_MENTIONS = 20
-
-export function synthesizeMentionEdges(
-  truthFacts: MemoryFact[],
-  existingEdges: Pick<GraphEdge, 'from' | 'to'>[],
-  workspaceId: string,
-  nowIso: string,
-): CandidateGraphEdge[] {
-  const linked = new Set<string>()
-  const pairKey = (a: string, b: string): string => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
-  for (const edge of existingEdges) {
-    linked.add(pairKey(edge.from, edge.to))
-  }
-  const scoped = truthFacts.filter((fact) => fact.provenance.workspaceId === workspaceId)
-  const results: CandidateGraphEdge[] = []
-  for (let i = 0; i < scoped.length && results.length < MAX_DETERMINISTIC_MENTIONS; i++) {
-    const left = scoped[i]!
-    const leftFiles = new Set(left.files)
-    if (leftFiles.size === 0) continue
-    for (let j = i + 1; j < scoped.length && results.length < MAX_DETERMINISTIC_MENTIONS; j++) {
-      const right = scoped[j]!
-      if (right.provenance.workspaceId !== workspaceId) continue
-      const shared = right.files.some((file) => leftFiles.has(file))
-      if (!shared) continue
-      const key = pairKey(left.id, right.id)
-      if (linked.has(key)) continue
-      linked.add(key)
-      const [from, to] = left.id < right.id ? [left.id, right.id] : [right.id, left.id]
-      results.push({
-        id: randomUUID(),
-        type: 'graph-edge',
-        status: 'proposed',
-        edge: {
-          id: randomUUID(),
-          from,
-          to,
-          type: 'mentions',
-          confidence: 0.6,
-          sourceFactIds: [from, to],
-          workspaceId,
-          createdAt: nowIso,
-        },
-        derivation: 'deterministic',
-        evidence: { observationIds: [] },
-      })
-    }
-  }
-  return results
 }
 
 interface PreparedObservation {
@@ -660,16 +597,8 @@ export async function runDeterministicStage(
         fileRefs: [], actor: 'habit-aggregator', createdAt: nowIso },
     })
   }
-  // Truth–truth mentions discovered from shared file refs. Human-gated
-  // through the normal graph-candidate flow; an empty truth set yields none.
-  const mentionEdges = synthesizeMentionEdges(
-    truthFacts,
-    await deps.listTruthEdges().catch(() => []),
-    batch.workspaceId,
-    nowIso,
-  )
-  await appendCandidateGraphEdges(mentionEdges)
-  if (candidates.length > 0 || habitCandidates.length > 0 || mentionEdges.length > 0) {
+  // Note: shared-file links do not create review work — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+  if (candidates.length > 0 || habitCandidates.length > 0) {
     await knowledgeAuditService.record({
       action: 'candidate_proposed',
       targetType: 'fact',
@@ -677,7 +606,7 @@ export async function runDeterministicStage(
       before: null,
       after: {
         factCandidateIds: [...candidates, ...habitCandidates].map((candidate) => candidate.id),
-        graphCandidateIds: mentionEdges.map((candidate) => candidate.id),
+        graphCandidateIds: [],
         sourceObservationIds: prepared.map((item) => item.observation.id),
         derivation: 'deterministic',
       },
@@ -694,5 +623,5 @@ export async function runDeterministicStage(
     })
   }
 
-  return { derived: unique.length, proposals: candidates.length + habitCandidates.length + mentionEdges.length, autoAccepted: 0 }
+  return { derived: unique.length, proposals: candidates.length + habitCandidates.length, autoAccepted: 0 }
 }

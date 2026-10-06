@@ -564,10 +564,12 @@ describe('KnowledgeReviewService', () => {
     const applied = knowledgeReviewService.applyCandidate(await reviewCandidateInput(candidate))
     const rejected = expect(applied).rejects.toThrow('audit unavailable')
     await waiting
-    const admission = proposeDerivedCandidates([next])
+    const admission = type === 'graph-edge'
+      ? expect(proposeDerivedCandidates([next])).rejects.toThrow('standalone-graph-proposals-disabled')
+      : proposeDerivedCandidates([next])
     release()
     try { await Promise.all([rejected, admission]) } finally { spy.mockRestore() }
-    expect((await readJsonl<CandidateFact>(path)).map(item => [item.id, item.status])).toEqual([[candidate.id, 'proposed'], [next.id, 'proposed']])
+    expect((await readJsonl<CandidateFact>(path)).map(item => [item.id, item.status])).toEqual(type === 'graph-edge' ? [[candidate.id, 'proposed']] : [[candidate.id, 'proposed'], [next.id, 'proposed']])
   })
 
 })

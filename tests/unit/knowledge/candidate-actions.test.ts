@@ -41,3 +41,11 @@ it('rejects stale snapshots, extra authority fields and disabled knowledge', asy
   await expect(runCandidateAction({ ...input, candidateHash: candidateDecisionHash(candidate) })).rejects.toThrow('memory-domain-disabled')
   expect(mocks.run).not.toHaveBeenCalled()
 })
+
+it.each(['score', 'refine'])('rejects legacy %s even when the new automation is switched off', async action => {
+  mocks.settings.mockResolvedValue({ enabled: true, automation: { enabled: false } })
+  await expect(runCandidateAction({ candidateId: candidate.id, candidateHash: candidateDecisionHash(candidate), action })).rejects.toThrow('legacy-candidate-action-disabled')
+  expect(mocks.run).not.toHaveBeenCalled()
+  expect(mocks.manual).not.toHaveBeenCalled()
+  expect(mocks.enqueue).not.toHaveBeenCalled()
+})

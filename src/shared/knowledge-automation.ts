@@ -94,12 +94,23 @@ export interface KnowledgeAutomationTask {
   model: KnowledgeStageModel
 }
 export interface KnowledgeAutomationStatus {
+  /** Versioned, host-validated candidate bindings; absent on older hosts. */
+  reviewStateVersion?: 1
+  /** Project review gate, distinct from automatic processing being switched off. */
+  reviewEnabled?: boolean
   running: boolean
   enabled: boolean
   /** Configured behavior, independent of whether a provider is currently reachable. */
   stages: Record<KnowledgeStage, 'automatic' | 'manual' | 'unconfigured' | 'rules-only'>
   /** Current eligible work; historical records below are not an inbox. */
-  queue: Array<Pick<KnowledgeAutomationTask, 'stage' | 'subject'> & { status: 'pending' | 'running' | 'needs-review' | 'failed' }>
+  queue: Array<Pick<KnowledgeAutomationTask, 'stage' | 'subject'> & {
+    status: 'pending' | 'running' | 'needs-review' | 'failed'
+    id?: string
+    workspaceId?: string
+    candidateHash?: string
+    reason?: string
+    canRetry?: boolean
+  }>
   tasks: KnowledgeAutomationTask[]
   total: number
   counts: Record<AutomationTaskStatus, number>

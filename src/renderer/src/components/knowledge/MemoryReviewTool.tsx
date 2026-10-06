@@ -7,11 +7,11 @@ import { LegacyEpisodeMigrationControl } from './LegacyEpisodeMigrationControl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
-import type { CandidateFact } from '../../../../shared/knowledge'
+import { useKnowledgeAutomation, refreshKnowledgeAutomation } from '../../services/knowledge-automation'
+import { useCandidateReviewState, assertCandidateCanReview } from './candidateReviewState'
 import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
-import { memoryCandidateSnapshot } from '../../../../shared/memory-candidate-snapshot'
 import { applyKnowledgeCandidate, rejectKnowledgeCandidate } from '../../services/knowledge'
-import { competingCorrections, countInboxScopes, filterInboxByScope, isUserScopeCandidate, splitReviewCandidates, type InboxCandidate, type InboxScopeFilter } from './inboxScope'
+import { competingCorrections, countInboxScopes, filterInboxByScope, isUserScopeCandidate, type InboxCandidate, type InboxScopeFilter } from './inboxScope'
 import { WikiCandidateSources } from './NoteWikiLinks'
 import surface from './MemorySurface.module.css'
 import styles from './MemoryReviewTool.module.css'
@@ -32,7 +32,7 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
   const personal = useExperimentalStore(s => s.persona) && domain !== 'engineering'
   const { t } = useI18n('knowledge')
   const [candidates, setCandidates] = useState<InboxCandidate[]>([])
-  const [automation, setAutomation] = useState<KnowledgeAutomationStatus | null>(null)
+  const { status: automation } = useKnowledgeAutomation(active && engineering)
   const [scope, setScope] = useState<InboxScopeFilter>('all')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -55,7 +55,9 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
   }, [t, engineering, personal])
   useEffect(() => {
     if (active) void refresh()
-    return () => { generation.current += 1 }
+    const changed = () => { if (active) void refresh() }
+    window.addEventListener('janusx-memory-changed', changed)
+    return () => { generation.current += 1; window.removeEventListener('janusx-memory-changed', changed) }
   }, [active, refresh])
 
   const review = async (candidate: InboxCandidate, approve: boolean, replacement?: ReviewCandidateInput['replacement']) => {
@@ -64,11 +66,10 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
     setBusy(true)
     setError('')
     try {
+      await assertCandidateCanReview(candidate)
       const input = await reviewCandidateInput(candidate)
       await (approve ? applyKnowledgeCandidate({ ...input, replacement }) : rejectKnowledgeCandidate(input))
       setCandidates(current => current.filter(item => item.type !== candidate.type || item.id !== candidate.id))
-      await refresh()
-      window.dispatchEvent(new Event('janusx-memory-changed'))
     } catch (reason) {
       setError(t(reason instanceof Error && reason.message.includes('Personal correction')
         ? 'knowledge:review.correctionStale'
@@ -100,21 +101,7 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
   const selectedScope = engineering && personal ? scope : personal ? 'user' : 'engineering'
   const counts = countInboxScopes(visibleCandidates)
   const selected = filterInboxByScope(visibleCandidates, selectedScope)
-  const { manual, automatic } = splitReviewCandidates(selected, engineering ? automation : null)
   const listClass = expanded ? `${surface.grid} ${surface.enter}` : styles.reviewList
-  const decide = async (candidate: CandidateFact, action: 'score' | 'refine') => {
-    if (actionLock.current) return
-    actionLock.current = true
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(memoryCandidateSnapshot(candidate)))
-      const candidateHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
-      await window.electron.knowledge.candidateAction({ candidateId: candidate.id, candidateHash, action })
-      setNotice(t(action === 'refine' ? 'knowledge:review.refinementQueued' : 'knowledge:review.scoreUpdated'))
-      await refresh()
-    } catch { setError(t('knowledge:review.failed')) }
-    finally { actionLock.current = false; setBusy(false) }
-  }
   const filters = [
     { scope: 'all' as const, label: t('knowledge:inbox.scope.all'), count: visibleCandidates.length },
     { scope: 'engineering' as const, label: t('knowledge:inbox.scope.engineering'), count: counts.engineering },
@@ -125,20 +112,15 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
       {filters.filter(filter => filter.scope === 'all' ? engineering && personal : filter.scope === 'user' ? personal : engineering).map(filter => <button key={filter.scope} type="button" aria-pressed={selectedScope === filter.scope} onClick={() => setScope(filter.scope)}>{filter.label} {loading || error ? '—' : filter.count}</button>)}
     </div>}
     <div className={styles.body} aria-busy={loading || busy}>
-      {engineering && <AutomationStatus active={active} hidden={selectedScope === 'user'} onStatusChange={setAutomation} onChanged={() => void refresh()} />}
+      {engineering && <AutomationStatus active={active} hidden={selectedScope === 'user'} onChanged={() => void refresh()} />}
       {selectedScope === 'user' && <p className={styles.personalHint}>{t('knowledge:review.personalManual')}</p>}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
       {loading && <CardSkeleton lines={4} label={t('knowledge:state.loading.title')} />}
       {!loading && <>
-        <h4 className={styles.groupTitle}>{t(engineering && selectedScope !== 'user' && !automation ? 'knowledge:review.pendingContents' : 'knowledge:review.manualCount', { count: error ? '—' : manual.length })}</h4>
-        {!error && manual.length === 0 && <p>{t('knowledge:review.noManual')}</p>}
-        <div className={listClass}>{manual.map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} onDecision={candidate.type === 'fact' && !isUserScopeCandidate(candidate) ? action => void decide(candidate, action) : undefined} />)}</div>
-        {automatic.length > 0 && <details className={styles.automaticGroup}>
-          <summary>{t('knowledge:review.automaticCount', { count: automatic.length })}</summary>
-          <p className={styles.personalHint}>{t('knowledge:review.automaticHint')}</p>
-          <div className={listClass}>{automatic.map(({ candidate, status }) => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} disabled automaticStatus={status} onReview={() => undefined} />)}</div>
-        </details>}
+        <h4 className={styles.groupTitle}>{t('knowledge:review.pendingContents', { count: error ? '—' : selected.length })}</h4>
+        {!error && selected.length === 0 && <p>{t('knowledge:review.noManual')}</p>}
+        <div className={listClass}>{selected.map(candidate => <MemoryReviewCard key={`${candidate.type}:${candidate.id}`} candidate={candidate} automation={automation} competing={competingCorrections(candidates, candidate)} disabled={busy || Boolean(error)} onReview={(approve, replacement) => void review(candidate, approve, replacement)} />)}</div>
       </>}
     </div>
     <footer className={styles.filters}>
@@ -151,14 +133,28 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
   </section>
 }
 
-export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, competing = 0, automaticStatus }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean, replacement?: ReviewCandidateInput['replacement']) => void; onDecision?: (action: 'score' | 'refine') => void; competing?: number; automaticStatus?: 'pending' | 'running' }) {
+export function MemoryReviewCard({ candidate, disabled, onReview, competing = 0, automation }: { candidate: InboxCandidate; disabled: boolean; onReview: (approve: boolean, replacement?: ReviewCandidateInput['replacement']) => void; competing?: number; automation: KnowledgeAutomationStatus | null }) {
   const { t } = useI18n('knowledge')
   const personal = isUserScopeCandidate(candidate)
+  const state = useCandidateReviewState(candidate, automation)
+  const [retrying, setRetrying] = useState(false)
+  const [retryError, setRetryError] = useState(false)
+  const retryLock = useRef(false)
+  const retry = async () => {
+    if (!state.taskId || retryLock.current) return
+    retryLock.current = true; setRetrying(true); setRetryError(false)
+    try { await window.electron.knowledge.automationRetry(state.taskId); await window.electron.knowledge.automationRun(); await refreshKnowledgeAutomation() }
+    catch { setRetryError(true) }
+    finally { retryLock.current = false; setRetrying(false) }
+  }
   const provenance = candidate.type === 'fact' ? candidate.fact.provenance : candidate.type === 'wiki-patch' ? candidate.provenance : undefined
   const content = candidate.type === 'fact' ? candidate.fact.content : candidate.type === 'wiki-patch' ? candidate.patchMarkdown : `${candidate.edge.from} → ${candidate.edge.to} (${candidate.edge.type})`
   return <article className={`${styles.card} ${surface.card}`}>
     <strong>{t(personal ? 'knowledge:inbox.scope.personal' : 'knowledge:inbox.scope.engineering')}</strong>
-    {automaticStatus && <span className={styles.automaticState}>{t(`knowledge:automation.status.${automaticStatus}`)}</span>}
+    <span className={styles.automaticState} data-review-state={state.status}>{t(`knowledge:review.currentState.${state.status}`)}</span>
+    {state.reason && <p>{state.reason === 'stage-not-configured' ? t('knowledge:automation.configurationHint') : state.reason}</p>}
+    {state.taskId && <button type="button" disabled={disabled || retrying} onClick={() => void retry()}>{t('knowledge:automation.retry')}</button>}
+    {retryError && <p role="alert">{t('knowledge:automation.actionFailed')}</p>}
     {candidate.type === 'fact' && candidate.legacySource && <p>{t('knowledge:review.legacySource')}</p>}
     {candidate.type === 'fact' && candidate.personalCorrection && <>
       <strong>{t('knowledge:review.correctionTitle')}</strong>
@@ -169,7 +165,7 @@ export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, co
     {personal && candidate.id.startsWith('habit-candidate:') && <p>{t('knowledge:review.inferredHabit')}</p>}
     <p>{content}</p>
     {candidate.type === 'fact' && candidate.decision && <details>
-      <summary>{t('knowledge:review.scoring')}</summary>
+      <summary>{t('knowledge:review.historicalScoring')}</summary>
       <p>{candidate.decision.scorer.provider} · {candidate.decision.status} · {candidate.decision.reason}</p>
       <p>{t('knowledge:review.scoreCaution')}</p>
       <ul>{candidate.decision.answers.map(answer => <li key={answer.question}>{answer.question}: {String(answer.answer)} ({Math.round(answer.answer_confidence * 100)}%)</li>)}</ul>
@@ -190,13 +186,9 @@ export function MemoryReviewCard({ candidate, disabled, onReview, onDecision, co
       {candidate.type === 'fact' && candidate.fact.supersedes && <p>{t('knowledge:review.supersedes', { id: candidate.fact.supersedes })}</p>}
       {!!candidate.conflicts?.length && <p>{t('knowledge:inspector.conflict', { detail: candidate.conflicts.join(', ') })}</p>}
     </details>
-    {!automaticStatus && <div className={styles.filters}>
-      {candidate.type === 'fact' ? <FactReviewControls candidate={candidate} disabled={disabled} onApprove={replacement => onReview(true, replacement)} /> : <button type="button" disabled={disabled} onClick={() => onReview(true)}>{t('knowledge:action.approve')}</button>}
-      <button type="button" disabled={disabled} onClick={() => onReview(false)}>{t('knowledge:action.reject')}</button>
-      {onDecision && candidate.type === 'fact' && candidate.derivation === 'deterministic' && !candidate.legacySource && !candidate.personalCorrection && !candidate.id.startsWith('remember-candidate:') && <details className={styles.moreActions}><summary>{t('knowledge:review.moreActions')}</summary><div className={styles.filters}>
-        <button type="button" disabled={disabled} onClick={() => onDecision('score')}>{t('knowledge:review.rescore')}</button>
-        <button type="button" disabled={disabled} onClick={() => onDecision('refine')}>{t('knowledge:review.refine')}</button>
-      </div></details>}
+    {state.canReview && <div className={styles.filters}>
+      {candidate.type === 'fact' ? <FactReviewControls candidate={candidate} disabled={disabled || retrying} onApprove={replacement => onReview(true, replacement)} /> : <button type="button" disabled={disabled || retrying} onClick={() => onReview(true)}>{t('knowledge:action.approve')}</button>}
+      <button type="button" disabled={disabled || retrying} onClick={() => onReview(false)}>{t('knowledge:action.reject')}</button>
     </div>}
   </article>
 }

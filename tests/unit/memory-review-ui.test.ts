@@ -24,13 +24,13 @@ beforeAll(async () => {
       const candidate = (id, scope) => ({id,type:'fact',status:'proposed',derivation:'deterministic',evidence:{observationIds:['obs']},fact:{content:id,scope,kind:'preference',provenance:{workspaceId:scope==='user'?'user':'project-a',fileRefs:[]}}})
       window.items = [candidate('private-choice','user'),candidate('project-rule','project')]
       window.calls = []; window.failLoad = false; window.failAction = false; window.defer = false
-      window.autoStatus ??= {enabled:false,running:false,stages:{extraction:'rules-only',entryReview:'automatic',wikiGeneration:'automatic',wikiReview:'automatic'},queue:[],counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}
+      window.autoStatus ??= {reviewStateVersion:1,enabled:false,running:false,stages:{extraction:'rules-only',entryReview:'automatic',wikiGeneration:'automatic',wikiReview:'automatic'},queue:[],counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}
       const checkSnapshot = async input => {
         const current = window.items.find(item => item.id === input.id)
         if (!current || (await reviewCandidateInput(current)).candidateHash !== input.candidateHash) throw Error('Candidate changed')
       }
       window.electron = {knowledge:{
-        automationStatus:async()=>{if(window.failStatus)throw Error('unavailable');return structuredClone(window.autoStatus)},
+        automationStatus:async()=>{if(window.failStatus)throw Error('unavailable');const value=structuredClone(window.autoStatus);for(const task of value.queue){const item=window.items.find(row=>row.id===task.subject);if(item){task.workspaceId=item.fact.provenance.workspaceId;task.candidateHash=(await reviewCandidateInput(item)).candidateHash}}return value},
         automationRun:async()=>{window.calls.push('run')},
         factReviewContext:async()=>{if(window.failContext)throw Error('unavailable');return window.conflictContext ?? {targets:[],competing:[]}},
         candidateAction:async input=>{window.calls.push(input);if(window.defer)await new Promise(resolve=>window.finish=resolve)},
@@ -72,12 +72,12 @@ describe('memory review browser interactions', () => {
         state.autoStatus.queue = [{stage:'entryReview',subject:'project-rule',status:'pending'}]
       })
       await page.clock.runFor(15050)
-      await page.getByRole('heading', { name: 'Needs your review · 1' }).waitFor()
+      await page.getByRole('heading', { name: 'Pending candidates · 2' }).waitFor()
       expect(await page.getByLabel('Human review badge').innerText()).toBe('1')
       await page.getByText('Waiting for new material', { exact: true }).waitFor({ state: 'hidden' })
       expect(await page.getByText('Tasks queued · 1', { exact: true }).isVisible()).toBe(true)
       expect(await page.getByRole('button', { name: 'Run once now', exact: true }).isVisible()).toBe(false)
-      await page.getByText('Processing automatically · 1', { exact: true }).click()
+      await page.getByText('Queued for automatic review', { exact: true }).waitFor()
       const automatic = page.locator('article').filter({ hasText: 'project-rule' })
       expect(await automatic.getByRole('button').count()).toBe(0)
       expect(await page.getByRole('button', { name: 'Approve', exact: true }).count()).toBe(1)
@@ -89,7 +89,7 @@ describe('memory review browser interactions', () => {
       await page.getByRole('button', { name: 'All 2', exact: true }).click()
       await page.evaluate(() => { (window as any).autoStatus.queue[0].status = 'needs-review' })
       await page.clock.runFor(15050)
-      await page.getByRole('heading', { name: 'Needs your review · 2' }).waitFor()
+      await page.getByRole('heading', { name: 'Pending candidates · 2' }).waitFor()
       expect(await page.getByLabel('Human review badge').innerText()).toBe('2')
       expect(await page.getByText('Processing automatically · 1', { exact: true }).count()).toBe(0)
       expect(await automatic.getByRole('button', { name: 'Approve', exact: true }).isEnabled()).toBe(true)
@@ -132,12 +132,13 @@ describe('memory review browser interactions', () => {
       await page.clock.runFor(5050)
       await automation.getByRole('alert').waitFor()
       await page.getByRole('heading', { name: 'Pending candidates · 2' }).waitFor()
-      expect(await page.getByRole('button', { name: 'Approve', exact: true }).count()).toBe(2)
+      expect(await page.getByRole('button', { name: 'Approve', exact: true }).count()).toBe(1)
+      await page.getByText('Review status unavailable. Refresh to continue.', { exact: true }).waitFor()
       await page.evaluate(() => { const state=window as any; state.failStatus=false; state.autoStatus.enabled=false; state.autoStatus.running=false; state.autoStatus.queue=[] })
       await page.clock.runFor(5050)
       await automation.getByText('Automatic processing is off', { exact: true }).waitFor()
       expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).isDisabled()).toBe(true)
-      await page.getByRole('heading', { name: 'Needs your review · 2' }).waitFor()
+      await page.getByRole('heading', { name: 'Pending candidates · 2' }).waitFor()
     } finally { await page.close() }
   })
 
@@ -201,25 +202,17 @@ describe('memory review browser interactions', () => {
       expect(calls[0].candidateHash).not.toBe(calls[1].candidateHash)
     } finally { await page.close() }
   })
-  it('submits a hashed candidate action without approval and blocks duplicate actions', async () => {
+  it('removes obsolete scoring and refinement actions', async () => {
     const page = await browser.newPage()
     try {
       await page.route('http://localhost/memory', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
       await page.goto('http://localhost/memory')
       await page.addScriptTag({ content: script })
       await page.getByRole('button', { name: 'All 2', exact: true }).waitFor()
-      await page.evaluate(() => { (window as any).defer = true })
       const card = page.locator('article').filter({ hasText: 'project-rule' })
-      await card.getByText('More actions', { exact: true }).click()
-      await card.getByRole('button', { name: 'Queue LLM refinement', exact: true }).click()
-      await page.waitForFunction(() => (window as any).calls.length === 1)
-      expect(await card.getByRole('button', { name: 'Approve', exact: true }).isDisabled()).toBe(true)
-      const calls = await page.evaluate(() => (window as any).calls)
-      expect(calls).toEqual([{ candidateId: 'project-rule', candidateHash: expect.stringMatching(/^[a-f0-9]{64}$/), action: 'refine' }])
-      await page.waitForFunction(() => typeof (window as any).finish === 'function')
-      await page.evaluate(() => (window as any).finish())
-      await page.getByText(/Refinement submitted/).waitFor()
-      expect(await page.locator('article').count()).toBe(2)
+      await card.getByRole('button', { name: 'Approve', exact: true }).waitFor()
+      expect(await card.getByRole('button', { name: /Score|refinement/i }).count()).toBe(0)
+      expect(await page.evaluate(() => (window as any).calls)).toEqual([])
     } finally { await page.close() }
   })
   it('imports old records into the personal review filter without automatically approving them', async () => {

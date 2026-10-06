@@ -27,6 +27,9 @@ import { ObservationRevokeControl } from './ObservationRevokeControl'
 import { ObservationRevocations } from './ObservationRevocations'
 import { KnowledgeStatusBar } from './KnowledgeStatusBar'
 import { AutomationStatus } from './AutomationStatus'
+import { useKnowledgeAutomation } from '../../services/knowledge-automation'
+import { assertCandidateCanReview } from './candidateReviewState'
+import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
 import { NoteWikiEditor, WikiPageDetail, WikiCandidateSources } from './NoteWikiLinks'
 import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas'
 import type { KnowledgeGraphNode } from './knowledgeGraph'
@@ -113,6 +116,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     audit: t('knowledge:tab.audit'),
     settings: t('knowledge:domains.settings'),
   }
+  const { status: automation } = useKnowledgeAutomation(isOpen && domain === 'engineering' && engineeringEnabled)
   const [tab, setTab] = useState<KnowledgeWorkbenchTab>('inbox')
   const activeTabRef = useRef(tab)
   activeTabRef.current = tab
@@ -195,7 +199,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
 
   useEffect(() => {
     if (isOpen && domain === 'engineering' && engineeringEnabled) void refresh()
-    return () => { loadGeneration.current += 1 }
+    const changed = () => { if (isOpen && domain === 'engineering' && engineeringEnabled) void refresh() }
+    window.addEventListener('janusx-memory-changed', changed)
+    return () => { loadGeneration.current += 1; window.removeEventListener('janusx-memory-changed', changed) }
   }, [isOpen, domain, engineeringEnabled, refresh])
 
   useEffect(() => {
@@ -281,10 +287,10 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     try {
       const candidate = snapshot && [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates].find(item => item.id === selected.id && item.type === selected.reviewType)
       if (!candidate) throw new Error('Candidate unavailable; refresh before reviewing')
+      await assertCandidateCanReview(candidate)
       const input = await reviewCandidateInput(candidate)
       if (action === 'apply') await applyKnowledgeCandidate({ ...input, replacement })
       else await rejectKnowledgeCandidate(input)
-      await refresh()
     } catch (error) {
       setReviewError(error instanceof Error ? error.message : t('knowledge:error.actionFailed', { action }))
     } finally {
@@ -458,7 +464,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               data-visible={detailAnim.visible ? 'true' : 'false'}
               aria-hidden={detailAnim.visible ? undefined : 'true'}
             >
-              <Inspector record={shownSelected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={replacement => void review('apply', replacement)} onReject={() => void review('reject')} onRevoke={() => void revoke()} onCloseDetail={clearDetail} />
+              <Inspector automation={automation} record={shownSelected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={replacement => void review('apply', replacement)} onReject={() => void review('reject')} onRevoke={() => void revoke()} onCloseDetail={clearDetail} />
             </aside>
           ) : null}
           </>}
@@ -584,7 +590,7 @@ function KnowledgeCardTile({ card, active, onSelect }: { card: KnowledgeCard; ac
   )
 }
 
-function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevoke, onCloseDetail }: { record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: (replacement?: ReviewCandidateInput['replacement']) => void; onReject: () => void; onRevoke: () => void; onCloseDetail: () => void }) {
+export function Inspector({ automation, record, snapshot, busy, error, onApprove, onReject, onRevoke, onCloseDetail }: { automation: KnowledgeAutomationStatus | null; record: InspectorRecord | null; snapshot: KnowledgeWorkbenchSnapshot | null; busy: boolean; error: string; onApprove: (replacement?: ReviewCandidateInput['replacement']) => void; onReject: () => void; onRevoke: () => void; onCloseDetail: () => void }) {
   const { t } = useI18n('knowledge')
   if (!record) return <StateBlock title={t('knowledge:inspector.empty')} compact />
   const wikiCandidate = record.reviewType === 'wiki-patch' ? snapshot?.wikiPatches.find(candidate => candidate.id === record.id) : undefined
@@ -594,7 +600,7 @@ function Inspector({ record, snapshot, busy, error, onApprove, onReject, onRevok
   const reviewCandidate = record.reviewType && snapshot ? [...snapshot.factCandidates, ...snapshot.wikiPatches, ...snapshot.graphCandidates].find(candidate => candidate.id === record.id && candidate.type === record.reviewType) : undefined
   if (reviewCandidate?.status === 'proposed') return <div className={styles.inspector}>
     <div className={styles.detailBar}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><button type="button" className={styles.detailClose} onClick={onCloseDetail} aria-label={t('knowledge:inspector.closeDetail')} title={t('knowledge:inspector.closeDetail')}><X size={16} aria-hidden="true" /></button></div>
-    <MemoryReviewCard candidate={reviewCandidate} competing={competingCorrections(snapshot?.factCandidates ?? [], reviewCandidate)} disabled={!canReview} onReview={(approve, replacement) => approve ? onApprove(replacement) : onReject()} />
+    <MemoryReviewCard automation={automation} candidate={reviewCandidate} competing={competingCorrections(snapshot?.factCandidates ?? [], reviewCandidate)} disabled={!canReview} onReview={(approve, replacement) => approve ? onApprove(replacement) : onReject()} />
     {conflicts.length > 0 && <p>{t('knowledge:inspector.conflict', { detail: conflicts.map(item => item.reason).join(', ') })}</p>}
     {error && <p role="alert">{error}</p>}
   </div>

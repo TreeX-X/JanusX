@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useKnowledgeAutomation, refreshKnowledgeAutomation } from '../../services/knowledge-automation'
 import { Activity, LoaderCircle, RotateCw } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { KNOWLEDGE_STAGES, type KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
@@ -10,34 +11,25 @@ export function AutomationStatus({ active, beforeRun, disabled = false, hidden =
   onStatusChange?: (status: KnowledgeAutomationStatus | null) => void
 }) {
   const { t } = useI18n('knowledge')
-  const [status, setStatus] = useState<KnowledgeAutomationStatus | null>(null)
+  const { status, error: readError } = useKnowledgeAutomation(active)
+  const refresh = refreshKnowledgeAutomation
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const generation = useRef(0)
   const changed = useRef(onChanged)
   changed.current = onChanged
   const statusChanged = useRef(onStatusChange)
   statusChanged.current = onStatusChange
   const actionLock = useRef(false)
   const lastCounts = useRef('')
-  const refresh = useCallback(async () => {
-    const request = ++generation.current
-    try { const next = await window.electron.knowledge.automationStatus(); if (request === generation.current) {
-      setStatus(next); setError('')
-      statusChanged.current?.(next)
-      const counts = JSON.stringify([next.counts, next.queue, next.stages, next.enabled])
-      if (lastCounts.current && lastCounts.current !== counts) changed.current?.()
-      lastCounts.current = counts
-    } }
-    catch { if (request === generation.current) { setError(t('knowledge:automation.loadFailed')); statusChanged.current?.(null) } }
-  }, [t])
   useEffect(() => {
     if (!active) return
-    void refresh()
-    const timer = setInterval(() => void refresh(), 5000)
-    return () => { clearInterval(timer); invalidate() }
-    function invalidate() { generation.current++ }
-  }, [active, refresh])
+    statusChanged.current?.(status)
+    setError(readError ? t('knowledge:automation.loadFailed') : '')
+    if (!status) return
+    const counts = JSON.stringify([status.counts, status.queue, status.stages, status.enabled])
+    if (lastCounts.current && lastCounts.current !== counts) changed.current?.()
+    lastCounts.current = counts
+  }, [status, readError, active, t])
   const run = async (backfill = false, taskId?: string) => {
     if (actionLock.current) return
     actionLock.current = true
@@ -103,7 +95,7 @@ export function AutomationStatus({ active, beforeRun, disabled = false, hidden =
         <p>{task.subject}</p>
         <p className={styles.hint}>{task.workspaceId} · {t(`knowledge:automation.provider.${task.model.provider}`)} / {task.model.model} · <time dateTime={task.updatedAt}>{new Date(task.updatedAt).toLocaleString()}</time></p>
         {task.reason && <p className={styles.hint}>{task.reason}</p>}
-        {['failed', 'needs-review'].includes(task.status) && <button type="button" disabled={busy || disabled || Boolean(error) || status.running || !status.enabled} onClick={() => void run(false, task.id)}><RotateCw size={12} aria-hidden />{t('knowledge:automation.retry')}</button>}
+        {status.queue.some(current => current.id === task.id && current.canRetry) && <button type="button" disabled={busy || disabled || Boolean(error) || status.running || !status.enabled} onClick={() => void run(false, task.id)}><RotateCw size={12} aria-hidden />{t('knowledge:automation.retry')}</button>}
       </article>)}</div>
     </details>}
   </section>

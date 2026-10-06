@@ -19,7 +19,7 @@ import {
   tokenJaccard,
 } from '../../../src/main/knowledge/deterministic-extractor'
 import { knowledgeExtractService } from '../../../src/main/knowledge/extract-service'
-import type { Observation } from '../../../src/shared/knowledge'
+import type { MemoryFact, Observation } from '../../../src/shared/knowledge'
 
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
@@ -55,6 +55,16 @@ describe('deterministic extractor (Phase 1-2)', () => {
     if (previousKnowledgeRoot === undefined) delete process.env.JANUSX_KNOWLEDGE_ROOT
     else process.env.JANUSX_KNOWLEDGE_ROOT = previousKnowledgeRoot
     await rm(root, { recursive: true, force: true })
+  })
+
+  it('does not create graph proposals when shared-file facts are scanned repeatedly', async () => {
+    const facts = ['a', 'b'].map(id => ({ id, kind: 'fact', content: id, status: 'active', concepts: [], files: ['src/db.ts'],
+      provenance: { workspaceId: 'ws-1', sourceObservationIds: [], fileRefs: ['src/db.ts'] } })) as MemoryFact[]
+    for (let index = 0; index < 2; index++) {
+      const result = await runDeterministicStage({ workspaceId: 'ws-1', observations: [obs({id:'plain',content:'A temporary progress update.'})] }, { listTruthFacts: async () => facts })
+      expect(result.proposals).toBe(0)
+      expect(await knowledgeExtractService.listGraphCandidates()).toEqual([])
+    }
   })
 
   it('normalizes ANSI, control chars, secrets, and long content', () => {

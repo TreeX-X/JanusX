@@ -33,7 +33,7 @@ type Ledger = z.infer<typeof ledgerSchema>
 interface Snapshot { observations: Observation[]; candidates: CandidateFact[]; patches: CandidateWikiPatch[]; facts: MemoryFact[]; pages: WikiPage[] }
 interface Plan { task: KnowledgeAutomationTask; observation?: Observation; observations?: Observation[]; candidate?: CandidateFact; patch?: CandidateWikiPatch; facts?: MemoryFact[]; page?: WikiPage; title?: string; generationHash?: string }
 export interface AutomationDeps {
-  settings(): Promise<{ allowed: boolean; config: KnowledgeAutomationSettings }>
+  settings(): Promise<{ allowed: boolean; reviewEnabled?: boolean; config: KnowledgeAutomationSettings }>
   snapshot(): Promise<Snapshot>
   content(observation: Observation): Promise<string>
   json(request: KnowledgeModelRequest): Promise<unknown>
@@ -54,7 +54,7 @@ function defaultDeps(): AutomationDeps {
         }
       }
       providerRevisions.set(config, revisions)
-      return { allowed: flags.knowledge && settings.enabled && config.enabled, config }
+      return { allowed: flags.knowledge && settings.enabled && config.enabled, reviewEnabled: flags.knowledge && settings.enabled, config }
     },
     snapshot: async () => {
       const [observations, candidates, patches, truth] = await Promise.all([knowledgeObservationService.listAll(true),
@@ -140,17 +140,29 @@ export class KnowledgeAutomationService {
         if (status !== 'pending' && status !== 'running' && status !== 'needs-review' && status !== 'failed') continue
         if (stages[plan.task.stage] !== 'automatic') status = 'needs-review'
         if (status === 'running' && !this.running) status = 'pending'
-        queue.push({ stage: plan.task.stage, subject: plan.task.subject, status })
+        const candidate = plan.candidate ?? plan.patch
+        const currentFailure = task && task.dependencyHash === plan.task.dependencyHash && ['failed', 'needs-review'].includes(task.status)
+        queue.push({ stage: plan.task.stage, subject: plan.task.subject, status,
+          id: plan.task.id, workspaceId: plan.task.workspaceId,
+          candidateHash: candidate ? (await reviewCandidateInput(candidate)).candidateHash : undefined,
+          reason: stages[plan.task.stage] !== 'automatic' ? 'stage-not-configured' : currentFailure ? safeReason(task.reason ?? '') : undefined,
+          canRetry: Boolean(currentFailure && stages[plan.task.stage] === 'automatic'),
+        })
       }
     }
-    return { running: this.running !== null, enabled: settings.allowed, stages, queue, counts, total: ledger.tasks.length,
+    return { reviewStateVersion: 1, reviewEnabled: settings.reviewEnabled ?? true, running: this.running !== null, enabled: settings.allowed, stages, queue, counts, total: ledger.tasks.length,
       tasks: [...ledger.tasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200) }
   }
   async retry(id: string): Promise<void> {
-    if (!(await this.deps.settings()).allowed) throw new Error('automation-disabled')
+    const settings = await this.deps.settings()
+    if (!settings.allowed) throw new Error('automation-disabled')
     await this.lock.run(async () => {
       const ledger = await this.read(); const task = ledger.tasks.find(item => item.id === id)
       if (!task || !['failed', 'needs-review'].includes(task.status)) throw new Error('task-not-retryable')
+      const plan = (await this.plans(settings.config, ledger)).get(id)
+      const model = settings.config.stages[task.stage]
+      if (!plan || plan.task.dependencyHash !== task.dependencyHash || model.provider === 'off'
+        || !model.model || model.provider === 'external' && !model.providerId) throw new Error('task-no-longer-current')
       task.status = 'pending'; task.attempts = 0; task.nextRunAt = 0; task.reason = 'manual-retry'; task.updatedAt = new Date(this.deps.now()).toISOString()
       await this.write(ledger)
     })

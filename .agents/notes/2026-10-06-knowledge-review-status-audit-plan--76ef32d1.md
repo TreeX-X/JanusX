@@ -17,7 +17,7 @@ relations:
 work:
   scope:
     - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
-      paths: [src/main/knowledge/, src/main/ipc/knowledge-handlers.ts, src/main/ipc/register.ts, src/shared/knowledge.ts, src/shared/knowledge-automation.ts, src/shared/ipc/knowledge.ts, src/shared/review-candidate-snapshot.ts, src/preload/index.ts, src/renderer/src/components/knowledge/, src/renderer/src/services/knowledge.ts, src/renderer/src/stores/, src/renderer/src/lib/electron-api-fallback.ts, src/renderer/src/i18n/, tests/unit/, tests/e2e/knowledge-pipeline.spec.ts, .agents/notes/]
+      paths: [src/main/knowledge/, src/main/ipc/knowledge-handlers.ts, src/main/ipc/register.ts, src/shared/knowledge.ts, src/shared/knowledge-automation.ts, src/shared/ipc/knowledge.ts, src/shared/review-candidate-snapshot.ts, src/preload/index.ts, src/renderer/src/components/knowledge/, src/renderer/src/services/knowledge.ts, src/renderer/src/services/knowledge-automation.ts, src/renderer/src/stores/, src/renderer/src/lib/electron-api-fallback.ts, src/renderer/src/i18n/, tests/unit/, tests/e2e/knowledge-pipeline.spec.ts, .agents/notes/]
   acceptanceRefs:
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
       criterionId: AC-4
@@ -63,7 +63,7 @@ work:
       repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
       cwd: .
       program: npm
-      args: [run, 'test:unit', --, --run, tests/unit/knowledge, tests/unit/memory-review-ui.test.ts, tests/unit/knowledge-automation-ui.test.ts, tests/unit/knowledge-ipc-contract.test.ts, tests/unit/knowledge-note-ui.test.ts, --maxWorkers=2, --reporter=dot]
+      args: [run, 'test:unit', --, --run, tests/unit/knowledge, tests/unit/memory-review-ui.test.ts, tests/unit/knowledge-review-state-ui.test.ts, tests/unit/knowledge-automation-ui.test.ts, tests/unit/knowledge-ipc-contract.test.ts, tests/unit/knowledge-note-ui.test.ts, --maxWorkers=2, --reporter=dot]
     - id: V-3
       kind: command
       required: true
@@ -77,7 +77,7 @@ work:
 
 ## Scope
 
-本任务承接[噪声与界面需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)中尚未实现的审核详情、Wiki 主图、自动化状态和审计体验。父需求的“工程知识沉淀流程”与“Wiki 主图与证据追溯契约”是用户于 2026-10-06 确认的方向，其他章节保留源码与合成诊断证据；本任务维护交付顺序、边界和验证。审核规划基线为 `abea07a`，图谱缺陷分析基线为 `fee6423`。当前仅完成分析、诊断与文档，后续按各环节讨论细化设计并落实功能；未开始生产界面或后端实施。
+本任务承接[噪声与界面需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)中的审核详情、Wiki 主图、自动化状态和审计体验。父需求的“工程知识沉淀流程”与“Wiki 主图与证据追溯契约”是用户于 2026-10-06 确认的方向；本任务维护交付顺序、边界和验证。审核规划基线为 `abea07a`，图谱缺陷分析基线为 `fee6423`。S1 的状态绑定、旧操作收口和独立图关系准入已实现，当前批次的真实噪声与图关系积压已按用户授权清理；具体证据见 Results。其余阶段仍待逐环节细化和实施。
 
 已完成基线包括 `bd5d48e` 的个人噪声过滤与 `abea07a` 的工程准入和存量清理，对应父需求 AC-1～3、AC-9。Jev 凭据保存反馈、四环节模型配置、领域开关及 Wiki 历史已有实现，不重复列为开发任务；保留回归。当前便携版未装入新修复属于交付缺口，不能把源码提交或旧窗口刷新当成运行态升级。
 
@@ -87,7 +87,7 @@ work:
 
 | 阶段 | 优先级与前置 | 负责的交付范围 | 退出条件 |
 | --- | --- | --- | --- |
-| S1 当前审核状态与旧操作收口 | P0；已有噪声防线为基线 | 对齐自动任务、当前候选版本、可用动作及原因；新流程拒绝旧 score/refine，保留历史读取。停止独立图关系提议增长，定义旧记录兼容状态，为两个界面提供同一状态来源。 | 旧窗口请求不产生旧精炼或新图关系积压；旧结果不能覆盖新候选；领域及失败边界测试通过。 |
+| S1 当前审核状态与旧操作收口 | P0；已完成，运行版更新待交付 | 对齐自动任务、当前候选版本、可用动作及原因；新流程拒绝旧 score/refine，保留历史读取。停止独立图关系提议增长，旧记录只读，两个界面使用同一状态来源。 | 宿主兼容请求、当前版本绑定、两入口与领域/失败边界测试通过；授权存量清理完成。 |
 | W1 Wiki 主题与关系发布 | P0；依赖 S1，先细化页面与关系契约 | 明确主题页面粒度、身份、引用与语义关系表达；关系纳入 Wiki 草稿、审核及同版本发布，处理去重、端点失效与拒绝后重放。 | 父需求 G1/G4/G5 的发布路径通过；未审核关系不出现，不要求额外图谱审核；具体存储契约有可复查依据。 |
 | G1 图谱连线与数据正确性 | P0；完整交付依赖 W1，锚点修复可独立提前 | 默认投影已发布 Wiki 页间关系；补齐 React Flow 端点、工作区隔离及缺失诊断，事实/实体/旧证据仅在追溯中按需读取。 | 父需求 G1/G2 通过；主图对象正确，真实浏览器有路径且无锚点报错，输入顺序不改变有效关系。 |
 | S2 审核卡片与详情重整 | P0；状态依赖 S1，Wiki 关系呈现依赖 W1 | 工作台、审核侧栏共用状态与动作规则；区分条目、Wiki 草稿及其关系、旧图记录和只读审计，整理正文、证据、替代影响和操作区。 | R1～R5 及 Wiki 关系审核呈现通过，同候选两入口一致，不重建独立关系审核页。 |
@@ -118,9 +118,9 @@ work:
 
 **G1/G2**：复用 [KnowledgeGraphCanvas.tsx](../../src/renderer/src/components/knowledge/KnowledgeGraphCanvas.tsx)、[knowledgeGraph.ts](../../src/renderer/src/components/knowledge/knowledgeGraph.ts) 及工作台样式。G1 用两张已发布 Wiki 与一条已核验引用固定浏览器回归，默认仅投影页面关系；事实、实体和证据放入单独追溯视图并修复丢边。G2 调整页面标题、方向和选择行为，计数使用当前 Wiki 及可见边，移除独立候选对主图筛选的干扰；适配器测试通过不能代替画布测试。
 
-**S1**：读取 [automation-service.ts](../../src/main/knowledge/automation-service.ts) 的 status/plans 与 [knowledge-automation.ts](../../src/shared/knowledge-automation.ts)，复用任务账本匹配当前候选及输入版本。当前、历史、无法读取分别投影；新记录按实际存储显示原因，缺失字段不能补造。共享只读订阅沿用 renderer services/store 约定，避免两个入口分别扫描所有来源。修改 [candidate-actions.ts](../../src/main/knowledge/candidate-actions.ts) 及相关 IPC 门禁，使新 automation 配置下旧动作明确失败且不入旧队列；清点旧精炼积压，只报告状态，不顺便删除用户历史。类型如有扩展，同步 shared IPC、preload、fallback 和合同测试。
+**S1**：[automation-service.ts](../../src/main/knowledge/automation-service.ts) 从当前 plans 投影任务、工作区和候选 hash，返回 `reviewStateVersion: 1` 及独立的工程审核开关。只有当前失败或待人工处理的任务可以重试；宿主复核任务、依赖和模型配置，拒绝过期任务。[共享状态源](../../src/renderer/src/services/knowledge-automation.ts)供侧栏、工作台与角标订阅，[候选状态判定](../../src/renderer/src/components/knowledge/candidateReviewState.ts)匹配当前快照，操作前再次读取宿主状态。未知或正在自动处理时不授权人工审核，个人候选保持人工确认，旧评分折叠为历史。新 automation 配置存在时，[candidate-actions.ts](../../src/main/knowledge/candidate-actions.ts)拒绝 score/refine，即使 automation 暂停也不进入旧队列；完全没有 automation 配置的旧宿主路径保持兼容。共享类型只扩展状态返回值，IPC 方法、preload 与 fallback 方法集合未变，合同回归通过。
 
-S1 同时检查确定性与模型两个图关系提议入口，停止新主流程中的独立图关系入队，不能只在 UI 藏起继续增长的候选。新语义关系交给 W1 的 Wiki 草稿及审核，不另建自动接受图边的通路。旧候选保留来源及拒绝记录，以明确分类兼容展示；不静默自动接受或批量清理。S2 在 Wiki 审核详情中显示关系两端的可读页面标题和依据，旧图记录的可用动作由兼容契约决定。
+S1 的确定性提取不生成共同文件关系；模型旧输出中的 graphEdges 不写入候选，派生候选入口也拒绝独立 graph-edge。旧存储可读、可通过既有维护 API 拒绝，界面显示只读记录；不自动接受或转为 Wiki 关系。2026-10-06 用户明确授权清理当前错误积累（含图谱审核），该批次按预览及快照核验处置，详见 Results；这项授权不构成产品自动删除历史的规则。W1 负责新语义关系的 Wiki 草稿及审核，S2 负责关系端点与依据的阅读布局。
 
 **S2**：调整 [MemoryReviewTool.tsx](../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)、[KnowledgeWorkbench.tsx](../../src/renderer/src/components/knowledge/KnowledgeWorkbench.tsx)、[FactReviewControls.tsx](../../src/renderer/src/components/knowledge/FactReviewControls.tsx)、[inboxScope.ts](../../src/renderer/src/components/knowledge/inboxScope.ts) 与对应样式。先落实父需求的对象/状态动作表，再处理详情层次；自动态与人工态的来源不能只依赖卡片 status=proposed。保留 reviewCandidateInput、替代目标确认及域门禁，当前来源/候选失效时清除旧确认。Wiki 复用现有安全 Markdown 与来源能力，旧评分只放历史诊断。更新中英文文案及现有测试中的旧 Laya 期望，不以删测试代替兼容性验证。
 
@@ -146,14 +146,17 @@ S1 同时检查确定性与模型两个图关系提议入口，停止新主流�
 
 把所有改动直接追加到需求正文最省文件，但会把问题、验收和执行状态混在一起；保留需求作为行为依据，以本任务维护唯一实施计划。一次重写整个知识工作台能统一样式，却扩大到已有可用的模型设置、个人画像和 Wiki 历史；本任务按 W1、G1/G2 及 S1～S5 复用现有模块。只修复混合图的连线无法满足 Wiki 主图定位，先明确 Wiki 关系与发布契约再完成主图，锚点故障可独立修复。
 
+S1 继续复用旧评分和仅按候选 ID 分类最省改动，但旧任务不能证明新版本的审核状态；采用当前计划与候选 hash 绑定，并共享读取。代价是旧宿主没有版本字段时界面只能显示未知状态，以及可见订阅期间仍每 5 秒读取计划。当前只解决正确性，2/10 秒刷新和紧凑摘要留给 S3。完全删除旧评分、关系格式与 API 可缩小兼容面，却会损失审计和存量处置入口；保留历史读取与维护能力，新提议统一关闭。W1 提供同版本 Wiki 关系后，再评估旧图格式的迁移范围。
+
 ## Acceptance criteria
 
-以下为父需求的引用，不另造或重编号行为条款；全部保持待验收。
+以下为父需求的引用，不另造或重编号行为条款。S1 完成 AC-11/12；AC-10 的当前状态与历史标识已覆盖，卡片分数语义和完整阅读层次仍待 S2。其他部分交付不等于整条验收完成。
 
 - [ ] [状态摘要 AC-4](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-4)、[共享订阅 AC-5](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-5)。
 - [ ] [审计详情 AC-6](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-6)、[审计分页 AC-7](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-7)、[布局 AC-8](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-8)。
-- [ ] [当前审核信息 AC-10](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-10)、[旧操作收口 AC-11](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-11)。
-- [ ] [两入口一致性 AC-12](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-12)、[对象与动作 AC-13](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-13)、[审核阅读与操作布局 AC-14](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-14)。
+- [ ] [当前审核信息 AC-10](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-10)。
+- [x] [旧操作收口 AC-11](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-11)、[两入口一致性 AC-12](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-12)。
+- [ ] [对象与动作 AC-13](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-13)、[审核阅读与操作布局 AC-14](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-14)。
 - [ ] [Wiki 主图与追溯 AC-15](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-15)、[图谱连线与数据 AC-16](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-16)。
 - [ ] [图谱阅读与计数 AC-17](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-17)、[关系去重与端点保护 AC-18](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-18)。
 - [ ] [沉淀与持续更新 AC-19](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-19)。
@@ -164,10 +167,10 @@ S1 同时检查确定性与模型两个图关系提议入口，停止新主流�
 
 阶段验证优先扩展现有用例：S1 使用 candidate-actions、automation-service、memory-domain-controls 与 knowledge-ipc-contract；S2 使用 memory-review-tool、memory-review-ui、workbench-selection 与 knowledge-note-ui，补工作台右侧真实组件的状态矩阵，不能只验证侧栏；S3 使用 knowledge-automation-ui，补共享订阅计时和迟到响应；S4 使用 audit-service、workbench-service 和浏览器审计夹具。父需求 R/P/A 用例规定输入和断言。新增独立测试文件仅用于现有入口无法覆盖的行为，不为样式细节逐条造实现镜像测试。
 
-集成检查命令如下，均在实施后运行，当前不能标为已通过：
+公共检查入口如下；S1 的已运行结果见 Results，后续阶段仍须按变更补齐对应检查：
 
 ```text
-npm run test:unit -- --run tests/unit/knowledge tests/unit/memory-review-ui.test.ts tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts tests/unit/knowledge-note-ui.test.ts --maxWorkers=2 --reporter=dot
+npm run test:unit -- --run tests/unit/knowledge tests/unit/memory-review-ui.test.ts tests/unit/knowledge-review-state-ui.test.ts tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts tests/unit/knowledge-note-ui.test.ts --maxWorkers=2 --reporter=dot
 npm run typecheck:strict-unused
 npm run i18n:types
 npm run i18n:check
@@ -183,4 +186,12 @@ git diff --check
 
 ## Results
 
-2026-10-06：完成问题记录、未完成项整理及流程定位。用户确认 Wiki 主图与按需证据追溯，关系随 Wiki 审核和发布；本任务据此补充 W1、调整图谱阶段，并记录逐环节细化入口。图谱合成诊断见父需求 Verification，仅验证缺陷。本任务保持 proposed，实施未开始，未生成 execution/receipt；具体主题与关系设计待后续落实。`npm run check:notes` 为 247 篇、0 errors、27 项既有外部链接诊断；三个更新文件的 35 处 Note URI、15 处正文 AC 引用及 15 项 acceptanceRefs 均解析到现存目标，任务 criteria 与 acceptanceRefs 一致。完整源码回归、界面验收、新构建与运行版本切换仍未执行。
+2026-10-06：S1 完成，主代理按 xdo 直接实施并自检，未委派代理。原任务契约固定于 `8c995628f10649840b7e6382b3bba28b1c9de0c6`，由 harness-core `taskContractHash` 得到 `63b9f9a215bfb03f3d04c1320223fdb9ac752de29f23a7f1bdddac3384432cf2`；验收来源为该提交的父需求，原始文件 SHA-256 为 `a4d895fb212f7e947fcd088f072917a16a007330b2e3a02f9bec0b42d237a52e`。本次补充共享 service 路径及真实组件测试入口，需求 AC 编号与行为约束保持稳定。
+
+S1 机器验证：上述完整知识回归为 78 个文件通过、4 个按条件跳过，777 项通过、5 项跳过。真实 Chromium 同时挂载侧栏与工作台 Inspector，覆盖 pending/running/needs-review/failed、版本变化、状态读取失败、正确任务重试、共享请求及关闭后迟到响应；修正等待回调在关闭后发起请求的边界后，三个界面测试文件再次运行，25 项通过。`typecheck:strict-unused`、14 个变更生产文件 ESLint、`i18n:types`、`i18n:check`、`check:package-boundary` 和隔离 `build:check` 均通过；`check:notes` 为 247 篇、0 errors、27 项既有外部链接诊断，`git diff --check` 通过。模型使用替身，测试写入使用隔离存储。
+
+用户授权的真实存量清理使用当前便携版的官方 renderer bridge/API。实际 userData 为 `release/0.9.0/data`，不能将早前 Roaming 存储快照冒充当前库。预览并拒绝 10 条工程错误候选及 27 条独立图关系候选，逐条核对后归档 4 条错误正式事实；图候选是三组错误事实共同文件关系的重复提议。14 条关联原始 observation 可读、未撤回，清理前后 SHA-256 一致。个人待审和确认事实本来均为 0；清理后工程待审、图关系待审、活动事实、Wiki 与已存图边也均为 0。
+
+当前便携版工程开关原为关闭，自动化配置保存为开启。首次拒绝请求被领域门禁挡住；维护期间仅临时开启工程域并暂停自动化，完成后在 finally 恢复完整设置，复核相等。处理使用候选 hash 和既有拒绝/撤回审计，没有重写在线 JSONL、删除来源或重启应用/终端，临时调试监听已关闭。本地忽略产物 `artifacts/knowledge-s1-cleanup-plan.json`、`knowledge-s1-cleanup-result.json` 和 `knowledge-s1-cleanup-verified.json` 保留预览、审计及复核证据，不将完整私人数据提交入库。
+
+任务仍为 proposed：W1、G1、S2～S4、G2、S5 未完成。新 Wiki 关系发布、图谱连线/布局、完整审核与审计阅读界面、2/10 秒状态摘要、真实模型质量、隔离 Electron 全流程及发布包切换均未在 S1 验收。当前旧便携进程未装入新代码，源码防回流能力需更新后的运行构建；原工程开关已恢复关闭，存量清理不等于运行版升级。

@@ -185,13 +185,17 @@ export type KnowledgeReviewCandidateInput = ReviewCandidateInput
 export async function rejectKnowledgeCandidate(
   input: KnowledgeReviewCandidateInput,
 ): Promise<unknown> {
-  return window.electron.knowledge.rejectCandidate(input)
+  const result = await window.electron.knowledge.rejectCandidate(input)
+  window.dispatchEvent(new Event('janusx-memory-changed'))
+  return result
 }
 
 export async function applyKnowledgeCandidate(
   input: KnowledgeReviewCandidateInput,
 ): Promise<unknown> {
-  return window.electron.knowledge.applyCandidate(input)
+  const result = await window.electron.knowledge.applyCandidate(input)
+  window.dispatchEvent(new Event('janusx-memory-changed'))
+  return result
 }
 
 export async function revokeKnowledgeTruth(input: RevokeTruthInput): Promise<void> {
