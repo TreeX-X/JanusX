@@ -1,0 +1,33 @@
+/* Session card expand motion: 0fr -> 1fr grid rows on .expand, .expandInner
+   clips and fades the body. Same 240ms cubic-bezier as the app grid columns
+   and the right-dock panel slide. Reduced motion falls back to instant. */
+
+.expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.expand[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+.expandInner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 180ms ease, transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.expand[data-open='true'] .expandInner {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expand,
+  .expandInner {
+    transition: none;
+  }
+}

@@ -193,10 +193,10 @@ describe('planche theme contract', () => {
       "const SURFACE_CARD = 'color-mix(in srgb, var(--shell-chrome) 94%, var(--shell-text))'",
     )
     expect(session).toContain(
-      "const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 90%, var(--shell-text))'",
+      "const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 84%, var(--shell-text))'",
     )
     expect(session).toContain(
-      "const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'",
+      "const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 78%, var(--shell-text))'",
     )
     expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(3)
     expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(10)
