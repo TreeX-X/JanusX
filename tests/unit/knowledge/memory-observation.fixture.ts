@@ -1,5 +1,9 @@
 import type { Observation } from '../../../src/shared/knowledge'
 
+export function taskNotification(id = 'fixture-task', summary = 'Background command completed (exit code 0)'): string {
+  return `<task-notification>\n<task-id>${id}</task-id>\n<tool-use-id>fixture-tool</tool-use-id>\n<output-file>C:\\fixture\\tasks\\task.output</output-file>\n<status>completed</status>\n<summary>${summary}</summary>\n</task-notification>`
+}
+
 /** A host-verified user statement, not a payload-supplied actor label. */
 export function personalObservation(input: Pick<Observation, 'id' | 'content' | 'createdAt'>): Observation {
   return {

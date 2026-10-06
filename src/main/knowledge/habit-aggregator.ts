@@ -8,7 +8,7 @@
  */
 import { createHash } from 'node:crypto'
 import type { CandidateFact, MemoryFact, MemorySourceEvidence, Observation } from '../../shared/knowledge'
-import { knowledgeAuditService } from './audit-service'
+import { personalPreferenceText } from './personal-memory-content'
 import { isUserStatement, sourceEvidence } from './memory-evidence'
 
 export const HABIT_PROMOTION_THRESHOLD = 3
@@ -65,14 +65,15 @@ export function proposeHabitCandidates(
     const identity = item.eventKey ?? item.id
     if (seen.has(identity)) continue
     seen.add(identity)
-    const text = item.content.trim()
+    const text = personalPreferenceText(item.content)
     if (!text) continue
+    const qualified = { ...item, content: text }
     const target = groups.find((group) => habitJaccard(text, group.latestText) >= HABIT_SIMILARITY_THRESHOLD)
     if (target) {
-      target.members.push(item)
+      target.members.push(qualified)
       target.latestText = text
     } else {
-      groups.push({ members: [item], latestText: text })
+      groups.push({ members: [qualified], latestText: text })
     }
   }
   return groups
@@ -183,25 +184,5 @@ export async function deriveHabitPromotions(
         evidence,
       }
     })
-  const promotions = proposeHabitCandidates(inputs, nowIso)
-  if (promotions.length > 0) {
-    await knowledgeAuditService.record({
-      action: 'habit_candidate_proposed',
-      targetType: 'fact',
-      targetId: `habits:${promotions.length}`,
-      before: null,
-      after: { count: promotions.length },
-      provenance: {
-        workspaceId: 'user',
-        workspaceName: 'user',
-        workspacePath: '',
-        source: 'system',
-        sourceObservationIds: promotions.flatMap((promotion) => promotion.evidenceObservationIds).slice(0, 50),
-        fileRefs: [],
-        actor: 'habit-aggregator',
-        createdAt: nowIso,
-      },
-    }).catch(() => undefined)
-  }
-  return promotions
+  return proposeHabitCandidates(inputs, nowIso)
 }

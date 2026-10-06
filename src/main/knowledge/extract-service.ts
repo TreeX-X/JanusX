@@ -41,6 +41,7 @@ import { knowledgeAuditService } from './audit-service'
 import { knowledgeTruthService } from './truth-service'
 import { proposeDerivedCandidates, proposeFactCandidates, withFactCandidatesLock } from './review-service'
 import { factScope, isActiveObservation, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
+import { isRuntimeNotification, personalStatementText } from './personal-memory-content'
 import { candidateDecisionHash } from './decision-scorer'
 import { findConflicts, toConflictTargets, tokenJaccard } from './deterministic-extractor'
 import { configService } from '../config/service'
@@ -542,17 +543,21 @@ export class KnowledgeExtractService {
     // 2. 解析 blobbed 内容，喂给 LLM
     const resolved: Observation[] = []
     for (const observation of evidence) {
+      let content = observation.content
       if (observation.blobRef) {
         try {
-          const fullContent = await knowledgeObservationService.resolveContent(observation)
-          resolved.push({ ...observation, content: fullContent })
+          content = await knowledgeObservationService.resolveContent(observation)
         } catch {
-          // 退化用 preview / truncated content
-          resolved.push(observation)
+          // A personal preview cannot prove that a quoted or scoped statement is complete.
+          if (observationScope(observation) === 'user') continue
         }
-      } else {
-        resolved.push(observation)
       }
+      if (isRuntimeNotification(content)) continue
+      if (observationScope(observation) === 'user') {
+        content = personalStatementText(content)
+        if (!content || observation.truncated) continue
+      }
+      resolved.push({ ...observation, content })
     }
 
     // 3. Phase 2：单批字符预算（超限丢最旧，id 进 droppedObservationIds）。

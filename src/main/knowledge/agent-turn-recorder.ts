@@ -16,6 +16,7 @@ import { knowledgeObservationService } from './observation-service'
 import { knowledgeProcessingQueue } from './processing-queue'
 import { createHash, randomUUID } from 'node:crypto'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
+import { isRuntimeNotification } from './personal-memory-content'
 
 interface ActiveTurn {
   id: string
@@ -255,6 +256,12 @@ class AgentTurnRecorder {
     payload: AgentHookPayload,
     terminal: TerminalContext,
   ): Promise<void> {
+    const metadata = payload.raw && typeof payload.raw === 'object' ? payload.raw as Record<string, unknown> : {}
+    if (payload.event === 'UserPromptSubmit' && (isRuntimeNotification(payload.message ?? '') || payload.source === 'claude' && metadata.isMeta === true)) {
+      this.emit({ type: 'skipped', reason: 'runtime-notification', terminalId: terminal.terminalId,
+        engine: terminal.engine, hookEvent: payload.event, workspaceId: terminal.workspaceId, workspacePath: terminal.cwd })
+      return
+    }
     const activeTurn = this.activeTurns.get(terminal.terminalId)
     const promptHash = hasText(payload.message) ? createHash('sha256').update(payload.message).digest('hex') : undefined
     const eventId = this.eventId(payload)
@@ -353,10 +360,14 @@ class AgentTurnRecorder {
       const starts = sessionRows.filter(row => row.tags.includes('turn-started') && !closed.has(row.correlationId)
         && Date.parse(row.createdAt) <= (timestampToMs(payload.timestamp) ?? Date.now()))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      const start = starts[0]
-      if (start?.correlationId) activeTurn = { id: start.correlationId, terminalId: terminal.terminalId, engine: terminal.engine,
-        workspaceId: terminal.workspaceId, workspacePath: terminal.cwd, prompt: start.sourceEvidence?.speaker === 'user' ? await knowledgeObservationService.resolveContent(start) : undefined,
-        sessionId: payload.sessionId, startedAt: start.createdAt, startedAtMs: Date.parse(start.createdAt) }
+      for (const start of starts) {
+        const prompt = start.sourceEvidence?.speaker === 'user' ? await knowledgeObservationService.resolveContent(start) : undefined
+        if (!start.correlationId || prompt && isRuntimeNotification(prompt)) continue
+        activeTurn = { id: start.correlationId, terminalId: terminal.terminalId, engine: terminal.engine,
+          workspaceId: terminal.workspaceId, workspacePath: terminal.cwd, prompt,
+          sessionId: payload.sessionId, startedAt: start.createdAt, startedAtMs: Date.parse(start.createdAt) }
+        break
+      }
     }
     const endedAtMs = timestampToMs(payload.timestamp) ?? Date.now()
     const durationMs = activeTurn ? endedAtMs - activeTurn.startedAtMs : undefined

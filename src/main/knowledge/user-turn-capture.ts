@@ -14,6 +14,7 @@ import { knowledgeObservationService } from './observation-service'
 import { knowledgeProcessingQueue } from './processing-queue'
 import { userEpisodeService } from './user-episode-service'
 import { logKnowledgeCaptureFailure } from './workspace-identity'
+import { isRuntimeNotification } from './personal-memory-content'
 
 /** Mid-range of the 30–90 day episode TTL band. */
 export const PERSON_TURN_EPISODE_TTL_DAYS = 60
@@ -31,6 +32,7 @@ export interface PersonTurnCaptureInput {
 export async function capturePersonChatTurn(input: PersonTurnCaptureInput): Promise<void> {
   const userText = input.userText?.trim() ?? ''
   const assistantText = input.assistantText?.trim() ?? ''
+  if (isRuntimeNotification(userText)) return
   if (!userText && !assistantText) return
   try {
     const policy = await memoryDomainPolicy()
@@ -72,7 +74,7 @@ export async function capturePersonChatTurn(input: PersonTurnCaptureInput): Prom
 /** Capture one dated episode from a workspace-attached janus-chat turn; never throws. */
 export async function capturePersonEpisodeFromTurn(input: Pick<PersonTurnCaptureInput, 'userText' | 'sessionId' | 'correlationId'>): Promise<void> {
   const userText = input.userText?.trim() ?? ''
-  if (!userText) return
+  if (!userText || isRuntimeNotification(userText)) return
   try {
     const policy = await memoryDomainPolicy()
     if (!policy.capturePersonal) return

@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
 import type { MemorySpeaker } from '../../shared/knowledge'
+import { isRuntimeNotification } from '../knowledge/personal-memory-content'
 import { claudeUserText, claudeAssistantText, codexUserText, codexAssistantText, piUserText, piAssistantText } from './external-session-scanner'
 
 export interface TranscriptEvidence { id: string; speaker: MemorySpeaker; content: string; timestamp?: string }
@@ -25,7 +26,7 @@ function parse(record: Record<string, unknown>, engine: string, position: number
   const assistant = engine === 'claude' ? claudeAssistantText(record) : engine === 'codex' ? codexAssistantText(record) : engine === 'pi' ? piAssistantText(record) : message.role === 'assistant' ? text(message.content) : ''
   // Codex duplicates response_item messages in event_msg; use the source records only.
   if (engine !== 'codex' || record.type !== 'event_msg') {
-    if (user) add('user', user)
+    if (user && !(engine === 'claude' && record.isMeta === true) && !isRuntimeNotification(user)) add('user', user)
     if (assistant) add('assistant', assistant)
   }
   if (engine === 'claude' && Array.isArray(message.content)) {
@@ -78,7 +79,7 @@ export async function readKnowledgeTurn(path: string, engine: string, sessionId?
             if (content && data.type === 'tool') toolMessages.push({ id: digest(JSON.stringify([row.id, part.id, content])), content, speaker: 'tool' })
           }
           const content = prose.join('\n')
-          if (content) messages.push({ id: digest(JSON.stringify([row.id, content])), content, speaker: role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'unknown' })
+          if (content && !(role === 'user' && isRuntimeNotification(content))) messages.push({ id: digest(JSON.stringify([row.id, content])), content, speaker: role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'unknown' })
           messages.push(...toolMessages)
         }
         return selectTurn(messages, expectedPrompt)

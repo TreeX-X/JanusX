@@ -5,16 +5,17 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CaptureObservationInput, MemoryFact, Observation } from '../../../src/shared/knowledge'
 import { knowledgeObservationService, resetObservationServiceEphemeralState } from '../../../src/main/knowledge/observation-service'
-import { deriveHabitPromotions, mergeHabitEvidence, proposeHabitCandidates } from '../../../src/main/knowledge/habit-aggregator'
+import { deriveHabitPromotions, habitPromotionToCandidate, mergeHabitEvidence, proposeHabitCandidates } from '../../../src/main/knowledge/habit-aggregator'
 import { runDeterministicStage } from '../../../src/main/knowledge/deterministic-extractor'
 import { knowledgeExtractService } from '../../../src/main/knowledge/extract-service'
-import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
+import { knowledgeReviewService, proposeFactCandidates } from '../../../src/main/knowledge/review-service'
 import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service'
 import { knowledgeRecallService } from '../../../src/main/knowledge/recall-service'
 import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
-import { sourceEvidence } from '../../../src/main/knowledge/memory-evidence'
+import { isUserStatement, sourceEvidence } from '../../../src/main/knowledge/memory-evidence'
+import { isRuntimeNotification, personalPreferenceText } from '../../../src/main/knowledge/personal-memory-content'
 import { knowledgeAuditService } from '../../../src/main/knowledge/audit-service'
-import { personalObservation } from './memory-observation.fixture'
+import { personalObservation, taskNotification } from './memory-observation.fixture'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 vi.mock('../../../src/main/knowledge/processing-queue', () => ({
@@ -41,6 +42,85 @@ describe('host memory evidence boundary', () => {
     await rm(root, { recursive: true, force: true })
     if (previousRoot === undefined) delete process.env.JANUSX_KNOWLEDGE_ROOT
     else process.env.JANUSX_KNOWLEDGE_ROOT = previousRoot
+  })
+
+  it.each([
+    taskNotification(), taskNotification('other', 'I prefer pnpm'),
+    'npm run build', 'Background command completed (exit code 0)',
+    '这次请用中文回复', '这个项目我习惯用 pnpm', '我习惯用什么包管理器？',
+    '他说：“我习惯先跑测试”', '> 我习惯先跑测试', '```text\n我习惯先跑测试\n```',
+    '例如：\n我习惯先跑测试', '我习惯先跑测试\n但仅限这个项目', '我习惯先跑测试\nOnly for this repo',
+    '“\n我习惯先跑测试\n”', '我习惯先跑测试\n仅这次，可以吗？',
+    '<example>\n我习惯先跑测试\n</example>', '例如：\n```\nI prefer pnpm\n```',
+    '为什么出现这条通知？\n' + taskNotification('quoted', 'I prefer pnpm'),
+  ])('does not turn repeated non-preference content into habits: %s', async content => {
+    const observations = [1, 2, 3, 4].map(index => personalObservation({ id: `noise-${index}`, content, createdAt: now }))
+    expect(personalPreferenceText(content)).toBeUndefined()
+    expect(proposeHabitCandidates(observations)).toEqual([])
+    expect(await deriveHabitPromotions(observations)).toEqual([])
+  })
+
+  it.each(['我习惯先跑测试', '以后回答请简洁', '请用中文回复', 'I prefer pnpm', 'I usually run tests before committing'])('admits explicit preferences without granting approval: %s', async content => {
+    const observations = [1, 2, 3].map(index => personalObservation({ id: `preference-${index}`, content, createdAt: now }))
+    expect((await deriveHabitPromotions(observations))[0]).toMatchObject({ content, frequency: 3 })
+    await runDeterministicStage({ workspaceId: 'user', observations })
+    expect((await knowledgeExtractService.listFactCandidates()).every(candidate => candidate.status === 'proposed')).toBe(true)
+    expect((await knowledgeTruthService.list()).facts).toEqual([])
+  })
+
+  it('keeps mixed conversation and XML intact while isolating a real preference from quoted notifications', () => {
+    const mixed = `我习惯先跑测试\n${taskNotification('quoted', 'I prefer npm')}\n为什么会出现这个？`
+    expect(isRuntimeNotification(mixed)).toBe(false)
+    expect(isUserStatement(personalObservation({ id: 'mixed', content: mixed, createdAt: now }))).toBe(true)
+    expect(personalPreferenceText(mixed)).toBe('我习惯先跑测试')
+    expect(isRuntimeNotification('<task-notification>示例</task-notification>')).toBe(false)
+    expect(isRuntimeNotification('请解释 task-notification')).toBe(false)
+    expect(isUserStatement(personalObservation({ id: 'notification', content: taskNotification(), createdAt: now }))).toBe(false)
+  })
+
+  it('ignores old notifications on repeated history scans and audits only new persisted habits', async () => {
+    for (let index = 0; index < 10; index++) {
+      await knowledgeObservationService.capture({ ...input, workspaceId: 'project-a', workspacePath: 'C:/project-a',
+        source: 'agent-stream', content: taskNotification(`old-${index}`, 'Background command "I prefer pnpm" completed (exit code 0)') },
+      { speaker: 'user', sourceEventId: `old-${index}` })
+    }
+    const trigger = await knowledgeObservationService.capture({ ...input, content: '今天检查构建状态' }, { speaker: 'user', sourceEventId: 'trigger' })
+    for (let pass = 0; pass < 2; pass++) await runDeterministicStage({ workspaceId: 'user', observations: [trigger] })
+    expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
+    expect(await knowledgeAuditService.list({ action: 'habit_candidate_proposed' })).toEqual([])
+    const turns: Observation[] = []
+    for (let index = 0; index < 3; index++) turns.push(await knowledgeObservationService.capture(input, { speaker: 'user', sourceEventId: `real-${index}` }))
+    await runDeterministicStage({ workspaceId: 'user', observations: turns })
+    const audits = await knowledgeAuditService.list({ action: 'habit_candidate_proposed' })
+    expect(audits).toHaveLength(1)
+    expect(audits[0].after).toMatchObject({ count: 1, candidateIds: [expect.any(String)] })
+    await runDeterministicStage({ workspaceId: 'user', observations: turns })
+    expect(await knowledgeAuditService.list({ action: 'habit_candidate_proposed' })).toEqual(audits)
+  })
+
+  it('blocks quoted and runtime text in the direct personal deterministic path as well as habits', async () => {
+    for (const [index, content] of [taskNotification(), '```text\n我习惯用 npm\n```', 'npm run build',
+      '为什么出现通知？\n' + taskNotification('mixed', 'I prefer npm')].entries()) {
+      const observations = [1, 2, 3].map(turn => personalObservation({ id: `direct-${index}-${turn}`, content, createdAt: now }))
+      await runDeterministicStage({ workspaceId: 'user', observations })
+    }
+    expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
+  })
+
+  it('keeps a legacy notification candidate rejected when the same history is processed twice', async () => {
+    const history: Observation[] = []
+    for (let index = 0; index < 4; index++) history.push(await knowledgeObservationService.capture({ ...input,
+      content: taskNotification(`legacy-${index}`) }, { speaker: 'user', sourceEventId: `legacy-${index}` }))
+    const candidate = habitPromotionToCandidate({ key: 'legacy', content: history[3].content, frequency: 4, strength: 0.7,
+      evidenceObservationIds: history.map(item => item.id), sources: history.map(sourceEvidence), lastSeenAt: now })
+    await proposeFactCandidates([candidate])
+    await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id, reviewNotes: 'Runtime notification, not a personal preference' }))
+    for (let pass = 0; pass < 2; pass++) await runDeterministicStage({ workspaceId: 'user', observations: history })
+    expect(await knowledgeExtractService.listFactCandidates()).toMatchObject([{ id: candidate.id, status: 'rejected' }])
+    expect(await knowledgeObservationService.listAll()).toHaveLength(4)
+    expect(await knowledgeAuditService.list({ action: 'candidate_rejected' })).toHaveLength(1)
+    expect(await knowledgeAuditService.list({ action: 'habit_candidate_proposed' })).toEqual([])
+    expect((await knowledgeTruthService.list()).facts).toEqual([])
   })
 
   it('ignores forged scope and trusted source fields in capture payloads', async () => {

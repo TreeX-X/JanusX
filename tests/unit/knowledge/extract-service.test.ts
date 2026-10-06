@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
 import { candidateDecisionHash } from '../../../src/main/knowledge/decision-scorer'
+import { personalObservation, taskNotification } from './memory-observation.fixture'
 import type {
   CandidateFact,
   CandidateGraphEdge,
@@ -96,6 +97,43 @@ describe('KnowledgeExtractService', () => {
     const { knowledgeExtractService } = await loadService()
     await expect(knowledgeExtractService[method]()).rejects.toThrow()
     expect(await readFile(file, 'utf8')).toBe(original)
+  })
+
+  it('does not send notifications or quoted preferences to the personal model extraction path', async () => {
+    const { knowledgeExtractService } = await loadService()
+    setupLlm({ facts: [], wikiPatches: [], graphEdges: [] })
+    for (const content of [taskNotification(), `为什么出现通知？\n${taskNotification('quoted', 'I prefer npm')}`, '```\n我习惯先跑测试\n```']) {
+      const observation = personalObservation({ id: 'noise', content, createdAt: '2026-10-06T00:00:00Z' })
+      const result = await knowledgeExtractService.extract({ workspaceId: 'user', observations: [observation] })
+      expect(result.degraded?.reason).toBe('no-evidence')
+      expect(result.facts).toEqual([])
+    }
+    expect(mocks.getDefaultModel).not.toHaveBeenCalled()
+    expect(mocks.generateObject).not.toHaveBeenCalled()
+  })
+
+  it('checks resolved notification blobs and sends only the unquoted personal preference to a model', async () => {
+    const { knowledgeExtractService } = await loadService()
+    const { knowledgeObservationService } = await import('../../../src/main/knowledge/observation-service')
+    setupLlm({ facts: [], wikiPatches: [], graphEdges: [] })
+    const observation = personalObservation({ id: 'blob', content: '<task-notification>\n<task-id>long', createdAt: '2026-10-06T00:00:00Z' })
+    const resolver = vi.spyOn(knowledgeObservationService, 'resolveContent').mockResolvedValue(taskNotification('long', 'x'.repeat(4000)))
+    try {
+      expect((await knowledgeExtractService.extract({ workspaceId: 'user', observations: [{ ...observation, blobRef: 'blobs/fixture.gz' }] })).degraded?.reason).toBe('no-evidence')
+      expect(mocks.getDefaultModel).not.toHaveBeenCalled()
+      const content = `我习惯先跑测试\n${taskNotification('quote', 'I prefer npm')}`
+      let prompt = ''
+      await knowledgeExtractService.extract({ workspaceId: 'user', observations: [personalObservation({ id: 'mixed', content, createdAt: observation.createdAt })] }, {
+        callModel: async args => { prompt = args.userContent; return { object: { facts: [], wikiPatches: [], graphEdges: [] } } },
+      })
+      expect(prompt).toContain('我习惯先跑测试')
+      expect(prompt).not.toContain('task-notification')
+      expect(prompt).not.toContain('I prefer npm')
+      await knowledgeExtractService.extract({ workspaceId: 'user', observations: [personalObservation({ id: 'personal-fact', content: '我住在上海', createdAt: observation.createdAt })] }, {
+        callModel: async args => { prompt = args.userContent; return { object: { facts: [], wikiPatches: [], graphEdges: [] } } },
+      })
+      expect(prompt).toContain('我住在上海')
+    } finally { resolver.mockRestore() }
   })
 
   it('degrades safely when no default LLM is configured', async () => {

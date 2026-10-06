@@ -16,6 +16,7 @@ import {
 } from '../../../src/main/knowledge/user-turn-capture'
 import { knowledgeObservationService } from '../../../src/main/knowledge/observation-service'
 import { userEpisodeService } from '../../../src/main/knowledge/user-episode-service'
+import { taskNotification } from './memory-observation.fixture'
 
 describe('Person turn capture (user memory closeout)', () => {
   const previousRoot = process.env.JANUSX_KNOWLEDGE_ROOT
@@ -71,5 +72,19 @@ describe('Person turn capture (user memory closeout)', () => {
     await expect(capturePersonEpisodeFromTurn({})).resolves.toBeUndefined()
     expect(await knowledgeObservationService.listAll()).toHaveLength(0)
     expect(await userEpisodeService.listActive(Date.now())).toHaveLength(0)
+  })
+
+  it('excludes pure runtime turns from personal episodes and observations, preserving mixed questions', async () => {
+    for (let index = 0; index < 4; index++) {
+      const userText = taskNotification(`task-${index}`)
+      await capturePersonChatTurn({ userText, assistantText: 'Task complete', correlationId: `personal-${index}` })
+      await capturePersonEpisodeFromTurn({ userText, correlationId: `attached-${index}` })
+    }
+    expect(await knowledgeObservationService.listAll()).toEqual([])
+    expect(await userEpisodeService.listActive()).toEqual([])
+    const mixed = `为什么出现这条通知？\n${taskNotification()}`
+    await capturePersonChatTurn({ userText: mixed, correlationId: 'mixed' })
+    await capturePersonEpisodeFromTurn({ userText: '<example>正常 XML</example>', correlationId: 'xml' })
+    expect((await userEpisodeService.listActive()).map(episode => episode.content)).toEqual(expect.arrayContaining([mixed, '<example>正常 XML</example>']))
   })
 })
