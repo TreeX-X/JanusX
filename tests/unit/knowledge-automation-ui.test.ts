@@ -17,7 +17,7 @@ beforeAll(async () => {
     import {useRightToolStore} from './src/renderer/src/stores/right-tools'
     import {defaultKnowledgeAutomation} from './src/shared/knowledge-automation'
     const counts={pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0}
-    window.calls=[];window.config={enabled:true,mode:'deterministic-only',autoAcceptDeterministicFacts:false,automation:defaultKnowledgeAutomation()}
+    window.calls=[];window.testCalls=[];window.config={enabled:true,mode:'deterministic-only',autoAcceptDeterministicFacts:false,automation:defaultKnowledgeAutomation()}
     window.localResult='pass';window.resources={supported:true,phase:'idle',receivedBytes:0,totalBytes:0}
     const disabledLocal=()=>{window.config.automation.local.enabled=false;Object.values(window.config.automation.stages).forEach(stage=>{if(stage.provider==='local')stage.provider='off'})}
     const status=()=>({enabled:window.config.automation.enabled,running:false,stages:{extraction:'rules-only',entryReview:'automatic',wikiGeneration:'automatic',wikiReview:'automatic'},queue:[],counts,total:0,tasks:[]})
@@ -29,6 +29,11 @@ beforeAll(async () => {
       listCandidates:async()=>[],listWikiPatchCandidates:async()=>[],listGraphCandidates:async()=>[],
       getSettings:async()=>window.config,updateSettings:async(value)=>{window.calls.push('save');value.automation.local=window.config.automation.local;window.config=value;return structuredClone(value)},externalMcpStatus:async()=>null,
       automationStatus:async()=>status(),automationRun:async()=>{window.calls.push('run');return status()},automationRetry:async()=>{},
+      testConfiguration:async input=>{window.testCalls.push(input);if(window.testWait)await new Promise(resolve=>window.finishTest=resolve);if(window.testError)throw new Error('unavailable');
+        if(input.model.provider==='external'&&!input.model.providerId)return {status:'incomplete',reason:'provider-missing'};
+        if(!input.model.model.trim())return {status:'incomplete',reason:'model-missing'};
+        if(input.model.provider==='jev'&&!(input.jevKey??window.savedCredential)?.trim())return {status:'incomplete',reason:'key-missing'};
+        return {status:'passed',durationMs:120}},
       localResourcesStatus:async()=>structuredClone(window.resources),installLocalResources:async()=>{window.calls.push('install');window.resources.phase='downloading';window.resources.totalBytes=100;return structuredClone(window.resources)},
       jevCredentialStatus:async()=>{if(window.credentialLoadError)throw new Error('load-failed');return {configured:Boolean(window.savedCredential)}},
       revealJevCredential:async()=>{window.calls.push('reveal');if(window.credentialRevealError)throw new Error('read-failed');return window.savedCredential??null},
@@ -59,6 +64,89 @@ async function openJev(page: Page) {
   await page.getByRole('button', { name: 'Entry review', exact: true }).click()
   await page.getByRole('option', { name: 'Jev review', exact: true }).click()
 }
+it('reminds users about missing configuration and tests unsaved Jev input without saving or processing knowledge', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page)
+    const panel = page.getByRole('region', { name: 'Configuration availability test' })
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByText('No model selected: rule extraction and manual processing need no connection test.', { exact: true }).waitFor()
+    expect(await page.evaluate(() => (window as any).testCalls)).toEqual([])
+    await openJev(page)
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByRole('alert').waitFor()
+    expect(await panel.locator('[data-test-stage="entryReview"]').innerText()).toContain('Enter a Jev credential')
+    await page.getByLabel('Jev credential', { exact: true }).fill('unsaved-test-key')
+    await panel.getByText('Configuration changed. Run the test again.', { exact: true }).waitFor()
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByText('All configured models passed the availability test.', { exact: true }).waitFor()
+    expect(await page.evaluate(() => (window as any).testCalls.at(-1))).toMatchObject({ stage: 'entryReview', jevKey: 'unsaved-test-key', model: { provider: 'jev' } })
+    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+    expect(await page.getByLabel('Jev credential', { exact: true }).inputValue()).toBe('unsaved-test-key')
+    await page.getByRole('button', { name: 'Save credential', exact: true }).click()
+    await panel.getByText('Configuration changed. Run the test again.', { exact: true }).waitFor()
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByText('All configured models passed the availability test.', { exact: true }).waitFor()
+    expect(await page.evaluate(() => (window as any).testCalls.at(-1))).not.toHaveProperty('jevKey')
+  } finally { await page.close() }
+})
+
+it('tests mixed providers by stage, keeps failures visible and supports retry in a narrow settings panel', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+  try {
+    await mount(page); await openJev(page)
+    await page.getByLabel('Jev credential', { exact: true }).fill('draft-key')
+    await page.getByRole('button', { name: 'Wiki generation', exact: true }).click()
+    await page.getByRole('option', { name: 'External model', exact: true }).click()
+    const panel = page.getByRole('region', { name: 'Configuration availability test' })
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByRole('alert').waitFor()
+    expect(await panel.locator('[data-test-stage="entryReview"]').getAttribute('data-test-status')).toBe('passed')
+    expect(await panel.locator('[data-test-stage="wikiGeneration"]').innerText()).toContain('Select an external provider')
+    await page.getByRole('button', { name: 'External provider', exact: true }).scrollIntoViewIfNeeded()
+    await page.waitForTimeout(100)
+    await page.getByRole('button', { name: 'External provider', exact: true }).click()
+    await page.getByRole('option', { name: 'My provider', exact: true }).click()
+    await page.evaluate(() => { (window as any).testError = true })
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByText('Some stages failed the test. Check the results below.', { exact: true }).waitFor()
+    await page.evaluate(() => { (window as any).testError = false })
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByText('All configured models passed the availability test.', { exact: true }).waitFor()
+    expect(await page.evaluate(() => (window as any).testCalls.slice(-2).map((input: any) => [input.stage, input.model.provider]))).toEqual([['entryReview', 'jev'], ['wikiGeneration', 'external']])
+    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
+    for (const theme of ['dark', 'planche']) {
+      await page.evaluate(value => { document.documentElement.dataset.theme = value }, theme)
+      await panel.screenshot({ path: `artifacts/knowledge-configuration-test/${theme}-narrow.png`, animations: 'disabled' })
+      expect(await panel.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
+    }
+  } finally { await page.close() }
+})
+
+it('disables duplicate tests and discards late results after configuration changes', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page); await openJev(page)
+    await page.getByLabel('Jev credential', { exact: true }).fill('draft-key')
+    const panel = page.getByRole('region', { name: 'Configuration availability test' })
+    await page.evaluate(() => { (window as any).testWait = true })
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await expect.poll(() => panel.locator('[data-test-stage="entryReview"]').getAttribute('data-test-status')).toBe('testing')
+    expect(await panel.getByRole('button', { name: 'Testing configuration…', exact: true }).isDisabled()).toBe(true)
+    const model = page.getByRole('textbox', { name: /^Entry review / })
+    const original = await model.inputValue()
+    await model.fill('other-model')
+    await model.fill(original)
+    await panel.getByText('Configuration changed. Run the test again.', { exact: true }).waitFor()
+    await page.evaluate(() => { (window as any).testWait = false; (window as any).finishTest() })
+    await expect.poll(() => panel.getByRole('button', { name: 'Test configuration', exact: true }).isEnabled()).toBe(true)
+    expect(await panel.locator('[data-test-status="passed"]').count()).toBe(0)
+    await page.getByLabel('Jev credential', { exact: true }).fill('replacement-key')
+    await panel.getByRole('button', { name: 'Test configuration', exact: true }).click()
+    await panel.getByText('All configured models passed the availability test.', { exact: true }).waitFor()
+    expect(await page.evaluate(() => (window as any).testCalls.at(-1).jevKey)).toBe('replacement-key')
+  } finally { await page.close() }
+})
 it('shows save progress, masks persisted credentials and reveals only on demand across remounts', async () => {
   const page = await browser.newPage()
   try {

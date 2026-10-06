@@ -1,11 +1,12 @@
 // Note: extraction, entry review, handbook generation and review have independent providers — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { KeyRound, Workflow } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeProvider, type KnowledgeStage } from '../../../shared/knowledge-automation'
 import { KnowledgeLocalModelPanel } from './KnowledgeLocalModelPanel'
 import { Select } from './ui/Select'
 import { JevCredentialFields } from './knowledge/JevCredentialFields'
+import { KnowledgeConfigurationTest } from './knowledge/KnowledgeConfigurationTest'
 import { AutomationSettingsStatus } from './knowledge/AutomationStatus'
 import styles from './KnowledgeSettingsPanel.module.css'
 import automationStyles from './KnowledgeAutomationPanel.module.css'
@@ -19,6 +20,8 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
   const config = value ?? defaultKnowledgeAutomation()
   const [providers, setProviders] = useState<Array<{ id: string; name: string; models: string[] }>>([])
   const [error, setError] = useState('')
+  const [credential, setCredential] = useState<{ key?: string; revision: number }>({ revision: 0 })
+  const credentialChanged = useCallback((key?: string) => setCredential(current => ({ key, revision: current.revision + 1 })), [])
   useEffect(() => {
     let alive = true
     void Promise.resolve().then(() => window.electron.llm.getTerminalProviders('janus'))
@@ -72,8 +75,9 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
       <legend><KeyRound size={14} aria-hidden />Jev</legend>
       <label className={automationStyles.connectionField}><span>{t('knowledge:automation.jevEndpoint')}</span><input value={config.jev.endpoint}
         onChange={event => onChange({ ...config, jev: { ...config.jev, endpoint: event.target.value } })} /></label>
-      <JevCredentialFields disabled={disabled} />
+      <JevCredentialFields disabled={disabled} onCredentialChange={credentialChanged} />
     </fieldset>}
+    <KnowledgeConfigurationTest config={config} credential={credential} disabled={disabled} />
     {error && <p className={`${styles.status} ${styles.statusError}`} role="alert">{error}</p>}
     <AutomationSettingsStatus beforeRun={onSave} disabled={disabled || !knowledgeEnabled || !config.enabled} />
   </section>

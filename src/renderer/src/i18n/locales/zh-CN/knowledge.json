@@ -476,6 +476,49 @@
   "time": {
     "unknown": "未知"
   },
+  "configurationTest": {
+    "title": "配置可用性测试",
+    "button": "一键测试配置",
+    "running": "正在测试配置…",
+    "hint": "按当前填写的配置逐项发送小样本请求；本地模型使用已检测启用的配置。测试不保存设置或写入知识库，外部调用可能产生少量费用。通过仅表示接口和响应可用。",
+    "changed": "配置已变更，请重新测试。",
+    "incomplete": "部分配置尚未完整，请按下方提示补全后重新测试。",
+    "failed": "部分环节测试失败，请检查下方结果。",
+    "empty": "尚未选择模型：当前仅使用规则提取和人工处理，无需连接测试。",
+    "passed": "已配置的模型均通过可用性测试。",
+    "duration": "{{seconds}} 秒",
+    "status": {
+      "waiting": "等待测试",
+      "testing": "正在测试",
+      "passed": "测试通过",
+      "failed": "测试失败",
+      "incomplete": "配置未完整",
+      "skipped": "无需测试"
+    },
+    "reason": {
+      "rules-only": "仅规则提取",
+      "manual": "已关闭，人工处理",
+      "model-missing": "请填写此环节的模型名称",
+      "provider-missing": "请选择外部提供方",
+      "provider-unavailable": "提供方不存在或未启用，请检查模型设置",
+      "provider-incomplete": "外部提供方配置不完整或无效，请在模型设置中检查地址和认证配置",
+      "endpoint-missing": "请填写接口地址；外部提供方请前往模型设置补全",
+      "endpoint-invalid": "接口地址无效；Jev 需要不含查询参数的 HTTPS 地址",
+      "key-missing": "请填写 Jev 密钥，或在模型设置中补全所选提供方的密钥",
+      "local-disabled": "请先在本地服务中检测并启用模型",
+      "provider-unsupported": "此环节不支持所选配置，Jev 仅用于审核",
+      "credential-unavailable": "无法读取已保存密钥，请重新保存或填写密钥后测试",
+      "auth-failed": "鉴权失败，请检查密钥和访问权限",
+      "rate-limited": "请求受限，请检查额度或稍后重试",
+      "model-or-endpoint-not-found": "未找到接口或模型，请检查地址和模型名称",
+      "timeout": "请求超时，请检查网络；本地模型首次加载可能较慢",
+      "invalid-response": "响应格式不符合要求或输出不完整，请检查模型支持",
+      "unavailable": "无法完成请求，请检查服务、网络和模型配置",
+      "local-unavailable": "本地模型不可用，请检查环境、路径和资源后重新检测",
+      "busy": "本地模型正在处理任务，请稍后重试",
+      "knowledge-disabled": "请先在功能设置中开启工程知识库"
+    }
+  },
   "automation": {
     "configurationHint": "部分处理环节尚未配置模型，请在功能设置中选择。",
     "pausedHint": "请在功能设置中检查知识采集与自动处理开关。",

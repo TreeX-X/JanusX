@@ -37,3 +37,7 @@
 .secretInput input { flex: 1; min-width: 0; }
 .secretInput button { flex-shrink: 0; }
 .credentialStatus { display: flex; align-items: center; gap: 6px; min-height: 18px; }
+.testPanel { display: grid; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--shell-border); border-radius: 8px; }
+.testResults { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.testResults li { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(0, 1.6fr); gap: 12px; font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .testResults li { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

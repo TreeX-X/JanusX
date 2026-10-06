@@ -57,6 +57,7 @@ export const KNOWLEDGE_CHANNELS = {
   automationStatus: 'knowledge:automation:status',
   automationRun: 'knowledge:automation:run',
   automationRetry: 'knowledge:automation:retry',
+  testConfiguration: 'knowledge:configuration:test',
   jevCredential: 'knowledge:jev:credential',
   jevCredentialStatus: 'knowledge:jev:credential-status',
   jevCredentialReveal: 'knowledge:jev:credential-reveal',
@@ -345,6 +346,7 @@ export interface KnowledgeAPI {
   automationStatus: () => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
   automationRun: (input?: { backfill?: boolean }) => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
   automationRetry: (id: string) => Promise<void>
+  testConfiguration: (input: import('../knowledge-automation').KnowledgeConfigurationTestRequest) => Promise<import('../knowledge-automation').KnowledgeConfigurationTestResult>
   setJevCredential: (key: string) => Promise<void>
   revealJevCredential: () => Promise<string | null>
   jevCredentialStatus: () => Promise<{ configured: boolean }>

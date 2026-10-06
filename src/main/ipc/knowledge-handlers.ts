@@ -1,6 +1,7 @@
 import { controlLaya } from '../knowledge/laya-runtime'
 import { listWikiHistory, readWikiRevision, pinWikiRevision } from '../knowledge/wiki-history'
 import { knowledgeAutomationService } from '../knowledge/automation-service'
+import { testKnowledgeConfiguration } from '../knowledge/knowledge-configuration-test'
 import { getJevKey, setJevKey } from '../knowledge/knowledge-credentials'
 import { configureKnowledgeLocalModel, disableKnowledgeLocalModel, startKnowledgeLocalResources } from '../knowledge/knowledge-local-settings'
 import { knowledgeLocalResources } from '../knowledge/knowledge-local-resources'
@@ -52,6 +53,7 @@ import type {
 export function registerKnowledgeHandlers(): void {
   const assertEnabled = async () => { if (!(await configService.getExperimentalFeatures()).knowledge) throw new Error('knowledge-disabled') }
   ipcMain.handle(KNOWLEDGE_CHANNELS.automationStatus, () => knowledgeAutomationService.status())
+  ipcMain.handle(KNOWLEDGE_CHANNELS.testConfiguration, (_event, input: unknown) => testKnowledgeConfiguration(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.automationRun, async (_event, input?: { backfill?: boolean }) => {
     await assertEnabled()
     if (input?.backfill === true) await knowledgeAutomationService.backfill()

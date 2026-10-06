@@ -5,7 +5,7 @@ import { useI18n } from '@/i18n/useI18n'
 import styles from '../KnowledgeSettingsPanel.module.css'
 import automationStyles from '../KnowledgeAutomationPanel.module.css'
 
-export function JevCredentialFields({ disabled }: { disabled: boolean }) {
+export function JevCredentialFields({ disabled, onCredentialChange }: { disabled: boolean; onCredentialChange?: (key?: string) => void }) {
   const { t } = useI18n('knowledge')
   const inputId = useId()
   const [configured, setConfigured] = useState(false)
@@ -15,6 +15,7 @@ export function JevCredentialFields({ disabled }: { disabled: boolean }) {
   const [status, setStatus] = useState<'loading' | 'idle' | 'saving' | 'clearing' | 'revealing' | 'saved' | 'cleared'>('loading')
   const [error, setError] = useState('')
   const busy = ['loading', 'saving', 'clearing', 'revealing'].includes(status)
+  useEffect(() => () => onCredentialChange?.(), [onCredentialChange])
 
   useEffect(() => {
     let alive = true
@@ -32,6 +33,7 @@ export function JevCredentialFields({ disabled }: { disabled: boolean }) {
       await window.electron.knowledge.setJevCredential(clear ? '' : key)
       setConfigured(!clear); setKey(''); setDirty(false); setVisible(false)
       setStatus(clear ? 'cleared' : 'saved')
+      onCredentialChange?.()
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : ''
       setError(t(message.includes('credential-encryption-unavailable') ? 'knowledge:automation.credentialEncryptionFailed'
@@ -60,7 +62,7 @@ export function JevCredentialFields({ disabled }: { disabled: boolean }) {
       <div className={automationStyles.secretInput}>
         <input id={inputId} type={visible ? 'text' : 'password'} autoComplete="off" spellCheck={false}
           value={key} placeholder={configured ? '••••••••••••' : ''}
-          onChange={event => { setKey(event.target.value); setDirty(true); setStatus('idle'); setError('') }} />
+          onChange={event => { setKey(event.target.value); setDirty(true); setStatus('idle'); setError(''); onCredentialChange?.(event.target.value) }} />
         <button type="button" className={styles.button} disabled={!key && !configured}
           aria-label={t(visible ? 'knowledge:automation.hideKey' : 'knowledge:automation.showKey')}
           aria-pressed={visible} onClick={() => void toggleVisibility()}>

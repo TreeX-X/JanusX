@@ -97,6 +97,7 @@ export function installElectronApiFallback(): void {
     knowledge: {
       automationStatus: () => unavailableKnowledge(),
       automationRun: () => unavailableKnowledge(),
+      testConfiguration: () => unavailableKnowledge(),
       automationRetry: () => unavailableKnowledge(),
       setJevCredential: () => unavailableKnowledge(),
       jevCredentialStatus: () => unavailableKnowledge(),

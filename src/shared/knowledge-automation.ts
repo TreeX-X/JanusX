@@ -14,6 +14,22 @@ export interface KnowledgeAutomationSettings {
   local: KnowledgeLocalSettings
   jev: { endpoint: string; model: string }
 }
+export interface KnowledgeConfigurationTestRequest {
+  stage: KnowledgeStage
+  model: KnowledgeStageModel
+  jevEndpoint: string
+  /** An unsaved replacement; absent means use the encrypted credential on the host. */
+  jevKey?: string
+}
+export type KnowledgeConfigurationTestReason = 'rules-only' | 'manual' | 'model-missing' | 'provider-missing'
+  | 'provider-unavailable' | 'provider-incomplete' | 'endpoint-missing' | 'endpoint-invalid' | 'key-missing' | 'local-disabled'
+  | 'provider-unsupported' | 'credential-unavailable' | 'auth-failed' | 'rate-limited'
+  | 'model-or-endpoint-not-found' | 'timeout' | 'invalid-response' | 'unavailable' | 'local-unavailable' | 'busy' | 'knowledge-disabled'
+export interface KnowledgeConfigurationTestResult {
+  status: 'passed' | 'failed' | 'incomplete' | 'skipped'
+  reason?: KnowledgeConfigurationTestReason
+  durationMs?: number
+}
 export interface KnowledgeLocalSettings {
   enabled: boolean
   endpoint: string

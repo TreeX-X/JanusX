@@ -108,7 +108,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(63)
+    expect(channels).toHaveLength(64)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -129,6 +129,15 @@ describe('Knowledge IPC contract', () => {
     mocks.knowledgeEnabled = false
     await expect(handler(KNOWLEDGE_CHANNELS.jevCredentialReveal)()).rejects.toThrow('knowledge-disabled')
     expect(getJevKey).not.toHaveBeenCalled()
+  })
+
+  it('forwards configuration tests and blocks them when the knowledge feature is disabled', async () => {
+    const input = { stage: 'entryReview' as const, model: { provider: 'jev' as const, model: 'jev-1.13.0', providerId: '', thinking: false }, jevEndpoint: 'https://example.com/review' }
+    await knowledgeApi.testConfiguration(input)
+    expect(mocks.invoke).toHaveBeenCalledWith(KNOWLEDGE_CHANNELS.testConfiguration, input)
+    const handler = mocks.handle.mock.calls.find(([channel]) => channel === KNOWLEDGE_CHANNELS.testConfiguration)![1]
+    mocks.knowledgeEnabled = false
+    expect(await handler({}, input)).toEqual({ status: 'incomplete', reason: 'knowledge-disabled' })
   })
 
   it('routes all typed operations with their existing argument order', async () => {
@@ -418,6 +427,7 @@ describe('Knowledge IPC contract', () => {
     const calls: Array<() => Promise<unknown>> = [
       () => api.automationStatus(),
       () => api.automationRun({ backfill: false }),
+      () => api.testConfiguration({ stage: 'entryReview', model: defaultKnowledgeAutomation().stages.entryReview, jevEndpoint: '' }),
       () => api.automationRetry('task'),
       () => api.setJevCredential(''),
       () => api.jevCredentialStatus(),
@@ -480,8 +490,8 @@ describe('Knowledge IPC contract', () => {
     calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
     calls.push(() => api.migrateLegacyEpisodes())
     calls.push(() => api.getPersonalSettings(), () => api.updatePersonalSettings({ useInChat: false }))
-    expect(Object.keys(api)).toHaveLength(63)
-    expect(calls).toHaveLength(63)
+    expect(Object.keys(api)).toHaveLength(64)
+    expect(calls).toHaveLength(64)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

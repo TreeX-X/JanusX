@@ -153,6 +153,7 @@ const browserAPI: BrowserAPI = {
 const knowledgeAPI: KnowledgeAPI = {
   automationStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationStatus),
   automationRun: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationRun, input),
+  testConfiguration: (input) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.testConfiguration, input),
   automationRetry: (id) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.automationRetry, id),
   setJevCredential: (key) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredential, key),
   jevCredentialStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jevCredentialStatus),

@@ -476,6 +476,49 @@
   "time": {
     "unknown": "unknown"
   },
+  "configurationTest": {
+    "title": "Configuration availability test",
+    "button": "Test configuration",
+    "running": "Testing configuration…",
+    "hint": "Sends a small sample using each current configuration; local models use the configuration already checked and enabled. Does not save settings or publish knowledge. External calls may incur a small charge. Passing checks API and response availability only.",
+    "changed": "Configuration changed. Run the test again.",
+    "incomplete": "Some configuration is incomplete. Complete the fields listed below and retry.",
+    "failed": "Some stages failed the test. Check the results below.",
+    "empty": "No model selected: rule extraction and manual processing need no connection test.",
+    "passed": "All configured models passed the availability test.",
+    "duration": "{{seconds}} s",
+    "status": {
+      "waiting": "Waiting",
+      "testing": "Testing",
+      "passed": "Passed",
+      "failed": "Failed",
+      "incomplete": "Incomplete",
+      "skipped": "Not required"
+    },
+    "reason": {
+      "rules-only": "Rule extraction only",
+      "manual": "Disabled; manual processing",
+      "model-missing": "Enter a model name for this stage",
+      "provider-missing": "Select an external provider",
+      "provider-unavailable": "Provider missing or disabled; check model settings",
+      "provider-incomplete": "External provider configuration is incomplete or invalid; check its endpoint and authentication in model settings",
+      "endpoint-missing": "Enter an endpoint; complete external providers in model settings",
+      "endpoint-invalid": "Invalid endpoint; Jev requires HTTPS without query parameters",
+      "key-missing": "Enter a Jev credential or complete the selected provider credential in model settings",
+      "local-disabled": "Check and enable the model in Local service first",
+      "provider-unsupported": "Unsupported stage configuration; Jev is for review only",
+      "credential-unavailable": "Could not read the stored credential; save it again or enter one to test",
+      "auth-failed": "Authentication failed; check the credential and access permissions",
+      "rate-limited": "Request limited; check quota or retry later",
+      "model-or-endpoint-not-found": "Endpoint or model not found; check the address and model name",
+      "timeout": "Request timed out; check the network. Initial local model loading can take longer",
+      "invalid-response": "Response format is invalid or output is incomplete; check model support",
+      "unavailable": "Request could not complete; check the service, network and model configuration",
+      "local-unavailable": "Local model unavailable; check environment, paths and resources, then run detection again",
+      "busy": "Local model is processing another task; retry later",
+      "knowledge-disabled": "Enable engineering knowledge in feature settings first"
+    }
+  },
   "automation": {
     "configurationHint": "Some stages have no model configured. Select a model in preferences.",
     "pausedHint": "Check the knowledge capture and automatic processing switches in preferences.",
