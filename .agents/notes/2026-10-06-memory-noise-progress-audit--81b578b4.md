@@ -5,17 +5,17 @@ kind: requirement
 lifecycle: proposed
 created: 2026-10-06
 class: bug-fix
-tags: [memory, persona, automation, audit, ui]
+tags: [memory, persona, automation, review, audit, ui]
 parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-528027d0e5cf
 ---
 
-# 个人记忆与工程知识噪声过滤、自动化进度与审计详情
+# 知识库噪声过滤、审核详情、自动化进度与审计优化
 
 ## Problem
 
 ### 接手入口与当前边界
 
-本 Note 覆盖记忆噪声、自动化状态和审计详情三项问题。个人采集过滤、偏好准入、历史重扫、提议审计，以及工程原始执行证据的候选准入防线已有实现。用户已明确要求清理个人画像与工程知识中的错误积累，本机清理和复核结果见“工程噪声防线与存量清理”。AC-1～3、AC-9 已交付；自动化状态和审计详情 AC-4～8 保持未完成，整篇仍为 proposed。此前的 Jev 密钥保存反馈已独立实现，不属于本 Note 的待办。
+本 Note 覆盖记忆噪声、审核详情、自动化状态和审计四组问题。个人采集过滤、偏好准入、历史重扫、提议审计，以及工程原始执行证据的候选准入防线已有实现；本机清理和复核结果见“工程噪声防线与存量清理”。AC-1～3、AC-9 已交付；自动化状态和审计 AC-4～8，以及审核详情 AC-10～14 保持未完成，整篇仍为 proposed。此前的 Jev 密钥保存反馈已独立实现，不属于待办。[实施任务](./2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md)承载剩余工作的执行顺序、依赖和验证，本 Note 保留问题、行为与验收依据。
 
 阅读时请先执行 `git status --short`，保留其他工作中的变更。源码引用以文件和函数名为定位依据，行号可能变化。核对当前实现是否已由其他提交修复，再决定剩余工作；本机数据统计和下方 ID 是 2026-10-06 的定位证据，不是要硬编码进产品的规则。
 
@@ -32,6 +32,21 @@ parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-5280
 [AuditList](../../src/renderer/src/components/knowledge/KnowledgeWorkbench.tsx)直接显示英文 action、targetType 和完整 targetId，点击只构造通用 InspectorRecord，丢弃 before、after、actor、workspace 和 source 等信息。通用详情保留审批/拒绝/归档布局，却没有审计专用变更呈现。列表不接收 selectedId，因此没有选中态；[样式](../../src/renderer/src/components/knowledge/KnowledgeWorkbench.module.css)包含硬编码深色颜色及长 ID 省略，动作、对象与时间缺少清楚的信息层级。本次为源码与数据检查，尚未对当前运行窗口进行视觉截图验收。
 
 审计还有查询问题：[工作台快照](../../src/renderer/src/services/knowledge.ts)先请求全域最近 30 条，再在前端过滤 user 域。[审计服务](../../src/main/knowledge/audit-service.ts)没有 workspace/domain 查询条件与分页游标；个人审计较多时，工程事件会在过滤前被截掉。本机现有 21 条审计中 19 条为个人习惯提议，仅 2 条为工程事件；所有 21 条都有 before 或 after，但习惯提议的 after 只存数量，targetId 为批次摘要，不能假设每条事件都具有完整对象快照。
+
+### 审核卡片与右侧详情核查（2026-10-06）
+
+基线为 `abea07a`。用户指出审核卡片点击后的右侧仍显示“决策评分”、Laya 内容，操作和布局未适配新流程。源码确认存在以下缺口；本次没有重建真实候选、执行审核操作或进行当前窗口截图验收，不能把源码结构推断写成已观测到的像素溢出。
+
+| 已确认问题 | 源码依据与影响 |
+| --- | --- |
+| 旧评分被当作主要详情 | [MemoryReviewCard](../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)存在 candidate.decision 就显示 scorer.provider、status、reason、题目答案和概率。它不整合当前自动任务的阶段、结论与依据，也不提示注解是否对应当前候选快照。旧注解可出现 laya，但不能据此断言当前正在运行 Laya。 |
+| 旧操作与新执行链脱节 | 中英文 knowledge.json 仍将 rescore 命名为“Laya 重新评分”，refine 为“提交 LLM 精炼”。[候选动作](../../src/main/knowledge/candidate-actions.ts)仍调用旧 decision/refinement 通路；[Laya 配置](../../src/main/knowledge/laya-runtime.ts)在存在 automation 配置时禁用旧模型，[队列注册](../../src/main/ipc/register.ts)同时跳过旧精炼执行。因此新流程下仍可能接收入旧队列，却没有对应执行。这里只确认路径，未实际提交精炼。 |
+| 两个入口适配不一致 | 审核侧栏按 [splitReviewCandidates](../../src/renderer/src/components/knowledge/inboxScope.ts)分离自动处理与人工候选，并向卡片传 automaticStatus。工作台 Inspector 仅检查 proposed，并未传 automaticStatus 或 onDecision；因此右侧能显示旧评分，却没有侧栏的评分按钮，也缺少相同的自动处理操作约束。不能把两个入口描述成完全相同。 |
+| 通用详情留下无关控件 | [Inspector](../../src/renderer/src/components/knowledge/KnowledgeWorkbench.tsx)的非待审分支固定渲染批准、拒绝和归档，不适用时仅禁用。AuditList 丢失事件快照后也进入该分支。已有领域校验、候选 hash 和 [FactReviewControls](../../src/renderer/src/components/knowledge/FactReviewControls.tsx)的冲突替代确认仍有效；问题不是完全没有审核保护。 |
+| 详情布局缺少层次 | 340px 右侧面板内再嵌套完整卡片；[factReview 样式](../../src/renderer/src/components/knowledge/MemoryReviewTool.module.css)占满一行，使批准和刷新冲突检查一组、拒绝另排。控件没有主要、次要与破坏性操作的视觉区分；内容、评分、证据与操作共用长滚动区。Wiki 候选正文用普通 p 呈现，没有阅读与变更层次。 |
+| 卡片百分比含义不清 | KnowledgeCardTile 用 formatConfidence 展示 card.score，候选映射来自 fact.confidence 等旧字段。这些字段可能是规则给定值或检索排名，不能显示成自动审核通过率；新审核模型契约明确返回结论而不是百分比。 |
+
+这组问题在当前源码中成立，不仅是旧便携版未更新。之前[自动处理需求](./2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md)的控件和路由验证证明当时覆盖的能力；不能据已有通过记录推断本次发现的两个详情入口已经一致。
 
 ### 可复查的通知样例与证据链
 
@@ -84,28 +99,32 @@ parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-5280
 
 查询应在宿主按领域/工作区过滤后排序、分页，再返回事件和对应计数，避免个人事件挤占工程列表。详情优先使用事件自身记录的变更，关联对象只用于当前状态导航，不能将当前内容误称为历史快照。默认展示最近记录，提供简洁的动作筛选和加载更多。
 
+### 审核详情与操作契约
+
+卡片主信息应为可读标题、知识类型、所属领域及当前处理状态。详情按知识正文、当前审核结论与原因、来源证据、冲突/替代影响组织；模型名、内部 ID、旧决策问卷和概率放入按需展开的诊断信息。旧 decision 注解需明确标为历史记录，不能充当当前审核结论。当前任务必须匹配候选类型、领域、工作区和输入版本；只按 candidate ID 连接历史任务会误用旧结果。没有对应记录时显示未审核或记录不可用，不能补造结论。检索相关性、规则置信度和模型判断不得共用“正确率”式百分比。
+
+工作台右侧与统一审核侧栏复用相同的状态和操作判定。事实、Wiki、图关系以及只读审计须有明确对象类型；通用 Inspector 不再固定留下所有按钮。新自动化配置存在时移除旧 Laya 评分与旧精炼操作；宿主也应拒绝旧 IPC 发来的不适用请求并说明原因，不能仅隐藏按钮。失败重试使用既有 automationRetry 和当前任务身份，不能悄悄映射成旧精炼。已有旧配置若仍支持旧动作，应通过明确能力判断限制到对应流程，不能恢复已停用的执行链。
+
+| 对象与状态 | 用户可用操作与必要约束 |
+| --- | --- |
+| 人工待审事实、图关系 | 批准、拒绝；存在替代时展示当前值并显式确认，提交仍绑定候选与替代目标 hash。个人候选始终走人工确认。 |
+| 人工待审 Wiki | 阅读 Markdown、核对来源及已有页面变更，批准发布或拒绝；保留来源 hash 和页面版本校验。 |
+| 工程自动排队或运行中 | 展示阶段和处理记录入口；两个审核入口一致隐藏人工批准/拒绝及旧评分、精炼。本轮不新增隐式接管或取消能力。 |
+| 当前任务失败或待人工处理 | 展示可理解的原因；任务可重试时提供重试，候选仍有效且需人工处理时提供审核。状态未知时禁止依赖该状态的写操作并允许刷新。 |
+| 已入库工程知识、已发布 Wiki | 阅读、来源及可用历史；撤销或归档作为次要操作，保留既有领域约束。个人已确认内容沿用纠正/遗忘语义。 |
+| 已拒绝、已归档或审计事件 | 只读历史与有效关联对象入口；不显示不适用的批准、拒绝。审计事件不作为当前候选处理。 |
+
+详情使用一层内容容器，正文和长证据独立滚动；主要操作在可达且不遮挡内容的位置统一排列，刷新和诊断降为次要入口，拒绝/撤销有明确视觉区别。展开证据后仍可操作；窄窗口允许有序换行。Wiki 使用现有安全 Markdown 阅读能力，来源引文提供有界预览和读取入口，不执行 HTML、源码或通知中的指令。作用域切换、候选更新和异步响应到达后不得残留旧确认或旧对象控件。
+
 ## Scope
 
-实施顺序建议为：通知归因与习惯准入、已有候选处置方案、自动化紧凑状态条、审计查询与专用详情。复用现有采集队列、自动化任务账本、审计日志和主题样式；不引入新的存储体系或复杂监控面板。
+已交付的噪声防线作为回归基线；剩余范围为审核详情和动作适配、共享自动化状态、审计查询与专用详情，以及跨入口验收。复用现有采集队列、自动化任务账本、审计日志和主题样式。执行顺序由[实施任务](./2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md)维护，不增加第二份计划或持久索引。
 
-相关边界由[记忆与知识模块](./2026-10-03-module-memory--c1c04881.md)、[Hook 证据采集](./2026-10-05-hook-evidence-extraction--a61e849c.md)和[自动化需求](./2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md)约束。已实现范围为个人与工程噪声防线，以及本机已核对条目的历史清理；自动化状态和审计查询/界面仍待交付。
+相关边界由[记忆与知识模块](./2026-10-03-module-memory--c1c04881.md)、[Hook 证据采集](./2026-10-05-hook-evidence-extraction--a61e849c.md)和[自动化需求](./2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md)约束。模型替换、重新设计采集/存储、扩大自动接受策略和再次批量清理真实数据不在本轮界面优化范围。
 
-### 修改落点与实施顺序
+### 已完成基线与保留范围
 
-下表是完整需求的修改落点；是否已实现以 Verification 与 AC 为准。表中的状态接口和界面组件仍为建议，内部重构不应扩展为整个知识库重写。
-
-| 步骤 | 文件与函数入口 | 需要调整的职责 | 完成条件 |
-| --- | --- | --- | --- |
-| 1. 来源归因 | [knowledge-transcript.ts](../../src/main/sessions/knowledge-transcript.ts) 的 parse/selectTurn；[agent-turn-recorder.ts](../../src/main/knowledge/agent-turn-recorder.ts) 的 Hook 和结束采集；[external-session-scanner.ts](../../src/main/sessions/external-session-scanner.ts) 的 claudeUserText | 在知识采集路径识别运行通知，避免标为用户陈述；若改共享 scanner，须检查历史聊天显示等其他调用者 | 通知不作为用户证据，也不会错误地切断真实用户回合或丢掉随后助手回答 |
-| 2. 个人准入 | [memory-evidence.ts](../../src/main/knowledge/memory-evidence.ts)、[user-turn-capture.ts](../../src/main/knowledge/user-turn-capture.ts)、[habit-aggregator.ts](../../src/main/knowledge/habit-aggregator.ts)、[deterministic-extractor.ts](../../src/main/knowledge/deterministic-extractor.ts) | 真实身份校验与内容准入分开；初次输入、历史输入及个人 episode 使用一致的规则，频率只作用于合格偏好证据 | 新采集与历史重扫均通过 AC-1/2；不通过降低角色权限或全局关开关掩盖问题 |
-| 3. 候选与审计去重 | [review-service.ts](../../src/main/knowledge/review-service.ts) 的 proposeFactCandidates；habit-aggregator 的 deriveHabitPromotions | 检查相同来源和增量来源是否会重复提议，审计区分真实新增、更新与无变化 | 重放不增长候选数或虚假的新增计数；不要把事件时间相近当成同一事件 |
-| 4. 历史处置 | review-service 的 rejectCandidate 与现有来源撤回/个人遗忘边界 | 生成预览，按完整通知判定和来源绑定处置污染候选，复核派生状态 | 使用最新 candidateHash 和既有锁，不直接重写 JSONL；执行后重跑提取不复生 |
-| 5. 状态投影 | [knowledge-automation.ts](../../src/shared/knowledge-automation.ts)、[automation-service.ts](../../src/main/knowledge/automation-service.ts) 的 status/plans | 给摘要提供可读对象、范围及真实时间信息；保留当前队列与历史账本的区别 | 页面无需多次逐条查正文，不把任务 ID 或未脱敏原文直接展示 |
-| 6. 紧凑展示 | [AutomationStatus.tsx](../../src/renderer/src/components/knowledge/AutomationStatus.tsx)、[AssistantTool.tsx](../../src/renderer/src/components/knowledge/AssistantTool.tsx)、[MemoryReviewTool.tsx](../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)、[KnowledgeWorkbench.tsx](../../src/renderer/src/components/knowledge/KnowledgeWorkbench.tsx) | 抽取共享状态订阅及纯展示摘要，右侧只挂载一份摘要；保留既有记录入口 | 切子页不丢状态，不重复轮询，右侧与工作台相同范围显示一致 |
-| 7. 审计查询 | [shared/ipc/knowledge.ts](../../src/shared/ipc/knowledge.ts) 的 AuditQuery/API；[audit-service.ts](../../src/main/knowledge/audit-service.ts) 的 list/stats；[knowledge-handlers.ts](../../src/main/ipc/knowledge-handlers.ts) | 宿主校验领域、工作区和游标，在截断前过滤；列表和计数共享过滤口径 | AC-7 的大量混合领域、相同时间及新事件插入场景通过 |
-| 8. 审计详情 | [services/knowledge.ts](../../src/renderer/src/services/knowledge.ts) 的快照装配；KnowledgeWorkbench 的 AuditList/Inspector；对应 CSS 与中英文 knowledge.json | 使用完整 AuditEvent，提供专用列表与详情，接入查询页状态及加载更多 | AC-6/8 通过，事件选择刷新后保持或明确消失，切领域不残留旧详情 |
-
-来源分类建议采用可单独测试的纯函数，输入包含引擎、消息角色、可信元数据和原文，输出至少能区分用户正文、引用片段与运行通知。输出不必持久化成新 schema，先复用当前证据类型的能力；若增加字段则应明确旧记录的默认解释，不能给旧记录补造“已验证用户发言”。纯通知可以跳过个人派生，同时仍留在原始 transcript；若保留为 knowledge observation，其类型和 authority 必须避免进入用户偏好和自动知识候选。
+来源分类和保守偏好准入已有实现，路径及验证见 Verification。后续显示来源时沿用真实归因、完整原文及其哈希，不能给旧记录补造“已验证用户发言”。纯通知可保留在原始执行证据，界面不能把显示这些证据等同于恢复个人偏好或正式知识。
 
 偏好准入采用保守的明确表达规则，覆盖“以后回答请简洁”“我习惯先跑测试”等可解释样例。引用、代码、XML 和疑问不作为自动个人证据；临时指令、明确项目限定及无法解释的混合正文不参与习惯累计，原始会话保留。个人事实与决策仍有各自提取路径，不要求个人事实都表达偏好。需要模型识别的含蓄行为仍待独立设计，不增加逐消息模型调用，也不把重复工程命令认作个人习惯。
 
@@ -167,6 +186,8 @@ parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-5280
 
 沿用当前自动化大卡片可复用全部功能，但右侧常见子页仍看不到状态；增加百分比和独立监控窗口会造成误导并增加面积。推荐复用状态源的紧凑摘要，保留已有详情。审计直接显示完整 JSON 可以保留字段，但阅读负担大；专用摘要与前后差异为主、原始结构折叠为辅更符合排查需求。
 
+只重命名 Laya 按钮并调整间距改动最少，但旧队列仍可能无法执行，也不能解决两个入口状态不一致。重新开发两套详情可分别适配场景，却增加动作与校验分叉。推荐复用候选数据和宿主保护，统一状态/动作判定，按对象类型呈现正文及操作；旧评分只保留为历史诊断。代价是增加当前任务与候选版本的关联，以及针对两个入口的状态矩阵验证。
+
 ## Acceptance criteria
 
 - [x] AC-1: 纯任务完成通知不会成为个人候选、近期记忆或习惯频次；重复三次以上仍不晋升，重新扫描历史也不恢复污染。
@@ -178,6 +199,11 @@ parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-5280
 - [ ] AC-7: 审计在宿主过滤后分页、计数，大量个人事件不会让工程事件缺失；翻页无重复和遗漏。
 - [ ] AC-8: 窄侧栏、长标题、长 ID 和深浅主题均可读，状态摘要保持一至两行，审计无无效审批操作。
 - [x] AC-9: 工具包装、带行号源码和未经用户归因的报告不直接形成工程规则；原始来源保持可用，模型仍可引用其有效结论。包装不能经模型输出或旧候选审批绕过准入。
+- [ ] AC-10: 审核卡片与详情优先展示知识正文、当前处理结论/原因和证据；任务匹配当前候选版本，缺失或旧记录明确标注。旧 decision/Laya 注解仅作为历史诊断，规则置信度、检索分数和模型概率不冒充审核正确率。
+- [ ] AC-11: 新自动化流程不展示或接收旧 Laya 评分/旧精炼操作；旧 IPC 请求有明确拒绝原因且不新增无法执行的任务。重试绑定当前有效自动化任务，不隐式改选提供方或恢复停用链路。
+- [ ] AC-12: 同一候选在审核侧栏和工作台详情中的状态、可用动作与刷新结果一致；自动排队/运行中与人工待审区分，状态未知和候选变化不保留旧操作授权，个人记忆仍需人工确认。
+- [ ] AC-13: 事实、Wiki、图关系、已入库内容及审计按对象与状态提供有效动作；审计为只读，不留下无关禁用按钮。批准/拒绝/替代/遗忘/撤销保持既有领域、快照、来源与版本保护，并发及重复操作结果正确。
+- [ ] AC-14: 审核详情正文、证据和操作分区清楚；主要、次要与破坏性操作可辨，长证据不使操作不可达。Wiki 可安全阅读正文及核对变更；320/390px 侧栏、640px 窗口、桌面及深色/planche 主题无横向溢出，键盘焦点和详情关闭可用。
 
 ## Verification
 
@@ -224,6 +250,11 @@ parent: note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-5280
 | N5 真实偏好 | 多次独立表达简洁输出或先测试的明确偏好 | 按既有审核流程形成候选，不能绕过人工确认成为事实 | AC-2 |
 | N6 同一回合多来源 | Hook 和 transcript、多个工作区扇出同一个 sourceEventId | 频次只记一次；分类不切断助手响应的回合归属 | AC-1/2 |
 | N7 处置冲突 | 预览后 candidateHash 改变，或候选已被批准 | 不覆盖；要求重新核对，重试无重复写入 | AC-3 |
+| R1 新旧结果 | 有/无旧 decision、laya 注解、旧任务与新候选 hash 不同、没有审核结果 | 当前状态真实，历史诊断有标识，不显示无依据正确率 | AC-10 |
+| R2 旧操作兼容 | 新 automation 配置下旧窗口调用 score/refine，正常任务重试 | 旧动作不产生无消费者任务，重试命中当前管线与合法任务 | AC-11 |
+| R3 两入口一致 | 同一候选 pending/running/needs-review/failed，读取失败、切域、异步迟到 | 工作台与侧栏状态和动作一致，个人不自动批准 | AC-12 |
+| R4 对象与写保护 | 事实、Wiki、图边、审计、已拒绝/归档；替代确认、陈旧 hash 与并发审核 | 仅有效动作可见，旧确认失效，宿主保护与幂等保留 | AC-13 |
+| R5 详情阅读 | 长正文/证据/ID、Markdown 表格和代码、两种主题、窄屏、Tab/Enter/Escape | 可读且不执行源内容，无横向溢出，操作始终可达、焦点可见 | AC-14 |
 | P1 状态序列 | loading→idle→pending→running→succeeded，再进入 failed/needs-review | 状态文案、对象、等待数和最后完成提示与真实数据相符 | AC-4 |
 | P2 单入口/双入口 | 同时打开侧栏与工作台，切工程/个人/审核子页 | 共用查询，无状态闪回或请求翻倍；工程范围标识清楚 | AC-4/5 |
 | P3 延迟与失败 | 请求超过轮询间隔、请求拒绝、隐藏窗口后恢复、卸载后的迟到结果 | single-flight、错误可见、隐藏停止、恢复刷新、迟到结果无效 | AC-5 |
@@ -252,6 +283,6 @@ npm run check:notes
 
 ### 尚待实施验证的判断
 
-尚未确认报告 observation 的具体 Hook/transcript 来源分支，修复通过合成夹具覆盖两个入口；未验证当前机器自动化是否实际存在调度故障，也未检查当前运行窗口的审计视觉和详情动画。后两项运行态问题应在对应实施前用脱敏夹具或实际只读诊断核对，不得据此宣称自动化后端完全未运行或审计点击事件没有触发。
+尚未确认报告 observation 的具体 Hook/transcript 来源分支，修复通过合成夹具覆盖两个入口。审核旧动作与详情状态缺口已有源码依据，但尚未实际触发旧动作、核验当前窗口像素布局或证明新自动化调度故障。实施前按 R/P/A 夹具复现，不得据此宣称整个自动化后端没有运行。独立模型质量、真实提供方组合、完整首次下载与发布包更新的待办见实施任务的范围边界。
 
 优先采用本 Note 推荐的全部工程状态范围、紧凑摘要和专用审计详情。偏好语义识别的覆盖、审计分页兼容方式以及历史清理涉及的已确认事实若与实施时数据不同，应在本 Note 内更新具体取舍；不要另建缺少来源关系的临时计划文档。

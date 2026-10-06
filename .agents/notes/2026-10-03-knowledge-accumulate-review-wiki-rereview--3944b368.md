@@ -126,6 +126,8 @@ Jev 设置仅在状态文字中标记已配置，可以复用最少控件，但�
 
 ## Verification
 
+2026-10-06 补充核查：[审核详情与状态优化需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)记录工作台与审核侧栏状态不一致、旧评分/精炼入口残留及动作布局问题，尚未实现。本文既有控件测试不覆盖这些新增报告场景；后续按[实施任务](./2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md)完成对应状态、动作与浏览器验收，不把已勾选的软件接入条款扩展解释为当前整体体验无缺口。
+
 `npm run test:unit -- --run tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts` 提供浏览器交互与 IPC 替身验证，覆盖等待、成功、失败重试、重新挂载、显隐、清除及读取门禁。密钥交互的两项浏览器测试通过，IPC 合同的 11 项测试通过；原有其余 11 项界面测试通过。`npm run typecheck` 通过。这些验证不证明真实系统加密或 Jev 鉴权可用。
 
 ### 首次下载与 GPU 部署验证（2026-10-04）
