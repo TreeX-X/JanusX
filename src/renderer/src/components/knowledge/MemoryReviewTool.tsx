@@ -29,7 +29,7 @@ export async function loadReviewCandidates(engineering = true): Promise<InboxCan
   return [...facts, ...wiki, ...graph].filter(candidate => candidate.status === 'proposed')
 }
 
-export function MemoryReviewTool({ active, domain, expanded = false }: { active: boolean; domain?: 'user' | 'engineering'; expanded?: boolean }) {
+export function MemoryReviewTool({ active, domain, expanded = false, showAutomation = true }: { active: boolean; domain?: 'user' | 'engineering'; expanded?: boolean; showAutomation?: boolean }) {
   const engineering = useExperimentalStore(s => s.knowledge) && domain !== 'user'
   const personal = useExperimentalStore(s => s.persona) && domain !== 'engineering'
   const { t } = useI18n('knowledge')
@@ -114,7 +114,7 @@ export function MemoryReviewTool({ active, domain, expanded = false }: { active:
       {filters.filter(filter => filter.scope === 'all' ? engineering && personal : filter.scope === 'user' ? personal : engineering).map(filter => <button key={filter.scope} type="button" aria-pressed={selectedScope === filter.scope} onClick={() => setScope(filter.scope)}>{filter.label} {loading || error ? '—' : filter.count}</button>)}
     </div>}
     <div className={styles.body} aria-busy={loading || busy}>
-      {engineering && <AutomationStatus active={active} hidden={selectedScope === 'user'} onChanged={() => void refresh()} />}
+      {engineering && <AutomationStatus active={active} hidden={!showAutomation || selectedScope === 'user'} onChanged={() => void refresh()} />}
       {selectedScope === 'user' && <p className={styles.personalHint}>{t('knowledge:review.personalManual')}</p>}
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}

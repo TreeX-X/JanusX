@@ -4,6 +4,7 @@ import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import { KnowledgeAssist } from './KnowledgeAssist'
 import { UserPersonaTool } from './UserPersonaTool'
+import { AutomationStatus } from './AutomationStatus'
 import { MemoryReviewTool } from './MemoryReviewTool'
 import styles from './AssistantTool.module.css'
 import surface from './MemorySurface.module.css'
@@ -22,10 +23,11 @@ export function AssistantTool({ active, workspaceId, workspacePath }: {
       {(['engineering', 'personal', 'review'] as const).filter(item => item === 'review' || (item === 'engineering' ? engineering : personal)).map(item =>
         <button key={item} type="button" aria-pressed={section === item} onClick={() => setSection(item)}>{t(`knowledge:assistant.${item}`)}</button>)}
     </nav>
+    {engineering && <AutomationStatus active={active} />}
     <div key={section} className={`${styles.content} ${surface.enter}`}>
       {section === 'engineering' && <KnowledgeAssist workspaceId={workspaceId} workspacePath={workspacePath} />}
       {section === 'personal' && <UserPersonaTool active={active} onOpenReview={() => setSection('review')} />}
-      {section === 'review' && <MemoryReviewTool active={active} />}
+      {section === 'review' && <MemoryReviewTool active={active} showAutomation={false} />}
     </div>
     <button className={styles.open} type="button" onClick={() => {
       setWorkbenchDomain(section === 'personal' || !engineering ? 'personal' : 'engineering')

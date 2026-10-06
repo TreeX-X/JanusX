@@ -108,10 +108,14 @@ export interface KnowledgeAutomationStatus {
     id?: string
     workspaceId?: string
     candidateHash?: string
+    /** Read-only, redacted label from this exact current plan. */
+    displayTitle?: string
     reason?: string
     canRetry?: boolean
   }>
-  tasks: KnowledgeAutomationTask[]
+  tasks: Array<KnowledgeAutomationTask & { displayTitle?: string }>
+  /** Actual successful task update, never a fabricated start time. */
+  lastCompletedAt?: string
   total: number
   counts: Record<AutomationTaskStatus, number>
 }

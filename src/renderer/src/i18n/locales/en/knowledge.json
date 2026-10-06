@@ -710,5 +710,32 @@
     "relationSources": "Relationship source bindings",
     "processingRecord": "Current processing record",
     "refreshSource": "Refresh source"
+  },
+  "summary": {
+    "scope": "All projects",
+    "loading": "Reading processing status…",
+    "unavailable": "Processing status unavailable",
+    "setupNeeded": "Setup needed: {{stages}}",
+    "rulesOnly": "Rule extraction enabled · reviews are manual",
+    "idle": "Automation enabled · waiting for new material",
+    "attention": "Attention {{count}}",
+    "lastCompleted": "Last completed {{time}}",
+    "records": "View records",
+    "retry": "Refresh status",
+    "settings": "Automation settings",
+    "savedStages": "Saved processing modes",
+    "recordArea": "Records",
+    "processingRecords": "Processing records",
+    "auditRecords": "Operation audit",
+    "recordFilter": "Processing record filter",
+    "allTasks": "All tasks",
+    "needsAttention": "Needs attention",
+    "currentTasks": "Current tasks",
+    "noCurrentTasks": "No current tasks match this filter.",
+    "recentTasks": "Recent history",
+    "historyLimit": "Shows up to 200 recent historical tasks. Current tasks appear above.",
+    "noHistory": "No other recent tasks recorded.",
+    "captureDetails": "Capture and rule extraction",
+    "captureHint": "This is the collection and extraction queue. Its counts are separate from automatic review and publication."
   }
 }

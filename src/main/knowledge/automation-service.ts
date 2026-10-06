@@ -121,7 +121,8 @@ export class KnowledgeAutomationService {
   async status(): Promise<KnowledgeAutomationStatus> {
     const [ledger, settings] = await Promise.all([this.read(), this.deps.settings()])
     const counts: KnowledgeAutomationStatus['counts'] = { pending: 0, running: 0, succeeded: 0, 'needs-review': 0, failed: 0, cancelled: 0 }
-    for (const task of ledger.tasks) counts[task.status]++
+    const engineeringTasks = ledger.tasks.filter(task => task.workspaceId !== 'user')
+    for (const task of engineeringTasks) counts[task.status]++
     // Note: current plans separate automatic work from human review — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
     const stages = Object.fromEntries(KNOWLEDGE_STAGES.map(stage => {
       const model = settings.config.stages[stage]
@@ -129,9 +130,12 @@ export class KnowledgeAutomationService {
         : !model.model || model.provider === 'external' && !model.providerId ? 'unconfigured' : 'automatic']
     })) as KnowledgeAutomationStatus['stages']
     const queue: KnowledgeAutomationStatus['queue'] = []
+    const titles = new Map<string, string>()
     if (settings.allowed) {
       const tasks = new Map(ledger.tasks.map(task => [task.id, task]))
       for (const plan of (await this.plans(settings.config, ledger)).values()) {
+        const title = safeReason(plan.candidate?.fact.content ?? plan.patch?.title ?? plan.title ?? plan.observation?.summary ?? plan.observation?.content ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, 96)
+        if (title) titles.set(plan.task.id, title)
         const task = tasks.get(plan.task.id)
         let status = task?.status ?? 'pending'
         if (task && task.dependencyHash !== plan.task.dependencyHash && ['needs-review', 'failed'].includes(status)) status = 'pending'
@@ -141,15 +145,16 @@ export class KnowledgeAutomationService {
         const candidate = plan.candidate ?? plan.patch
         const currentFailure = task && task.dependencyHash === plan.task.dependencyHash && ['failed', 'needs-review'].includes(task.status)
         queue.push({ stage: plan.task.stage, subject: plan.task.subject, status,
-          id: plan.task.id, workspaceId: plan.task.workspaceId,
+          id: plan.task.id, workspaceId: plan.task.workspaceId, displayTitle: title || undefined,
           candidateHash: candidate ? (await reviewCandidateInput(candidate)).candidateHash : undefined,
           reason: stages[plan.task.stage] !== 'automatic' ? 'stage-not-configured' : currentFailure ? safeReason(task.reason ?? '') : undefined,
           canRetry: Boolean(currentFailure && stages[plan.task.stage] === 'automatic'),
         })
       }
     }
-    return { reviewStateVersion: 1, reviewEnabled: settings.reviewEnabled ?? true, running: this.running !== null, enabled: settings.allowed, stages, queue, counts, total: ledger.tasks.length,
-      tasks: [...ledger.tasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200) }
+    return { reviewStateVersion: 1, reviewEnabled: settings.reviewEnabled ?? true, running: this.running !== null, enabled: settings.allowed, stages, queue, counts, total: engineeringTasks.length,
+      lastCompletedAt: engineeringTasks.filter(task => task.status === 'succeeded' && Number.isFinite(Date.parse(task.updatedAt))).map(task => task.updatedAt).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
+      tasks: [...engineeringTasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200).map(task => ({ ...task, displayTitle: titles.get(task.id) })) }
   }
   async retry(id: string): Promise<void> {
     const settings = await this.deps.settings()

@@ -17,7 +17,7 @@ relations:
 work:
   scope:
     - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
-      paths: [package.json, package-lock.json, src/shared/wiki-relations.ts, src/main/knowledge/, src/main/ipc/knowledge-handlers.ts, src/main/ipc/register.ts, src/shared/knowledge.ts, src/shared/knowledge-card.ts, src/shared/knowledge-automation.ts, src/shared/ipc/knowledge.ts, src/shared/review-candidate-snapshot.ts, src/preload/index.ts, src/renderer/src/components/knowledge/, src/renderer/src/services/knowledge.ts, src/renderer/src/services/knowledge-automation.ts, src/renderer/src/stores/, src/renderer/src/lib/electron-api-fallback.ts, src/renderer/src/i18n/, tests/unit/, tests/e2e/knowledge-pipeline.spec.ts, .agents/notes/]
+      paths: [package.json, package-lock.json, src/shared/wiki-relations.ts, src/main/knowledge/, src/main/ipc/knowledge-handlers.ts, src/main/ipc/register.ts, src/shared/knowledge.ts, src/shared/knowledge-card.ts, src/shared/knowledge-automation.ts, src/shared/ipc/knowledge.ts, src/shared/review-candidate-snapshot.ts, src/preload/index.ts, src/renderer/src/components/knowledge/, src/renderer/src/components/KnowledgeAutomationPanel.tsx, src/renderer/src/services/knowledge.ts, src/renderer/src/services/knowledge-automation.ts, src/renderer/src/stores/, src/renderer/src/lib/electron-api-fallback.ts, src/renderer/src/i18n/, tests/unit/, tests/e2e/knowledge-pipeline.spec.ts, .agents/notes/]
   acceptanceRefs:
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
       criterionId: AC-4
@@ -63,7 +63,7 @@ work:
       repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
       cwd: .
       program: npm
-      args: [run, 'test:unit', --, --run, tests/unit/knowledge, tests/unit/memory-review-ui.test.ts, tests/unit/knowledge-review-state-ui.test.ts, tests/unit/knowledge-note-sources.test.ts, tests/unit/knowledge-automation-ui.test.ts, tests/unit/knowledge-ipc-contract.test.ts, tests/unit/knowledge-note-ui.test.ts, tests/unit/knowledge-graph-ui.test.ts, tests/unit/planche-theme.test.ts, --maxWorkers=2, --reporter=dot]
+      args: [run, 'test:unit', --, --run, tests/unit/knowledge, tests/unit/memory-review-ui.test.ts, tests/unit/knowledge-review-state-ui.test.ts, tests/unit/knowledge-note-sources.test.ts, tests/unit/knowledge-automation-ui.test.ts, tests/unit/knowledge-automation-summary-ui.test.ts, tests/unit/assistant-ui.test.ts, tests/unit/knowledge-ipc-contract.test.ts, tests/unit/knowledge-note-ui.test.ts, tests/unit/knowledge-graph-ui.test.ts, tests/unit/planche-theme.test.ts, --maxWorkers=2, --reporter=dot]
     - id: V-3
       kind: command
       required: true
@@ -77,7 +77,7 @@ work:
 
 ## Scope
 
-本任务承接[噪声与界面需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)中的审核详情、Wiki 主图、自动化状态和审计体验。父需求的“工程知识沉淀流程”与“Wiki 主图与证据追溯契约”是用户于 2026-10-06 确认的方向；本任务维护交付顺序、边界和验证。审核规划基线为 `abea07a`，图谱缺陷分析基线为 `fee6423`。S1 的状态绑定、旧操作收口和独立图关系准入已实现，当前批次的真实噪声与图关系积压已按用户授权清理；具体证据见 Results。W1 的主题组织、页间关系与同版本发布，以及 G1 的 Wiki 主图和来源追溯、S2 的审核卡片与详情重整已实现；下一阶段为 S3 自动化紧凑摘要。
+本任务承接[噪声与界面需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)中的审核详情、Wiki 主图、自动化状态和审计体验。父需求的“工程知识沉淀流程”与“Wiki 主图与证据追溯契约”是用户于 2026-10-06 确认的方向；本任务维护交付顺序、边界和验证。审核规划基线为 `abea07a`，图谱缺陷分析基线为 `fee6423`。S1 的状态绑定、旧操作收口和独立图关系准入已实现，当前批次的真实噪声与图关系积压已按用户授权清理；具体证据见 Results。W1 的主题组织、页间关系与同版本发布，以及 G1 的 Wiki 主图和来源追溯、S2 的审核卡片与详情重整已实现；S3 的自动化紧凑摘要和记录入口已实现；下一阶段为 S4 审计分页与专用详情。
 
 已完成基线包括 `bd5d48e` 的个人噪声过滤与 `abea07a` 的工程准入和存量清理，对应父需求 AC-1～3、AC-9。Jev 凭据保存反馈、四环节模型配置、领域开关及 Wiki 历史已有实现，不重复列为开发任务；保留回归。当前便携版未装入新修复属于交付缺口，不能把源码提交或旧窗口刷新当成运行态升级。
 
@@ -91,7 +91,7 @@ work:
 | W1 Wiki 主题与关系发布 | P0；已实现，验证见 Results | 按明确概念细分主题，复用已有页面身份；关系纳入 Wiki 草稿、审核及同版本发布，保留拒绝、目标版本和来源保护。 | 生成、拒绝重放、目标失效及并发发布有隔离回归；图谱默认投影和画布仍由 G1/G2 完成。 |
 | G1 图谱连线与数据正确性 | P0；已实现，验证见 Results | 默认投影已发布 Wiki 页间关系；补齐 React Flow 端点、工作区隔离及缺失诊断，事实/实体/旧证据仅在追溯中按需读取。 | 父需求 G1/G2 通过；主图对象正确，真实浏览器有路径且无锚点报错，输入顺序不改变有效关系。 |
 | S2 审核卡片与详情重整 | P0；已实现，验证见 Results | 工作台、审核侧栏共用状态与动作规则；区分条目、Wiki 草稿及其关系、旧图记录和只读审计，整理正文、证据、替代影响和操作区。 | R1～R5 及 Wiki 关系审核呈现通过，同候选两入口一致，不重建独立关系审核页。 |
-| S3 自动化紧凑摘要 | P1；依赖 S1，并在 S2 接入稳定后实施 | 复用共享订阅，在右侧助手导航下与工程工作台呈现范围明确的阶段、对象、等待及异常摘要；保留处理记录入口。 | P1～P4 验证通过，订阅、轮询、隐藏/恢复和未知状态没有重复请求或假运行提示。 |
+| S3 自动化紧凑摘要 | P1；已实现，验证见 Results | 复用共享订阅，在右侧助手导航下与工程工作台呈现范围明确的阶段、对象、等待及异常摘要；保留处理记录入口。 | P1～P4 验证通过，订阅、轮询、隐藏/恢复和未知状态没有重复请求或假运行提示。 |
 | S4 审计分页与专用详情 | P1；依赖 S2 的对象分型 | 宿主按领域/工作区过滤后分页，列表与计数同范围；保留完整事件快照，实现审计选择、前后变化、关联对象与加载更多。 | A1～A4 通过；审计没有审核按钮，旧事件缺字段不伪造；个人事件不挤占工程分页。 |
 | G2 图谱阅读与布局 | P1；依赖 G1、S1/S2 | Wiki 局部关系阅读与概览切换、二维分量布局、页面标题/关系及方向；点击打开 Wiki，单独展开证据，统一计数与空态说明。 | 父需求 G3 通过；稀疏页面和长标题在双主题、窄窗口中可读，主图与追溯对象数量不混淆。 |
 | S5 跨入口验收与构建交付 | P1；依赖 W1、G1/G2 及 S1～S4 | 集成回归、双主题/窄窗口/键盘验证、隔离 Electron 联调及新构建验证；核验 Wiki 正文、检索与主图版本一致。 | 本任务所引用 AC 有具体证据；明确可运行构建及其版本，实际切换前保护活跃会话，不自动中断终端。 |
@@ -100,7 +100,7 @@ work:
 
 ### 后续逐项细化入口
 
-S1/W1/G1/S2 的行为、契约和验证已记录；其余事项在对应环节落实时补入父需求的行为与验收、以及本任务的范围和证据，保留现有 UUID 与 AC 编号。
+S1/W1/G1/S2/S3 的行为、契约和验证已记录；其余事项在对应环节落实时补入父需求的行为与验收、以及本任务的范围和证据，保留现有 UUID 与 AC 编号。
 
 | 环节 | 待细化问题 | 对应实施位置 |
 | --- | --- | --- |
@@ -126,6 +126,8 @@ S1 的确定性提取不生成共同文件关系；模型旧输出中的 graphEd
 
 **S3**：调整 [AutomationStatus.tsx](../../src/renderer/src/components/knowledge/AutomationStatus.tsx)、[AssistantTool.tsx](../../src/renderer/src/components/knowledge/AssistantTool.tsx)、工作台及 S1 的共享订阅。首版采用全部工程范围并明确标识；个人功能单独开启时不读取或展示关闭的工程域。摘要复用宿主已加载对象生成可读标题，展示失败不回退为“空闲”。single-flight、最后一个订阅者离开停轮询、页面恢复刷新，按父需求给定的运行/空闲节奏测试；同一当前任务不在新旧队列摘要中重复计数。缺少真实开始时间时不显示虚构耗时。
 
+S3 纳入用户确认的顶部布局：摘要不展开配置与记录，四环节说明移入设置，原“审计”入口承载“记录 → 处理记录 / 操作审计”。顶部普通入口打开处理记录，异常入口按当前有效任务筛选；200 条上限只在历史列表内说明。原 KnowledgeStatusBar 的采集/提取信息和手动动作移入记录内按需查看，不与新自动化的队列数量相加。宿主复用当前计划快照返回脱敏对象名及真实最近成功时间；客户端复用 single-flight 订阅，运行 2 秒、空闲及失败 10 秒，隐藏停止并在恢复时刷新。验证覆盖父需求 P1～P4，完成 AC-4/5；AC-8 的状态栏部分随 S3 验证，完整审计布局仍归 S4。
+
 **S4**：调整 [audit-service.ts](../../src/main/knowledge/audit-service.ts)、[knowledge-handlers.ts](../../src/main/ipc/knowledge-handlers.ts)、[shared/ipc/knowledge.ts](../../src/shared/ipc/knowledge.ts)、[services/knowledge.ts](../../src/renderer/src/services/knowledge.ts) 及工作台。先清点 listAudit/auditStats 的调用者，再确定兼容扩展或新增分页接口；不要无差别替换所有数组调用者。排序以事件真实时间和 ID 稳定续页，游标绑定领域、工作区与筛选。前端保留选中的完整 AuditEvent，详情读事件自身的 before/after；当前对象仅用于关联导航。批次、count-only、已撤回和未知动作有明确显示，历史审计不清空。
 
 **S5**：用同一组合夹具贯通 W1、G1/G2 及 S1～S4；在已存在的 [knowledge-pipeline.spec.ts](../../tests/e2e/knowledge-pipeline.spec.ts) 基础上运行隔离 Electron，核验真实 preload/IPC 与宿主动作，以及从条目入库到 Wiki/图谱同版本更新的闭环。构建写入 artifacts/build-check，不覆盖正在运行的开发输出；记录便携版交付是否仍待完成。若需要实际切换运行版本，先检查并保存会话状态；不能把“重启旧便携版”描述为装入新代码。
@@ -146,15 +148,17 @@ S1 的确定性提取不生成共同文件关系；模型旧输出中的 graphEd
 
 把所有改动直接追加到需求正文最省文件，但会把问题、验收和执行状态混在一起；保留需求作为行为依据，以本任务维护唯一实施计划。一次重写整个知识工作台能统一样式，却扩大到已有可用的模型设置、个人画像和 Wiki 历史；本任务按 W1、G1/G2 及 S1～S5 复用现有模块。只修复混合图的连线无法满足 Wiki 主图定位，先明确 Wiki 关系与发布契约再完成主图，锚点故障可独立修复。
 
-S1 继续复用旧评分和仅按候选 ID 分类最省改动，但旧任务不能证明新版本的审核状态；采用当前计划与候选 hash 绑定，并共享读取。代价是旧宿主没有版本字段时界面只能显示未知状态，以及可见订阅期间仍每 5 秒读取计划。当前只解决正确性，2/10 秒刷新和紧凑摘要留给 S3。完全删除旧评分、关系格式与 API 可缩小兼容面，却会损失审计和存量处置入口；保留历史读取与维护能力，新提议统一关闭。W1 提供同版本 Wiki 关系后，再评估旧图格式的迁移范围。
+S1 继续复用旧评分和仅按候选 ID 分类最省改动，但旧任务不能证明新版本的审核状态；采用当前计划与候选 hash 绑定，并共享读取。代价是旧宿主没有版本字段时界面只能显示未知状态，活动订阅仍须周期性读取计划。共享订阅运行时每 2 秒读取，空闲或失败时每 10 秒读取；隐藏或最后一个订阅离开时停止。完全删除旧评分、关系格式与 API 可缩小兼容面，却会损失审计和存量处置入口；保留历史读取与维护能力，新提议统一关闭。W1 提供同版本 Wiki 关系后，再评估旧图格式的迁移范围。
 
 S2 复用两入口的审核组件和现有 Markdown/只读来源接口，避免两套详情分别维护状态及写保护。维持原通用详情最省改动，但会继续混用历史评分、对象动作及原始 Markdown；重建独立审核服务会扩大 IPC 与事务边界，本阶段不采用。完整来源和已发布页面比较按需读取，代价是展开后才得到该次读取的可用性；已知失败保持阻止批准，最终写保护仍由宿主执行。来源缓存随候选快照失效，不新增持久副本。
 
+S3 保留顶部的当前状态与入口，把配置和历史放入各自的阅读区域。继续在顶部折叠所有内容便于就地展开，但展开后仍会挤压知识正文；另建仪表盘会增加重复导航和状态来源。因此复用设置页及原审计导航，处理记录和操作审计分别承载任务与事件。代价是详细配置和历史需要一次跳转；摘要保留异常直达、等待数与最近完成时间。只从当前计划生成标题，旧历史没有对应对象时显示阶段名称，避免额外扫描来源或把新版本内容误认为旧任务标题。若实际记录检索需求超过最近 200 条，再单独扩展任务历史查询，S4 的事件分页不改变此上限。
+
 ## Acceptance criteria
 
-以下为父需求的引用，不另造或重编号行为条款。S1 完成 AC-11/12，W1 完成 AC-18，G1 完成 AC-15/16；S2 完成 AC-10/13/14 的内容分层、分数语义、有效动作和阅读布局。其他部分交付不等于整条验收完成。
+以下为父需求的引用，不另造或重编号行为条款。S1 完成 AC-11/12，W1 完成 AC-18，G1 完成 AC-15/16；S2 完成 AC-10/13/14 的内容分层、分数语义、有效动作和阅读布局。S3 完成 AC-4/5 及 AC-8 的状态摘要部分，完整审计布局仍归 S4。其他部分交付不等于整条验收完成。
 
-- [ ] [状态摘要 AC-4](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-4)、[共享订阅 AC-5](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-5)。
+- [x] [状态摘要 AC-4](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-4)、[共享订阅 AC-5](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-5)。
 - [ ] [审计详情 AC-6](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-6)、[审计分页 AC-7](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-7)、[布局 AC-8](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-8)。
 - [x] [当前审核信息 AC-10](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-10)。
 - [x] [旧操作收口 AC-11](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-11)、[两入口一致性 AC-12](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-12)。
@@ -168,12 +172,12 @@ S2 复用两入口的审核组件和现有 Markdown/只读来源接口，避免�
 
 图谱扩展既有 [knowledge-graph.test.ts](../../tests/unit/knowledge/knowledge-graph.test.ts)，并增加真实画布浏览器回归，覆盖父需求 G1～G5；断言 SVG 路径生成和可见线段，同时监听 React Flow error 008。水平路径可能具有零高度包围盒，不能只依赖 Playwright 的元素 visible 判定，应结合路径、样式与截图。W1 扩展 automation-service 与 Wiki 审核/历史/恢复相关测试，覆盖正文和关系同版本发布、失败草稿隔离、拒绝后重放及目标页面失效。写入使用隔离存储，不操作在线库。
 
-阶段验证优先扩展现有用例：S1 使用 candidate-actions、automation-service、memory-domain-controls 与 knowledge-ipc-contract；S2 使用 memory-review-tool、memory-review-ui、workbench-selection 与 knowledge-note-ui，补工作台右侧真实组件的状态矩阵，不能只验证侧栏；S3 使用 knowledge-automation-ui，补共享订阅计时和迟到响应；S4 使用 audit-service、workbench-service 和浏览器审计夹具。父需求 R/P/A 用例规定输入和断言。新增独立测试文件仅用于现有入口无法覆盖的行为，不为样式细节逐条造实现镜像测试。
+阶段验证优先扩展现有用例：S1 使用 candidate-actions、automation-service、memory-domain-controls 与 knowledge-ipc-contract；S2 使用 memory-review-tool、memory-review-ui、workbench-selection 与 knowledge-note-ui，补工作台右侧真实组件的状态矩阵，不能只验证侧栏；S3 使用 knowledge-automation-ui、knowledge-automation-summary-ui 和 assistant-ui，覆盖共享订阅计时、迟到响应和跨入口导航；S4 使用 audit-service、workbench-service 和浏览器审计夹具。父需求 R/P/A 用例规定输入和断言。新增独立测试文件仅用于现有入口无法覆盖的行为，不为样式细节逐条造实现镜像测试。
 
-公共检查入口如下；S1/W1/G1/S2 的已运行结果见 Results，后续阶段仍须按变更补齐对应检查：
+公共检查入口如下；S1/W1/G1/S2/S3 的已运行结果见 Results，后续阶段仍须按变更补齐对应检查：
 
 ```text
-npm run test:unit -- --run tests/unit/knowledge tests/unit/memory-review-ui.test.ts tests/unit/knowledge-review-state-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/knowledge-graph-ui.test.ts tests/unit/planche-theme.test.ts --maxWorkers=2 --reporter=dot
+npm run test:unit -- --run tests/unit/knowledge tests/unit/memory-review-ui.test.ts tests/unit/knowledge-review-state-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-automation-summary-ui.test.ts tests/unit/assistant-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/knowledge-graph-ui.test.ts tests/unit/planche-theme.test.ts --maxWorkers=2 --reporter=dot
 npm run typecheck:strict-unused
 npm run i18n:types
 npm run i18n:check
@@ -197,7 +201,7 @@ S1 机器验证：上述完整知识回归为 78 个文件通过、4 个按条�
 
 当前便携版工程开关原为关闭，自动化配置保存为开启。首次拒绝请求被领域门禁挡住；维护期间仅临时开启工程域并暂停自动化，完成后在 finally 恢复完整设置，复核相等。处理使用候选 hash 和既有拒绝/撤回审计，没有重写在线 JSONL、删除来源或重启应用/终端，临时调试监听已关闭。本地忽略产物 `artifacts/knowledge-s1-cleanup-plan.json`、`knowledge-s1-cleanup-result.json` 和 `knowledge-s1-cleanup-verified.json` 保留预览、审计及复核证据，不将完整私人数据提交入库。
 
-任务仍为 proposed：S3/S4、G2、S5 未完成。图谱阅读与布局、完整审计阅读界面、2/10 秒状态摘要、真实模型质量、隔离 Electron 全流程及发布包切换仍待对应阶段。当前旧便携进程未装入新代码，源码能力需更新后的运行构建；原工程开关已恢复关闭，存量清理不等于运行版升级。
+任务仍为 proposed：S4、G2、S5 未完成。图谱阅读与布局、完整审计阅读界面、真实模型质量、隔离 Electron 全流程及发布包切换仍待对应阶段。当前旧便携进程未装入新代码，源码能力需更新后的运行构建；原工程开关已恢复关闭，存量清理不等于运行版升级。
 
 2026-10-06：W1 按 xdo 直接实施。验收固定于 `7c7b4ec021528e041f8cf956a3b94b05bcfd7fbb` 的本任务和父需求；任务契约 hash 为 `fbe5dff05516b214a39621bd4ee218882f098ddfcb83603b43e7402c39e9bb63`，父需求原始文件 SHA-256 为 `dba71f07733d49e1f1f263df91fff405c014b0b96152d158ae5bf72e9b9b7674`。新增纯分组/关系模块，扩展 shared 类型与知识合同，IPC 方法集合保持兼容。Markdown AST 解析器沿用已安装的 mdast-util-from-markdown 2.0.3，仅将声明从开发依赖移到运行依赖。
 
@@ -228,4 +232,14 @@ S2 完整知识回归使用 Verification 中的命令，81 个文件通过、4 �
 
 浏览器覆盖 320/390px 侧栏、640×720 窗口和 1280×900 桌面，分别使用 dark/planche；长正文、证据、ID、表格及代码不造成横向溢出，操作保留在阅读区外。机器检查元素几何、滚动和焦点，人工核对窄侧栏、窄工作台与桌面截图；合成截图位于 `artifacts/knowledge-s2-browser/`。Markdown 不执行 HTML，原始证据按文本显示，源图片不自动加载。模型与宿主 IPC 使用替身，完整 Electron 验收和便携包更新仍归 S5。
 
-S2 的 `npm run typecheck:strict-unused`、7 个变更生产 TS/TSX 文件 ESLint、`npm run i18n:types`、`npm run i18n:check`、`npm run check:package-boundary` 和 `npm run build:check` 均通过。隔离构建输出为 `artifacts/build-check`，未切换或重启当前便携版，也未再次修改在线知识存储。`npm run check:notes` 检查 247 篇 Note，0 errors、27 项既有外部链接诊断；`git diff --check` 通过。本任务保持 proposed，后续顺序为 S3 → S4 → G2 → S5。
+S2 的 `npm run typecheck:strict-unused`、7 个变更生产 TS/TSX 文件 ESLint、`npm run i18n:types`、`npm run i18n:check`、`npm run check:package-boundary` 和 `npm run build:check` 均通过。隔离构建输出为 `artifacts/build-check`，未切换或重启当前便携版，也未再次修改在线知识存储。`npm run check:notes` 检查 247 篇 Note，0 errors、27 项既有外部链接诊断；`git diff --check` 通过。本任务保持 proposed，后续顺序为 S4 → G2 → S5。
+
+2026-10-06：S3 按 xdo 直接实施并自检，未委派代理。验收基线为 `7a0cc2c0d6015b4b6685863d19fcd8eac7ca583b`；taskContractHash 为 `2bb6f201a2a97fdb08cc696624205851d4802af6f4b3121c61249ffbb03b2845`，父需求原始 SHA-256 为 `39a05e9b2b437f5e4dd0cbdd345be01dc5bcf821a183c1b4c84d63eec5ef39ee`。本阶段纳入用户确认的顶部布局，范围补充 KnowledgeAutomationPanel，验证入口补充摘要及助手浏览器测试；AC 编号保持稳定。
+
+摘要以“全部工程”标识范围，顶部只呈现两行状态及记录、设置入口。“处理范围与环节”在设置中读取，手动运行与历史补扫继续先保存设置；处理记录与操作审计共用“记录”导航下的两个视图。当前队列与历史分开显示，历史失败不获得当前任务的重试能力，当前异常入口不混入旧失败数量。宿主复用计划快照返回最多 96 字符的脱敏标题，不额外读取原文；已完成任务缺少当前计划时只显示阶段，不查找其他版本标题。工程历史、计数及最近成功时间排除个人域，真实最近成功时间不受最近 200 条窗口限制。接口扩展为可选返回字段，IPC 方法和存储格式不变，模块声明同步接口含义。
+
+S3 知识回归使用 Verification 中的知识库命令（该次不含独立 assistant-ui 文件），82 个文件通过、4 个按条件跳过，844 项通过、5 项跳过，日志为 `artifacts/knowledge-s3-acceptance.log`。其中新增摘要浏览器测试 13 项，覆盖真实组件、运行 2 秒/空闲 10 秒、共享请求、慢响应、错误刷新、隐藏/恢复、最后订阅卸载及迟到结果隔离。宿主测试覆盖只读标题、工作区隔离、脱敏，以及 201 条较新失败与个人成功记录不改变工程最近成功时间。另行运行 `npm run test:unit -- --run tests/unit/assistant-ui.test.ts --maxWorkers=2 --reporter=dot`，6 项全部通过；测试移除与 S2 单层详情不一致的旧卡片边框比较，保留领域隔离、布局、真实加载反馈及快捷入口验证。
+
+真实 Chromium 验证 dark/planche、320/390/640/1280px；摘要高度不超过 64px，工程顶部不超过 72px，长中文标题与技术 ID 不产生横向溢出。键盘可聚焦并打开当前异常，处理记录与操作审计切换、设置跳转和工程开关关闭均有交互断言。人工核对窄侧栏、窄工作台及中文运行态截图，产物位于忽略目录 `artifacts/knowledge-s3-browser/`。模型和宿主接口使用替身，未执行真实模型质量或完整 Electron 端到端验收。
+
+`npm run typecheck:strict-unused`、10 个变更生产 TS/TSX 文件 ESLint、`npm run i18n:types`、`npm run i18n:check`、`npm run check:package-boundary` 及 `npm run build:check` 均通过。隔离构建输出为 `artifacts/build-check`。`npm run check:notes` 为 247 篇、0 errors、27 项既有外部链接诊断，`git diff --check` 通过。当前便携版与在线知识存储未改动。AC-4/5 完成；AC-8 仅摘要部分完成，审计完整详情/分页归 S4，图谱阅读归 G2，运行交付归 S5，任务整体保持 proposed。

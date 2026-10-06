@@ -710,5 +710,32 @@
     "relationSources": "关系来源绑定",
     "processingRecord": "当前处理记录",
     "refreshSource": "重新读取来源"
+  },
+  "summary": {
+    "scope": "全部工程",
+    "loading": "正在读取运行状态…",
+    "unavailable": "运行状态暂不可用",
+    "setupNeeded": "待配置：{{stages}}",
+    "rulesOnly": "规则提取已开启 · 审核由人工处理",
+    "idle": "自动化已开启，等待新内容",
+    "attention": "需处理 {{count}}",
+    "lastCompleted": "最近完成 {{time}}",
+    "records": "查看记录",
+    "retry": "刷新状态",
+    "settings": "自动化设置",
+    "savedStages": "已保存的环节模式",
+    "recordArea": "记录",
+    "processingRecords": "处理记录",
+    "auditRecords": "操作审计",
+    "recordFilter": "处理记录筛选",
+    "allTasks": "全部任务",
+    "needsAttention": "待处理",
+    "currentTasks": "当前任务",
+    "noCurrentTasks": "没有符合筛选条件的当前任务。",
+    "recentTasks": "近期历史",
+    "historyLimit": "最多读取 200 条近期历史任务，当前任务单独显示在上方。",
+    "noHistory": "暂无其他近期任务记录。",
+    "captureDetails": "采集与规则提取",
+    "captureHint": "此处展示采集与提取队列，计数与自动审核、发布任务分别计算。"
   }
 }

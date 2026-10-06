@@ -29,6 +29,7 @@ import { ObservationRevokeControl } from './ObservationRevokeControl'
 import { ObservationRevocations } from './ObservationRevocations'
 import { KnowledgeStatusBar } from './KnowledgeStatusBar'
 import { AutomationStatus } from './AutomationStatus'
+import { AutomationRecords } from './AutomationRecords'
 import { useKnowledgeAutomation } from '../../services/knowledge-automation'
 import { assertCandidateCanReview } from './candidateReviewState'
 import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
@@ -117,11 +118,14 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     wiki: t('knowledge:tab.wiki'),
     graph: t('knowledge:tab.graph'),
     search: t('knowledge:tab.search'),
-    audit: t('knowledge:tab.audit'),
+    audit: t('knowledge:summary.recordArea'),
     settings: t('knowledge:domains.settings'),
   }
   const { status: automation } = useKnowledgeAutomation(isOpen && domain === 'engineering' && engineeringEnabled)
   const [tab, setTab] = useState<KnowledgeWorkbenchTab>('inbox')
+  const [recordTab, setRecordTab] = useState<'processing' | 'audit'>('processing')
+  const [attentionOnly, setAttentionOnly] = useState(false)
+  const automationView = useAssistantStore(s => s.automationView)
   const activeTabRef = useRef(tab)
   activeTabRef.current = tab
   const [snapshot, setSnapshot] = useState<KnowledgeWorkbenchSnapshot | null>(null)
@@ -275,6 +279,18 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     }
   }
 
+  useEffect(() => {
+    if (!isOpen || !engineeringEnabled || !automationView) return
+    setTab(automationView === 'settings' ? 'settings' : 'audit')
+    setRecordTab('processing'); setAttentionOnly(automationView === 'attention')
+    setSelectedId(''); setSelectedSearch(null)
+    useAssistantStore.getState().requestAutomationView(null)
+  }, [isOpen, engineeringEnabled, automationView])
+
+  const openRecords = (attention: boolean) => {
+    activateTab('audit'); setRecordTab('processing'); setAttentionOnly(attention)
+  }
+
   const selectCandidate = (id: string) => {
     setSelectedSearch(null)
     setSelectedId(id)
@@ -399,10 +415,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
             />
           </div>}
         </header>
-        <div className={styles.statusCard} style={cardStyle(1)}>
+        <div className={styles.statusCard} data-domain={domain} style={cardStyle(1)}>
           {domain === 'personal' ? <div className={styles.personalStatus}><strong>{t('knowledge:domains.personal')}</strong><span>{t('knowledge:personalBoard.description')}</span></div> : <>
-          <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
-          <AutomationStatus active={isOpen} onChanged={() => void refresh()} showSettingsEntry={false} />
+          <AutomationStatus active={isOpen} onChanged={() => void refresh()} onOpenRecords={openRecords} onOpenSettings={() => activateTab('settings')} />
           </>}
         </div>
         <main key={domain} className={styles.grid} data-domain={domain} data-detail-open={cardPlan.detailOpen ? 'true' : 'false'}>
@@ -431,7 +446,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                 onClick={() => activateTab(item)}
               >
                 <span>{TAB_LABELS[item]}</span>
-                <span className={styles.paneCount}>{tabCounts[item]}</span>
+                {item !== 'audit' && <span className={styles.paneCount}>{tabCounts[item]}</span>}
               </button>
             ))}
             <div className={styles.navLabel}>{t('knowledge:nav.special')}</div>
@@ -444,7 +459,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                 onClick={() => activateTab(item)}
               >
                 <span>{TAB_LABELS[item]}</span>
-                <span className={styles.paneCount}>{tabCounts[item]}</span>
+                {item !== 'audit' && <span className={styles.paneCount}>{tabCounts[item]}</span>}
               </button>
             ))}
             <button type="button" className={`${styles.navButton} ${tab === 'settings' ? styles.navActive : ''}`} aria-current={tab === 'settings' ? 'page' : undefined} onClick={() => activateTab('settings')}>{TAB_LABELS.settings}</button>
@@ -452,7 +467,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
           <section key={tab} className={styles.stage} style={cardStyle(3)} aria-busy={tab !== 'settings' && loadState === 'loading'}>
             <div className={styles.paneHeader}>
               <div className={styles.paneTitle}>{paneTitle}</div>
-              {tab !== 'settings' && <span className={styles.paneCount} aria-label={t('knowledge:aria.paneCount', { title: paneTitle })}>{paneCount}</span>}
+              {tab !== 'settings' && tab !== 'audit' && <span className={styles.paneCount} aria-label={t('knowledge:aria.paneCount', { title: paneTitle })}>{paneCount}</span>}
             </div>
             {tab === 'settings' && <div className={styles.settingsContent}><KnowledgeSettingsPanel /></div>}
             {tab !== 'settings' && loadState === 'loading' && <CardSkeleton lines={4} label={t('knowledge:state2.loadingRecords')} />}
@@ -467,7 +482,19 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                 <CardCollection title={t('knowledge:wiki.empty.title')} detail={t('knowledge:wiki.empty.detail')} cards={snapshot.wikiPatches.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />
               </div>}
               {tab === 'graph' && <KnowledgeGraphCanvas key={snapshot.loadedAt} snapshot={snapshot} selectedId={selectedId} resolveRecord={resolveCanvasRecord} onSelect={selectGraph} />}
-              {tab === 'audit' && <><ObservationRevocations /><AuditList events={snapshot.auditEvents} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} /></>}
+              {tab === 'audit' && <div className={styles.recordsContent}>
+                <div className={styles.domainNavigation} role="group" aria-label={t('knowledge:summary.recordArea')}>
+                  <button type="button" aria-pressed={recordTab === 'processing'} onClick={() => { setRecordTab('processing'); clearDetail() }}>{t('knowledge:summary.processingRecords')}</button>
+                  <button type="button" aria-pressed={recordTab === 'audit'} onClick={() => { setRecordTab('audit'); clearDetail() }}>{t('knowledge:summary.auditRecords')}</button>
+                </div>
+                {recordTab === 'processing' ? <>
+                  <AutomationRecords active={isOpen} attentionOnly={attentionOnly} onFilterChange={setAttentionOnly} onChanged={() => void refresh()} />
+                  <details className={styles.legacyProcessing}><summary>{t('knowledge:summary.captureDetails')}</summary>
+                    <p>{t('knowledge:summary.captureHint')}</p>
+                    <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
+                  </details>
+                </> : <><ObservationRevocations /><AuditList events={snapshot.auditEvents} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} /></>}
+              </div>}
             </>}
           </section>
           {detailAnim.rendered ? (

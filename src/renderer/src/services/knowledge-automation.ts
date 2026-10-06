@@ -12,7 +12,7 @@ let flight: Promise<void> | undefined
 const emit = () => { for (const listener of listeners) listener() }
 function schedule() {
   clearTimeout(timer)
-  if (users && !document.hidden) timer = setTimeout(() => void refreshKnowledgeAutomation(), 5000)
+  if (users && !document.hidden) timer = setTimeout(() => void refreshKnowledgeAutomation(), state.status?.running ? 2000 : 10000)
 }
 export function refreshKnowledgeAutomation(): Promise<void> {
   if (flight) return flight

@@ -51,6 +51,55 @@ async function candidate(index: number, concept = 'workflow'): Promise<Candidate
 }
 async function facts(items: MemoryFact[]) { await mkdir(join(root, 'facts'), { recursive: true }); await writeFile(join(root, 'facts/facts.jsonl'), items.map(item => JSON.stringify(item)).join('\n') + '\n') }
 describe('durable knowledge automation', () => {
+  it('projects bounded subject labels from the current plan without extra snapshots or content reads', async () => {
+    const item = await candidate(1)
+    item.fact.content = 'Backup policy\n' + 'long-title '.repeat(50)
+    await writeFile(join(root, 'facts/candidates.jsonl'), JSON.stringify(item) + '\n')
+    const snapshot = vi.spyOn(deps, 'snapshot')
+    const content = vi.spyOn(deps, 'content')
+    const state = await service.status()
+    const task = state.queue.find(task => task.subject === item.id)!
+    expect(task.displayTitle).toBe(item.fact.content.replace(/\n/g, ' ').slice(0, 96))
+    expect(task.displayTitle).not.toContain(item.id)
+    expect(snapshot).toHaveBeenCalledTimes(1)
+    expect(content).not.toHaveBeenCalled()
+    expect(state.lastCompletedAt).toBeUndefined()
+  })
+
+  it('reports only actual successful update times, even when other tasks fail later', async () => {
+    await candidate(1)
+    await service.run()
+    const completed = (await service.status()).lastCompletedAt
+    expect(completed).toBe(new Date(now).toISOString())
+    const ledgerPath = join(root, 'processing/automation-tasks.json')
+    const ledger = JSON.parse(await readFile(ledgerPath, 'utf8'))
+    ledger.tasks.push(...Array.from({ length: 201 }, (_, index) => ({ ...ledger.tasks[0], id: 'later-failure-' + index, subject: 'missing-source', status: 'failed', updatedAt: new Date(now + 1000 + index).toISOString() })))
+    ledger.tasks.push({ ...ledger.tasks[0], id: 'private-history', workspaceId: 'user', status: 'succeeded', updatedAt: new Date(now + 10000).toISOString() })
+    await writeFile(ledgerPath, JSON.stringify(ledger))
+    const status = await service.status()
+    expect(status.counts.failed).toBeGreaterThan(0)
+    expect(status.lastCompletedAt).toBe(completed)
+    expect(status.tasks).toHaveLength(200)
+    expect(status.tasks.some(task => task.workspaceId === 'user')).toBe(false)
+    expect(status.counts.succeeded).toBe(1)
+  })
+
+  it('redacts labels and keeps same-ID candidates bound to their workspace', async () => {
+    const item = await candidate(1)
+    const snapshot = await deps.snapshot()
+    const secret = 'sk-' + 'a'.repeat(48)
+    deps.snapshot = async () => ({ ...snapshot, candidates: [
+      { ...item, fact: { ...item.fact, content: `Backup API_KEY=${secret}` } },
+      { ...item, fact: { ...item.fact, content: 'Other project policy', provenance: { ...item.fact.provenance, workspaceId: 'other' } } },
+      { ...item, fact: { ...item.fact, content: 'Private preference', scope: 'user', provenance: { ...item.fact.provenance, workspaceId: 'user' } } },
+    ] })
+    const state = await service.status()
+    expect(state.queue.find(task => task.workspaceId === 'project')?.displayTitle).toBe('Backup API_KEY=[REDACTED]')
+    expect(state.queue.find(task => task.workspaceId === 'other')?.displayTitle).toBe('Other project policy')
+    expect(JSON.stringify(state)).not.toContain(secret)
+    expect(state.queue.some(task => task.workspaceId === 'user')).toBe(false)
+  })
+
   it('binds current review status to the proposal and rejects retries after it changes', async () => {
     const item = await candidate(1)
     review.mockResolvedValue({ verdict: 'uncertain', reason: 'Need source context', complete: false, conflict: false, coveredIds: [] })

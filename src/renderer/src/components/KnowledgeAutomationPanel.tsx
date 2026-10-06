@@ -6,7 +6,7 @@ import { defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationS
 import { KnowledgeLocalModelPanel } from './KnowledgeLocalModelPanel'
 import { Select } from './ui/Select'
 import { JevCredentialFields } from './knowledge/JevCredentialFields'
-import { AutomationStatus } from './knowledge/AutomationStatus'
+import { AutomationSettingsStatus } from './knowledge/AutomationStatus'
 import styles from './KnowledgeSettingsPanel.module.css'
 import automationStyles from './KnowledgeAutomationPanel.module.css'
 
@@ -75,6 +75,6 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
       <JevCredentialFields disabled={disabled} />
     </fieldset>}
     {error && <p className={`${styles.status} ${styles.statusError}`} role="alert">{error}</p>}
-    <AutomationStatus active beforeRun={onSave} disabled={disabled || !knowledgeEnabled || !config.enabled} />
+    <AutomationSettingsStatus beforeRun={onSave} disabled={disabled || !knowledgeEnabled || !config.enabled} />
   </section>
 }

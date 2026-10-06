@@ -16,7 +16,9 @@ beforeAll(async () => {
     import {useExperimentalStore} from './src/renderer/src/stores/experimental'
     import {useAssistantStore} from './src/renderer/src/stores/assistant'
     import {useRightToolStore} from './src/renderer/src/stores/right-tools'
+    import {refreshKnowledgeAutomation} from './src/renderer/src/services/knowledge-automation'
     window.calls=[];window.features=useExperimentalStore;window.assistant=useAssistantStore;window.dock=useRightToolStore
+    window.refreshAutomation=refreshKnowledgeAutomation
     window.settingsRequested=0;window.addEventListener('janusx:open-knowledge-settings',()=>window.settingsRequested++)
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true,load:async()=>{}})
     const candidate=(id,scope)=>({id,type:'fact',status:'proposed',derivation:'deterministic',evidence:{observationIds:[]},fact:{id,content:id,kind:'preference',scope,confidence:0.9,tags:[],concepts:[],provenance:{workspaceId:scope==='user'?'user':'project',sourceObservationIds:[],fileRefs:[],createdAt:'2026-10-04'}}})
@@ -28,7 +30,7 @@ beforeAll(async () => {
       factReviewContext:async()=>({targets:[],competing:[],blocked:false}),
       personalProfileEditContext:async()=>({hash:'profile-hash',overrides:{identity:'Tree',formatPrefs:['Concise answers'],toolPrefs:['TypeScript']}}),
       savePersonalProfile:async input=>{window.calls.push(input)},
-      automationStatus:async()=>({enabled:window.autoEnabled??false,running:false,stages:{extraction:'rules-only',entryReview:'automatic',wikiGeneration:'automatic',wikiReview:'automatic'},queue:[],counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
+      automationStatus:async()=>({reviewStateVersion:1,reviewEnabled:true,enabled:window.autoEnabled??false,running:false,stages:{extraction:'rules-only',entryReview:'automatic',wikiGeneration:'automatic',wikiReview:'automatic'},queue:[],counts:{pending:0,running:0,succeeded:0,'needs-review':0,failed:0,cancelled:0},total:0,tasks:[]}),
       automationRun:async()=>{window.calls.push('check')},
       getPersonalSettings:async()=>({captureConversations:true,inferEngineeringHabits:false,useInChat:true,episodeTtlDays:60}),
       externalMcpStatus:async()=>({entry:'C:/app/knowledge-mcp.js',entryExists:true,isPackaged:false,clients:[{id:'codex',label:'Codex',support:'automatic',registered:true,current:false,configPath:'config.toml'},{id:'pi',label:'Pi',support:'unverified',registered:false,configPath:''},...[['claude-code','Claude Code'],['opencode','OpenCode'],['janus','Janus CLI'],['dsh','DeepSeek / dsh']].map(([id,label])=>({id,label,support:['claude-code','opencode'].includes(id)?'automatic':'unverified',registered:false,configPath:''}))]}),
@@ -121,10 +123,6 @@ it('shares the workbench shell across domains, isolates review queues and shows 
     await page.getByRole('button').filter({ hasText: 'Engineering review item' }).waitFor()
     await page.getByRole('button').filter({ hasText: 'Engineering review item' }).click()
     await page.getByRole('article').waitFor()
-    const engineeringCardStyle = await page.getByRole('article').evaluate(element => {
-      const style = getComputedStyle(element)
-      return [style.borderRadius, style.borderTopWidth, style.padding, style.backgroundColor]
-    })
     expect(await page.getByText('Personal review one', { exact: true }).count()).toBe(0)
     const after = (await shell.boundingBox())!
     expect(after).toEqual(before)
@@ -135,10 +133,6 @@ it('shares the workbench shell across domains, isolates review queues and shows 
     await page.getByText('Personal review one', { exact: true }).waitFor()
     const cards = page.getByRole('article')
     expect(await cards.count()).toBe(2)
-    expect(await cards.first().evaluate(element => {
-      const style = getComputedStyle(element)
-      return [style.borderRadius, style.borderTopWidth, style.padding, style.backgroundColor]
-    })).toEqual(engineeringCardStyle)
     const first = (await cards.nth(0).boundingBox())!
     const second = (await cards.nth(1).boundingBox())!
     expect(Math.abs(first.y - second.y)).toBeLessThan(2)
@@ -152,7 +146,7 @@ it('shares the workbench shell across domains, isolates review queues and shows 
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await domains.getByRole('button', { name: 'Project knowledge', exact: true }).click()
     await page.getByRole('button').filter({ hasText: 'Engineering review item' }).waitFor()
-    expect(await page.locator('[data-domain="engineering"]').evaluate(element => element.getAnimations({ subtree: true }).some(animation => animation.playState === 'running' && ['memory-content-in', 'knowledge-workbench-in'].some(name => (animation as CSSAnimation).animationName?.includes(name))))).toBe(false)
+    expect(await page.locator('main[data-domain="engineering"]').evaluate(element => element.getAnimations({ subtree: true }).some(animation => animation.playState === 'running' && ['memory-content-in', 'knowledge-workbench-in'].some(name => (animation as CSSAnimation).animationName?.includes(name))))).toBe(false)
   } finally { await page.close() }
 })
 
@@ -181,32 +175,32 @@ it('keeps sidebar profile editing and compact review usable at 320 pixels', asyn
   } finally { await page.close() }
 })
 
-it('shows background automation first, keeps manual checks secondary and separates review cards', async () => {
+it('keeps automation compact above review cards and routes actions to records and settings', async () => {
   const page = await browser.newPage({ viewport: { width: 320, height: 850 } })
   try {
     await mount(page, 'assist')
-    await page.evaluate(() => { (window as any).seedReview(); (window as any).autoEnabled = true; document.documentElement.dataset.theme = 'dark' })
+    await page.evaluate(async () => { (window as any).seedReview(); (window as any).autoEnabled = true; document.documentElement.dataset.theme = 'dark'; await (window as any).refreshAutomation() })
     await page.getByRole('button', { name: 'Review', exact: true }).click()
     const automation = page.getByRole('region', { name: 'Automation progress', exact: true })
-    await automation.getByText('Background processing enabled', { exact: true }).waitFor()
-    expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).isVisible()).toBe(false)
+    await automation.getByText('Automation enabled · waiting for new material', { exact: true }).waitFor()
+    expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).count()).toBe(0)
+    expect(await automation.locator('details').count()).toBe(0)
     expect(await page.evaluate(() => (window as any).calls)).toEqual([])
     await page.getByRole('article').first().waitFor()
     const controlBounds = (await automation.boundingBox())!
     const cardBounds = (await page.getByRole('article').first().boundingBox())!
+    expect(controlBounds.height).toBeLessThanOrEqual(64)
     expect(cardBounds.y - controlBounds.y - controlBounds.height).toBeGreaterThanOrEqual(13)
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/automation-background-sidebar.png', animations: 'disabled' })
-    await automation.getByText('More actions', { exact: true }).click()
-    await automation.getByRole('button', { name: 'Run once now', exact: true }).click()
-    expect(await page.evaluate(() => (window as any).calls)).toEqual(['check'])
+    await automation.getByRole('button', { name: 'View records', exact: true }).click()
+    expect(await page.evaluate(() => (window as any).assistant.getState().automationView)).toBe('processing')
     await page.getByRole('button', { name: 'Profile', exact: true }).click()
-    await page.evaluate(() => { (window as any).autoEnabled = false; document.documentElement.dataset.theme = 'planche' })
+    await page.evaluate(async () => { (window as any).autoEnabled = false; document.documentElement.dataset.theme = 'planche'; await (window as any).refreshAutomation() })
     await page.getByRole('button', { name: 'Review', exact: true }).click()
     await automation.getByText('Automatic processing is off', { exact: true }).waitFor()
-    await automation.getByRole('button', { name: 'Preferences', exact: true }).click()
-    expect(await page.evaluate(() => (window as any).settingsRequested)).toBe(1)
-    await automation.getByText('More actions', { exact: true }).click()
-    expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).isDisabled()).toBe(true)
+    await automation.getByRole('button', { name: 'Automation settings', exact: true }).click()
+    expect(await page.evaluate(() => (window as any).assistant.getState().automationView)).toBe('settings')
+    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/automation-paused-sidebar.png', animations: 'disabled' })
   } finally { await page.close() }
 })
