@@ -54,8 +54,8 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
 }
 
-// Note: 会话表面一律由 --shell-chrome 朝 --shell-text 混出，右栏列表卡片、详情页
-// turn 卡片、diff 面板共用同一套档位 — 见
+// Note: 会话表面混色档位只服务详情窗（turn 卡/孤儿卡/diff 面）；右栏列表面板的
+// 地/卡/内卡三阶走 A 方案高保真逐值，在 SessionPanel.module.css — 见
 // .agents/notes/2026-09-29-session-card-surface--764d5d26.md
 //
 // 为什么不能直接用 --shell-card / --shell-chrome：planche 的 --shell-void /
@@ -214,7 +214,7 @@ export function SessionPanel() {
   }, [loading, visible.length])
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className={`flex flex-col h-full overflow-hidden ${styles.panelGround}`}>
       <div
         className="px-3 pt-3 shrink-0"
         style={{ borderBottom: '1px solid var(--border)' }}
@@ -887,11 +887,8 @@ function SessionCard({
 
   return (
     <div
-      className="transition-colors"
+      className={`transition-colors ${styles.cardSurface}`}
       style={{
-        background: SURFACE_CARD,
-        border: CARD_BORDER,
-        borderRadius: 6,
         padding: 10,
         opacity: session.archived ? 0.62 : 1,
       }}

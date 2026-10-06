@@ -32,9 +32,29 @@
   }
 }
 
-/* 内容卡浅纸面（首轮提示 / 最近轮次）：planche 为暖白纸 #F8F2E0（浅纸卡
-   变体 A），dark 为提亮浮起块。表面阶梯唯一带填充的例外，见
-   .agents/notes/2026-09-29-session-card-surface--764d5d26.md */
+/* 会话面板表面三阶（A 方案高保真逐值）：地 → 卡 → 内卡。
+   planche：灰地 #E8E6E2 → 牛皮卡 #E2D9BD → 暖白纸内卡 #F8F2E0；
+   dark：v6 HiFi 画布 #151517 → 卡 #1c1c1f → 内卡提亮块。
+   见 .agents/notes/2026-09-29-session-card-surface--764d5d26.md */
+.panelGround {
+  background: #E8E6E2;
+}
+
+:global([data-theme='dark']) .panelGround {
+  background: #151517;
+}
+
+.cardSurface {
+  background: #E2D9BD;
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+}
+
+:global([data-theme='dark']) .cardSurface {
+  background: #1c1c1f;
+}
+
+/* 内容卡浅纸面（首轮提示 / 最近轮次） */
 .sheet {
   background: #F8F2E0;
   border: 1px solid var(--shell-border);

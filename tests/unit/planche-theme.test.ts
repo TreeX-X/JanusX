@@ -198,16 +198,20 @@ describe('planche theme contract', () => {
     expect(session).toContain(
       "const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'",
     )
-    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(3)
+    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(2)
     // 内容卡（首轮提示/最近轮次）走 module .sheet 浅纸面，不占 SURFACE_INSET 名额
     expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(8)
-    // 浅纸面（变体 A）：planche 暖白纸 + dark 提亮，表面阶梯唯一填充例外
+    // 会话面板三阶（A 方案高保真逐值）：地 → 卡 → 内卡
     const sessionMod = read('components/SessionPanel.module.css')
+    expect(sessionMod).toContain('background: #E8E6E2')
+    expect(sessionMod).toContain('background: #E2D9BD')
     expect(sessionMod).toContain('background: #F8F2E0')
+    expect(sessionMod).toContain(":global([data-theme='dark']) .panelGround")
+    expect(sessionMod).toContain(":global([data-theme='dark']) .cardSurface")
     expect(sessionMod).toContain(":global([data-theme='dark']) .sheet")
     expect(sessionMod).toContain('color-mix(in srgb, var(--shell-chrome) 88%, white)')
     expect(session.match(/background: SURFACE_DEEP/g) ?? []).toHaveLength(2)
-    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(3)
+    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(2)
     expect(session).not.toMatch(/background: 'rgba\(255,\s*255,\s*255/)
     expect(session).not.toMatch(/background: 'rgba\(0,\s*0,\s*0,\s*0\.[1-5]\d\)'/)
     expect(session).not.toMatch(/(solid|dashed) rgba\(255,\s*255,\s*255/)
