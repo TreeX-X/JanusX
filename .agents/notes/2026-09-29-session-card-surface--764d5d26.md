@@ -23,10 +23,10 @@ Three failure modes share one cause. Fills written as `rgba(0, 0, 0, 0.18–0.35
 Three surfaces derived from the ramp carry the whole file, defined once at the module top and used by every fill:
 
 - `SURFACE_CARD` — `color-mix(in srgb, var(--shell-chrome) 94%, var(--shell-text))` on the list card, the detail turn card, and the detail orphan card.
-- `SURFACE_INSET` — 84% on the in-flow blocks: turn panel, first-prompt block, checkpoint strip and review panel, search input, continue-modal blocks, detail nav rail, diff side panel, footer buttons.
-- `SURFACE_DEEP` — 78% on the two code surfaces: the diff body and its sticky active-path header.
+- `SURFACE_INSET` — 90% on the in-flow blocks: checkpoint strip and review panel, search input, continue-modal blocks, detail nav rail, diff side panel, footer buttons.
+- `SURFACE_DEEP` — 86% on the two code surfaces: the diff body and its sticky active-path header.
 
-Rung spacing holds the card-to-inset gap at about twenty 8-bit steps in both themes. Without that gap the in-flow blocks read flat against the card they sit on, and the hairlines alone do not carry the nesting.
+The expanded card's content cards — the first-prompt block and the recent-turn panel — carry no fill of their own. They read as frames on the card surface with a `1px solid var(--shell-border)` hairline, the paper-and-frame language planche node cards use in `components/blueprint/blueprint.css`; a filled step under nested cards reads as a slab on the light paper.
 
 Mixing toward the text token is what makes plankhe work at all. That theme has no darker surface step, so mixing toward `--shell-void` collapses to the chrome value, because void and chrome are the same paper, and a sunken card is unrepresentable there. A small step toward ink produces a warm, quiet card in plankhe and a raised card in dark from one declaration.
 
@@ -42,6 +42,6 @@ Mixing toward the text token is what makes plankhe work at all. That theme has n
 
 ## Consequences
 
-- **Gains**: every session surface resolves in both themes, the list and the detail read as one material, and the hairlines that separate the panes are finally drawn. Measured in Chromium against the shipped tokens — `planche` resolves `SURFACE_CARD`, `SURFACE_INSET`, and `SURFACE_DEEP` to `rgb(226, 217, 189)`, `rgb(205, 200, 175)`, and `rgb(193, 189, 167)` on a `rgb(239, 228, 197)` chrome, and `dark` to `rgb(43, 43, 45)`, `rgb(65, 65, 67)`, and `rgb(78, 78, 80)` on a `rgb(30, 30, 32)` chrome. Accent, selected rows, and the active-turn ring follow the theme accent instead of a fixed blue.
+- **Gains**: every session surface resolves in both themes, the list and the detail read as one material, and the hairlines that separate the panes are finally drawn. Measured in Chromium against the shipped tokens — `planche` resolves `SURFACE_CARD`, `SURFACE_INSET`, and `SURFACE_DEEP` to `rgb(226, 217, 189)`, `rgb(218, 210, 183)`, and `rgb(209, 203, 178)` on a `rgb(239, 228, 197)` chrome, and `dark` to `rgb(43, 43, 45)`, `rgb(52, 52, 54)`, and `rgb(61, 61, 63)` on a `rgb(30, 30, 32)` chrome. Accent, selected rows, and the active-turn ring follow the theme accent instead of a fixed blue.
 - **Costs and limits**: `color-mix` is required, so the session surface inherits that browser baseline, which Electron 35 provides. The scale only runs toward the text token, so in `dark` every surface is now raised off the chrome where the diff body and turn cards used to be sunk, and the theme's own note that "panes read sunk, not punched" no longer describes them. The scale lives as three module constants; `SessionPanel.module.css` owns expand motion only, and the constants retire when the fills move into that stylesheet. The two modal scrims still use `rgba(0, 0, 0, 0.64)` rather than the shared `rgba(8, 8, 10, 0.62)`, and the diff pane's `13-janus-planche.css`-style island theming is untouched.
-- **Verification**: `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` and `npx eslint src/renderer/src/components/SessionPanel.tsx` both exit clean, and `npx vitest run tests/unit/planche-theme.test.ts` passes 14 of 14 with the three declarations pinned by literal and the 3/10/2 use-site counts intact.
+- **Verification**: `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` and `npx eslint src/renderer/src/components/SessionPanel.tsx` both exit clean, and `npx vitest run tests/unit/planche-theme.test.ts` passes 14 of 14 with the three declarations pinned by literal and the 3/8/2 use-site counts intact.

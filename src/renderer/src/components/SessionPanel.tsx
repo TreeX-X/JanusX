@@ -65,8 +65,8 @@ function formatSize(bytes: number): string {
 // 3 档是唯一在两主题都能拉出可见台阶的写法：planche 得到偏暖的深纸色，dark 得到
 // 逐级浮起的卡片。板面之间的分界交给发丝线，不靠更深的底色。
 const SURFACE_CARD = 'color-mix(in srgb, var(--shell-chrome) 94%, var(--shell-text))'
-const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 84%, var(--shell-text))'
-const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 78%, var(--shell-text))'
+const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 90%, var(--shell-text))'
+const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'
 const CARD_BORDER = '1px solid var(--shell-border)'
 const CARD_BORDER_SOFT = '1px solid var(--shell-border-soft)'
 
@@ -946,7 +946,7 @@ function SessionCard({
               <div>…/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''}</div>
             </div>
             {session.firstPrompt && (
-              <div style={{ marginTop: 8, background: SURFACE_INSET, border: '1px solid var(--shell-border-soft)', borderRadius: 6, padding: '9px 10px' }}>
+              <div style={{ marginTop: 8, border: '1px solid var(--shell-border)', borderRadius: 6, padding: '9px 10px' }}>
                 <div className="flex items-center" style={{ gap: 8, fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginBottom: 6 }}>
                   <span>{t('terminal:agentSession.firstPrompt')}</span>
                   <span style={{ marginLeft: 'auto' }}>
@@ -958,7 +958,7 @@ function SessionCard({
                 </div>
               </div>
             )}
-            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', background: SURFACE_INSET, border: '1px solid var(--shell-border-soft)', borderRadius: 6, padding: '2px 10px' }}>
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', border: '1px solid var(--shell-border)', borderRadius: 6, padding: '2px 10px' }}>
               <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', padding: '8px 0 0' }}>
                 {t('terminal:agentSession.recentTurns')}
               </div>
