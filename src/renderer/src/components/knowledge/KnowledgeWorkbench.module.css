@@ -1642,6 +1642,9 @@
 .detailReading:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: -2px; }
 .statusCard[data-domain='engineering'] { min-height: 0; padding: 4px 8px; }
 .recordsContent { min-height: 0; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.recordsContent > .recordsTabs { height: 34px; flex-shrink: 0; border-bottom: 1px solid var(--shell-border-soft); overflow-x: auto; }
+.recordsPanel { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.recordsPanel:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: -1px; }
 .legacyProcessing { padding-top: 10px; border-top: 1px solid var(--shell-border); font-size: 11px; color: var(--shell-muted); }
 .legacyProcessing > summary { cursor: pointer; }
 .legacyProcessing .statusBar { flex-wrap: wrap; }

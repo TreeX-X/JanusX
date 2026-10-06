@@ -6,7 +6,7 @@ import { PersonalMemorySettingsPanel } from '../PersonalMemorySettingsPanel'
 import { KnowledgeSettingsPanel } from '../KnowledgeSettingsPanel'
 import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { reviewCandidateInput } from '../../../../shared/review-candidate-snapshot'
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import {
@@ -54,6 +54,7 @@ import { CardSkeleton, useAnimatedOpen, useWorkbenchPhase } from '../shared/Card
 import { useI18n } from '@/i18n/useI18n'
 import '../shared/CardFrame.css'
 import surface from './MemorySurface.module.css'
+import tabStyles from '../ui/TabStrip.module.css'
 import styles from './KnowledgeWorkbench.module.css'
 
 export type KnowledgeWorkbenchTab = 'inbox' | 'library' | 'wiki' | 'graph' | 'search' | 'audit' | 'settings'
@@ -62,6 +63,7 @@ type Candidate = CandidateFact | CandidateWikiPatch | CandidateGraphEdge
 /** §9.1: left-rail grouping mirrors the demo skeleton (workbench vs special views). */
 const MAIN_TABS: KnowledgeWorkbenchTab[] = ['inbox', 'library', 'search']
 const SPECIAL_TABS: KnowledgeWorkbenchTab[] = ['wiki', 'graph', 'audit']
+const RECORD_TABS = ['processing', 'audit'] as const
 
 interface Props {
   isOpen: boolean
@@ -127,6 +129,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const { status: automation } = useKnowledgeAutomation(isOpen && domain === 'engineering' && engineeringEnabled)
   const [tab, setTab] = useState<KnowledgeWorkbenchTab>('inbox')
   const [recordTab, setRecordTab] = useState<'processing' | 'audit'>('processing')
+  const recordTabId = useId()
   const [attentionOnly, setAttentionOnly] = useState(false)
   const automationView = useAssistantStore(s => s.automationView)
   const activeTabRef = useRef(tab)
@@ -502,10 +505,24 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               {tab === 'graph' && <KnowledgeGraphCanvas key={snapshot.loadedAt} snapshot={snapshot} selectedId={selectedId} resolveRecord={resolveCanvasRecord} onSelect={selectGraph} />}
             </>}
               {tab === 'audit' && <div className={styles.recordsContent}>
-                <div className={styles.domainNavigation} role="group" aria-label={t('knowledge:summary.recordArea')}>
-                  <button type="button" aria-pressed={recordTab === 'processing'} onClick={() => { setRecordTab('processing'); clearDetail() }}>{t('knowledge:summary.processingRecords')}</button>
-                  <button type="button" aria-pressed={recordTab === 'audit'} onClick={() => { setRecordTab('audit'); clearDetail() }}>{t('knowledge:summary.auditRecords')}</button>
-                </div>
+                {/* Note: record views use the settings-style text tabs — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md */}
+                <nav className={`${tabStyles.strip} ${styles.recordsTabs}`} role="tablist" aria-label={t('knowledge:summary.recordArea')}>
+                  {RECORD_TABS.map((item, index) => <button key={item} type="button" role="tab" className={tabStyles.tab}
+                    id={`${recordTabId}-${item}`} aria-controls={`${recordTabId}-panel`} aria-selected={recordTab === item}
+                    tabIndex={recordTab === item ? 0 : -1} onClick={() => { setRecordTab(item); clearDetail() }}
+                    onKeyDown={event => {
+                      const next = event.key === 'Home' ? 0 : event.key === 'End' ? RECORD_TABS.length - 1
+                        : event.key === 'ArrowRight' ? (index + 1) % RECORD_TABS.length
+                          : event.key === 'ArrowLeft' ? (index + RECORD_TABS.length - 1) % RECORD_TABS.length : -1
+                      if (next < 0) return
+                      event.preventDefault()
+                      if (next === index) return
+                      setRecordTab(RECORD_TABS[next]!)
+                      clearDetail()
+                      document.getElementById(`${recordTabId}-${RECORD_TABS[next]}`)?.focus()
+                    }}>{t(item === 'processing' ? 'knowledge:summary.processingRecords' : 'knowledge:summary.auditRecords')}</button>)}
+                </nav>
+                <div className={styles.recordsPanel} role="tabpanel" id={`${recordTabId}-panel`} aria-labelledby={`${recordTabId}-${recordTab}`} tabIndex={0}>
                 {recordTab === 'processing' ? <>
                   <AutomationRecords active={isOpen} attentionOnly={attentionOnly} onFilterChange={setAttentionOnly} onChanged={() => void refresh()} />
                   <details className={styles.legacyProcessing}><summary>{t('knowledge:summary.captureDetails')}</summary>
@@ -513,6 +530,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                     <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
                   </details>
                 </> : <><AuditRecords selectedId={selectedAudit?.id} onSelect={setSelectedAudit} /><details className={styles.legacyProcessing}><summary>{t('knowledge:observation.history')}</summary><ObservationRevocations /></details></>}
+                </div>
               </div>}
           </section>
           {detailAnim.rendered ? (

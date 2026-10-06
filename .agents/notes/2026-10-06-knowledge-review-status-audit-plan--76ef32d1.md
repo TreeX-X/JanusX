@@ -75,7 +75,7 @@ execution:
   mode: xdo
   state: done
   baseline:
-    taskContractHash: 88f27e112c5494fbfa95d4e53d5eec0f6d363c405ecf2181cdb8b04276563476
+    taskContractHash: 738fd533469dc1aa7491720de1452c43466a303f64d79703d8bed1759c27f171
     inputs:
       - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
         contentHash: 5e138e09085b7401be8ee5c0356727441db83c13663b4b7a931eeb046c561fda
@@ -148,6 +148,7 @@ S4 采用新增 `knowledge:audit:page`，旧 `listAudit` 保持数组返回，�
 
 操作审计使用独立分页列表和完整选中事件，工作台自动状态刷新不重置已加载的审计页。变更前后按事件字段比较，未变字段、长值和原始结构按需展开；批次或缺失快照明确说明。当前对象仅按明确类型、工作区及目标身份调用既有只读接口，已应用候选只有明确 appliedId 才能关联正式对象。读取当前值与历史快照分别呈现，失败或撤回不影响事件阅读。来源撤回历史保留在折叠入口，避免再次挤压列表。
 
+记录区“处理记录 / 操作审计”参考 ProjectSettings 横向页签的透明底、文字选中态与强调色下划线，复用 ui/TabStrip.module.css，页签条高 34px，正文从下方独立起行。tablist、tab 和 tabpanel 使用组件实例 ID 关联，选中页签进入 Tab 顺序；左右方向键循环切换，Home/End 定位首尾。切换清除旧详情并挂载对应视图，任务筛选、审计分页和来源撤回入口沿用原有行为。
 **S5**：用同一组合夹具贯通 W1、G1/G2 及 S1～S4；在已存在的 [knowledge-pipeline.spec.ts](../../tests/e2e/knowledge-pipeline.spec.ts) 基础上运行隔离 Electron，核验真实 preload/IPC 与宿主动作，以及从条目入库到 Wiki/图谱同版本更新的闭环。构建写入 artifacts/build-check，不覆盖正在运行的开发输出；将便携包写入独立交付目录，并验证包内构建身份、仓库外运行和便携启动器。若需要实际切换运行版本，先检查并保存会话状态；不能把“重启旧便携版”描述为装入新代码。
 
 **S5 运行验收与交付**：使用独立 `playwright.desktop.config.ts` 执行真实 Electron、preload、IPC、自动任务和存储链路，不启动岛屿网页服务器。现有采集/人工审核/领域隔离用例保留，完整沉淀用例用回环 HTTP 模型夹具覆盖提取、两轮审核门禁、Wiki 同版本关系发布、后续来源更新、历史版本、撤回后的检索与主图隔离；可信来源归因在隔离存储夹具中预置，公共 observe IPC 不允许凭 actor 自行提升归因。测试结果必须区分流程验证和真实模型质量。构建输出和便携包保存在独立 artifacts 目录，运行检查接受明确的 `--release-dir`，在仓库外启动副本并隔离知识根目录；当前用户会话与便携目录不自动替换。工作台全局 Escape 优先关闭已打开的详情，即使焦点仍在图谱或领域导航；没有详情时才关闭工作台。Inspector 内的已处理按键不重复执行全局动作。
@@ -178,6 +179,8 @@ S4 保留原列表接口并增加分页读取，避免将数组调用者一起�
 
 G2 继续使用原圆点和横向分量排列的维护成本最低，但局部标题与稀疏集合不可读；通用力导向布局可表达密集结构，却需要碰撞与稳定性调参。确定性网格与分量装箱优先保证标题不重叠、稀疏集合紧凑，代价是密集关系可能交叉；局部邻居上限与独立概览承接该边界。如果真实高密度页面需要顺着大量跨层依赖阅读，再评估层次布局。局部视图保留 0.85 的最小自动适配缩放并允许平移；全部概览可缩小适配全图。选择不持久恢复，避免打开图谱时自动跳转右侧详情；拖动位置按视图保留。
 **G2 与侧栏页签**：2026-10-06 用户授权将右侧“工程知识 / 个人画像 / 待审核”改为会话管理的文字与底部细线 Tab，并实施 G2。图谱采用 208×84 标题卡、带类型标签及箭头的关系线；默认选择连接最多的正式页面及最多 12 个邻居，页面选择器与“全部页面”提供明确切换，超限另行提示。单击只选详情，聚焦操作独立；筛选实际改变可见节点，页面与来源对象分别计数。局部页面居中、邻居分列两侧；概览分量内按确定性广度遍历排列网格，分量间二维装箱，旧圆点布局以 v3 存储键隔离，局部/概览/来源位置分别保存。页签沿用会话管理的 11.5px 文字、16px 间隔及 1px 底线，并支持方向键、Home/End、tab/tabpanel 语义。G3 验证覆盖 20 个孤立页面、多个分量、长标题、聚焦恢复、双主题与 640px。
+
+记录区继续复用领域按钮组最省改动，但会把内容切换呈现为操作按钮；复制整个设置导航则会引入额外布局维护。本任务只采用设置横向页签的轻量视觉，复用共享 TabStrip 样式并保留知识库自身内容布局。共享样式的后续修改需要同时核对记录区与其他消费者的主题表现。
 
 ## Acceptance criteria
 
@@ -301,3 +304,9 @@ G2 完整知识回归使用 Verification 中的命令，84 个文件通过、4 �
 S5 文档检查使用 npm run check:notes，247 篇 Note、0 errors、27 项既有外部链接诊断；git diff --check 通过。用户已确认的实施任务与父需求转为 accepted，执行完成状态仅保存在本任务，后续质量验证不阻塞本轮功能交付。
 
 验收完成后的临时副本清理被自动审批拒绝，仅返回 blocked by policy。仓库外临时目录仍保留，其路径记录在 artifacts/knowledge-s5-package-stage.txt；交付包、代码提交与通过结果不受影响。
+
+2026-10-06：记录页签细化按 xdo 实施，输入基线为 `905c04e67b76a558fccfbfe02134bea056a0f84e`，原 taskContractHash 为 `88f27e112c5494fbfa95d4e53d5eec0f6d363c405ecf2181cdb8b04276563476`，父需求 SHA-256 为 `5e138e09085b7401be8ee5c0356727441db83c13663b4b7a931eeb046c561fda`。用户要求落实在 AC-8 的记录布局内，不新增审核或记录状态。KnowledgeWorkbench 使用共享文字页签样式与可访问的键盘切换；宿主接口、数据及领域开关无变更。
+
+`npm run test:unit -- --run tests/unit/knowledge-audit-ui.test.ts tests/unit/knowledge-automation-summary-ui.test.ts tests/unit/assistant-ui.test.ts --maxWorkers=2 --reporter=dot` 为 3 个文件、34 项通过，0 跳过。既有浏览器用例覆盖方向键循环、Home/End、焦点、页签与面板关联、鼠标切换，以及处理筛选和审计分页。`npm run typecheck:strict-unused`、KnowledgeWorkbench.tsx 的 ESLint 及 `npx electron-vite build --outDir artifacts/knowledge-record-tabs-build` 通过；构建使用现有 llm-core 产物。人工核对 dark/planche、640px 窄窗口与 1280px 桌面截图，产物在 `artifacts/knowledge-record-tabs/`，日志前缀为 `artifacts/knowledge-record-tabs-`。本次只交付代码与隔离构建，S5 便携包保留原哈希，尚未纳入此次样式细化；当前用户进程没有重启。
+
+?? check:notes ?? 247 ? Note?0 errors?27 ??????????git diff --check ???

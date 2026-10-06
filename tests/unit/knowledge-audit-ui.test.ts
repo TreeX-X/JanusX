@@ -63,7 +63,7 @@ async function mount(page: Page) {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
   await page.addScriptTag({ content: script })
   await page.getByRole('button', { name: 'View records', exact: true }).click()
-  await page.getByRole('button', { name: 'Operation audit', exact: true }).click()
+  await page.getByRole('tab', { name: 'Operation audit', exact: true }).click()
   await page.getByText('Loaded 30 of 35 events', { exact: true }).waitFor()
 }
 
