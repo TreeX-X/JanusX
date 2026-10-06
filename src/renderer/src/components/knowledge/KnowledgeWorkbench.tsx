@@ -32,7 +32,7 @@ import { assertCandidateCanReview } from './candidateReviewState'
 import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
 import { NoteWikiEditor, WikiPageDetail, WikiCandidateSources } from './NoteWikiLinks'
 import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas'
-import type { KnowledgeGraphNode } from './knowledgeGraph'
+import { buildKnowledgeGraphView, publishedGraphPages, graphWikiId, recordForGraphNode, type KnowledgeGraphNode } from './knowledgeGraph'
 import type {
   CandidateFact,
   CandidateGraphEdge,
@@ -242,7 +242,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   }, [isOpen, query, tab, domain, engineeringEnabled])
 
   const selected = useMemo(
-    () => tab === 'settings' ? null : tab === 'search' || tab === 'audit' || tab === 'graph'
+    () => tab === 'settings' ? null : tab === 'graph'
+      ? snapshot ? resolveGraphRecord(snapshot, selectedId) ?? selectedSearch : null
+      : tab === 'search' || tab === 'audit'
       ? selectedSearch
       : snapshot ? resolveRecordForTab(snapshot, tab, selectedId) : null,
     [selectedId, selectedSearch, snapshot, tab],
@@ -322,7 +324,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     inbox: snapshot ? candidatesForTab(snapshot, 'inbox', 'engineering').length : 0,
     library: snapshot?.libraryCards.length ?? 0,
     wiki: (snapshot?.wikiPatches.length ?? 0) + (snapshot ? publishedWikiCards(snapshot).length : 0),
-    graph: snapshot?.graphCandidates.length ?? 0,
+    graph: snapshot ? publishedGraphPages(snapshot).length : 0,
     search: searchCards.length,
     audit: snapshot?.auditEvents.length ?? 0,
     settings: 0,
@@ -453,7 +455,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                 <CardCollection title={t('knowledge:wiki.published.empty.title')} detail={t('knowledge:wiki.published.empty.detail')} cards={snapshot ? publishedWikiCards(snapshot) : []} selectedId={selectedId} onSelect={selectCandidate} />
                 <CardCollection title={t('knowledge:wiki.empty.title')} detail={t('knowledge:wiki.empty.detail')} cards={snapshot.wikiPatches.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />
               </div>}
-              {tab === 'graph' && <KnowledgeGraphCanvas snapshot={snapshot} selectedId={selectedId} resolveRecord={resolveCanvasRecord} onSelect={selectGraph} />}
+              {tab === 'graph' && <KnowledgeGraphCanvas key={snapshot.loadedAt} snapshot={snapshot} selectedId={selectedId} resolveRecord={resolveCanvasRecord} onSelect={selectGraph} />}
               {tab === 'audit' && <><ObservationRevocations /><AuditList events={snapshot.auditEvents} onSelect={(record) => { setSelectedSearch(record); setSelectedId(record.id) }} /></>}
             </>}
           </section>
@@ -490,28 +492,13 @@ export function publishedWikiCards(snapshot: KnowledgeWorkbenchSnapshot): Knowle
   return snapshot.libraryCards.filter((card) => card.kind === 'wiki')
 }
 
-/**
- * Graph record resolution: canvas node ids (`fact:<factId>`) resolve back to
- * inspector records. The `proposal:<candidateId>` branch stays for backward
- * compatibility with persisted selections; the graph itself is truth-only.
- */
+/** Resolve current published Wiki nodes; evidence nodes carry their own read-only records. */
 export function resolveGraphRecord(
   snapshot: KnowledgeWorkbenchSnapshot,
   id: string,
 ): InspectorRecord | null {
-  const candidates: Candidate[] = [
-    ...snapshot.factCandidates,
-    ...snapshot.wikiPatches,
-    ...snapshot.graphCandidates,
-  ]
-  if (id.startsWith('proposal:')) {
-    return recordFromCandidate(candidates.find((candidate) => candidate.id === id.slice('proposal:'.length)) ?? null)
-  }
-  if (id.startsWith('fact:')) {
-    const card = snapshot.libraryCards.find((item) => item.id === id.slice('fact:'.length))
-    return card ? recordFromCard(card) : null
-  }
-  return recordFromCandidate(candidates.find((candidate) => candidate.id === id) ?? null)
+  const node = buildKnowledgeGraphView(snapshot).nodes.find(item => item.id === id)
+  return node ? recordForGraphNode(node) : null
 }
 
 export function resolveRecordForTab(
@@ -548,9 +535,8 @@ export function selectionIdForTab(
     return snapshot.wikiPatches[0]?.id ?? publishedWikiCards(snapshot)[0]?.id ?? ''
   }
   if (tab === 'graph') {
-    // The graph maps settled truth; default to the first truth fact.
-    const firstFact = snapshot.truthFacts?.[0]
-    return firstFact ? `fact:${firstFact.id}` : ''
+    const firstPage = publishedGraphPages(snapshot)[0]
+    return firstPage ? graphWikiId(firstPage) : ''
   }
   return ''
 }
@@ -604,10 +590,10 @@ export function Inspector({ automation, record, snapshot, busy, error, onApprove
     {conflicts.length > 0 && <p>{t('knowledge:inspector.conflict', { detail: conflicts.map(item => item.reason).join(', ') })}</p>}
     {error && <p role="alert">{error}</p>}
   </div>
-  const canRevoke = record.status === 'active' && record.kind !== 'observation' && Boolean(record.workspaceId) && !busy
+  const canRevoke = record.status === 'active' && (record.kind === 'fact' || record.kind === 'wiki') && Boolean(record.workspaceId) && !busy
   const observationControl = record.kind === 'observation' && record.workspaceId && !snapshot?.usingDemoData
     ? <ObservationRevokeControl key={JSON.stringify([record.workspaceId, record.id])} id={record.id} workspaceId={record.workspaceId} onRevoked={onRevoke} /> : null
-  return <div className={styles.inspector}><div className={styles.detailBar}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><button type="button" className={styles.detailClose} onClick={onCloseDetail} aria-label={t('knowledge:inspector.closeDetail')} title={t('knowledge:inspector.closeDetail')}><X size={16} aria-hidden="true" /></button></div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{wikiCandidate && <WikiCandidateSources key={wikiCandidate.id} candidate={wikiCandidate} />}{wikiPage && <WikiPageDetail key={JSON.stringify([wikiPage.workspaceId, wikiPage.slug])} page={wikiPage} />}{record.confidence !== undefined && <Metric label={t('knowledge:inspector.confidence')} value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label={t('knowledge:inspector.status')} value={record.status} />}{record.derivation && <KeyValue label={t('knowledge:inspector.derivation')} value={record.derivation} />}{record.factKind && <KeyValue label={t('knowledge:inspector.factKind')} value={record.factKind} />}{record.scoreExplanation && <KeyValue label={t('knowledge:inspector.scoreExplanation')} value={formatScoreExplanation(record.scoreExplanation)} />}<TagRow tags={record.tags} /><KeyValue label={t('knowledge:inspector.created')} value={formatDate(record.createdAt, t('knowledge:time.unknown'))} /><KeyValue label={t('knowledge:inspector.sourceRefs')} value={record.sourceIds.join(', ') || t('knowledge:inspector.none')} /><KeyValue label={t('knowledge:inspector.files')} value={record.fileRefs.join(', ') || t('knowledge:inspector.none')} />{conflicts.length > 0 && <div className={styles.demoNotice}>{t('knowledge:inspector.conflict', { detail: conflicts.map((item) => `${item.reason} with ${item.targetId}`).join(', ') })}</div>}{observationControl}<div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={() => onApprove()}>{busy ? t('knowledge:action.working') : t('knowledge:action.approve')}</button><button type="button" disabled={!canReview} onClick={onReject}>{t('knowledge:action.reject')}</button><button type="button" disabled={!canRevoke} onClick={onRevoke}>{t('knowledge:action.archive')}</button></div>{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>{t('knowledge:inspector.demoNotice')}</div>}</div>
+  return <div className={styles.inspector}><div className={styles.detailBar}><div className={styles.paneTitle}>{t('knowledge:inspector.provenance')}</div><button type="button" className={styles.detailClose} onClick={onCloseDetail} aria-label={t('knowledge:inspector.closeDetail')} title={t('knowledge:inspector.closeDetail')}><X size={16} aria-hidden="true" /></button></div><div className={styles.inspectorTitle}>{record.title}</div><p>{record.body}</p>{wikiCandidate && <WikiCandidateSources key={wikiCandidate.id} candidate={wikiCandidate} />}{wikiPage && <WikiPageDetail key={JSON.stringify([wikiPage.workspaceId, wikiPage.slug])} page={wikiPage} />}{record.confidence !== undefined && <Metric label={t('knowledge:inspector.confidence')} value={formatConfidence(record.confidence)} />}{record.status && <KeyValue label={t('knowledge:inspector.status')} value={record.status} />}{record.derivation && <KeyValue label={t('knowledge:inspector.derivation')} value={record.derivation} />}{record.factKind && <KeyValue label={t('knowledge:inspector.factKind')} value={record.factKind} />}{record.scoreExplanation && <KeyValue label={t('knowledge:inspector.scoreExplanation')} value={formatScoreExplanation(record.scoreExplanation)} />}<TagRow tags={record.tags} /><KeyValue label={t('knowledge:inspector.created')} value={formatDate(record.createdAt, t('knowledge:time.unknown'))} /><KeyValue label={t('knowledge:inspector.sourceRefs')} value={record.sourceIds.join(', ') || t('knowledge:inspector.none')} /><KeyValue label={t('knowledge:inspector.files')} value={record.fileRefs.join(', ') || t('knowledge:inspector.none')} />{conflicts.length > 0 && <div className={styles.demoNotice}>{t('knowledge:inspector.conflict', { detail: conflicts.map((item) => `${item.reason} with ${item.targetId}`).join(', ') })}</div>}{observationControl}{(record.reviewType || record.kind) && <div className={styles.actionRow}><button type="button" disabled={!canReview} onClick={() => onApprove()}>{busy ? t('knowledge:action.working') : t('knowledge:action.approve')}</button><button type="button" disabled={!canReview} onClick={onReject}>{t('knowledge:action.reject')}</button><button type="button" disabled={!canRevoke} onClick={onRevoke}>{t('knowledge:action.archive')}</button></div>}{error && <div className={styles.demoNotice}>{error}</div>}{snapshot?.usingDemoData && <div className={styles.demoNotice}>{t('knowledge:inspector.demoNotice')}</div>}</div>
 }
 
 /** User memory M4: person-scoped candidates carry an explicit scope tag in the Inbox. */

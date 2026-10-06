@@ -3,7 +3,11 @@
     "title": "Page relationships",
     "pageReference": "Page reference:",
     "targetVersion": "Target version: {{version}}",
-    "type": { "references": "References", "depends_on": "Depends on", "conflicts_with": "Conflicts with" },
+    "type": {
+      "references": "References",
+      "depends_on": "Depends on",
+      "conflicts_with": "Conflicts with"
+    },
     "status": {
       "missing": "Target page is unavailable; this relationship needs review.",
       "ambiguous": "Target page identity is ambiguous; this relationship needs review.",
@@ -347,8 +351,8 @@
   },
   "graph": {
     "empty": {
-      "title": "No settled knowledge",
-      "detail": "Approved candidates will appear here as settled facts and relations."
+      "title": "No published Wiki pages",
+      "detail": "Reviewed Wiki pages appear here with their published relationships."
     },
     "canvas": {
       "searchPlaceholder": "Search nodes to locate…",
@@ -360,13 +364,49 @@
       "resetLayout": "Reset layout",
       "capped": "Showing {{shown}} of {{total}} nodes",
       "noMatch": "No nodes match the current filters",
-      "noEdges": "No edges yet — links appear when facts share concepts/files or stored relations exist",
-      "hint": "Click a node to focus its one-hop neighborhood (click again to release), hover to highlight, double-click to zoom",
+      "noEdges": "No published page relationships are visible. Pages may stand alone.",
+      "hint": "Click to open a Wiki page; double-click to focus neighbors. Trace sources to read facts and evidence.",
       "legend": {
-        "stored": "Stored relation",
+        "stored": "Published / stored relationship",
         "derived": "Derived / supersedes",
         "conflict": "Conflict"
-      }
+      },
+      "traceWiki": "Trace sources",
+      "backToWiki": "Back to Wiki graph",
+      "loadingEvidence": "Loading evidence…",
+      "noEvidenceEdges": "No source relationships are visible.",
+      "traceHint": "Source tracing is read-only. Legacy graph relations stay here and do not enter the Wiki graph or create reviews.",
+      "pageCount": "{{count}} pages · {{edges}} relationships",
+      "evidenceCount": "{{count}} source objects · {{edges}} relationships",
+      "diagnostics": "{{count}} relationship or source diagnostics"
+    },
+    "kinds": {
+      "wiki": "Wiki pages",
+      "fact": "Facts",
+      "entity": "Files and concepts",
+      "observation": "Source evidence"
+    },
+    "relations": {
+      "references": "References",
+      "depends_on": "Depends on",
+      "conflicts_with": "Conflicts with",
+      "mentions": "Mentions",
+      "derived_from": "Derived from",
+      "supersedes": "Supersedes",
+      "implemented_in": "Implemented in",
+      "owned_by": "Owned by",
+      "used_by_agent": "Used by agent"
+    },
+    "diagnostics": {
+      "missing": "Endpoint or source missing",
+      "ambiguous": "Duplicate identity",
+      "changed": "Target version changed",
+      "stale": "Source is stale",
+      "invalid": "Invalid relationship endpoint",
+      "unverified": "Relationship not checked by the host",
+      "not-loaded": "Evidence not loaded",
+      "unavailable": "Evidence unavailable or read failed; retry is available",
+      "revoked": "Evidence revoked"
     }
   },
   "statusbar": {
@@ -586,7 +626,11 @@
     "settings": "Preferences"
   },
   "memorySettings": {
-    "groups": { "capture": "Memory capture", "recall": "Use in conversations", "retention": "Recent memory retention" },
+    "groups": {
+      "capture": "Memory capture",
+      "recall": "Use in conversations",
+      "retention": "Recent memory retention"
+    },
     "title": "Personal profile",
     "navMeta": "Memory & preferences",
     "description": "Control how Janus remembers and uses personal information. Disabling Personal profile stops personal capture, processing and chat recall while retaining existing data.",

@@ -3,7 +3,11 @@
     "title": "页面关系",
     "pageReference": "页面引用地址：",
     "targetVersion": "目标版本：{{version}}",
-    "type": { "references": "引用", "depends_on": "依赖", "conflicts_with": "存在冲突" },
+    "type": {
+      "references": "引用",
+      "depends_on": "依赖",
+      "conflicts_with": "存在冲突"
+    },
     "status": {
       "missing": "目标页面不可用，此关系需要重新审核。",
       "ambiguous": "目标页面身份不唯一，此关系需要重新审核。",
@@ -347,8 +351,8 @@
   },
   "graph": {
     "empty": {
-      "title": "无沉淀知识",
-      "detail": "批准候选后，沉淀的事实与关系会出现在这里。"
+      "title": "尚无已发布 Wiki",
+      "detail": "Wiki 审核发布后显示页面，连线来自随页面发布的关系。"
     },
     "canvas": {
       "searchPlaceholder": "搜索节点定位…",
@@ -360,13 +364,49 @@
       "resetLayout": "重置排布",
       "capped": "仅显示 {{shown}} / {{total}} 个节点",
       "noMatch": "无节点匹配当前筛选",
-      "noEdges": "暂无线条 — 当事实共享概念 / 文件，或存在存储关系与冲突时会自动连线",
-      "hint": "单击节点聚焦一跳关联（再次单击取消），悬停高亮邻居，双击缩放",
+      "noEdges": "当前没有可显示的已发布页间关系；页面可独立存在。",
+      "hint": "单击打开 Wiki，双击聚焦邻居；通过“查看来源追溯”读取条目和证据。",
       "legend": {
-        "stored": "存储关系",
+        "stored": "已存关系",
         "derived": "派生 / 取代",
         "conflict": "冲突"
-      }
+      },
+      "traceWiki": "查看来源追溯",
+      "backToWiki": "返回 Wiki 主图",
+      "loadingEvidence": "加载证据…",
+      "noEvidenceEdges": "当前没有可显示的来源关系。",
+      "traceHint": "来源追溯为只读视图。旧图关系仅供追溯，不进入 Wiki 主图或新增审核。",
+      "pageCount": "{{count}} 页 · {{edges}} 条关系",
+      "evidenceCount": "{{count}} 个追溯对象 · {{edges}} 条关系",
+      "diagnostics": "{{count}} 项关系或来源诊断"
+    },
+    "kinds": {
+      "wiki": "Wiki 页面",
+      "fact": "条目",
+      "entity": "文件与概念",
+      "observation": "原始证据"
+    },
+    "relations": {
+      "references": "引用",
+      "depends_on": "依赖",
+      "conflicts_with": "冲突",
+      "mentions": "提及",
+      "derived_from": "来源",
+      "supersedes": "替代",
+      "implemented_in": "实现于",
+      "owned_by": "归属",
+      "used_by_agent": "代理使用"
+    },
+    "diagnostics": {
+      "missing": "端点或来源缺失",
+      "ambiguous": "身份重复",
+      "changed": "目标版本已变化",
+      "stale": "来源已失效",
+      "invalid": "关系端点无效",
+      "unverified": "宿主尚未核验关系",
+      "not-loaded": "证据尚未加载",
+      "unavailable": "证据不可用或读取失败，可重试",
+      "revoked": "证据已撤回"
     }
   },
   "statusbar": {
@@ -586,7 +626,11 @@
     "settings": "功能设置"
   },
   "memorySettings": {
-    "groups": { "capture": "记忆积累", "recall": "对话使用", "retention": "近期记忆保留" },
+    "groups": {
+      "capture": "记忆积累",
+      "recall": "对话使用",
+      "retention": "近期记忆保留"
+    },
     "title": "个人画像",
     "navMeta": "记忆与偏好",
     "description": "管理 Janus 如何记住和使用你的个人信息。关闭创新功能中的个人画像将停止个人记忆采集、处理与对话召回，已有资料保留。",

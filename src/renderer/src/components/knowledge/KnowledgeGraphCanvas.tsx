@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Controls,
+  Handle,
+  Position,
+  MarkerType,
   MiniMap,
   ReactFlow,
   useEdgesState,
@@ -26,6 +29,7 @@ import {
   mergeStoredLayout,
   recordForGraphEdge,
   recordForGraphNode,
+  type GraphEvidence,
   type KnowledgeGraphEdge,
   type KnowledgeGraphNode,
 } from './knowledgeGraph'
@@ -45,7 +49,7 @@ interface Props {
   onSelect: (id: string, record: InspectorRecord | null) => void
 }
 
-const KIND_FILTERS = ['fact', 'proposal', 'wiki', 'entity', 'observation'] as const
+const KIND_FILTERS = ['fact', 'wiki', 'entity', 'observation'] as const
 
 /** Obsidian dot palette (shared with the MiniMap). Dark snapshot; paper mapping below. */
 const KIND_DOT_COLORS: Record<KnowledgeGraphNode['kind'], string> = {
@@ -101,6 +105,8 @@ function KgDotNode({ data, selected }: NodeProps<Node<KgDotData, 'kgDot'>>) {
       style={{ width: data.size, height: data.size }}
       title={data.fullLabel}
     >
+      <Handle type="target" position={Position.Left} isConnectable={false} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Right} isConnectable={false} style={{ opacity: 0 }} />
       <span className={styles.dotCaption}>{data.caption}</span>
     </div>
   )
@@ -123,6 +129,10 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
   const reducedMotion = useReducedMotion()
   const plancheCanvas = useThemeStore((s) => s.theme) === 'planche'
   const instanceRef = useRef<ReactFlowInstance | null>(null)
+  const [traceWikiId, setTraceWikiId] = useState<string | undefined>()
+  const [evidence, setEvidence] = useState<GraphEvidence[]>([])
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const evidenceGeneration = useRef(0)
   const [expandedIds, setExpandedIds] = useState<string[]>([])
   const [focusId, setFocusId] = useState<string | null>(null)
   const [hoverId, setHoverId] = useState<string | null>(null)
@@ -135,9 +145,44 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
   const [layoutEpoch, setLayoutEpoch] = useState(0)
 
   const view = useMemo(
-    () => buildKnowledgeGraphView(snapshot, { expandedEvidence: expandedIds }),
-    [snapshot, expandedIds],
+    () => buildKnowledgeGraphView(snapshot, { traceWikiId, expandedEvidence: expandedIds, evidence }),
+    [snapshot, traceWikiId, expandedIds, evidence],
   )
+
+  useEffect(() => {
+    ++evidenceGeneration.current
+    setExpandedIds([])
+    setEvidence([])
+    setEvidenceLoading(false)
+    setFocusId(null)
+    setKindFilter('all')
+    setEdgeFilter('all')
+    const requests = evidenceGeneration
+    return () => { ++requests.current }
+  }, [snapshot, traceWikiId])
+
+  const expandEvidence = async (node: KnowledgeGraphNode) => {
+    const generation = evidenceGeneration.current
+    setExpandedIds(ids => [...new Set([...ids, node.id])])
+    setEvidenceLoading(true)
+    const ids = [...new Set(node.evidenceIds)]
+    const loaded: GraphEvidence[] = []
+    // Bound concurrent host reads, and discard results after refresh, navigation or close.
+    for (let offset = 0; offset < ids.length; offset += 4) {
+      if (generation !== evidenceGeneration.current) return
+      const batch = await Promise.all(ids.slice(offset, offset + 4).map(async id => {
+        try {
+          const result = await window.electron.knowledge.observationRevocationContext({ id, workspaceId: node.workspaceId })
+          return { id, workspaceId: node.workspaceId, content: result.content,
+            status: result.revoked ? 'revoked' as const : 'available' as const }
+        } catch { return { id, workspaceId: node.workspaceId, status: 'unavailable' as const } }
+      }))
+      loaded.push(...batch)
+    }
+    if (generation !== evidenceGeneration.current) return
+    setEvidence(current => [...current.filter(item => !loaded.some(next => item.workspaceId === next.workspaceId && item.id === next.id)), ...loaded])
+    setEvidenceLoading(false)
+  }
   const nodeIdsKey = useMemo(() => view.nodes.map((node) => node.id).sort().join('\u0000'), [view])
 
   // Layout: deterministic computed positions overlaid with the stored
@@ -246,7 +291,8 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
         id: edge.id,
         source: edge.from,
         target: edge.to,
-        label: edge.type === 'conflicts_with' ? edge.type : undefined,
+        markerEnd: { type: MarkerType.ArrowClosed, color: edge.type === 'conflicts_with' ? '#ff6b6b' : 'var(--shell-muted)' },
+        label: undefined,
         style: {
           ...base,
           opacity: hoverSet !== null && !touched ? 0.12 : 1,
@@ -316,9 +362,6 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
     const graphNode = view.nodes.find((entry) => entry.id === node.id)
     if (!graphNode) return
     persistSelection(node.id)
-    // Single click focuses the one-hop neighborhood (distant nodes hide);
-    // clicking the focused node again releases the focus.
-    setFocusId((current) => (current === node.id ? null : node.id))
     onSelect(node.id, resolveRecord?.(graphNode) ?? recordForGraphNode(graphNode))
   }, [view, resolveRecord, onSelect, persistSelection])
 
@@ -358,7 +401,7 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
   const canExpand = selectedNode !== null
     && selectedNode.kind !== 'observation'
     && selectedNode.evidenceIds.length > 0
-    && !expandedIds.includes(selectedNode.id)
+    && (evidenceLoading || !expandedIds.includes(selectedNode.id) || evidence.some(item => item.workspaceId === selectedNode.workspaceId && selectedNode.evidenceIds.includes(item.id) && item.status === 'unavailable'))
 
   const matchCount = locateTerm
     ? view.nodes.filter((node) => visibleNodeIds.has(node.id)
@@ -368,6 +411,8 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
   if (view.nodes.length === 0) {
     return (
       <div className={styles.graphNotice}>
+        {traceWikiId && <button type='button' onClick={() => { setTraceWikiId(undefined); onSelect('', null) }}>{t('knowledge:graph.canvas.backToWiki')}</button>}
+        {view.diagnostics.map((item, index) => <p key={index}>{t(`knowledge:graph.diagnostics.${item.status}`)} · {item.target}</p>)}
         <strong>{t('knowledge:graph.empty.title')}</strong>
         <span>{t('knowledge:graph.empty.detail')}</span>
       </div>
@@ -384,29 +429,40 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
           placeholder={t('knowledge:graph.canvas.searchPlaceholder')}
           aria-label={t('knowledge:graph.canvas.searchPlaceholder')}
         />
-        <label className={styles.graphFilter}>
+        {traceWikiId && <label className={styles.graphFilter}>
           {t('knowledge:graph.canvas.kindFilter')}
           <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value)}>
             <option value="all">{t('knowledge:graph.canvas.all')}</option>
-            {KIND_FILTERS.map((kind) => <option key={kind} value={kind}>{kind}</option>)}
+            {KIND_FILTERS.map((kind) => <option key={kind} value={kind}>{t(`knowledge:graph.kinds.${kind}`)}</option>)}
           </select>
-        </label>
+        </label>}
         <label className={styles.graphFilter}>
           {t('knowledge:graph.canvas.edgeFilter')}
           <select value={edgeFilter} onChange={(event) => setEdgeFilter(event.target.value)}>
             <option value="all">{t('knowledge:graph.canvas.all')}</option>
             {Array.from(new Set(view.edges.map((edge) => edge.type))).sort().map((type) => (
-              <option key={type} value={type}>{type}</option>
+              <option key={type} value={type}>{t(`knowledge:graph.relations.${type}`)}</option>
             ))}
           </select>
         </label>
+
+        {!traceWikiId && selectedNode?.kind === 'wiki' && (
+          <button type="button" className={styles.graphButton} onClick={() => setTraceWikiId(selectedNode.id)}>
+            {t('knowledge:graph.canvas.traceWiki')}
+          </button>
+        )}
+        {traceWikiId && (
+          <button type="button" className={styles.graphButton} onClick={() => { setTraceWikiId(undefined); onSelect('', null) }}>
+            {t('knowledge:graph.canvas.backToWiki')}
+          </button>
+        )}
         {canExpand && (
-          <button type="button" className={styles.graphButton} onClick={() => setExpandedIds((ids) => [...ids, selectedNode.id])}>
-            {t('knowledge:graph.canvas.expandEvidence')}
+          <button type="button" className={styles.graphButton} disabled={evidenceLoading} onClick={() => void expandEvidence(selectedNode)}>
+            {t(evidenceLoading ? 'knowledge:graph.canvas.loadingEvidence' : 'knowledge:graph.canvas.expandEvidence')}
           </button>
         )}
         {expandedIds.length > 0 && (
-          <button type="button" className={styles.graphButton} onClick={() => setExpandedIds([])}>
+          <button type="button" className={styles.graphButton} onClick={() => { ++evidenceGeneration.current; setExpandedIds([]); setEvidence([]); setEvidenceLoading(false) }}>
             {t('knowledge:graph.canvas.collapseEvidence')}
           </button>
         )}
@@ -421,15 +477,15 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
         <span className={styles.graphCount}>
           {view.truncated
             ? t('knowledge:graph.canvas.capped', { shown: view.nodes.length, total: view.totalNodes })
-            : `${matchCount}`}
+            : t(traceWikiId ? 'knowledge:graph.canvas.evidenceCount' : 'knowledge:graph.canvas.pageCount', { count: matchCount, edges: baseEdges.length })}
         </span>
       </div>
       <div className={styles.graphCanvas} data-reduced-motion={reducedMotion ? 'true' : undefined}>
         {visibleNodeIds.size === 0 && (
           <div className={styles.graphNoticeFloat}><span>{t('knowledge:graph.canvas.noMatch')}</span></div>
         )}
-        {visibleNodeIds.size > 0 && view.edges.length === 0 && (
-          <div className={styles.graphNoticeFloat}><span>{t('knowledge:graph.canvas.noEdges')}</span></div>
+        {visibleNodeIds.size > 0 && baseEdges.length === 0 && (
+          <div className={styles.graphNoticeFloat}><span>{t(traceWikiId ? 'knowledge:graph.canvas.noEvidenceEdges' : 'knowledge:graph.canvas.noEdges')}</span></div>
         )}
         <ReactFlow
           nodes={rfNodes}
@@ -461,10 +517,17 @@ export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSe
           />
         </ReactFlow>
       </div>
-      <div className={styles.graphHint}>{t('knowledge:graph.canvas.hint')}</div>
+
+      <div className={styles.graphHint}>
+        <span>{t(traceWikiId ? 'knowledge:graph.canvas.traceHint' : 'knowledge:graph.canvas.hint')}</span>
+        {view.diagnostics.length > 0 && <details>
+          <summary>{t('knowledge:graph.canvas.diagnostics', { count: view.diagnostics.length })}</summary>
+          <ul>{view.diagnostics.map((item, index) => <li key={index}>{t(`knowledge:graph.diagnostics.${item.status}`)} · {item.target}</li>)}</ul>
+        </details>}
+      </div>
       <div className={styles.graphLegend} aria-hidden="true">
         <span><i style={{ borderTop: '2px solid var(--shell-muted)' }} />{t('knowledge:graph.canvas.legend.stored')}</span>
-        <span><i style={{ borderTop: '2px dashed var(--shell-muted)' }} />{t('knowledge:graph.canvas.legend.derived')}</span>
+        {traceWikiId && <span><i style={{ borderTop: '2px dashed var(--shell-muted)' }} />{t('knowledge:graph.canvas.legend.derived')}</span>}
         <span><i style={{ borderTop: '2px dashed #ff6b6b' }} />{t('knowledge:graph.canvas.legend.conflict')}</span>
       </div>
     </div>

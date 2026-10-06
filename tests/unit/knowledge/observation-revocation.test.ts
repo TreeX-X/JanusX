@@ -52,6 +52,16 @@ afterEach(async () => {
 })
 
 describe('durable observation revocation', () => {
+  it('resolves old evidence by workspace and ID beyond the recent 40 without mutation', async () => {
+    const old = { ...source, createdAt: '2020-01-01T00:00:00.000Z', content: 'Old original evidence' }
+    await records('observations/active/2026-09.jsonl', [old, ...Array.from({ length: 45 }, (_, i) => ({ ...source, id: 'new-' + i }))])
+    const before = await readFile(join(root, 'observations/active/2026-09.jsonl'), 'utf8')
+    expect((await knowledgeObservationService.list({ scope: 'workspace', workspaceId: 'ws', limit: 40 })).some(item => item.id === old.id)).toBe(false)
+    expect(await observationRevocationContext({ id: old.id, workspaceId: 'ws' })).toMatchObject({ content: old.content, revoked: false })
+    await expect(observationRevocationContext({ id: old.id, workspaceId: 'other' })).rejects.toThrow('missing or ambiguous')
+    expect(await readFile(join(root, 'observations/active/2026-09.jsonl'), 'utf8')).toBe(before)
+  })
+
   it.each(['available', 'changed', 'missing', 'ambiguous'] as const)('keeps the receipt visible when source is %s without writing storage', async status => {
     await revokeObservation(await input())
     if (status === 'changed') await records('observations/active/2026-09.jsonl', [{ ...source, content: 'new text' }])
