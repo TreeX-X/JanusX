@@ -2,6 +2,8 @@ import type { ToolResult } from '../../../shared/ipc/agent-runtime'
 import { ProjectType, type LaunchConfig, type RunningProjectSummary, type ValidationResult } from '../../../shared/ipc/project'
 import { chatStream, type ChatMessage } from './llm'
 
+// Note: launch-assistant sourceTag keeps this dialog out of persona capture (recall/capture/timeline gates) — see .agents/notes/2026-10-07-run-config-assistant-edit-tools--f481b0db.md
+
 const MANIFEST_PATTERN = /(^|\/)(package\.json|pyproject\.toml|cargo\.toml|go\.mod|cmakelists\.txt|readme(?:\.md)?)$/i
 const MAX_CONTEXT_FILES = 5
 const ROOT_CONTEXT_FILES = ['package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'CMakeLists.txt', 'README.md']
@@ -279,7 +281,7 @@ export function streamWorkspaceLaunchAssistant(input: {
       input.onDone(response)
     },
     input.onError,
-    { sourceTag: 'janus-chat', workspaceId: input.analysis.workspaceId },
+    { sourceTag: 'launch-assistant', workspaceId: input.analysis.workspaceId },
   )
 }
 

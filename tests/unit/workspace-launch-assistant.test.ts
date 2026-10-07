@@ -125,6 +125,14 @@ describe('workspace launch assistant', () => {
     })
   })
 
+  it('sends the launch-assistant source tag so persona capture gates miss', () => {
+    vi.mocked(chatStream).mockReturnValue({ abort: vi.fn() })
+    streamWorkspaceLaunchAssistant({
+      request: '运行 debug 版 start.exe', analysis, config, onDelta: vi.fn(), onDone: vi.fn(), onError: vi.fn(),
+    })
+    expect(vi.mocked(chatStream).mock.calls[0]?.[4]).toEqual({ sourceTag: 'launch-assistant', workspaceId: 'workspace-1' })
+  })
+
   it('redacts common secrets from workspace excerpts', () => {
     expect(redactWorkspaceExcerpt('API_KEY=abc123\nhttps://user:pass@example.com')).toBe('API_KEY=[REDACTED]\nhttps://[REDACTED]@example.com')
   })

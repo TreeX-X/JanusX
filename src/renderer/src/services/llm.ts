@@ -85,7 +85,7 @@ export async function chat(
   messages: ChatMessage[],
   providerId?: string,
   modelId?: string,
-  options?: { sourceTag?: 'janus-chat'; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[] }
+  options?: { sourceTag?: 'janus-chat' | 'launch-assistant'; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[] }
 ): Promise<string> {
   const targetProvider = providerId || (await getTerminalDefault('janus').catch(() => null))?.provider.id
   if (!targetProvider) throw new Error('未配置 LLM Provider')
@@ -134,7 +134,7 @@ export function chatStream(
   options?: {
     providerId?: string
     modelId?: string
-    sourceTag?: 'janus-chat'
+    sourceTag?: 'janus-chat' | 'launch-assistant'
     conversationId?: string
     workspaceId?: string
     workspacePath?: string

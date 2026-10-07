@@ -34,7 +34,7 @@ export interface ChatRequest {
   contextCheckpoint?: import('../chat-context').ChatContextCheckpoint
   contextEpoch?: number
   compact?: { keepRecentUnits: number }
-  messages: ChatMessage[]; providerId: string; modelId?: string; sourceTag?: 'janus-chat'; conversationId?: string; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[]
+  messages: ChatMessage[]; providerId: string; modelId?: string; sourceTag?: 'janus-chat' | 'launch-assistant'; conversationId?: string; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[]
   /** Compact trace of tool calls from earlier turns, replayed into the model's context. */
   toolTraces?: ChatToolTraceEntry[]
   /**

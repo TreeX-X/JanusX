@@ -61,7 +61,7 @@ export interface ChatStreamRequest {
   messages: ChatMessage[]
   providerId: string
   modelId?: string
-  sourceTag?: 'janus-chat'
+  sourceTag?: 'janus-chat' | 'launch-assistant'
   conversationId?: string
   workspaceId?: string
   workspacePath?: string
