@@ -1,3 +1,4 @@
+// Note: 助手卡顶栏与输入框吃蓝图右栏的对话卡语言（光点 Janus 头 + opencode 方框 composer） — see .agents/notes/2026-10-07-right-chat-column-card-language--5f33b918.md
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ArrowUp, LoaderCircle, Square } from 'lucide-react'
@@ -44,11 +45,20 @@ export function ProjectLaunchAssistant({
   const abortRef = useRef<(() => void) | null>(null)
   const streamIdRef = useRef(0)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const { output: pendingContent, append, complete, flush, reset } = useStreamingPrinter()
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' })
   }, [messages, pendingContent])
+
+  // 与蓝图 minimalComposer 同呼吸：从 46px 起按内容长到 150px 封顶。
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 150)}px`
+  }, [input])
 
   useEffect(() => () => {
     streamIdRef.current += 1
@@ -149,10 +159,11 @@ export function ProjectLaunchAssistant({
   return (
     <aside className={styles.assistant} style={style} aria-label="Janus workspace launch assistant">
       <div className={styles.assistantHeader}>
-        <div>
+        <div className={styles.assistantIdentity}>
+          <span className={styles.assistantDot} aria-hidden="true" />
           <strong>Janus</strong>
-          <span>{analysis ? t('editor:launcher.workspaceRead') : t('editor:launcher.waitingAnalysis')}</span>
         </div>
+        <span className={styles.assistantStatus}>{analysis ? t('editor:launcher.workspaceRead') : t('editor:launcher.waitingAnalysis')}</span>
       </div>
       <div className={styles.messages}>
         {messages.map((message, index) => (
@@ -170,31 +181,36 @@ export function ProjectLaunchAssistant({
         <div ref={messagesEndRef} />
       </div>
       <div className={styles.promptBox}>
-        <textarea
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault()
-              void send()
-            }
-          }}
-          placeholder={t('editor:launcher.inputPlaceholder')}
-          rows={3}
-          disabled={sending || busy}
-        />
-        <button
-          className={styles.sendButton}
-          onClick={() => streaming ? stop() : void send()}
-          disabled={!streaming && (!input.trim() || sending || busy)}
-          title={streaming ? t('editor:launcher.stopGeneration') : t('editor:launcher.send')}
-        >
-          {streaming
-            ? <Square size={11} fill="currentColor" />
-            : sending
-              ? <LoaderCircle size={14} className={styles.spinIcon} />
-              : <ArrowUp size={14} />}
-        </button>
+        <div className={styles.promptRow}>
+          <span className={styles.promptPrefix} aria-hidden="true">›</span>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault()
+                void send()
+              }
+            }}
+            placeholder={t('editor:launcher.inputPlaceholder')}
+            rows={1}
+            disabled={sending || busy}
+          />
+          <button
+            className={styles.sendButton}
+            data-mode={streaming ? 'stop' : 'send'}
+            onClick={() => streaming ? stop() : void send()}
+            disabled={!streaming && (!input.trim() || sending || busy)}
+            title={streaming ? t('editor:launcher.stopGeneration') : t('editor:launcher.send')}
+          >
+            {streaming
+              ? <Square size={11} fill="currentColor" />
+              : sending
+                ? <LoaderCircle size={14} className={styles.spinIcon} />
+                : <ArrowUp size={14} />}
+          </button>
+        </div>
       </div>
     </aside>
   )

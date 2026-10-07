@@ -2,6 +2,7 @@
  * Single-session workspace dialog.
  * Note: 右侧只有一个以当前工作区为基础的对话，无多会话管理 — see .agents/notes/2026-09-25-blueprint-workspace-dialog--5480ef6d.md
  * Note: 对话上下文跟随画布焦点成批注入，无需「维护此节点」点击 — see .agents/notes/2026-09-30-blueprint-batch-context--7c1e4a92.md
+ * Note: 入场空态是一条开场引导语（借运行配置助手的开场消息设计），纯展示不进会话历史 — see .agents/notes/2026-10-07-right-chat-column-card-language--5f33b918.md
  */
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
@@ -157,6 +158,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
+        emptyState={<p className="bp-maintenance-greeting">{t('blueprint:maintenance.greeting')}</p>}
         renderTurnFooter={turnId => <NoteTurnActivity key={turnId ?? 'live'} conversationId={chat.conversationId}
           workspacePath={activeWorkspace.path} turnId={turnId ?? chat.activeTurnId} live={!turnId} />}
         discussionFooter={noteHistoryReady ? <NoteChatActivity key={`${activeWorkspace.id}:${activeWorkspace.path}:${chat.conversationId}`}

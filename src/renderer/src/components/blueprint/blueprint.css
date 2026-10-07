@@ -2494,6 +2494,18 @@
 /* 纯对话框不展示空态 JANUSX 像素 banner 与会话侧边栏（后者由 compactNavigation 关闭）。 */
 .bp-maintenance-panel .janus-chat-empty { display: none; }
 
+/* 入场开场引导语：借运行配置助手的开场消息样式（左强调发丝线 + 安静墨字）。
+   纯展示空态，不写入会话历史；消息流出现内容后由 emptyState 槽位自然退场。 */
+.bp-maintenance-greeting {
+  margin: 2px 0 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--shell-accent-border);
+  color: var(--shell-muted);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
 .bp-maintenance-panel {
   display: flex;
   flex-direction: column;
@@ -4370,6 +4382,11 @@
 
 [data-theme='planche'] .bp-maintenance-panel__header {
   border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-greeting {
+  border-left-color: var(--planche-red, #D43D2A);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
 }
 
 [data-theme='planche'] .bp-maintenance-janus-head {

@@ -236,6 +236,7 @@ export type TypedI18nKey =
   | 'blueprint:maintenance.filesTitle'
   | 'blueprint:maintenance.finishOtherTarget'
   | 'blueprint:maintenance.goalDefault'
+  | 'blueprint:maintenance.greeting'
   | 'blueprint:maintenance.groupByNode'
   | 'blueprint:maintenance.groupDeletes'
   | 'blueprint:maintenance.groupNodes'

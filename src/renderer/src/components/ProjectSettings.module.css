@@ -92,7 +92,6 @@
   font-size: 9px;
 }
 
-.sendButton,
 .commandBar button,
 .approvalBar button {
   display: inline-flex;
@@ -109,7 +108,6 @@
   transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
 }
 
-.sendButton:hover,
 .commandBar button:hover:not(:disabled),
 .approvalBar button:hover {
   border-color: var(--shell-accent-border);
@@ -259,17 +257,26 @@
   overflow: hidden;
 }
 
+/* 顶栏对齐蓝图右栏的光点 Janus 头：光点 + 字标同线，状态文本靠右安静位。 */
 .assistantHeader {
   min-height: 48px;
   justify-content: space-between;
+  gap: 10px;
   padding: 8px 12px 8px 14px;
   border-bottom: 1px solid var(--shell-border);
 }
 
-.assistantHeader > div { display: flex; flex-direction: column; gap: 2px; }
-.assistantHeader strong { color: var(--shell-text); font-size: 12px; }
-.assistantHeader span { color: var(--shell-dim); font-size: 9px; }
-.sendButton { width: var(--control-h, 30px); min-height: var(--control-h, 30px); padding: 0; }
+.assistantIdentity { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.assistantIdentity strong { color: var(--shell-text); font-size: 12px; letter-spacing: 0.02em; }
+.assistantDot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--shell-accent);
+  box-shadow: 0 0 6px var(--shell-accent-border);
+}
+.assistantStatus { color: var(--shell-dim); font-size: 9px; white-space: nowrap; }
 
 .messages {
   display: flex;
@@ -295,18 +302,92 @@
 .streamingMessage { min-height: 28px; color: var(--shell-muted); }
 .streamingMessage :global(.janus-chat-streaming-cursor) { --accent-color: var(--shell-accent); }
 
+/* 输入框对齐蓝图右栏 minimalComposer：opencode 方框（› 前缀 + 无边框输入 + 38 方块发送），
+   度量与令牌同源（min-height 46px / max-height 150px / --shell-pane 卡面）。 */
 .promptBox {
-  position: relative;
   margin: 10px;
-  border: 1px solid var(--control-border);
-  border-radius: 6px;
-  background: var(--shell-void);
+  border: 1px solid var(--shell-border);
+  border-radius: 4px;
+  background: var(--shell-pane);
+  overflow: hidden;
 }
 
-.promptBox:focus-within { border-color: var(--shell-accent-border); }
-.promptBox textarea { width: 100%; min-height: 64px; resize: none; border: 0; outline: 0; background: transparent; padding: 8px 40px 8px 10px; color: var(--shell-text); font: 11px/1.55 inherit; }
+.promptBox:focus-within {
+  border-color: var(--shell-accent-border);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+
+.promptRow {
+  display: flex;
+  align-items: flex-end;
+  min-height: 46px;
+}
+
+.promptPrefix {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  flex: none;
+  min-height: 46px;
+  padding: 0 10px 0 12px;
+  border-right: 1px solid var(--shell-border-soft);
+  color: var(--shell-accent);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.promptBox textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  resize: none;
+  min-height: 46px;
+  max-height: 150px;
+  padding: 14px 12px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--shell-text);
+  font-family: 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow-y: auto;
+}
+
 .promptBox textarea::placeholder { color: var(--shell-dim); }
-.sendButton { position: absolute; right: 6px; bottom: 6px; }
+.promptBox textarea:disabled { color: var(--shell-muted); }
+
+.sendButton {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  margin: 4px 6px 4px 0;
+  padding: 0;
+  border: 1px solid var(--shell-border);
+  border-radius: 4px;
+  background: var(--shell-hover);
+  color: var(--shell-dim);
+  cursor: pointer;
+}
+
+.sendButton[data-mode='send']:not(:disabled) {
+  color: var(--shell-void);
+  background: var(--shell-accent);
+  border-color: var(--shell-accent-border);
+}
+
+.sendButton[data-mode='send']:not(:disabled):hover { background: var(--shell-accent-strong); }
+.sendButton[data-mode='stop'] { color: var(--shell-muted); }
+.sendButton[data-mode='stop']:hover { border-color: var(--shell-accent-border); color: var(--shell-text); }
+.sendButton:disabled { cursor: not-allowed; }
+.sendButton:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
 
 /* 加载态也是一张浮岛卡：壳透明后裸文字浮在遮罩上读不清 */
 .loading {
@@ -348,7 +429,6 @@
   border-color: var(--line, #1C343B);
 }
 
-:global([data-theme='planche']) .sendButton:hover,
 :global([data-theme='planche']) .commandBar button:hover:not(:disabled),
 :global([data-theme='planche']) .approvalBar button:hover {
   border-color: var(--planche-red, #D43D2A);
@@ -374,10 +454,20 @@
 :global([data-theme='planche']) .promptBox {
   border: 1px solid var(--line, #1C343B);
   background: var(--paper, #EFE4C5);
+  box-shadow: none;
+}
+
+:global([data-theme='planche']) .assistantDot {
+  box-shadow: none;
 }
 
 :global([data-theme='planche']) .promptBox:focus-within {
   border-color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .promptPrefix {
+  border-right-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--planche-red, #D43D2A);
 }
 
 :global([data-theme='planche']) .promptBox textarea {
@@ -386,6 +476,22 @@
 
 :global([data-theme='planche']) .promptBox textarea::placeholder {
   color: var(--ink-faint, rgba(28, 52, 59, 0.38));
+}
+
+:global([data-theme='planche']) .sendButton {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
+}
+
+:global([data-theme='planche']) .sendButton[data-mode='send']:not(:disabled) {
+  background: var(--planche-red, #D43D2A);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--paper, #EFE4C5);
+}
+
+:global([data-theme='planche']) .sendButton[data-mode='stop'] {
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
 }
 
 :global([data-theme='planche']) .loading {
