@@ -4,8 +4,8 @@
  * 工作区启动配置（左侧侧栏右键进入）。彻底分体：弹窗壳透明，顶栏与三栏共
  * 四张浮岛卡，缝隙直接露出共享遮罩，不垫任何整块地色。三栏各是一张框线卡，
  * 入场按 --card-index 错峰升起（时长与曲线对齐 blueprint-workbench-card-rise）。
- * 分组卡靠框线定界，不靠填充分组；planche 加法层给纸面墨框。色值全部走主题
- * 令牌，白字/白 alpha 边框/黑底填充清零。
+ * 分组卡与设置内卡同料（柔和发丝线 + 浅抬升底，两主题共用）；planche 加法层
+ * 给纸面墨框。色值全部走主题令牌，白字/白 alpha 边框/黑底填充清零。
  * 见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
  */
 
@@ -186,13 +186,13 @@
   padding: 14px 16px;
 }
 
-/* 变更列表：框线分组卡（同底 + 立框），内部保留发丝线分隔 */
+/* 变更列表：与设置内卡同料的分组卡，内部保留发丝线分隔 */
 .diffList {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--shell-border);
+  border: 1px solid var(--shell-border-soft);
   border-radius: 6px;
-  background: transparent;
+  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
   padding: 6px 14px;
 }
 .diffEmpty { padding: 18px 0; color: var(--shell-dim); font-size: 11px; }
@@ -229,9 +229,9 @@
 
 .taskOutput {
   margin: 0 16px 8px;
-  border: 1px solid var(--shell-border);
+  border: 1px solid var(--shell-border-soft);
   border-radius: 6px;
-  background: transparent;
+  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
   overflow: hidden;
 }
 .taskOutput summary { min-height: 32px; gap: 7px; padding: 0 14px; color: var(--shell-muted); cursor: pointer; font-size: 10px; list-style: none; }
@@ -422,11 +422,6 @@
 :global([data-theme='planche']) .loading {
   border-color: var(--line, #1C343B);
   box-shadow: none;
-}
-
-:global([data-theme='planche']) .diffList,
-:global([data-theme='planche']) .taskOutput {
-  border-color: var(--line, #1C343B);
 }
 
 :global([data-theme='planche']) .commandBar button:hover:not(:disabled),

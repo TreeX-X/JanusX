@@ -24,7 +24,7 @@ class: architecture
 
 **表面层**：设置中心的 `generalRow`、`lsCard` 与 NotificationSettingsPanel、KnowledgeSettingsPanel、LlmConfigModal 的 `section` 使用 1px `--shell-border-soft`、6px 圆角与 `color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas))` 底色。轻微底色与发丝线共同界定分组，控件与窗口外壳保持更强边界。两个主题共用这条规则，planche 内卡不另加墨框；最后一张分组卡也不额外加深底边。通知共享样式同时覆盖 Agent、托管、个人记忆与实验设置的分组。双层卡片如果都采用实色墨框，会让分组与输入控件争夺注意力，因此设置的内层分组不照搬工作台独立浮岛的外框。
 
-运行配置的 `configSelector`、`fieldList`、`diffList`、`taskOutput` 使用透明底、1px `--shell-border`、6px 圆角，planche 加法层使用 `--line` 墨框。dark 浮岛卡保留 `--shell-card` + 阴影；planche 浮岛卡纸面墨框、零阴影。
+运行配置的 `configSelector`、`fieldList`、`diffList`、`taskOutput` 与设置内卡共用同一条分组卡规则（1px `--shell-border-soft` + 6px 圆角 + `color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas))` 底色），两主题同料、planche 不加墨框，输入控件保留更强边界。dark 浮岛卡保留 `--shell-card` + 阴影；planche 浮岛卡纸面墨框、零阴影。
 
 **控件层**：选中态维持「文字提亮 + 2px 强调条」。`QuickConfigForm` 的 `configTab` 选中从白色填充块改为文字提亮 + 底部 2px 强调条（`::after`），planche 强调条走 `--planche-red`。输入类控件吃 `--rc-field`（解析到 `--shell-void`，planche 层覆写纸面）与 `--control-border` 令牌，focus 边框走 `--shell-accent-border`（planche 朱红），`removeBtn` 悬停改 diff-del 描边语言。
 
@@ -38,13 +38,14 @@ class: architecture
 - 设置界面也拆成浮岛瓦片 —— 最强理由是全局形态最一致。否决原因是设置被刻意设计成「主窗口的一个抽屉」（侧栏吃 `--shell-chrome`、内容吃 `--shell-canvas`，与主窗口同构），拆岛等于重写该概念；密集表单纵向滚动被瓦片切断后填写节奏受损。设置只做表面层与控件层，布局层留给运行配置。
 - 表面层直接照搬会话卡的牛皮卡/浅纸面三阶 —— 最强理由是与会话坞同料。限用原因是设置与运行配置是软件工作面而非内容卡列表，其地色应吃 `--shell-canvas` 与软件底一致；设置内卡只混入 12% 主题抬升底色，避免形成大片填充色块。
 - 设置内卡直接复用外壳墨框：优势是边界明确且实现简单；代价是密集表单中所有层级同样醒目。内卡使用已有柔和边框令牌，控件与外壳保留更强对比。
+- 运行配置组卡保留独立实框（透明底 + 1px `--shell-border`，planche 加墨框）—— 最强理由是与浮岛卡外框语言一致，且零填充更贴「无色块」方向。否决原因是同一工作面上设置内卡已是「柔和发丝线 + 12% 抬升底」的分组语言，两套内卡语言并行正是分叉本身；实框组卡会与输入控件争夺边框注意力，削弱「控件与外壳保持更强边界」的层级。
 - 三个界面提取共享 CardFrame 组件一次性统一 —— 最强理由是消灭重复。否决原因是三者生命周期不同（工作台 portal、抽屉 modal、整窗视图），共享抽象要同时兼容三种宿主，成本高于在各自模块内按同一规则复写；先对齐规则，出现第三个同类需求再提取。
 - Do nothing / reuse 现状 —— 零成本、零回归风险。代价是 planche 下运行配置主列白字不可读的缺陷持续存在，卡片语言继续三套并行，字面量继续游离在主题机制之外。
 
 ## Consequences
 
-- **Gains**: 运行配置读作四张（顶栏 + 三栏）可独立抬升的浮岛卡，卡间缝隙露出共享遮罩，与蓝图工作台同为「壳透明、卡片即布局」的分体构图，错峰入场同节奏；设置内卡以低对比轮廓和极浅底色分组，运行配置以独立卡框定界；运行配置样式文件的色值全部经令牌解析，planche 主列/表单/助手列文字为墨字可读，左侧类型 tab 与设置导航、知识工作台共用同一套选中/悬停/焦点反馈。
+- **Gains**: 运行配置读作四张（顶栏 + 三栏）可独立抬升的浮岛卡，卡间缝隙露出共享遮罩，与蓝图工作台同为「壳透明、卡片即布局」的分体构图，错峰入场同节奏；设置与运行配置的分组卡共用低对比轮廓 + 极浅底色内卡语言，组卡轻、控件与外壳边界更强；运行配置样式文件的色值全部经令牌解析，planche 主列/表单/助手列文字为墨字可读，左侧类型 tab 与设置导航、知识工作台共用同一套选中/悬停/焦点反馈。
 
 设置卡片验证：`npx vitest run tests/unit/planche-theme.test.ts tests/unit/laya-settings-ui.test.ts tests/unit/feishu-settings-ui-contract.test.ts --maxWorkers=2` 为 21 项通过、1 项跳过。浏览器加载真实通用设置组件，1280×900 下目检 planche 与 dark；分组框分别计算为 `rgba(28,52,59,0.14)` 与 `rgba(255,255,255,0.043)`。截图位于本地 `artifacts/settings-cards/`，不作为分发资源。浏览器夹具报告 `Electron API is unavailable`，因此目检不证明桌面接口功能；桌面端全量验证未运行。
-- **Costs and limits**: 浮岛卡的 12px 缝隙与内边距吃掉小窗口的表单空间，≤980px 只保留了「隐藏助手列」单条兜底，更窄窗口未实测；dark 浮岛卡仍引用 `--shell-card` 阶（`#1c1c1f`）而非全透明，因为透明 + 发丝线框在深色底上分界不足，这是卡阶的既有授权，不是新增填充色块。导航状态规则第三处复写（设置、知识工作台、类型 tab），后续调整交互规范需三处同步，出现第四个同类需求应提取共享样式。`cardIndexStyle` 的返回类型从字面量对象改为 `CSSProperties` 以便直接挂到 `style`，未改变取值。
-- **Verification**: `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` 退出干净；`npx eslint src/renderer/src/components/ProjectSettings.tsx src/renderer/src/components/ProjectLaunchAssistant.tsx src/renderer/src/components/Sidebar.tsx src/renderer/src/components/shared/CardFrame.tsx` 零 error；`npx vitest run tests/unit/planche-theme.test.ts tests/unit/assistant-ui.test.ts tests/unit/knowledge/workbench-selection.test.ts --maxWorkers=2` 三文件 30 项通过，含钉点：壳透明无窗面、顶栏独立浮岛卡、内层容器不垫地色、五表无色值字面量、浮岛错峰入场、类型 tab 选中态、configTab 无填充块。浏览器/桌面端双主题目检与窄窗实测未做；变更文件 `git diff --check` 通过。
+- **Costs and limits**: 浮岛卡的 12px 缝隙与内边距吃掉小窗口的表单空间，≤980px 只保留了「隐藏助手列」单条兜底，更窄窗口未实测；dark 浮岛卡仍引用 `--shell-card` 阶（`#1c1c1f`）而非全透明，因为透明 + 发丝线框在深色底上分界不足，这是卡阶的既有授权，不是新增填充色块。导航状态规则第三处复写（设置、知识工作台、类型 tab），分组卡内卡规则在六个模块各自复写（AppSettingsModal、KnowledgeSettingsPanel、LlmConfigModal、NotificationSettingsPanel、QuickConfigForm、ProjectSettings），后续调整交互规范或内卡观感需逐处同步，出现第四个同类导航或第七处内卡复写应提取共享样式。`cardIndexStyle` 的返回类型从字面量对象改为 `CSSProperties` 以便直接挂到 `style`，未改变取值。
+- **Verification**: `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` 退出干净；`npx eslint src/renderer/src/components/ProjectSettings.tsx src/renderer/src/components/ProjectLaunchAssistant.tsx src/renderer/src/components/Sidebar.tsx src/renderer/src/components/shared/CardFrame.tsx` 零 error；`npx vitest run tests/unit/planche-theme.test.ts tests/unit/assistant-ui.test.ts tests/unit/knowledge/workbench-selection.test.ts --maxWorkers=2` 三文件 30 项通过，含钉点：壳透明无窗面、顶栏独立浮岛卡、内层容器不垫地色、五表无色值字面量、浮岛错峰入场、类型 tab 选中态、configTab 无填充块、中部组卡吃设置内卡规则（`color-mix` 钉在 QuickConfigForm/ProjectSettings）。浏览器/桌面端双主题目检与窄窗实测未做；变更文件 `git diff --check` 通过。

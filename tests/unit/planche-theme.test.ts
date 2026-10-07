@@ -302,6 +302,10 @@ describe('planche theme contract', () => {
     const quick = stripCssComments(read('components/ProjectConfigForm/QuickConfigForm.module.css'))
     expect(quick).toContain('.configTab.active::after')
     expect(quick).not.toMatch(/\.configTab\.active\s*\{[^}]*background/)
+    // 中部组卡与设置内卡同料：柔和发丝线 + 12% 抬升底色，两主题共用一条规则
+    const innerCard = 'color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas))'
+    expect(quick).toContain(innerCard)
+    expect(stripCssComments(project)).toContain(innerCard)
   })
 
   it('covers expanded deep surfaces (brand/tabs/chat/monitor/roundtable/auxiliary)', () => {

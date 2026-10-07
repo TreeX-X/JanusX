@@ -1,7 +1,7 @@
 /**
  * src/renderer/src/components/ProjectConfigForm/QuickConfigForm.module.css
- * 快速配置表单样式。分组卡框线定界（同底 + 立框），选中态文字提亮 + 2px 强调条；
- * 色值走主题令牌，planche 加法层给纸面墨框。
+ * 快速配置表单样式。分组卡与设置内卡同料（柔和发丝线 + 浅抬升底），选中态
+ * 文字提亮 + 2px 强调条；色值走主题令牌，planche 加法层给输入纸面墨框。
  * 见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
  */
 
@@ -24,15 +24,15 @@
   font-size: 13px;
 }
 
-/* 配置选择：框线分组卡 */
+/* 配置选择：与设置内卡同料的分组卡 */
 .configSelector {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--shell-border);
+  border: 1px solid var(--shell-border-soft);
   border-radius: 6px;
-  background: transparent;
+  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
 }
 
 .configTab {
@@ -78,15 +78,15 @@
   background: var(--shell-accent);
 }
 
-/* 字段列表：框线分组卡，字段纵向排布 */
+/* 字段列表：与设置内卡同料的分组卡，字段纵向排布 */
 .fieldList {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid var(--shell-border);
+  border: 1px solid var(--shell-border-soft);
   border-radius: 6px;
-  background: transparent;
+  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
 }
 
 .field {
@@ -247,12 +247,8 @@
   opacity: 0.6;
 }
 
-/* ── planche：分组卡墨框，输入纸面墨框（加法层，dark 原样不动）── */
-:global([data-theme='planche']) .configSelector,
-:global([data-theme='planche']) .fieldList {
-  border-color: var(--line, #1C343B);
-}
-
+/* ── planche：输入纸面墨框（加法层，dark 原样不动；分组卡与设置内卡共用一条
+   规则，两主题同料，不另加墨框）── */
 :global([data-theme='planche']) .input,
 :global([data-theme='planche']) .select {
   border-color: var(--line, #1C343B);
