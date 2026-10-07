@@ -41,6 +41,19 @@ it('keeps retries local to one card and opens readable processing details with s
       expect(await localizedDetail.innerText()).not.toContain('???')
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       await page.screenshot({ path: `artifacts/knowledge-s3-browser/processing-explanation-${theme}.png`, animations: 'disabled' })
+      const localizedFirst = page.getByRole('region', { name: '处理记录', exact: true }).locator('article').filter({ hasText: 'Backup policy' })
+      for (const width of [320, 640]) {
+        await localizedFirst.evaluate((element, width) => { (element as HTMLElement).style.width = `${width}px`; (element as HTMLElement).style.maxWidth = '100%' }, width)
+        const detailsButton = localizedFirst.getByRole('button', { name: '查看处理详情', exact: true })
+        const retryButton = localizedFirst.getByRole('button', { name: '重新审核', exact: true })
+        const detailsBounds = (await detailsButton.boundingBox())!
+        const retryBounds = (await retryButton.boundingBox())!
+        expect(detailsBounds.height).toBe(retryBounds.height)
+        expect(detailsBounds.width).toBe(retryBounds.width)
+        expect(detailsBounds.y).toBe(retryBounds.y)
+        expect(await localizedFirst.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+        await localizedFirst.screenshot({ path: `artifacts/knowledge-task-cards/${theme}-${width}.png`, animations: 'disabled' })
+      }
     }
   } finally { await page.close() }
 })

@@ -11,12 +11,22 @@
 .root button:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
 .root p { margin: 5px 0 0; overflow-wrap: anywhere; }
 .hint { color: var(--shell-muted); font-size: 11px; }
-.task { padding: 12px; margin: 8px 0; border: 1px solid var(--shell-border-soft); border-radius: 8px; background: var(--shell-card); overflow-wrap: anywhere; }
-.task[data-selected] { border-color: var(--shell-accent); background: var(--shell-accent-soft); }
-.taskHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.taskHeading strong { font-size: 11px; font-weight: 600; }
-.taskHeading span { color: var(--shell-muted); font-size: 10px; }
-.task button { margin-top: 6px; }
+.task { padding: 14px; margin: 10px 0; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-card); overflow-wrap: anywhere; }
+.task[data-selected] { border-color: var(--shell-accent); }
+.taskHeading { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; }
+.taskHeading strong { flex: 1 1 140px; min-width: 0; font-size: 12px; font-weight: 600; line-height: 1.6; }
+.taskStatus { display: inline-flex; align-items: center; flex-shrink: 0; gap: 5px; padding: 2px 7px; border-radius: 4px; background: var(--shell-hover); color: var(--shell-muted); font-size: 10px; line-height: 1.6; }
+.taskStatus::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.taskStatus[data-status='failed'] { color: var(--shell-diff-del); }
+.taskStatus[data-status='succeeded'] { color: var(--shell-diff-add); }
+.taskStatus[data-status='needs-review'], .taskStatus[data-status='running'] { color: var(--shell-accent-strong); background: var(--shell-accent-soft); }
+.task > section { margin-top: 10px; line-height: 1.65; }
+.task > section p + p { color: var(--shell-muted); }
+.taskActions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--shell-border-soft); }
+.taskActions > .actionButtons { display: contents; }
+.taskActions button { box-sizing: border-box; min-height: 30px; min-width: 112px; padding: 5px 10px; font-size: 11px; line-height: 18px; }
+.taskActions button svg { flex-shrink: 0; }
+.taskActions p { flex-basis: 100%; margin: 0; }
 
 .compact { min-width: 0; flex-shrink: 0; padding: 6px 8px; color: var(--shell-text); font-size: 11px; line-height: 1.5; }
 .compactLine { display: flex; align-items: center; gap: 8px; min-width: 0; height: 24px; }

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { FileText, RotateCcw } from 'lucide-react'
 import { useKnowledgeAutomation, refreshKnowledgeAutomation } from '../../services/knowledge-automation'
 import { useAutomationAction } from './AutomationStatus'
 import { AutomationExplanation } from './AutomationExplanation'
@@ -20,6 +21,7 @@ export function ProcessingAction({ task, enabled, onChanged, onReview }: { task:
   const action = automationAction(task.reason)
   return <div className={styles.actionButtons}>
     {task.id && task.canRetry && action !== 'manual' && <button type="button" disabled={busy || !enabled} onClick={() => { setAttempted(true); void run(false, task.id) }}>
+      <RotateCcw size={13} aria-hidden="true" />
       {t(busy ? 'knowledge:automationExplain.working' : action === 'recover' ? 'knowledge:automationExplain.recover' : 'knowledge:automationExplain.retry')}
     </button>}
     {action === 'manual' && onReview && task.stage !== 'extraction' && <button type="button" onClick={() => onReview(task.subject)}>{t('knowledge:automationExplain.manual')}</button>}
@@ -28,7 +30,7 @@ export function ProcessingAction({ task, enabled, onChanged, onReview }: { task:
   </div>
 }
 
-/** Task cards keep individual actions; the immutable event reader remains separate. */
+// Note: task cards share aligned controls and readable status hierarchy; see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
 export function AutomationRecords({ active, attentionOnly, onFilterChange, onChanged, selectedId, onSelect, onReview }: {
   active: boolean; attentionOnly: boolean; onFilterChange: (value: boolean) => void; onChanged: () => void
   selectedId?: string; onSelect?: (task: ProcessingRecord) => void; onReview?: (id: string) => void
@@ -43,11 +45,11 @@ export function AutomationRecords({ active, attentionOnly, onFilterChange, onCha
   const current = records.filter(task => attentionOnly ? attentionIds.current.has(task.id ?? '') : ids.has(task.id))
   const history = records.filter(task => !ids.has(task.id))
   const render = (task: ProcessingRecord) => <article className={styles.task} key={task.id} data-selected={selectedId === task.id || undefined}>
-    <div className={styles.taskHeading}><strong>{task.displayTitle || t(`knowledge:automation.stage.${task.stage}`)}</strong><span>{t(`knowledge:automation.status.${task.status}`)}</span></div>
+    <div className={styles.taskHeading}><strong>{task.displayTitle || t(`knowledge:automation.stage.${task.stage}`)}</strong><span className={styles.taskStatus} data-status={task.status}>{t(`knowledge:automation.status.${task.status}`)}</span></div>
     <p className={styles.hint}>{t(`knowledge:automation.stage.${task.stage}`)}{task.updatedAt && <> · <time>{new Date(task.updatedAt).toLocaleString()}</time></>}</p>
     <AutomationExplanation reason={task.reason} status={task.status} />
-    <div className={styles.actionButtons}>
-      {onSelect && <button type="button" data-processing-id={task.id} aria-pressed={selectedId === task.id} onClick={() => onSelect(task)}>{t('knowledge:automationExplain.details')}</button>}
+    <div className={styles.taskActions}>
+      {onSelect && <button type="button" data-processing-id={task.id} aria-pressed={selectedId === task.id} onClick={() => onSelect(task)}><FileText size={13} aria-hidden="true" />{t('knowledge:automationExplain.details')}</button>}
       <ProcessingAction task={task} enabled={status?.enabled ?? false} onReview={onReview} onChanged={onChanged} />
     </div>
   </article>

@@ -343,3 +343,7 @@ S5 文档检查使用 npm run check:notes，247 篇 Note、0 errors、27 项既�
 2026-10-07：按用户要求细化 Jev 阈值控件。旧布局将数字框与滑块放在同一 label 的双列网格中，滑块还继承文本框边框与内边距；现改为独立设置行，共享可访问名称与说明，主题色细轨道和紧凑数字框并排，范围刻度及说明置于下方。使用既有设置面板的颜色、边框和字号，数字统一两位小数，失焦恢复最后有效值。保留 0.50～1.00 范围、0.01 步长及显式保存/重新评估语义。浏览器验证方向键、Home/End、输入同步与无效值恢复；dark/planche 的 390px 和 1280px 截图位于 artifacts/knowledge-threshold/，已人工检查窄深色及宽浅色布局。类型检查与组件 ESLint 通过。
 
 本次控件优化最终验证：knowledge-automation-ui.test.ts 的 20 项浏览器测试全部通过，Note 检查 251 篇、0 错误（27 项既有外部链接诊断），git diff --check 通过。
+
+2026-10-07：当前任务卡片的操作区统一为 30px 最小高度、112px 最小宽度及相同内边距，详情与重新审核配套 13px 图标。嵌套操作容器仅在卡片内使用 display: contents，消除双层顶部间距及默认拉伸造成的按钮尺寸差异；反馈文字独占下一行，详情页仍保留独立操作容器。卡片标题、阶段时间、原因、下一步与操作区分层，状态使用带文字和圆点的主题色标签，选中态保留强调边框。复用现有任务卡片，因此近期历史记录也保持同一视觉规范。相较另建按钮组件或重写动作状态，本次局部样式调整保留逐任务重审行为与已有组件边界。
+
+验证：npm run test:unit -- --run tests/unit/knowledge-automation-summary-ui.test.ts --maxWorkers=2 --reporter=dot，14 项全部通过；覆盖两按钮等高等宽、同排对齐、卡片无横向溢出、单项重审与反馈。人工检查 artifacts/knowledge-task-cards/ 下 dark-320.png、planche-640.png；双主题均生成 320px 和 640px 卡片截图。npm run typecheck:strict-unused 与 AutomationRecords.tsx 的 ESLint 通过。
