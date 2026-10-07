@@ -44,7 +44,7 @@ Turns ended invisibly: files changed behind the prompt with no per-turn signal, 
 
 ## Decision
 
-The main process emits a turn-end change event carrying kind, baseline reference, capped per-file records, and aggregate counts, computed off the turn pipeline with the hash-index fast path keeping quiet trees cheap. `TurnChangeIsland` mounts one overlay per terminal pane for every engine with no per-engine branch: a collapsed pill by default, an expanded file index on focused turns or pinned clicks, and dismissal on Esc, click-away, close, or the next turn. The chrome never steals terminal focus, sizing stays relative to the pane with narrow panes pinned to the pill, and a short hover-aware TTL collapses the signal while the session panel keeps the record. Binaries and oversized files report kind and size without content.
+The main process emits a turn-end change event with capped per-file records and aggregate counts. Per-terminal snapshots define adjacent-conversation differences; the checkpoint reference remains audit metadata. The persistent overlay, empty-turn handling, and bounded history follow [Terminal right-island turn file history](2026-09-23-terminal-right-island-turn-history--70beb72a.md). Binaries and oversized files report status without content.
 
 ## Alternatives considered
 
@@ -56,5 +56,5 @@ The main process emits a turn-end change event carrying kind, baseline reference
 
 ## Consequences
 
-- **Gains**: every turn end lands a transient, focus-safe signal with per-file counts across all engines. The hash-index fast path skips reads on quiet trees; sibling `agent-core` checks cover it; turn feed, store, and IPC contract checks pass with project typecheck, touched-file lint, and bilingual keys.
-- **Costs and limits**: composer clearance is a fixed heuristic with no TUI geometry reported; file lists cap at one hundred entries with the drawer-equivalent record in Sessions; scrollback never contains the island. Daemon-backed reattach stays unscheduled. Built-app Electron acceptance was not exercised here.
+- **Gains**: turn-end changes are visible without leaving the terminal across all engines. A quiet turn clears the current signal and preserves earlier change records. The renderer never injects bytes into terminal scrollback.
+- **Costs and limits**: capture reads workspace files at turn boundaries and cannot attribute concurrent writes to individual engines. Per-file counts may be unavailable for binaries, large files, and bounded diff work. Snapshot limits and validation commands live in the linked island history decision.

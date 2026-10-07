@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { terminalManager } from '../terminal/manager'
+import { TerminalTurnChangeTracker } from '../terminal/turn-change-tracker'
 import { checkpointManager } from '@janus-agent/agent-core'
 import type { CheckpointEngine } from '@janus-agent/agent-core'
 import { agentSessionRegistry, type AgentSessionRecord } from '../sessions/session-registry'
@@ -377,6 +378,9 @@ async function resolveOfficecliLaunchAssets(): Promise<{
 export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | null): void {
   getHostWindow = getMainWindow
   const hookDiagnostics = new AgentHookDiagnostics()
+  const turnChangeTracker = new TerminalTurnChangeTracker(event => {
+    sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.turnChanges, event)
+  })
   const serviceErrorDetectors = new Map<string, TerminalServiceErrorDetector>()
   agentTurnRecorder.setEventSink((event) => {
     hookDiagnostics.record({
@@ -453,6 +457,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       sendToRenderer(getMainWindow(), AGENT_CHANNELS.hookEvent, event)
     },
     onTurnStarted: (turn) => {
+      turnChangeTracker.start(turn.terminalId)
       agentSessionRegistry.noteProviderSession(turn.terminalId, turn.sessionId, turn.transcriptPath)
       // Transcript sentinel watches engines with a tail-readable transcript
       // contract; today only claude. Others rely on their own failure hooks
@@ -512,7 +517,8 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
             ? 'interrupted'
             : 'done'
         const baselineId = state.checkpointId ?? undefined
-        const baselineCwd = state.cwd
+        // Capture the boundary before transcript reads; duplicate end hooks are ignored.
+        void turnChangeTracker.finish(terminal.terminalId, kind, baselineId ?? null)
         // Answer prose resolves per engine capability (hook raw first,
         // session record second). Failures yield undefined and never block.
         const excerpt = await readAssistantExcerpt({
@@ -527,35 +533,6 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
           engine: terminal.engine,
         })
         agentSessionRegistry.recordTurnEnd(terminal.terminalId, kind, baselineId, excerpt)
-        // Turn-change island feed: per-file records against the baseline.
-        // Best-effort and off the turn pipeline; quiet trees hit the mtime
-        // fast path, binaries and oversized files never enter memory.
-        void (async () => {
-          try {
-            const records = baselineId
-              ? await checkpointManager.getChangedFileRecords(baselineId, baselineCwd)
-              : []
-            const files = records.slice(0, 100)
-            sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.turnChanges, {
-              id: terminal.terminalId,
-              kind,
-              checkpointId: baselineId ?? null,
-              files: files.map((record) => ({
-                path: record.path,
-                status: record.status,
-                additions: record.additions,
-                deletions: record.deletions,
-                size: record.size,
-              })),
-              fileCount: records.length,
-              additions: records.reduce((total, record) => total + (record.additions ?? 0), 0),
-              deletions: records.reduce((total, record) => total + (record.deletions ?? 0), 0),
-              endedAt: new Date().toISOString(),
-            })
-          } catch (err) {
-            console.error('[terminal] turn-changes feed failed:', err)
-          }
-        })()
       }
       companionSessionState.handleHookPayload(payload)
       await agentTurnRecorder.handleHookPayload({ ...payload, raw: {
@@ -851,6 +828,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
 
     let instance
     try {
+      if (engine !== 'shell') await turnChangeTracker.register(id, cwd)
       const officeMcpEntry = resolve(__dirname, '..', 'office-mcp.js')
       const officeSession = buildOfficeAgentSession(engine, cwd, office.binaryPath, officeMcpEntry)
       if (officeSession.limitation) {
@@ -888,6 +866,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         stack: err instanceof Error ? err.stack : undefined,
       })
       // Release the creation lock stub so a later retry is not blocked.
+      turnChangeTracker.unregister(id)
       terminalStates.delete(id)
       throw err
     }
@@ -1089,6 +1068,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
           analyzer.analyzeTerminal(state.cwd, id).catch(err => console.error('[janus] terminal-close analyze failed:', err))
         }
         terminalStates.delete(id)
+        turnChangeTracker.unregister(id)
         serviceErrorDetectors.delete(id)
         clearHandoffDeliveryForTerminal(id)
         companionSessionState.unregisterTerminal(id)
@@ -1100,6 +1080,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         console.error(`[terminal ${id}] onExit error:`, err)
         // Best-effort cleanup so a partial failure does not leak state.
         try { terminalStates.delete(id) } catch {}
+        turnChangeTracker.unregister(id)
         try { serviceErrorDetectors.delete(id) } catch {}
         try { clearHandoffDeliveryForTerminal(id) } catch {}
         try { companionSessionState.unregisterTerminal(id) } catch {}
@@ -1129,6 +1110,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     } catch (error) {
       rollbackTerminalCreation({
         clearState: () => {
+          turnChangeTracker.unregister(id)
           terminalStates.delete(id)
           serviceErrorDetectors.delete(id)
           clearHandoffDeliveryForTerminal(id)
@@ -1303,6 +1285,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     }
     dropPendingTerminalData(id)
     clearHandoffDeliveryForTerminal(id)
+    turnChangeTracker.unregister(id)
     terminalManager.kill(id)
     return { success: true }
   })

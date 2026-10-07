@@ -127,6 +127,10 @@ export interface TurnChangedFile {
  */
 export interface TerminalTurnChangesEvent {
   id: string
+  turnId?: string
+  sequence?: number
+  /** False when a boundary could not be captured; never report it as no changes. */
+  available?: boolean
   kind: TurnChangeKind
   checkpointId: string | null
   files: TurnChangedFile[]

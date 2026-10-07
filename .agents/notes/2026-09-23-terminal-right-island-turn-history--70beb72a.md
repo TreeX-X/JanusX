@@ -27,22 +27,28 @@ extensions:
 ---
 # Terminal right-island turn file history
 
-
 ## Problem
 
-Turn file changes reach the renderer as one transient bottom pill per terminal pane. The pill shows only the latest turn, collapses after six seconds, and its file rows are not interactive, so reviewing earlier turns or opening a changed file forces a detour through the session panel.
+A terminal's file-change signal must describe the difference between consecutive completed conversations. Reusing a submission checkpoint ties this signal to input parsing and can combine several conversations. Multiple mounted islands subscribe to the same global event, so unguarded appends create duplicate history entries. Empty turns require an empty latest view while prior change records remain accessible.
 
 ## Decision
 
-Each terminal pane carries a persistent island on its right edge once its first turn lands. Single click expands the latest turn's file list; double click expands per-turn history grouped by turn with kind and red/green counts. File rows open the embedded editor preview resolved from terminal cwd plus relative path; deleted files stay disabled with a reason. Unfocused and narrow panes keep the pill with the fresh count instead of auto-expanding. Terminal kill and zero-exit clear that terminal's history; the session panel remains the audit record. History is memory-only and bounded at twenty turns per terminal.
+`TerminalTurnChangeTracker` owns one in-memory file baseline per terminal. The initial capture precedes CLI creation; each accepted turn end compares its captured state with the previous completed turn and advances the baseline, including quiet turns. Start/end gating ignores duplicate completion hooks, per-terminal queues preserve event order, and unregistering discards pending results. Snapshot failures clear the baseline and publish an unavailable result; the next successful capture re-establishes the baseline without claiming a cumulative change.
+
+The tracker reads Git's tracked and nonignored untracked paths, with a directory walk for folders without Git. Internal checkpoint and build directories are excluded. Small regular files use content hashes; files at least 2 MiB use size and modification metadata and have no content diff. Text retention is bounded at 16 MiB per terminal snapshot. The `diff` library counts added and deleted lines in chronological order with a per-file time limit; omitted content or a diff timeout leaves counts unknown. Captures are observational filesystem reads, so concurrent writers can affect a boundary; a detected size change during a read invalidates that capture.
+
+The renderer shares one reference-counted IPC subscription. Turn identity and sequence reject duplicates and stale results. Only nonempty successful changes append to the twenty-record history; every quiet or unavailable turn clears latest independently. Identical file lists from different turns remain separate valid records. Terminal teardown clears both views. History stores immutable summaries in memory, and file clicks open the current embedded editor preview.
+
+The right-edge dock displays only the latest nonzero file count, caps its compact label at 99+, and keeps the exact count in the accessible label. A quiet dock hides the number and remains operable for latest and history. Single click opens latest; double click opens history; keyboard activation and explicit view buttons provide the same access. Cards emphasize filenames over directory paths, align line counts, use localized status and timestamps, and share dark/paper theme tokens with reduced-motion support.
 
 ## Alternatives considered
 
-- Do nothing and keep the transient pill: rejected, because anything beyond the latest turn stays invisible and files stay non-interactive.
-- Dock a persistent sidebar that squeezes the terminal: rejected, because xterm reflow and split-pane layout cost outweigh the density gain; an overlay preserves existing geometry.
-- Open files in a separate editor window over IPC: rejected, because the embedded `openFile` path already handles text, image, and binary view types with dynamic loading, so a second window manager adds ownership without new capability.
-- Persist turn history to disk: rejected, because the lifecycle is explicitly tied to the terminal and no cross-restart requirement exists.
+- Reuse submission checkpoints and filter empty renderer events. This keeps one snapshot mechanism, but its baseline depends on input recognition and represents submission time rather than the previous completed conversation.
+- Persist additional end-of-turn checkpoints. This reuses blob storage, but mixes transient UI tracking with restore-point retention and session checkpoint counts.
+- Keep one event subscription per island with content-based deduplication. This minimizes lifecycle plumbing, but repeats global work and can erase legitimate identical changes in different conversations.
 
 ## Consequences
 
-Reviewing the latest turn and its predecessors happens without leaving the terminal, and every changed file opens in place. The overlay covers the pane's right edge while expanded, history beyond twenty turns drops with the oldest first, and double-click discovery rests on the pill hint. Verification runs through `npx vitest --run tests/unit/turn-changes-store.test.ts`, `npx tsc --noEmit`, `npm run i18n:check`, and eslint over the touched renderer files.
+Latest reflects the current conversation while history contains only actual change records. Independent baselines add filesystem reads and bounded text retention per open terminal; large-file metadata is approximate, and shared-workspace edits from other terminals are included. History is not persisted, and editor previews are current files rather than archived contents.
+
+Verification uses `npx vitest run tests/unit/turn-change-tracker.test.ts tests/unit/turn-changes-store.test.ts` for adjacent turns, quiet turns, duplicate subscriptions, failures, teardown, Git ignores, and binary/large files. `npx playwright test tests/e2e/turn-changes.spec.ts --project=island --workers=1` checks latest clearing, retained history, compact counts, keyboard access, and dark/paper screenshots.
