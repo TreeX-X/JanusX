@@ -1706,14 +1706,8 @@ export function Sidebar() {
         >
           {({ requestClose }) => (
             <>
-              {/* Header */}
-              <div
-                className="flex justify-between items-center"
-                style={{
-                  padding: '12px 16px',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
-                }}
-              >
+              {/* Header：顶栏卡——分体布局的一员，不是窗上的条 */}
+              <div className="ws-config-head">
                 <div
                   className="font-semibold flex items-center"
                   style={{ fontSize: 13, color: 'var(--shell-text)', gap: 8 }}
@@ -1726,7 +1720,7 @@ export function Sidebar() {
                 <ModalCloseButton onClose={requestClose} />
               </div>
               {/* Body */}
-              <div style={{ padding: '0', overflow: 'hidden', flex: 1 }}>
+              <div style={{ padding: '0', overflow: 'visible', flex: 1 }}>
                 <ProjectLauncher
                   projectPath={projectCandidate?.projectPath ?? configTarget.path}
                   workspaceId={configTarget.id}

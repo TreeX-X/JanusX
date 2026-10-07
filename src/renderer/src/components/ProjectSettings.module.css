@@ -1,10 +1,11 @@
 /**
  * src/renderer/src/components/ProjectSettings.module.css
  *
- * 工作区启动配置（左侧侧栏右键进入）。三栏改分体浮岛卡：地色吃 --shell-canvas，
- * 三栏各是一张框线卡，卡间留 12px 缝隙，入场按 --card-index 错峰升起（时长与
- * 曲线对齐 blueprint-workbench-card-rise）。分组卡靠框线定界，不靠填充分组；
- * planche 加法层给纸面墨框。色值全部走主题令牌，白字/白 alpha 边框/黑底填充清零。
+ * 工作区启动配置（左侧侧栏右键进入）。彻底分体：弹窗壳透明，顶栏与三栏共
+ * 四张浮岛卡，缝隙直接露出共享遮罩，不垫任何整块地色。三栏各是一张框线卡，
+ * 入场按 --card-index 错峰升起（时长与曲线对齐 blueprint-workbench-card-rise）。
+ * 分组卡靠框线定界，不靠填充分组；planche 加法层给纸面墨框。色值全部走主题
+ * 令牌，白字/白 alpha 边框/黑底填充清零。
  * 见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
  */
 
@@ -12,11 +13,11 @@
   display: grid;
   grid-template-columns: 176px minmax(420px, 1fr) 320px;
   gap: 12px;
-  padding: 12px;
+  padding: 0;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
-  background: var(--shell-canvas);
+  overflow: visible;
+  background: transparent;
   color: var(--shell-text);
   perspective: 1200px;
 }
@@ -307,7 +308,22 @@
 .promptBox textarea::placeholder { color: var(--shell-dim); }
 .sendButton { position: absolute; right: 6px; bottom: 6px; }
 
-.loading { grid-column: 1 / -1; display: flex; flex: 1; align-items: center; justify-content: center; gap: 9px; color: var(--shell-dim); font-size: 11px; }
+/* 加载态也是一张浮岛卡：壳透明后裸文字浮在遮罩上读不清 */
+.loading {
+  grid-column: 1 / -1;
+  place-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 24px 32px;
+  color: var(--shell-muted);
+  font-size: 11px;
+  background: var(--shell-card);
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
 .spinner { width: 16px; height: 16px; border: 1px solid var(--shell-border); border-top-color: var(--shell-accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 .spinIcon { animation: spin 0.8s linear infinite; }
 
@@ -321,7 +337,8 @@
 /* ── planche：浮岛纸面墨框（--shell-card 在 planche 即纸面同底，只换墨框）── */
 :global([data-theme='planche']) .sidebar,
 :global([data-theme='planche']) .main,
-:global([data-theme='planche']) .assistant {
+:global([data-theme='planche']) .assistant,
+:global([data-theme='planche']) .loading {
   border-color: var(--line, #1C343B);
   box-shadow: none;
 }

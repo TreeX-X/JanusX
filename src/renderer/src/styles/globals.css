@@ -362,19 +362,66 @@ textarea::placeholder {
 /* ════════════════════════════════════════════════════════════
    工作区配置 / 项目启动弹窗 shell
    进出场动效与遮罩由 shared/ModalFrame.css 统一提供（ModalFrame），
-   这里只留面板几何；island-expand-modal 的 overshoot 弹入属于旧读法。
+   这里只留几何与分体排布：壳透明无窗面（无底/无框/无影），顶栏与
+   三栏各是一张浮岛卡，缝隙直接露出共享遮罩。
+   见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
    ════════════════════════════════════════════════════════════ */
 .ws-config-modal {
   width: min(1180px, calc(100vw - 56px));
   height: min(760px, calc(100vh - 56px));
   max-height: none;
-  background: var(--shell-chrome);
-  border: 1px solid var(--shell-border);
-  border-radius: 10px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  /* 彻底分体：壳不做窗面，只承担几何与卡间节奏 */
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 12px;
+  padding: 12px;
+  overflow: visible;
+  perspective: 1200px;
+}
+
+/* 顶栏卡：标题 + 关闭灯，与三栏浮岛同一卡语言（框线 + 卡面 + 卡影） */
+.ws-config-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: var(--shell-card);
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  animation: ws-config-card-rise 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * 180ms);
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+@keyframes ws-config-card-rise {
+  from {
+    opacity: 0;
+    transform: translateZ(-56px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-config-head {
+    animation: none;
+  }
+}
+
+[data-theme='planche'] .ws-config-head {
+  border-color: var(--line, #1C343B);
+  box-shadow: none;
 }
 
 .ws-config-modal .ws-config-body {

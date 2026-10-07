@@ -248,6 +248,18 @@ describe('planche theme contract', () => {
     expect(project).toContain('var(--card-index')
     expect(project).toContain('prefers-reduced-motion')
     expect(read('components/ProjectSettings.tsx')).toContain('cardIndexStyle')
+    // 彻底分体：弹窗壳透明不做窗面（无底/无框/无影），顶栏是一张独立浮岛卡，
+    // 内层容器不垫整块地色——缝隙直接露出共享遮罩。
+    const globalsAll = read('styles/globals.css')
+    expect(globalsAll).toMatch(/\.ws-config-modal\s*\{[^}]*background:\s*transparent/)
+    expect(globalsAll).toMatch(/\.ws-config-modal\s*\{[^}]*box-shadow:\s*none/)
+    expect(globalsAll).toContain('.ws-config-head')
+    expect(globalsAll).toContain('ws-config-card-rise')
+    expect(globalsAll).toContain("[data-theme='planche'] .ws-config-head")
+    const launcherCss = stripCssComments(read('components/ProjectLauncher.module.css'))
+    expect(launcherCss).toContain('background: transparent')
+    expect(launcherCss).not.toMatch(/background:\s*var\(--shell-canvas\)/)
+    expect(stripCssComments(project)).not.toMatch(/background:\s*var\(--shell-canvas\)/)
     // 设置底栏不再写死 dark 的 canvas 色值。#151517 只在 dark 成立，留在声明里
     // 会让默认的 planche 纸面主题在内容底部压一条近黑横条，并永久盖住尾部内容。
     for (const mod of [
@@ -273,6 +285,7 @@ describe('planche theme contract', () => {
       'components/ProjectConfigForm/QuickConfigForm.module.css',
       'components/ProjectTypeSelector.module.css',
       'components/ProjectConfigForm/JsonEditor.module.css',
+      'components/ProjectLauncher.module.css',
     ]) {
       const source = stripCssComments(read(mod))
       expect(source, mod).not.toMatch(/color:\s*#/)
