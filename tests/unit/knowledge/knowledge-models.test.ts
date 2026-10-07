@@ -19,6 +19,23 @@ afterEach(async () => { await stopKnowledgeLocalModel(); if (server) { server.cl
 const request = (): KnowledgeModelRequest => ({ stage: 'entryReview', settings: defaultKnowledgeAutomation(), system: 'Review supplied evidence.', input: { candidate: 'Nightly backup', evidence: 'Nightly backup' }, signal: new AbortController().signal })
 const verdict = { verdict: 'supported', reason: 'Supported', complete: true, conflict: false, coveredIds: ['a'] }
 describe('knowledge providers', () => {
+  it('normalizes thresholds and preserves measured scores at the exact approval boundary', async () => {
+    for (const threshold of [undefined, null, '0.8', 0.49, 1.01, NaN, Infinity]) {
+      expect(normalizeKnowledgeAutomation({ jev: { threshold } }).jev.threshold).toBe(0.9)
+    }
+    for (const threshold of [0.5, 0.85, 1]) expect(normalizeKnowledgeAutomation({ jev: { threshold } }).jev.threshold).toBe(threshold)
+    await setJevKey('test-private-credential')
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ model: 'jev-1.13.0', answers: {
+      support: { type: 'noul', noul: 0.85 }, consistent: { type: 'noul', noul: 0.95 }, coverage_0: { type: 'noul', noul: 0.9 },
+    } }))))
+    const input = request(); input.settings.stages.entryReview = { provider: 'jev', model: 'jev-1.13.0', providerId: '', thinking: false }
+    const before = await reviewKnowledge(input, [{ id: 'a', content: 'Backup' }])
+    expect(before.verdict).toBe('uncertain')
+    expect(before.scores).toEqual({ threshold: 0.9, support: 0.85, consistent: 0.95, coverage: [0.9] })
+    input.settings.jev.threshold = 0.85
+    expect(await reviewKnowledge(input, [{ id: 'a', content: 'Backup' }])).toMatchObject({ verdict: 'supported', scores: { threshold: 0.85 } })
+    expect(before.scores?.threshold).toBe(0.9)
+  })
   it('keeps defaults and legacy local selections off, rejects direct local execution while disabled', async () => {
     const input = request()
     expect(input.settings.local.enabled).toBe(false)

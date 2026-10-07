@@ -3,6 +3,47 @@ import { chromium, type Browser, type Page } from '@playwright/test'
 import { build } from 'esbuild'
 
 let browser: Browser, script: string, css: string
+it('keeps retries local to one card and opens readable processing details with scores', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+  try {
+    await mount(page); await seedTasks(page)
+    await page.evaluate(async () => {
+      const w = window as any
+      const first = w.current.queue[0]
+      first.reason = 'evidence-coverage-or-conflict-needs-review'
+      first.scores = { threshold: 0.9, support: 0.8, consistent: 0.99, coverage: [0.95] }
+      w.current.queue.push({ ...first, id: 'second', subject: 'second', displayTitle: 'Another policy' })
+      w.electron.knowledge.automationRun = async input => {
+        w.calls.push(['target', input.taskId]); await new Promise(resolve => { w.finishTask = resolve })
+        w.current.queue = w.current.queue.map(task => task.id === input.taskId ? { ...task, status: 'needs-review', canRetry: true } : task)
+      }
+      await w.refresh()
+    })
+    await page.locator('#assistant [data-automation-summary]').getByRole('button', { name: 'View records', exact: true }).click()
+    await page.clock.runFor(1000)
+    const records = page.getByRole('region', { name: 'Processing records', exact: true })
+    const first = records.locator('article').filter({ hasText: 'Backup policy' })
+    const second = records.locator('article').filter({ hasText: 'Another policy' })
+    await first.getByRole('button', { name: 'View processing details' }).click()
+    const detail = page.getByRole('region', { name: 'View processing details', exact: true })
+    await detail.getByText('Review scores did not meet the approval threshold.', { exact: true }).waitFor()
+    expect(await detail.innerText()).toContain('0.80')
+    expect(await detail.innerText()).not.toContain('inputHash')
+    await first.getByRole('button', { name: 'Review again', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => (window as any).calls.filter(call => call[0] === 'target').length)).toBe(1)
+    expect(await second.getByRole('button', { name: 'Review again', exact: true }).isEnabled()).toBe(true)
+    await page.evaluate(() => (window as any).finishTask())
+    await first.getByRole('status').waitFor()
+    for (const theme of ['dark', 'planche']) {
+      await page.evaluate(async theme => { document.documentElement.dataset.theme = theme; await (window as any).language('zh-CN') }, theme)
+      const localizedDetail = page.getByRole('region', { name: '查看处理详情', exact: true })
+      await localizedDetail.getByText('审核评分未达到通过阈值。', { exact: true }).waitFor()
+      expect(await localizedDetail.innerText()).not.toContain('???')
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await page.screenshot({ path: `artifacts/knowledge-s3-browser/processing-explanation-${theme}.png`, animations: 'disabled' })
+    }
+  } finally { await page.close() }
+})
 beforeAll(async () => {
   browser = await chromium.launch({ headless: true })
   const bundle = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `

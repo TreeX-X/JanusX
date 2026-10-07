@@ -345,8 +345,8 @@ export interface ExternalMcpRegisterResult {
 
 export interface KnowledgeAPI {
   automationStatus: () => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
-  automationRun: (input?: { backfill?: boolean }) => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
-  automationRetry: (id: string) => Promise<void>
+  automationRun: (input?: import('../knowledge-automation').AutomationRunInput) => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
+  automationRetry: (id: string | import('../knowledge-automation').AutomationRetryInput) => Promise<string | void>
   testConfiguration: (input: import('../knowledge-automation').KnowledgeConfigurationTestRequest) => Promise<import('../knowledge-automation').KnowledgeConfigurationTestResult>
   setJevCredential: (key: string) => Promise<void>
   revealJevCredential: () => Promise<string | null>

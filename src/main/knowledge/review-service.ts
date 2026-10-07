@@ -479,7 +479,7 @@ export class KnowledgeReviewService {
     try {
       audit = await knowledgeAuditService.record({
         action: 'candidate_rejected', targetType: auditTargetType(type), targetId: id,
-        before: { status: current.status }, after: { status: 'rejected', reviewNotes: reviewNotes ?? null }, provenance,
+        before: { status: current.status, ...(current.type === 'fact' ? { content: current.fact.content } : current.type === 'wiki-patch' ? { title: current.title, markdown: current.patchMarkdown } : {}) }, after: { status: 'rejected', reviewNotes: reviewNotes ?? null }, provenance,
       })
     } catch (error) {
       records[index] = current
@@ -569,7 +569,7 @@ export class KnowledgeReviewService {
       action: 'candidate_approved',
       targetType,
       targetId: id,
-      before: { status: current.status },
+      before: { status: current.status, ...(current.type === 'fact' ? { content: current.fact.content } : current.type === 'wiki-patch' ? { title: current.title, markdown: current.patchMarkdown } : {}) },
       after: { status: 'applied', reviewNotes: reviewNotes ?? null,
         ...(automatic ? { taskId: automatic.taskId, provider: automatic.model.provider, model: automatic.model.model } : {}),
         ...(input.replacement ? { replacementId: input.replacement.id, replacementHash: input.replacement.hash } : {}) },
@@ -607,7 +607,7 @@ export class KnowledgeReviewService {
       action: 'candidate_applied',
       targetType,
       targetId: id,
-      before: { status: current.status },
+      before: { status: current.status, ...(current.type === 'fact' ? { content: current.fact.content } : current.type === 'wiki-patch' ? { title: current.title, markdown: current.patchMarkdown } : {}) },
       after: {
         status: 'applied',
         appliedId:

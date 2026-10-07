@@ -51,3 +51,24 @@ export function auditValue(value: unknown): string {
   return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
     ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item, 2) ?? ''
 }
+
+export function auditImpact(action: string) {
+  if (['candidate_applied', 'candidate_approved'].includes(action)) return 'auditApplied'
+  if (action === 'candidate_rejected') return 'auditRejected'
+  if (action.includes('proposed')) return 'auditProposed'
+  if (['capture', 'user_episode_captured'].includes(action)) return 'auditCaptured'
+  if (['truth_revoked', 'fact_superseded', 'observation_pruned', 'observation_archived'].includes(action)) return 'auditRevoked'
+  if (action === 'wiki_updated') return 'auditWiki'
+  if (['processing_failed', 'schema_violation'].includes(action)) return 'auditFailure'
+  return 'auditUnknown'
+}
+export function auditReadable(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object') return {}
+  const row = value as Record<string, unknown>
+  const result: Record<string, unknown> = {}
+  for (const key of ['title', 'content', 'markdown', 'patchMarkdown', 'status', 'version', 'reviewNotes', 'reason', 'count']) {
+    if (row[key] !== undefined) result[key === 'patchMarkdown' ? 'markdown' : key] = row[key]
+  }
+  if (row.fact) Object.assign(result, auditReadable(row.fact))
+  return result
+}

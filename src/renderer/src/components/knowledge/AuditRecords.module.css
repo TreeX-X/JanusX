@@ -6,8 +6,8 @@
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .filters label { display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; min-width: 0; color: var(--shell-muted); }
 .filters select { max-width: 100%; min-width: 0; width: 100%; }
-.list { display: flex; flex-direction: column; margin: 8px 0; }
-.list .event { width: 100%; text-align: left; border-radius: 0; border: 0; border-bottom: 1px solid var(--shell-border-soft); padding: 10px; background: transparent; }
+.list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.list .event { width: 100%; text-align: left; border-radius: 8px; border: 1px solid var(--shell-border-soft); padding: 12px; background: var(--shell-card); }
 .list .event[aria-pressed='true'] { background: var(--shell-accent-soft); box-shadow: inset 3px 0 var(--shell-accent); }
 .heading { display: flex; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
 .heading strong { font-weight: 600; }

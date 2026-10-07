@@ -1,3 +1,4 @@
+import { AutomationExplanation } from './AutomationExplanation'
 import { reviewCandidateInput, reviewCandidateSnapshot } from '../../../../shared/review-candidate-snapshot'
 import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { FactReviewControls } from './FactReviewControls'
@@ -162,9 +163,17 @@ function ReviewCardContent({ candidate, disabled, onReview, competing = 0, autom
   const sourceBlocked = evidenceBlocked || wikiBlocked || notesBlocked
   const retryLock = useRef(false)
   const retry = async () => {
-    if (!state.taskId || retryLock.current) return
+    if ((!state.taskId && !state.canAdmit) || retryLock.current) return
     retryLock.current = true; setRetrying(true); setRetryError(false)
-    try { await window.electron.knowledge.automationRetry(state.taskId); await window.electron.knowledge.automationRun(); await refreshKnowledgeAutomation() }
+    try {
+      const input = await reviewCandidateInput(candidate)
+      const workspaceId = candidate.type === 'fact' ? candidate.fact.provenance.workspaceId : candidate.type === 'wiki-patch' ? candidate.provenance.workspaceId : ''
+      const id = await window.electron.knowledge.automationRetry(state.taskId ?? { candidateId: candidate.id, workspaceId, candidateHash: input.candidateHash })
+      await refreshKnowledgeAutomation()
+      if (id || state.taskId) await window.electron.knowledge.automationRun({ taskId: id || state.taskId })
+      await refreshKnowledgeAutomation()
+      window.dispatchEvent(new Event('janusx-memory-changed'))
+    }
     catch { setRetryError(true) }
     finally { retryLock.current = false; setRetrying(false) }
   }
@@ -177,7 +186,7 @@ function ReviewCardContent({ candidate, disabled, onReview, competing = 0, autom
       <div className={styles.cardMeta}><span>{t(`knowledge:reviewContent.types.${type}`)}</span><span>{t(personal ? 'knowledge:inbox.scope.personal' : 'knowledge:inbox.scope.engineering')}</span></div>
       <h3>{title}</h3>
       <span className={styles.automaticState} data-review-state={state.status}>{t(`knowledge:review.currentState.${state.status}`)}</span>
-      {state.reason && <p>{state.reason === 'stage-not-configured' ? t('knowledge:automation.configurationHint') : state.reason}</p>}
+      {!personal && <AutomationExplanation reason={state.reason} status={state.status} scores={state.scores} detail={detail} />}
     </header>
     <div className={styles.cardContent} tabIndex={0} aria-label={t('knowledge:reviewContent.reading')}>
       {(state.status === 'pending' || state.status === 'running' || state.status === 'failed' || state.status === 'needs-review') && <details className={styles.diagnostics}>
@@ -227,13 +236,13 @@ function ReviewCardContent({ candidate, disabled, onReview, competing = 0, autom
         </details>)}
       </details>}
     </div>
-    {(state.canReview || state.taskId || state.status === 'unknown') && <footer className={styles.reviewFooter}>
+    {(state.canReview || state.taskId || state.canAdmit || state.status === 'unknown') && <footer className={styles.reviewFooter}>
       {retryError && <p role="alert">{t('knowledge:automation.actionFailed')}</p>}
       {sourceBlocked && <p role="alert">{t('knowledge:reviewContent.checkSources')}</p>}
       {state.canReview && (candidate.type === 'fact'
         ? <FactReviewControls key={String(sourceBlocked)} candidate={candidate} disabled={disabled || retrying} approvalBlocked={sourceBlocked} onApprove={replacement => onReview(true, replacement)} onReject={() => onReview(false)} />
         : <div className={styles.actionButtons}><button className={styles.primaryAction} type="button" disabled={disabled || retrying || sourceBlocked} onClick={() => onReview(true)}>{t('knowledge:reviewContent.publishWiki')}</button><button className={styles.destructiveAction} type="button" disabled={disabled || retrying} onClick={() => onReview(false)}>{t('knowledge:action.reject')}</button></div>)}
-      {state.taskId && <button type="button" disabled={disabled || retrying} onClick={() => void retry()}>{t('knowledge:automation.retry')}</button>}
+      {(state.taskId || state.canAdmit) && <button type="button" disabled={disabled || retrying} onClick={() => void retry()}>{t(retrying ? 'knowledge:automationExplain.working' : state.canAdmit ? 'knowledge:automationExplain.admit' : 'knowledge:automationExplain.retry')}</button>}
       {state.status === 'unknown' && <button type="button" disabled={disabled} onClick={() => { void refreshKnowledgeAutomation(); window.dispatchEvent(new Event('janusx-memory-changed')) }}>{t('knowledge:action.refresh')}</button>}
     </footer>}
   </article>

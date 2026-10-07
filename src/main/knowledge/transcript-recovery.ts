@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 import { z } from 'zod'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
@@ -51,7 +52,7 @@ export class TranscriptRecovery {
       }, context: { speaker: message.speaker, createdAt: context.createdAt, relatedObservationIds: context.relatedObservationIds,
         sourceEventId: createHash('sha256').update(JSON.stringify([row.engine, input.sessionId ?? row.path, message.id])).digest('hex') },
     }))
-    entries.push({ input: { ...input, metadata: { ...input.metadata, evidenceStatus: result.reason ?? 'complete' } },
+    entries.push({ input: { ...input, metadata: { ...input.metadata, transcriptPath: row.path, evidenceStatus: result.reason ?? 'complete' } },
       context: { ...context, sourceEventId: `${context.sourceEventId}:${result.reason ? 'transcript-pending' : 'transcript-complete'}` } })
     return entries
   }
@@ -61,7 +62,7 @@ export class TranscriptRecovery {
       if ((await readObservationRevocationBarrier()).blocksObservations(row.end.input.workspaceId ?? '', row.end.context.relatedObservationIds ?? [])) {
         await this.write(rows.filter(item => item.id !== row.id)); return []
       }
-      const result = await this.deps.read(row.path, row.engine, row.end.input.sessionId, row.prompt, row.end.context.createdAt)
+      const result = await this.deps.read(row.path, row.engine, row.end.input.sessionId, row.prompt, row.end.context.createdAt, row.end.input.workspacePath)
       if (!await enabled()) return []
       if ((await readObservationRevocationBarrier()).blocksObservations(row.end.input.workspaceId ?? '', row.end.context.relatedObservationIds ?? [])) {
         await this.write(rows.filter(item => item.id !== row.id)); return []
@@ -97,3 +98,21 @@ export class TranscriptRecovery {
   }
 }
 export const knowledgeTranscriptRecovery = new TranscriptRecovery()
+
+/** Exact provider session and original turn time own recovery; never use the latest session. */
+export async function recoverObservationTranscript(observation: Observation, enabled: () => Promise<boolean>): Promise<Observation | undefined> {
+  const engine = observation.agentId
+  const path = typeof observation.metadata?.transcriptPath === 'string' ? observation.metadata.transcriptPath
+    : engine === 'opencode' && observation.sessionId ? join(homedir(), '.local', 'share', 'opencode', 'opencode.db') : undefined
+  if (!engine || !path || !observation.sessionId || !observation.correlationId) return undefined
+  const rows = await knowledgeTranscriptRecovery.submit({ path, engine,
+    prompt: typeof observation.metadata?.prompt === 'string' ? observation.metadata.prompt : undefined,
+    end: { input: { workspaceId: observation.workspaceId, workspacePath: observation.workspacePath, source: 'agent-stream',
+      type: 'system-event', content: observation.content, summary: observation.summary, actor: engine,
+      sessionId: observation.sessionId, agentId: engine, correlationId: observation.correlationId, tags: observation.tags,
+      metadata: observation.metadata },
+      context: { sourceEventId: observation.sourceEvidence?.sourceEventId ?? observation.id, createdAt: observation.createdAt,
+        speaker: 'unknown', relatedObservationIds: [observation.id] } },
+  }, enabled)
+  return rows.find(row => row.tags.includes('turn-completed') && row.metadata?.evidenceStatus === 'complete') ?? rows.find(row => row.tags.includes('turn-completed'))
+}

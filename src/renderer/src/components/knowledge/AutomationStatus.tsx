@@ -75,13 +75,13 @@ export function useAutomationAction(beforeRun?: () => Promise<boolean>, onChange
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(false)
   const lock = useRef(false)
-  const run = async (backfill = false, taskId?: string) => {
+  const run = async (backfill = false, taskId?: string, reevaluate = false) => {
     if (lock.current) return
     lock.current = true; setBusy(true); setFailed(false)
     try {
       if (beforeRun && !await beforeRun()) return
-      if (taskId) await window.electron.knowledge.automationRetry(taskId)
-      await window.electron.knowledge.automationRun({ backfill })
+      if (taskId) { await window.electron.knowledge.automationRetry(taskId); await refreshKnowledgeAutomation() }
+      await window.electron.knowledge.automationRun({ backfill, taskId, reevaluate })
       await refreshKnowledgeAutomation(); onChanged?.()
     } catch { setFailed(true) }
     finally { lock.current = false; setBusy(false) }
@@ -103,6 +103,8 @@ export function AutomationSettingsStatus({ beforeRun, disabled }: { beforeRun: (
       <div className={styles.actionButtons}>
         <button type="button" disabled={disabled || busy || error || status?.running} onClick={() => void run()}>{t('knowledge:automation.run')}</button>
         <button type="button" disabled={disabled || busy || error || status?.running} onClick={() => void run(true)}>{t('knowledge:automation.backfill')}</button>
+        <button type="button" disabled={disabled || busy || error || status?.running} onClick={() => void run(false, undefined, true)}>{t('knowledge:automationExplain.reevaluate')}</button>
+        <p>{t('knowledge:automationExplain.reevaluateHint')}</p>
       </div><p className={styles.hint}>{t('knowledge:automation.backfillHint')}</p>
     </details>
     <button type="button" onClick={() => openAutomationView('processing')}>{t('knowledge:summary.records')}</button>

@@ -91,6 +91,22 @@ it('reads OpenCode multipart user messages as one boundary and preserves tool ou
   expect(result.messages.map(message => message.speaker)).toEqual(['user', 'assistant', 'tool'])
   expect(result.messages[0].content).toBe('Fix\nthe cache')
 })
+it('recovers only the matching OpenCode workspace and turn before the recorded completion', async () => {
+  const { DatabaseSync } = await import('node:sqlite')
+  const db = new DatabaseSync(path)
+  try {
+    db.exec('CREATE TABLE session (id TEXT, directory TEXT); CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT); CREATE TABLE part (id TEXT, message_id TEXT, time_created INTEGER, data TEXT)')
+    db.prepare('INSERT INTO session VALUES (?, ?)').run('s', '/project')
+    for (const [id, time, role, text] of [['u', 100, 'user', 'First'], ['a', 200, 'assistant', 'First answer'], ['u2', 400, 'user', 'Later'], ['a2', 500, 'assistant', 'Later answer']] as const) {
+      db.prepare('INSERT INTO message VALUES (?, ?, ?, ?)').run(id, 's', time, JSON.stringify({ role }))
+      db.prepare('INSERT INTO part VALUES (?, ?, ?, ?)').run(id, id, time, JSON.stringify({ type: 'text', text }))
+    }
+  } finally { db.close() }
+  const ended = new Date(300).toISOString()
+  expect((await readKnowledgeTurn(path, 'opencode', 's', undefined, ended, '/wrong')).reason).toBe('transcript-workspace-mismatch')
+  const result = await readKnowledgeTurn(path, 'opencode', 's', undefined, ended, '/project')
+  expect(result.messages.map(item => item.content)).toEqual(['First', 'First answer'])
+})
 it('reports incomplete and unmatched sources rather than returning a misleading partial task', async () => {
   await rows([claude('user', 'Fix', 'u1')]); expect((await readKnowledgeTurn(path, 'claude')).reason).toBe('transcript-answer-not-ready')
   await rows([claude('user', 'Fix', 'u1'), claude('assistant', 'done', 'a1')])

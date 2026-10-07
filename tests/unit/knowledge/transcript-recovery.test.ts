@@ -31,7 +31,7 @@ describe('durable transcript rereads', () => {
     const recovered = await new TranscriptRecovery(deps).drain()
     expect(recovered).toHaveLength(2)
     expect(recovered[1].metadata?.evidenceStatus).toBe('complete')
-    expect(read).toHaveBeenLastCalledWith(job.path, 'claude', 'session', 'Fix cache', job.end.context.createdAt)
+    expect(read).toHaveBeenLastCalledWith(job.path, 'claude', 'session', 'Fix cache', job.end.context.createdAt, job.end.input.workspacePath)
     expect(await new TranscriptRecovery(deps).status('project')).toEqual({ pending: 0, lastError: undefined })
     expect(submit.mock.calls[1][0][1].context.sourceEventId).toBe('completed-1:transcript-complete')
   })

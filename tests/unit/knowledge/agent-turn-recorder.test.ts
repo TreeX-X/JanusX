@@ -41,6 +41,17 @@ async function loadRecorder() {
 }
 
 describe('AgentTurnRecorder', () => {
+  it('connects an OpenCode completion to its exact session database recovery', async () => {
+    const { agentTurnRecorder } = await loadRecorder()
+    const { knowledgeTranscriptRecovery } = await import('../../../src/main/knowledge/transcript-recovery')
+    vi.mocked(knowledgeTranscriptRecovery.submit).mockResolvedValue([{ id: 'completed', workspaceId: 'workspace-1' } as any])
+    agentTurnRecorder.registerTerminal({ terminalId: 'oc', engine: 'opencode', workspaceId: 'workspace-1', cwd: 'C:/work' })
+    await agentTurnRecorder.handleHookPayload({ source: 'opencode', event: 'session.idle', terminalId: 'oc', sessionId: 'exact-session', timestamp: '2026-10-07T00:00:00Z' })
+    expect(knowledgeTranscriptRecovery.submit).toHaveBeenCalledWith(expect.objectContaining({
+      engine: 'opencode', path: expect.stringMatching(/opencode[\\/]opencode\.db$/),
+      end: expect.objectContaining({ input: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath: 'C:/work', sessionId: 'exact-session' }) }),
+    }), expect.any(Function))
+  })
   beforeEach(() => {
     mocks.capture.mockReset()
     mocks.capture.mockResolvedValue({ workspaceId: 'workspace-1' })

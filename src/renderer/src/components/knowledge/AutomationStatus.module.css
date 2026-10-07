@@ -11,7 +11,8 @@
 .root button:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
 .root p { margin: 5px 0 0; overflow-wrap: anywhere; }
 .hint { color: var(--shell-muted); font-size: 11px; }
-.task { padding: 10px 0; border-top: 1px solid var(--shell-border-soft); overflow-wrap: anywhere; }
+.task { padding: 12px; margin: 8px 0; border: 1px solid var(--shell-border-soft); border-radius: 8px; background: var(--shell-card); overflow-wrap: anywhere; }
+.task[data-selected] { border-color: var(--shell-accent); background: var(--shell-accent-soft); }
 .taskHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .taskHeading strong { font-size: 11px; font-weight: 600; }
 .taskHeading span { color: var(--shell-muted); font-size: 10px; }

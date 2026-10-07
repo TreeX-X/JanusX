@@ -8,6 +8,8 @@ export interface CandidateReviewState {
   canReview: boolean
   taskId?: string
   reason?: string
+  scores?: import('../../../../shared/knowledge-automation').ReviewScores
+  canAdmit?: boolean
 }
 const unknown: CandidateReviewState = { status: 'unknown', canReview: false }
 
@@ -18,15 +20,19 @@ export function candidateReviewState(candidate: InboxCandidate, automation: Know
   if (isUserScopeCandidate(candidate)) return { status: 'manual', canReview: true }
   if (automation?.reviewStateVersion !== 1) return unknown
   if (automation.reviewEnabled === false) return { status: 'disabled', canReview: false }
-  if (!automation.enabled) return { status: 'manual', canReview: true }
+  if (!automation.enabled) return { status: 'manual', canReview: true, reason: 'automation-disabled' }
   const stage = candidate.type === 'fact' ? 'entryReview' : 'wikiReview'
   const workspaceId = candidate.type === 'fact' ? candidate.fact.provenance.workspaceId : candidate.provenance.workspaceId
   const matches = automation.queue.filter(task => task.stage === stage && task.subject === candidate.id)
-  if (!matches.length) return { status: 'manual', canReview: true }
+  if (!matches.length) {
+    const previous = automation.tasks.find(task => task.subject === candidate.id && task.workspaceId === workspaceId)
+    return { status: 'manual', canReview: true, reason: automation.stages[stage] === 'automatic' ? 'historical' : 'stage-not-configured', scores: previous?.scores,
+      canAdmit: automation.stages[stage] === 'automatic' && (candidate.type === 'fact' || candidate.managed === true) }
+  }
   const task = matches.find(item => item.workspaceId === workspaceId && item.candidateHash === candidateHash)
   if (!task) return unknown
   return { status: task.status, canReview: task.status === 'needs-review' || task.status === 'failed',
-    taskId: task.canRetry ? task.id : undefined, reason: task.reason }
+    taskId: task.canRetry ? task.id : undefined, reason: task.reason, scores: task.scores }
 }
 
 export function useCandidateReviewState(candidate: InboxCandidate, automation: KnowledgeAutomationStatus | null): CandidateReviewState {

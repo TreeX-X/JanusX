@@ -64,6 +64,23 @@ async function openJev(page: Page) {
   await page.getByRole('button', { name: 'Entry review', exact: true }).click()
   await page.getByRole('option', { name: 'Jev review', exact: true }).click()
 }
+it('saves a Jev threshold without processing and reevaluates only on the explicit action', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page); await openJev(page)
+    const threshold = page.locator('input[type="number"][min="0.5"]')
+    await threshold.fill('0.85')
+    await page.getByRole('checkbox', { name: 'Enable automatic review and publication', exact: true }).check()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    expect(await page.evaluate(() => (window as any).config.automation.jev.threshold)).toBe(0.85)
+    expect(await page.evaluate(() => (window as any).calls.includes('run'))).toBe(false)
+    await page.evaluate(() => { (window as any).electron.knowledge.automationRun = async input => { (window as any).reevaluation = input; return { counts: {}, queue: [], tasks: [] } } })
+    await page.getByText('More actions', { exact: true }).click()
+    await page.getByRole('button', { name: 'Save and reevaluate below-threshold tasks', exact: true }).click()
+    await expect.poll(() => page.evaluate(() => (window as any).reevaluation?.reevaluate)).toBe(true)
+    expect(await page.evaluate(() => (window as any).reevaluation.backfill)).toBe(false)
+  } finally { await page.close() }
+})
 it.each(['missing-preload', 'missing-handler', 'ipc-failure'])('reports %s as an app service issue instead of a model failure', async mode => {
   const page = await browser.newPage()
   try {

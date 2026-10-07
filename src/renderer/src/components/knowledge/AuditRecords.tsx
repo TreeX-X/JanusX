@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AuditPage, AuditRecord } from '../../../../shared/ipc/knowledge'
 import { useI18n } from '@/i18n/useI18n'
-import { auditActions, auditTypes, snapshotCount } from './auditPresentation'
+import { auditImpact, auditActions, auditTypes, snapshotCount } from './auditPresentation'
 import styles from './AuditRecords.module.css'
 
 export function useAuditLabels() {
@@ -65,6 +65,7 @@ export function AuditRecords({ selectedId, onSelect }: { selectedId?: string; on
       {!page.items.length && <p>{t('knowledge:audit.empty.title')}</p>}
       <div className={styles.list}>{page.items.map(event => <button type="button" key={event.id} data-audit-id={event.id} aria-pressed={selectedId === event.id} className={styles.event} onClick={() => onSelect(event)}>
         <span className={styles.heading}><strong>{action(event.action)}</strong><span title={title(event)}>{title(event)}</span></span>
+        <span>{t(`knowledge:automationExplain.${auditImpact(event.action)}`)}</span>
         <span className={styles.meta}><span>{event.provenance?.workspaceName || event.provenance?.workspaceId || t('knowledge:auditView.unknownWorkspace')}</span><span>{event.provenance?.actor || t('knowledge:auditView.unknownActor')}</span><time>{time(event.provenance?.createdAt)}</time></span>
       </button>)}</div>
       {page.nextCursor && <button type="button" disabled={busy} onClick={() => void more()}>{t(busy ? 'knowledge:auditView.loading' : 'knowledge:auditView.more')}</button>}

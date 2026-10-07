@@ -1,3 +1,17 @@
+// Note: explainable review keeps scores and targeted actions — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+export function jevThreshold(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0.5 && value <= 1 ? value : 0.9
+}
+export interface ReviewScores { threshold: number; support: number; consistent: number; coverage: number[] }
+export type AutomationAction = 'retry' | 'recover' | 'manual'
+export function automationAction(reason?: string): AutomationAction {
+  if (reason === 'incomplete-task-evidence:turn-failed' || reason === 'incomplete-task-evidence:transcript-workspace-mismatch') return 'manual'
+  if (reason?.startsWith('incomplete-task-evidence:')) return 'recover'
+  if (reason && /^(source-|candidate-conflict|review-context-|wiki-sources-|wiki-section-|extraction-window-exceeds-budget|knowledge-item-too-long)/.test(reason)) return 'manual'
+  return 'retry'
+}
+export interface AutomationRunInput { backfill?: boolean; taskId?: string; reevaluate?: boolean }
+export interface AutomationRetryInput { candidateId: string; workspaceId: string; candidateHash: string }
 export const KNOWLEDGE_STAGES = ['extraction', 'entryReview', 'wikiGeneration', 'wikiReview'] as const
 export type KnowledgeStage = typeof KNOWLEDGE_STAGES[number]
 export type KnowledgeProvider = 'off' | 'local' | 'external' | 'jev'
@@ -12,7 +26,7 @@ export interface KnowledgeAutomationSettings {
   enabledSince?: string
   stages: Record<KnowledgeStage, KnowledgeStageModel>
   local: KnowledgeLocalSettings
-  jev: { endpoint: string; model: string }
+  jev: { endpoint: string; model: string; threshold?: number }
 }
 export interface KnowledgeConfigurationTestRequest {
   stage: KnowledgeStage
@@ -70,7 +84,7 @@ export function defaultKnowledgeAutomation(): KnowledgeAutomationSettings {
   return { enabled: false, stages: {
     extraction: { ...model(), provider: 'off' }, entryReview: model(), wikiGeneration: model(true), wikiReview: model(),
   }, local: { enabled: false, contextTokens: 0, endpoint: 'http://127.0.0.1:18791/v1', serverPath: '', modelPath: '' },
-  jev: { endpoint: 'https://api.typesafe.ai/v1/systemone', model: 'jev-1.13.0' } }
+  jev: { endpoint: 'https://api.typesafe.ai/v1/systemone', model: 'jev-1.13.0', threshold: 0.9 } }
 }
 export function normalizeKnowledgeAutomation(value: unknown): KnowledgeAutomationSettings {
   const defaults = defaultKnowledgeAutomation()
@@ -90,7 +104,7 @@ export function normalizeKnowledgeAutomation(value: unknown): KnowledgeAutomatio
     ...(typeof raw.enabledSince === 'string' && Number.isFinite(Date.parse(raw.enabledSince)) ? { enabledSince: raw.enabledSince } : {}),
     local: { enabled: raw.local?.enabled === true, contextTokens: Number.isSafeInteger(raw.local?.contextTokens) && Number(raw.local?.contextTokens) > 0 ? Number(raw.local?.contextTokens) : 0,
       endpoint: text(raw.local?.endpoint, defaults.local.endpoint), serverPath: text(raw.local?.serverPath), modelPath: text(raw.local?.modelPath) },
-    jev: { endpoint: text(raw.jev?.endpoint, defaults.jev.endpoint), model: text(raw.jev?.model, defaults.jev.model) } }
+    jev: { endpoint: text(raw.jev?.endpoint, defaults.jev.endpoint), model: text(raw.jev?.model, defaults.jev.model), threshold: jevThreshold(raw.jev?.threshold) } }
 }
 
 export type AutomationTaskStatus = 'pending' | 'running' | 'succeeded' | 'needs-review' | 'failed' | 'cancelled'
@@ -109,12 +123,16 @@ export interface KnowledgeAutomationTask {
   updatedAt: string
   reason?: string
   model: KnowledgeStageModel
+  displayTitle?: string
+  scores?: ReviewScores
+  history?: Array<{ updatedAt: string; status: AutomationTaskStatus; reason?: string; scores?: ReviewScores }>
 }
 export interface KnowledgeAutomationStatus {
   /** Versioned, host-validated candidate bindings; absent on older hosts. */
   reviewStateVersion?: 1
   /** Project review gate, distinct from automatic processing being switched off. */
   reviewEnabled?: boolean
+  enabledSince?: string
   running: boolean
   enabled: boolean
   /** Configured behavior, independent of whether a provider is currently reachable. */
@@ -129,6 +147,7 @@ export interface KnowledgeAutomationStatus {
     displayTitle?: string
     reason?: string
     canRetry?: boolean
+    scores?: ReviewScores
   }>
   tasks: Array<KnowledgeAutomationTask & { displayTitle?: string }>
   /** Actual successful task update, never a fabricated start time. */
@@ -138,6 +157,7 @@ export interface KnowledgeAutomationStatus {
 }
 
 export interface KnowledgeModelReview {
+  scores?: ReviewScores
   verdict: 'supported' | 'unsupported' | 'uncertain'
   reason: string
   complete: boolean

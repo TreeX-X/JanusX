@@ -1,4 +1,5 @@
 import { controlLaya } from '../knowledge/laya-runtime'
+import { z } from 'zod'
 import { listWikiHistory, readWikiRevision, pinWikiRevision } from '../knowledge/wiki-history'
 import { knowledgeAutomationService } from '../knowledge/automation-service'
 import { testKnowledgeConfiguration } from '../knowledge/knowledge-configuration-test'
@@ -54,13 +55,20 @@ export function registerKnowledgeHandlers(): void {
   const assertEnabled = async () => { if (!(await configService.getExperimentalFeatures()).knowledge) throw new Error('knowledge-disabled') }
   ipcMain.handle(KNOWLEDGE_CHANNELS.automationStatus, () => knowledgeAutomationService.status())
   ipcMain.handle(KNOWLEDGE_CHANNELS.testConfiguration, (_event, input: unknown) => testKnowledgeConfiguration(input))
-  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRun, async (_event, input?: { backfill?: boolean }) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRun, async (_event, input?: import('../../shared/knowledge-automation').AutomationRunInput) => {
     await assertEnabled()
-    if (input?.backfill === true) await knowledgeAutomationService.backfill()
-    else await knowledgeAutomationService.run()
+    input = z.object({ backfill: z.boolean().optional(), reevaluate: z.boolean().optional(), taskId: z.string().trim().min(1).optional() }).strict()
+      .refine(value => Number(!!value.backfill) + Number(!!value.reevaluate) + Number(!!value.taskId) <= 1).parse(input ?? {})
+    if (input?.reevaluate) await knowledgeAutomationService.reevaluate()
+    else if (input?.backfill === true) await knowledgeAutomationService.backfill()
+    else await knowledgeAutomationService.run(input?.taskId)
     return knowledgeAutomationService.status()
   })
-  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRetry, async (_event, id: string) => { await assertEnabled(); await knowledgeAutomationService.retry(id) })
+  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRetry, async (_event, input: unknown) => {
+    await assertEnabled()
+    const id = z.union([z.string().trim().min(1), z.object({ candidateId: z.string().min(1), workspaceId: z.string().min(1), candidateHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict()]).parse(input)
+    return knowledgeAutomationService.retry(id)
+  })
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredential, async (_event, input: unknown) => { await assertEnabled(); knowledgeAutomationService.stop(); return setJevKey(input) })
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredentialStatus, async () => ({ configured: Boolean(await getJevKey()) }))
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredentialReveal, async () => { await assertEnabled(); return getJevKey() })

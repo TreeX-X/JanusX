@@ -1,6 +1,7 @@
 // Note: capture bounded turn evidence, not UI excerpts or a mutable history mirror — see .agents/notes/2026-10-05-hook-evidence-extraction--a61e849c.md
 import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { MemorySpeaker } from '../../shared/knowledge'
 import { isRuntimeNotification } from '../knowledge/personal-memory-content'
 import { claudeUserText, claudeAssistantText, codexUserText, codexAssistantText, piUserText, piAssistantText } from './external-session-scanner'
@@ -63,7 +64,7 @@ function selectTurn(messages: TranscriptEvidence[], expectedPrompt?: string, end
   return { messages: turn }
 }
 
-export async function readKnowledgeTurn(path: string, engine: string, sessionId?: string, expectedPrompt?: string, endedAt?: string): Promise<TranscriptCapture> {
+export async function readKnowledgeTurn(path: string, engine: string, sessionId?: string, expectedPrompt?: string, endedAt?: string, workspacePath?: string): Promise<TranscriptCapture> {
   if (!['claude', 'codex', 'pi', 'janus', 'opencode'].includes(engine)) return { messages: [], reason: 'transcript-engine-unsupported' }
   try {
     if (engine === 'opencode') {
@@ -71,7 +72,13 @@ export async function readKnowledgeTurn(path: string, engine: string, sessionId?
       const { DatabaseSync } = await import('node:sqlite')
       const db = new DatabaseSync(path, { readOnly: true })
       try {
-        const rows = db.prepare('SELECT id, data, time_created FROM message WHERE session_id = ? ORDER BY time_created DESC LIMIT 257').all(sessionId).reverse()
+        if (workspacePath) {
+          const session = db.prepare('SELECT directory FROM session WHERE id = ?').get(sessionId)
+          const normalize = (value: string) => process.platform === 'win32' ? resolve(value).toLowerCase() : resolve(value)
+          if (!session || typeof session.directory !== 'string' || normalize(session.directory) !== normalize(workspacePath)) return { messages: [], reason: 'transcript-workspace-mismatch' }
+        }
+        const cutoff = endedAt && Number.isFinite(Date.parse(endedAt)) ? Date.parse(endedAt) : Number.MAX_SAFE_INTEGER
+        const rows = db.prepare('SELECT id, data, time_created FROM message WHERE session_id = ? AND time_created <= ? ORDER BY time_created DESC LIMIT 257').all(sessionId, cutoff).reverse()
         const messages: TranscriptEvidence[] = []
         for (const row of rows) {
           const role = object(JSON.parse(String(row.data))).role

@@ -11,13 +11,13 @@ relations:
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
   - type: implements
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
-    criteria: [AC-4, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19]
+    criteria: [AC-4, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-22, AC-23]
   - type: governed-by
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/908d675a-aec9-4791-8c8b-05f1e4c923ca
 work:
   scope:
     - repoId: 972afef3-2fc7-49de-a3ee-7e041225d28c
-      paths: [package.json, package-lock.json, playwright.desktop.config.ts, scripts/check-packaged-runtime.mjs, src/shared/wiki-relations.ts, src/main/knowledge/, src/main/ipc/knowledge-handlers.ts, src/main/ipc/register.ts, src/shared/knowledge.ts, src/shared/knowledge-card.ts, src/shared/knowledge-automation.ts, src/shared/ipc/knowledge.ts, src/shared/review-candidate-snapshot.ts, src/preload/index.ts, src/renderer/src/components/knowledge/, src/renderer/src/components/KnowledgeAutomationPanel.tsx, src/renderer/src/services/knowledge.ts, src/renderer/src/services/knowledge-automation.ts, src/renderer/src/stores/, src/renderer/src/lib/electron-api-fallback.ts, src/renderer/src/i18n/, tests/unit/, tests/e2e/knowledge-pipeline.spec.ts, .agents/notes/]
+      paths: [src/main/sessions/knowledge-transcript.ts, package.json, package-lock.json, playwright.desktop.config.ts, scripts/check-packaged-runtime.mjs, src/shared/wiki-relations.ts, src/main/knowledge/, src/main/ipc/knowledge-handlers.ts, src/main/ipc/register.ts, src/shared/knowledge.ts, src/shared/knowledge-card.ts, src/shared/knowledge-automation.ts, src/shared/ipc/knowledge.ts, src/shared/review-candidate-snapshot.ts, src/preload/index.ts, src/renderer/src/components/knowledge/, src/renderer/src/components/KnowledgeAutomationPanel.tsx, src/renderer/src/services/knowledge.ts, src/renderer/src/services/knowledge-automation.ts, src/renderer/src/stores/, src/renderer/src/lib/electron-api-fallback.ts, src/renderer/src/i18n/, tests/unit/, tests/e2e/knowledge-pipeline.spec.ts, .agents/notes/]
   acceptanceRefs:
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
       criterionId: AC-4
@@ -49,6 +49,14 @@ work:
       criterionId: AC-18
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
       criterionId: AC-19
+    - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
+      criterionId: AC-20
+    - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
+      criterionId: AC-21
+    - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
+      criterionId: AC-22
+    - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
+      criterionId: AC-23
   verification:
     - id: V-1
       kind: command
@@ -75,11 +83,11 @@ execution:
   mode: xdo
   state: done
   baseline:
-    taskContractHash: 738fd533469dc1aa7491720de1452c43466a303f64d79703d8bed1759c27f171
+    taskContractHash: 45c34c32255fe08451f807f344fcefff624d43895438d36617064a32e2adedf3
     inputs:
       - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
-        contentHash: 5e138e09085b7401be8ee5c0356727441db83c13663b4b7a931eeb046c561fda
-        criteria: [AC-4, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19]
+        contentHash: d6bc21cdfff98ebbe5111aa5ca56442ff9487d417c11d0999a539cea80761a1d
+        criteria: [AC-4, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-22, AC-23]
       - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/908d675a-aec9-4791-8c8b-05f1e4c923ca
         contentHash: 2ce421a4c6ac3f34fbbd83d424ddb3792ec49a85e80384f2dcf072fc9f542445
   attempt: 1
@@ -90,6 +98,9 @@ execution:
 # 知识库审核、图谱、状态与审计优化实施计划
 
 ## Scope
+
+2026-10-07 接续实施父需求 AC-20～AC-23：可调 Jev 阈值及评分留存、候选失败说明、单项重审和证据恢复、历史候选准入、记录卡片和可读详情。沿用本 Note 与父需求，不修改用户现存知识数据；运行态升级需要后续启动新构建。范围包含 src/main/sessions/knowledge-transcript.ts、src/main/knowledge/agent-turn-recorder.ts 和阈值设置界面。验证使用隔离存储的模型、自动化、恢复、组件回归及 TypeScript、i18n、构建检查。
+
 
 本任务承接[噪声与界面需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)中的审核详情、Wiki 主图、自动化状态和审计体验。父需求的“工程知识沉淀流程”与“Wiki 主图与证据追溯契约”是用户于 2026-10-06 确认的方向；本任务维护交付顺序、边界和验证。审核规划基线为 `abea07a`，图谱缺陷分析基线为 `fee6423`。S1 的状态绑定、旧操作收口和独立图关系准入已实现，当前批次的真实噪声与图关系积压已按用户授权清理；具体证据见 Results。W1 的主题组织、页间关系与同版本发布，以及 G1 的 Wiki 主图和来源追溯、S2 的审核卡片与详情重整已实现；S3 的自动化紧凑摘要和记录入口、S4 的审计分页与专用详情已实现；G2 的图谱局部阅读、二维布局与侧栏 Tab 已实现；S5 的跨入口验收和独立便携包交付已完成，全部阶段的证据见 Results。
 
@@ -314,3 +325,17 @@ S5 文档检查使用 npm run check:notes，247 篇 Note、0 errors、27 项既�
 2026-10-06：用户授权日期免安装预览包，交付 `release/preview-2026-10-06/JanusX-0.9.0-preview-2026-10-06-x64-portable.exe`。功能代码固定于 `5f4a2110cefc8d924602e05e7dcfd338e47d1c76`，包含本任务全部阶段与记录 Tab 细化；程序基础版本仍为 0.9.0，日期和 preview 标记用于识别产物。可执行文件 112083504 字节，SHA-256 为 `70c2c9afc8500b8120f67d9070c33376c554c21783a94a7c190d330199d6f504`；同目录 README-preview.txt、SHA256SUMS.txt 和 preview-manifest.json 保存使用说明、校验值及构建来源。
 
 打包使用 `npx electron-builder --config artifacts/knowledge-preview-2026-10-06-builder.cjs --win portable --x64 --publish never`，将已验证的 artifacts/knowledge-record-tabs-build 映射到包内 out；209 个构建文件逐一校验一致。包内不含工作区缓存目录，构建前已有的 builder 配置及 blueprint 样式等四项工作区差异保持原样，哈希记录在 manifest。`npm run check:package-boundary` 通过；`node scripts/check-packaged-runtime.mjs --release-dir artifacts/knowledge-preview-2026-10-06 --portable` 退出码 0，覆盖仓库外运行、便携载荷及启动器。ASAR 有效载荷 171.0 MiB、解包依赖 11.1 MiB、便携文件 106.9 MiB，均在现有预算内。以 JANUSX_DESKTOP_EXECUTABLE 指向新包的 win-unpacked/JanusX.exe 运行 knowledge-pipeline.spec.ts，2 项通过、0 跳过，存储与用户配置隔离。带日期的交付副本与已验收的便携文件 SHA-256 相同。打包日志前缀为 artifacts/knowledge-preview-2026-10-06-；当前用户运行进程和在线知识数据未切换，Scope 中独立模型质量等后续事项仍保留。
+
+2026-10-07：AC-20～AC-23 按 xdo 实现并自检。Jev 阈值默认 0.90，范围 0.50～1.00；设置保存不创建新的失败任务身份，不自动重跑未达标项，显式重新评估仅针对当前评分未达标任务。每项任务保存最近一次模型子审核的实际分项分数及阈值，手动重试保留最多 20 次此前结果；历史任务没有分数时明确说明缺失。多窗口或多段 Wiki 的分数表示最近一次子审核，不冒充全部请求的平均分。
+
+单任务运行在后台执行互斥锁之后只处理指定任务；其他任务的正常后台调度独立存在。历史候选通过工作区、候选 ID 与 hash 单独准入，宿主继续验证来源与冲突，不能通过调低阈值授权 AI 自证。当前任务及收件箱卡片解释原因，永久性来源约束引导人工审核。OpenCode 完成 Hook 使用既有数据库读取器；缺证据任务先按原工作区、session ID 和结束时间恢复正文，再执行提取，失败保留实际原因。撤回屏障及功能关闭检查在读取与写入两侧执行。数据库缺失、结构变化及会话已删除仍可能恢复失败，不作恢复成功保证。
+
+处理记录使用紧凑任务卡片及独立详情，操作审计使用紧凑事件卡片，先解释结果、影响和可读快照，技术字段折叠。审计批准与拒绝事件保存候选正文；历史缺失正文不推断。完整知识回归命令为 `npm run test:unit -- --run tests/unit/knowledge tests/unit/knowledge-transcript.test.ts tests/unit/memory-review-ui.test.ts tests/unit/knowledge-review-state-ui.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge-automation-summary-ui.test.ts tests/unit/knowledge-audit-ui.test.ts tests/unit/assistant-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts tests/unit/knowledge-note-ui.test.ts tests/unit/knowledge-graph-ui.test.ts --maxWorkers=2 --reporter=dot`，结果为 87 个文件通过、4 个跳过，912 项通过、5 项条件跳过，日志 `artifacts/knowledge-review-explain-regression.log`。补充的真实数据库恢复测试和中文双主题卡片测试各通过 1 项；设置阈值保存与显式重新评估浏览器用例通过。
+
+`npm run typecheck:strict-unused`、变更生产 TS/TSX 的 ESLint、`npm run i18n:types`、`npm run i18n:check`、`npm run check:package-boundary`、`npm run build:check` 和 `git diff --check` 通过。生成的 i18n types.ts 被 ESLint 配置忽略，类型检查已覆盖，不把忽略提示算作 lint 验证。Note 检查为 250 篇、0 错误、27 项既有外部链接诊断。设置 `JANUSX_DESKTOP_ENTRY=artifacts/build-check/main/index.js` 运行 `npx playwright test --config playwright.desktop.config.ts tests/e2e/knowledge-pipeline.spec.ts`，2 项通过；测试隔离配置和知识存储，日志 `artifacts/knowledge-review-explain-desktop.log`。构建日志为 `artifacts/knowledge-review-explain-build.log`，中文截图为 `artifacts/knowledge-s3-browser/processing-explanation-dark.png` 和 `processing-explanation-planche.png`，宽度 1280px、无页面横向溢出，手工查看两张截图确认原因、评分与动作可读。
+
+保留边界：未对用户现有候选执行重审或修改真实知识存储；未调用实际 Jev 服务，不将受控模型响应测试当作模型质量评估。运行中的便携版仍需切换新构建才能获得这些功能。阈值提高不撤销已入库知识。重试历史与记录正文占用额外存储；需要更多历史或跨提供方对比分数时再扩展，不能从旧统一错误码补造分项评分。
+
+本批次固定 taskContractHash 为 `45c34c32255fe08451f807f344fcefff624d43895438d36617064a32e2adedf3`，父需求 LF 字节 SHA-256 为 `d6bc21cdfff98ebbe5111aa5ca56442ff9487d417c11d0999a539cea80761a1d`；验收引用 AC-20～AC-23，既有 AC 引用保持有效。
+
+收尾边界回归：Wiki 关系审核保留评分，具有真实分数的 Wiki 覆盖未达标项可显式重新评估；失败回合与工作区不匹配引导人工处理。4 个后端测试文件共 71 项通过，覆盖提取、任务、模型阈值、会话读取与恢复。最终变更文件类型检查及 ESLint 再次通过。

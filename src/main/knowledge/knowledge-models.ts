@@ -1,3 +1,4 @@
+import { jevThreshold } from '../../shared/knowledge-automation'
 // Note: per-stage providers never fall back to an unselected model — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
 import { withKnowledgeLocalModel } from './knowledge-local-runtime'
 export { stopKnowledgeLocalModel } from './knowledge-local-runtime'
@@ -127,9 +128,11 @@ export async function reviewKnowledge(request: KnowledgeModelRequest, required: 
   const parsed = response.data
   if (parsed.model !== (selected.model || request.settings.jev.model)
     || Object.keys(parsed.answers).length !== Object.keys(questions).length || Object.keys(questions).some(id => !parsed.answers[id])) throw new Error('invalid-jev-response')
-  const coveredIds = required.filter((_item, index) => parsed.answers[`coverage_${index}`]!.noul >= 0.9).map(item => item.id)
+  const threshold = jevThreshold(request.settings.jev.threshold)
+  const coveredIds = required.filter((_item, index) => parsed.answers[`coverage_${index}`]!.noul >= threshold).map(item => item.id)
   const all = Object.values(parsed.answers).map(answer => answer.noul)
-  return { verdict: all.every(p => p >= 0.9) ? 'supported' : all.some(p => p <= 0.1) ? 'unsupported' : 'uncertain',
-    reason: all.every(p => p >= 0.9) ? 'evidence-and-coverage-supported' : 'evidence-coverage-or-conflict-needs-review',
-    complete: coveredIds.length === required.length, conflict: parsed.answers.consistent!.noul < 0.9, coveredIds }
+  return { verdict: all.every(p => p >= threshold) ? 'supported' : all.some(p => p <= 0.1) ? 'unsupported' : 'uncertain',
+    reason: all.every(p => p >= threshold) ? 'evidence-and-coverage-supported' : 'evidence-coverage-or-conflict-needs-review',
+    scores: { threshold, support: parsed.answers.support!.noul, consistent: parsed.answers.consistent!.noul, coverage: required.map((_item, index) => parsed.answers[`coverage_${index}`]!.noul) },
+    complete: coveredIds.length === required.length, conflict: parsed.answers.consistent!.noul < threshold, coveredIds }
 }

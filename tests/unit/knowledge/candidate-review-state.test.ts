@@ -33,7 +33,7 @@ describe('current candidate review state', () => {
   it('never uses historical task results or legacy graph records as current authorization', () => {
     const status = automation()
     status.tasks = [{ id: 'old', subject: candidate.id, status: 'failed', reason: 'historical' }] as KnowledgeAutomationStatus['tasks']
-    expect(candidateReviewState(candidate, status, '')).toEqual({ status: 'manual', canReview: true })
+    expect(candidateReviewState(candidate, status, '')).toMatchObject({ status: 'manual', canReview: true, canAdmit: true, reason: 'historical' })
     expect(candidateReviewState({ id: 'edge', type: 'graph-edge', status: 'proposed' } as CandidateGraphEdge, status, '')).toEqual({ status: 'legacy', canReview: false })
     expect(candidateReviewState({ ...candidate, status: 'applied' }, status, '')).toEqual({ status: 'succeeded', canReview: false })
   })

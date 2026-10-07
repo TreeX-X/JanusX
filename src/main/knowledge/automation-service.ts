@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 import type { CandidateFact, CandidateWikiPatch, MemoryFact, Observation, WikiPage, WikiPageRelation } from '../../shared/knowledge'
-import { defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeAutomationStatus,
+import { automationAction, jevThreshold, type AutomationRetryInput, defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeAutomationStatus,
   type KnowledgeAutomationTask, type KnowledgeStage, type KnowledgeModelReview } from '../../shared/knowledge-automation'
 import { reviewCandidateInput, reviewCandidateSnapshot } from '../../shared/review-candidate-snapshot'
 import { configService } from '../config/service'
@@ -26,14 +26,18 @@ import { wikiPageUri } from '../../shared/wiki-relations'
 import { evidenceChunks, extractionWindows, EXTRACTION_SYSTEM, EXTRACTION_VERSION, CURATION_SYSTEM, COVERAGE_SYSTEM, relevantKnowledge, reviewContextObservations } from './extraction-context'
 import { ExtractionReviewRequired, resetExtractionCheckpoint, runExtraction } from './extraction-run'
 import { knowledgeAuditService } from './audit-service'
+import { recoverObservationTranscript } from './transcript-recovery'
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 const providerRevisions = new WeakMap<KnowledgeAutomationSettings, Record<string, string>>()
 const modelSchema = z.object({ provider: z.enum(['off', 'local', 'external', 'jev']), providerId: z.string(), model: z.string(), thinking: z.boolean() })
+const scoresSchema = z.object({ threshold: z.number().min(0.5).max(1), support: z.number().min(0).max(1), consistent: z.number().min(0).max(1), coverage: z.array(z.number().min(0).max(1)) })
 const taskSchema = z.object({ id: z.string(), stage: z.enum(KNOWLEDGE_STAGES), workspaceId: z.string(), subject: z.string(),
   inputHash: z.string(), dependencyHash: z.string().optional(), configHash: z.string(), status: z.enum(['pending', 'running', 'succeeded', 'needs-review', 'failed', 'cancelled']),
-  attempts: z.number().int().nonnegative(), nextRunAt: z.number(), createdAt: z.string(), updatedAt: z.string(), reason: z.string().optional(), model: modelSchema })
-const ledgerSchema = z.object({ schema: z.literal(1), backfillThrough: z.string().optional(), tasks: z.array(taskSchema) }).strict()
+  attempts: z.number().int().nonnegative(), nextRunAt: z.number(), createdAt: z.string(), updatedAt: z.string(), reason: z.string().optional(), model: modelSchema,
+  displayTitle: z.string().optional(), scores: scoresSchema.optional(),
+  history: z.array(z.object({ updatedAt: z.string(), status: z.enum(['pending', 'running', 'succeeded', 'needs-review', 'failed', 'cancelled']), reason: z.string().optional(), scores: scoresSchema.optional() })).optional() })
+const ledgerSchema = z.object({ schema: z.literal(1), backfillThrough: z.string().optional(), admitted: z.array(z.string()).optional(), tasks: z.array(taskSchema) }).strict()
 type Ledger = z.infer<typeof ledgerSchema>
 interface Snapshot { observations: Observation[]; candidates: CandidateFact[]; patches: CandidateWikiPatch[]; facts: MemoryFact[]; pages: WikiPage[] }
 interface Plan { task: KnowledgeAutomationTask; observation?: Observation; observations?: Observation[]; candidate?: CandidateFact; patch?: CandidateWikiPatch; facts?: MemoryFact[]; page?: WikiPage; title?: string; topicKey?: string; generationHash?: string }
@@ -72,7 +76,7 @@ function defaultDeps(): AutomationDeps {
 
 function modelHash(config: KnowledgeAutomationSettings, stage: KnowledgeStage): string {
   const selected = config.stages[stage]
-  return hash([selected, selected.provider === 'local' ? config.local : selected.provider === 'jev' ? config.jev : providerRevisions.get(config)?.[stage]])
+  return hash([selected, selected.provider === 'local' ? config.local : selected.provider === 'jev' ? { endpoint: config.jev.endpoint, model: config.jev.model } : providerRevisions.get(config)?.[stage]])
 }
 const WIKI_GENERATION_VERSION = 'wiki-topics-relations-1'
 function activeFacts(facts: MemoryFact[], now: number): MemoryFact[] {
@@ -151,39 +155,71 @@ export class KnowledgeAutomationService {
           id: plan.task.id, workspaceId: plan.task.workspaceId, displayTitle: title || undefined,
           candidateHash: candidate ? (await reviewCandidateInput(candidate)).candidateHash : undefined,
           reason: stages[plan.task.stage] !== 'automatic' ? 'stage-not-configured' : currentFailure ? safeReason(task.reason ?? '') : undefined,
-          canRetry: Boolean(currentFailure && stages[plan.task.stage] === 'automatic'),
+          scores: task?.scores,
+          canRetry: Boolean(currentFailure && stages[plan.task.stage] === 'automatic' && automationAction(task.reason) !== 'manual'),
         })
       }
     }
-    return { reviewStateVersion: 1, reviewEnabled: settings.reviewEnabled ?? true, running: this.running !== null, enabled: settings.allowed, stages, queue, counts, total: engineeringTasks.length,
+    return { reviewStateVersion: 1, reviewEnabled: settings.reviewEnabled ?? true, enabledSince: settings.config.enabledSince, running: this.running !== null, enabled: settings.allowed, stages, queue, counts, total: engineeringTasks.length,
       lastCompletedAt: engineeringTasks.filter(task => task.status === 'succeeded' && Number.isFinite(Date.parse(task.updatedAt))).map(task => task.updatedAt).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
-      tasks: [...engineeringTasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200).map(task => ({ ...task, displayTitle: titles.get(task.id) })) }
+      tasks: [...engineeringTasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200).map(task => ({ ...task, displayTitle: titles.get(task.id) || task.displayTitle })) }
   }
-  async retry(id: string): Promise<void> {
+  async retry(input: string | AutomationRetryInput): Promise<string> {
     const settings = await this.deps.settings()
     if (!settings.allowed) throw new Error('automation-disabled')
+    let id = typeof input === 'string' ? input : ''
+    if (typeof input !== 'string') {
+      const snapshot = await this.deps.snapshot()
+      const candidate = [...snapshot.candidates, ...snapshot.patches].find(item => item.id === input.candidateId && (item.type === 'fact' ? item.fact.provenance.workspaceId : item.provenance.workspaceId) === input.workspaceId)
+      if (!candidate || candidate.status !== 'proposed' || (await reviewCandidateInput(candidate)).candidateHash !== input.candidateHash
+        || (candidate.type === 'fact' ? candidate.fact.provenance.workspaceId : candidate.provenance.workspaceId) !== input.workspaceId
+        || candidate.type === 'fact' && factScope(candidate.fact) !== 'project') throw new Error('task-no-longer-current')
+      const stage = candidate.type === 'fact' ? 'entryReview' : 'wikiReview'
+      if (settings.config.stages[stage].provider === 'off' || candidate.type === 'wiki-patch' && !candidate.managed) throw new Error('task-no-longer-current')
+      await this.lock.run(async () => { const ledger = await this.read()
+        ledger.admitted = [...new Set([...(ledger.admitted ?? []), hash([input.workspaceId, candidate.id, reviewCandidateSnapshot(candidate)])])]
+        await this.write(ledger)
+      })
+      const plans = await this.sync(settings.config)
+      id = [...plans.values()].find(plan => plan.task.subject === input.candidateId && plan.task.workspaceId === input.workspaceId)?.task.id ?? ''
+    }
     await this.lock.run(async () => {
       const ledger = await this.read(); const task = ledger.tasks.find(item => item.id === id)
-      if (!task || !['failed', 'needs-review'].includes(task.status)) throw new Error('task-not-retryable')
+      if (!task || !['failed', 'needs-review', ...(typeof input === 'string' ? [] : ['pending'])].includes(task.status)) throw new Error('task-not-retryable')
       const plan = (await this.plans(settings.config, ledger)).get(id)
       const model = settings.config.stages[task.stage]
       if (!plan || plan.task.dependencyHash !== task.dependencyHash || model.provider === 'off'
         || !model.model || model.provider === 'external' && !model.providerId) throw new Error('task-no-longer-current')
+      if (automationAction(task.reason) === 'manual') throw new Error('task-needs-manual-review')
       if (task.stage === 'extraction') await resetExtractionCheckpoint(task.id)
-      task.status = 'pending'; task.attempts = 0; task.nextRunAt = 0; task.reason = 'manual-retry'; task.updatedAt = new Date(this.deps.now()).toISOString()
+      task.history = [...(task.history ?? []), { updatedAt: task.updatedAt, status: task.status, reason: task.reason, scores: task.scores }].slice(-20)
+      task.status = 'pending'; task.attempts = 0; task.nextRunAt = 0; task.reason = 'manual-retry'; task.scores = undefined; task.updatedAt = new Date(this.deps.now()).toISOString()
       await this.write(ledger)
     })
+    return id
+  }
+  async reevaluate(): Promise<void> {
+    const settings = await this.deps.settings()
+    if (!settings.allowed) throw new Error('automation-disabled')
+    const plans = await this.plans(settings.config, await this.read())
+    const tasks = (await this.read()).tasks.filter(task => plans.has(task.id) && task.status === 'needs-review' && (task.reason === 'evidence-coverage-or-conflict-needs-review' || task.reason === 'wiki-missing-required-knowledge' && task.scores !== undefined))
+    for (const task of tasks) { await this.retry(task.id); await this.run(task.id) }
   }
   async backfill(): Promise<void> {
     if (!(await this.deps.settings()).allowed) throw new Error('automation-disabled')
     await this.lock.run(async () => { const ledger = await this.read(); ledger.backfillThrough = new Date(this.deps.now()).toISOString(); await this.write(ledger) })
     await this.run()
   }
-  run(): Promise<void> {
+  run(taskId?: string): Promise<void> {
+    if (taskId) return this.targeted.run(async () => { while (this.running) await this.running; return this.start(taskId) })
+    return this.start()
+  }
+  private readonly targeted = new SerialQueue()
+  private start(taskId?: string): Promise<void> {
     if (this.closed) return Promise.resolve()
     if (this.running) return this.running
     this.controller = new AbortController()
-    this.running = this.process(this.controller.signal).finally(() => { this.running = null; this.controller = null })
+    this.running = this.process(this.controller.signal, taskId).finally(() => { this.running = null; this.controller = null })
     return this.running
   }
   private async plans(config: KnowledgeAutomationSettings, ledger: Ledger): Promise<Map<string, Plan>> {
@@ -196,7 +232,7 @@ export class KnowledgeAutomationService {
       const id = hash([stage, workspaceId, subject, inputHash, configHash])
       const timestamp = new Date(now).toISOString()
       plans.set(id, { ...extra, task: { id, stage, workspaceId, subject, inputHash, configHash,
-        status: 'pending', attempts: 0, nextRunAt, dependencyHash, createdAt: timestamp, updatedAt: timestamp, model: config.stages[stage] } })
+        status: 'pending', attempts: 0, nextRunAt, dependencyHash, createdAt: timestamp, updatedAt: timestamp, displayTitle: safeReason(extra.candidate?.fact.content ?? extra.patch?.title ?? extra.title ?? extra.observation?.summary ?? '').slice(0, 160), model: config.stages[stage] } })
     }
     if (config.stages.extraction.provider !== 'off') {
       for (const window of extractionWindows(snapshot.observations, now)) {
@@ -207,7 +243,7 @@ export class KnowledgeAutomationService {
       }
     }
     for (const candidate of snapshot.candidates) {
-      if (candidate.status !== 'proposed' || factScope(candidate.fact) !== 'project' || !eligibleTime(candidate.fact.provenance.createdAt)) continue
+      if (candidate.status !== 'proposed' || factScope(candidate.fact) !== 'project' || !eligibleTime(candidate.fact.provenance.createdAt) && !ledger.admitted?.includes(hash([candidate.fact.provenance.workspaceId, candidate.id, reviewCandidateSnapshot(candidate)]))) continue
       add('entryReview', candidate.fact.provenance.workspaceId, candidate.id, hash([EXTRACTION_VERSION, reviewCandidateSnapshot(candidate),
         reviewContextObservations(candidate, snapshot.observations, now).map(sourceEvidence)]), { candidate }, 0,
         hash(relatedFacts(candidate, snapshot.facts, now).map(wikiFactHash).sort()))
@@ -226,7 +262,7 @@ export class KnowledgeAutomationService {
       add('wikiGeneration', workspaceId, slug, hash([generationHash, page?.version ?? 0]), { facts, page, title, topicKey, generationHash }, newest + 15000)
     }
     for (const patch of snapshot.patches) {
-      if (patch.status !== 'proposed' || !patch.managed || !eligibleTime(patch.provenance.createdAt)) continue
+      if (patch.status !== 'proposed' || !patch.managed || !eligibleTime(patch.provenance.createdAt) && !ledger.admitted?.includes(hash([patch.provenance.workspaceId, patch.id, reviewCandidateSnapshot(patch)]))) continue
       const page = snapshot.pages.find(item => item.workspaceId === patch.provenance.workspaceId && item.slug === patch.pageSlug)
       const facts = activeFacts(snapshot.facts, now).filter(fact => fact.provenance.workspaceId === patch.provenance.workspaceId && patch.sourceFactIds.includes(fact.id))
       const group = groups.find(group => group.workspaceId === patch.provenance.workspaceId && group.slug === patch.pageSlug)
@@ -269,18 +305,18 @@ export class KnowledgeAutomationService {
   }
   private async current(plan: Plan, config: KnowledgeAutomationSettings): Promise<boolean> {
     const latest = await this.deps.settings()
-    if (!latest.allowed || modelHash(latest.config, plan.task.stage) !== modelHash(config, plan.task.stage)) return false
+    if (!latest.allowed || modelHash(latest.config, plan.task.stage) !== modelHash(config, plan.task.stage) || latest.config.stages[plan.task.stage].provider === 'jev' && jevThreshold(latest.config.jev.threshold) !== jevThreshold(config.jev.threshold)) return false
     return (await this.plans(latest.config, await this.read())).has(plan.task.id)
   }
-  private async process(signal: AbortSignal): Promise<void> {
+  private async process(signal: AbortSignal, taskId?: string): Promise<void> {
     await withFactCandidatesLock(async () => undefined)
     await withWikiCandidatesLock(async () => undefined)
-    for (let work = 0; work < 12 && !signal.aborted; work++) {
+    for (let work = 0; work < (taskId ? 1 : 12) && !signal.aborted; work++) {
       const settings = await this.deps.settings()
       if (!settings.allowed) return
       const plans = await this.sync(settings.config)
       const ledger = await this.read()
-      const task = ledger.tasks.filter(item => ['pending', 'running'].includes(item.status) && item.nextRunAt <= this.deps.now() && plans.has(item.id))
+      const task = ledger.tasks.filter(item => ['pending', 'running'].includes(item.status) && item.nextRunAt <= this.deps.now() && plans.has(item.id) && (!taskId || item.id === taskId))
         // Publish a reviewed topic before generating the next one, so it can be cited as a real target.
         .sort((a, b) => Number(b.stage === 'wikiReview') - Number(a.stage === 'wikiReview') || a.createdAt.localeCompare(b.createdAt) || a.nextRunAt - b.nextRunAt)[0]
       if (!task) return
@@ -335,6 +371,18 @@ export class KnowledgeAutomationService {
   private async execute(plan: Plan, config: KnowledgeAutomationSettings, signal: AbortSignal): Promise<void> {
     const request = (system: string, input: unknown): KnowledgeModelRequest => ({ stage: plan.task.stage, settings: config, system, input, signal })
     if (plan.observation) {
+      if (plan.observation.metadata?.evidenceStatus && plan.observation.metadata.evidenceStatus !== 'complete' && !plan.observation.tags.includes('turn-failed')) {
+        const recovered = await recoverObservationTranscript(plan.observation, async () => !signal.aborted && (await this.deps.settings()).allowed)
+        if (!recovered) throw new ManualReview('incomplete-task-evidence:transcript-path-unavailable')
+        if (recovered.metadata?.evidenceStatus !== 'complete') throw new ManualReview('incomplete-task-evidence:' + recovered.metadata?.evidenceStatus)
+        const replacement = [...(await this.plans(config, await this.read())).values()].find(item => item.observation?.id === recovered.id)
+        if (!replacement) throw new ManualReview('incomplete-task-evidence:transcript-turn-boundary-missing')
+        await this.sync(config)
+        await this.process(signal, replacement.task.id)
+        const result = (await this.read()).tasks.find(task => task.id === replacement.task.id)
+        if (result?.status !== 'succeeded') throw new ManualReview(result?.reason ?? 'processing-failed')
+        return
+      }
       const observations = plan.observations ?? [plan.observation]
       const status = plan.observation.metadata?.evidenceStatus
       if (plan.observation.tags.includes('turn-failed') || typeof status === 'string' && status !== 'complete') {
@@ -413,6 +461,7 @@ export class KnowledgeAutomationService {
         const review = await this.deps.review(request(REVIEW_SYSTEM, { candidate: candidate.fact.content, evidence, required,
           context,
           existingKnowledge: batch.map(fact => ({ id: fact.id, content: fact.content })) }), required)
+        if (review.scores) await this.update(plan.task.id, { scores: review.scores })
         if (!reviewPassed(review, [candidate.id])) throw new ManualReview(review.reason)
         reason = review.reason
         }
@@ -502,11 +551,13 @@ export class KnowledgeAutomationService {
         const required = facts.filter(fact => section.ids.includes(fact.id)).map(fact => ({ id: fact.id, content: fact.content }))
         if (!required.length || required.reduce((sum, item) => sum + item.content.length, 0) > 3500) throw new ManualReview('invalid-wiki-section')
         const support = await this.deps.review(request(REVIEW_SYSTEM, { candidate: section.markdown, evidence: required, required }), required)
+        if (support.scores) await this.update(plan.task.id, { scores: support.scores })
         if (!reviewPassed(support, required.map(item => item.id))) throw new ManualReview(support.reason)
         // Read the entire section independently for each fact, preserving multi-paragraph conditions.
         for (const fact of required) {
           const coverage = await this.deps.review(request(REVIEW_SYSTEM, { candidate: fact.content,
             evidence: [{ id: 'wiki-section', content: section.markdown }], required: [fact] }), [fact])
+          if (coverage.scores) await this.update(plan.task.id, { scores: coverage.scores })
           if (!reviewPassed(coverage, [fact.id])) throw new ManualReview('wiki-missing-required-knowledge')
         }
       }
@@ -519,6 +570,7 @@ export class KnowledgeAutomationService {
         if (evidence.reduce((sum, item) => sum + item.content.length, 0) > 14000) throw new ManualReview('wiki-relation-exceeds-review-context')
         const review = await this.deps.review(request(REVIEW_SYSTEM + ' Check the exact relationship type and direction, not just topical similarity. A references relation only asserts an explicit page citation; dependencies and conflicts require factual support.',
           { candidate: required[0]!.content, evidence, required }), required)
+        if (review.scores) await this.update(plan.task.id, { scores: review.scores })
         if (!reviewPassed(review, [required[0]!.id])) throw new ManualReview(review.reason)
       }
       await knowledgeReviewService.applyAutomaticCandidate({ ...await reviewCandidateInput(patch), reviewNotes: 'All sections and page relationships supported; required knowledge covered' }, {

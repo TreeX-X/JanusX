@@ -58,6 +58,70 @@ async function candidate(index: number, concept = 'workflow'): Promise<Candidate
 }
 async function facts(items: MemoryFact[]) { await mkdir(join(root, 'facts'), { recursive: true }); await writeFile(join(root, 'facts/facts.jsonl'), items.map(item => JSON.stringify(item)).join('\n') + '\n') }
 describe('durable knowledge automation', () => {
+  it('recovers a missing OpenCode turn from its database before extracting with the real capture pipeline', async () => {
+    const { DatabaseSync } = await import('node:sqlite')
+    const path = join(root, 'opencode.db')
+    const db = new DatabaseSync(path)
+    try {
+      db.exec('CREATE TABLE session (id TEXT, directory TEXT); CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT); CREATE TABLE part (id TEXT, message_id TEXT, time_created INTEGER, data TEXT)')
+      db.prepare('INSERT INTO session VALUES (?, ?)').run('session', root)
+      for (const [id, time, role, text] of [['u', now - 2000, 'user', 'Check the cache'], ['a', now - 1000, 'assistant', 'The cache check is complete.']] as const) {
+        db.prepare('INSERT INTO message VALUES (?, ?, ?, ?)').run(id, 'session', time, JSON.stringify({ role }))
+        db.prepare('INSERT INTO part VALUES (?, ?, ?, ?)').run(id, id, time, JSON.stringify({ type: 'text', text }))
+      }
+    } finally { db.close() }
+    const observation = await knowledgeObservationService.capture({ workspaceId: 'project', workspacePath: root, source: 'agent-stream',
+      type: 'system-event', content: 'opencode terminal task completed', sessionId: 'session', correlationId: 'turn', agentId: 'opencode',
+      tags: ['turn-completed'], metadata: { evidenceStatus: 'transcript-path-unavailable', transcriptPath: path } }, { speaker: 'unknown', createdAt: new Date(now).toISOString() })
+    config.stages.extraction = { provider: 'external', providerId: 'test', model: 'test', thinking: false }
+    json.mockResolvedValue({ complete: true, facts: [] })
+    const id = (await service.status()).queue.find(task => task.subject === observation.id)!.id!
+    await service.run(id)
+    const state = await service.status()
+    expect(state.tasks.find(task => task.id === id)).toMatchObject({ status: 'succeeded' })
+    expect((await deps.snapshot()).observations.some(row => row.metadata?.evidenceStatus === 'complete')).toBe(true)
+    expect(json).toHaveBeenCalled()
+  })
+  it('never bypasses assistant-only evidence after lowering the Jev threshold', async () => {
+    const item = await candidate(1)
+    const snapshot = await deps.snapshot()
+    deps.snapshot = async () => ({ ...snapshot, observations: snapshot.observations.map(row => ({ ...row, sourceEvidence: { ...sourceEvidence(row), authority: 'model-generated', speaker: 'assistant' } })) })
+    config.jev.threshold = 0.5
+    await service.run()
+    const state = await service.status()
+    expect(state.queue.find(task => task.subject === item.id)).toMatchObject({ status: 'needs-review' })
+    expect(review).not.toHaveBeenCalled()
+  })
+  it('runs only the requested task and records previous scores without rerunning failures on threshold save', async () => {
+    config.stages.entryReview = { provider: 'jev', model: 'jev-1.13.0', providerId: '', thinking: false }
+    const first = await candidate(1); await candidate(2)
+    const scores = { threshold: 0.9, support: 0.85, consistent: 0.99, coverage: [0.99] }
+    review.mockResolvedValue({ verdict: 'uncertain', reason: 'evidence-coverage-or-conflict-needs-review', complete: true, conflict: false, coveredIds: [first.id], scores })
+    const id = (await service.status()).queue.find(task => task.subject === first.id)!.id!
+    await service.run(id)
+    expect(review).toHaveBeenCalledTimes(1)
+    expect((await service.status()).queue.find(task => task.subject === 'candidate-2')?.status).toBe('pending')
+    config.jev.threshold = 0.8
+    expect((await service.status()).queue.find(task => task.subject === first.id)).toMatchObject({ id, status: 'needs-review', scores })
+    await service.retry(id)
+    review.mockResolvedValue({ verdict: 'supported', reason: 'supported', complete: true, conflict: false, coveredIds: [first.id], scores: { ...scores, threshold: 0.8 } })
+    await service.run(id)
+    const state = await service.status()
+    expect(state.tasks.find(task => task.id === id)).toMatchObject({ status: 'succeeded', scores: { threshold: 0.8 }, history: [{ reason: 'evidence-coverage-or-conflict-needs-review', scores }] })
+    expect(state.queue.find(task => task.subject === 'candidate-2')?.status).toBe('pending')
+  })
+  it('admits only an explicitly selected historical candidate with the matching workspace and hash', async () => {
+    const first = await candidate(1); await candidate(2)
+    config.enabledSince = new Date(now).toISOString()
+    expect((await service.status()).queue).toHaveLength(0)
+    const input = { candidateId: first.id, workspaceId: 'project', candidateHash: (await reviewCandidateInput(first)).candidateHash }
+    await expect(service.retry({ ...input, workspaceId: 'other' })).rejects.toThrow('task-no-longer-current')
+    await expect(service.retry({ ...input, candidateHash: 'stale' })).rejects.toThrow('task-no-longer-current')
+    const id = await service.retry(input)
+    await service.run(id)
+    expect(review).toHaveBeenCalledTimes(1)
+    expect((await service.status()).queue.some(task => task.subject === 'candidate-2')).toBe(false)
+  })
   it('projects bounded subject labels from the current plan without extra snapshots or content reads', async () => {
     const item = await candidate(1)
     item.fact.content = 'Backup policy\n' + 'long-title '.repeat(50)

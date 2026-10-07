@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join as joinTranscriptPath } from 'node:path'
 import type { AgentEngine } from '../janus-runner/types'
 import { configService } from '../config/service'
 import {
@@ -380,7 +382,7 @@ class AgentTurnRecorder {
     const endedAtMs = timestampToMs(payload.timestamp) ?? Date.now()
     const durationMs = activeTurn ? endedAtMs - activeTurn.startedAtMs : undefined
     const raw = payload.raw && typeof payload.raw === 'object' ? payload.raw as Record<string, unknown> : {}
-    const transcriptPath = raw.transcript_path ?? raw.transcriptPath
+    const transcriptPath = raw.transcript_path ?? raw.transcriptPath ?? (terminal.engine === 'opencode' && (payload.sessionId ?? activeTurn?.sessionId) ? joinTranscriptPath(homedir(), '.local', 'share', 'opencode', 'opencode.db') : undefined)
     const correlationId = activeTurn?.id ?? this.eventId(payload)
     const end: CaptureEntry = { input: {
       workspaceId: terminal.workspaceId,

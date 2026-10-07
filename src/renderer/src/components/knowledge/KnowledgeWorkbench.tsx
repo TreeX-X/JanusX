@@ -1,3 +1,5 @@
+import { useCandidateReviewState } from './candidateReviewState'
+import { automationReason } from './AutomationExplanation'
 import { useAssistantStore } from '@/stores/assistant'
 import { useExperimentalStore } from '@/stores/experimental'
 import { UserPersonaTool } from './UserPersonaTool'
@@ -29,7 +31,8 @@ import { ObservationRevokeControl } from './ObservationRevokeControl'
 import { ObservationRevocations } from './ObservationRevocations'
 import { KnowledgeStatusBar } from './KnowledgeStatusBar'
 import { AutomationStatus } from './AutomationStatus'
-import { AutomationRecords } from './AutomationRecords'
+import { ProcessingDetail } from './ProcessingDetail'
+import { processingRecords, type ProcessingRecord, AutomationRecords } from './AutomationRecords'
 import { AuditRecords } from './AuditRecords'
 import { AuditDetail } from './AuditDetail'
 import type { AuditRecord } from '../../../../shared/ipc/knowledge'
@@ -140,8 +143,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const loadGeneration = useRef(0)
   const [selectedId, setSelectedId] = useState('')
   const [selectedSearch, setSelectedSearch] = useState<InspectorRecord | null>(null)
+  const [selectedProcessing, setSelectedProcessing] = useState<ProcessingRecord | null>(null)
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null)
-  useEffect(() => { setSelectedAudit(null) }, [domain, tab, recordTab, isOpen])
+  useEffect(() => { setSelectedAudit(null); setSelectedProcessing(null) }, [domain, tab, recordTab, isOpen])
   const [query, setQuery] = useState('')
   const [searchCards, setSearchCards] = useState<KnowledgeCard[]>([])
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'unavailable'>('idle')
@@ -265,10 +269,13 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   // Detail side panel stays mounted across its exit slide: the grid track
   // collapses in parallel while the last record fades/slides out.
   const auditSelected = tab === 'audit' && recordTab === 'audit' ? selectedAudit : null
-  const detailOpen = domain === 'engineering' && (selected != null || auditSelected != null)
+  const processingSelected = tab === 'audit' && recordTab === 'processing' && selectedProcessing
+    ? (automation ? processingRecords(automation).find(task => task.id === selectedProcessing.id) : null) ?? selectedProcessing : null
+  const detailOpen = domain === 'engineering' && (selected != null || auditSelected != null || processingSelected != null)
   const clearDetail = useCallback(() => {
     const auditId = selectedAudit?.id
     setSelectedAudit(null)
+    setSelectedProcessing(null)
     setSelectedSearch(null)
     setSelectedId('')
     if (auditId) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-audit-id="${CSS.escape(auditId)}"]`)?.focus())
@@ -296,6 +303,9 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   if (auditSelected) previousAudit.current = auditSelected
   const shownAudit = auditSelected ?? (detailAnim.rendered && tab === 'audit' && recordTab === 'audit' ? previousAudit.current : null)
 
+  const openProcessingCandidate = (id: string) => {
+    setSelectedProcessing(null); setTab('inbox'); setSelectedId(id)
+  }
   const activateTab = (nextTab: KnowledgeWorkbenchTab) => {
     setTab(nextTab)
     setSelectedSearch(null)
@@ -494,13 +504,13 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
             {tab !== 'settings' && tab !== 'audit' && loadState === 'loading' && <CardSkeleton lines={4} label={t('knowledge:state2.loadingRecords')} />}
             {tab !== 'settings' && tab !== 'audit' && loadState === 'error' && <StateBlock title={t('knowledge:state2.workbenchUnavailable')} detail={loadError} />}
             {tab !== 'settings' && loadState === 'idle' && snapshot && <>
-              {tab === 'inbox' && <CardCollection title={t('knowledge:inbox.empty.title')} detail={t('knowledge:inbox.empty.detail')} cards={candidatesForTab(snapshot, 'inbox', 'engineering').map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
+              {tab === 'inbox' && <CardCollection automation={automation} candidates={candidatesForTab(snapshot, 'inbox', 'engineering')} title={t('knowledge:inbox.empty.title')} detail={t('knowledge:inbox.empty.detail')} cards={candidatesForTab(snapshot, 'inbox', 'engineering').map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'library' && <CardCollection title={t('knowledge:library.empty.title')} detail={t('knowledge:library.empty.detail')} cards={snapshot.libraryCards} selectedId={selectedId} onSelect={selectCandidate} />}
               {tab === 'search' && <SearchLab query={query} onQueryChange={setQuery} cards={searchCards} state={searchState} selectedId={selectedId} onSelect={(card) => { setSelectedSearch({ ...recordFromCard(card), confidence: card.score, scoreKind: 'search' }); setSelectedId(card.id) }} />}
               {tab === 'wiki' && <div className={styles.wikiSections}>
                 <details><summary>Propose a wiki page from Notes</summary><NoteWikiEditor /></details>
                 <CardCollection title={t('knowledge:wiki.published.empty.title')} detail={t('knowledge:wiki.published.empty.detail')} cards={snapshot ? publishedWikiCards(snapshot) : []} selectedId={selectedId} onSelect={selectCandidate} />
-                <CardCollection title={t('knowledge:wiki.empty.title')} detail={t('knowledge:wiki.empty.detail')} cards={snapshot.wikiPatches.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />
+                <CardCollection title={t('knowledge:wiki.empty.title')} detail={t('knowledge:wiki.empty.detail')} automation={automation} candidates={snapshot.wikiPatches} cards={snapshot.wikiPatches.map(cardFromCandidate)} selectedId={selectedId} onSelect={selectCandidate} />
               </div>}
               {tab === 'graph' && <KnowledgeGraphCanvas key={snapshot.loadedAt} snapshot={snapshot} selectedId={selectedId} resolveRecord={resolveCanvasRecord} onSelect={selectGraph} />}
             </>}
@@ -524,7 +534,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
                 </nav>
                 <div className={styles.recordsPanel} role="tabpanel" id={`${recordTabId}-panel`} aria-labelledby={`${recordTabId}-${recordTab}`} tabIndex={0}>
                 {recordTab === 'processing' ? <>
-                  <AutomationRecords active={isOpen} attentionOnly={attentionOnly} onFilterChange={setAttentionOnly} onChanged={() => void refresh()} />
+                  <AutomationRecords selectedId={selectedProcessing?.id} onSelect={setSelectedProcessing} onReview={openProcessingCandidate} active={isOpen} attentionOnly={attentionOnly} onFilterChange={setAttentionOnly} onChanged={() => void refresh()} />
                   <details className={styles.legacyProcessing}><summary>{t('knowledge:summary.captureDetails')}</summary>
                     <p>{t('knowledge:summary.captureHint')}</p>
                     <KnowledgeStatusBar stats={procStats} busy={procBusy} onProcessNow={() => void processNow()} />
@@ -540,7 +550,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               data-visible={detailAnim.visible ? 'true' : 'false'}
               aria-hidden={detailAnim.visible ? undefined : 'true'}
             >
-              {shownAudit ? <AuditDetail key={shownAudit.id} event={shownAudit} onClose={clearDetail} /> : <Inspector automation={automation} record={shownSelected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={replacement => void review('apply', replacement)} onReject={() => void review('reject')} onRevoke={() => void revoke()} onCloseDetail={clearDetail} />}
+              {processingSelected ? <ProcessingDetail key={processingSelected.id} task={processingSelected} enabled={automation?.enabled ?? false} onClose={clearDetail} onChanged={() => void refresh()} onReview={openProcessingCandidate} /> : shownAudit ? <AuditDetail key={shownAudit.id} event={shownAudit} onClose={clearDetail} /> : <Inspector automation={automation} record={shownSelected} snapshot={snapshot} busy={reviewBusy} error={reviewError} onApprove={replacement => void review('apply', replacement)} onReject={() => void review('reject')} onRevoke={() => void revoke()} onCloseDetail={clearDetail} />}
             </aside>
           ) : null}
           </>}
@@ -615,9 +625,15 @@ export function selectionIdForTab(
   return ''
 }
 
-function CardCollection({ title, detail, cards, selectedId, onSelect }: { title: string; detail: string; cards: KnowledgeCard[]; selectedId: string; onSelect: (id: string) => void }) {
+function CandidateTileReason({ candidate, automation }: { candidate: Candidate; automation: KnowledgeAutomationStatus | null }) {
+  const { t } = useI18n('knowledge')
+  const state = useCandidateReviewState(candidate, automation)
+  return <p><span>{t(`knowledge:review.currentState.${state.status}`)}</span> · {t(`knowledge:automationExplain.${automationReason(state.reason, state.status)}`)}</p>
+}
+
+function CardCollection({ title, detail, cards, selectedId, onSelect, candidates, automation }: { candidates?: Candidate[]; automation?: KnowledgeAutomationStatus | null; title: string; detail: string; cards: KnowledgeCard[]; selectedId: string; onSelect: (id: string) => void }) {
   if (!cards.length) return <StateBlock title={title} detail={detail} />
-  return <div className={`${styles.cardGrid} ${surface.grid} ${surface.enter}`}>{cards.map((card) => <KnowledgeCardTile key={card.id} card={card} active={card.id === selectedId} onSelect={() => onSelect(card.id)} />)}</div>
+  return <div className={`${styles.cardGrid} ${surface.grid} ${surface.enter}`}>{cards.map((card) => <KnowledgeCardTile explanation={candidates?.find(item => item.id === card.id) ? <CandidateTileReason candidate={candidates.find(item => item.id === card.id)!} automation={automation ?? null} /> : undefined} key={card.id} card={card} active={card.id === selectedId} onSelect={() => onSelect(card.id)} />)}</div>
 }
 
 function SearchLab({ query, onQueryChange, cards, state, selectedId, onSelect }: { query: string; onQueryChange: (value: string) => void; cards: KnowledgeCard[]; state: 'idle' | 'loading' | 'unavailable'; selectedId: string; onSelect: (card: KnowledgeCard) => void }) {
@@ -625,7 +641,7 @@ function SearchLab({ query, onQueryChange, cards, state, selectedId, onSelect }:
   return <div className={styles.searchLab}><div className={styles.searchPanel}><div className={styles.cardTopline}><span>{t('knowledge:searchLab.controlledRecall')}</span><span>{t('knowledge:searchLab.bm25')}</span></div><input className={styles.largeInput} value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t('knowledge:searchLab.placeholder')} /></div><div className={styles.searchResults}>{!query.trim() && <StateBlock title={t('knowledge:searchLab.enterQuery')} compact />}{query.trim() && state === 'loading' && <StateBlock title={t('knowledge:searchLab.searching')} compact />}{query.trim() && state === 'unavailable' && <StateBlock title={t('knowledge:searchLab.unavailable.title')} detail={t('knowledge:searchLab.unavailable.detail')} compact />}{query.trim() && state === 'idle' && !cards.length && <StateBlock title={t('knowledge:searchLab.noMatches.title')} detail={t('knowledge:searchLab.noMatches.detail')} compact />}{cards.map((card) => <KnowledgeCardTile search key={card.id} card={card} active={card.id === selectedId} onSelect={() => onSelect(card)} />)}</div></div>
 }
 
-function KnowledgeCardTile({ card, active, onSelect, search = false }: { card: KnowledgeCard; active?: boolean; onSelect: () => void; search?: boolean }) {
+function KnowledgeCardTile({ card, active, onSelect, search = false, explanation }: { card: KnowledgeCard; active?: boolean; onSelect: () => void; search?: boolean; explanation?: import('react').ReactNode }) {
   const { t } = useI18n('knowledge')
   return (
     <button type="button" className={`${surface.card} ${styles.reviewCard} ${active ? styles.reviewCardActive : ''}`} onClick={onSelect}>
@@ -638,6 +654,7 @@ function KnowledgeCardTile({ card, active, onSelect, search = false }: { card: K
       </div>
       <strong title={card.title}>{card.title}</strong>
       {card.summary && <p title={card.summary}>{card.summary}</p>}
+      {explanation}
       <TagRow tags={card.tags} />
       <div className={styles.cardFoot}>{card.status ?? t('knowledge:card.statusActive')} - {t('knowledge:card.sourceRefs', { count: card.sourceRefs.observationIds.length })}</div>
     </button>
