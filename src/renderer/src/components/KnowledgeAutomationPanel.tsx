@@ -1,5 +1,5 @@
 // Note: extraction, entry review, handbook generation and review have independent providers — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState, type CSSProperties } from 'react'
 import { KeyRound, Workflow } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { jevThreshold, defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeProvider, type KnowledgeStage } from '../../../shared/knowledge-automation'
@@ -18,8 +18,10 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
 }) {
   const { t } = useI18n('knowledge')
   const config = value ?? defaultKnowledgeAutomation()
-  const [thresholdText, setThresholdText] = useState(String(jevThreshold(config.jev.threshold)))
-  useEffect(() => { setThresholdText(String(jevThreshold(config.jev.threshold))) }, [config.jev.threshold])
+  const thresholdId = useId()
+  const thresholdValue = jevThreshold(config.jev.threshold)
+  const [thresholdText, setThresholdText] = useState(thresholdValue.toFixed(2))
+  useEffect(() => { setThresholdText(thresholdValue.toFixed(2)) }, [thresholdValue])
   const [providers, setProviders] = useState<Array<{ id: string; name: string; models: string[] }>>([])
   const [error, setError] = useState('')
   const [credential, setCredential] = useState<{ key?: string; revision: number }>({ revision: 0 })
@@ -77,16 +79,26 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
       <legend><KeyRound size={14} aria-hidden />Jev</legend>
       <label className={automationStyles.connectionField}><span>{t('knowledge:automation.jevEndpoint')}</span><input value={config.jev.endpoint}
         onChange={event => onChange({ ...config, jev: { ...config.jev, endpoint: event.target.value } })} /></label>
-      <label className={automationStyles.connectionField}><span>{t('knowledge:automationExplain.threshold')}</span>
-        <input type="number" min="0.5" max="1" step="0.01" value={thresholdText} onBlur={() => setThresholdText(String(jevThreshold(config.jev.threshold)))} onChange={event => {
-          setThresholdText(event.target.value)
-          const threshold = Number(event.target.value)
-          if (threshold >= 0.5 && threshold <= 1) onChange({ ...config, jev: { ...config.jev, threshold } })
-        }} />
-        <input type="range" min="0.5" max="1" step="0.01" aria-label={t('knowledge:automationExplain.threshold')} value={jevThreshold(config.jev.threshold)}
-          onChange={event => onChange({ ...config, jev: { ...config.jev, threshold: Number(event.target.value) } })} />
-      </label>
-      <p className={styles.hint}>{t('knowledge:automationExplain.thresholdHint')}</p>
+      {/* Note: threshold controls follow settings tokens and retain explicit save semantics; see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md */}
+      <div className={automationStyles.thresholdField}>
+        <label id={`${thresholdId}-label`} htmlFor={thresholdId}>{t('knowledge:automationExplain.threshold')}</label>
+        <div className={automationStyles.thresholdControls}>
+          <div className={automationStyles.thresholdScale}>
+            <input className={automationStyles.thresholdSlider} type="range" min="0.5" max="1" step="0.01"
+              aria-labelledby={`${thresholdId}-label`} aria-describedby={`${thresholdId}-hint`} value={thresholdValue}
+              style={{ '--threshold-fill': `${(thresholdValue - 0.5) * 200}%` } as CSSProperties}
+              onChange={event => onChange({ ...config, jev: { ...config.jev, threshold: Number(event.target.value) } })} />
+            <div className={automationStyles.thresholdLimits} aria-hidden="true"><span>0.50</span><span>1.00</span></div>
+          </div>
+          <input id={thresholdId} className={automationStyles.thresholdNumber} aria-describedby={`${thresholdId}-hint`}
+            type="number" min="0.5" max="1" step="0.01" value={thresholdText} onBlur={() => setThresholdText(thresholdValue.toFixed(2))} onChange={event => {
+              setThresholdText(event.target.value)
+              const threshold = Number(event.target.value)
+              if (threshold >= 0.5 && threshold <= 1) onChange({ ...config, jev: { ...config.jev, threshold } })
+            }} />
+        </div>
+        <p id={`${thresholdId}-hint`} className={styles.hint}>{t('knowledge:automationExplain.thresholdHint')}</p>
+      </div>
       <JevCredentialFields disabled={disabled} onCredentialChange={credentialChanged} />
     </fieldset>}
     <KnowledgeConfigurationTest config={config} credential={credential} disabled={disabled} />

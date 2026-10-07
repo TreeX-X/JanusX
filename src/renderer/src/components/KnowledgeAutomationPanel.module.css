@@ -1,7 +1,7 @@
 .panel { min-width: 0; font-size: 12px; line-height: 1.5; }
 .panel fieldset { min-width: 0; margin: 0; }
 .panel legend { display: flex; align-items: center; gap: 7px; padding: 0; color: var(--shell-text); font-size: 11px; font-weight: 600; }
-.panel input:not([type='checkbox']) { box-sizing: border-box; min-width: 0; height: 30px; padding: 0 9px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--shell-text); background: var(--so-field, var(--shell-canvas)); font: inherit; font-size: 12px; }
+.panel input:not([type='checkbox']):not([type='range']) { box-sizing: border-box; min-width: 0; height: 30px; padding: 0 9px; border: 1px solid var(--control-border); border-radius: 5px; color: var(--shell-text); background: var(--so-field, var(--shell-canvas)); font: inherit; font-size: 12px; }
 .panel input:not([type='checkbox']):focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 1px; }
 .panel input::placeholder { color: var(--shell-muted); }
 .panel input:not([type='checkbox']):disabled { opacity: .45; }
@@ -29,6 +29,18 @@
 .connection > p { margin-top: 6px; }
 .connectionField { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(0, 1.6fr); align-items: center; gap: 12px; font-size: 11px; color: var(--shell-muted); }
 .connectionField input { width: 100%; }
+.thresholdField { display: grid; gap: 8px; min-width: 0; padding-block: 12px; border-block: 1px solid var(--shell-border-soft); }
+.thresholdField > label { color: var(--shell-text); font-size: 11px; font-weight: 500; }
+.thresholdControls { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.thresholdScale { flex: 1; min-width: 0; }
+.thresholdLimits { display: flex; justify-content: space-between; color: var(--shell-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.thresholdNumber { flex: 0 0 64px; width: 64px; text-align: center; font-variant-numeric: tabular-nums; appearance: textfield; }
+.thresholdNumber::-webkit-inner-spin-button, .thresholdNumber::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.thresholdSlider { display: block; appearance: none; box-sizing: border-box; width: 100%; min-width: 0; height: 30px; margin: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; cursor: pointer; }
+.thresholdSlider::-webkit-slider-runnable-track { height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--shell-accent) 0 var(--threshold-fill), var(--control-border) var(--threshold-fill) 100%); }
+.thresholdSlider::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; margin-top: -4px; border: 2px solid var(--shell-accent); border-radius: 50%; background: var(--shell-card); }
+.thresholdSlider:hover:not(:disabled)::-webkit-slider-thumb { background: var(--shell-accent); }
+.thresholdSlider:disabled { cursor: default; }
 .credential { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--shell-border); border-radius: 5px; }
 @media (prefers-reduced-motion: reduce) { .connection summary::before { transition: none; } }
 

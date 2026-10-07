@@ -68,8 +68,31 @@ it('saves a Jev threshold without processing and reevaluates only on the explici
   const page = await browser.newPage()
   try {
     await mount(page); await openJev(page)
-    const threshold = page.locator('input[type="number"][min="0.5"]')
+    const threshold = page.getByRole('spinbutton', { name: 'Jev approval threshold', exact: true })
+    const slider = page.getByRole('slider', { name: 'Jev approval threshold', exact: true })
+    await slider.focus(); await slider.press('ArrowLeft')
+    await expect.poll(() => threshold.inputValue()).toBe('0.89')
+    await slider.press('End')
+    await expect.poll(() => threshold.inputValue()).toBe('1.00')
+    await slider.press('Home')
+    await expect.poll(() => threshold.inputValue()).toBe('0.50')
+    await threshold.fill('0.2'); await threshold.blur()
+    await expect.poll(() => threshold.inputValue()).toBe('0.50')
     await threshold.fill('0.85')
+    expect(await slider.inputValue()).toBe('0.85')
+    for (const theme of ['dark', 'planche']) {
+      await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme)
+      for (const width of [390, 1280]) {
+        await page.setViewportSize({ width, height: 900 })
+        const field = threshold.locator('xpath=ancestor::fieldset[1]')
+        await field.screenshot({ path: `artifacts/knowledge-threshold/${theme}-${width}.png` })
+        const sliderBounds = (await slider.boundingBox())!
+        const numberBounds = (await threshold.boundingBox())!
+        expect(sliderBounds.width).toBeGreaterThan(100)
+        expect(numberBounds.x).toBeGreaterThan(sliderBounds.x + sliderBounds.width)
+        expect(numberBounds.x + numberBounds.width).toBeLessThanOrEqual(width)
+      }
+    }
     await page.getByRole('checkbox', { name: 'Enable automatic review and publication', exact: true }).check()
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     expect(await page.evaluate(() => (window as any).config.automation.jev.threshold)).toBe(0.85)
