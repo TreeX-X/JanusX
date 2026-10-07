@@ -1,7 +1,7 @@
 /* Note: memory settings group compact controls in bordered cards — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md */
 .panel { display: flex; flex-direction: column; gap: 20px; min-height: 100%; min-width: 0; color: var(--shell-text); font-size: 12px; line-height: 1.5; }
-.section { display: grid; gap: 16px; min-width: 0; padding: 18px; border: 1px solid var(--shell-border); border-radius: 6px; background: transparent; color: var(--shell-text); font-size: 12px; line-height: 1.5; }
-/* Note: section 卡框线定界（同底 + 立框），planche 墨框见文末加法层 — see .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md */
+.section { display: grid; gap: 16px; min-width: 0; padding: 18px; border: 1px solid var(--shell-border-soft); border-radius: 6px; background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas)); color: var(--shell-text); font-size: 12px; line-height: 1.5; }
+/* Note: 设置内卡采用柔和层级 — see .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md */
 .sectionTitle { display: flex; align-items: center; gap: 7px; margin: 0; padding-bottom: 12px; border-bottom: 1px solid var(--shell-border-soft); color: var(--shell-text); font-size: 12px; font-weight: 600; line-height: 1.5; }
 .sectionTitle svg { color: var(--shell-muted); flex-shrink: 0; }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; min-height: 30px; }
@@ -38,8 +38,3 @@
 @media (max-width: 700px) { .row { gap: 8px; } .row > button[aria-haspopup] { width: 145px; } }
 @media (max-width: 480px) { .section { padding: 12px; gap: 12px; } .clientCard { grid-template-columns: minmax(0, 1fr); } .clientCard > button { justify-self: end; } }
 @media (prefers-reduced-motion: reduce) { .switchTrack::after { transition: none; } }
-
-/* ── planche：分组卡纸面墨框（加法层，dark 原样不动）── */
-:global([data-theme='planche']) .section {
-  border-color: var(--line, #1C343B);
-}

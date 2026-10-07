@@ -10,7 +10,8 @@
  *   2. 橙色是唯一强调色，只允许出现在 1px 边框、2px 选中条和文字上——不做填充色块。
  *      旧版把选中项、provider 卡片、badge、notice 全做成带边框的橙色/白色填充块，
  *      叠在一起就是"大量色块"的来源。
- *   3. 分组靠发丝线和留白，不靠嵌套的圆角容器。
+ *   3. 分组靠低对比发丝线、轻微底色和留白，弱于外壳与控件边界。
+ * Note: 设置内卡采用柔和层级 — see .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
  *
  * 遮罩与进出场动效不在这里：它们由 shared/ModalFrame.css 统一提供，
  * 本文件只保留设置中心自己的安全边距与主题覆写。
@@ -372,9 +373,9 @@
   gap: 24px;
   align-items: start;
   padding: 12px 14px;
-  border: 1px solid var(--shell-border);
+  border: 1px solid var(--shell-border-soft);
   border-radius: 6px;
-  background: transparent;
+  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
 }
 
 .generalLabelCol {
@@ -446,9 +447,9 @@
   width: 100%;
   min-width: 0;
   padding: 12px 14px;
-  border: 1px solid var(--shell-border);
+  border: 1px solid var(--shell-border-soft);
   border-radius: 6px;
-  background: transparent;
+  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
 }
 
 .lsCardHeader {
@@ -712,12 +713,6 @@
 
 :global([data-theme='planche']) .tabButtonActive::before {
   background: var(--planche-red, #D43D2A);
-}
-
-/* 分组卡框线定界：纸面同底 + 墨框（同 bp-node-card planche 层） */
-:global([data-theme='planche']) .generalRow,
-:global([data-theme='planche']) .lsCard {
-  border-color: var(--line, #1C343B);
 }
 
 :global([data-theme='planche']) .body::-webkit-scrollbar-thumb {

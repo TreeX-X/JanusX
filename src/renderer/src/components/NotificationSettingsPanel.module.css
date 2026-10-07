@@ -14,20 +14,18 @@
   color: var(--shell-text);
 }
 
-/* 每 section 一张框线卡，与通用页 generalRow 对齐：
-   padding 12px 14px / radius 6px / 同底立框，不靠填充分组 */
+/* 分组轮廓与通用页 generalRow 对齐，弱于输入控件和窗口外壳。 */
 .section {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid var(--shell-border);
+  border: 1px solid var(--shell-border-soft);
   border-radius: 6px;
-  background: transparent;
+  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
 }
 
 .section:last-of-type {
-  border-bottom: 1px solid var(--shell-border);
   padding-bottom: 12px;
 }
 
@@ -333,11 +331,6 @@
 :global([data-theme='planche']) .footer {
   background: var(--paper, #EFE4C5);
   backdrop-filter: none;
-}
-
-/* 分组卡框线定界：纸面同底 + 墨框 */
-:global([data-theme='planche']) .section {
-  border-color: var(--line, #1C343B);
 }
 
 :global([data-theme='planche']) .labelText {
