@@ -3,6 +3,113 @@ import { chromium, type Browser, type Page } from '@playwright/test'
 import { build } from 'esbuild'
 
 let browser: Browser, script: string, css: string
+it('separates blocked work, reviewable candidates and historical outcomes, and drops resolved attention items', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+  try {
+    await mount(page); await seedTasks(page)
+    await page.evaluate(async () => {
+      const w = window as any
+      const task = w.current.queue[0]
+      task.status = 'needs-review'
+      task.subjectState = { kind: 'candidate', target: { id: task.subject, type: 'fact', workspaceId: 'project', status: 'proposed' } }
+      w.current.queue.push({ ...task, id: 'blocked', stage: 'wikiGeneration', subject: 'topic', displayTitle: 'Unfinished handbook', reason: 'stage-not-configured', canRetry: false, subjectState: { kind: 'no-candidate' } })
+      w.current.tasks[1].status = 'needs-review'
+      w.current.tasks[1].subjectState = { kind: 'candidate', target: { id: 'old-internal-id', type: 'fact', workspaceId: 'project', status: 'applied' } }
+      await w.refresh()
+    })
+    await page.locator('#assistant [data-automation-summary]').getByRole('button', { name: 'View records', exact: true }).click()
+    await page.clock.runFor(1000)
+    const records = page.getByRole('region', { name: 'Processing records', exact: true })
+    const reviewable = records.locator('article').filter({ hasText: 'Backup policy' })
+    const blocked = records.locator('article').filter({ hasText: 'Unfinished handbook' })
+    const historical = records.locator('article').filter({ hasText: 'Old failure' })
+    await reviewable.getByText('Awaiting human review', { exact: true }).waitFor()
+    expect(await reviewable.getByRole('button', { name: 'Review in inbox' }).count()).toBe(1)
+    expect(await blocked.getByRole('button', { name: 'Review in inbox' }).count()).toBe(0)
+    await blocked.getByText('Processing blocked', { exact: true }).waitFor()
+    expect(await blocked.innerText()).toContain('no review candidate')
+    await historical.getByText('Incomplete at the time', { exact: true }).waitFor()
+    expect(await historical.innerText()).toContain('was published')
+    expect(await historical.getByRole('button', { name: 'Review again' }).count()).toBe(0)
+    expect(await historical.getByRole('button', { name: 'Review in inbox' }).count()).toBe(0)
+    await reviewable.getByRole('button', { name: 'View processing details' }).click()
+    await records.getByRole('button', { name: 'Needs attention', exact: true }).click()
+    await page.evaluate(async () => {
+      const w = window as any
+      w.current.queue = w.current.queue.filter(task => task.id !== 'current-failure')
+      w.current.tasks[0].status = 'needs-review'
+      w.current.tasks[0].subjectState = { kind: 'candidate', target: { id: 'internal-candidate', type: 'fact', workspaceId: 'project', status: 'rejected' } }
+      await w.refresh()
+    })
+    await expect.poll(() => reviewable.count()).toBe(0)
+    const detail = page.getByRole('region', { name: 'View processing details', exact: true })
+    expect(await detail.innerText()).toContain('was rejected')
+    expect(await detail.getByRole('button', { name: 'Review again' }).count()).toBe(0)
+    await page.evaluate(async () => { const w = window as any; w.current.queue[0].status = 'pending'; await w.refresh() })
+    await expect.poll(() => records.locator('article').count()).toBe(0)
+    await records.getByText('No current tasks match this filter.', { exact: true }).waitFor()
+    await records.getByRole('button', { name: 'All tasks', exact: true }).click()
+    await reviewable.waitFor()
+    for (const theme of ['dark', 'planche']) {
+      await page.evaluate(async theme => { document.documentElement.dataset.theme = theme; await (window as any).language('zh-CN') }, theme)
+      await page.screenshot({ path: `artifacts/knowledge-record-state/${theme}.png`, animations: 'disabled' })
+    }
+    await page.evaluate(async () => { const w = window as any; w.fail = true; await w.refresh() })
+    const staleDetail = page.getByRole('region', { name: '查看处理详情', exact: true })
+    expect(await staleDetail.innerText()).toContain('状态待刷新')
+    expect(await staleDetail.getByRole('button').count()).toBe(1)
+    expect(await staleDetail.innerText()).not.toContain('这是历史执行结果')
+  } finally { await page.close() }
+})
+
+it('revalidates inbox destinations and respects review availability independently of automation', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
+  try {
+    await mount(page); await seedTasks(page)
+    await page.evaluate(async () => {
+      const w = window as any
+      w.current.queue[0].subjectState = { kind: 'candidate', target: { id: 'internal-candidate', type: 'fact', workspaceId: 'project', status: 'proposed' } }
+      w.items = [{ id: 'internal-candidate', type: 'fact', status: 'proposed', derivation: 'llm', evidence: { observationIds: [], sources: [], quotes: [] }, fact: { id: 'fact', content: 'Exact inbox policy', kind: 'procedure', scope: 'project', status: 'proposed', confidence: 0, concepts: [], files: [], tags: [], version: 1, provenance: { workspaceId: 'other', workspaceName: 'Other', source: 'manual', createdAt: '2026-10-06T01:00:00Z', sourceObservationIds: [], fileRefs: [] } } }]
+      w.electron.knowledge.listCandidates = async () => {
+        if (w.failCandidates) throw Error('offline')
+        if (w.waitCandidates) { w.waitCandidates = false; await new Promise(resolve => { w.finishCandidates = resolve }) }
+        return structuredClone(w.items)
+      }
+      await w.refresh()
+    })
+    await page.locator('#assistant [data-automation-summary]').getByRole('button', { name: 'View records', exact: true }).click()
+    await page.clock.runFor(1000)
+    const records = page.getByRole('region', { name: 'Processing records', exact: true })
+    const card = records.locator('article').filter({ hasText: 'Backup policy' })
+    const open = card.getByRole('button', { name: 'Review in inbox' })
+
+    await open.click()
+    await card.getByRole('alert').waitFor()
+    expect(await records.isVisible()).toBe(true)
+    await page.evaluate(() => { const w = window as any; w.items[0].fact.provenance.workspaceId = 'project'; w.items[0].status = 'applied' })
+    await open.click()
+    await card.getByRole('alert').waitFor()
+    expect(await records.isVisible()).toBe(true)
+    await page.evaluate(() => { const w = window as any; w.items[0].status = 'proposed'; w.failCandidates = true })
+    await open.click()
+    await card.getByRole('alert').waitFor()
+    await page.evaluate(async () => { const w = window as any; w.failCandidates = false; w.current.reviewEnabled = false; await w.refresh() })
+    expect(await open.isDisabled()).toBe(true)
+    await page.evaluate(async () => { const w = window as any; w.current.reviewEnabled = true; w.current.enabled = false; await w.refresh() })
+    expect(await open.isEnabled()).toBe(true)
+    await page.evaluate(() => { (window as any).waitCandidates = true })
+    await open.click()
+    await expect.poll(() => page.evaluate(() => typeof (window as any).finishCandidates)).toBe('function')
+    await page.getByRole('tab', { name: 'Operation audit', exact: true }).click()
+    await page.evaluate(() => (window as any).finishCandidates())
+    expect(await page.getByRole('tab', { name: 'Operation audit', exact: true }).getAttribute('aria-selected')).toBe('true')
+    await page.getByRole('tab', { name: 'Processing records', exact: true }).click()
+    await open.click()
+    await records.waitFor({ state: 'detached' })
+    await expect.poll(() => page.getByText('Exact inbox policy', { exact: true }).count()).toBeGreaterThan(0)
+  } finally { await page.close() }
+})
+
 it('keeps retries local to one card and opens readable processing details with scores', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' })
   try {

@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 import type { CandidateFact, CandidateWikiPatch, MemoryFact, Observation, WikiPage, WikiPageRelation } from '../../shared/knowledge'
 import { automationAction, jevThreshold, type AutomationRetryInput, defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeAutomationStatus,
-  type KnowledgeAutomationTask, type KnowledgeStage, type KnowledgeModelReview } from '../../shared/knowledge-automation'
+  type KnowledgeAutomationTask, type KnowledgeStage, type KnowledgeModelReview, type AutomationSubjectState } from '../../shared/knowledge-automation'
 import { reviewCandidateInput, reviewCandidateSnapshot } from '../../shared/review-candidate-snapshot'
 import { configService } from '../config/service'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
@@ -41,6 +41,19 @@ const ledgerSchema = z.object({ schema: z.literal(1), backfillThrough: z.string(
 type Ledger = z.infer<typeof ledgerSchema>
 interface Snapshot { observations: Observation[]; candidates: CandidateFact[]; patches: CandidateWikiPatch[]; facts: MemoryFact[]; pages: WikiPage[] }
 interface Plan { task: KnowledgeAutomationTask; observation?: Observation; observations?: Observation[]; candidate?: CandidateFact; patch?: CandidateWikiPatch; facts?: MemoryFact[]; page?: WikiPage; title?: string; topicKey?: string; generationHash?: string }
+// Note: current candidate state explains historical outcomes without rewriting them; see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+function subjectState(task: KnowledgeAutomationTask, snapshot: Snapshot): AutomationSubjectState {
+  if (task.stage === 'extraction') return { kind: task.status === 'succeeded' ? 'extraction-output' : 'no-candidate' }
+  const id = task.stage === 'wikiGeneration' ? `auto-wiki:${task.id}` : task.subject
+  const matches = task.stage === 'entryReview'
+    ? snapshot.candidates.filter(item => item.id === id && item.fact.provenance.workspaceId === task.workspaceId && factScope(item.fact) === 'project')
+    : snapshot.patches.filter(item => item.id === id && item.provenance.workspaceId === task.workspaceId)
+  if (matches.length === 1) {
+    const candidate = matches[0]
+    return { kind: 'candidate', target: { id: candidate.id, type: candidate.type, workspaceId: task.workspaceId, status: candidate.status } }
+  }
+  return { kind: !matches.length && task.stage === 'wikiGeneration' && task.status !== 'succeeded' ? 'no-candidate' : 'unavailable' }
+}
 export interface AutomationDeps {
   settings(): Promise<{ allowed: boolean; reviewEnabled?: boolean; config: KnowledgeAutomationSettings }>
   snapshot(): Promise<Snapshot>
@@ -127,6 +140,7 @@ export class KnowledgeAutomationService {
   async shutdown(): Promise<void> { this.closed = true; this.stop(); await Promise.all([stopKnowledgeLocalModel(), cancelKnowledgeLocalSetup()]) }
   async status(): Promise<KnowledgeAutomationStatus> {
     const [ledger, settings] = await Promise.all([this.read(), this.deps.settings()])
+    const snapshot = settings.reviewEnabled !== false ? await this.deps.snapshot() : undefined
     const counts: KnowledgeAutomationStatus['counts'] = { pending: 0, running: 0, succeeded: 0, 'needs-review': 0, failed: 0, cancelled: 0 }
     const engineeringTasks = ledger.tasks.filter(task => task.workspaceId !== 'user')
     for (const task of engineeringTasks) counts[task.status]++
@@ -138,9 +152,9 @@ export class KnowledgeAutomationService {
     })) as KnowledgeAutomationStatus['stages']
     const queue: KnowledgeAutomationStatus['queue'] = []
     const titles = new Map<string, string>()
-    if (settings.allowed) {
+    if (settings.allowed && snapshot) {
       const tasks = new Map(ledger.tasks.map(task => [task.id, task]))
-      for (const plan of (await this.plans(settings.config, ledger)).values()) {
+      for (const plan of (await this.plans(settings.config, ledger, snapshot)).values()) {
         const title = safeReason(plan.candidate?.fact.content ?? plan.patch?.title ?? plan.title ?? plan.observation?.summary ?? plan.observation?.content ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, 96)
         if (title) titles.set(plan.task.id, title)
         const task = tasks.get(plan.task.id)
@@ -156,13 +170,15 @@ export class KnowledgeAutomationService {
           candidateHash: candidate ? (await reviewCandidateInput(candidate)).candidateHash : undefined,
           reason: stages[plan.task.stage] !== 'automatic' ? 'stage-not-configured' : currentFailure ? safeReason(task.reason ?? '') : undefined,
           scores: task?.scores,
+          subjectState: snapshot ? subjectState(task ?? plan.task, snapshot) : undefined,
           canRetry: Boolean(currentFailure && stages[plan.task.stage] === 'automatic' && automationAction(task.reason) !== 'manual'),
         })
       }
     }
     return { reviewStateVersion: 1, reviewEnabled: settings.reviewEnabled ?? true, enabledSince: settings.config.enabledSince, running: this.running !== null, enabled: settings.allowed, stages, queue, counts, total: engineeringTasks.length,
       lastCompletedAt: engineeringTasks.filter(task => task.status === 'succeeded' && Number.isFinite(Date.parse(task.updatedAt))).map(task => task.updatedAt).sort((a, b) => Date.parse(b) - Date.parse(a))[0],
-      tasks: [...engineeringTasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200).map(task => ({ ...task, displayTitle: titles.get(task.id) || task.displayTitle })) }
+      tasks: [...engineeringTasks].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 200).map(task => ({ ...task, displayTitle: titles.get(task.id) || task.displayTitle,
+        subjectState: snapshot ? subjectState(task, snapshot) : undefined })) }
   }
   async retry(input: string | AutomationRetryInput): Promise<string> {
     const settings = await this.deps.settings()
@@ -222,8 +238,8 @@ export class KnowledgeAutomationService {
     this.running = this.process(this.controller.signal, taskId).finally(() => { this.running = null; this.controller = null })
     return this.running
   }
-  private async plans(config: KnowledgeAutomationSettings, ledger: Ledger): Promise<Map<string, Plan>> {
-    const snapshot = await this.deps.snapshot()
+  private async plans(config: KnowledgeAutomationSettings, ledger: Ledger, snapshot?: Snapshot): Promise<Map<string, Plan>> {
+    snapshot ??= await this.deps.snapshot()
     const now = this.deps.now()
     const plans = new Map<string, Plan>()
     const eligibleTime = (created: string) => created >= (config.enabledSince ?? new Date(now).toISOString()) || !!ledger.backfillThrough && created <= ledger.backfillThrough

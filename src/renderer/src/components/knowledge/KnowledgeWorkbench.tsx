@@ -36,9 +36,9 @@ import { processingRecords, type ProcessingRecord, AutomationRecords } from './A
 import { AuditRecords } from './AuditRecords'
 import { AuditDetail } from './AuditDetail'
 import type { AuditRecord } from '../../../../shared/ipc/knowledge'
-import { useKnowledgeAutomation } from '../../services/knowledge-automation'
+import { refreshKnowledgeAutomation, useKnowledgeAutomation } from '../../services/knowledge-automation'
 import { assertCandidateCanReview } from './candidateReviewState'
-import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
+import type { AutomationReviewTarget, KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
 import { NoteWikiEditor, WikiPageDetail } from './NoteWikiLinks'
 import { KnowledgeGraphCanvas } from './KnowledgeGraphCanvas'
 import { buildKnowledgeGraphView, publishedGraphPages, graphWikiId, recordForGraphNode, type KnowledgeGraphNode } from './knowledgeGraph'
@@ -145,7 +145,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   const [selectedSearch, setSelectedSearch] = useState<InspectorRecord | null>(null)
   const [selectedProcessing, setSelectedProcessing] = useState<ProcessingRecord | null>(null)
   const [selectedAudit, setSelectedAudit] = useState<AuditRecord | null>(null)
-  useEffect(() => { setSelectedAudit(null); setSelectedProcessing(null) }, [domain, tab, recordTab, isOpen])
+  const processingNavigation = useRef(0)
+  useEffect(() => { processingNavigation.current++; setSelectedAudit(null); setSelectedProcessing(null) }, [domain, tab, recordTab, isOpen])
   const [query, setQuery] = useState('')
   const [searchCards, setSearchCards] = useState<KnowledgeCard[]>([])
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'unavailable'>('idle')
@@ -270,7 +271,8 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   // collapses in parallel while the last record fades/slides out.
   const auditSelected = tab === 'audit' && recordTab === 'audit' ? selectedAudit : null
   const processingSelected = tab === 'audit' && recordTab === 'processing' && selectedProcessing
-    ? (automation ? processingRecords(automation).find(task => task.id === selectedProcessing.id) : null) ?? selectedProcessing : null
+    ? (automation ? processingRecords(automation).find(task => task.id === selectedProcessing.id) : null)
+      ?? { ...selectedProcessing, current: undefined, canRetry: false, reviewEnabled: false, subjectState: undefined } : null
   const detailOpen = domain === 'engineering' && (selected != null || auditSelected != null || processingSelected != null)
   const clearDetail = useCallback(() => {
     const auditId = selectedAudit?.id
@@ -303,8 +305,20 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
   if (auditSelected) previousAudit.current = auditSelected
   const shownAudit = auditSelected ?? (detailAnim.rendered && tab === 'audit' && recordTab === 'audit' ? previousAudit.current : null)
 
-  const openProcessingCandidate = (id: string) => {
-    setSelectedProcessing(null); setTab('inbox'); setSelectedId(id)
+  const openProcessingCandidate = async (target: AutomationReviewTarget) => {
+    const request = ++loadGeneration.current
+    const navigation = ++processingNavigation.current
+    const next = await loadKnowledgeWorkbenchSnapshot(true)
+    if (request !== loadGeneration.current || navigation !== processingNavigation.current) throw new Error('stale-candidate-navigation')
+    setSnapshot(next)
+    const matches = candidatesForTab(next, 'inbox', 'engineering').filter(candidate => candidate.id === target.id)
+    const candidate = matches.length === 1 ? matches[0] : undefined
+    if (next.usingDemoData || !candidate || candidate.type !== target.type
+      || (candidate.type === 'fact' ? candidate.fact.provenance.workspaceId : candidate.provenance.workspaceId) !== target.workspaceId) {
+      await refreshKnowledgeAutomation()
+      throw new Error('candidate-no-longer-in-inbox')
+    }
+    setLoadState('idle'); setSelectedProcessing(null); setTab('inbox'); setSelectedId(target.id)
   }
   const activateTab = (nextTab: KnowledgeWorkbenchTab) => {
     setTab(nextTab)

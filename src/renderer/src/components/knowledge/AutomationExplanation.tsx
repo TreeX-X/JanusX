@@ -18,13 +18,13 @@ export function automationReason(reason?: string, status?: string) {
   return 'unknown'
 }
 
-export function AutomationExplanation({ reason, status, scores, detail = false }: { reason?: string; status?: string; scores?: ReviewScores; detail?: boolean }) {
+export function AutomationExplanation({ reason, status, scores, detail = false, showNext = true }: { reason?: string; status?: string; scores?: ReviewScores; detail?: boolean; showNext?: boolean }) {
   const { t } = useI18n('knowledge')
   const key = automationReason(reason, status)
   const proseReason = reason && /\s/.test(reason) && !/^[a-z]+-[a-z-]+/.test(reason)
   return <section aria-label={t('knowledge:automationExplain.title')}>
     <p>{proseReason ? reason : t(`knowledge:automationExplain.${key}`)}</p>
-    <p>{t(`knowledge:automationExplain.${key}Next`)}</p>
+    {showNext && <p>{t(`knowledge:automationExplain.${key}Next`)}</p>}
     {scores ? <details open={detail || undefined}><summary>{t('knowledge:automationExplain.scores')}</summary>
       <p>{t('knowledge:automationExplain.threshold')}: {scores.threshold.toFixed(2)}</p>
       <ul>{([['support', scores.support], ['consistent', scores.consistent], ...scores.coverage.map(value => ['coverage', value] as const)] as const).map(([label, value], index) => <li key={index}>

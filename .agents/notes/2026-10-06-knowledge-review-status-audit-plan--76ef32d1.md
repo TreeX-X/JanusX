@@ -11,7 +11,7 @@ relations:
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
   - type: implements
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
-    criteria: [AC-4, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-22, AC-23]
+    criteria: [AC-4, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-22, AC-23, AC-24]
   - type: governed-by
     target: note://972afef3-2fc7-49de-a3ee-7e041225d28c/908d675a-aec9-4791-8c8b-05f1e4c923ca
 work:
@@ -57,6 +57,8 @@ work:
       criterionId: AC-22
     - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
       criterionId: AC-23
+    - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
+      criterionId: AC-24
   verification:
     - id: V-1
       kind: command
@@ -87,7 +89,7 @@ execution:
     inputs:
       - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b
         contentHash: d6bc21cdfff98ebbe5111aa5ca56442ff9487d417c11d0999a539cea80761a1d
-        criteria: [AC-4, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-22, AC-23]
+        criteria: [AC-4, AC-5, AC-6, AC-7, AC-8, AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-20, AC-21, AC-22, AC-23, AC-24]
       - uri: note://972afef3-2fc7-49de-a3ee-7e041225d28c/908d675a-aec9-4791-8c8b-05f1e4c923ca
         contentHash: 2ce421a4c6ac3f34fbbd83d424ddb3792ec49a85e80384f2dcf072fc9f542445
   attempt: 1
@@ -98,6 +100,8 @@ execution:
 # 知识库审核、图谱、状态与审计优化实施计划
 
 ## Scope
+
+2026-10-07 接续父需求 AC-24，修复处理记录与收件箱的状态关系；状态接口追加只读候选关联，卡片、详情与审核跳转共用关联结果。保留任务原始执行结果，不修改在线数据；基线提交为 9b398db。
 
 2026-10-07 接续实施父需求 AC-20～AC-23：可调 Jev 阈值及评分留存、候选失败说明、单项重审和证据恢复、历史候选准入、记录卡片和可读详情。沿用本 Note 与父需求，不修改用户现存知识数据；运行态升级需要后续启动新构建。范围包含 src/main/sessions/knowledge-transcript.ts、src/main/knowledge/agent-turn-recorder.ts 和阈值设置界面。验证使用隔离存储的模型、自动化、恢复、组件回归及 TypeScript、i18n、构建检查。
 
@@ -177,6 +181,8 @@ S4 采用新增 `knowledge:audit:page`，旧 `listAudit` 保持数组返回，�
 | P3 增量个人证据合并 | 父需求已解决相同历史重放；新增来源改变候选身份时的跨候选合并仍未实现。 | 收集重复提议的独立事件样例，设计保留来源与拒绝意图的合并规则；不得放宽已交付的偏好准入。 |
 ## Alternatives considered
 
+记录区保留持久化尝试结果，并只读叠加候选现状。直接把历史失败改写为成功可以简化当前标签，但会抹掉失败原因并污染最近成功时间；只修改“需要人工处理”的文案则无法解决无候选入口及已处理对象滞留。宿主复用一次当前快照计算计划和关联，追加每条记录的类型、工作区与候选状态；读取成本包含关闭自动化后的候选状态查询，旧宿主缺字段时显示无法核对而不给出审核入口。
+
 把所有改动直接追加到需求正文最省文件，但会把问题、验收和执行状态混在一起；保留需求作为行为依据，以本任务维护唯一实施计划。一次重写整个知识工作台能统一样式，却扩大到已有可用的模型设置、个人画像和 Wiki 历史；本任务按 W1、G1/G2 及 S1～S5 复用现有模块。只修复混合图的连线无法满足 Wiki 主图定位，先明确 Wiki 关系与发布契约再完成主图，锚点故障可独立修复。
 
 S1 继续复用旧评分和仅按候选 ID 分类最省改动，但旧任务不能证明新版本的审核状态；采用当前计划与候选 hash 绑定，并共享读取。代价是旧宿主没有版本字段时界面只能显示未知状态，活动订阅仍须周期性读取计划。共享订阅运行时每 2 秒读取，空闲或失败时每 10 秒读取；隐藏或最后一个订阅离开时停止。完全删除旧评分、关系格式与 API 可缩小兼容面，却会损失审计和存量处置入口；保留历史读取与维护能力，新提议统一关闭。W1 提供同版本 Wiki 关系后，再评估旧图格式的迁移范围。
@@ -206,6 +212,8 @@ G2 继续使用原圆点和横向分量排列的维护成本最低，但局部�
 - [x] [图谱阅读与计数 AC-17](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-17)。
 - [x] [关系去重与端点保护 AC-18](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-18)。
 - [x] [沉淀与持续更新 AC-19](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-19)。
+
+- [x] [记录与收件箱一致性 AC-24](note://972afef3-2fc7-49de-a3ee-7e041225d28c/81b578b4-5346-486c-9b93-e626e4bb636b#AC-24)。
 
 ## Verification
 
@@ -347,3 +355,13 @@ S5 文档检查使用 npm run check:notes，247 篇 Note、0 errors、27 项既�
 2026-10-07：当前任务卡片的操作区统一为 30px 最小高度、112px 最小宽度及相同内边距，详情与重新审核配套 13px 图标。嵌套操作容器仅在卡片内使用 display: contents，消除双层顶部间距及默认拉伸造成的按钮尺寸差异；反馈文字独占下一行，详情页仍保留独立操作容器。卡片标题、阶段时间、原因、下一步与操作区分层，状态使用带文字和圆点的主题色标签，选中态保留强调边框。复用现有任务卡片，因此近期历史记录也保持同一视觉规范。相较另建按钮组件或重写动作状态，本次局部样式调整保留逐任务重审行为与已有组件边界。
 
 验证：npm run test:unit -- --run tests/unit/knowledge-automation-summary-ui.test.ts --maxWorkers=2 --reporter=dot，14 项全部通过；覆盖两按钮等高等宽、同排对齐、卡片无横向溢出、单项重审与反馈。人工检查 artifacts/knowledge-task-cards/ 下 dark-320.png、planche-640.png；双主题均生成 320px 和 640px 卡片截图。npm run typecheck:strict-unused 与 AutomationRecords.tsx 的 ESLint 通过。
+
+2026-10-07：AC-24 按 xdo 实现并自检。宿主从同一快照读取当前计划和候选状态，按类型、工作区和 ID 关联；Wiki 生成结果使用 auto-wiki 任务标识，不把主题 slug 当成候选 ID。候选批准、入库、拒绝或不可用后退出当前审核任务，历史保留原失败原因与分数，另列最新去向。当前待处理筛选只包含队列中的 needs-review/failed，重试转入排队后移出筛选。详情在状态失联或历史窗口移出后关闭所有旧动作。
+
+卡片分别显示待人工审核、处理受阻、当时未完成；已处理候选没有审核入口，无候选任务解释为何未进入收件箱。审核入口重新读取工程快照，验证 proposed 状态、类型、工作区与唯一 ID；读取失败或对象变化留在原页，页面切换使迟到导航失效。人工审核门禁与自动化开关分别生效。历史原因保留但不附加失效的“下一步”，计数明确标注为记录结果。
+
+验证命令：npm run test:unit -- --run tests/unit/knowledge/automation-service.test.ts tests/unit/knowledge-automation-summary-ui.test.ts tests/unit/knowledge-review-state-ui.test.ts tests/unit/memory-review-ui.test.ts tests/unit/knowledge-automation-ui.test.ts tests/unit/assistant-ui.test.ts tests/unit/knowledge-ipc-contract.test.ts --maxWorkers=2 --reporter=dot。7 个文件、123 项全部通过，日志 artifacts/knowledge-record-state-regression.log。覆盖候选四种状态、缺失及工作区隔离、提取和 Wiki 无候选、原日志不改写、当前筛选退出、详情更新、失败导航与迟到响应。人工检查 artifacts/knowledge-record-state/dark.png 和 planche.png 的中文当前/历史卡片及详情；既有双主题 320/390/640/1280px 浏览器布局回归同时通过。类型检查、i18n 对齐、包边界、Note 检查和 build:check 通过；构建日志 artifacts/knowledge-record-state-build.log，产物 artifacts/build-check。Note 检查为 251 篇、0 错误和 27 项既有外部链接诊断。
+
+本次 taskContractHash 为 4608586d2dd22894c1b3f67a3831cad3091fa0c0a18c08ebe827c3e9498edc4a，父需求 LF 字节 SHA-256 为 9346a9f1540ec8c16d8c7afde8fd647efd355c383306c265a923c5cae5e0af40，验收为 AC-24。没有修改用户在线知识存储或当前便携程序；没有调用真实 Jev 服务。提取可能产生多个候选，本接口不伪造一对一候选链接；关联对象已删除时只报告不可用，不猜测删除原因。
+
+收尾验证补充：状态读取失败或已选任务退出最近历史窗口时，详情标注“状态待刷新”，不将未知状态推断为历史，也不保留审核或重试操作。knowledge-automation-summary-ui.test.ts 的 16 项浏览器测试再次全部通过，类型检查、最终组件 ESLint、i18n 和 Note 检查再次通过；git diff --check 通过，最终 build:check 再次通过。

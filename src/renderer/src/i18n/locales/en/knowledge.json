@@ -531,7 +531,7 @@
     "partial": "Partly automatic",
     "unconfigured": "Automation enabled · review setup needed",
     "idle": "Waiting for new material",
-    "waitingForReview": "Waiting for human attention",
+    "waitingForReview": "Automation has items needing attention",
     "queued": "Tasks queued · {{count}}",
     "runningStage": "Processing: {{stage}}",
     "attention": "Current tasks: attention {{review}} · failed {{failed}}",
@@ -542,7 +542,7 @@
       "unconfigured": "Setup incomplete",
       "rules-only": "Rule extraction (automatic)"
     },
-    "taskCountsHint": "Historical task counts: one source can produce several tasks. These are not published-item counts.",
+    "taskCountsHint": "These counts summarize recorded execution outcomes, including history; they are not inbox counts.",
     "title": "Knowledge automation",
     "description": "Publish project knowledge and Wiki after review. People handle missing evidence, conflicts and model failures. Personal memory remains manually reviewed.",
     "enable": "Enable automatic review and publication",
@@ -621,7 +621,7 @@
     "progress": "Automation progress",
     "active": "Background processing enabled",
     "paused": "Automatic processing is off",
-    "counts": "Pending {{pending}} · Running {{running}} · Complete {{succeeded}} · Review {{needs-review}} · Failed {{failed}}",
+    "counts": "Recorded outcomes: pending {{pending}} · running {{running}} · completed {{succeeded}} · blocked {{needs-review}} · failed {{failed}}",
     "run": "Run once now",
     "backfill": "Process existing backlog",
     "backfillHint": "Only new material since enablement is processed by default. Backfill includes existing project material and uses the selected models; external API charges may apply.",
@@ -958,5 +958,27 @@
     "actorAutomatic": "Automation",
     "auditSummary": "{{actor}} · {{action}}",
     "configured": "Open automation settings"
+  },
+  "processing": {
+    "awaitingReview": "Awaiting human review",
+    "blocked": "Processing blocked",
+    "historicalIncomplete": "Incomplete at the time",
+    "pastResult": "Outcome at the time",
+    "currentHint": "Current tasks include extraction, generation and review. Only created candidates awaiting review appear in the inbox.",
+    "historyHint": "This is a historical outcome, excluded from current attention items. The latest candidate state appears below.",
+    "unverified": "The linked candidate could not be verified. Refresh the status to check again.",
+    "no-candidate": "This task has no review candidate to open. Candidates appear in the inbox after they are created.",
+    "unavailable": "The linked candidate is unavailable; it may have been removed or its source withdrawn. This record is retained for reference.",
+    "extraction-output": "Extraction may produce several candidates. Check the inbox for content still awaiting review.",
+    "openInbox": "Review in inbox",
+    "targetChanged": "Could not open the linked candidate. It may have been handled, become unavailable, or failed to load. Refresh and check again.",
+    "candidate": {
+      "proposed": "The linked candidate still awaits review and can be opened in the inbox.",
+      "approved": "The linked candidate was approved and is no longer an inbox item.",
+      "applied": "The linked candidate was published and is no longer an inbox item.",
+      "rejected": "The linked candidate was rejected and is no longer an inbox item."
+    },
+    "noCandidateHistory": "This historical task has no linked candidate to review in the inbox.",
+    "statusUnavailable": "Status needs refreshing"
   }
 }

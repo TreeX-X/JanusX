@@ -1,4 +1,6 @@
 // Note: explainable review keeps scores and targeted actions — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+import type { CandidateStatus } from './knowledge'
+
 export function jevThreshold(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0.5 && value <= 1 ? value : 0.9
 }
@@ -108,6 +110,10 @@ export function normalizeKnowledgeAutomation(value: unknown): KnowledgeAutomatio
 }
 
 export type AutomationTaskStatus = 'pending' | 'running' | 'succeeded' | 'needs-review' | 'failed' | 'cancelled'
+export interface AutomationReviewTarget { id: string; type: 'fact' | 'wiki-patch'; workspaceId: string; status: CandidateStatus }
+/** Read-only current object state, separate from the persisted outcome of an attempt. */
+export type AutomationSubjectState = { kind: 'candidate'; target: AutomationReviewTarget }
+  | { kind: 'no-candidate' | 'unavailable' | 'extraction-output' }
 export interface KnowledgeAutomationTask {
   id: string
   stage: KnowledgeStage
@@ -148,8 +154,9 @@ export interface KnowledgeAutomationStatus {
     reason?: string
     canRetry?: boolean
     scores?: ReviewScores
+    subjectState?: AutomationSubjectState
   }>
-  tasks: Array<KnowledgeAutomationTask & { displayTitle?: string }>
+  tasks: Array<KnowledgeAutomationTask & { subjectState?: AutomationSubjectState }>
   /** Actual successful task update, never a fabricated start time. */
   lastCompletedAt?: string
   total: number

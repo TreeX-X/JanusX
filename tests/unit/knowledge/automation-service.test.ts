@@ -58,6 +58,57 @@ async function candidate(index: number, concept = 'workflow'): Promise<Candidate
 }
 async function facts(items: MemoryFact[]) { await mkdir(join(root, 'facts'), { recursive: true }); await writeFile(join(root, 'facts/facts.jsonl'), items.map(item => JSON.stringify(item)).join('\n') + '\n') }
 describe('durable knowledge automation', () => {
+  it('projects resolved candidates beside immutable failures and removes them from current work without running automation', async () => {
+    const item = await candidate(1)
+    review.mockResolvedValue({ verdict: 'uncertain', reason: 'evidence-coverage-or-conflict-needs-review', complete: false, conflict: false, coveredIds: [] })
+    await service.run()
+    const path = join(root, 'processing/automation-tasks.json')
+    const persisted = await readFile(path, 'utf8')
+    const snapshot = await deps.snapshot()
+    deps.snapshot = vi.fn(async () => snapshot)
+    const current = (await service.status()).queue.find(task => task.subject === item.id)!
+    expect(current.subjectState).toEqual({ kind: 'candidate', target: { id: item.id, type: 'fact', workspaceId: 'project', status: 'proposed' } })
+    for (const state of ['approved', 'applied', 'rejected'] as const) {
+      snapshot.candidates[0].status = state
+      const status = await service.status()
+      expect(status.queue.some(task => task.subject === item.id)).toBe(false)
+      expect(status.tasks.find(task => task.id === current.id)).toMatchObject({ status: 'needs-review', subjectState: { kind: 'candidate', target: { status: state } } })
+    }
+    snapshot.candidates[0].fact.provenance.workspaceId = 'different-workspace'
+    expect((await service.status()).tasks.find(task => task.id === current.id)?.subjectState).toEqual({ kind: 'unavailable' })
+    snapshot.candidates = []
+    expect((await service.status()).tasks.find(task => task.id === current.id)?.subjectState).toEqual({ kind: 'unavailable' })
+    expect(await readFile(path, 'utf8')).toBe(persisted)
+  })
+
+  it('distinguishes missing generation output from exact wiki candidates and hides object state when review closes', async () => {
+    await candidate(1)
+    review.mockResolvedValue({ verdict: 'uncertain', reason: 'source-needs-human-review', complete: false, conflict: false, coveredIds: [] })
+    await service.run()
+    const path = join(root, 'processing/automation-tasks.json')
+    const ledger = JSON.parse(await readFile(path, 'utf8'))
+    ledger.tasks.push({ ...ledger.tasks[0], id: 'generation', stage: 'wikiGeneration', subject: 'topic' },
+      { ...ledger.tasks[0], id: 'extraction', stage: 'extraction', subject: 'source' },
+      { ...ledger.tasks[0], id: 'wiki-review', stage: 'wikiReview', subject: 'draft' })
+    await writeFile(path, JSON.stringify(ledger))
+    const snapshot = await deps.snapshot()
+    deps.snapshot = vi.fn(async () => snapshot)
+    const state = await service.status()
+    expect(state.tasks.find(task => task.id === 'generation')?.subjectState).toEqual({ kind: 'no-candidate' })
+    expect(state.tasks.find(task => task.id === 'extraction')?.subjectState).toEqual({ kind: 'no-candidate' })
+    expect(state.tasks.find(task => task.id === 'wiki-review')?.subjectState).toEqual({ kind: 'unavailable' })
+    const patch = { id: 'auto-wiki:generation', type: 'wiki-patch', status: 'rejected', provenance: { workspaceId: 'project' } } as CandidateWikiPatch
+    snapshot.patches.push(patch, { ...patch, id: 'draft' })
+    for (const id of ['generation', 'wiki-review']) expect((await service.status()).tasks.find(task => task.id === id)?.subjectState)
+      .toMatchObject({ kind: 'candidate', target: { type: 'wiki-patch', workspaceId: 'project', status: 'rejected' } })
+    allowed = false
+    expect((await service.status()).tasks.find(task => task.id === 'generation')?.subjectState?.kind).toBe('candidate')
+    deps.settings = async () => ({ allowed: false, reviewEnabled: false, config })
+    vi.mocked(deps.snapshot).mockClear()
+    expect((await service.status()).tasks.every(task => task.subjectState === undefined)).toBe(true)
+    expect(deps.snapshot).not.toHaveBeenCalled()
+  })
+
   it('recovers a missing OpenCode turn from its database before extracting with the real capture pipeline', async () => {
     const { DatabaseSync } = await import('node:sqlite')
     const path = join(root, 'opencode.db')

@@ -531,7 +531,7 @@
     "partial": "部分自动处理已开启",
     "unconfigured": "自动处理已开启 · 审核待配置",
     "idle": "等待新资料",
-    "waitingForReview": "等待人工处理",
+    "waitingForReview": "自动处理有待解决事项",
     "queued": "排队 {{count}} 项任务",
     "runningStage": "正在处理：{{stage}}",
     "attention": "当前任务：{{review}} 项需人工处理 · {{failed}} 项失败",
@@ -542,7 +542,7 @@
       "unconfigured": "配置未完整",
       "rules-only": "规则提取（自动）"
     },
-    "taskCountsHint": "以下为历史处理任务数；一份资料可产生多个任务，不等于入库条数。",
+    "taskCountsHint": "以下计数汇总已记录的执行结果，包含历史，不是收件箱待审核数量。",
     "title": "知识库自动处理",
     "description": "审核通过的项目知识条目和 Wiki 自动入库；来源不足、冲突和模型故障交由人工处理。个人记忆继续人工审核。",
     "enable": "启用自动审核与入库",
@@ -621,7 +621,7 @@
     "progress": "自动处理进度",
     "active": "后台自动处理已开启",
     "paused": "自动处理未启用",
-    "counts": "待处理 {{pending}} · 处理中 {{running}} · 完成 {{succeeded}} · 待审核 {{needs-review}} · 失败 {{failed}}",
+    "counts": "记录结果：排队 {{pending}} · 处理中 {{running}} · 完成 {{succeeded}} · 受阻 {{needs-review}} · 失败 {{failed}}",
     "run": "立即运行一次",
     "backfill": "处理历史积压",
     "backfillHint": "默认仅处理启用后的新资料。处理历史积压会纳入现有项目资料，并使用所选模型，外部接口可能产生费用。",
@@ -958,5 +958,27 @@
     "actorAutomatic": "自动化",
     "auditSummary": "{{actor}} · {{action}}",
     "configured": "前往自动化设置"
+  },
+  "processing": {
+    "awaitingReview": "待人工审核",
+    "blocked": "处理受阻",
+    "historicalIncomplete": "当时未完成",
+    "pastResult": "当时结果",
+    "currentHint": "当前任务包含提取、生成和审核；只有已生成且待审核的候选才会出现在收件箱。",
+    "historyHint": "这是历史执行结果，不计入当前待处理；候选的最新状态见下方。",
+    "unverified": "暂时无法核对关联候选，请刷新状态后查看。",
+    "no-candidate": "此任务尚无可直接打开的审核候选；候选生成后才会出现在收件箱中。",
+    "unavailable": "关联候选已不可用，可能已移除或来源已撤回；此记录仅供追溯。",
+    "extraction-output": "提取任务可能产生多条候选，请在收件箱查看仍待审核的内容。",
+    "openInbox": "去收件箱审核",
+    "targetChanged": "未能打开对应候选：它可能已处理、不可用，或读取失败。请刷新后查看。",
+    "candidate": {
+      "proposed": "关联候选仍待审核，可前往收件箱处理。",
+      "approved": "关联候选已获批准，不再属于收件箱待办。",
+      "applied": "关联候选已入库，不再属于收件箱待办。",
+      "rejected": "关联候选已被拒绝，不再属于收件箱待办。"
+    },
+    "noCandidateHistory": "这条历史任务没有关联的候选可供收件箱审核。",
+    "statusUnavailable": "状态待刷新"
   }
 }
