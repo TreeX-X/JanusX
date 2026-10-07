@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { ArrowUp, LoaderCircle, Square } from 'lucide-react'
 import type { LaunchConfig } from '@/types/project'
 import type { RunningProjectSummary } from '../../../shared/ipc/project'
@@ -19,6 +20,8 @@ interface ProjectLaunchAssistantProps {
   config: LaunchConfig | null
   busy: boolean
   runningProjects: RunningProjectSummary[]
+  /** 浮岛卡索引等装饰变量（见 ProjectSettings 三栏错峰入场）。 */
+  style?: CSSProperties
   onAnalyze: () => Promise<WorkspaceLaunchAnalysis | null>
   onConfig: (config: LaunchConfig) => void
   onSave: (config?: LaunchConfig) => Promise<boolean>
@@ -28,7 +31,7 @@ interface ProjectLaunchAssistantProps {
 }
 
 export function ProjectLaunchAssistant({
-  analysis, config, busy, runningProjects, onAnalyze, onConfig, onSave, onTest, onRun, onStop,
+  analysis, config, busy, runningProjects, style, onAnalyze, onConfig, onSave, onTest, onRun, onStop,
 }: ProjectLaunchAssistantProps) {
   const { t } = useI18n('editor')
   const [input, setInput] = useState('')
@@ -144,7 +147,7 @@ export function ProjectLaunchAssistant({
   }
 
   return (
-    <aside className={styles.assistant} aria-label="Janus workspace launch assistant">
+    <aside className={styles.assistant} style={style} aria-label="Janus workspace launch assistant">
       <div className={styles.assistantHeader}>
         <div>
           <strong>Janus</strong>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer } from 'react'
+import { useCallback, useEffect, useReducer, type CSSProperties } from 'react'
 
 /**
  * Shared card-workbench primitives (Phase 4, §9).
@@ -99,8 +99,8 @@ export function useWorkbenchPhase(
 }
 
 /** Grid-track card index helper for staggered enter/exit (`--card-index`). */
-export function cardIndexStyle(index: number): { '--card-index': number } {
-  return { '--card-index': index } as { '--card-index': number }
+export function cardIndexStyle(index: number): CSSProperties {
+  return { '--card-index': index } as CSSProperties
 }
 
 /**

@@ -1,34 +1,66 @@
 /**
  * src/renderer/src/components/ProjectSettings.module.css
  *
- * 工作区启动配置（左侧侧栏右键进入）。三栏结构刻意复刻主窗口：
- * 左侧配置栏与右侧助手栏吃 --shell-chrome（对应侧栏/右坞），中间主区吃 --shell-canvas
- * （对应中部工作台）。设置中心用的是同一套阶梯与同一套控件语言。
+ * 工作区启动配置（左侧侧栏右键进入）。三栏改分体浮岛卡：地色吃 --shell-canvas，
+ * 三栏各是一张框线卡，卡间留 12px 缝隙，入场按 --card-index 错峰升起（时长与
+ * 曲线对齐 blueprint-workbench-card-rise）。分组卡靠框线定界，不靠填充分组；
+ * planche 加法层给纸面墨框。色值全部走主题令牌，白字/白 alpha 边框/黑底填充清零。
+ * 见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
  */
 
 .container {
   display: grid;
   grid-template-columns: 176px minmax(420px, 1fr) 320px;
+  gap: 12px;
+  padding: 12px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
   background: var(--shell-canvas);
-  color: var(--text);
+  color: var(--shell-text);
+  perspective: 1200px;
 }
 
+/* 浮岛卡共性：框线 + 6px 圆角 + 错峰升起（--card-index 由 cardIndexStyle 注入） */
 .sidebar,
+.main,
 .assistant {
   min-width: 0;
-  background: var(--shell-chrome);
+  min-height: 0;
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  background: var(--shell-card);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  animation: projectIslandRise 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * 180ms);
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+@keyframes projectIslandRise {
+  from {
+    opacity: 0;
+    transform: translateZ(-56px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .main,
+  .assistant {
+    animation: none;
+  }
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
-  min-height: 0;
   padding: 14px 10px 10px;
-  overflow-y: auto;
-  border-right: 1px solid var(--shell-border);
+  overflow: hidden auto;
 }
 
 .sidebarHeader,
@@ -48,13 +80,13 @@
 
 .sidebarHeader h3 {
   margin: 0;
-  color: #d7d7da;
+  color: var(--shell-text);
   font-size: 11px;
   font-weight: 650;
 }
 
 .confidence {
-  color: #77777f;
+  color: var(--shell-dim);
   font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace;
   font-size: 9px;
 }
@@ -70,7 +102,7 @@
   border: 1px solid var(--shell-border);
   border-radius: 5px;
   background: transparent;
-  color: #929299;
+  color: var(--shell-muted);
   cursor: pointer;
   font-size: 11px;
   transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
@@ -79,18 +111,15 @@
 .sendButton:hover,
 .commandBar button:hover:not(:disabled),
 .approvalBar button:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.025);
-  color: #e4e4e7;
+  border-color: var(--shell-accent-border);
+  background: transparent;
+  color: var(--shell-text);
 }
 
 .main {
   display: flex;
-  min-width: 0;
-  min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--shell-border);
 }
 
 .contextBar {
@@ -110,7 +139,7 @@
 
 .contextBar strong {
   overflow: hidden;
-  color: #ececef;
+  color: var(--shell-text);
   font-size: 13px;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -119,15 +148,15 @@
 
 .contextBar span {
   overflow: hidden;
-  color: #6f6f77;
+  color: var(--shell-dim);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .contextMeta { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
-.contextMeta code { color: #97979e; font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 9px; }
-.contextMeta .runningState { color: #68b99c; }
+.contextMeta code { color: var(--shell-muted); font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 9px; }
+.contextMeta .runningState { color: var(--shell-diff-add); }
 
 .tabs {
   display: flex;
@@ -142,14 +171,14 @@
   border: 0;
   border-bottom: 1px solid transparent;
   background: transparent;
-  color: #76767e;
+  color: var(--shell-muted);
   cursor: pointer;
   font-size: 11px;
 }
 
-.tab:hover { color: #c6c6ca; }
-.tabActive { border-bottom-color: var(--shell-accent); color: #ececef; }
-.diffCount { margin-left: 5px; color: var(--shell-muted, #a1a1a1); font-family: monospace; font-size: 9px; }
+.tab:hover { color: var(--shell-text); }
+.tabActive { border-bottom-color: var(--shell-accent); color: var(--shell-text); }
+.diffCount { margin-left: 5px; color: var(--shell-muted); font-family: monospace; font-size: 9px; }
 
 .formContainer {
   flex: 1;
@@ -158,30 +187,30 @@
   padding: 14px 16px;
 }
 
-/* 变更列表整体一张灰卡，与设置中心 section 卡同 token；内部保留发丝线分隔 */
+/* 变更列表：框线分组卡（同底 + 立框），内部保留发丝线分隔 */
 .diffList {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--shell-border);
-  border-radius: 10px;
-  background: var(--shell-card, #1c1c1f);
+  border-radius: 6px;
+  background: transparent;
   padding: 6px 14px;
 }
-.diffEmpty { padding: 18px 0; color: #73737a; font-size: 11px; }
+.diffEmpty { padding: 18px 0; color: var(--shell-dim); font-size: 11px; }
 .diffRow { padding: 8px 0; border-bottom: 1px solid var(--shell-border-soft); font-family: 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 10px; line-height: 1.55; }
 .diffRow:last-child { border-bottom: 0; }
-.diffPath { display: flex; align-items: center; gap: 8px; color: #d6d6da; }
-.diffPath span { width: 44px; color: #77777e; font-size: 8px; text-transform: uppercase; }
+.diffPath { display: flex; align-items: center; gap: 8px; color: var(--shell-text); }
+.diffPath span { width: 44px; color: var(--shell-dim); font-size: 8px; text-transform: uppercase; }
 .diffBefore, .diffAfter { overflow-wrap: anywhere; white-space: pre-wrap; }
-.diffBefore { color: #b97878; }
-.diffAfter { color: #6fb88a; }
+.diffBefore { color: var(--shell-diff-del); }
+.diffAfter { color: var(--shell-diff-add); }
 
 /* 错误提示与设置中心的 .message 同构：一条细线做锚点，不做填充块。 */
 .errorBanner {
   margin: 0 16px 8px;
   padding: 2px 0 2px 11px;
-  border-left: 2px solid rgba(215, 139, 146, 0.7);
-  color: #d78b92;
+  border-left: 2px solid var(--shell-diff-del);
+  color: var(--shell-diff-del);
   font-size: 10px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -191,25 +220,25 @@
   gap: 7px;
   padding: 7px 14px;
   border-top: 1px solid var(--shell-border);
-  color: #b8b8bd;
+  color: var(--shell-muted);
   font-size: 10px;
 }
 
 .approvalBar span { margin-right: auto; }
 .approvalBar button { min-height: 26px; padding: 0 9px; }
-.approvalBar .approveButton { border-color: var(--shell-border); color: #ececef; }
+.approvalBar .approveButton { border-color: var(--shell-border); color: var(--shell-text); }
 
 .taskOutput {
   margin: 0 16px 8px;
   border: 1px solid var(--shell-border);
-  border-radius: 10px;
-  background: var(--shell-card, #1c1c1f);
+  border-radius: 6px;
+  background: transparent;
   overflow: hidden;
 }
-.taskOutput summary { min-height: 32px; gap: 7px; padding: 0 14px; color: #8b8b92; cursor: pointer; font-size: 10px; list-style: none; }
-.taskOutput summary span { margin-left: auto; color: #cf787f; }
-.taskOutput summary span[data-success='true'] { color: #68b99c; }
-.taskOutput pre { max-height: 140px; margin: 0; overflow: auto; padding: 9px 14px; border-top: 1px solid var(--shell-border-soft); background: var(--shell-void); color: #aaaab0; font: 9px/1.55 'Cascadia Mono', 'SF Mono', Consolas, monospace; white-space: pre-wrap; }
+.taskOutput summary { min-height: 32px; gap: 7px; padding: 0 14px; color: var(--shell-muted); cursor: pointer; font-size: 10px; list-style: none; }
+.taskOutput summary span { margin-left: auto; color: var(--shell-diff-del); }
+.taskOutput summary span[data-success='true'] { color: var(--shell-diff-add); }
+.taskOutput pre { max-height: 140px; margin: 0; overflow: auto; padding: 9px 14px; border-top: 1px solid var(--shell-border-soft); background: var(--shell-void); color: var(--shell-muted); font: 9px/1.55 'Cascadia Mono', 'SF Mono', Consolas, monospace; white-space: pre-wrap; }
 
 .commandBar {
   min-height: 46px;
@@ -221,12 +250,12 @@
 .commandBar button { min-width: 70px; padding: 0 10px; }
 .commandBar button:disabled { cursor: default; opacity: 0.35; }
 .commandSpacer { flex: 1; }
-.commandBar .runButton { border-color: var(--shell-border); color: #ececef; }
+.commandBar .runButton { border-color: var(--shell-border); color: var(--shell-text); }
 
 .assistant {
   display: flex;
-  min-height: 0;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .assistantHeader {
@@ -237,8 +266,8 @@
 }
 
 .assistantHeader > div { display: flex; flex-direction: column; gap: 2px; }
-.assistantHeader strong { color: #e8e8eb; font-size: 12px; }
-.assistantHeader span { color: #68686f; font-size: 9px; }
+.assistantHeader strong { color: var(--shell-text); font-size: 12px; }
+.assistantHeader span { color: var(--shell-dim); font-size: 9px; }
 .sendButton { width: var(--control-h, 30px); min-height: var(--control-h, 30px); padding: 0; }
 
 .messages {
@@ -254,32 +283,32 @@
 .assistantMessage,
 .userMessage {
   max-width: 94%;
-  color: #aaaab0;
+  color: var(--shell-muted);
   font-size: 11px;
   line-height: 1.65;
   white-space: pre-wrap;
 }
 
-.assistantMessage { padding-left: 9px; border-left: 1px solid rgba(255, 255, 255, 0.16); }
-.userMessage { align-self: flex-end; padding: 7px 9px; border: 1px solid rgba(255, 255, 255, 0.065); border-radius: 6px; color: #d1d1d5; }
-.streamingMessage { min-height: 28px; color: #b8b8bd; }
-.streamingMessage :global(.janus-chat-streaming-cursor) { --accent-color: #ff7830; }
+.assistantMessage { padding-left: 9px; border-left: 1px solid var(--shell-accent-border); }
+.userMessage { align-self: flex-end; padding: 7px 9px; border: 1px solid var(--shell-border); border-radius: 6px; color: var(--shell-text); }
+.streamingMessage { min-height: 28px; color: var(--shell-muted); }
+.streamingMessage :global(.janus-chat-streaming-cursor) { --accent-color: var(--shell-accent); }
 
 .promptBox {
   position: relative;
   margin: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.075);
+  border: 1px solid var(--control-border);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--shell-void);
 }
 
-.promptBox:focus-within { border-color: rgba(255, 255, 255, 0.16); }
-.promptBox textarea { width: 100%; min-height: 64px; resize: none; border: 0; outline: 0; background: transparent; padding: 8px 40px 8px 10px; color: #d8d8dc; font: 11px/1.55 inherit; }
-.promptBox textarea::placeholder { color: #54545b; }
+.promptBox:focus-within { border-color: var(--shell-accent-border); }
+.promptBox textarea { width: 100%; min-height: 64px; resize: none; border: 0; outline: 0; background: transparent; padding: 8px 40px 8px 10px; color: var(--shell-text); font: 11px/1.55 inherit; }
+.promptBox textarea::placeholder { color: var(--shell-dim); }
 .sendButton { position: absolute; right: 6px; bottom: 6px; }
 
-.loading { display: flex; flex: 1; align-items: center; justify-content: center; gap: 9px; color: #787880; font-size: 11px; }
-.spinner { width: 16px; height: 16px; border: 1px solid rgba(255, 255, 255, 0.08); border-top-color: #ff7830; border-radius: 50%; animation: spin 0.8s linear infinite; }
+.loading { grid-column: 1 / -1; display: flex; flex: 1; align-items: center; justify-content: center; gap: 9px; color: var(--shell-dim); font-size: 11px; }
+.spinner { width: 16px; height: 16px; border: 1px solid var(--shell-border); border-top-color: var(--shell-accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 .spinIcon { animation: spin 0.8s linear infinite; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -289,7 +318,19 @@
   .assistant { display: none; }
 }
 
-/* ── planche：项目助手列纸面化（加法层，dark 原样不动）── */
+/* ── planche：浮岛纸面墨框（--shell-card 在 planche 即纸面同底，只换墨框）── */
+:global([data-theme='planche']) .sidebar,
+:global([data-theme='planche']) .main,
+:global([data-theme='planche']) .assistant {
+  border-color: var(--line, #1C343B);
+  box-shadow: none;
+}
+
+:global([data-theme='planche']) .diffList,
+:global([data-theme='planche']) .taskOutput {
+  border-color: var(--line, #1C343B);
+}
+
 :global([data-theme='planche']) .sendButton:hover,
 :global([data-theme='planche']) .commandBar button:hover:not(:disabled),
 :global([data-theme='planche']) .approvalBar button:hover {

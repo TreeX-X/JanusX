@@ -373,8 +373,8 @@
   align-items: start;
   padding: 12px 14px;
   border: 1px solid var(--shell-border);
-  border-radius: 10px;
-  background: var(--shell-card);
+  border-radius: 6px;
+  background: transparent;
 }
 
 .generalLabelCol {
@@ -447,8 +447,8 @@
   min-width: 0;
   padding: 12px 14px;
   border: 1px solid var(--shell-border);
-  border-radius: 8px;
-  background: var(--shell-card);
+  border-radius: 6px;
+  background: transparent;
 }
 
 .lsCardHeader {
@@ -712,6 +712,12 @@
 
 :global([data-theme='planche']) .tabButtonActive::before {
   background: var(--planche-red, #D43D2A);
+}
+
+/* 分组卡框线定界：纸面同底 + 墨框（同 bp-node-card planche 层） */
+:global([data-theme='planche']) .generalRow,
+:global([data-theme='planche']) .lsCard {
+  border-color: var(--line, #1C343B);
 }
 
 :global([data-theme='planche']) .body::-webkit-scrollbar-thumb {

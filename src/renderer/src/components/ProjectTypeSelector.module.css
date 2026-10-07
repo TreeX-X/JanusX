@@ -1,5 +1,10 @@
 /**
  * src/renderer/src/components/ProjectTypeSelector.module.css
+ *
+ * 项目类型列表（运行配置左栏）。选中/悬停/焦点态与设置中心导航（tabButton）、
+ * 知识工作台（navButton）同一套状态规则：透明底、无可见边框、hover 微亮、
+ * 选中主题底色 + 左 2px 强调条、focus 向内 1px 描边、160ms 过渡。
+ * 见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
  */
 
 .selector {
@@ -14,31 +19,18 @@
 
 .typeItem {
   position: relative;
-  padding: 6px 22px 6px 8px;
+  padding: 6px 22px 6px 12px;
   background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid transparent;
-  border-radius: 6px;
+  color: var(--shell-muted);
+  border: 0;
+  border-radius: 5px;
   cursor: pointer;
   text-align: left;
   font-size: 11px;
-  transition: all 0.2s;
+  transition: background 0.16s ease, color 0.16s ease;
 }
 
-.typeItem:hover {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-/* 选中态与设置中心导航同构：中性底 + 左侧 2px 强调条，不做整块橙染 */
-.typeItem.selected {
-  background: var(--shell-active, rgba(255, 255, 255, 0.06));
-  border-color: var(--shell-border, var(--border));
-  color: var(--text);
-}
-
-.typeItem.selected::before {
+.typeItem::before {
   content: '';
   position: absolute;
   left: 0;
@@ -46,6 +38,28 @@
   bottom: 7px;
   width: 2px;
   border-radius: 0 2px 2px 0;
+  background: transparent;
+  transition: background 0.16s ease;
+}
+
+.typeItem:hover {
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--shell-text);
+}
+
+.typeItem:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+}
+
+/* 选中态与设置中心导航同构：主题底色 + 左 2px 强调条，不做整块橙染 */
+.typeItem.selected,
+.typeItem.selected:hover {
+  background: var(--shell-active);
+  color: var(--shell-text);
+}
+
+.typeItem.selected::before {
   background: var(--shell-accent);
 }
 
@@ -64,7 +78,7 @@
 
 .autoBadge {
   font-size: 10px;
-  color: #4ec9b0;
+  color: var(--shell-diff-add);
   padding: 0;
   border-radius: 3px;
   font-weight: 400;
@@ -72,7 +86,7 @@
 
 .typeDesc {
   display: none;
-  color: var(--text-secondary);
+  color: var(--shell-muted);
   opacity: 0.7;
 }
 
@@ -81,7 +95,21 @@
   top: 50%;
   right: 7px;
   transform: translateY(-50%);
-  color: var(--text);
+  color: var(--shell-text);
   width: 12px;
   height: 12px;
+}
+
+/* ── planche：hover/选中走纸深，强调条走朱红（加法层，dark 原样不动）── */
+:global([data-theme='planche']) .typeItem:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .typeItem.selected,
+:global([data-theme='planche']) .typeItem.selected:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .typeItem.selected::before {
+  background: var(--planche-red, #D43D2A);
 }

@@ -1,6 +1,8 @@
 /**
  * src/renderer/src/components/ProjectConfigForm/QuickConfigForm.module.css
- * 快速配置表单样式
+ * 快速配置表单样式。分组卡框线定界（同底 + 立框），选中态文字提亮 + 2px 强调条；
+ * 色值走主题令牌，planche 加法层给纸面墨框。
+ * 见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
  */
 
 .form {
@@ -9,6 +11,8 @@
   gap: 14px;
   /* 与设置中心 --so-control-h 同源，单行输入/页签统一高度 */
   --rc-control-h: var(--control-h, 30px);
+  /* 输入类控件下沉一层：吃 --shell-void（planche 即纸面），不写死 rgba(0,0,0,…) */
+  --rc-field: var(--shell-void);
 }
 
 .empty {
@@ -16,57 +20,73 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: var(--text-secondary);
+  color: var(--shell-muted);
   font-size: 13px;
 }
 
-/* 配置选择：独立一张灰卡，与设置中心 section 卡同 token */
+/* 配置选择：框线分组卡 */
 .configSelector {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--shell-border, var(--border));
-  border-radius: 10px;
-  background: var(--shell-card, #1c1c1f);
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  background: transparent;
 }
 
 .configTab {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: var(--rc-control-h);
   padding: 0 12px;
   background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border);
+  color: var(--shell-muted);
+  border: 1px solid transparent;
   border-radius: 5px;
   cursor: pointer;
   font-size: 12px;
   line-height: 1.5;
-  transition: all 0.2s;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.configTab::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 1px;
+  background: transparent;
+  transition: background 0.16s ease;
 }
 
 .configTab:hover {
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--shell-text);
 }
 
+/* 选中：文字提亮 + 2px 强调条，不做整块染色 */
 .configTab.active {
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--shell-text);
+  border-color: var(--shell-border);
 }
 
-/* 字段列表：整体一张灰卡，字段纵向排布（对齐设置中心多行一卡） */
+.configTab.active::after {
+  background: var(--shell-accent);
+}
+
+/* 字段列表：框线分组卡，字段纵向排布 */
 .fieldList {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid var(--shell-border, var(--border));
-  border-radius: 10px;
-  background: var(--shell-card, #1c1c1f);
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  background: transparent;
 }
 
 .field {
@@ -78,24 +98,24 @@
 .label {
   font-size: 12px;
   font-weight: 500;
-  color: var(--text);
+  color: var(--shell-text);
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .required {
-  color: #ff6b6b;
+  color: var(--shell-diff-del);
   font-size: 11px;
 }
 
 .input {
   height: var(--rc-control-h);
   padding: 0 9px;
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid var(--control-border, var(--border));
+  background: var(--rc-field);
+  border: 1px solid var(--control-border);
   border-radius: 6px;
-  color: var(--text);
+  color: var(--shell-text);
   font-size: 12px;
   font-family: 'SF Mono', 'Cascadia Code', monospace;
   transition: border-color 0.2s;
@@ -103,21 +123,21 @@
 }
 
 .input:focus {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(0, 0, 0, 0.28);
+  border-color: var(--shell-accent-border);
+  background: var(--rc-field);
 }
 
 .input::placeholder {
-  color: #444;
+  color: var(--shell-dim);
 }
 
 .select {
   /* 高度由 Select 触发器自身的 min-height(var(--control-h)) 保证，这里只收横向内边距 */
   padding: 0 9px;
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid var(--control-border, var(--border));
+  background: var(--rc-field);
+  border: 1px solid var(--control-border);
   border-radius: 6px;
-  color: var(--text);
+  color: var(--shell-text);
   font-size: 12px;
   cursor: pointer;
   outline: none;
@@ -125,12 +145,12 @@
 }
 
 .select:focus {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--shell-accent-border);
 }
 
 .description {
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--shell-muted);
   opacity: 0.7;
   margin: 0;
   line-height: 1.4;
@@ -160,26 +180,25 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid var(--shell-border);
   border-radius: 4px;
-  color: var(--text-secondary);
+  color: var(--shell-muted);
   cursor: pointer;
   font-size: 14px;
   transition: all 0.15s;
 }
 
 .removeBtn:hover {
-  background: rgba(255, 88, 88, 0.1);
-  border-color: rgba(255, 88, 88, 0.25);
-  color: #ff5858;
+  border-color: var(--shell-diff-del);
+  color: var(--shell-diff-del);
 }
 
 .addBtn {
   min-height: var(--rc-control-h);
   padding: 0 10px;
   background: transparent;
-  color: var(--text-secondary);
-  border: 1px dashed var(--border);
+  color: var(--shell-muted);
+  border: 1px dashed var(--shell-border);
   border-radius: 5px;
   cursor: pointer;
   font-size: 12px;
@@ -188,8 +207,8 @@
 }
 
 .addBtn:hover {
-  color: var(--text);
-  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--shell-text);
+  border-color: var(--shell-accent-border);
 }
 
 /* 对象编辑器 */
@@ -210,7 +229,7 @@
 }
 
 .equals {
-  color: var(--text-secondary);
+  color: var(--shell-muted);
   font-size: 12px;
   font-weight: 600;
 }
@@ -218,12 +237,37 @@
 /* 提示 */
 .hint {
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--shell-border);
 }
 
 .hint p {
   margin: 0;
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--shell-muted);
   opacity: 0.6;
+}
+
+/* ── planche：分组卡墨框，输入纸面墨框（加法层，dark 原样不动）── */
+:global([data-theme='planche']) .configSelector,
+:global([data-theme='planche']) .fieldList {
+  border-color: var(--line, #1C343B);
+}
+
+:global([data-theme='planche']) .input,
+:global([data-theme='planche']) .select {
+  border-color: var(--line, #1C343B);
+  background: var(--paper, #EFE4C5);
+}
+
+:global([data-theme='planche']) .input:focus,
+:global([data-theme='planche']) .select:focus {
+  border-color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .configTab.active::after {
+  background: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .configTab.active {
+  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
 }

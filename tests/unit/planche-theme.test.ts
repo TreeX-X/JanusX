@@ -243,6 +243,11 @@ describe('planche theme contract', () => {
     expect(notif).toContain(":global([data-theme='planche']) .labelText")
     const project = read('components/ProjectSettings.module.css')
     expect(project).toContain(":global([data-theme='planche']) .promptBox textarea")
+    // 运行配置分体浮岛：错峰入场 + reduced-motion 兜底，卡片层吃 --card-index
+    expect(project).toContain('projectIslandRise')
+    expect(project).toContain('var(--card-index')
+    expect(project).toContain('prefers-reduced-motion')
+    expect(read('components/ProjectSettings.tsx')).toContain('cardIndexStyle')
     // 设置底栏不再写死 dark 的 canvas 色值。#151517 只在 dark 成立，留在声明里
     // 会让默认的 planche 纸面主题在内容底部压一条近黑横条，并永久盖住尾部内容。
     for (const mod of [
@@ -261,6 +266,29 @@ describe('planche theme contract', () => {
     const fileTree = read('components/file-tree/file-tree.module.css')
     expect(fileTree).toContain('color: var(--shell-text)')
     expect(fileTree).not.toMatch(/color:\s*#(d4d4d4|ccc|999)/)
+    // 运行配置四表收编主题令牌（2026-10-07-run-config-island-cards）：
+    // 无白字/手写色文字、无白 alpha 边框、无黑底填充；文字与边框走 --shell-*
+    for (const mod of [
+      'components/ProjectSettings.module.css',
+      'components/ProjectConfigForm/QuickConfigForm.module.css',
+      'components/ProjectTypeSelector.module.css',
+      'components/ProjectConfigForm/JsonEditor.module.css',
+    ]) {
+      const source = stripCssComments(read(mod))
+      expect(source, mod).not.toMatch(/color:\s*#/)
+      expect(source, mod).not.toMatch(/border[a-z-]*:\s*[^;{}]*rgba\(\s*255\s*,\s*255\s*,\s*255/)
+      expect(source, mod).not.toMatch(/background:\s*rgba\(\s*0\s*,\s*0\s*,\s*0/)
+      expect(source, mod).not.toMatch(/background:\s*#/)
+    }
+    // 左栏类型 tab 选中态与设置导航同构：主题底色 + 左 2px 强调条，无整块染色
+    const typeSel = read('components/ProjectTypeSelector.module.css')
+    expect(typeSel).toContain('.typeItem.selected::before')
+    expect(typeSel).toContain('var(--shell-active)')
+    expect(typeSel).toContain('var(--shell-accent)')
+    // configTab 选中态：文字提亮 + 2px 强调条，不吃白色填充块
+    const quick = stripCssComments(read('components/ProjectConfigForm/QuickConfigForm.module.css'))
+    expect(quick).toContain('.configTab.active::after')
+    expect(quick).not.toMatch(/\.configTab\.active\s*\{[^}]*background/)
   })
 
   it('covers expanded deep surfaces (brand/tabs/chat/monitor/roundtable/auxiliary)', () => {

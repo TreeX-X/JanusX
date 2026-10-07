@@ -168,15 +168,15 @@
   border-radius: 3px;
 }
 
-/* 每 section 一张灰卡，与通用页 generalRow 对齐 */
+/* 每 section 一张框线卡，与通用页 generalRow 对齐 */
 .section {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--shell-border);
-  border-radius: 10px;
-  background: var(--shell-card);
+  border-radius: 6px;
+  background: transparent;
 }
 
 .section:last-child {
@@ -574,6 +574,11 @@
 
 :global([data-theme='planche']) .llmConfigPanel {
   box-shadow: 3px 3px 0 var(--line, #1C343B);
+}
+
+/* 分组卡框线定界：纸面同底 + 墨框 */
+:global([data-theme='planche']) .section {
+  border-color: var(--line, #1C343B);
 }
 
 :global([data-theme='planche']) .runtimeStatus strong,

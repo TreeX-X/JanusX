@@ -3,6 +3,8 @@
  *
  * 项目设置窗口
  * 集成：项目类型选择 + 配置表单 + JSON 编辑
+ *
+ * Note: 三栏改分体浮岛卡（错峰入场 + 框线定界 + 主题令牌收编）— see .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
@@ -23,6 +25,7 @@ import ProjectTypeSelector from './ProjectTypeSelector'
 import QuickConfigForm from './ProjectConfigForm/QuickConfigForm'
 import JsonEditor from './ProjectConfigForm/JsonEditor'
 import ProjectLaunchAssistant from './ProjectLaunchAssistant'
+import { cardIndexStyle } from '@/components/shared/CardFrame'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './ProjectSettings.module.css'
 
@@ -389,7 +392,7 @@ export function ProjectSettings({
 
   return (
     <div className={styles.container}>
-      <nav className={styles.sidebar} aria-label={t('editor:project.navAriaLabel')}>
+      <nav className={styles.sidebar} style={cardIndexStyle(0)} aria-label={t('editor:project.navAriaLabel')}>
         <div className={styles.sidebarHeader}>
           <h3>{t('editor:project.runType')}</h3>
           {detection && (
@@ -410,7 +413,7 @@ export function ProjectSettings({
 
       </nav>
 
-      <main className={styles.main}>
+      <main className={styles.main} style={cardIndexStyle(1)}>
         <div className={styles.contextBar}>
           <div>
             <strong>{config?.projectName || projectPath.split(/[/\\]/).pop()}</strong>
@@ -516,6 +519,7 @@ export function ProjectSettings({
         config={config}
         busy={analyzing || saving || executing !== null}
         runningProjects={runningProjects}
+        style={cardIndexStyle(2)}
         onAnalyze={handleAnalyze}
         onConfig={handleAssistantConfig}
         onSave={handleSave}
