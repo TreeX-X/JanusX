@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { parseNote, serializeNote } from '@janus-agent/harness-core'
+import { parseNote, serializeNote, type Receipt } from '@janus-agent/harness-core'
 import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
 import type { HarnessAPI } from '../../src/shared/ipc/harness'
 import type { LlmAPI } from '../../src/shared/ipc/llm'
@@ -13,6 +13,7 @@ import { createDesktopTestEnv } from './desktop-test-env'
 
 type HarnessWindow = Window & { electron: { harness: HarnessAPI; llm: LlmAPI } }
 
+// Note: .agents/notes/agent/independent-review-repair.md
 // A deterministic HTTP model exercises the built transport and tools, not model quality.
 for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'independent'], ['xdo', 'independent'], ['xdel', 'independent']] as const) test(`built desktop v2 ${mode}/${review} implements, checks, persists receipts and reloads local history`, async () => {
   const independent = mode !== 'xdel' && review === 'independent'
@@ -42,9 +43,10 @@ for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'inde
       expect(request.url).toBe('/v1/responses')
       expect(body.input).toBeDefined()
       const prompt = JSON.stringify(body.input)
-      const reviewing = prompt.includes('Reply with exactly one JSON object')
+      const planningTests = prompt.includes('Return exactly one JSON test plan, not a verdict:')
+      const reviewing = planningTests || prompt.includes('Reply with exactly one JSON object')
       const independent = prompt.includes('Independent read-only audit.')
-      requests.push(reviewing ? independent ? 'independent-review' : 'self-review' : 'implementation')
+      requests.push(planningTests ? 'independent-tests' : reviewing ? independent ? 'independent-review' : 'self-review' : 'implementation')
       expect(body.stream).toBe(true)
       {
         const current = reviewing ? -1 : turn++
@@ -75,7 +77,16 @@ for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'inde
             if (!match) throw new Error('Review did not receive a pinned criterion')
             expect(prompt).toContain('[command/passed]')
             expect(prompt).toContain('43')
-            content = JSON.stringify({ verdict: 'approved', coverage: [{ uri: match[1], criterionId: match[2], criterionHash: match[3], checkIds: ['V-1'] }], summary: 'Inspected the file and passed check.' })
+            if (planningTests) {
+              content = JSON.stringify({ tests: [{ name: 'AC-1 reads the implemented value', criteria: [{ uri: match[1], criterionId: match[2] }],
+                source: 'import assert from "node:assert/strict"; import { readFileSync } from "node:fs"; assert.equal(readFileSync("src/value.txt", "utf8"), "43"); console.log("EVALUATOR_AC_1_OK");',
+              }] })
+            } else {
+              const checkId = independent ? prompt.match(/- (eval-[a-f0-9-]+) \[command\/passed\]/)?.[1] : 'V-1'
+              if (!checkId) throw new Error('Independent verdict did not receive an executed reviewer check')
+              if (independent) expect(prompt).toContain('EVALUATOR_AC_1_OK')
+              content = JSON.stringify({ verdict: 'approved', coverage: [{ uri: match[1], criterionId: match[2], criterionHash: match[3], checkIds: [checkId] }], summary: 'Inspected the file and passed check.' })
+            }
           }
           const item = { type: 'message', id: 'text-1' }
           emit({ type: 'response.output_item.added', output_index: 0, item })
@@ -136,14 +147,21 @@ for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'inde
       throw new Error(`${String(error)}; ${JSON.stringify({ requests, failures, history })}`)
     })
     expect(failures).toEqual([])
-    expect(executed).toMatchObject({ completed: !pending, reviewPending: pending, implementationResult: 'Updated src/value.txt to 43.', checks: [{ status: 'passed' }] })
+    expect(executed).toMatchObject({ completed: !pending, reviewPending: pending, implementationResult: 'Updated src/value.txt to 43.', checks: Array.from({ length: independent ? 2 : 1 }, () => ({ status: 'passed' })) })
     expect(await readFile(join(workspace, 'src/value.txt'), 'utf8')).toBe('43')
-    expect(requests).toEqual(['implementation', 'implementation', 'implementation', 'self-review', 'self-review', ...(independent ? ['independent-review', 'independent-review'] : [])])
-    const receipt = JSON.parse(await readFile(join(workspace, '.agents/evidence', `${executed.receiptId}.json`), 'utf8'))
+    expect(requests).toEqual(['implementation', 'implementation', 'implementation', 'self-review', 'self-review', ...(independent ? ['independent-tests', 'independent-tests', 'independent-review', 'independent-review'] : [])])
+    const receipt = JSON.parse(await readFile(join(workspace, '.agents/evidence', `${executed.receiptId}.json`), 'utf8')) as Receipt
     expect(receipt.checks[0].status).toBe('passed')
     expect(receipt.mode).toBe(mode)
     expect(receipt.review.kind).toBe(independent ? 'independent' : 'self')
     expect(receipt.review.actor === receipt.actor).toBe(!independent)
+    const reviewerChecks = receipt.checks.filter(check => check.id.startsWith('eval-'))
+    expect(reviewerChecks).toHaveLength(independent ? 1 : 0)
+    if (independent) {
+      expect(reviewerChecks[0]).toMatchObject({ status: 'passed', exitCode: 0, required: true, performedBy: receipt.review.actor })
+      expect(reviewerChecks[0].summary).toContain('EVALUATOR_AC_1_OK')
+      expect(receipt.coverage).toEqual([expect.objectContaining({ uri: taskUri, criterionId: 'AC-1', checkIds: [reviewerChecks[0].id] })])
+    }
     expect(receipt.codeManifest).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'src/value.txt', sha256: createHash('sha256').update('43').digest('hex') })]))
     if (pending) {
       expect(executed.diagnostics).toEqual([expect.objectContaining({ code: 'NOT_READY' })])
