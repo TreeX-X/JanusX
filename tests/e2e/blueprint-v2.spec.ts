@@ -5,6 +5,43 @@ const nav = (page: Page) => page.getByRole('navigation', { name: '模块导航' 
 const fit = async (page: Page) => { await page.getByRole('button', { name: '适应画布', exact: true }).first().click() }
 
 for (const surface of ['', '&workbench']) {
+  for (const title of ['Reader module', 'Planned module']) {
+    test(`first double-click survives preview reflow: ${title} ${surface}`, async ({ page }) => {
+      await page.goto('/blueprint-architecture.html?v2' + surface)
+      await card(page, title).click({ trial: true })
+      const bounds = (await card(page, title).boundingBox())!
+      await page.evaluate(() => {
+        (window as any).doubleClickTargets = []
+        document.addEventListener('click', event => {
+          const target = event.target as Element
+          ;(window as any).doubleClickTargets.push(target.closest('.react-flow__node')?.querySelector('.bp-node-card__title')?.textContent ?? 'pane')
+        }, true)
+      })
+      await page.mouse.dblclick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, { delay: 130 })
+      await expect(nav(page).locator('[aria-current="page"]')).toHaveText(title)
+      const targets = await page.evaluate(() => (window as any).doubleClickTargets as string[])
+      expect(targets[0]).toBe(title)
+      expect(targets[1]).not.toBe(title)
+      if (title === 'Reader module') expect(targets[1]).toBe('pane')
+      await expect(card(page, title)).toBeVisible()
+      await nav(page).getByRole('button', { name: '返回', exact: true }).click()
+      await expect(nav(page).locator('[aria-current="page"]')).toHaveText('Workbench architecture')
+      await expect(nav(page).getByRole('button', { name: '返回', exact: true })).toBeDisabled()
+    })
+  }
+
+  test(`unrelated pane double-click does not enter the previewed module ${surface}`, async ({ page }) => {
+    await page.goto('/blueprint-architecture.html?v2' + surface)
+    await card(page, 'Reader module').click()
+    await expect(page.locator('.bp-node-detail')).toContainText('Reader module responsibilities from module.md.')
+    const pane = (await page.locator('.react-flow').boundingBox())!
+    const point = { x: pane.x + 10, y: pane.y + 10 }
+    expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.react-flow__pane'), point)).toBe(true)
+    await page.mouse.dblclick(point.x, point.y, { delay: 130 })
+    await expect(nav(page).locator('[aria-current="page"]')).toHaveText('Workbench architecture')
+    await expect(nav(page).getByRole('button', { name: '返回', exact: true })).toBeDisabled()
+  })
+
   test(`module preview, scoped pages, nested return and container design ${surface}`, async ({ page }) => {
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message))
     await page.goto('/blueprint-architecture.html?v2' + surface)

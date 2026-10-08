@@ -9,7 +9,7 @@
  *  - canvasLayout：拖拽后防抖写回 Blueprint.canvasLayout。
  */
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ReactFlow,
@@ -561,17 +561,24 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   }, [effectiveCollapsedNodeIds, persistCollapsedNodeIds, moduleBrowsing])
   const cardActions = useMemo(() => ({ toggleCollapse, moduleBrowsing, architectureRoles: architecture?.roles, moduleDocuments: moduleBrowse?.owned, moduleChildren: architecture?.graph.nodes, openModule }), [toggleCollapse, moduleBrowsing, architecture, moduleBrowse?.owned, openModule])
 
-  const onNodeDoubleClick: NodeMouseHandler = useCallback(
-    (event, node) => {
-      // Opening the preview can move cards between the two clicks. Preserve the first target.
-      const first = firstNodeClick.current
-      const id = first && event.timeStamp - first.time < 1000 && Math.hypot(event.clientX - first.x, event.clientY - first.y) < 8 ? first.id : node.id
-      firstNodeClick.current = null
+  const activateNode = useCallback(
+    (id: string) => {
       if (architecture?.roles[id]) openModule(id)
       else revealNode(id)
     },
     [architecture, openModule, revealNode]
   )
+
+  const onCanvasDoubleClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    // Note: preview reflow can move the second click onto another card or the pane.
+    // See .agents/notes/blueprint/workspaces/architect-workspace-model.md.
+    const first = firstNodeClick.current
+    firstNodeClick.current = null
+    if (!first || event.timeStamp - first.time >= 1000 || Math.hypot(event.clientX - first.x, event.clientY - first.y) >= 8) return
+    event.preventDefault()
+    event.stopPropagation()
+    activateNode(first.id)
+  }, [activateNode])
 
   const onNodeContextMenu: NodeMouseHandler = useCallback(
     (e, node) => {
@@ -824,12 +831,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onNodeDragStop={() => { void flushLayoutSave() }}
-        onNodeDoubleClick={onNodeDoubleClick}
+        onDoubleClickCapture={onCanvasDoubleClick}
+        onNodeDoubleClick={(_event, node) => activateNode(node.id)}
         onNodeClick={(event, node) => {
           if (event.detail === 2 && firstNodeClick.current) return
           firstNodeClick.current = { id: node.id, x: event.clientX, y: event.clientY, time: event.timeStamp }
           setSelectedId(node.id); setDetailNodeId(node.id); setWikiAnchor(null)
         }}
+        onMove={(event) => { if (event) firstNodeClick.current = null }}
+        onNodeDragStart={() => { firstNodeClick.current = null }}
         nodesDraggable={!moduleBrowsing}
         zoomOnDoubleClick={false}
         onNodeContextMenu={onNodeContextMenu}
