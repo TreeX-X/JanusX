@@ -13,9 +13,21 @@
 .bp-note-locations details { font-size: 12px; padding: 8px 0; border-bottom: 1px solid var(--shell-border); }
 .bp-note-locations summary { cursor: pointer; color: var(--shell-muted); }
 .bp-note-locations ul { max-height: 170px; overflow: auto; overflow-wrap: anywhere; padding-left: 20px; }
-.bp-assistant-target .bp-node-card { outline: 3px solid var(--shell-accent); outline-offset: 4px; }
-.bp-assistant-reference .bp-node-card { outline: 2px dashed var(--shell-accent); outline-offset: 4px; }
-.bp-assistant-dependency .bp-node-card { outline: 2px dotted var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-target .bp-node-card { --bp-focus-line-style: solid; outline: 3px solid var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-reference .bp-node-card { --bp-focus-line-style: dashed; outline: 2px dashed var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-dependency .bp-node-card { --bp-focus-line-style: dotted; outline: 2px dotted var(--shell-accent); outline-offset: 4px; }
+/* Note: focus follows the module body and tab without changing their geometry — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md */
+.blueprint-canvas-wrapper :is(.bp-assistant-target, .bp-assistant-reference, .bp-assistant-dependency) .bp-node-card.bp-node-card--module {
+  outline: none;
+  border-color: var(--shell-accent);
+  border-style: var(--bp-focus-line-style);
+  box-shadow: none;
+}
+.blueprint-canvas-wrapper :is(.bp-assistant-target, .bp-assistant-reference, .bp-assistant-dependency) .bp-node-card--module::before {
+  border-color: var(--shell-accent);
+  border-style: var(--bp-focus-line-style);
+  border-bottom: 0;
+}
 .bp-assistant-edge path { stroke: var(--shell-accent) !important; stroke-width: 3px !important; }
 .bp-note-groups { max-height: 250px; overflow: auto; }
 .bp-note-group h4 { margin: 8px 0 4px; font: inherit; font-weight: 600; overflow-wrap: anywhere; }
