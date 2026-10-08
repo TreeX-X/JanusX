@@ -7,7 +7,7 @@
   "created": "2026-10-04",
   "class": "architecture",
   "tags": ["memory","knowledge","persona","settings","verification"],
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T10:33:27.488Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-528027d0e5cf"
 }
 ---
@@ -37,6 +37,8 @@
 创新开关从入口控制扩展到生产处理控制，旧安装中关闭的功能不会继续积累资料。已存内容不删除，重新开启后队列可处理未完成资料。个人信息读取与编辑复用现有画像组件，不增加第二套画像存储。工程自动模型管线与个人人工审核仍有不同能力边界；此设置不承诺个人记忆自动通过模型审核。
 
 ## Verification
+
+2026-10-08：蓝图真实录制暴露了 Chat 收尾错误：领域策略拒绝可选采集后，已成功的模型回复和 Note 工具也被显示为失败。Chat 宿主现在仅将精确的 `memory-capture-disabled` 作为预期跳过，保持采集门禁和用户配置；磁盘等其他错误继续上报。`npx vitest run tests/unit/llm/janus-agent-ports.test.ts tests/unit/llm/chat-turn-guard.test.ts` 通过 40 项，覆盖关闭采集、存储失败、载荷与领域隔离。此修复不改变知识入库或质量验收结论。
 
 2026-10-07：个人画像分组调整的 `npx vitest run tests/unit/experimental-features.test.ts --reporter=dot` 为 4 项通过，验证开关默认值、独立性和 IPC 契约；组件 ESLint 与 Note 检查通过。源码复查确认 persona 仅列于 DEV_FEATURES，中英文共用同一分组及已有标题词条。本次未执行浏览器视觉验收。
 

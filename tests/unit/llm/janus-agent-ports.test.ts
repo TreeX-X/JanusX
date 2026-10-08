@@ -219,6 +219,26 @@ describe('tools port', () => {  it('threads callerId through and passes registry
 })
 
 describe('knowledge ports', () => {
+  it('skips disabled capture without failing a completed chat', async () => {
+    const captureObservation = vi.fn(async () => { throw new Error('memory-capture-disabled') })
+    const ports = buildJanusChatTurnPorts(baseDeps({ captureObservation }))
+    await expect(ports.knowledgeCapture!.captureTurn({
+      targets: [{ workspaceId: 'ws1', workspacePath: 'C:/ws', sessionId: 's1' }],
+      userText: 'hello', assistantText: 'done', providerId: 'p', modelId: 'm', correlationId: 'r',
+    })).resolves.toBeUndefined()
+    expect(captureObservation).toHaveBeenCalledTimes(2)
+  })
+
+  it('still reports storage failures during capture', async () => {
+    const ports = buildJanusChatTurnPorts(baseDeps({
+      captureObservation: async () => { throw new Error('disk unavailable') },
+    }))
+    await expect(ports.knowledgeCapture!.captureTurn({
+      targets: [{ workspaceId: 'ws1', workspacePath: 'C:/ws', sessionId: 's1' }],
+      assistantText: 'done', providerId: 'p', modelId: 'm', correlationId: 'r',
+    })).rejects.toThrow('disk unavailable')
+  })
+
   it('delegates search with the facade query shape', async () => {
     const search = vi.fn(async () => ({ items: [] }) as unknown as KnowledgeContextResult)
     const ports = buildJanusChatTurnPorts(baseDeps({

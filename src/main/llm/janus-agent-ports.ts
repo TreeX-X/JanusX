@@ -88,7 +88,14 @@ export interface JanusChatTurnPortsDeps {
  */
 export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnPorts {
   // Narrowed once: the async capture closure below keeps the check.
-  const captureObservation = deps.captureObservation
+  // Note: disabled capture is an expected no-op — see .agents/notes/knowledge/memory-domain-controls.md
+  const captureObservation = deps.captureObservation ? async (input: JanusCaptureInput) => {
+    try { return await deps.captureObservation!(input) }
+    catch (error) {
+      if (error instanceof Error && error.message === 'memory-capture-disabled') return undefined
+      throw error
+    }
+  } : undefined
   return {
     model: {
       resolve: async (providerId, modelId) => {
