@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T14:09:02Z",
+  "updated": "2026-10-08T14:23:53Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -65,6 +65,8 @@ Main checks pass 45 desktop executor tests, six standalone review tests and 15 I
 A separate native evaluator subsequently reran these adapters and tested the actual Electron 35.7.5 / Node 22.16.0 execution boundary. Seven probes passed: assertion outcomes, copied-source and original Task write refusal, junction and child-process refusal, and writable disposable fixtures. The reviewed implementation passes; this native review does not create an embedded runtime receipt or establish external-model quality. The [adoption plan](../blueprint/workflowx-v2-adoption.md) links the fixed cross-repository acceptance and remaining release coverage.
 
 The compiled-desktop regression model now handles test planning separately from verdict generation. It reads the pinned source, requests a real Node assertion, then accepts only the host-produced passing check in its coverage. The receipt assertion verifies reviewer identity, exit code and generated-test output, and restart checks preserve the same evidence. Main ran `npx playwright test tests/e2e/desktop-harness-runtime.spec.ts --project=desktop --workers=1` against an isolated 0408046 application build: all five xdo/xdel/xflow and review-obligation cases passed. This repairs the outdated test fixture discovered during full integration acceptance; production behavior is unchanged.
+
+Both initial launch and relaunch await the actual harness/LLM preload APIs before exercising IPC. Independent rerun exposed an intermittent read before preload readiness; an unchanged targeted rerun passed, so the fixture now waits for capability rather than assuming firstWindow implies readiness. This affects test synchronization only.
 
 - **Gains**: verifying runs gain a read-only audit with an independent
   receipt, an explicit finish, and budget-spending repairs that reopen the

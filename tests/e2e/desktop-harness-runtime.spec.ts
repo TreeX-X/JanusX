@@ -13,6 +13,12 @@ import { createDesktopTestEnv } from './desktop-test-env'
 
 type HarnessWindow = Window & { electron: { harness: HarnessAPI; llm: LlmAPI } }
 
+async function readyDesktopPage(application: ElectronApplication) {
+  const page = await application.firstWindow()
+  await page.waitForFunction(() => Boolean((window as HarnessWindow).electron?.harness && (window as HarnessWindow).electron?.llm))
+  return page
+}
+
 // Note: .agents/notes/agent/independent-review-repair.md
 // A deterministic HTTP model exercises the built transport and tools, not model quality.
 for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'independent'], ['xdo', 'independent'], ['xdel', 'independent']] as const) test(`built desktop v2 ${mode}/${review} implements, checks, persists receipts and reloads local history`, async () => {
@@ -130,7 +136,7 @@ for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'inde
     git('add', '.'); git('commit', '--no-gpg-sign', '-m', 'fixture')
     const launch = () => electron.launch({ args: [resolve(process.env.JANUS_DESKTOP_MAIN ?? 'out/main/index.js'), `--user-data-dir=${userDataDir}`], env: createDesktopTestEnv(root) })
     application = await launch()
-    let page = await application.firstWindow()
+    let page = await readyDesktopPage(application)
     const saved = await page.evaluate(async (baseURL) => (window as HarnessWindow).electron.llm.saveTerminalProvider('janus', {
       id: 'openai-compatible', name: 'Local fixture', authType: 'api-key' as never, enabled: true,
       apiKey: 'fixture-key', baseURL, modelId: 'fixture-model', models: ['fixture-model'],
@@ -172,7 +178,7 @@ for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'inde
     expect(git('ls-files', '.agents/.local')).toBe('')
     await application.close()
     application = await launch()
-    page = await application.firstWindow()
+    page = await readyDesktopPage(application)
     const recovered = await page.evaluate(async ({ cwd, runId }) => {
       const api = (window as HarnessWindow).electron.harness
       return { transcript: await api.runTranscript(cwd, runId), closeout: await api.runCloseout(cwd, runId) }
