@@ -1,4 +1,5 @@
 // Note: desktop xdo host owns checks and self-review — see .agents/notes/agent/desktop-xdo-executor.md
+// Note: evaluator tests precede the verdict — see .agents/notes/agent/independent-review-repair.md
 /**
  * @file Desktop verification and delegated execution host.
  * @description Runs an accepted task's declared verification on the desktop:
@@ -19,13 +20,15 @@ import {
   codeKey,
   codeManifestHash,
   taskExecutionPolicy,
+  reviewTestVerdict,
+  type RunReviewTests,
   type Diagnostic,
   type Receipt,
   type ReceiptCheck,
   type ReceiptCoverage,
   type VerificationStep,
 } from '@janus-agent/harness-core'
-import { TaskScope, checkpointTaskHandoff, collectLiveSnapshot, collectTaskSnapshot } from '@janus-agent/harness-node'
+import { TaskScope, checkpointTaskHandoff, collectLiveSnapshot, collectTaskSnapshot, createReviewTestSession } from '@janus-agent/harness-node'
 import { ensureTaskThread, recordThreadAttempt, recordThreadEvaluation } from './task-thread'
 import { buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles, type TaskBrief } from './task-brief'
 import {
@@ -54,6 +57,7 @@ export interface DesktopReviewPortInput {
   checks: ReceiptCheck[]
   criteria: DesktopReviewCriterion[]
   brief: TaskBrief
+  runTests?: RunReviewTests
 }
 
 export interface DesktopExecutorPorts {
@@ -353,7 +357,12 @@ export async function verifyDesktopTask(
     if (policy.independent) {
       await checkCurrent()
       await checkpointTaskHandoff(root, run.taskUri, run.baseline.taskContractHash, 'Independent review against fixed acceptance criteria')
-      claim = await ports.independentReview!({ manifest, manifestHash, checks, criteria, brief: { ...brief, prior: [] } }, opts?.signal)
+      const tests = createReviewTestSession({ root, repoId: snapshot.repoId, actor: reviewer, manifest, criteria,
+        verification: snapshot.work.verification, command: ports.command, checkCurrent })
+      claim = await ports.independentReview!({ manifest: structuredClone(manifest), manifestHash, checks: structuredClone(checks), criteria, brief: { ...brief, prior: [] }, runTests: tests.run }, opts?.signal)
+      tests.assertExecuted()
+      checks.push(...tests.checks)
+      claim.verdict = reviewTestVerdict(claim.verdict, checks)
     }
     await checkCurrent()
   } catch (error) {

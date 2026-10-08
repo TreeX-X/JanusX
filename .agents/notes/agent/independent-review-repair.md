@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T12:41:09Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -31,23 +31,13 @@
 
 ## Problem
 
-Desktop runs verify and self-review in one host turn, but delegated work
-needs a second pair of eyes: an evaluator that never saw the implementor's
-working history, bound to the same pinned revision, with repairs spending an
-explicit budget. Without it, `xdel` and `xflow` tasks cannot complete their
-acceptance on the desktop, and every failed receipt dead-ends instead of
-reopening the run.
+Independent evaluation must test fixed acceptance against the implemented revision without inheriting implementation history. Auditing only the implementor's prior checks leaves the evaluator unable to exercise missing cases. xflow and explicitly retained independent obligations need this evaluation; xdel stops after self-review and leaves any independent obligation pending.
 
 ## Decision
 
-`src/main/harness/independent-review.ts` audits the pinned checks of a
-verifying run through a read-only evaluator turn. The evaluator inherits no
-implementor history: its brief carries an empty prior while the manifest,
-the recorded checks, and the criterion hashes travel exactly. The reviewer
-identity must differ from the run owner, or the request refuses; the verdict
-lands as a separate immutable receipt plus a thread evaluation stored beside
-implementor attempts, never merged into them. Missing checks, wrong states,
-foreign receipts, and moved baselines all refuse before any model call.
+Desktop execution and standalone review use the shared agentX test request contract. The evaluator first submits minimal tests for fixed AC; the host reruns named Main-authored checks or executes generated Node assertions against copied, read-only manifest files. It returns actual results before the final model verdict. A missing test phase is refused, unavailable execution blocks approval and failed required checks produce needs-fix. Execution limits and permission behavior belong to the [shared runtime Note](note://62b44166-82f0-41ff-838d-e2b02388ed06/0b2e7c13-8ae0-42d9-b185-1dd575c43a19).
+
+The evaluator inherits no implementation history: its brief carries an empty prior, actual AC text, exact manifest and criterion hashes. Both desktop entry points support source reads during planning. Reviewer identity differs from the implementor; new checks record that reviewer, while existing evidence keeps its original actor. The verdict lands as an immutable receipt and a thread evaluation. State, lease, attempt and acceptance are rechecked during evaluation; changed code blocks receipt validity. Task content remains Main-owned.
 `finishWithLatestReceipt` finishes a verifying run against its latest
 receipt and a live snapshot. Repairs stay manual and explicit through
 `runRepair` with the failing receipt and a summary, spending the kernel
@@ -57,8 +47,7 @@ main process.
 
 ## Alternatives considered
 
-- Rerun checks inside the evaluator: simplest evidence, but evaluators are
-  read-only by definition; re-execution belongs to implementor turns.
+- Give the evaluator unrestricted command and write tools: flexible, but loses the source and Task ownership boundary. Reuse host execution with exact declared commands and permission-limited temporary tests.
 - Merge evaluations into attempt history: one list to render, but it mixes
   auditor verdicts with implementor work and inherits bias through shared
   context; separation is structural here.
@@ -70,6 +59,8 @@ main process.
   reopen.
 
 ## Consequences
+
+Current Main checks pass 45 desktop executor tests, six standalone review tests and 15 IPC mapping tests across targeted runs. The added model-port test executes a real reviewer-generated assertion and binds it to the reviewer receipt; another rejects approval without test execution. Model replies are controlled test fixtures. These checks do not replace independent evaluation of the final integration.
 
 - **Gains**: verifying runs gain a read-only audit with an independent
   receipt, an explicit finish, and budget-spending repairs that reopen the

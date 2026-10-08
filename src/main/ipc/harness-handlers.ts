@@ -39,7 +39,7 @@ import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import { finishWithLatestReceipt, requestIndependentReview } from '../harness/independent-review'
 import { ensureTaskThread, readDesktopConcurrency, setThreadModel, setThreadReviewer } from '../harness/task-thread'
 import { llmService } from '../llm/LlmService'
-import { generateText, streamText } from '../llm/ai-runtime'
+import { streamText } from '../llm/ai-runtime'
 import type { HarnessTaskContractInput } from '../../shared/ipc/harness'
 import {
   cancelTaskRun,
@@ -748,10 +748,11 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
           ...(providerId ? { providerId } : {}),
           ...(modelId ? { modelId } : {}),
           getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
-          generateReviewText: async (model, prompt) => {
-            const result = await generateText({ model: model as never, maxSteps: 1, messages: [{ role: 'user', content: prompt }] as never })
-            return (result as { text?: string }).text ?? ''
-          },
+          generateReviewText: (_model, prompt, signal) => generateDesktopReviewText(root, runId, token, 'independent', {
+            providerId: providerId ?? '', modelId: modelId ?? '', maxTurns: DEFAULT_AGENT_MAX_STEPS,
+            getModel: (provider, model) => llmService.getLanguageModel('janus', provider, model),
+            streamTextFn: streamText as unknown as ChatTurnPorts['streamTextFn'],
+          }, prompt, signal),
         }, buildEvaluatorPrompt),
       }, { reviewer, ...(input?.receiptId ? { receiptId: input.receiptId } : {}) })
       if (!reviewed.ok) throwRunFailure(reviewed.errors)

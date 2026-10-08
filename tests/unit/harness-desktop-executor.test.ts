@@ -12,7 +12,7 @@ import { prepareTaskRun, startTaskRun, getTaskRun, pauseTaskRun, rebaselineTaskR
 import { executeDesktopTask, executeDesktopXdo, runDesktopCommand, type DesktopExecutorPorts } from '../../src/main/harness/desktop-executor'
 import { createDesktopImplementationPort, generateDesktopReviewText, prepareDesktopTaskTurn } from '../../src/main/harness/desktop-task-turn'
 import { readTaskTranscript } from '../../src/main/harness/task-transcript'
-import { buildDesktopReviewPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
+import { buildDesktopReviewPrompt, buildEvaluatorPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
 import { BRIEF_MAX_FILES, buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles } from '../../src/main/harness/task-brief'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
@@ -128,6 +128,7 @@ function approvingPorts(root: string): DesktopExecutorPorts {
   return {
     command: (step, signal) => runDesktopCommand(root, step, { signal }),
     review: async (input) => {
+      await input.runTests?.({ tests: [{ name: 'declared behavior check', criteria: input.criteria, checkId: input.checks[0].id }] })
       const criterion = input.criteria[0] as { uri: string; criterionId: string; criterionHash: string }
       const coverage: ReceiptCoverage[] = [{
         uri: criterion.uri, criterionId: criterion.criterionId, criterionHash: criterion.criterionHash,
@@ -139,6 +140,44 @@ function approvingPorts(root: string): DesktopExecutorPorts {
 }
 
 describe('desktop implementation loop', () => {
+  it('runs reviewer-generated assertions before the model verdict and records their identity', async () => {
+    const root = await makeRoot({ implementation: true })
+    const { runId, token } = await startedRun(root, 'xflow')
+    let calls = 0
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root),
+      implement: async () => { await writeFile(join(root, 'src/value.txt'), '43'); return { cancelled: false } },
+      independentReview: async input => createModelReviewPort(TASK_URI, 1, {
+        providerId: 'test', modelId: 'test', getModel: async () => ({}),
+        generateReviewText: async (_model, prompt) => {
+          if (++calls === 1) {
+            expect(prompt).toContain('Independent evaluator:')
+            return JSON.stringify({ tests: [{ name: 'updated value is 43', criteria: input.criteria,
+              source: "import assert from 'node:assert/strict'; import { readFileSync } from 'node:fs'; assert.equal(readFileSync('src/value.txt', 'utf8'), '43');" }] })
+          }
+          expect(prompt).toContain('updated value is 43')
+          expect(prompt).toContain('[command/passed]')
+          const testId = prompt.match(/- (eval-[a-f0-9-]+) \[command\/passed\]/)![1]
+          return JSON.stringify({ verdict: 'approved', coverage: input.criteria.map(c => ({ ...c, checkIds: [testId] })) })
+        },
+      }, buildEvaluatorPrompt)(input),
+    })
+    expect(result.errors).toEqual([])
+    expect(result.data.completed).toBe(true)
+    expect(calls).toBe(2)
+    const receipt = JSON.parse(await readFile(join(root, '.agents/evidence', `${result.data.receiptId}.json`), 'utf8'))
+    expect(receipt.checks.find((check: { id: string }) => check.id.startsWith('eval-'))).toMatchObject({ status: 'passed', performedBy: receipt.review.actor })
+  })
+
+  it('refuses an independent approval that never executes a test plan', async () => {
+    const root = await makeRoot()
+    const { runId, token } = await startedRun(root, 'xflow')
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root),
+      implement: async () => ({ cancelled: false }), independentReview: async () => ({ verdict: 'approved', coverage: [] }),
+    })
+    expect(result.data.completed).toBe(false)
+    expect(result.errors[0].message).toContain('must execute')
+  })
+
   it.each(['xdel', 'xdo', 'xflow'] as const)('v2 %s preserves review obligations and fresh-session handoff', async mode => {
     const root = await makeRoot({ implementation: true, v2: true, review: 'independent' })
     const before = parseNote(await readFile(join(root, '.agents/notes/task.md'), 'utf8'))
@@ -203,7 +242,10 @@ describe('desktop implementation loop', () => {
         if (++attempts === 2) expect(turn.request.systemPromptPrefix).toContain('Handle the empty value in src/value.txt')
         await writeFile(join(root, 'src/value.txt'), '43'); return { cancelled: false }
       },
-      independentReview: async () => ({ verdict: 'needs-fix', coverage: [], summary: 'Handle the empty value in src/value.txt' }),
+      independentReview: async (input) => {
+        await input.runTests?.({ tests: [{ name: 'declared behavior check', criteria: input.criteria, checkId: input.checks[0].id }] })
+        return { verdict: 'needs-fix', coverage: [], summary: 'Handle the empty value in src/value.txt' }
+      },
     })
     expect(result.data.completed).toBe(false)
     expect(attempts).toBe(2)

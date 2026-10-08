@@ -62,7 +62,7 @@ describe('current system structure', () => {
     expect(result.related[id(2)].filter(row => row.nodeId === id(4))).toHaveLength(1)
     expect(result.related[id(2)].some(row => row.nodeId === id(5))).toBe(true)
     expect(result.related[id(6)].some(row => row.nodeId === id(5))).toBe(true)
-    expect(result.related[id(2)]).toContainEqual({ uri: uri(99), nodeId: undefined, via: 'related-to' })
+    expect(result.related[id(2)]).toContainEqual(expect.objectContaining({ uri: uri(99), nodeId: undefined, via: 'related-to' }))
     expect(source).toEqual(before)
   })
   it('preserves distinct checkout instances and refuses ambiguous external providers', () => {

@@ -588,6 +588,12 @@
     "coverage": "检出范围",
     "related": "决策与相关工作",
     "noRelated": "暂无明确关联的工作。",
+    "governedBy": "遵循决策",
+    "derivedFrom": "源自",
+    "supersedes": "替代",
+    "acceptance": "验收依据",
+    "reference": "文档引用",
+    "ownership": "模块归属",
     "unresolved": "目标未解析"
   },
   "moduleState": {

@@ -588,6 +588,12 @@
     "coverage": "Checkout coverage",
     "related": "Decisions and related work",
     "noRelated": "No declared related work.",
+    "governedBy": "Governed by",
+    "derivedFrom": "Derived from",
+    "supersedes": "Supersedes",
+    "acceptance": "Acceptance source",
+    "reference": "Document reference",
+    "ownership": "Module ownership",
     "unresolved": "Unresolved target"
   },
   "moduleState": {

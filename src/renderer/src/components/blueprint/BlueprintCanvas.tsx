@@ -144,6 +144,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
 
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const firstNodeClick = useRef<{ id: string; x: number; y: number; time: number } | null>(null)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
   const [wikiAnchor, setWikiAnchor] = useState<{ uri: string; value?: string } | null>(null)
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
@@ -561,9 +562,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const cardActions = useMemo(() => ({ toggleCollapse, moduleBrowsing, architectureRoles: architecture?.roles, moduleDocuments: moduleBrowse?.owned, moduleChildren: architecture?.graph.nodes, openModule }), [toggleCollapse, moduleBrowsing, architecture, moduleBrowse?.owned, openModule])
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
-    (_e, node) => {
-      if (architecture?.roles[node.id]) openModule(node.id)
-      else revealNode(node.id)
+    (event, node) => {
+      // Opening the preview can move cards between the two clicks. Preserve the first target.
+      const first = firstNodeClick.current
+      const id = first && event.timeStamp - first.time < 1000 && Math.hypot(event.clientX - first.x, event.clientY - first.y) < 8 ? first.id : node.id
+      firstNodeClick.current = null
+      if (architecture?.roles[id]) openModule(id)
+      else revealNode(id)
     },
     [architecture, openModule, revealNode]
   )
@@ -820,7 +825,11 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         onNodesChange={onNodesChange}
         onNodeDragStop={() => { void flushLayoutSave() }}
         onNodeDoubleClick={onNodeDoubleClick}
-        onNodeClick={(_event, node) => { setSelectedId(node.id); setDetailNodeId(node.id); setWikiAnchor(null) }}
+        onNodeClick={(event, node) => {
+          if (event.detail === 2 && firstNodeClick.current) return
+          firstNodeClick.current = { id: node.id, x: event.clientX, y: event.clientY, time: event.timeStamp }
+          setSelectedId(node.id); setDetailNodeId(node.id); setWikiAnchor(null)
+        }}
         nodesDraggable={!moduleBrowsing}
         zoomOnDoubleClick={false}
         onNodeContextMenu={onNodeContextMenu}
