@@ -51,11 +51,18 @@ it('browses immediate module ownership without changing the source, and shares w
   expect(overview.groups).toEqual([])
   expect(overview.graph.nodeIds).toEqual([id(1), id(2)])
   const rootPage = projectModuleBrowse(source, projection, id(1))
-  expect(rootPage.graph.nodeIds).toEqual([id(2), id(3)])
+  expect(rootPage.graph.nodeIds).toEqual([id(1), id(2), id(3)])
   const expanded = projectModuleBrowse(source, projection, id(2))
-  expect(expanded.graph.nodeIds).toEqual([id(6), id(4), id(5)])
+  expect(expanded.graph.nodeIds).toEqual([id(2), id(6), id(4), id(5)])
+  expect(expanded.graph.rootNodeId).toBe(id(2))
+  expect(expanded.graph.nodes[id(2)].parentId).toBeNull()
+  expect(expanded.graph.nodes[id(2)].children).toEqual([id(6), id(4), id(5)])
+  for (const child of expanded.graph.nodes[id(2)].children) {
+    expect(expanded.graph.nodes[child].parentId).toBe(id(2))
+    expect(expanded.graph.canvasLayout[child].y).toBeGreaterThan(expanded.graph.canvasLayout[id(2)].y + 110)
+  }
   expect(expanded.groups.map(g => [g.moduleId, g.kind, g.nodeIds])).toEqual([[id(2), 'note', [id(4)]], [id(2), 'idea', [id(5)]]])
-  expect(projectModuleBrowse(source, projection, id(6)).graph.nodeIds).toEqual([id(7)])
+  expect(projectModuleBrowse(source, projection, id(6)).graph.nodeIds).toEqual([id(6), id(7)])
   expect(moduleTrail(projection, id(6))).toEqual([id(1), id(2), id(6)])
   for (const group of expanded.groups) for (const child of group.nodeIds) {
     const point = expanded.graph.canvasLayout[child]
@@ -94,7 +101,7 @@ it('keeps every document in the maintained JanusX corpus reachable through its o
     const page = projectModuleBrowse(source, projection, id)
     for (const child of page.graph.nodeIds) {
       accessible.add(child)
-      expect(page.owners[child]).toBe(id)
+      if (child !== id) expect(page.owners[child]).toBe(id)
     }
     expect(moduleTrail(projection, id).at(-1)).toBe(id)
   }

@@ -51,7 +51,7 @@ export function moduleTrail(projection: ArchitectureProjection, id: string | nul
   return trail
 }
 
-/** A disposable page of immediate children. Complete source data stays available to search/wiki. */
+/** A disposable module root and its immediate children. Source data stays available to search/wiki. */
 export function projectModuleBrowse(source: Blueprint, projection: ArchitectureProjection, scopeId: string | null) {
   const owners = moduleOwners(source, projection)
   const owned: Record<string, string[]> = Object.fromEntries(projection.graph.nodeIds.map(id => [id, []]))
@@ -63,14 +63,14 @@ export function projectModuleBrowse(source: Blueprint, projection: ArchitectureP
   const roots = projection.graph.nodeIds.filter(id => !projection.graph.nodes[id].parentId)
   const moduleIds = scope ? scope.children : roots.flatMap(id => [id, ...projection.graph.nodes[id].children])
   const documents = scope ? owned[scope.id] : []
-  const nodeIds = [...new Set([...moduleIds, ...documents])]
+  const nodeIds = [...new Set([...(scope ? [scope.id] : []), ...moduleIds, ...documents])]
   const graph: Blueprint = { ...projection.graph, nodeIds,
     nodes: Object.fromEntries(nodeIds.map(id => {
       const node = source.nodes[id]
-      const parent = !scope && moduleIds.includes(id) ? projection.graph.nodes[id].parentId : null
+      const parent = scope ? (id === scope.id ? null : scope.id) : projection.graph.nodes[id].parentId
       return [id, { ...node, parentId: parent, children: [] }]
     })),
-    rootNodeId: scope ? moduleIds[0] ?? documents[0] ?? '' : roots[0] ?? '',
+    rootNodeId: scope?.id ?? roots[0] ?? '',
     canvasLayout: {}, collapsedNodeIds: [],
     relations: source.relations.filter(edge => nodeIds.includes(edge.sourceNodeId) && nodeIds.includes(edge.targetNodeId)),
   }
@@ -87,8 +87,9 @@ export function projectModuleBrowse(source: Blueprint, projection: ArchitectureP
       x += width + 100
     }
   } else {
-    moduleIds.forEach((id, i) => { graph.canvasLayout[id] = { x: i % 3 * 304 + 24, y: Math.floor(i / 3) * 164 } })
-    const columns = [Math.ceil(moduleIds.length / 3) * 164 + 24, Math.ceil(moduleIds.length / 3) * 164 + 24]
+    const childTop = 190
+    moduleIds.forEach((id, i) => { graph.canvasLayout[id] = { x: i % 3 * 304 + 24, y: childTop + Math.floor(i / 3) * 164 } })
+    const columns = [childTop + Math.ceil(moduleIds.length / 3) * 164 + 24, childTop + Math.ceil(moduleIds.length / 3) * 164 + 24]
     const kinds = [...DOCUMENT_KINDS, ...new Set(documents.map(id => source.nodes[id].note?.kind ?? source.nodes[id].kind ?? 'note').filter(kind => !DOCUMENT_KINDS.includes(kind as typeof DOCUMENT_KINDS[number])))]
     for (const kind of kinds) {
       const ids = documents.filter(id => (source.nodes[id].note?.kind ?? source.nodes[id].kind ?? 'note') === kind)
@@ -100,6 +101,8 @@ export function projectModuleBrowse(source: Blueprint, projection: ArchitectureP
       ids.forEach((id, i) => { graph.canvasLayout[id] = { x: group.x + 24 + i % 2 * 280, y: group.y + 40 + Math.floor(i / 2) * 150 } })
       columns[column] += group.height + 28
     }
+    const width = Math.max(240, ...moduleIds.map(id => graph.canvasLayout[id].x + 240), ...groups.map(group => group.x + group.width))
+    graph.canvasLayout[scope.id] = { x: width / 2 - 120, y: 0 }
   }
   return { graph, groups, owners, owned, unassigned }
 }

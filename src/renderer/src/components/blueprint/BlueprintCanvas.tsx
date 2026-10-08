@@ -304,12 +304,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         }
         return
       }
-      instance.fitView({ padding: 0.2, duration })
+      instance.fitView({ padding: 0.2, duration, ...(moduleBrowsing ? { maxZoom: 1 } : {}) })
     }
     fitFrameRef.current = requestAnimationFrame(() => {
       fitFrameRef.current = requestAnimationFrame(settle)
     })
-  }, [])
+  }, [moduleBrowsing])
 
   const persistCollapsedNodeIds = useCallback(async (nodeIds: Set<string>) => {
     if (moduleBrowsing) return
@@ -775,7 +775,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       {sourceBlueprint && architecture && (moduleBrowsing || architecture.diagnostics.length > 0 || !!sourceBlueprint.invalidNotes?.length) && <div className="bp-architecture-overview"><BlueprintArchitecturePanel source={sourceBlueprint} projection={architecture} onSelect={selectCompositionNode} /></div>}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
       {toolbarState && actionError && <div className="blueprint-canvas-error" role="alert">{actionError}</div>}
-      {moduleBrowsing && scopeId && !currentBlueprint?.nodeIds.length && <p className="bp-browser-empty">{t('blueprint:browse.emptyModule')}</p>}
+      {moduleBrowsing && scopeId && currentBlueprint?.nodeIds.length === 1 && <p className="bp-browser-empty">{t('blueprint:browse.emptyModule')}</p>}
       {!graphReady ? <div className="blueprint-canvas-loading" aria-live="polite" aria-label={t('blueprint:toolbar.loading')} /> : null}
       <BlueprintCardActionsContext.Provider value={cardActions}>
       <ReactFlow<Node<BlueprintNodeData, 'blueprint'>, Edge>
