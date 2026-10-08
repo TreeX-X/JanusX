@@ -34,6 +34,8 @@ for (const surface of ['', '&workbench']) {
     await page.goto('/blueprint-architecture.html?v2' + surface)
     await card(page, 'Reader module').click()
     await expect(page.locator('.bp-node-detail')).toContainText('Reader module responsibilities from module.md.')
+    // Wait for the preview column transition before capturing a blank-canvas coordinate.
+    await page.locator('.react-flow__pane').click({ position: { x: 10, y: 10 }, trial: true })
     const pane = (await page.locator('.react-flow').boundingBox())!
     const point = { x: pane.x + 10, y: pane.y + 10 }
     expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.react-flow__pane'), point)).toBe(true)

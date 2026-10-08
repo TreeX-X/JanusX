@@ -5,7 +5,7 @@
   "kind": "requirement",
   "lifecycle": "accepted",
   "created": "2026-10-08",
-  "updated": "2026-10-08T15:06:16.136Z",
+  "updated": "2026-10-08T15:39:52.573Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/17bbe20e-f05c-470c-aee1-3f92a86369ab"
 }
 ---
@@ -33,7 +33,7 @@ note_scope 维护对话关注集合，记录目标、参考、依赖及原因，
 
 当前浏览模块、当前选中对象、对话关注集合分别表达。向右侧会话提供当前模块身份与路径，允许讨论同模块其他文档；点击某文件不能让模型误以为页面只剩该文件。浏览上下文来自 UI，正文仍按需读取，不复制 Note 内容或扩大编辑、执行权限。空模块、未归属文档和无模块仓库保留现有入口。
 
-关注高亮适配节点形状：模块沿卡片本体与顶部页签的原有边框显示主题强调色，target、reference、dependency 分别使用实线、虚线、点线，不再叠加矩形外框或矩形选中光晕。保留模块尺寸、圆角和缩小时的页签几何；普通文件仍使用原有外轮廓。两种蓝图入口共用此样式，关注不改变选中、预览与导航语义。
+关注高亮统一采用卡片外侧的独立轮廓，与边框之间保留约 4px 空隙。模块外圈沿卡片本体与顶部页签绕行，保留卡片原有边框及选中效果；target、reference、dependency 分别使用实线、虚线、点线。模块外圈复用 React Flow 的节点测量尺寸，随极简缩放调整页签，不参与布局或接收鼠标事件。普通文件仍使用原有外轮廓。两种蓝图入口共用此样式，关注不改变选中、预览与导航语义；后续调整模块页签几何时需同步外圈路径。
 
 兼容旧调用时，note_scope 接受原 focus 参数但始终不导航；note_focus 缺少 action 时按 locate 解释，缺少明确展示意图的 auto 调用只高亮。用户请求预览、进入或定位后，明确 action 或 focus: explicit 才可发出导航；focus: none 仍保持页面不动。scope/access 事件在接收端再次限制为不导航。工具返回 validated 与 requested/not-requested，不把事件发送冒充 UI 完成。
 
@@ -67,4 +67,6 @@ note_scope 维护对话关注集合，记录目标、参考、依赖及原因，
 
 回归发现快速进入再返回时，同 ID 节点的尺寸会在重建中丢失，未变化的 DOM 不再触发 ResizeObserver，导致节点和连线持续隐藏。现保留复用节点的测量值；两种入口各重复三次，共六项返回检查通过。截图核对了右侧模块分组、主目标与逐项操作，以及父节点和选中文件的视口。`node scripts/verify-note-corpus.mjs` 报告 258 份维护文档、0 error、23 项允许的读取诊断；八份保护文件哈希不变。无全仓目录迁移、新 Task 执行或独立评审。
 
-模块关注轮廓修复由 Main 自检：`npx playwright test tests/e2e/blueprint-module-focus.spec.ts tests/e2e/blueprint-note-focus.spec.ts tests/e2e/blueprint-v2.spec.ts --project=island --workers=1` 共 22 项通过。临时浏览器检查 `node artifacts/module-focus/verify.mjs` 覆盖两种入口 × 亮暗主题 × 三种关注角色的 12 个组合，确认模块本体与页签线型、颜色一致，关注前后尺寸不变，普通文件外轮廓、选中状态和极简缩放正常；截图人工核对页签轮廓。脚本、结果和截图保留在本地 `artifacts/module-focus/`，未纳入版本库；本次未做 Electron 打包验收。
+模块独立外圈由 Main 自检：`npx playwright test tests/e2e/blueprint-module-focus.spec.ts tests/e2e/blueprint-note-focus.spec.ts tests/e2e/blueprint-v2.spec.ts --project=island --workers=1` 共 22 项通过。初次回归中的工作台空白区双击检查在预览栏过渡动画期间读取坐标，导致点击位置断言失败；现先用 Playwright trial 点击等待布局稳定，保留原有空白区命中及导航断言。`npm run typecheck:strict-unused` 和变更组件 ESLint 通过。
+
+临时浏览器检查 `node artifacts/module-focus-offset/verify.mjs` 覆盖两种入口 × 亮暗主题 × 三种关注角色的 12 个组合，确认关注外圈与卡片分离、原边框保持实线、关注前后尺寸不变，普通文件外圈、选中状态、清空关注及极简缩放正常；截图人工核对页签外圈和边框间隙。脚本、结果和截图保留在本地 `artifacts/module-focus-offset/`，未纳入版本库；本次未做 Electron 打包验收。

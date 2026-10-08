@@ -48,7 +48,21 @@ export interface BlueprintNodeData extends Record<string, unknown> {
 /** Blueprint ????? React Flow Node ?? */
 export type BlueprintRFNodeType = Node<BlueprintNodeData, 'blueprint'>
 
-function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNodeType>) {
+// Note: separate focus ring with a 4px gap — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
+function moduleFocusPath(width: number, height: number, minimal: boolean) {
+  // Match the tab in module-browsing.css; expand its silhouette by 5px to
+  // place the 2px stroke outside the card without changing layout or hit areas.
+  const tabWidth = minimal ? 50 : 76
+  const tabRise = minimal ? 6 : 9
+  const tabJoin = tabWidth - 10 + Math.sqrt(15 ** 2 - (15 - tabRise) ** 2)
+  return `M -5 ${6 - tabRise} A 11 11 0 0 1 6 ${-tabRise - 5}
+    H ${tabWidth - 10} A 15 15 0 0 1 ${tabJoin} -5
+    H ${width - 10} A 15 15 0 0 1 ${width + 5} 10
+    V ${height - 10} A 15 15 0 0 1 ${width - 10} ${height + 5}
+    H 10 A 15 15 0 0 1 -5 ${height - 10} Z`
+}
+
+function BlueprintNodeCardImpl({ id, data, selected, width, height }: NodeProps<BlueprintRFNodeType>) {
   const { t } = useI18n('blueprint')
   const d = data
   const actions = useContext(BlueprintCardActionsContext)
@@ -72,6 +86,11 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
         d.searchDimmed ? 'bp-node-card--dimmed' : ''
       ].filter(Boolean).join(' ')}
     >
+      {architectureRole && width && height ? (
+        <svg className="bp-node-card__module-focus" width={width} height={height} aria-hidden="true" focusable="false">
+          <path d={moduleFocusPath(width, height, minimal)} />
+        </svg>
+      ) : null}
       {/* Note: hierarchy edges use Top/Bottom, relation edges may exit Left/Right — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md */}
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="target" id="left" position={Position.Left} style={{ opacity: 0 }} />
