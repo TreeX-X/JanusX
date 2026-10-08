@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-03",
   "class": "simplification",
-  "updated": "2026-10-08T10:44:48.910Z",
+  "updated": "2026-10-08T14:39:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -47,4 +47,4 @@ README 演示需要独立调整单个功能的步骤、文案与节奏。分屏�
 
 当前蓝图资产基于 JanusX `dc8a6394cf1618c12bacffb95a7b9a14fc689aed` 的隔离构建和 agentX `d6cd44569eee3c36c637a996131a1303b3900bde`，使用源码相符的共享依赖。隔离构建与严格类型检查通过；`npm run showcase -- build blueprint` 通过，输出 271 帧、1920×1080、34.38 秒 GIF 和 PNG。模型恰好接收六次请求：scope、focus、回复、read、write、回复，无额外修复轮次。`npm run test:showcase` 五项通过；关键原始帧与合成末帧经视觉检查，结束状态为 IDLE。
 
-录制中发现并修复两个真实问题：agentX 的修复判断误将领域状态当作执行失败，见其 [工程运行模块](note://62b44166-82f0-41ff-838d-e2b02388ed06/86c2d794-3be5-4807-b0fb-1f63c1baa910)；JanusX 在可选知识采集关闭时误报对话失败，见[领域控制](../knowledge/memory-domain-controls.md)。相关 29 项与 40 项测试分别通过。历史 2026-10-05 的五篇 v1 演示由本次资产替代，旧验证只说明当时行为，不能作为当前导航证据。当前验证属于 Main 自检，最终独立评审仍待执行。
+录制中发现并修复两个真实问题：agentX 的修复判断误将领域状态当作执行失败，见其 [工程运行模块](note://62b44166-82f0-41ff-838d-e2b02388ed06/86c2d794-3be5-4807-b0fb-1f63c1baa910)；JanusX 在可选知识采集关闭时误报对话失败，见[领域控制](../knowledge/memory-domain-controls.md)。相关 29 项与 40 项测试分别通过。历史 2026-10-05 的五篇 v1 演示由本次资产替代，旧验证只说明当时行为，不能作为当前导航证据。原资产验证属于 Main 自检。独立 evaluatorX 现已在 0408046 隔离构建及 5c41e2f 共享依赖上重新完整录制与合成：271 帧、1920×1080、六次确定性请求，原位维护和文档数量断言通过，成品与关键原始帧经 reviewer 和 Main 检视。该本地验收为 PASS，原资产及历史基线保持不变。
