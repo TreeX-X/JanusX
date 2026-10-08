@@ -5,7 +5,7 @@
   "kind": "requirement",
   "lifecycle": "accepted",
   "created": "2026-10-08",
-  "updated": "2026-10-08T06:29:34.779Z",
+  "updated": "2026-10-08T06:46:11.939Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd"
 }
 ---
@@ -62,6 +62,6 @@
 | 类型、构建、语言资源 | `npm run typecheck:strict-unused`、`npm run build:check`、`npm run i18n:check` 均通过；针对变更文件的 ESLint 为 0 error，保留既有布局状态中文字符串的 1 项 warning。 |
 | 文档语料 | `node scripts/verify-note-corpus.mjs`：257 份维护中的 v2 文档，254 份已迁移来源、3 份保护文件；0 error，23 项已允许的读取诊断。 |
 
-本轮没有创建 Task、执行全仓目录迁移或改写历史迁移哈希。真实子模块职责设计、README 演示和最终独立评审按后续顺序继续。
+本轮没有创建 Task、执行全仓目录迁移或改写历史迁移哈希。下一项为 [关注工具与模块浏览适配](module-focus-navigation.md)，其验收单独记录；之后继续真实子模块职责设计、README 演示和最终独立评审。
 
 父节点保留的补充验收 AC-7：`npx vitest run tests/unit/workflowx-v2.test.ts tests/unit/blueprint-architecture.test.ts` 14 项通过；`npx playwright test tests/e2e/blueprint-v2.spec.ts tests/e2e/blueprint-architecture.spec.ts --project=island --workers=1` 7 项通过（端口 41839，本地代理清空）；`npm run typecheck:strict-unused` 通过。核对浅色内嵌与深色工作台截图，当前模块位于直属内容上方；空模块仍显示自身，重复进入本页父节点不会多出返回步骤。此补充保留原分组和来源归属，页面父子连线不改写 Note。
