@@ -34,10 +34,15 @@
   vertical-align: baseline;
   white-space: normal;
   overflow-wrap: anywhere;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
-.bp-note-wiki .markdown-preview .bp-note-link:hover {
+.bp-note-wiki .markdown-preview .bp-note-link:is(:hover, :focus-visible) {
   border-color: var(--shell-accent, #f39861);
-  background: var(--shell-accent-mid, #493222);
+  background: var(--accent-mid, rgba(244, 125, 67, .18));
+  color: var(--shell-text, #fafafa);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bp-note-wiki .markdown-preview .bp-note-link { transition: none; }
 }
 .bp-note-source { white-space: pre-wrap; overflow-wrap: anywhere; background: #18171b; padding: 10px; border: 1px solid #333238; border-radius: 5px; font-size: 11px; max-height: 520px; overflow: auto; }
 .bp-note-wiki__group { border-top: 1px solid #363539; padding-top: 10px; margin-top: 12px; }
