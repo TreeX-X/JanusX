@@ -60,6 +60,7 @@ import { BlueprintBrowserBar } from './BlueprintBrowserBar'
 import './module-browsing.css'
 import './module-groups.css'
 import { BlueprintArchitecturePanel } from './BlueprintArchitecturePanel'
+import { BlueprintSourceInfo } from './BlueprintSourceInfo'
 import { nodeNoteSnapshot, resolveCompositionNote } from '@/features/blueprint/composition-view'
 
 const EMPTY_NODE_IDS: ReadonlySet<string> = new Set()
@@ -217,10 +218,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   if (activeDetailNode) leavingNodeRef.current = activeDetailNode
   const detailNode = activeDetailNode ?? (detailAnim.rendered ? leavingNodeRef.current : null)
   const detailSnapshot = sourceBlueprint && detailNode ? nodeNoteSnapshot(sourceBlueprint, detailNode.id) : undefined
-  const selectCompositionNode = (id: string): void => {
-    setSearchQuery(''); setStatusFilter('all'); setKindFilter('all'); setLocalFocusActive(false)
-    revealNode(id)
-  }
   const detailInCanvas = Boolean(detailNode && !detailPortal)
   const selectedNode = sourceBlueprint && selectedId ? sourceBlueprint.nodes[selectedId] ?? null : null
   /** 详情展示 note 原始词汇（HTML 高保真同构；legacy 缺透传时回退映射标签） */
@@ -423,6 +420,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     onNodeOpen?.(id)
     return !moduleBrowsing || !!architecture?.roles[id] || !!moduleBrowse?.owners[id]
   }, [sourceBlueprint, moduleBrowsing, currentBlueprint, moduleBrowse, architecture, navigateScope, setHideIsolated, onNodeOpen])
+  const selectCompositionNode = useCallback((id: string): void => {
+    setSearchQuery(''); setStatusFilter('all'); setKindFilter('all'); setLocalFocusActive(false)
+    revealNode(id)
+  }, [setSearchQuery, setStatusFilter, setKindFilter, revealNode])
+  useEffect(() => {
+    if (!toolbarState) return
+    toolbarState.revealSourceNodeRef.current = selectCompositionNode
+    return () => { toolbarState.revealSourceNodeRef.current = null }
+  }, [toolbarState, selectCompositionNode])
   useEffect(() => {
     history.current = []; setHistoryLength(0); setScopeId(null); setSelectedId(null); setDetailNodeId(null); setWikiAnchor(null)
     pendingViewport.current = null; pendingCenter.current = null
@@ -713,6 +719,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
               <button className="blueprint-btn" onClick={fitView} title={t('blueprint:action.fitCanvas')}>
                 {t('blueprint:action.fitCanvas')}
               </button>
+              {sourceBlueprint && architecture && <BlueprintSourceInfo key={sourceBlueprint.id} source={sourceBlueprint} projection={architecture} onSelect={selectCompositionNode} />}
               {!moduleBrowsing && isolatedCount > 0 && (
                 <button
                   className={`blueprint-btn blueprint-toolbar__toggle${hideIsolated ? ' blueprint-toolbar__toggle--active' : ''}`}
@@ -818,7 +825,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       )}
 
       {sourceBlueprint && moduleBrowse && architecture && <BlueprintBrowserBar source={sourceBlueprint} trail={moduleTrail(architecture, scopeId)} showOverview={!homeModuleId} canGoBack={historyLength > 0} onBack={goBack} onScope={navigateScope} searching={searchFilterActive} matches={allSearchMatchIds} unassigned={moduleBrowse.unassigned} onReveal={revealNode} hasModules={moduleBrowsing} />}
-      {sourceBlueprint && architecture && (moduleBrowsing || architecture.diagnostics.length > 0 || !!sourceBlueprint.invalidNotes?.length) && <div className="bp-architecture-overview"><BlueprintArchitecturePanel source={sourceBlueprint} projection={architecture} onSelect={selectCompositionNode} /></div>}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
       {toolbarState && actionError && <div className="blueprint-canvas-error" role="alert">{actionError}</div>}
       {moduleBrowsing && scopeId && currentBlueprint?.nodeIds.length === 1 && <p className="bp-browser-empty">{t('blueprint:browse.emptyModule')}</p>}
@@ -876,7 +882,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           />
         ) : null}
       </ReactFlow>
-      {!moduleBrowsing && currentBlueprint?.composition && <div className="bp-composition-overlay"><BlueprintCompositionPanel blueprint={currentBlueprint} onSelect={selectCompositionNode} /></div>}
       <div className="bp-canvas-legend" aria-hidden="true">
         {(!moduleBrowsing ? ['planning', 'in-progress', 'done', 'archived'] as const : []).map((status) => (
           <span key={status}>

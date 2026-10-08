@@ -1,4 +1,32 @@
 {
+  "sourceInfo": {
+    "title": "Data sources",
+    "attention": "Needs attention",
+    "description": "Inspect the repositories, document read status, and issues behind this blueprint.",
+    "attentionDescription": "Some sources or module relationships need attention. See the details below.",
+    "repositories": "Repositories and document sources",
+    "noSources": "This blueprint has no document source information.",
+    "bound": "Connected",
+    "unbound": "Not connected",
+    "stale": "Source needs refresh",
+    "complete": "Document scan complete",
+    "incomplete": "Document scan incomplete",
+    "revision": "Read revision: {{value}}",
+    "unknown": "Unknown",
+    "selected": "Currently used",
+    "dirty": "Local changes",
+    "diagnostics": "Issues to review",
+    "noDiagnostics": "No additional parsing issues.",
+    "technical": "Technical details",
+    "moduleInterfaces": "Module interfaces · {{count}}",
+    "interfaces": "Cross-module interfaces · {{count}}",
+    "interfaceDetails": "Interface connections",
+    "issue": {
+      "document": "Document reading needs review",
+      "scan": "Document scan is incomplete",
+      "module": "Module or repository relationship needs review"
+    }
+  },
   "browse": {
     "navigation": "Module navigation",
     "related": "Related documents and interfaces",
@@ -582,10 +610,8 @@
     "unavailable": "Not available in this canvas: {{names}}"
   },
   "architecture": {
-    "info": "Blueprint information",
     "project": "Project",
     "module": "Module",
-    "coverage": "Checkout coverage",
     "related": "Decisions and related work",
     "noRelated": "No declared related work.",
     "governedBy": "Governed by",

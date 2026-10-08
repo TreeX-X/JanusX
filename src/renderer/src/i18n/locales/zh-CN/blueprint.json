@@ -1,4 +1,32 @@
 {
+  "sourceInfo": {
+    "title": "数据来源",
+    "attention": "有待处理项",
+    "description": "查看蓝图使用的仓库、文档读取状态，以及需要检查的问题。",
+    "attentionDescription": "部分来源或模块关系需要检查，详情见下方。",
+    "repositories": "仓库与文档来源",
+    "noSources": "当前蓝图未提供文档来源信息。",
+    "bound": "已接入",
+    "unbound": "尚未接入",
+    "stale": "来源需要刷新",
+    "complete": "文档扫描完整",
+    "incomplete": "文档扫描未完成",
+    "revision": "读取版本：{{value}}",
+    "unknown": "未知",
+    "selected": "当前使用",
+    "dirty": "有本地修改",
+    "diagnostics": "需要检查的问题",
+    "noDiagnostics": "没有额外的解析问题。",
+    "technical": "技术详情",
+    "moduleInterfaces": "模块接口 · {{count}}",
+    "interfaces": "跨模块接口 · {{count}}",
+    "interfaceDetails": "接口连接详情",
+    "issue": {
+      "document": "文档读取需要检查",
+      "scan": "文档扫描尚未完成",
+      "module": "模块或仓库关系需要检查"
+    }
+  },
   "browse": {
     "navigation": "模块导航",
     "related": "关联文档与接口",
@@ -582,10 +610,8 @@
     "unavailable": "当前画布不可用：{{names}}"
   },
   "architecture": {
-    "info": "蓝图信息",
     "project": "项目",
     "module": "模块",
-    "coverage": "检出范围",
     "related": "决策与相关工作",
     "noRelated": "暂无明确关联的工作。",
     "governedBy": "遵循决策",

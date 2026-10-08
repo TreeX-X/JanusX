@@ -19,6 +19,7 @@ import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from '@/i18n/useI18n'
 import { projectArchitecture } from '@/features/blueprint/architecture-view'
+import { BlueprintSourceInfo } from './BlueprintSourceInfo'
 import { Select } from '../ui/Select'
 import { STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, type NoteKindFilter, getBlueprintStatusVisual } from './blueprintStatus'
 
@@ -47,6 +48,7 @@ interface BlueprintToolbarState {
   toggleDetailRef: { current: (() => void) | null }
   restoreLayoutRef: { current: (() => void) | null }
   undoLayoutRef: { current: (() => void) | null }
+  revealSourceNodeRef: { current: ((id: string) => void) | null }
   detailOpen: boolean
   canUndoLayout: boolean
   reportDetailOpen: (open: boolean) => void
@@ -103,6 +105,7 @@ export function BlueprintToolbarProvider({ children }: { children: ReactNode }) 
   const toggleDetailRef = useRef<(() => void) | null>(null)
   const restoreLayoutRef = useRef<(() => void) | null>(null)
   const undoLayoutRef = useRef<(() => void) | null>(null)
+  const revealSourceNodeRef = useRef<((id: string) => void) | null>(null)
   const [detailOpen, reportDetailOpen] = useState(true)
   const [canUndoLayout, reportCanUndoLayout] = useState(false)
   const reportSelectedId = useCallback((id: string | null) => setSelectedId(id), [])
@@ -120,7 +123,7 @@ export function BlueprintToolbarProvider({ children }: { children: ReactNode }) 
     setHideIsolated,
     isolatedCount,
     fitRef,
-    toggleDetailRef, restoreLayoutRef, undoLayoutRef,
+    toggleDetailRef, restoreLayoutRef, undoLayoutRef, revealSourceNodeRef,
     detailOpen, canUndoLayout, reportDetailOpen, reportCanUndoLayout,
     saveStatus,
     reportSaveStatus,
@@ -150,11 +153,11 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
     statusFilter, setStatusFilter,
     kindFilter, setKindFilter,
     hideIsolated, setHideIsolated, isolatedCount,
-    fitRef, saveStatus, toggleDetailRef, restoreLayoutRef, undoLayoutRef, detailOpen, canUndoLayout,
+    fitRef, saveStatus, toggleDetailRef, restoreLayoutRef, undoLayoutRef, revealSourceNodeRef, detailOpen, canUndoLayout,
   } = useRequiredBlueprintToolbar()
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
-  const architectureAvailable = useMemo(() => !!currentBlueprint && projectArchitecture(currentBlueprint).graph.nodeIds.length > 0, [currentBlueprint])
-  const moduleBrowsing = architectureAvailable
+  const architecture = useMemo(() => currentBlueprint ? projectArchitecture(currentBlueprint) : null, [currentBlueprint])
+  const moduleBrowsing = !!architecture?.graph.nodeIds.length
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
   const selectedWorkspaceId = useBlueprintStore((s) => s.selectedWorkspaceId)
@@ -240,6 +243,7 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
         {t('blueprint:action.restoreDefaultLayout')}
       </button>
       {canUndoLayout && <button className="blueprint-btn" onClick={() => undoLayoutRef.current?.()}>{t('blueprint:action.undoRestore')}</button>}
+      {architecture && <BlueprintSourceInfo key={currentBlueprint.id} source={currentBlueprint} projection={architecture} onSelect={id => revealSourceNodeRef.current?.(id)} />}
       {/* 面板常驻且自带上下文，这里不再需要「把节点带进对话」的中转按钮。 */}
       <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${saveStatus === 'clean' ? 'saved' : saveStatus}`}>
         {moduleBrowsing ? t('blueprint:action.autoLayout') : saveStatus === 'saving' ? '保存中…' : saveStatus === 'pending' ? '待保存' : saveStatus === 'failed' ? '保存失败' : '布局已保存（本机）'}

@@ -91,6 +91,7 @@ if (params.has('v2')) {
   graph.noteSnapshot!.diagnostics.push({ code: 'FIXTURE_PARSE_DIAGNOSTIC', message: 'Invalid historical document remains visible' } as any)
 }
 if (params.has('collapsed')) graph.collapsedNodeIds = [root.id]
+if (params.has('clean')) graph.noteSnapshot!.diagnostics = []
 if (params.has('untagged')) for (const node of Object.values(graph.nodes)) { node.tags = []; node.note!.tags = [] }
 // Real repository corpus supplied by the host test; production projection and lazy reads.
 if (params.has('corpus')) Object.assign(graph, (window as any).noteCorpus)

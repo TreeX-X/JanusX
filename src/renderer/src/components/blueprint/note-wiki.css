@@ -63,7 +63,6 @@
 .bp-composition section { max-height: 300px; overflow: auto; }
 .bp-composition button { background: transparent; border: 0; color: #e78b63; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
 .bp-composition button:disabled { color: #93939d; cursor: default; }
-.bp-composition-overlay { position: absolute; top: 12px; left: 12px; z-index: 4; max-width: min(460px, 65%); background: rgba(25, 25, 29, .94); border: 1px solid #34343b; border-radius: 8px; }
 
 /* ── Planche 纸面覆盖（加法层，dark 原样不动） ── */
 [data-theme='planche'] .bp-note-wiki { color: var(--ink, #1C343B); }
@@ -115,8 +114,3 @@
 [data-theme='planche'] .bp-composition summary { color: var(--shell-text); }
 [data-theme='planche'] .bp-composition button { color: var(--planche-red, #D43D2A); }
 [data-theme='planche'] .bp-composition button:disabled { color: var(--ink-faint, rgba(28, 52, 59, 0.38)); }
-[data-theme='planche'] .bp-composition-overlay {
-  background: var(--paper, #EFE4C5);
-  border: 1px solid var(--line, #1C343B);
-  box-shadow: 3px 3px 0 var(--line, #1C343B);
-}
