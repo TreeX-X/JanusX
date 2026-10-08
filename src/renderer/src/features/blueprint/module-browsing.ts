@@ -58,9 +58,11 @@ export function projectModuleBrowse(source: Blueprint, projection: ArchitectureP
   for (const id of source.nodeIds) if (!projection.roles[id] && owners[id]) owned[owners[id]].push(id)
   const unassigned = source.nodeIds.filter(id => !projection.roles[id] && !owners[id])
   const groups: ModuleDocumentGroup[] = []
-  if (!projection.graph.nodeIds.length) return { graph: source, groups, owners, owned, unassigned: [] }
-  const scope = scopeId ? projection.graph.nodes[scopeId] : undefined
   const roots = projection.graph.nodeIds.filter(id => !projection.graph.nodes[id].parentId)
+  const homeModuleId = roots.length === 1 ? roots[0] : null
+  if (!projection.graph.nodeIds.length) return { graph: source, groups, owners, owned, unassigned: [], scopeId: null, homeModuleId }
+  // A single root is already the home page; null and its id share one layout and navigation identity.
+  const scope = projection.graph.nodes[scopeId ?? ''] ?? projection.graph.nodes[homeModuleId ?? '']
   const moduleIds = scope ? scope.children : roots.flatMap(id => [id, ...projection.graph.nodes[id].children])
   const documents = scope ? owned[scope.id] : []
   const nodeIds = [...new Set([...(scope ? [scope.id] : []), ...moduleIds, ...documents])]
@@ -104,5 +106,5 @@ export function projectModuleBrowse(source: Blueprint, projection: ArchitectureP
     const width = Math.max(240, ...moduleIds.map(id => graph.canvasLayout[id].x + 240), ...groups.map(group => group.x + group.width))
     graph.canvasLayout[scope.id] = { x: width / 2 - 120, y: 0 }
   }
-  return { graph, groups, owners, owned, unassigned }
+  return { graph, groups, owners, owned, unassigned, scopeId: scope?.id ?? null, homeModuleId }
 }

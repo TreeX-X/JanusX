@@ -47,10 +47,12 @@ it('browses immediate module ownership without changing the source, and shares w
   expect(projection.graph.nodeIds).toHaveLength(3)
   expect(source.nodes[id(2)].status).toBe('planning')
   expect(source.nodes[id(3)].updatedAt).toBe('2026-10-08T00:00:00Z')
-  const overview = projectModuleBrowse(source, projection, null)
-  expect(overview.groups).toEqual([])
-  expect(overview.graph.nodeIds).toEqual([id(1), id(2)])
+  const home = projectModuleBrowse(source, projection, null)
   const rootPage = projectModuleBrowse(source, projection, id(1))
+  expect(home).toEqual(rootPage)
+  expect(home.scopeId).toBe(id(1))
+  expect(home.homeModuleId).toBe(id(1))
+  expect(home.groups.map(group => group.nodeIds)).toEqual([[id(3)]])
   expect(rootPage.graph.nodeIds).toEqual([id(1), id(2), id(3)])
   const expanded = projectModuleBrowse(source, projection, id(2))
   expect(expanded.graph.nodeIds).toEqual([id(2), id(6), id(4), id(5)])
@@ -73,6 +75,25 @@ it('browses immediate module ownership without changing the source, and shares w
   const snapshot = await service.readSnapshot(root)
   expect(noteWikiView(snapshot, uri(4)).ancestors).toEqual([uri(2), uri(1)])
   expect(noteDirectory(snapshot).find(r => r.entry.uri === uri(4))?.depth).toBe(2)
+})
+
+it('keeps an aggregate home for multiple roots and resolves a stale scope to the current home', async () => {
+  const { root, service } = await fixture()
+  const source = (await service.projectView(root)).blueprint
+  const singleRoot = projectArchitecture(source)
+  expect(projectModuleBrowse(source, singleRoot, id(999))).toEqual(projectModuleBrowse(source, singleRoot, null))
+  source.nodes[id(2)].note!.parent = null
+  delete source.nodes[id(2)].note!.metadata!.parent
+  source.nodes[id(2)].note!.relations = source.nodes[id(2)].note!.relations.filter(relation => relation.type !== 'parent')
+  source.relations = source.relations.filter(relation => relation.sourceNodeId !== id(2) || relation.type !== 'parent')
+  const multipleRoots = projectArchitecture(source)
+  const home = projectModuleBrowse(source, multipleRoots, null)
+  expect(home.homeModuleId).toBeNull()
+  expect(home.scopeId).toBeNull()
+  expect([...home.graph.nodeIds].sort()).toEqual([id(1), id(2), id(6)])
+  expect(home.groups).toEqual([])
+  expect(projectModuleBrowse(source, multipleRoots, id(1)).graph.nodeIds).toEqual([id(1), id(3)])
+  expect(projectModuleBrowse(source, multipleRoots, id(999))).toEqual(home)
 })
 
 it('retains unassigned and retired documents, while cross-module references do not change ownership', async () => {

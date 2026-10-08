@@ -67,7 +67,10 @@ if (params.has('v2')) {
     [5, 'Deep parsing document', 'note', `note://${R}/00000004-aaaa-4aaa-8aaa-aaaaaaaaaaaa`],
     [6, 'Legacy unassigned document', 'note', null],
     [7, 'Retired module', 'module', null],
+    [8, 'Additional module A', 'module', root.sourceUri],
+    [9, 'Additional module B', 'module', root.sourceUri],
   ] as const) {
+    if (index >= 8 && !params.has('wide')) continue
     const node = structuredClone(module)
     node.id = `0000000${index}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`; node.sourceUri = `note://${R}/${node.id}`
     node.title = node.note!.title = title; node.kind = node.note!.kind = kind

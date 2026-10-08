@@ -42,7 +42,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/dda0c41e-4581-4de5-af98-8fbdc2e768f5"},
     {"type":"governed-by","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/47c7be36-5a48-4a27-aa86-d4f9dffb641c"}
   ],
-  "updated": "2026-10-08T06:46:11.939Z",
+  "updated": "2026-10-08T07:12:00Z",
   "moduleState": "partial"
 }
 ---
@@ -55,7 +55,7 @@
 
 ## Design
 
-当前文档采用 WorkflowX v2：每个模块有一个 module.md，普通文档通过 module 声明归属；moduleState 单独记录 planned、partial、implemented、retired。统一蓝图概览显示模块，单击在左侧预览真实正文，双击进入模块页面；当前模块保留为画布父节点，下方显示直属文件与子模块入口，空模块也保留自身。返回恢复浏览范围、选中、预览和视口。模块使用带页签的容器轮廓，文件按类型放在所属模块的灰色虚线分组中。wiki 与 Chat 读取同一共享快照，搜索与 Chat 定位从完整来源进入所属模块，写入经 agentX 事务完成。具体接入、历史迁移和验证见 [WorkflowX v2 接入](workflowx-v2-adoption.md)。
+当前文档采用 WorkflowX v2：每个模块有一个 module.md，普通文档通过 module 声明归属；moduleState 单独记录 planned、partial、implemented、retired。单根项目的蓝图首页即根模块页，沿用模块页的分行布局，面包屑从项目名开始；多根项目保留聚合入口。单击在左侧预览真实正文，双击进入模块页面；当前模块保留为画布父节点，下方显示直属文件与子模块入口，空模块也保留自身。返回恢复浏览范围、选中、预览和视口，重复进入当前根节点不增加层级。模块使用带页签的容器轮廓，文件按类型放在所属模块的灰色虚线分组中。wiki 与 Chat 读取同一共享快照，搜索与 Chat 定位从完整来源进入所属模块，写入经 agentX 事务完成。具体接入、历史迁移和验证见 [WorkflowX v2 接入](workflowx-v2-adoption.md)。
 
 已实现行为与验证见 [模块浏览交互需求](requirements/module-browsing.md)。下一项是 [关注工具与模块浏览适配](requirements/module-focus-navigation.md)，统一右侧关注、预览/进入意图与当前模块上下文；随后按长期职责整理真实子模块与文档归属。现有一级模块接入不代表职责层级已经细分完成。
 

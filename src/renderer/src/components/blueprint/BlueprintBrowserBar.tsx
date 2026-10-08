@@ -4,8 +4,8 @@ import type { Blueprint } from '@/services/blueprint'
 import { useI18n } from '@/i18n/useI18n'
 import { NOTE_KIND_LABEL_KEY, noteKindOf } from './blueprintStatus'
 
-export function BlueprintBrowserBar({ source, trail, canGoBack, onBack, onScope, searching, matches, unassigned, onReveal, hasModules }: {
-  source: Blueprint; trail: string[]; canGoBack: boolean; onBack: () => void
+export function BlueprintBrowserBar({ source, trail, showOverview, canGoBack, onBack, onScope, searching, matches, unassigned, onReveal, hasModules }: {
+  source: Blueprint; trail: string[]; showOverview: boolean; canGoBack: boolean; onBack: () => void
   onScope: (id: string | null) => void; searching: boolean; matches: string[]
   unassigned: string[]; onReveal: (id: string) => void; hasModules: boolean
 }) {
@@ -21,9 +21,9 @@ export function BlueprintBrowserBar({ source, trail, canGoBack, onBack, onScope,
   return <div className="bp-browser-bar">
     <nav className="bp-browser-navigation" aria-label={t('blueprint:browse.navigation')}>
       <button className="blueprint-btn" onClick={onBack} disabled={!canGoBack} aria-label={t('blueprint:browse.back')}><ArrowLeft size={14} />{t('blueprint:browse.back')}</button>
-      <button className="blueprint-btn" onClick={() => onScope(null)} aria-current={!trail.length ? 'page' : undefined}>{t('blueprint:browse.overview')}</button>
+      {showOverview && <button className="blueprint-btn" onClick={() => onScope(null)} aria-current={!trail.length ? 'page' : undefined}>{t('blueprint:browse.overview')}</button>}
       {trail.map((id, index) => <span className="bp-browser-crumb" key={id}>
-        <ChevronRight size={12} aria-hidden="true" />
+        {(showOverview || index > 0) && <ChevronRight size={12} aria-hidden="true" />}
         <button className="blueprint-btn" aria-current={index === trail.length - 1 ? 'page' : undefined} onClick={() => onScope(id)}>{source.nodes[id].title}</button>
       </span>)}
     </nav>

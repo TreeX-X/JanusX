@@ -123,8 +123,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const { t } = useI18n('blueprint')
   const sourceBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const architecture = useMemo(() => sourceBlueprint ? projectArchitecture(sourceBlueprint) : null, [sourceBlueprint])
-  const [scopeId, setScopeId] = useState<string | null>(null)
-  const moduleBrowse = useMemo(() => sourceBlueprint && architecture ? projectModuleBrowse(sourceBlueprint, architecture, scopeId) : null, [sourceBlueprint, architecture, scopeId])
+  const [requestedScopeId, setScopeId] = useState<string | null>(null)
+  const moduleBrowse = useMemo(() => sourceBlueprint && architecture ? projectModuleBrowse(sourceBlueprint, architecture, requestedScopeId) : null, [sourceBlueprint, architecture, requestedScopeId])
+  const scopeId = moduleBrowse?.scopeId ?? null
+  const homeModuleId = moduleBrowse?.homeModuleId ?? null
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
@@ -386,13 +388,14 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   // Note: local module navigation preserves source/layout — see .agents/notes/blueprint/requirements/module-browsing.md
   const navigateScope = useCallback((nextScope: string | null, previewId: string | null = nextScope) => {
     pendingCenter.current = null
-    if (nextScope !== scopeId) {
+    const targetScope = nextScope ?? homeModuleId
+    if (targetScope !== scopeId) {
       history.current.push({ scopeId, selectedId, detailNodeId, wikiAnchor, viewport: rfInstanceRef.current?.getViewport() ?? null })
       setHistoryLength(history.current.length)
-      setScopeId(nextScope)
+      setScopeId(targetScope)
     }
     setSelectedId(previewId); setDetailNodeId(previewId); setWikiAnchor(null)
-  }, [scopeId, selectedId, detailNodeId, wikiAnchor])
+  }, [scopeId, homeModuleId, selectedId, detailNodeId, wikiAnchor])
   const openModule = useCallback((id: string) => {
     if (architecture?.roles[id]) navigateScope(id)
   }, [architecture, navigateScope])
@@ -422,10 +425,10 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     pendingViewport.current = null; pendingCenter.current = null
   }, [blueprintId, ownerPath])
   useEffect(() => {
-    if (scopeId && !architecture?.roles[scopeId]) {
+    if (requestedScopeId && !architecture?.roles[requestedScopeId]) {
       setScopeId(null); history.current = []; setHistoryLength(0)
     }
-  }, [scopeId, architecture])
+  }, [requestedScopeId, architecture])
   const revealAssistantNodes = useCallback((ids: string[]) => ids[0] ? revealNode(ids[0]) : false, [revealNode])
   const assistantCanvas = useNoteCanvasFocus(sourceBlueprint, ownerPath, rfNodes, rfEdges, rfInstanceRef, revealAssistantNodes)
 
@@ -771,7 +774,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       </div>
       )}
 
-      {sourceBlueprint && moduleBrowse && architecture && <BlueprintBrowserBar source={sourceBlueprint} trail={moduleTrail(architecture, scopeId)} canGoBack={historyLength > 0} onBack={goBack} onScope={navigateScope} searching={searchFilterActive} matches={allSearchMatchIds} unassigned={moduleBrowse.unassigned} onReveal={revealNode} hasModules={moduleBrowsing} />}
+      {sourceBlueprint && moduleBrowse && architecture && <BlueprintBrowserBar source={sourceBlueprint} trail={moduleTrail(architecture, scopeId)} showOverview={!homeModuleId} canGoBack={historyLength > 0} onBack={goBack} onScope={navigateScope} searching={searchFilterActive} matches={allSearchMatchIds} unassigned={moduleBrowse.unassigned} onReveal={revealNode} hasModules={moduleBrowsing} />}
       {sourceBlueprint && architecture && (moduleBrowsing || architecture.diagnostics.length > 0 || !!sourceBlueprint.invalidNotes?.length) && <div className="bp-architecture-overview"><BlueprintArchitecturePanel source={sourceBlueprint} projection={architecture} onSelect={selectCompositionNode} /></div>}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
       {toolbarState && actionError && <div className="blueprint-canvas-error" role="alert">{actionError}</div>}
