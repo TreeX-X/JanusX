@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-08",
-  "updated": "2026-10-08T10:44:48.910Z",
+  "updated": "2026-10-08T11:37:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
   "codeRefs": [
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/harness/note-authoring.ts","role":"entry"},
@@ -58,7 +58,11 @@ Chat 的 Note 工具复用共享服务，并保留 workspace.read、workspace.ed
 | 2 | 关注工具适配 | 已实现并自检，预览、进入、定位复用导航，见[关注需求](navigation/requirements/module-focus-navigation.md)。 |
 | 3 | 真实职责层级与文档归属 | 两批迁移已完成，身份、相对链接、代码反向引用和语料验证见[整理记录](module-responsibilities.md)。 |
 | 4 | README 示例和演示资产 | 已实现并自检：三层目录、关注定位、xdo 原位维护与 Main-owned Task 交接；271 帧真实宿主演示使用本地脚本模型。构建来源、修复和验证见[演示记录](../desktop/readme-showcase.md)，跨仓完成情况见[演示需求](note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/ca370eb7-05a0-4bde-9539-4f9fddf77b2c)。 |
-| 5 · 下一项 | 最终独立评审与修复 | 复核最终代码、真实语料和演示；跨仓 Task 的 independent 义务仍待满足。正式执行前先修订旧 AC-4 交互措辞并固定新基线；发布和推送另行安排。 |
+| 5 · 下一项 | 补齐共享评估执行能力 | WorkflowX 明确评估器只读与测试执行边界；agentX 补齐按固定 AC 发起并实际运行最小测试的通道，JanusX 对齐桌面适配。现有实现只能核对预先运行的检查，详见[共享运行时缺口](note://62b44166-82f0-41ff-838d-e2b02388ed06/0b2e7c13-8ae0-42d9-b185-1dd575c43a19)。 |
+| 6 | 架构师 v2 适配与验证 | 复用已支持的 module.md 初始化、模块投影和显式 checkout 组合。补齐多层模块、module 归属、接口绑定、模块浏览及关注工具的组合场景验证；按失败证据修复。设计边界见[架构师工作区](workspaces/architect-workspace-model.md)。 |
+| 7 | 最终独立评审与修复 | 在前两项完成后复核集成代码、真实语料和必要更新的演示。正式执行前修订旧 AC-4 交互措辞，补齐评估与架构师验收范围并固定新基线；跨仓 Task 的 independent 义务仍待满足。发布和推送另行安排。 |
+
+本轮仅完成源码核对与计划修订，没有实现第 5、6 项，也没有运行 evaluatorX。此前“下一项只剩最终独立评审”的排期遗漏了评估器执行通道。架构师初始化与 module 识别已有 v2 支持，专用架构/组合测试仍主要使用 harness-note/1 initiative 数据；这说明新组合场景尚缺验证，不能直接判定已有能力全部失效。
 
 ## 验证与边界
 

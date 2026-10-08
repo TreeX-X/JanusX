@@ -30,14 +30,16 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-08T11:37:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bc9c2ca8-e036-48ec-a35e-667d694460ca"
 }
 ---
 
 # 架构师工作区：Note、wiki 与蓝图的共同契约
 
-本文规定目标设计；完成位置、实施顺序和验收只记在[实施计划](../requirements/blueprint-notev2-implementation-plan.md)。本文保持 proposed，文档完善不代表功能已实现。
+本文记录架构师工作区的设计边界，accepted 表示设计已采纳，不代表每项功能已验收。早期实施依据保留在[历史计划](../requirements/blueprint-notev2-implementation-plan.md)；当前 v2 适配顺序和未完成项见[接入计划](../workflowx-v2-adoption.md)。
+
+本轮源码核对确认：WorkflowX xarch 已按 module.md 创建项目与子模块，agentX 初始化已生成 v2 项目模块，JanusX 架构投影已识别 module、module 归属和显式 checkout。专用架构/组合测试仍主要使用旧 initiative 数据，不能据此宣称新格式的完整架构师交互已验收。后续需验证递归模块、开发仓库归属与接口、未接入状态，以及预览、进入、保留父节点、返回和关注定位的组合场景；仅对证实的缺口补实现。
 
 设计沿用 [V2 单工作区投影](../navigation/blueprint-workspace-graph-v2.md)和 [V3 组合视图](./blueprint-composition-v3.md)的分层与证据概念。规划骨架的唯一存储为架构师 Git 仓库中的标准 Note。共享索引的上游依据为 [WorkFlowX 派生索引约定](note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/c61d7a4e-6f8b-4a2e-9d31-5c7e8b0f2a14)。
 
@@ -57,7 +59,7 @@ Note 已有稳定身份和工程关系，轻索引已有反链与查询，但蓝
 | L1 规划骨架 | 架构师仓库的项目、模块职责、接口、仓库绑定 | 共享 Git 仓库，可用 CODEOWNERS 分工 |
 | 读视图 | 工程 wiki、单工作区投影、项目组合蓝图 | 从同一 Note 索引派生，布局与过滤保存在本机 |
 
-架构师工作区是普通 Git 仓库，具有自己的 repoId 和 `.agents/harness.json`。项目与模块使用 initiative；模块内部的机制、需求和任务由开发仓库维护。项目全景由架构师仓库声明，不能随本机已打开的工作区集合改变。
+架构师工作区是普通 Git 仓库，具有自己的 repoId 和 `.agents/harness.json`。项目与模块使用 `kind: module` 的 module.md，项目入口声明 `role: project`；递归子模块用 parent 表达模块层级，普通文档用 module 声明归属。模块内部的机制、需求和任务由开发仓库维护。项目全景由架构师仓库声明，不能随本机已打开的工作区集合改变，也不把开发仓库的 Task 和执行证据复制到架构师仓库。
 
 Note 是工程声明的唯一真源。工程 wiki 直接展示 Note 的目录、正文、引用和反链；既有知识 wiki 继续解释其 fact/observation 来源，并可引用 Note。知识摘要、搜索结果和画布都不拥有 Note 的生命周期、执行状态或审批权。
 
@@ -71,7 +73,7 @@ Note 是工程声明的唯一真源。工程 wiki 直接展示 Note 的目录、
 
 | 数据 | 最少保留的内容 |
 |---|---|
-| Note 条目 | URI、标题、kind、lifecycle、tags、parent、仓库绑定、codeRefs、接口声明、路径、内容哈希、短摘录 |
+| Note 条目 | URI、标题、kind、lifecycle、moduleState、tags、module、parent、仓库绑定、codeRefs、接口声明、路径、内容哈希、短摘录 |
 | 正式关系 | 完整起止 URI、原始 type，以及已声明的 criteria、scope、reason |
 | 派生引用 | 正文链接或 wiki 来源的起止身份、来源类别；与正式关系分开返回 |
 | 诊断 | 源文件、原因、目标 URI（存在时）、解析状态；保留未解析目标 |
@@ -94,13 +96,13 @@ Note 是工程声明的唯一真源。工程 wiki 直接展示 Note 的目录、
 | 目标缺失或不明确 | 仓库已读但目标不存在、ID 冲突或绑定歧义；展示诊断，不猜测连线 |
 | 内容已变化 | wiki/证据保存的来源哈希与当前 Note 不同；显示过期并允许查看当前原文 |
 
-lifecycle、task.execution 和来源新鲜度各自展示。模块获准不代表下游任务完成，内容变化也不自动撤销已有回执；正式验收仍由现有契约与回执规则决定。
+moduleState、lifecycle、task.execution 和来源新鲜度各自展示。planned 模块与尚未绑定仓库的模块仍保留入口；模块获准不代表下游任务完成，内容变化也不自动撤销已有回执。正式验收仍由现有契约与回执规则决定。
 
 ### 4. 接口声明与组合装配
 
-接口声明遵循 WorkFlowX S1.2 的 `initiative.interfaces[]`：name、direction（provides/needs）及可选 provider Note URI。它不进入 taskContractHash。S1.2 仍为候选版，须按实施计划完成正式版本与三仓接入后启用；正文解释不再承担另一份可执行接口表。
+接口使用当前固定 harness-note/2 profile 的模块 `interfaces[]`：name、direction（provides/needs）及可选 provider Note URI。复用现有字段与解析，不增设架构师专用 schema；正文解释不再承担另一份可执行接口表。旧 S1.2 initiative 表述仅属历史版本背景。
 
-组装时，有 provider 的 needs 必须解析到该模块的同名 provides，才能形成接口匹配边。无 provider 的 needs 按 S1.2 契约显示悬空需求，可列出候选但不凭同名自动连线。仓库不可达时显示未接入，不能判定接口不存在。未被当前范围需求引用的 provides 标为“当前范围未引用”，避免推断其它仓库也无人使用。
+组装时，有 provider 的 needs 必须解析到该模块的同名 provides，才能形成接口匹配边。无 provider 的 needs 显示悬空需求，可列出候选但不凭同名自动连线。仓库不可达时显示未接入，不能判定接口不存在。未被当前范围需求引用的 provides 标为“当前范围未引用”，避免推断其它仓库也无人使用。
 
 装配器读取架构师骨架与已接入仓库的共同读数据，不另读 Note 文件。一个仓库承载多个模块时，证据归属依据显式关系和代码范围；无法判定的条目提供仓库级入口，不能复制成每个模块的证据。骨架与各库保留各自 revision，界面显示当前范围，不能拼成一个全局版本号。
 
@@ -118,23 +120,23 @@ harness-core 负责解析、校验和哈希，harness-node 负责文件、索引
 
 有效、旧格式、外来格式、损坏、重复身份及未解析引用都必须可查。旧格式不能通过 silently skip 从项目中消失；无法安全迁移时保留原文与分类。迁移保持既有 UUID、可解析链接及原始事实，不能由旧 Status 伪造 task 回执。
 
-`xarch` 沿用直接执行的六步：建立或检查 Git 仓库、建立或校验身份、生成合法 initiative 模板、写可选 CODEOWNERS 与 README、注册本机工作区、核对投影与诊断。已有身份只校验；复用脏仓时停止并说明。新模板使用当前正式 profile 和标准必填节；未绑定仓库时省略字段，不能写伪 UUID 占位值。
+`xarch` 由 Main Agent 直接建立或检查 Git 仓库、复用或创建身份、生成项目与已确认或 planned 子模块的 module.md，并按范围写 README 与可选 CODEOWNERS。创建时使用宿主支持的当前 profile、真实 UUID 和已知绑定，未知仓库不写伪占位值。检查已有改动并保护重叠文件；本机注册与投影验证分别报告，缺失宿主能力时不能由文件创建推断接入成功。xarch 不创建 Task，也不派发子 Agent。
 
-目标目录布局为平铺 `notes/`，层级由 parent 表达。当前 xarch 的 planning 子目录属于待对齐实现，扫描继续递归读取已有文件。本次原位规范化的两篇规划 Note 保留路径，批量移动归入后续迁移。
+目录按模块职责组织：`.agents/notes/module.md` 为项目入口，每个子模块目录有自己的 module.md，相关普通 Note 与下级模块共存。使用稳定主题文件名，移动不改变 Note URI；文件目录与 module/parent 关系保持一致，不再规定平铺 notes 或单独 planning 树。
 
-UI 先完善现有原型，再实现工程 wiki 的目录、反链、来源状态及组合图的接口边、未接入态。布局、过滤和默认架构仓 pin 只属本机；不同架构仓分别呈现，不隐式合并。默认只展示正式工程关系，正文引用和知识解释按需展开。
+架构师视图复用现有模块浏览：单击左侧预览，双击进入范围，保留当前模块自身与直属文档、子模块入口，返回恢复上下文。单根首页采用根模块布局，关注工具与手动导航使用同一范围和 checkout 身份。组合视图保留接口与未接入诊断；上述行为在跨仓组合中的一致性属于本轮待验证范围。布局、过滤和默认架构仓 pin 只属本机；不同架构仓分别呈现，不隐式合并。默认只展示正式工程关系，正文引用和知识解释按需展开。
 
 ### 7. 治理与审批
 
 架构师仓库成员共同维护模块声明，各开发仓库自治。计划性变更走各库 Git 评审，应用内变更走原有 maintenance 事务、expectedHash 和审计。跨库意图拆为独立事务，逐库报告结果；不引入跨库原子提交。
 
-维护对话先在 plan 模式探索并产出 changeset。用户全选或部分选择操作组，依赖闭包补齐后才进入可写阶段，并保留现有工具动作审批。删除逐项确认，审计和撤销沿用已有能力。状态切换、工具白名单和事务接入都属于待实现工作，不能只恢复按钮便宣布完成。
+维护入口沿用当前宿主的授权、工具权限、expectedHash 与事务边界；本文不再要求每次修改都另走固定 plan → changeset → 全选流程。跨仓修改绑定明确目标，分别报告结果。Task 全文始终只由 Main Agent 修改；子 Agent 返回结果与草稿，由 Main 整合，不增设架构师专用交接文档。交互与事务是否完整接通须以当前实现验证为准。
 
 并发冲突由 Agent 重读并说明。若合并改变已确认的提案，必须重新确认；重试须有界，未解决时明确报告。wiki 摘要和画布交互均不能绕过该写路径。
 
 ### 8. 简洁边界
 
-只保留五种 Note kind，沿用现有 class 与 tags。此次完善不新增能力注册表、机制字段、共享 views、中央 INDEX.md、搜索数据库或通用资源图框架。接口采用已裁决的 S1.2 最小字段；多任务调度另立项。任务验收引用、哈希和 lifecycle/execution 双轨保持现行语义。
+复用当前六种 Note kind：module、note、idea、requirement、decision、task。此次适配不新增架构师专用元数据、能力注册表、共享 views、中央 INDEX.md、搜索数据库或通用资源图框架。接口沿用现有最小字段；实际任务执行继续走 xdo/xdel/xflow，xarch 只负责工作区与规划入口。任务验收引用、哈希和 lifecycle/execution 双轨保持现行语义。
 
 接口边与引用边都是读取时的派生结果，不回写为 Note 正式关系。每项派生数据都必须能由来源重建；正文、状态和反链均不得要求人工维护两份。
 
