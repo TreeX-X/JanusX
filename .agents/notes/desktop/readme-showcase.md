@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-03",
   "class": "simplification",
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T10:44:48.910Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -27,7 +27,11 @@ README 演示需要独立调整单个功能的步骤、文案与节奏。分屏�
 
 [产物脚本](../../../scripts/showcase/record-product.mjs) 使用真实文件发现、Island 提醒和预览组件，通过断言检查 HTML 交互、面板缩放后的预览、JSON 结果、多标签与磁盘重新加载。示例报告和验收数据由脚本编写，不调用模型、不复制登录凭证。成品与入口放在 [README](../../../README.md) 第 09 项基础功能。
 
-[蓝图脚本](../../../scripts/showcase/record-blueprint.mjs) 在临时配置中开启蓝图，以一篇项目声明、两篇模块声明和两篇决策驱动真实 Note 投影。演示覆盖系统结构、模块接口、关联决策、全部 Note 与维护指令输入；关键控件或内容缺失时录制失败。蓝图不复制登录凭证、不发送消息，成品统一使用 `feature-blueprint-workbench`，README 文案与实际操作一致。
+[蓝图脚本](../../../scripts/showcase/record-blueprint.mjs) 在隔离配置中开启蓝图，以九篇 v2 文档展示项目、文件阅读、解析与提示三层模块，父层普通 Note 与子模块共存，覆盖 module、note、idea、requirement、decision、task 六种类型。单击预览原文，双击进入并保留模块自身，返回上层；关注列表与显式定位分别展示。
+
+[本地模型](../../../scripts/showcase/blueprint-model.mjs) 通过回环 HTTP Responses 返回确定性工具调用，实际操作走 Electron、IPC 和共享 Note 服务。先执行 `note_scope`、`note_focus`，再由 `note_read`、`note_write` 原位更新阅读约定；断言身份、created、九篇文档与一个既有 Task 数量不变，updated 刷新。Task 只展示 Main-owned Handoff，未执行、无独立评估。模型服务只使用演示占位密钥，不复制登录文件或调用外部模型。
+
+录制同时检查对话结束且没有错误卡片，成功才保存 manifest 和更新 latest。manifest 记录构建入口、JanusX 与 agentX 提交、工具序列和时间变化。`SHOWCASE_ENTRY` 可指向隔离版本构建，两个 source commit 环境变量由录制者核对；成品继续使用 `feature-blueprint-workbench`。README 明确区分真实宿主操作、本地脚本模型与示例 Task。
 
 ## Alternatives considered
 
@@ -41,4 +45,6 @@ README 演示需要独立调整单个功能的步骤、文案与节奏。分屏�
 
 验证入口为 `npm run test:showcase`，五项测试覆盖鼠标位置、点击拼接、中文输入、失败拖拽释放和延时单位。`npm run showcase -- build product` 在本机构建产物上通过真实交互断言，生成 185 帧、1920×1080 的 GIF 与 PNG；成品末帧经人工视觉检查。
 
-2026-10-05：`npm run build` 与 `npm run showcase -- build blueprint` 通过，蓝图录制生成 168 帧、1920×1080、约 0.96 MB 的 GIF 及配套 PNG。录制断言验证结构视图三节点、全部 Note 五节点、模块接口、关联决策正文及完整中文输入；结构视图与合成末帧经人工视觉检查。`npm run test:showcase` 五项通过。
+当前蓝图资产基于 JanusX `dc8a6394cf1618c12bacffb95a7b9a14fc689aed` 的隔离构建和 agentX `d6cd44569eee3c36c637a996131a1303b3900bde`，使用源码相符的共享依赖。隔离构建与严格类型检查通过；`npm run showcase -- build blueprint` 通过，输出 271 帧、1920×1080、34.38 秒 GIF 和 PNG。模型恰好接收六次请求：scope、focus、回复、read、write、回复，无额外修复轮次。`npm run test:showcase` 五项通过；关键原始帧与合成末帧经视觉检查，结束状态为 IDLE。
+
+录制中发现并修复两个真实问题：agentX 的修复判断误将领域状态当作执行失败，见其 [工程运行模块](note://62b44166-82f0-41ff-838d-e2b02388ed06/86c2d794-3be5-4807-b0fb-1f63c1baa910)；JanusX 在可选知识采集关闭时误报对话失败，见[领域控制](../knowledge/memory-domain-controls.md)。相关 29 项与 40 项测试分别通过。历史 2026-10-05 的五篇 v1 演示由本次资产替代，旧验证只说明当时行为，不能作为当前导航证据。当前验证属于 Main 自检，最终独立评审仍待执行。

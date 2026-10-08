@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-08",
-  "updated": "2026-10-08T09:10:33.782Z",
+  "updated": "2026-10-08T10:44:48.910Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
   "codeRefs": [
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/harness/note-authoring.ts","role":"entry"},
@@ -50,16 +50,16 @@ Chat 的 Note 工具复用共享服务，并保留 workspace.read、workspace.ed
 
 ## 后续实施顺序
 
-按依赖推进，不把 Main 自检等同于独立评审。当前 xdo 只维护目录及检查，不启动新正式 Task 执行。
+按依赖推进，不把 Main 自检等同于独立评审。当前 xdo 已完成目录、README 和演示资产及必要运行时修复，不启动新正式 Task 执行。
 
 | 顺序 | 工作 | 状态与出口 |
 | --- | --- | --- |
 | 1 | 统一模块浏览与单根首页 | 已实现并自检，保留父节点和逐层返回，见[浏览需求](navigation/requirements/module-browsing.md)。 |
 | 2 | 关注工具适配 | 已实现并自检，预览、进入、定位复用导航，见[关注需求](navigation/requirements/module-focus-navigation.md)。 |
 | 3 | 真实职责层级与文档归属 | 两批迁移已完成，身份、相对链接、代码反向引用和语料验证见[整理记录](module-responsibilities.md)。 |
-| 4 · 下一项 | README 示例和演示资产 | 以稳定目录和当前行为展示模块/子模块、关注定位、文档维护及 Task 交接，遵循[演示需求](note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/ca370eb7-05a0-4bde-9539-4f9fddf77b2c)。 |
-| 5 | 最终独立评审与修复 | 复核最终代码、真实语料和演示；跨仓 Task 的 independent 义务仍待满足。发布和推送另行安排。 |
+| 4 | README 示例和演示资产 | 已实现并自检：三层目录、关注定位、xdo 原位维护与 Main-owned Task 交接；271 帧真实宿主演示使用本地脚本模型。构建来源、修复和验证见[演示记录](../desktop/readme-showcase.md)，跨仓完成情况见[演示需求](note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/ca370eb7-05a0-4bde-9539-4f9fddf77b2c)。 |
+| 5 · 下一项 | 最终独立评审与修复 | 复核最终代码、真实语料和演示；跨仓 Task 的 independent 义务仍待满足。正式执行前先修订旧 AC-4 交互措辞并固定新基线；发布和推送另行安排。 |
 
 ## 验证与边界
 
-验证命令、结果和仍待独立评审的项目见 [接入验证](../../../docs/migrations/workflowx-v2-verification.md)。桌面测试使用本地确定性 HTTP 模型驱动真实 Electron、IPC、工具与回执；它验证集成路径，不代表外部真实模型的质量或生产发布。独立评审与 README 演示仍由 [跨仓接入 Task](note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/2ce416be-b118-40c4-bddc-87da25a8fe02)跟踪。
+验证命令、结果和仍待独立评审的项目见 [接入验证](../../../docs/migrations/workflowx-v2-verification.md)。桌面测试使用本地确定性 HTTP 模型驱动真实 Electron、IPC、工具与回执；它验证集成路径，不代表外部真实模型的质量或生产发布。演示追加采用 agentX `d6cd44569eee3c36c637a996131a1303b3900bde` 的工具修复判断，以及 JanusX `dc8a639` 的关闭采集收尾修复；原接入基线和回执不改写。独立评审与 README 完成状态由 [跨仓接入 Task](note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/2ce416be-b118-40c4-bddc-87da25a8fe02)跟踪。

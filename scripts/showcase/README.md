@@ -52,7 +52,13 @@ node scripts/showcase/compose.mjs --manifest .cache/showcase/product-xxxxxx --ou
 
 原始帧和包含字幕、鼠标位置的 `manifest.json` 保存在 `.cache/showcase/<功能>-<随机后缀>/`。成功录制才更新 `.cache/showcase/<功能>-latest.json`；失败返回非零退出码，`build` 随即停止，不会拿旧帧合成。合成只写指定功能的 GIF 与末帧 PNG。旧版缺少字幕的 manifest 需重新录制，已提交 GIF 不受影响。
 
-各录制实例使用独立的临时用户目录。涉及 CLI 的脚本需要对应 CLI 已安装；`split` 需要 Claude、Codex、OpenCode、Pi，`session` 需要 Claude。现有 `seedFixture` 会复制本机 Claude / OpenCode 登录文件到临时目录，结束后清理。`product` 只用本地文件和 Shell，不复制登录文件，也不调用模型。`blueprint` 在临时配置中开启蓝图，以五篇本地 Note 展示系统结构、模块接口、关联决策和全部 Note；最后逐字输入维护指令但不发送，不复制登录文件或调用模型。
+各录制实例使用独立的临时用户目录。涉及 CLI 的脚本需要对应 CLI 已安装；`split` 需要 Claude、Codex、OpenCode、Pi，`session` 需要 Claude。现有 `seedFixture` 会复制本机 Claude / OpenCode 登录文件到临时目录，结束后清理。`product` 只用本地文件和 Shell，不复制登录文件，也不调用模型。
+
+`blueprint` 使用九篇 v2 文档，覆盖三层模块、父层普通 Note 和六种文档类型。录制断言验证单击预览、双击进入、保留父节点、返回、跨模块关注与定位，以及 `note_read` / `note_write` 原位维护：UUID、created 和文档数量不变，updated 刷新。Task 仅展示 Main-owned Handoff，尚无执行或验收结果。
+
+蓝图录制的 `blueprint-model.mjs` 在回环地址提供确定性 Responses 模型，只驱动预设操作；真实 Electron、IPC、Note 工具和磁盘写入仍照常运行。不复制登录文件，不调用外部模型；这些断言不评价模型质量。录制成功后，manifest 的 evidence 保存工具调用、文档身份、时间变化和构建来源。
+
+需要录制隔离版本时，设置 `SHOWCASE_ENTRY` 为该版本已构建的 `out/main/index.js` 绝对路径，`SHOWCASE_SOURCE_COMMIT` 为 JanusX 源码提交，`SHOWCASE_AGENT_COMMIT` 为已构建共享依赖的 agentX 提交。默认入口为当前目录的构建产物；必须自行确保产物与所声明源码一致。录制会等待对话结束并检查错误卡片，成功写文件但对话报错也会失败。
 
 ## 调整公共参数
 
