@@ -42,7 +42,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/dda0c41e-4581-4de5-af98-8fbdc2e768f5"},
     {"type":"governed-by","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/47c7be36-5a48-4a27-aa86-d4f9dffb641c"}
   ],
-  "updated": "2026-10-08T07:58:00Z",
+  "updated": "2026-10-08T09:10:33.782Z",
   "moduleState": "partial"
 }
 ---
@@ -55,17 +55,13 @@
 
 ## Design
 
-当前文档采用 WorkflowX v2：每个模块有一个 module.md，普通文档通过 module 声明归属；moduleState 单独记录 planned、partial、implemented、retired。单根项目的蓝图首页即根模块页，沿用模块页的分行布局，面包屑从项目名开始；多根项目保留聚合入口。单击在左侧预览真实正文，双击进入模块页面；当前模块保留为画布父节点，下方显示直属文件与子模块入口，空模块也保留自身。返回恢复浏览范围、选中、预览和视口，重复进入当前根节点不增加层级。模块使用带页签的容器轮廓，文件按类型放在所属模块的灰色虚线分组中。wiki 与 Chat 读取同一共享快照，搜索与 Chat 定位从完整来源进入所属模块，写入经 agentX 事务完成。具体接入、历史迁移和验证见 [WorkflowX v2 接入](workflowx-v2-adoption.md)。
+本模块由四项长期职责协作：[工程文档读取与 wiki](documents/module.md)提供同源正文和目录；[模块投影与导航](navigation/module.md)将来源组织为可逐层浏览的模块页；[蓝图维护对话](maintenance/module.md)承接讨论、文件变更与审批；[工作区组合与初始化](workspaces/module.md)处理明确 checkout 的装配和接入。
 
-已实现行为与验证见 [模块浏览交互需求](requirements/module-browsing.md)和[关注工具与模块浏览适配](requirements/module-focus-navigation.md)。note_scope 只维护对话关注集合，普通访问不改变页面；note_focus 明确区分预览、进入与定位，并沿用模块导航、父节点和返回历史。右侧按模块组织条目，会话分别获得当前模块路径、选中对象和关注集合。下一项按长期职责整理真实子模块与文档归属；现有一级模块接入不代表职责层级已经细分完成。
+单根首页采用根模块页，单击预览真实正文，双击进入并保留当前模块为本页父节点，返回恢复范围、预览和视口。具体交互与工具行为由导航子模块的[浏览需求](navigation/requirements/module-browsing.md)和[关注需求](navigation/requirements/module-focus-navigation.md)维护。
 
-交付路线见 [Note、wiki 与蓝图交付专题](./requirements/blueprint-notev2-implementation-plan.md)，性能约束见 [蓝图性能专题](./requirements/blueprint-performance.md)。相关工作包括历史方案和当前实现；列表中的存在或关联不代表已采纳、已交付或拥有写入权限。
+Janus 负责产品投影和交互；agentX 的共享 harness 包拥有解析、身份、读取缓存、创建编辑、事务、监听、共享与撤销。任务执行和回执由 Agent 对话与执行模块承接，知识 Wiki 生成与审核由记忆与知识模块承接。[共享边界](agentx-harness-inheritance.md)记录取舍。
 
-模块负责工程文档投影、导航、蓝图关注与界面呈现。agentX 的共享 harness 包拥有 Note 读取快照、创建编辑、缓存索引、事务、监听、共享与撤销；Janus 的 HarnessNoteService 叠加组合投影和本地画布状态。任务执行与回执由共享 Agent 执行入口负责，知识 wiki 的生成与审核属于记忆知识模块。边界依据见 [agentX 复用边界](./agentx-harness-inheritance.md)。
-
-`WorkspaceBlueprintService` 提供工作区蓝图状态与绑定窗口的初始化预览入口，调用 agentX 共享初始化和撤销函数。界面以工作区 ID 选择投影或空态，起草入口复用项目会话；具体边界见[工作区切换与初始化生成](./requirements/blueprint-empty-init.md)。
-
-[架构师工作区设计](./architect-workspace-model.md)说明跨仓组织的依据；[共同读取任务](./tasks/note-blueprint-r2-read.md)记录读取投影工作；[系统结构任务](./tasks/module-structure-view.md)记录模块视图的交付与验证。
+[接入计划](workflowx-v2-adoption.md)与跨子模块的交付、性能专题保留在本层。它们引用各职责的实现和验收，不复制子模块正文。目录与旧文档的归属依据见[职责目录整理](module-responsibilities.md)。
 
 ## Acceptance criteria
 

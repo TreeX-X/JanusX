@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-09-27",
   "class": "feature",
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -19,7 +19,7 @@ The shared Markdown renderer styles emphasis with filled blocks: inline code car
 
 ## Decision
 
-`src/renderer/src/components/viewers/markdown-components.tsx` owns the single emphasis language for every preview surface. Strong renders `#ff9159` at weight 700; em renders `#ff9159` italic; inline code renders `#ff9159` in the mono stack with transparent background, no border, and no padding; blockquote keeps the 3px `#ff7830` left rule on a transparent background with slim padding; `mark` renders transparent background with `#ff9159` text so raw `<mark>` passthrough cannot reintroduce a fill. Code fences, tables, headings, links, and task checkboxes keep their existing treatment. MarkdownViewer, LocalFileStage, QuickNote, chat MarkdownContent, and NoteWikiPanel inherit the change through the shared components with no call-site edits. Image resolution ownership stays with [markdown preview local assets](./markdown-preview-local-assets.md), and toolbar syntax production stays with [note drawer markdown toolbar](../blueprint/note-drawer-markdown-toolbar.md).
+`src/renderer/src/components/viewers/markdown-components.tsx` owns the single emphasis language for every preview surface. Strong renders `#ff9159` at weight 700; em renders `#ff9159` italic; inline code renders `#ff9159` in the mono stack with transparent background, no border, and no padding; blockquote keeps the 3px `#ff7830` left rule on a transparent background with slim padding; `mark` renders transparent background with `#ff9159` text so raw `<mark>` passthrough cannot reintroduce a fill. Code fences, tables, headings, links, and task checkboxes keep their existing treatment. MarkdownViewer, LocalFileStage, QuickNote, chat MarkdownContent, and NoteWikiPanel inherit the change through the shared components with no call-site edits. Image resolution ownership stays with [markdown preview local assets](./markdown-preview-local-assets.md), and toolbar syntax production stays with [note drawer markdown toolbar](./note-drawer-markdown-toolbar.md).
 
 ## Alternatives considered
 

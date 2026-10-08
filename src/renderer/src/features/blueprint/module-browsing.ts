@@ -1,4 +1,4 @@
-// Note: scoped module navigation — see .agents/notes/blueprint/requirements/module-browsing.md
+// Note: scoped module navigation — see .agents/notes/blueprint/navigation/requirements/module-browsing.md
 import type { Blueprint } from '@/services/blueprint'
 import { resolveArchitectureNote, type ArchitectureProjection } from './architecture-view'
 

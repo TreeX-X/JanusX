@@ -1,4 +1,4 @@
-// Note: the note pane routes toolbar edits through execCommand so the browser keeps undo history — see .agents/notes/blueprint/note-drawer-markdown-toolbar.md
+// Note: the note pane routes toolbar edits through execCommand so the browser keeps undo history — see .agents/notes/workbench/note-drawer-markdown-toolbar.md
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'

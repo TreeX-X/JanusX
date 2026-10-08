@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -61,7 +61,7 @@ Desktop terminal input waits for the shell prompt before typing into xterm. A mo
 
 Node and sibling pins require deliberate updates in both workflows. Temporary-path canonicalization covers the verification environment; it is not a claim that every application watcher accepts short aliases. Single-worker tests still use real filesystem events and preserve native watcher coverage. Release publishing requires an authorized tag push; validation of the workflow does not itself publish a release.
 
-A process started against the shared `out` layout needs one deliberate restart to enter the isolated development layout. Save any required Blueprint conversation before restarting: the [workspace dialog contract](../blueprint/tasks/blueprint-workspace-dialog.md) keeps that history in memory only. The build commands neither kill a running process nor apply a pending proposal. A production preview still owns `out` for its lifetime; use `build:check` instead of rebuilding its live files. Launching a second dev server against the same `.cache` directory is not supported.
+A process started against the shared `out` layout needs one deliberate restart to enter the isolated development layout. Save any required Blueprint conversation before restarting: the [workspace dialog contract](../blueprint/maintenance/tasks/blueprint-workspace-dialog.md) keeps that history in memory only. The build commands neither kill a running process nor apply a pending proposal. A production preview still owns `out` for its lifetime; use `build:check` instead of rebuilding its live files. Launching a second dev server against the same `.cache` directory is not supported.
 
 Build-isolation verification uses `tests/unit/electron-build-isolation.test.ts`: real Electron-Vite builds reproduce a missing lazy module when two generations share a directory, then keep deferred imports intact across distinct development, production and verification outputs. All fixture output paths are absolute beneath private temporary directories because Electron-Vite resolves relative output overrides from the process working directory. Four isolation cases, seven external MCP registration cases and 48 proposal/approval/transaction cases pass with `npx vitest run tests/unit/electron-build-isolation.test.ts tests/unit/knowledge/external-mcp.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/blueprint-maintenance-harness-routing.test.ts tests/unit/maintenance-harness-apply.test.ts`. `npx playwright test tests/e2e/blueprint-maintenance.spec.ts` passes all 14 cases using a mocked provider and real renderer controls. `npm run build:check` passes; an isolated Electron invocation of `scripts/dev-entry.mjs --smoke-test=module-graph` reports `ok`, including maintenance service imports, and verifies the original package identity and checkout path. No live provider request or user Note approval is exercised by these checks.
 

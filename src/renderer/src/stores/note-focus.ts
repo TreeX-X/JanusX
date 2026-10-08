@@ -1,4 +1,4 @@
-// Note: passive scope and explicit navigation stay separate — see .agents/notes/blueprint/requirements/module-focus-navigation.md
+// Note: passive scope and explicit navigation stay separate — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
 import { create } from 'zustand'
 import type { NoteBrowserState, NoteFocusAction, NoteFocusEvent, NoteScopeItem } from '../../../shared/note-chat'
 import { sameCheckoutPath } from '../features/blueprint/resolveNodeWorkspace'

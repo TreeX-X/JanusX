@@ -27,7 +27,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -54,4 +54,4 @@ Graph projection rebuilds task completion and requirement acceptance from curren
 
 The adapter integration test removes local state after verification, rebuilds a valid result and graph completion, exports referenced receipts, then changes acceptance and observes stale evidence. `npm run test:unit -- --run` with the harness adapter, run handlers, service, acceptance, IPC contract, store branch, maintenance apply and maintenance routing files passes 42 checks. Typecheck, package boundaries and i18n checks pass. Rendering continues to use the existing run panel and canvas components.
 
-Repeated evidence checks add file IO; large graphs with many receipt dependencies require performance measurement. A share carries evidence claims, not an assurance that the receiver's code matches. [Shared conversation control](../sessions/project-conversation-controller.md) and [task contract adoption](./task-contract-adoption.md) now cover the new Note entry workflow. GUI model-driven execution and full Electron interaction acceptance remain incomplete. The standard remains a candidate.
+Repeated evidence checks add file IO; large graphs with many receipt dependencies require performance measurement. A share carries evidence claims, not an assurance that the receiver's code matches. [Shared conversation control](../sessions/threads/project-conversation-controller.md) and [task contract adoption](./task-contract-adoption.md) now cover the new Note entry workflow. GUI model-driven execution and full Electron interaction acceptance remain incomplete. The standard remains a candidate.

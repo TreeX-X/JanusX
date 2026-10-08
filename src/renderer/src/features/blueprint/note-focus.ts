@@ -1,5 +1,5 @@
 import type { Blueprint } from '@/services/blueprint'
-// Note: list ownership and UI context share module navigation — see .agents/notes/blueprint/requirements/module-focus-navigation.md
+// Note: list ownership and UI context share module navigation — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
 import type { NoteBrowserState, NoteFocusEvent, NoteScopeItem } from '../../../../shared/note-chat'
 import { sameCheckoutPath } from './resolveNodeWorkspace'
 import { projectArchitecture } from './architecture-view'

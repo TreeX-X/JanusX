@@ -1,7 +1,7 @@
 /**
  * Single-session workspace dialog.
- * Note: 右侧只有一个以当前工作区为基础的对话，无多会话管理 — see .agents/notes/blueprint/tasks/blueprint-workspace-dialog.md
- * Note: 对话上下文跟随画布焦点成批注入，无需「维护此节点」点击 — see .agents/notes/blueprint/blueprint-batch-context.md
+ * Note: 右侧只有一个以当前工作区为基础的对话，无多会话管理 — see .agents/notes/blueprint/maintenance/tasks/blueprint-workspace-dialog.md
+ * Note: 对话上下文跟随画布焦点成批注入，无需「维护此节点」点击 — see .agents/notes/blueprint/maintenance/blueprint-batch-context.md
  * Note: 入场空态是一条开场引导语（借运行配置助手的开场消息设计），纯展示不进会话历史 — see .agents/notes/workbench/right-chat-column-card-language.md
  */
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
@@ -49,7 +49,7 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const blueprint = useBlueprintStore(state => state.currentBlueprint)
   const ownerPath = useBlueprintStore(state => blueprint ? state.blueprintWorkspace[blueprint.id] ?? null : null)
   const workspaceState = useBlueprintStore(state => activeWorkspaceId ? state.workspaceStates[activeWorkspaceId] : undefined)
-  // Note: uninitialized workspaces have no Note history to load — see .agents/notes/blueprint/requirements/blueprint-empty-init.md
+  // Note: uninitialized workspaces have no Note history to load — see .agents/notes/blueprint/workspaces/requirements/blueprint-empty-init.md
   const noteHistoryReady = !!activeWorkspace && (workspaceState
     ? sameCheckoutPath(workspaceState.workspacePath, activeWorkspace.path) && ['ok', 'empty'].includes(workspaceState.state)
     : !!blueprint && !!ownerPath && sameCheckoutPath(ownerPath, activeWorkspace.path))

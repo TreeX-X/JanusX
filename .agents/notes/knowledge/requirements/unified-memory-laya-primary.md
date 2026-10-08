@@ -8,7 +8,7 @@
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c0a75c6a-5d06-4088-b7ed-9ecdd835b3d3",
   "class": "architecture",
   "tags": ["memory","knowledge","unification","laya","qwen","jev","decision-model"],
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-528027d0e5cf"
 }
 ---
@@ -270,7 +270,7 @@ Jev 官方有[引文核验示例](https://docs.typesafe.ai/cookbooks/citation_ch
 
 完整语义分类能覆盖更多表达，但需要可靠的抽取与质量证据；当前选择有限标签规则，避免把临时要求误判为长期单值。只显示冲突提示维护成本较低，却允许两个不同单值同时进入 active，因此提交端也实施约束。同 ID 全部拒绝可保留历史；新审核的中断由日志恢复，缺少日志的历史残留不能自动修复。审核上下文按卡片读取并扫描当前文件，没有新增持久索引；大候选列表的读取次数和进程内串行等待需要测量，达到交互瓶颈时再引入批量上下文读取。当前没有多目标合并、任意事实选择器或跨进程事务；既有显式个人纠正保留目标的所有者字段。
 
-保留 WikiPage、GraphEdge、sourceFactIds，以及已落地的 [Note 来源审核](../../blueprint/tasks/note-wiki-r3.md)中的 sourceNoteRefs、hash、页面版本与回滚约束。Laya 不生成新正文；无 LLM 时可以提取原文事实、生成确定性关系和人工整理 Wiki，但不承诺自动完成多来源长文综合。
+保留 WikiPage、GraphEdge、sourceFactIds，以及已落地的 [Note 来源审核](../../blueprint/documents/tasks/note-wiki-r3.md)中的 sourceNoteRefs、hash、页面版本与回滚约束。Laya 不生成新正文；无 LLM 时可以提取原文事实、生成确定性关系和人工整理 Wiki，但不承诺自动完成多来源长文综合。
 
 ### Laya 决策与 LLM 精修
 

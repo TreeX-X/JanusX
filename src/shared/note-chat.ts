@@ -1,7 +1,7 @@
 // Note: Janus extends the shared agentX runtime — see .agents/notes/blueprint/agentx-harness-inheritance.md
 export type { NoteChatChange } from '@janus-agent/harness-node'
 
-// Note: explicit UI intent is separate from working Notes — see .agents/notes/blueprint/requirements/module-focus-navigation.md
+// Note: explicit UI intent is separate from working Notes — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
 export type NoteFocusAction = 'preview' | 'enter' | 'locate'
 
 export interface NoteBrowserState {

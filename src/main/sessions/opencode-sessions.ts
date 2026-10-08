@@ -1,5 +1,5 @@
 // Note: opencode sqlite backfill plus detail reads — see
-// .agents/notes/sessions/opencode-session-driver.md
+// .agents/notes/sessions/records/opencode-session-driver.md
 import { DatabaseSync } from 'node:sqlite'
 import { homedir } from 'node:os'
 import { join } from 'node:path'

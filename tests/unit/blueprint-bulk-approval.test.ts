@@ -5,7 +5,7 @@
  * (remove-then-recreate): the closure drags the delete in, and a bulk approval
  * that silently covered it would be a hole in the high-risk gate.
  *
- * Note: see .agents/notes/blueprint/blueprint-action-bar.md
+ * Note: see .agents/notes/blueprint/maintenance/blueprint-action-bar.md
  */
 import { describe, expect, it } from 'vitest'
 import {

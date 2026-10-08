@@ -1,6 +1,6 @@
 // Note: transcript detail reads plus provider resume commands back the
 // windowed session reading — see
-// .agents/notes/sessions/session-resume-detail.md
+// .agents/notes/sessions/records/session-resume-detail.md
 export const SESSION_CHANNELS = {
   list: 'session:list',
   get: 'session:get',

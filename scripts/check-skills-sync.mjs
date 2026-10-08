@@ -1,4 +1,4 @@
-// Note: dual-end sync gate lives here — see .agents/notes/blueprint/note-mechanical-checks.md
+// Note: dual-end sync gate lives here — see .agents/notes/blueprint/documents/note-mechanical-checks.md
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join as joinPath } from 'node:path'

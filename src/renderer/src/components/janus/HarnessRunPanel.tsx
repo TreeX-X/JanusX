@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 // Note: desktop entry to task runs incl. the xdo host — see .agents/notes/agent/desktop-xdo-executor.md
 // Note: external runner backflow surface — see .agents/notes/agent/external-runner-backflow.md
-// Note: thread registry, activation, and close — see .agents/notes/sessions/thread-registry-activation.md
+// Note: thread registry, activation, and close — see .agents/notes/sessions/threads/thread-registry-activation.md
 // Note: independent review and limited repair — see .agents/notes/agent/independent-review-repair.md
-// Note: reversible managed writes — see .agents/notes/blueprint/harness-undo.md
+// Note: reversible managed writes — see .agents/notes/blueprint/maintenance/harness-undo.md
 import { useI18n } from '@/i18n/useI18n'
 import { getTerminalDefault, getTerminalProviders, listModels } from '@/services/llm'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'

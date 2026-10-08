@@ -1,4 +1,4 @@
-// Note: explicit checkouts compose outside source parsing — see .agents/notes/blueprint/tasks/blueprint-r4.md
+// Note: explicit checkouts compose outside source parsing — see .agents/notes/blueprint/workspaces/tasks/blueprint-r4.md
 import { createHash } from 'node:crypto'
 import type { Blueprint, BlueprintNode, BlueprintRelation } from '../../shared/janus/types'
 import type { NoteReadSnapshot } from '../../shared/notes'

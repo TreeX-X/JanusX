@@ -216,7 +216,7 @@ function workspaceInitial(name: string): string {
 
 // Note: folder is the resting glyph; the repo avatar crossfades in on row
 // hover only, with no bordered box in either state — see
-// .agents/notes/sessions/worktree-sidebar-scoping.md
+// .agents/notes/sessions/worktrees/worktree-sidebar-scoping.md
 function RepoRowIcon({ workspacePath }: { workspacePath: string }) {
   const avatar = useWorktreeStore((s) => s.avatars[workspacePath])
   const [failed, setFailed] = useState(false)
@@ -560,7 +560,7 @@ function WorktreeSubList({
               aria-label={worktree.path}
               onClick={(event) => {
                 event.stopPropagation()
-                // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/sessions/worktree-file-tree-scope.md
+                // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/sessions/worktrees/worktree-file-tree-scope.md
                 void switchActiveWorktree(workspaceId, worktree.path)
               }}
               onKeyDown={(event) => {

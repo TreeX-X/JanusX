@@ -55,7 +55,7 @@
       }
     }
   },
-  "updated": "2026-10-08T03:25:17.805Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd"
 }
 ---
@@ -99,7 +99,7 @@ WorkFlowX 的 Note 已包含问题、方案或决策、替代选项、验收或�
 | 并发 | 多终端直接编辑 Git 工作树 | 进程内锁、内存缓存、JSON 原子替换和维护修订校验 | 单进程锁不能保护其他终端的 Markdown 写入 |
 | 宿主 | 主要由 skill、模板和代理纪律约束 | Electron IPC、应用 Store 与本地审计 | 新标准必须可在没有 JanusX 的终端运行 |
 
-当前 [受控蓝图维护 Note](./history/blueprint-maintenance.md) 与 [维护契约](../../../src/shared/janus/maintenance-types.ts) 已覆盖提案、变更集、证据、选择应用、过期检测和撤销。新方案应保留这些能力的作用，把操作对象改为 Note 文件及其关系。现有普通节点编辑和分析回写也能修改 Store，因此不能仅更换维护面板而保留其他 JSON 写入口。
+当前 [受控蓝图维护 Note](./maintenance/history/blueprint-maintenance.md) 与 [维护契约](../../../src/shared/janus/maintenance-types.ts) 已覆盖提案、变更集、证据、选择应用、过期检测和撤销。新方案应保留这些能力的作用，把操作对象改为 Note 文件及其关系。现有普通节点编辑和分析回写也能修改 Store，因此不能仅更换维护面板而保留其他 JSON 写入口。
 
 WorkFlowX 的 [Notes 与 Hybrid Tree 设计](../../../../WorkFlowX/docs/agent-notes-and-hybrid-tree-design.md) 记录长期决策和短期执行的历史区分。当前格式及模板见 [Harness 标准](../../../../WorkFlowX/standards/harness-note/1/manifest.json)，当前运行规则以各仓库 skills 为准。统一应减少独立载体，同时保留不同内容的用途与质量要求；历史设计中的设想不能作为现有门禁的证据。
 

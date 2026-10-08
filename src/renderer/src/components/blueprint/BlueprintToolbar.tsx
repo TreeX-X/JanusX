@@ -175,7 +175,7 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
     [t],
   )
 
-  // Note: canvas controls only apply to a loaded workspace graph — see .agents/notes/blueprint/requirements/blueprint-empty-init.md
+  // Note: canvas controls only apply to a loaded workspace graph — see .agents/notes/blueprint/workspaces/requirements/blueprint-empty-init.md
   // Keep the shell's second grid row empty while setup owns the surface.
   if (!currentBlueprint?.nodeIds.length || selectedWorkspaceId !== activeWorkspaceId) return <div aria-hidden="true" />
 

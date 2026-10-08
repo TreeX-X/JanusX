@@ -92,7 +92,15 @@ if (params.has('v2')) {
 }
 if (params.has('collapsed')) graph.collapsedNodeIds = [root.id]
 if (params.has('untagged')) for (const node of Object.values(graph.nodes)) { node.tags = []; node.note!.tags = [] }
+// Real repository corpus supplied by the host test; production projection and lazy reads.
+if (params.has('corpus')) Object.assign(graph, (window as any).noteCorpus)
 installWorkbenchBoundary(() => graph, workspace.path)
+if (params.has('corpus')) Object.assign(window.electron.harness, {
+  noteRead: (cwd: string, uri: string) => {
+    if (cwd !== workspace.path) throw new Error('Unexpected corpus checkout')
+    return (window as any).readCorpusNote(uri)
+  },
+})
 useWorkspaceStore.setState({ activeWorkspaceId: workspace.id, workspaces: [workspace as any] })
 useBlueprintMaintenanceStore.setState({ initialized: true })
 useBlueprintStore.setState({ currentBlueprint: graph, blueprintWorkspace: { [graph.id]: workspace.path }, loading: false })

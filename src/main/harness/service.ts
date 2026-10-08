@@ -28,7 +28,7 @@ export interface ProjectView {
 export class HarnessNoteService extends NoteService {
   private compositionHashes = new Map<string, Record<string, string>>()
   async projectView(root: string): Promise<ProjectView> {
-    // Note: explicit checkout projections compose outside the source adapter — see .agents/notes/blueprint/tasks/blueprint-r4.md
+    // Note: explicit checkout projections compose outside the source adapter — see .agents/notes/blueprint/workspaces/tasks/blueprint-r4.md
     const view = await this.singleProjectView(root)
     const bindings = await this.getBindings(root)
     // Bound checkouts project independently: run them concurrently and keep

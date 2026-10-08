@@ -1,4 +1,4 @@
-// Note: validated UI intent does not grant edit or execution authority — see .agents/notes/blueprint/requirements/module-focus-navigation.md
+// Note: validated UI intent does not grant edit or execution authority — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { NOTE_URI_RE } from '@janus-agent/harness-core'

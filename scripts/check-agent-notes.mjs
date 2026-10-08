@@ -1,10 +1,11 @@
-// Note: mechanical noteX gate lives here — see .agents/notes/blueprint/note-mechanical-checks.md
+// Note: mechanical noteX gate lives here — see .agents/notes/blueprint/documents/note-mechanical-checks.md
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseNote, validateNote, splitFrontmatter } from '@janus-agent/harness-core'
 import { claimsHarnessSchema, sha256HexBytes } from '@janus-agent/harness-node'
 import { markdownDestinations, relativeLinkTarget } from './migrate-agent-notes.mjs'
+import { readNoteRelocations, resolveNoteRelocation } from './note-relocations.mjs'
 
 export const LIFECYCLES = ['proposed', 'implemented', 'rejected', 'archived']
 export const CLASSES = ['feature', 'bug-fix', 'architecture', 'process', 'testing', 'simplification']
@@ -56,7 +57,7 @@ function parseSections(text) {
 
 // Fixed pre-organization defects, pinned to Note identity and exact target.
 export const PREEXISTING_LINKS = new Map([])
-function checkLinks(root, relPath, body, id, errors, diagnostics) {
+function checkLinks(root, relPath, body, id, errors, diagnostics, relocations) {
   for (const link of markdownDestinations(body)) {
     let target
     try { target = relativeLinkTarget(root, relPath, link.destination) }
@@ -72,8 +73,11 @@ function checkLinks(root, relPath, body, id, errors, diagnostics) {
       const inventory = existsSync(inventoryPath) ? JSON.parse(readFileSync(inventoryPath, 'utf8')) : null
       const protectedSource = inventory?.deferred?.find(row => row.path === relPath)
       const moved = inventory?.sources?.find(row => row.source === local)
-      if (protectedSource && moved && existsSync(join(root, moved.target)) && sha256HexBytes(readFileSync(join(root, relPath))) === protectedSource.sha256) {
-        diagnostics.push({ code: 'protected-migrated-link', path: relPath, destination: link.destination, target: moved.target, reason: 'Original dirty source is preserved; repair this link when its owner resumes editing.' })
+      const targetPath = moved && resolveNoteRelocation(moved.target, relocations)
+      const targetFile = targetPath && join(root, targetPath)
+      const targetNote = targetFile && existsSync(targetFile) ? parseNote(readFileSync(targetFile, 'utf8')) : null
+      if (protectedSource && moved && targetNote?.meta.id === moved.id && targetNote?.meta.created === moved.created && sha256HexBytes(readFileSync(join(root, relPath))) === protectedSource.sha256) {
+        diagnostics.push({ code: 'protected-migrated-link', path: relPath, destination: link.destination, target: targetPath, reason: 'Original dirty source is preserved; repair this link when its owner resumes editing.' })
         continue
       }
       const reason = PREEXISTING_LINKS.get(id + ':' + local)
@@ -88,6 +92,7 @@ export function checkNotes(root = process.cwd()) {
   const notesDir = join(root, '.agents', 'notes')
   const errors = []
   const diagnostics = []
+  const relocations = readNoteRelocations(root)
   let harnessChecked = 0
   const identities = new Set()
   if (!existsSync(notesDir)) return { errors: ['missing .agents/notes directory'], checked: 0, harnessChecked: 0, diagnostics }
@@ -115,7 +120,7 @@ export function checkNotes(root = process.cwd()) {
         for (const diagnostic of validateNote(parsed)) errors.push(relPath + ': ' + diagnostic.message)
         if (identities.has(parsed.meta.id)) errors.push(relPath + ': duplicate Note identity ' + parsed.meta.id)
         identities.add(parsed.meta.id)
-        checkLinks(root, relPath, splitFrontmatter(text).body, parsed.meta.id, errors, diagnostics)
+        checkLinks(root, relPath, splitFrontmatter(text).body, parsed.meta.id, errors, diagnostics, relocations)
       } catch (error) { errors.push(relPath + ': ' + error.message) }
       continue
     }
@@ -184,7 +189,7 @@ export function checkNotes(root = process.cwd()) {
       errors.push(`${relPath}: missing ## Alternatives considered`)
     }
 
-    checkLinks(root, relPath, text, null, errors, diagnostics)
+    checkLinks(root, relPath, text, null, errors, diagnostics, relocations)
 
     // Provenance pins: no Parent/Child numbers, PR numbers, version pins.
     const body = lines.slice(3).join('\n')

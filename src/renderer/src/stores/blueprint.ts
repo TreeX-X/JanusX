@@ -72,7 +72,7 @@ interface BlueprintStore {
 }
 
 export const useBlueprintStore = create<BlueprintStore>((set, get) => {
-  // Note: selection belongs to workspaces even without a projection — see .agents/notes/blueprint/requirements/blueprint-empty-init.md
+  // Note: selection belongs to workspaces even without a projection — see .agents/notes/blueprint/workspaces/requirements/blueprint-empty-init.md
   let workspaceRequestId = 0
   let statusRequestId = 0
   let loadRequestId = 0

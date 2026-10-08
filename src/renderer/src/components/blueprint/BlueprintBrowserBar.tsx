@@ -1,4 +1,4 @@
-// Note: one navigation model for canvas, search and Chat — see .agents/notes/blueprint/requirements/module-browsing.md
+// Note: one navigation model for canvas, search and Chat — see .agents/notes/blueprint/navigation/requirements/module-browsing.md
 import { ArrowLeft, ChevronRight } from 'lucide-react'
 import type { Blueprint } from '@/services/blueprint'
 import { useI18n } from '@/i18n/useI18n'

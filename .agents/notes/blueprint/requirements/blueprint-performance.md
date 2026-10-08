@@ -7,7 +7,7 @@
   "created": "2026-09-26",
   "class": "architecture",
   "tags": ["blueprint","performance","parent","governance"],
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd"
 }
 ---
@@ -26,7 +26,7 @@
 
 合并 listing 与 load 双 IPC 的方案已否决：缓存命中后两次调用皆为廉价读，省一次往返不值得新增通道；一致性由 rev 门控保证。服务端布局搬迁已否决：同等墙钟效果由稳定键缓存达成，改动小一个数量级。
 
-画布渲染三件同属本域（互链不合并）：[canvas-controls](../blueprint-canvas-controls.md)（移除悬浮缩放控件）、[zoom-range](../blueprint-canvas-zoom-range.md)（远览下限 0.05）、[edge-refresh](../blueprint-edge-partial-refresh.md)（层级边独立路由与局部刷新）；[R7](../tasks/note-graph-r7-perf.md)为性能根治任务，同属本域。
+画布渲染三件同属本域（互链不合并）：[canvas-controls](../navigation/blueprint-canvas-controls.md)（移除悬浮缩放控件）、[zoom-range](../navigation/blueprint-canvas-zoom-range.md)（远览下限 0.05）、[edge-refresh](../navigation/blueprint-edge-partial-refresh.md)（层级边独立路由与局部刷新）；[R7](../tasks/note-graph-r7-perf.md)为性能根治任务，同属本域。
 
 ## Acceptance criteria
 

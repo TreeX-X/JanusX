@@ -144,7 +144,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   })
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.initApply, (event, cwd: string, id: string, foreign: boolean) => workspaceBlueprintService.apply(cwd, id, event.sender.id, foreign))
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.initUndo, (event, cwd: string, id: string) => workspaceBlueprintService.undo(cwd, id, event.sender.id))
-  // Note: wiki and blueprint resolve the same source — see .agents/notes/blueprint/tasks/note-wiki-r3.md
+  // Note: wiki and blueprint resolve the same source — see .agents/notes/blueprint/documents/tasks/note-wiki-r3.md
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteRead, async (_e, cwd: string, uri: string) => {
     if (typeof uri !== 'string' || !uri.startsWith('note://')) throw new Error('A complete Note URI is required')
     const source = await harnessNoteService.readNote(await withRoot(cwd), uri)
@@ -799,7 +799,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   )
 
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteChatChanges, async (_e, cwd: string, conversationId: string) => {
-    // Note: preserve useful diagnostics through Electron's Error serialization — see .agents/notes/blueprint/requirements/blueprint-empty-init.md
+    // Note: preserve useful diagnostics through Electron's Error serialization — see .agents/notes/blueprint/workspaces/requirements/blueprint-empty-init.md
     try {
       if (typeof conversationId !== 'string' || !conversationId.trim() || conversationId.length > 128) throwFailure('SCHEMA_INVALID', 'Invalid conversation id')
       return await listNoteChatChanges(await withRoot(cwd), conversationId)

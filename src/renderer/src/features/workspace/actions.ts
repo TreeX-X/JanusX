@@ -10,7 +10,7 @@ export function getActiveWorkspacePath(): string | null {
   return workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.path ?? null
 }
 
-// Note: file tree follows the active worktree scope, not the workspace root — see .agents/notes/sessions/worktree-file-tree-scope.md
+// Note: file tree follows the active worktree scope, not the workspace root — see .agents/notes/sessions/worktrees/worktree-file-tree-scope.md
 /** Effective file-tree root: active worktree path when set, otherwise the workspace root. */
 export function getActiveScopePath(): string | null {
   const { workspaces, activeWorkspaceId } = useWorkspaceStore.getState()

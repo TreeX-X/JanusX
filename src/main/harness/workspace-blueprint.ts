@@ -1,4 +1,4 @@
-// Note: workspace visibility and explicit initialization — see .agents/notes/blueprint/requirements/blueprint-empty-init.md
+// Note: workspace visibility and explicit initialization — see .agents/notes/blueprint/workspaces/requirements/blueprint-empty-init.md
 import { randomUUID } from 'node:crypto'
 import { lstat, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'

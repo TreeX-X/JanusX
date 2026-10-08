@@ -26,7 +26,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/97a21dee-2b5e-4cf8-8298-28263eeb02bb"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/cee742a2-d7ca-4a61-8021-e1e118534c96"}
   ],
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:10:33.782Z",
   "moduleState": "partial"
 }
 ---
@@ -35,25 +35,15 @@
 
 ## Responsibility
 
-保存会话身份、终端绑定、转录读取与检查点关联，并在工作区和 worktree 范围内呈现会话。AgentSessionRegistry 为终端等调用方提供会话注册与查询；PTY 进程和 Task 验收由其他模块负责。
-
-下列链接保留已有决策、阶段需求和交付记录的阅读路径；正文及生命周期由原 Note 负责。历史 parent 仅组织文档，跨模块关联由本声明的 related-to 补充。模块声明只在职责、接口、明确依赖或代码入口变化时维护。
+在工作区与 worktree 范围内组织会话、恢复点和连续对话。会话与终端的绑定、检查点关联以及项目线程各有独立身份；PTY 进程和正式 Task 验收由其他模块负责。
 
 ## Design
 
-Checkpoint 不变式：[snapshot-safety](./checkpoint-safety.md)（永不静默变异）与[retention](./checkpoint-retention.md)（40/30 天双帽）互补，同属本域。
+[会话记录与续接](records/module.md)维护 AgentSessionRegistry、外部转录、回合时间线及续接；[会话检查点](checkpoints/module.md)复用共享快照引擎，维护会话范围、保留期和显式恢复；[项目对话与任务线程](threads/module.md)维护对话激活及 run 关联上下文；[工作树隔离与切换](worktrees/module.md)维护 Git 生命周期和活动目录作用范围。
 
-会话所有权与耐久：[checkpoint-migration](./session-checkpoint-migration.md)（独立工具退役、checkpoint 归属 session）与[durability](./session-durability-archive.md)（quit flush、归档只读）为枢纽；史前提案[transcript-backfill](./external-session-transcript-backfill.md)保留为附录，由[external-backfill](./external-session-backfill.md)承接落地。
+终端以稳定 sessionId 关联会话和检查点，线程以项目/viewRef 或 Task run 维持连续性，工作树为这些入口提供有效目录。各子模块通过现有服务与 IPC 协作，不建立另一个会话或执行事实索引。
 
-内容管线以[conversation-content](./session-conversation-content.md)为数据契约核心：[change-events](./session-change-events.md)、[engine-capabilities](./session-engine-capabilities.md)、[opencode-driver](./opencode-session-driver.md)、[scan-derivation](./session-scan-derivation.md)、[resume-detail](./session-resume-detail.md)为引擎与读取附节。
-
-呈现以需求[orca-restore](./requirements/session-mgmt-orca-restore.md)为头：[expand-content](./session-checkpoint-expand-content.md)、[timeline-v5](./session-timeline-v5.md)、[windowed-reading](./session-windowed-reading.md)、[timeline-live](./session-timeline-live.md)、[modal-scope](./session-modal-scope-display.md)为渲染切片与修补。
-
-可靠性附录：[count-truth](./session-checkpoint-count-truth.md)、[expand](./session-checkpoint-expand.md)、[flicker-storm](./session-flicker-storm.md)、[hook-replay](./hook-event-replay-authority.md)。
-
-工作区与线程：[总需求](./requirements/workspace-session-checkpoint-continue.md)、[sessions-v1](./workspace-sessions-v1.md)、[row-hover](./workspace-row-hover-reveal.md)、[row-menu](./workspace-row-actions-menu.md)、[task-threads](./persistent-task-threads.md)、[conversation-controller](./project-conversation-controller.md)、[thread-registry](./thread-registry-activation.md)、[hit-slop](./workbench-close-hit-slop.md)、[opencode-resume](./opencode-continue-native-resume.md)；归档提案 thread-close 保持冻结。
-
-Worktree 生命周期：[isolation 需求](./requirements/worktree-isolation-parallel-agents.md)与[总需求 P2 部分](./requirements/workspace-session-checkpoint-continue.md)归一以后者为准；[create-delete](./worktree-create-delete.md)、[ship-merge](./worktree-ship-merge.md)为实现两节；[sidebar-scoping](./worktree-sidebar-scoping.md)、[path-avatar](./worktree-path-avatar.md)、[selector-stability](./worktree-selector-stability.md)、[file-tree-scope](./worktree-file-tree-scope.md)为侧栏定域修补。
+[工作区、会话与恢复总需求](requirements/workspace-session-checkpoint-continue.md)、[窗口化呈现与恢复需求](requirements/session-mgmt-orca-restore.md)和[初始实现决策](workspace-sessions-v1.md)横跨子模块，仍归本层。工作区行的[常驻菜单](workspace-row-actions-menu.md)与[悬停显示](workspace-row-hover-reveal.md)保留先后取舍。共享弹窗动效和关闭热区已归回工作台，具体搬迁记录见[职责目录整理](../blueprint/module-responsibilities.md)。
 
 ## Acceptance criteria
 

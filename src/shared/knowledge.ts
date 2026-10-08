@@ -341,7 +341,7 @@ export interface MemoryFact {
   updatedBy?: string | null
 }
 
-// Note: wiki sources are host-read snapshots — see .agents/notes/blueprint/tasks/note-wiki-r3.md
+// Note: wiki sources are host-read snapshots — see .agents/notes/blueprint/documents/tasks/note-wiki-r3.md
 export interface WikiNoteRef { uri: string; sourceHash: string }
 export interface WikiNoteStatus {
   uri: string

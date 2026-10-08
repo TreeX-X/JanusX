@@ -14,7 +14,7 @@ import type { NoteChatChange, NoteFocusEvent } from '../../shared/note-chat'
 const rootKey = (root: string) => process.platform === 'win32' ? resolve(root).toLowerCase() : resolve(root)
 const fail = (error: unknown) => error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
 
-// Note: module browsing actions and passive scope — see .agents/notes/blueprint/requirements/module-focus-navigation.md
+// Note: module browsing actions and passive scope — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
 export const NOTE_CHAT_TOOLS = [
   { name: 'note.focus', actionRisk: 'read', description: 'Request a user-directed UI action: preview a Note, enter a module, or locate a Note with its module parent. The first target (otherwise first Note) is primary; other Notes remain individually accessible in the list. May change page, selection and source preview; preserves working Notes and navigation history. Use only when the user asks to view or navigate. Returns validation/request status, not proof the UI navigated. No editing or execution.', inputSchema: NOTE_FOCUS_SCHEMA },
   { name: 'note.scope', actionRisk: 'read', description: 'Set the conversation working Notes after finding and reading them. Give each a target/reference/dependency role and reason. User pins and removals take precedence. Never changes page, selection, preview or viewport, including legacy focus parameters. This collection grants no editing or execution authority. Use note.focus for an explicit UI navigation request.', inputSchema: NOTE_SCOPE_SCHEMA },

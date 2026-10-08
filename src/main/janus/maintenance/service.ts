@@ -1,4 +1,4 @@
-// Note: proposal and execution stay separate — see .agents/notes/blueprint/history/blueprint-maintenance.md
+// Note: proposal and execution stay separate — see .agents/notes/blueprint/maintenance/history/blueprint-maintenance.md
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -359,7 +359,7 @@ class BlueprintMaintenanceService {
     }
   }
 
-  // Note: completion returns a file-translatable proposal to the requesting turn — see .agents/notes/blueprint/blueprint-maintenance-approval-gap.md
+  // Note: completion returns a file-translatable proposal to the requesting turn — see .agents/notes/blueprint/maintenance/blueprint-maintenance-approval-gap.md
   async proposeForConversation(input: {
     taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
     providerId: string; modelId?: string; signal: AbortSignal; chatSession: ChatSessionRuntime; workspaceIds: string[]

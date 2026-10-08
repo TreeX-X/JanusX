@@ -32,7 +32,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-08T04:35:16.603Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "moduleState": "partial"
 }
 ---
@@ -57,7 +57,7 @@ WorkflowX v2 中，普通 xdo 直接使用工程工具，不要求建立 Task。
 
 S6 维护面五件套：[discussion](./maintenance-discussion-unified-s6.md)、[guard](./maintenance-harness-guard-s6.md)、[bridge](./maintenance-harness-bridge-s6.md)、[apply](./maintenance-harness-apply-s6.md)、[shared-render](./maintenance-panel-shared-render-s6.md)。
 
-主线与执行器：[repo-identity-S7](../blueprint/harness-repo-identity-s7.md)、[execution-adapter-S8](./harness-execution-adapter-s8.md)、[portable-results](./harness-portable-results.md)、[s9-readiness](./harness-s9-readiness.md)、[undo](../blueprint/harness-undo.md)、[xdo-executor](./desktop-xdo-executor.md)、[review-repair](./independent-review-repair.md)、[handoff-brief](./handoff-brief.md)、[verify-harden](../desktop/verify-pipeline-harden.md)、[notifications](./agent-notifications.md)。
+主线与执行器：[repo-identity-S7](../blueprint/workspaces/harness-repo-identity-s7.md)、[execution-adapter-S8](./harness-execution-adapter-s8.md)、[portable-results](./harness-portable-results.md)、[s9-readiness](./harness-s9-readiness.md)、[undo](../blueprint/maintenance/harness-undo.md)、[xdo-executor](./desktop-xdo-executor.md)、[review-repair](./independent-review-repair.md)、[handoff-brief](./handoff-brief.md)、[verify-harden](../desktop/verify-pipeline-harden.md)、[notifications](./agent-notifications.md)。
 
 PI 运行时三篇为反转续接非重复：[context-recognition](../terminal/janus-pi-context-recognition.md)否决 hook 在先，[hook-management](../terminal/janus-pi-hook-management.md)声明理由过时并建 hook 在后，均以本域为父。
 

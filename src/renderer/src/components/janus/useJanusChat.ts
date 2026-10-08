@@ -592,7 +592,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.pendingBuffer = ''
     handles.reasoning = emptyReasoning()
 
-    // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/blueprint/requirements/blueprint-review-conversation-loop.md
+    // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/blueprint/maintenance/requirements/blueprint-review-conversation-loop.md
     const nextMessages = maintenanceTaskId || compact ? history : [...history, userMessage]
     if (!recovery) updateConversation(id, (current) => ({
       ...current,
@@ -955,7 +955,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     setRuntime(id, () => ({ ...emptyRuntime(), ...(panel ? { approvalMode: 'plan' as const } : {}) }))
   }, [invalidateRuntime, setRuntime, updateConversation])
 
-  // Note: workspace lifetime survives panel unmounts — see .agents/notes/blueprint/tasks/blueprint-workspace-dialog.md
+  // Note: workspace lifetime survives panel unmounts — see .agents/notes/blueprint/maintenance/tasks/blueprint-workspace-dialog.md
   useEffect(() => useWorkspaceStore.subscribe((state) => {
     if (panelWorkspaceRef.current === null) return
     const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId)

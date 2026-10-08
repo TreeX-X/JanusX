@@ -1,5 +1,5 @@
 // Note: external provider sessions import by transcript backfill — see
-// .agents/notes/sessions/external-session-backfill.md
+// .agents/notes/sessions/records/external-session-backfill.md
 import { open, readdir, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'

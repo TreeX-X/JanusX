@@ -1,4 +1,4 @@
-// Note: task-bound persistent threads — see .agents/notes/sessions/persistent-task-threads.md
+// Note: task-bound persistent threads — see .agents/notes/sessions/threads/persistent-task-threads.md
 /**
  * @file Task-bound thread store (S8-JanusX, persistent-subagent P1).
  * @description Persists one thread per run under `.agents/.local/runs/<runId>/`:

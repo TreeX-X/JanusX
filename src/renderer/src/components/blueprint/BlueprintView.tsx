@@ -1,4 +1,4 @@
-// Note: workspace-first selection and recoverable empty states — see .agents/notes/blueprint/requirements/blueprint-empty-init.md
+// Note: workspace-first selection and recoverable empty states — see .agents/notes/blueprint/workspaces/requirements/blueprint-empty-init.md
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './blueprint.css'
 import { useI18n } from '@/i18n/useI18n'

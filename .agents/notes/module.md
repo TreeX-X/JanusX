@@ -7,7 +7,7 @@
   "created": "2026-10-03",
   "class": "architecture",
   "tags": [],
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:10:33.782Z",
   "moduleState": "partial",
   "role": "project"
 }
@@ -21,11 +21,11 @@
 
 ## Design
 
-本项目声明覆盖当前 JanusX 仓库的粗粒度模块。共享 Agent 包是外部依赖，其实现与决策由 janus-agentX 自己维护。模块层级由 parent 派生，接口由显式声明连接，代码入口由各模块的 codeRefs 定位。
+项目入口组织终端与外部 CLI、会话与工作区、Agent 对话与执行、桌面与分发、工作台与产物界面、远程控制与托管协作、Note 与蓝图、记忆与知识。共享 Agent 包是外部依赖，其实现与决策由 janus-agentX 维护；各模块的 codeRefs 定位本仓入口。
 
-当前模块包括终端与外部 CLI、会话与工作区、Agent 对话与执行、桌面与分发、工作台与产物界面、远程控制与托管协作、Note 与蓝图、记忆与知识。模块由 parent 自动发现；计划和性能专题位于相应模块之下，系统结构视图仍只绘制有效模块声明。
+[Note 与蓝图](blueprint/module.md)按文档读取、模块导航、维护对话、工作区组合细分；[会话与工作区](sessions/module.md)按会话记录、检查点、对话线程、工作树细分。其余模块保持现有职责深度，后续出现独立维护边界时再拆分，不要求树形等深。
 
-现有决策、阶段性 initiative 和 Task 保留原身份。未分类的 Note 可从全部 Note 阅读，不能据此推断它已经失效。此结构不列举所有文件、函数或运行时调用，也不表示所有功能已经完成。
+模块层级来自最近上级的 parent，普通 Note 通过 module 归属。单根蓝图首页就是项目模块页，进入子模块后显示它自身和直属内容；未归属文档及读取诊断保留访问入口。文件数量、Task 完成和模块状态分别表达，不据目录位置推断功能已经验收。整理依据与迁移证据见[职责目录整理](blueprint/module-responsibilities.md)。
 
 ## Acceptance criteria
 

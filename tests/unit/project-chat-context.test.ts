@@ -49,7 +49,7 @@ describe('project chat checkout selection', () => {
 })
 
 // Note: batch selection degrades at the byte budget instead of failing the turn —
-// see .agents/notes/blueprint/blueprint-batch-context.md
+// see .agents/notes/blueprint/maintenance/blueprint-batch-context.md
 describe('project chat context budget', () => {
   it('provides an index for direct conversation so background Notes cannot crowd out its history', async () => {
     const a = await checkout('Index title', 'UNIQUE_SOURCE_BODY'.repeat(5000))

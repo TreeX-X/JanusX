@@ -1,4 +1,4 @@
-// Note: document-driven structure keeps decisions and task contracts independent — see .agents/notes/blueprint/document-driven-module-view.md
+// Note: document-driven structure keeps decisions and task contracts independent — see .agents/notes/blueprint/navigation/document-driven-module-view.md
 import type { Blueprint, BlueprintNode } from '@/services/blueprint'
 import type { CompositionDiagnostic, CompositionInterface } from '../../../../shared/blueprint-composition'
 

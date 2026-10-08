@@ -14,7 +14,7 @@
       "reason": "Git blob provenance before separating current facts and historical planning."
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -23,7 +23,7 @@
 
 ## Problem
 
-This draft records the 2026-09-23 starting point and phased proposal. It is retained as a planning source, not a description of the current theme implementation. Later decisions on [session surfaces](../session-card-surface.md), [settings scrims](../settings-footer-scrim-token.md) and [modal motion](../../sessions/worktree-composer-entry-motion.md) carry their own implementation facts. Original criteria below keep their proposed dark-default requirement; the draft is not silently updated to match a later default.
+This draft records the 2026-09-23 starting point and phased proposal. It is retained as a planning source, not a description of the current theme implementation. Later decisions on [session surfaces](../session-card-surface.md), [settings scrims](../settings-footer-scrim-token.md) and [modal motion](../worktree-composer-entry-motion.md) carry their own implementation facts. Original criteria below keep their proposed dark-default requirement; the draft is not silently updated to match a later default.
 
 JanusX has no real theme system. `GlobalConfig.theme: 'dark' | 'light'` (`src/main/workspace/types.ts:52`, default in `src/main/config/service.ts:44`) is stored but never read by the renderer. All surfaces are hardcoded dark: shell ramp `--shell-*` in `src/renderer/src/styles/globals.css:24-54`, xterm `theme.background #151517` in `src/renderer/src/components/CLITerminal.tsx:167-190`, the Codex `OSC 10/11` probe answers in `src/shared/terminalColorQuery.ts:8-21`, Monaco `janusx-dark` in `src/renderer/src/lib/monaco-theme.ts:13-54`, and the web gateway xterm in `src/main/web-test-gateway/page.ts:720`.
 

@@ -1,9 +1,9 @@
 // Note: offline worktree discovery plus login-free repo avatars — see
-// .agents/notes/sessions/worktree-sidebar-scoping.md
+// .agents/notes/sessions/worktrees/worktree-sidebar-scoping.md
 // Note: background creation, scoped deletion, and branch review — see
-// .agents/notes/sessions/worktree-create-delete.md
+// .agents/notes/sessions/worktrees/worktree-create-delete.md
 // Note: creation metadata plus local Ship diff/merge/abort — see
-// .agents/notes/sessions/worktree-ship-merge.md
+// .agents/notes/sessions/worktrees/worktree-ship-merge.md
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'

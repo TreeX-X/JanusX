@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-08T03:43:45.319Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "moduleState": "partial"
 }
 ---
@@ -59,9 +59,9 @@
 
 产物语义：[workspace 重构](./product-workspace.md)、[notice-matrix](./product-notice-matrix.md)、[peek-race](./product-peek-width-and-close-race.md)、[preview-p0](./product-preview-p0.md)、[tour](./product-tour.md)、[landing](../desktop/landing-page.md)。
 
-Note 工具链三件各司其职：[drawer-toolbar](../blueprint/note-drawer-markdown-toolbar.md)、[mechanical-gates](../blueprint/note-mechanical-checks.md)、[rename-draftcard](../blueprint/notecard-rename-draft-card.md)；工作便签归属：[own-namespace implemented](../blueprint/history/own-notes-namespace.md)与[own-namespace proposed](../blueprint/history/own-notes-namespace-proposal.md)为生命周期对，成对保留。
+Note 工具链三件各司其职：[drawer-toolbar](./note-drawer-markdown-toolbar.md)、[mechanical-gates](../blueprint/documents/note-mechanical-checks.md)、[rename-draftcard](./notecard-rename-draft-card.md)；工作便签归属：[own-namespace implemented](../blueprint/documents/history/own-notes-namespace.md)与[own-namespace proposed](../blueprint/documents/history/own-notes-namespace-proposal.md)为生命周期对，成对保留。
 
-配套：[github-maintenance](../desktop/github-maintenance.md)、[markdown-assets](./markdown-preview-local-assets.md)、[file-glyph](./drawer-markdown-file-glyph.md)、[reveal-race](./file-tree-reveal-race.md)、[share-import](../blueprint/share-import.md)、[plugin-forms](./requirements/plugin-architecture-forms.md)、[plugin-debug](./requirements/plugin-import-debug.md)、[entry-nav](./entry-switch-navigation.md)、[f12-nav](./f12-navigation.md)。
+配套：[github-maintenance](../desktop/github-maintenance.md)、[markdown-assets](./markdown-preview-local-assets.md)、[file-glyph](./drawer-markdown-file-glyph.md)、[reveal-race](./file-tree-reveal-race.md)、[share-import](../blueprint/workspaces/share-import.md)、[plugin-forms](./requirements/plugin-architecture-forms.md)、[plugin-debug](./requirements/plugin-import-debug.md)、[entry-nav](./entry-switch-navigation.md)、[f12-nav](./f12-navigation.md)。
 
 渲染与编辑器：[emphasis](./markdown-emphasis-orange-text.md)（强调色去填充块）、[standalone-refresh](./standalone-editor-auto-refresh.md)（独立编辑器外部变更自刷新）。
 

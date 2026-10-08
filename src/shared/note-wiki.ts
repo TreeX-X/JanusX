@@ -1,6 +1,6 @@
 import type { NoteReadEntry, NoteReadSnapshot } from './notes'
 
-// Note: a disposable wiki view, never another relation store — see .agents/notes/blueprint/tasks/note-wiki-r3.md
+// Note: a disposable wiki view, never another relation store — see .agents/notes/blueprint/documents/tasks/note-wiki-r3.md
 export function noteWikiView(snapshot: NoteReadSnapshot, uri: string, maxItems = 32, maxChars = 18000) {
   const groups = new Map<string, NoteReadEntry[]>()
   for (const entry of snapshot.entries) {

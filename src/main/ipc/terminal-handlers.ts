@@ -120,7 +120,7 @@ let continueSessionImpl:
   | null = null
 
 /** Continue in New Session: fresh terminal plus focused handoff for one task. */
-// Note: internal opencode rows resume natively via --session instead — see .agents/notes/sessions/opencode-continue-native-resume.md
+// Note: internal opencode rows resume natively via --session instead — see .agents/notes/sessions/records/opencode-continue-native-resume.md
 export function continueAgentSession(
   sessionId: string,
   opts?: ContinueSessionOptions,
@@ -316,7 +316,7 @@ function processCheckpointQueue(id: string): void {
   const previousCpId = state.checkpointId
   state.checkpointId = null
 
-  // Note: session tag joins the card count with the session-scoped list — see .agents/notes/sessions/session-checkpoint-count-truth.md
+  // Note: session tag joins the card count with the session-scoped list — see .agents/notes/sessions/checkpoints/session-checkpoint-count-truth.md
   const sessionId = agentSessionRegistry.sessionIdForTerminal(id)
   checkpointManager.finalizeAndCreateCheckpoint(previousCpId, {
     terminalId: id,

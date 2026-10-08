@@ -8,7 +8,7 @@
  *
  *  The brief text is rendered here, in main, so what the terminal receives is
  *  one auditable function rather than a template assembled in the renderer.
- *  See .agents/notes/blueprint/blueprint-dispatch-panel.md
+ *  See .agents/notes/blueprint/maintenance/blueprint-dispatch-panel.md
  */
 import { z } from 'zod'
 import type { BlueprintMaintenanceScope } from '../../../shared/janus/maintenance-types'

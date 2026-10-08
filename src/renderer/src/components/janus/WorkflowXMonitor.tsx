@@ -9,7 +9,7 @@ export function WorkflowXMonitor() {
   return <WorkflowXStatus />
 }
 
-// Note: settings and Island share detection state and actions — see .agents/notes/blueprint/requirements/workflowx-onboarding.md
+// Note: settings and Island share detection state and actions — see .agents/notes/blueprint/workspaces/requirements/workflowx-onboarding.md
 export function WorkflowXStatus({ surface = 'island' }: { surface?: 'island' | 'settings' }) {
   const { t } = useI18n('janus')
   const { snapshot, checking, check } = useWorkflowXStore()

@@ -3,7 +3,7 @@ import type { ArchitectureProjection } from '@/features/blueprint/architecture-v
 import { useI18n } from '@/i18n/useI18n'
 import { BlueprintCompositionPanel } from './BlueprintCompositionPanel'
 
-// Note: unified module browsing — see .agents/notes/blueprint/requirements/module-browsing.md
+// Note: unified module browsing — see .agents/notes/blueprint/navigation/requirements/module-browsing.md
 export function BlueprintArchitecturePanel({ source, projection, nodeId, onSelect }: { source: Blueprint; projection: ArchitectureProjection; nodeId?: string; onSelect: (id: string) => void }) {
   const { t } = useI18n('blueprint')
   const related = nodeId ? projection.related[nodeId] ?? [] : []

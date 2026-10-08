@@ -67,7 +67,7 @@
     ],
     "review": "independent"
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd"
 }
 ---
@@ -76,7 +76,7 @@
 
 ## Scope
 
-以前置 [R4](./blueprint-r4.md) 在 0ada8cc 的独立验收为基线。维护交互复用 JanusChat controller、现有 changeset、harness 事务、审计和撤销；右侧对话承载节点上下文，审批区域按需展开，保持 v11 的三列结构与简洁布局。节点所属 checkout 必须显式定位，无法定位时给出可操作诊断。
+以前置 [R4](../workspaces/tasks/blueprint-r4.md) 在 0ada8cc 的独立验收为基线。维护交互复用 JanusChat controller、现有 changeset、harness 事务、审计和撤销；右侧对话承载节点上下文，审批区域按需展开，保持 v11 的三列结构与简洁布局。节点所属 checkout 必须显式定位，无法定位时给出可操作诊断。
 
 全量迁移覆盖当前 JanusX 的 185 个既有 Note。原始正文、UUID、链接和代码引用可追溯；允许规范化旧关系字段及章节，但保留原始记录，不把历史状态转换为虚构 execution 或 receipt。迁移报告保留在 .agents/.local/。外部仓库无关文件不进入提交。
 

@@ -29,7 +29,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -40,7 +40,7 @@
 
 The maintenance panel and service carry two discussion owners: the legacy loop with its own messages, sessions, steering ports, traces, and controllers next to the janus-chat shared turn. Every turn-lock, steering, retry, and recovery fix ships twice and diverges. On-demand migration already gives unmigrated blueprints a path forward, so keeping the loop beside the new path only preserves the fork the unification removed.
 
-The cut list lives in the [legacy loop removal plan](./history/legacy-loop-removal-plan.md). Migration entry is covered by [on-demand legacy blueprint migration](../blueprint/history/blueprint-migration.md); shared discussion ownership by [one project conversation](../sessions/project-conversation-controller.md); the kept apply lane by [maintenance writes through the harness transaction](./maintenance-harness-apply-s6.md).
+The cut list lives in the [legacy loop removal plan](./history/legacy-loop-removal-plan.md). Migration entry is covered by [on-demand legacy blueprint migration](../blueprint/documents/history/blueprint-migration.md); shared discussion ownership by [one project conversation](../sessions/threads/project-conversation-controller.md); the kept apply lane by [maintenance writes through the harness transaction](./maintenance-harness-apply-s6.md).
 
 ## Decision
 

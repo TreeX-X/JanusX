@@ -387,7 +387,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   }, [flushLayoutSave, onRegisterFlush])
   const graphReady = !currentBlueprint || currentBlueprint.nodeIds.length === 0 || rfNodes.length > 0
   const ownerPath = useBlueprintStore(state => state.blueprintWorkspace[blueprintId] ?? null)
-  // Note: local module navigation preserves source/layout — see .agents/notes/blueprint/requirements/module-browsing.md
+  // Note: local module navigation preserves source/layout — see .agents/notes/blueprint/navigation/requirements/module-browsing.md
   const navigateScope = useCallback((nextScope: string | null, previewId: string | null = nextScope) => {
     pendingCenter.current = null
     const targetScope = nextScope ?? homeModuleId

@@ -1,4 +1,4 @@
-// Note: confirmation applies the host's frozen file preview — see .agents/notes/blueprint/blueprint-maintenance-approval-gap.md
+// Note: confirmation applies the host's frozen file preview — see .agents/notes/blueprint/maintenance/blueprint-maintenance-approval-gap.md
 import { useEffect, useState } from 'react'
 import { previewMaintenanceChangeSet } from '@/services/blueprint'
 import { useI18n } from '@/i18n/useI18n'

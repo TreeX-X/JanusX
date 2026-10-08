@@ -10,7 +10,7 @@
   "relations": [
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/6813a52b-249b-556e-a0eb-55acc6930922"}
   ],
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -29,7 +29,7 @@ The renderer derives the same status row from the same `ChatAgentEvent` union an
 
 `styles/03-janus-chat-core.css` owns shared feedback, message text and metadata, and the compact navigation and minimal composer variants. Status, reasoning text and author labels use `--shell-muted`; elapsed time and timestamps use `--shell-dim`; message and input text use `--shell-text`; the cursor, thinking border, assistant label and input caret use `--shell-accent`. The minimal composer consumes the existing pane, border, hover and accent tokens. Palette values belong to `src/shared/theme/definition.ts` and its generated stylesheet. These rules contain no Island or Blueprint ancestor requirement and need no per-theme feedback override, so theme changes apply to active streams and completed reasoning alike.
 
-Host styles own placement, sizing and structural skins. They must not duplicate shared feedback or text colors. `BlueprintMaintenancePanel` continues to use `JanusChat` rendering, model calls and streaming through its own controller. The [workspace dialog decision](../blueprint/tasks/blueprint-workspace-dialog.md) owns conversation lifetime and the explicit file-review boundary.
+Host styles own placement, sizing and structural skins. They must not duplicate shared feedback or text colors. `BlueprintMaintenancePanel` continues to use `JanusChat` rendering, model calls and streaming through its own controller. The [workspace dialog decision](../blueprint/maintenance/tasks/blueprint-workspace-dialog.md) owns conversation lifetime and the explicit file-review boundary.
 
 ## Alternatives considered
 

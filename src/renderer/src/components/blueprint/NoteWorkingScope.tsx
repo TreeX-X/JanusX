@@ -6,7 +6,7 @@ import { groupFocusNotes, resolveFocusNodes } from '@/features/blueprint/note-fo
 import type { NoteFocusEvent } from '../../../../shared/note-chat'
 import './note-focus.css'
 
-// Note: every entry has an independent module navigation action — see .agents/notes/blueprint/requirements/module-focus-navigation.md
+// Note: every entry has an independent module navigation action — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
 function FocusNoteList({ event, editable = false }: { event: NoteFocusEvent; editable?: boolean }) {
   const { t } = useI18n('blueprint')
   const state = useNoteFocusStore()
@@ -52,7 +52,7 @@ export function NoteWorkingScope({ conversationId, workspacePath }: { conversati
   </section>
 }
 
-// Note: per-turn evidence stays folded beside its reply — see .agents/notes/blueprint/requirements/blueprint-conversation-development.md
+// Note: per-turn evidence stays folded beside its reply — see .agents/notes/blueprint/maintenance/requirements/blueprint-conversation-development.md
 export function NoteTurnActivity({ conversationId, workspacePath, turnId }: {
   conversationId: string; workspacePath: string; turnId?: string; live?: boolean
 }) {

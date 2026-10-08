@@ -17,7 +17,7 @@ const statusLabel: Record<string, string> = { resolved: '已解析', missing: '�
 const errorText = (error: unknown): string => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : String(error)
 type Props = { snapshot: NoteReadSnapshot; rootPath: string; uri?: string; anchor?: string; compact?: boolean; canNavigate?: (uri: string) => boolean; onNavigate: (uri: string, anchor?: string) => void; onRefresh: () => void }
 
-// Note: the engineering wiki reads the same Note, without a page copy — see .agents/notes/blueprint/tasks/note-wiki-r3.md
+// Note: the engineering wiki reads the same Note, without a page copy — see .agents/notes/blueprint/documents/tasks/note-wiki-r3.md
 export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false, canNavigate, onNavigate, onRefresh }: Props) {
   const [tab, setTab] = useState<'body' | 'links' | 'context'>('body')
   const [query, setQuery] = useState('')

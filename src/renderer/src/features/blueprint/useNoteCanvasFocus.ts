@@ -1,4 +1,4 @@
-// Note: module-aware explicit navigation — see .agents/notes/blueprint/requirements/module-focus-navigation.md
+// Note: module-aware explicit navigation — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { Edge, Node, ReactFlowInstance } from '@xyflow/react'
 import type { BlueprintNodeData } from '@/components/blueprint/BlueprintNodeCard'

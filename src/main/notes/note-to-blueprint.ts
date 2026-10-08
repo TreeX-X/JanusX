@@ -6,7 +6,7 @@
  *  original metadata, URI relations and diagnostics
  *  alongside canvas vocabulary. No renderer interprets frontmatter.
  *  Pure: no filesystem, no Electron, no network, no harness imports.
- *  See .agents/notes/blueprint/blueprint-note-graph-readonly.md
+ *  See .agents/notes/blueprint/navigation/blueprint-note-graph-readonly.md
  */
 import type {
   Blueprint,

@@ -53,7 +53,7 @@
       }
     }
   },
-  "updated": "2026-10-08T03:25:17.772Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -68,7 +68,7 @@
 
 ### 当前实施状态与下一步
 
-2026-09-18 的 [共享项目会话](../sessions/project-conversation-controller.md) 已将新 Note 蓝图入口接入主 Chat controller，共享消息、单 turn、停止、steering、模型、资源、问题及审批。维护任务只保留提案与审计，采用共享历史生成提案。旧维护生成与对话运行路径的退出及保留的结算能力见 [旧维护循环移除](./legacy-loop-removal.md)。
+2026-09-18 的 [共享项目会话](../sessions/threads/project-conversation-controller.md) 已将新 Note 蓝图入口接入主 Chat controller，共享消息、单 turn、停止、steering、模型、资源、问题及审批。维护任务只保留提案与审计，采用共享历史生成提案。旧维护生成与对话运行路径的退出及保留的结算能力见 [旧维护循环移除](./legacy-loop-removal.md)。
 
 [任务合同采纳](./task-contract-adoption.md) 支持补全圆桌 action 草稿的 scope、AC、引用和验证步骤，显式转为 accepted 后开放执行准备。当前表单限单个 primary repo。集成用例通过共享执行内核运行真实检查命令，以评审 stub 形成正式结果，再从新 clone 重建完成状态及需求覆盖率；浏览器用例使用模拟 IPC/model，不能替代真实 Electron 或模型执行验收。
 

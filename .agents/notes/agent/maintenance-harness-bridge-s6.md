@@ -28,7 +28,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-08T09:06:56.496Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -43,7 +43,7 @@ The S6-c guard keeps project graphs safe by refusing maintenance writes, but no 
 
 `translateMaintenanceOpsToHarness` in `src/main/harness/maintenance-bridge.ts` owns the mapping as a pure function: maintenance operations in, harness operations plus per-op refusals out. Creates carry full prose in a single op; updates move through `applyNodePatch`; relations resolve through the synthetic projection id with `blocks` flipping direction and `related-to` landing on the smaller URI; deletes downgrade to archive with an explicit flag; restores verify snapshot edges. All touches of one URI fuse into a single op because the transaction pre-checks every hash against disk. Refusals cover kind changes, progress, features, relation prose, workspace bindings, and dependency cycles. `mergeNoteEdit` moves to `artifact-producer` as the single merge implementation with the service delegating. Scope follows [implementation contract](../blueprint/note-harness-implementation-contract.md) C2/C5 and the [harness guard](./maintenance-harness-guard-s6.md).
 
-Note section edits use `update-node.after.sections`: exact Markdown heading names map to complete replacement section bodies. Explicit sections override the legacy canvas field mapping when both address the same heading. The existing merge preserves unrelated sections, frontmatter and Note identity; normal parse validation and preview approval still apply. This lets requirement edits reach `Expected behavior` and `Acceptance criteria` without using the unsupported `features` array. The real-file review and approval regression is recorded in the [review implementation](../blueprint/tasks/blueprint-review-implementation.md#verification).
+Note section edits use `update-node.after.sections`: exact Markdown heading names map to complete replacement section bodies. Explicit sections override the legacy canvas field mapping when both address the same heading. The existing merge preserves unrelated sections, frontmatter and Note identity; normal parse validation and preview approval still apply. This lets requirement edits reach `Expected behavior` and `Acceptance criteria` without using the unsupported `features` array. The real-file review and approval regression is recorded in the [review implementation](../blueprint/maintenance/tasks/blueprint-review-implementation.md#verification).
 
 ## Alternatives considered
 

@@ -168,7 +168,7 @@ export interface PreparedMaintenanceSelection {
   bundleId: string
 }
 
-// Note: preview and application consume the same translated bytes — see .agents/notes/blueprint/blueprint-maintenance-approval-gap.md
+// Note: preview and application consume the same translated bytes — see .agents/notes/blueprint/maintenance/blueprint-maintenance-approval-gap.md
 export async function prepareMaintenanceSelection(
   service: HarnessNoteService,
   req: HarnessSelectionRequest,

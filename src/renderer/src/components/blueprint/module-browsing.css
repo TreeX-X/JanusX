@@ -1,4 +1,4 @@
-/* Note: container cards and scoped browsing — see .agents/notes/blueprint/requirements/module-browsing.md */
+/* Note: container cards and scoped browsing — see .agents/notes/blueprint/navigation/requirements/module-browsing.md */
 .bp-browser-bar { padding: 8px 12px; border-bottom: 1px solid var(--shell-border); color: var(--shell-text); }
 .bp-browser-navigation, .bp-browser-crumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .bp-browser-navigation [aria-current='page'] { font-weight: 650; background: var(--shell-hover); }

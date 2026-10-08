@@ -5,7 +5,7 @@
  *  below must stay usable from a fixture upgrade that touches only
  *  `note-to-blueprint.ts` plus golden snapshots. `note-provider.ts` converts the
  *  parsed representation into these shapes at the boundary.
- *  See .agents/notes/blueprint/blueprint-note-graph-readonly.md
+ *  See .agents/notes/blueprint/navigation/blueprint-note-graph-readonly.md
  */
 
 /** Frontmatter schema claimed by harness notes. */
