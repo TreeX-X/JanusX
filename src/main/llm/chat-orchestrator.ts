@@ -68,6 +68,14 @@ export interface ChatStreamRequest {
   workspaceResources?: ChatWorkspaceResource[]
   toolTraces?: import('../../shared/ipc/llm').ChatToolTraceEntry[]
   /**
+   * Host-owned tool surface for this turn (dual gate, supply side): names not
+   * listed are never offered to the model. `toolGate` is the call-time
+   * backstop; it is a host function and never crosses IPC — see
+   * .agents/notes/agent/run-config-assistant-edit-tools.md
+   */
+  toolAllowlist?: string[]
+  toolGate?: (call: { name: string; arguments: unknown }) => Promise<{ block: true; reason: string; terminate?: boolean } | undefined>
+  /**
    * S6 engineering domain. Missing = legacy personal behavior.
    * `project` never falls back to personal memory capture/injection.
    */
@@ -142,6 +150,27 @@ export async function prepareJanusChatRecall(
 
 /*-- delta 合批窗口：高速流下把每 token 一次 IPC 压到每 40ms 一次 --*/
 const DELTA_FLUSH_MS = 40
+
+type ChatToolGate = NonNullable<ChatStreamRequest['toolGate']>
+
+const normalizeToolName = (name: string) => name.toLowerCase().replace(/[._-]+/g, '')
+
+/**
+ * 双闸兜底：`toolAllowlist` 过滤工具供给之后，`toolGate` 在调用点拦截
+ * allowlist 之外的一切调用（含未来新注册工具），reason 回灌模型。
+ * 用法照 desktop-task-turn.ts 的既有先例 — see
+ * .agents/notes/agent/run-config-assistant-edit-tools.md
+ */
+export function gateFromToolAllowlist(allowlist: string[] | undefined, policy?: ChatToolGate): ChatToolGate | undefined {
+  if (!allowlist) return policy
+  const allowed = new Set(allowlist.map(normalizeToolName))
+  return async (call) => {
+    if (!allowed.has(normalizeToolName(call.name))) {
+      return { block: true, reason: `Tool unavailable for this conversation: ${call.name}` }
+    }
+    return policy?.(call)
+  }
+}
 /*-- 推理增量仅 UI 展示：超限后不再转发，省 IPC（渲染端另有 4k 截断） --*/
 const REASONING_FORWARD_CAP_CHARS = 8_000
 
@@ -393,7 +422,7 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
 // Note: single-turn lock and project domain isolation — see .agents/notes/agent/chat-turn-guard-domain-s6.md
 /** 流式对话编排：由 llm-handlers 的 ipcMain.on(chatStream) 委托调用 */
 export async function handleChatStream(event: ChatStreamReplyTarget, request: ChatStreamRequest): Promise<void> {
-  const { requestId, messages, providerId, modelId, sourceTag, conversationId, workspaceId, workspacePath, workspaceResources, toolTraces, domain } = request
+  const { requestId, messages, providerId, modelId, sourceTag, conversationId, workspaceId, workspacePath, workspaceResources, toolTraces, toolAllowlist, toolGate, domain } = request
 
   // S6: same conversationId shares one active turn across assistant/blueprint entries.
   const activeTurn = activeSteerTargets.get(conversationId || requestId)
@@ -453,9 +482,10 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
   try {
     const callerId = `renderer:${event.sender?.id ?? 'unknown'}`
     const ports = defaultChatTurnPorts(callerId, requestId, domain, conversationId)
+    const turnToolGate = gateFromToolAllowlist(toolAllowlist, toolGate)
     const modeCommand = parseWorkflowXCommand([...messages].reverse().find(message => message.role === 'user')?.content ?? '')
     if (modeCommand && !modeCommand.prompt && !request.maintenanceTaskId) {
-      await runChatTurn({ requestId, messages, providerId, modelId, sourceTag }, ports, { onEvent: agentEvent => {
+      await runChatTurn({ requestId, messages, providerId, modelId, sourceTag, toolAllowlist, toolGate: turnToolGate }, ports, { onEvent: agentEvent => {
         sendAgentEvent(agentEvent)
         if (agentEvent.type === 'text_delta') queueDelta(agentEvent.delta)
       } }, controller.signal)
@@ -560,6 +590,8 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         workspacePath,
         workspaceResources,
         toolTraces,
+        toolAllowlist,
+        toolGate: turnToolGate,
         callerId,
         chatSession,
         steeringPort,

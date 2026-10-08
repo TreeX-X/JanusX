@@ -42,6 +42,8 @@ interface ChatRequest {
   workspaceId?: string
   workspacePath?: string
   workspaceResources?: ChatWorkspaceResource[]
+  /** Contract mirror of shared ChatRequest; the non-stream path has no tool loop. */
+  toolAllowlist?: string[]
 }
 
 let connectionStatus: LlmRuntimeStatus['connection'] = { state: 'checking' }

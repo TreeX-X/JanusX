@@ -4,6 +4,7 @@ import { chatStream } from '../../src/renderer/src/services/llm'
 import {
   analyzeWorkspaceLaunch,
   buildLaunchAssistantMessages,
+  LAUNCH_ASSISTANT_TOOL_ALLOWLIST,
   parseLaunchAssistantResponse,
   redactWorkspaceExcerpt,
   selectLaunchContextFiles,
@@ -130,7 +131,16 @@ describe('workspace launch assistant', () => {
     streamWorkspaceLaunchAssistant({
       request: '运行 debug 版 start.exe', analysis, config, onDelta: vi.fn(), onDone: vi.fn(), onError: vi.fn(),
     })
-    expect(vi.mocked(chatStream).mock.calls[0]?.[4]).toEqual({ sourceTag: 'launch-assistant', workspaceId: 'workspace-1' })
+    expect(vi.mocked(chatStream).mock.calls[0]?.[4]).toEqual({
+      sourceTag: 'launch-assistant', workspaceId: 'workspace-1', toolAllowlist: [...LAUNCH_ASSISTANT_TOOL_ALLOWLIST],
+    })
+  })
+
+  it('pins the assistant tool surface to read-only workspace tools and launch-config writes', () => {
+    expect([...LAUNCH_ASSISTANT_TOOL_ALLOWLIST]).toEqual([
+      'workspace.list', 'workspace.read', 'project.detect',
+      'launch-config.get', 'launch-config.edit', 'launch-config.apply',
+    ])
   })
 
   it('redacts common secrets from workspace excerpts', () => {

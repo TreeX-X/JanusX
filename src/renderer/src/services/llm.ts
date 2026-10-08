@@ -140,6 +140,7 @@ export function chatStream(
     workspacePath?: string
     workspaceResources?: ChatWorkspaceResource[]
     toolTraces?: ChatToolTraceEntry[]
+    toolAllowlist?: string[]
     domain?: 'personal' | 'project'
     noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
     noteWorkingSet?: string
@@ -270,6 +271,7 @@ export function chatStream(
         workspacePath: options?.workspacePath,
         workspaceResources: options?.workspaceResources,
         toolTraces: options?.toolTraces,
+        ...(options?.toolAllowlist ? { toolAllowlist: options.toolAllowlist } : {}),
         ...(options?.domain ? { domain: options.domain } : {}),
         ...(options?.noteRefs ? { noteRefs: options.noteRefs } : {}),
         ...(options?.noteWorkingSet ? { noteWorkingSet: options.noteWorkingSet } : {}),

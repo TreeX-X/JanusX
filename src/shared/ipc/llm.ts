@@ -38,6 +38,14 @@ export interface ChatRequest {
   /** Compact trace of tool calls from earlier turns, replayed into the model's context. */
   toolTraces?: ChatToolTraceEntry[]
   /**
+   * Host-owned tool surface for this turn: names absent here are never offered
+   * to the model, and the host blocks their execution at call time (backstop
+   * against future registered tools). Absent = the standard staged offering.
+   * The call-time gate itself is a host function and never crosses IPC — see
+   * .agents/notes/agent/run-config-assistant-edit-tools.md
+   */
+  toolAllowlist?: string[]
+  /**
    * S6 engineering domain. Missing = legacy personal behavior for backward
    * compatibility; `project` must never fall back to personal memory capture.
    */

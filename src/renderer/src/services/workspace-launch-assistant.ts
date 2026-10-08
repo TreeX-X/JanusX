@@ -9,6 +9,16 @@ const MAX_CONTEXT_FILES = 5
 const ROOT_CONTEXT_FILES = ['package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'CMakeLists.txt', 'README.md']
 const ACTION_OPEN = '<janus-launch-action>'
 const ACTION_CLOSE = '</janus-launch-action>'
+
+/**
+ * 助手轮次固定工具面：只读理解 + 专属配置写入口。git 只读按需追加，
+ * project.process-output 默认不放行 — see
+ * .agents/notes/agent/run-config-assistant-edit-tools.md
+ */
+export const LAUNCH_ASSISTANT_TOOL_ALLOWLIST = [
+  'workspace.list', 'workspace.read', 'project.detect',
+  'launch-config.get', 'launch-config.edit', 'launch-config.apply',
+]
 const IGNORED_CONTEXT_DIRECTORIES = new Set([
   '.claude', '.codex', '.git', '.hybrid', '.janusx',
   'build', 'coverage', 'dist', 'node_modules', 'out', 'test-results',
@@ -281,7 +291,7 @@ export function streamWorkspaceLaunchAssistant(input: {
       input.onDone(response)
     },
     input.onError,
-    { sourceTag: 'launch-assistant', workspaceId: input.analysis.workspaceId },
+    { sourceTag: 'launch-assistant', workspaceId: input.analysis.workspaceId, toolAllowlist: [...LAUNCH_ASSISTANT_TOOL_ALLOWLIST] },
   )
 }
 
