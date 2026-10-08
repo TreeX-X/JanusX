@@ -18,6 +18,8 @@ for (const mode of ['', '?workbench']) test(`legacy module declarations retain s
   await expect(page.getByRole('button', { name: /^(系统结构|全部 Note)$/ })).toHaveCount(0)
   await expect(page.locator('.bp-node-card__progress')).toHaveCount(0)
   await expect(page.locator('.react-flow__edge').filter({ hasText: 'read' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: '进入模块 Workbench architecture', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '进入模块 Reader module', exact: true })).toBeVisible()
   const information = page.locator('.bp-architecture-overview details').filter({ has: page.locator('summary', { hasText: /^蓝图信息$/ }) })
   await information.locator('summary').click()
   await expect(information).toContainText('检出范围')

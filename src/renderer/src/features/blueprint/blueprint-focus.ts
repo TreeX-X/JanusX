@@ -18,6 +18,8 @@ import { noteKindOf, type NoteKindFilter } from '@/components/blueprint/blueprin
 import type { BlueprintMaintenanceScope } from '../../../../shared/janus/maintenance-types'
 import { buildEffectiveHierarchy } from './canvas-navigation'
 import { sameCheckoutPath } from './resolveNodeWorkspace'
+import { projectArchitecture } from './architecture-view'
+import { projectModuleBrowse } from './module-browsing'
 
 export type FocusStatusFilter = BlueprintNodeStatus | 'all'
 export type FocusKindFilter = NoteKindFilter
@@ -57,6 +59,8 @@ export interface BlueprintFocusInput {
   statusFilter: FocusStatusFilter
   kindFilter: FocusKindFilter
   selectedId: string | null
+  /** Undefined for legacy document canvases; null denotes multi-root aggregation. */
+  moduleScopeId?: string | null
 }
 
 export const EMPTY_FOCUS: BlueprintFocusInput = {
@@ -151,6 +155,10 @@ export function resolveBlueprintContextScope(
       return node ? nodeMatchesFocus(node, query, focus.statusFilter, focus.kindFilter) : false
     })
     reason = 'filter'
+  } else if (focus.moduleScopeId !== undefined) {
+    candidates = projectModuleBrowse(blueprint, projectArchitecture(blueprint), focus.moduleScopeId).graph.nodeIds
+    if (selected) candidates = [selected, ...candidates.filter(id => id !== selected)]
+    reason = 'view'
   } else if (selected) {
     candidates = focusSubtreeIds(blueprint, selected)
     reason = 'selection'

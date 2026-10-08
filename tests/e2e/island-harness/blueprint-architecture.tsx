@@ -2,6 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { BlueprintCanvas } from '../../../src/renderer/src/components/blueprint/BlueprintCanvas'
 import { BlueprintWorkbench } from '../../../src/renderer/src/components/blueprint/BlueprintWorkbench'
+import { BlueprintMaintenancePanel } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
 import { JanusChatProvider } from '../../../src/renderer/src/components/janus/JanusChatProvider'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { initI18n } from '../../../src/renderer/src/i18n'
@@ -21,7 +22,8 @@ installElectronApiFallback()
 document.documentElement.dataset.theme = DEFAULT_APP_THEME
 Object.assign(window.electron.system, { getLanguage: async () => 'zh-CN', onPrepareQuit: () => () => {} })
 const R = '11111111-1111-4111-8111-111111111111', rootId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-const workspace = { id: 'architecture', name: 'Architecture', path: 'C:/architecture', createdAt: '', updatedAt: '' }
+const params = new URLSearchParams(location.search)
+const workspace = { id: 'architecture', name: 'Architecture', path: params.get('cwd') ?? 'C:/architecture', createdAt: '', updatedAt: '' }
 const graph = createWorkbenchGraph(R, rootId, workspace)
 const [root, task, decision, module, orphan] = graph.nodeIds.map(id => graph.nodes[id])
 function declare(node: typeof root, role: string, parent: string | null) {
@@ -36,7 +38,6 @@ root.note!.metadata!.interfaces = [{ name: 'read', direction: 'provides' }]
 module.note!.metadata!.interfaces = [{ name: 'read', direction: 'needs', provider: root.sourceUri }]
 module.note!.relations = [{ type: 'related-to', target: task.sourceUri! }, { type: 'governed-by', target: decision.sourceUri! }, { type: 'related-to', target: `note://${R}/99999999-9999-4999-8999-999999999999` }]
 decision.kind = decision.note!.kind = 'decision'; decision.title = decision.note!.title = 'Storage decision'
-const params = new URLSearchParams(location.search)
 if (params.has('v2')) {
   for (const node of [root, module, orphan]) {
     node.kind = node.note!.kind = 'module'; node.tags = node.note!.tags = []
@@ -59,6 +60,7 @@ if (params.has('v2')) {
     node.note!.id = node.id
     node.note!.module = index === 3 ? root.sourceUri! : module.sourceUri!
     node.note!.metadata = { ...node.note!.metadata!, id: node.id, kind: kind as any, module: node.note!.module }
+    node.note!.body = `# ${node.title}\n\nSource for ${node.title}.`
     graph.nodes[node.id] = node; graph.nodeIds.push(node.id)
     graph.noteSnapshot!.entries.push({ ...graph.noteSnapshot!.entries[0], uri: node.sourceUri, doc: node.note })
   }
@@ -94,8 +96,30 @@ installWorkbenchBoundary(() => graph, workspace.path)
 useWorkspaceStore.setState({ activeWorkspaceId: workspace.id, workspaces: [workspace as any] })
 useBlueprintMaintenanceStore.setState({ initialized: true })
 useBlueprintStore.setState({ currentBlueprint: graph, blueprintWorkspace: { [graph.id]: workspace.path }, loading: false })
+const streams: any[] = [], events = new Set<(event: any) => void>()
+if (params.has('focus')) {
+  Object.assign(window.electron.workspace, { list: async () => [workspace] })
+  Object.assign(window.electron, { janusChat: { load: async () => null, save: async () => {} } })
+  Object.assign(window.electron.agentRuntime, {
+    createSession: async (input: any) => ({ id: 'focus-session', status: 'running', workspace: { workspaceId: input.workspaceId, workspaceRoot: input.workspaceRoot } }),
+    cancelSession: async () => true, setApprovalMode: async () => true,
+  })
+  Object.assign(window.electron.harness, { noteChatChanges: async () => [] })
+  Object.assign(window.electron.llm, {
+    getTerminalProviders: async () => [{ id: 'p', name: 'Fixture' }],
+    getTerminalDefault: async () => ({ provider: { id: 'p', name: 'Fixture' }, modelId: 'model-a' }),
+    listModels: async () => [{ id: 'model-a', name: 'Model A' }],
+    onAgentEvent: (listener: (event: any) => void) => { events.add(listener); return () => events.delete(listener) },
+    startChatStream: (request: any) => { streams.push(request); queueMicrotask(() => events.forEach(listener => listener({ type: 'text_delta', requestId: request.requestId, delta: 'Module navigation reply' }))) },
+  })
+}
 ;(window as any).architectureFixture = {
   graph,
+  streams,
+  deliver: (focus: unknown) => events.forEach(listener => listener({ type: 'note_focus', requestId: streams.at(-1).requestId, focus })),
+  finish: () => events.forEach(listener => listener({ type: 'stream_end', requestId: streams.at(-1).requestId, cancelled: false })),
+  browser: () => useNoteFocusStore.getState().browser,
+  scope: () => useNoteFocusStore.getState().scopes,
   theme: (theme: string) => { document.documentElement.dataset.theme = theme; useThemeStore.setState({ theme }) },
   refresh: () => {
     graph.nodes[module.id].title = 'Reader module refreshed'
@@ -113,4 +137,6 @@ useBlueprintStore.setState({ currentBlueprint: graph, blueprintWorkspace: { [gra
     useNoteFocusStore.getState().receive({ id: crypto.randomUUID(), workspacePath: workspace.path, conversationId: 'fixture', mode: 'display', focus, notes: [{ uri: target.sourceUri!, role: 'target' }, ...(related ? [{ uri: related.sourceUri, role: 'reference' }] : [])], source: 'assistant', createdAt: new Date().toISOString() } as any)
   },
 }
-void initI18n().then(() => createRoot(document.getElementById('root')!).render(params.has('workbench') ? <JanusChatProvider><BlueprintWorkbench isOpen onClose={() => {}} /></JanusChatProvider> : <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><BlueprintCanvas blueprintId={graph.id} /></main>))
+void initI18n().then(() => createRoot(document.getElementById('root')!).render(params.has('workbench') ? <JanusChatProvider><BlueprintWorkbench isOpen onClose={() => {}} /></JanusChatProvider> : params.has('focus')
+  ? <JanusChatProvider><div style={{ display: 'flex', height: '100vh' }}><main style={{ flex: 1, minWidth: 0, display: 'flex' }}><BlueprintCanvas blueprintId={graph.id} /></main><aside style={{ width: 380, display: 'flex' }}><BlueprintMaintenancePanel onClose={() => {}} /></aside></div></JanusChatProvider>
+  : <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><BlueprintCanvas blueprintId={graph.id} /></main>))

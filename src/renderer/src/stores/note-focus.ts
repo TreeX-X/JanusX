@@ -1,6 +1,6 @@
-// Note: assistant highlighting never changes mouse selection or execution scope — see .agents/notes/blueprint/requirements/blueprint-conversation-development.md
+// Note: passive scope and explicit navigation stay separate — see .agents/notes/blueprint/requirements/module-focus-navigation.md
 import { create } from 'zustand'
-import type { NoteFocusEvent, NoteScopeItem } from '../../../shared/note-chat'
+import type { NoteBrowserState, NoteFocusAction, NoteFocusEvent, NoteScopeItem } from '../../../shared/note-chat'
 import { sameCheckoutPath } from '../features/blueprint/resolveNodeWorkspace'
 
 export interface WorkingScope { workspacePath: string; notes: NoteScopeItem[]; excluded: string[] }
@@ -10,20 +10,23 @@ export const useNoteFocusStore = create<{
   display: NoteFocusEvent | null
   displays: Record<string, NoteFocusEvent>
   activeConversationId: string | null
-  hidden: Record<string, string[]>
-  reportHidden: (conversationId: string, ids: string[]) => void
+  browser: NoteBrowserState | null
+  setBrowser: (browser: NoteBrowserState | null) => void
   activate: (conversationId: string | null) => void
   receive: (event: NoteFocusEvent) => void
-  locate: (event: NoteFocusEvent) => void
+  locate: (event: NoteFocusEvent, action?: NoteFocusAction) => void
   remove: (conversationId: string, uri: string) => void
   pin: (conversationId: string, uri: string) => void
   clear: (conversationId: string, forgetHistory?: boolean) => void
 }>((set) => ({
-  scopes: {}, history: [], display: null, displays: {}, activeConversationId: null,
-  hidden: {},
-  reportHidden: (id, ids) => set(state => JSON.stringify(state.hidden[id]) === JSON.stringify(ids) ? state : { hidden: { ...state.hidden, [id]: ids } }),
-  activate: activeConversationId => set(state => ({ activeConversationId, display: activeConversationId ? state.displays[activeConversationId] ?? null : null })),
+  scopes: {}, history: [], display: null, displays: {}, activeConversationId: null, browser: null,
+  setBrowser: browser => set(state => JSON.stringify(state.browser) === JSON.stringify(browser) ? state : { browser }),
+  activate: activeConversationId => set(state => {
+    const cached = activeConversationId ? state.displays[activeConversationId] : undefined
+    return { activeConversationId, display: cached ? { ...cached, focus: 'none' } : null }
+  }),
   receive: event => set(state => {
+    if (event.mode !== 'display') event = { ...event, focus: 'none', action: undefined }
     const sameAccess = (item: NoteFocusEvent) => event.mode === 'access' && !!event.turnId
       && item.mode === 'access' && item.turnId === event.turnId && item.conversationId === event.conversationId
       && sameCheckoutPath(item.workspacePath, event.workspacePath)
@@ -37,16 +40,14 @@ export const useNoteFocusStore = create<{
       event = { ...event, id: previousAccess.id, notes: [...merged.values()].slice(-32) }
     }
     const previous = state.scopes[event.conversationId]
-    const old = previous?.workspacePath === event.workspacePath ? previous : undefined
+    const old = previous && sameCheckoutPath(previous.workspacePath, event.workspacePath) ? previous : undefined
     const excluded = old?.excluded ?? []
     const pins = old?.notes.filter(note => note.pinned) ?? []
     const preserved = event.mode === 'access' ? (old?.notes ?? pins).map(note => !note.pinned && event.notes.some(item => item.uri === note.uri && item.role === 'target')
       ? { ...note, role: 'target' as const } : note) : pins
     const notes = event.mode === 'scope' || event.focus === 'none' ? [...preserved, ...event.notes.filter(note => !excluded.includes(note.uri) && !preserved.some(pin => pin.uri === note.uri))].slice(0, 32) : event.notes
     const effective = { ...event, notes }
-    const primary = (items: NoteScopeItem[]) => items.filter(item => item.role === 'target').map(item => item.uri).sort().join('|')
-    const sameTarget = primary(notes) === primary(old?.notes ?? [])
-    const display = { ...effective, focus: event.focus === 'auto' && (sameTarget || event.mode === 'display') ? 'none' as const : event.focus }
+    const display = { ...effective, focus: event.mode === 'display' && event.focus === 'explicit' ? 'explicit' as const : 'none' as const }
     return {
       scopes: event.mode === 'scope' ? { ...state.scopes, [event.conversationId]: { workspacePath: event.workspacePath, notes, excluded } } : state.scopes,
       history: [...state.history.filter(item => item.id !== event.id), event.mode === 'access' ? event : effective].slice(-100),
@@ -54,8 +55,8 @@ export const useNoteFocusStore = create<{
       display: state.activeConversationId === event.conversationId ? display : state.display,
     }
   }),
-  locate: event => set(state => {
-    const display: NoteFocusEvent = { ...event, id: crypto.randomUUID(), focus: 'explicit', mode: 'display' }
+  locate: (event, action = 'locate') => set(state => {
+    const display: NoteFocusEvent = { ...event, id: crypto.randomUUID(), focus: 'explicit', mode: 'display', action }
     return { displays: { ...state.displays, [event.conversationId]: display },
       display: state.activeConversationId === event.conversationId ? display : state.display }
   }),

@@ -54,6 +54,8 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     ? sameCheckoutPath(workspaceState.workspacePath, activeWorkspace.path) && ['ok', 'empty'].includes(workspaceState.state)
     : !!blueprint && !!ownerPath && sameCheckoutPath(ownerPath, activeWorkspace.path))
   const selection = useBlueprintMaintenanceStore(state => state.contextSelection)
+  const browser = useNoteFocusStore(state => state.browser)
+  const currentBrowser = browser?.blueprintId === blueprint?.id && ownerPath && sameCheckoutPath(browser?.workspacePath ?? '', ownerPath) ? browser : null
   const draftRequest = useBlueprintStore(state => state.draftRequest)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [switchNotice, setSwitchNotice] = useState<string | null>(null)
@@ -68,15 +70,16 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const searchQuery = toolbar ? toolbar.searchQuery : EMPTY_FOCUS.searchQuery
   const statusFilter = toolbar ? toolbar.statusFilter : EMPTY_FOCUS.statusFilter
   const kindFilter = toolbar ? toolbar.kindFilter : EMPTY_FOCUS.kindFilter
-  const selectedId = toolbar ? toolbar.selectedId : selection?.nodeId ?? null
+  const selectedId = currentBrowser ? currentBrowser.selectedId : toolbar ? toolbar.selectedId : selection?.nodeId ?? null
+  const moduleScopeId = currentBrowser?.moduleBrowsing ? currentBrowser.moduleId : undefined
   // Typing must not re-cut a 200-node batch on every keystroke; the canvas uses
   // the same deferred value for its own matching.
   const deferredQuery = useDeferredValue(searchQuery)
 
   const contextScope = useMemo(() => blueprint && activeWorkspace
-    ? resolveBlueprintContextScope(blueprint, { searchQuery: deferredQuery, statusFilter, kindFilter, selectedId },
+    ? resolveBlueprintContextScope(blueprint, { searchQuery: deferredQuery, statusFilter, kindFilter, selectedId, moduleScopeId },
       { active: activeWorkspace.path, owner: ownerPath })
-    : null, [blueprint, activeWorkspace, ownerPath, deferredQuery, statusFilter, kindFilter, selectedId])
+    : null, [blueprint, activeWorkspace, ownerPath, deferredQuery, statusFilter, kindFilter, selectedId, moduleScopeId])
 
   // A composition member whose Note lives in another checkout cannot be injected
   // here: main authorizes refs only against attached workspace roots.

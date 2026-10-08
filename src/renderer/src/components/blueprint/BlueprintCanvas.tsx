@@ -46,6 +46,8 @@ import { useAnimatedOpen } from '@/components/shared/CardFrame'
 import { useBlueprintAnalysisActions } from '@/features/blueprint/useBlueprintAnalysisActions'
 import { useBlueprintGraphController } from '@/features/blueprint/useBlueprintGraphController'
 import { useNoteCanvasFocus } from '@/features/blueprint/useNoteCanvasFocus'
+import { useNoteFocusStore } from '@/stores/note-focus'
+import type { NoteFocusAction } from '../../../../shared/note-chat'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
 import { collectLocalHierarchyIds, computeInitialCollapsedIds, groupRootsByConnectivity, stepMatchIndex, visibleNodeIds } from '@/features/blueprint/canvas-navigation'
 import { buildNodeSearchText, nodeMatchesFocus, normalizeSearchText } from '@/features/blueprint/blueprint-focus'
@@ -429,8 +431,37 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       setScopeId(null); history.current = []; setHistoryLength(0)
     }
   }, [requestedScopeId, architecture])
-  const revealAssistantNodes = useCallback((ids: string[]) => ids[0] ? revealNode(ids[0]) : false, [revealNode])
-  const assistantCanvas = useNoteCanvasFocus(sourceBlueprint, ownerPath, rfNodes, rfEdges, rfInstanceRef, revealAssistantNodes)
+  const revealAssistantNode = useCallback((id: string, action: NoteFocusAction) => {
+    if (!sourceBlueprint?.nodes[id]) return null
+    const visible = !!currentBlueprint?.nodes[id]
+    let targetScope = scopeId
+    if (action === 'enter') {
+      if (!architecture?.roles[id]) return null
+      targetScope = id
+      navigateScope(id)
+    } else {
+      const onCanvas = revealNode(id)
+      pendingCenter.current = null
+      if (!onCanvas || action === 'preview' && visible) return null
+      if (moduleBrowsing && !visible) targetScope = moduleBrowse?.owners[id] ?? homeModuleId
+    }
+    if (fitFrameRef.current !== null) cancelAnimationFrame(fitFrameRef.current)
+    const page = sourceBlueprint && architecture ? projectModuleBrowse(sourceBlueprint, architecture, targetScope) : null
+    const targetViewKey = blueprintId + ':' + (targetScope ?? 'overview')
+    // The focus hook owns this fit; a queued page fit must not zoom away from its target.
+    initialFitBlueprintRef.current = targetViewKey
+    return { viewKey: targetViewKey,
+      nodeIds: action === 'enter' ? page?.graph.nodeIds ?? [id] : [...new Set([...(moduleBrowsing && targetScope ? [targetScope] : []), id])] }
+  }, [sourceBlueprint, currentBlueprint, scopeId, architecture, navigateScope, revealNode, moduleBrowsing, moduleBrowse, homeModuleId, blueprintId])
+  const assistantCanvas = useNoteCanvasFocus(sourceBlueprint, ownerPath, rfNodes, rfEdges, rfInstanceRef, viewKey, revealAssistantNode)
+  useEffect(() => {
+    if (!ownerPath) return
+    useNoteFocusStore.getState().setBrowser({ blueprintId, workspacePath: ownerPath, moduleBrowsing, moduleId: scopeId, selectedId,
+      visibleIds: rfNodes.filter(node => !node.hidden).map(node => node.id) })
+  }, [blueprintId, ownerPath, moduleBrowsing, scopeId, selectedId, rfNodes])
+  useEffect(() => () => {
+    if (useNoteFocusStore.getState().browser?.blueprintId === blueprintId) useNoteFocusStore.getState().setBrowser(null)
+  }, [blueprintId])
 
   useEffect(() => {
     if (!canvasLoadPlan || !rfInstanceRef.current) return

@@ -23,6 +23,9 @@ test.beforeEach(async ({ page }) => {
   await chat(page).locator('textarea').press('Enter')
   await expect(chat(page)).toContainText('Project reply in progress')
   await expect(page.locator('.react-flow__node')).toHaveCount(5)
+  // The initial sidebar resize also fits the canvas. Observe its settled state
+  // before attributing any later viewport motion to a Note event.
+  await expect.poll(async () => { const before = await transform(page); await page.waitForTimeout(250); return await transform(page) === before }).toBe(true)
 })
 
 test('multi-Note highlight, connected edges and scope controls leave mouse selection unchanged', async ({ page }) => {
@@ -62,7 +65,7 @@ test('access is visible after scope selection and a folded read can be located',
   await focus(page, { ids: [child], mode: 'access', focus: 'none' })
   await expect(chat(page).locator('.bp-note-access')).toBeVisible()
   await chat(page).locator('.bp-note-access summary').click()
-  await expect(chat(page).locator('.bp-note-access')).toContainText(/hidden|隐藏/)
+  await expect(chat(page).locator('.bp-note-access')).toContainText(/Outside this page|当前页外/)
   await chat(page).locator('.bp-note-access').getByRole('button', { name: /^(Locate|定位)$/ }).click()
   await expect(page.locator(`.react-flow__node[data-id="${child}"]`)).toBeVisible()
   await expect(chat(page).locator('.bp-note-scope:not(.bp-note-access)')).toBeVisible()
@@ -70,7 +73,7 @@ test('access is visible after scope selection and a folded read can be located',
   await expect(chat(page).locator('.bp-note-scope:not(.bp-note-access) header')).toContainText('2')
 })
 
-test('a repeated scope does not move the viewport; historical locate changes only the highlight', async ({ page }) => {
+test('a repeated scope does not move the viewport; historical locate preserves the working scope', async ({ page }) => {
   await focus(page, { id: 'first' })
   await expect(page.locator('.bp-assistant-target')).toHaveCount(1)
   await page.waitForTimeout(250)
@@ -105,6 +108,11 @@ test('an active canvas gesture suppresses automatic focus with no delayed jump',
 test('missing references are reported and clearing conversation clears scope and history', async ({ page }) => {
   await focus(page, { ids: ['missing'] })
   await expect(chat(page).locator('.bp-note-scope [role=status]')).toContainText('Missing Note')
+  const before = await transform(page), detail = await page.locator('.bp-node-detail').textContent()
+  await focus(page, { ids: ['missing', child], mode: 'display', focus: 'explicit' })
+  await expect(page.locator('.bp-assistant-reference')).toHaveCount(1)
+  expect(await transform(page)).toBe(before)
+  expect(await page.locator('.bp-node-detail').textContent()).toBe(detail)
   await chat(page).locator('.bp-maintenance-clear').click()
   await expect(chat(page).locator('.bp-note-scope')).toHaveCount(0)
   await expect(chat(page).locator('.bp-note-locations details')).toHaveCount(0)
@@ -138,7 +146,7 @@ test('paged reads form one folded record per reply and stay out of the composer'
 test('explicit location reveals a folded target and editing blocks automatic motion', async ({ page }) => {
   await page.locator(`.react-flow__node[data-id="${root}"] .bp-node-card__collapse`).click()
   await expect(page.locator(`.react-flow__node[data-id="${child}"]`)).toHaveCount(0)
-  await focus(page, { ids: [child], focus: 'explicit' })
+  await focus(page, { ids: [child], mode: 'display', focus: 'explicit' })
   await expect(page.locator(`.react-flow__node[data-id="${child}"]`)).toBeVisible()
   await page.waitForTimeout(250)
   await page.locator('.blueprint-workbench-detail-slot').evaluate(element => { const input = document.createElement('input'); element.append(input); input.focus() })

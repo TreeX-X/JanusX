@@ -559,7 +559,18 @@
   "noteFocus": {
     "read": "Accessed Notes",
     "addScope": "Add to working Notes",
-    "hidden": "{{count}} highlighted Notes are hidden. Locate to reveal them.",
+    "primary": "Primary",
+    "enter": "Enter module",
+    "documents": "Documents",
+    "unassigned": "Unassigned documents",
+    "unavailableGroup": "Unavailable documents",
+    "location": {
+      "current": "Current page",
+      "otherModule": "Other module; locate to visit",
+      "unassigned": "Unassigned; preview available",
+      "unavailable": "Missing or ambiguous source",
+      "outsideView": "Outside this page; locate to visit"
+    },
     "scope": "Working Notes",
     "locate": "Locate",
     "clear": "Reset scope",

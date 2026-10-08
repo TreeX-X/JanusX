@@ -320,7 +320,13 @@ export function useBlueprintGraphController({
     // (25 commits for 200 nodes, each reconciling the growing array); the
     // entry animation is pure CSS stagger on --bp-entry-index and needs no JS
     // batching. One commit also keeps edges and nodes in the same paint.
-    setNodes(allNodes)
+    // Note: module return reuses DOM nodes; keep their measurements so unchanged
+    // sizes do not wait forever for a new ResizeObserver event.
+    // See .agents/notes/blueprint/requirements/module-focus-navigation.md
+    setNodes(current => {
+      const measured = new Map(current.map(node => [node.id, node.measured]))
+      return allNodes.map(node => ({ ...node, measured: measured.get(node.id) }))
+    })
     setEdges(flow.edges.map((edge) => {
       const className = [edge.className, entering ? 'bp-flow-edge--enter' : '']
         .filter(Boolean)

@@ -14,6 +14,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useNoteChatStore } from '@/stores/note-chat'
 import { useNoteFocusStore } from '@/stores/note-focus'
+import { useBlueprintStore } from '@/stores/blueprint'
+import { noteBrowserContext } from '@/features/blueprint/note-focus'
 import type { Workspace } from '@/types'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, type ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
@@ -697,7 +699,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           ...(maintenanceTaskId ? { maintenanceTaskId } : {}),
           workspaceResources: agentResources,
           toolTraces: latest.toolTraces,
-          noteWorkingSet: JSON.stringify(useNoteFocusStore.getState().scopes[id] ?? null),
+          noteWorkingSet: JSON.stringify({ workingSet: useNoteFocusStore.getState().scopes[id] ?? null,
+            browsing: latest.engineeringContext?.viewRef?.viewId === 'workspace-dialog'
+              ? noteBrowserContext(useBlueprintStore.getState().currentBlueprint, useNoteFocusStore.getState().browser, agentResources.map(resource => resource.workspacePath)) : null }),
           // S6: explicit domain; missing = legacy personal. Project never falls back to personal memory.
           ...(latest.engineeringContext?.domain ? { domain: latest.engineeringContext.domain } : {}),
           ...(latest.engineeringContext?.noteRefs?.length

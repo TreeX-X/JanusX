@@ -17,3 +17,11 @@
 .bp-assistant-reference .bp-node-card { outline: 2px dashed var(--shell-accent); outline-offset: 4px; }
 .bp-assistant-dependency .bp-node-card { outline: 2px dotted var(--shell-accent); outline-offset: 4px; }
 .bp-assistant-edge path { stroke: var(--shell-accent) !important; stroke-width: 3px !important; }
+.bp-note-groups { max-height: 250px; overflow: auto; }
+.bp-note-group h4 { margin: 8px 0 4px; font: inherit; font-weight: 600; overflow-wrap: anywhere; }
+.bp-note-group ul { max-height: none; padding: 0; margin: 0; list-style: none; }
+.bp-note-group li { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 4px 0; }
+.bp-note-group .bp-note-title { flex: 1; text-align: left; overflow-wrap: anywhere; }
+.bp-note-group li p { flex-basis: 100%; margin: 0; opacity: .7; overflow-wrap: anywhere; }
+.bp-note-location { flex-basis: 100%; color: var(--shell-muted); }
+.bp-note-group button:disabled { cursor: default; opacity: .6; }
