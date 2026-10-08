@@ -5,7 +5,7 @@
   "kind": "requirement",
   "lifecycle": "accepted",
   "created": "2026-10-08",
-  "updated": "2026-10-08T05:26:35.881Z",
+  "updated": "2026-10-08T05:40:24.120Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd"
 }
 ---
@@ -16,7 +16,7 @@
 
 当前蓝图保留“系统结构 / 全部 Note”切换，模块单击展开分类文档、双击打开正文详情。用户要求统一蓝图入口，并区分两个目的：单击阅读模块说明，双击进入模块内部浏览。模块和普通文件节点也需要有清晰的外观差异。
 
-本需求已确认、尚未实施。本轮只记录交互与待实施范围。[v2 接入记录](../workflowx-v2-adoption.md)描述当前行为；[旧模块视图需求](module-structure-requirement.md)的既有验收保留为历史记录，新交互替代其中的双视图切换要求，不回写旧 Task 或执行证据。
+本需求已确认、尚未实施，已列为 [后续实施顺序](../workflowx-v2-adoption.md#后续实施顺序)的第一项。[v2 接入记录](../workflowx-v2-adoption.md)描述当前行为；[旧模块视图需求](module-structure-requirement.md)的既有验收保留为历史记录，新交互替代其中的双视图切换要求，不回写旧 Task 或执行证据。
 
 ## Expected behavior
 
