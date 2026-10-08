@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import type { KnowledgeAutomationStatus } from '../../../shared/knowledge-automation'
 
-// Note: both review entrances share one live status source — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: both review entrances share one live status source — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 interface State { status: KnowledgeAutomationStatus | null; error: boolean }
 let state: State = { status: null, error: false }
 const listeners = new Set<() => void>()

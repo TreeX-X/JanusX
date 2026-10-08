@@ -1,5 +1,5 @@
 // Note: hosted platform abstraction with GitHub over gh CLI — see
-// .agents/notes/2026-09-21-hosted-github-reviews--97a21dee.md
+// .agents/notes/remote/hosted-github-reviews.md
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type {

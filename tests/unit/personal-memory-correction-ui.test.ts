@@ -4,7 +4,7 @@ import { build } from 'esbuild'
 
 let browser: Browser
 let script: string
-// Note: commit fixture activation transitions before asserting refresh — see .agents/notes/2026-09-20-reproducible-verification--914a7e92.md
+// Note: commit fixture activation transitions before asserting refresh — see .agents/notes/desktop/reproducible-verification.md
 beforeAll(async () => {
   browser = await chromium.launch({ headless: true })
   const result = await build({

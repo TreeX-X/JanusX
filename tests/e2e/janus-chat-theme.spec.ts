@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 // Note: shared feedback must not depend on its host or a particular palette — see
-// .agents/notes/2026-09-26-janus-chat-feedback-parity--54b1046a.md
+// .agents/notes/agent/janus-chat-feedback-parity.md
 async function setTheme(page: Page, theme: string) {
   await page.evaluate(value => { document.documentElement.dataset.theme = value }, theme)
 }

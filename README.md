@@ -23,7 +23,7 @@
 ![Codex](https://img.shields.io/badge/Codex-CLI-1C343B?style=flat-square&logo=openai&logoColor=white)
 ![Janus-agentX](https://img.shields.io/badge/Janus_agentX-CLI-E5A422?style=flat-square)
 
-[下载安装](https://treex-x.github.io/JanusX/) · [版本发布](https://github.com/TreeX-X/JanusX/releases) · [使用与架构文档](wiki/README.md) · [反馈问题](https://github.com/TreeX-X/JanusX/issues)
+[下载安装](https://treex-x.github.io/JanusX/) · [版本发布](https://github.com/TreeX-X/JanusX/releases) · [使用与架构文档](./wiki/README.md) · [反馈问题](https://github.com/TreeX-X/JanusX/issues)
 
 > Second test Oct 10 (not v1.0 stable) · 10.10 二测（非正式版）
 
@@ -211,7 +211,7 @@ JanusX 桌面工作台（planche 石板色）
 - **就地预览**：支持 HTML、Markdown、图片、文本及 Office 文件；本演示使用 HTML 与 JSON。
 - **对照与刷新**：标签切换、拖动面板宽度；文件修改后可点击「从磁盘重新加载」查看内容。
 
-演示的步骤与字幕按功能独立维护，背景、鼠标和节奏共用配置。录制与合成命令见 [演示脚本说明](scripts/showcase/README.md)。
+演示的步骤与字幕按功能独立维护，背景、鼠标和节奏共用配置。录制与合成命令见 [演示脚本说明](./scripts/showcase/README.md)。
 
 ---
 
@@ -285,7 +285,7 @@ npm run package:linux
 
 打包产物位于 `release/<version>/`。平台打包需具备对应系统及构建环境。
 
-架构与模块导航见 [Wiki](wiki/README.md)，优化状态与路线图见 [架构优化计划](wiki/06-architecture-optimization-plan.md)。贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+架构与模块导航见 [Wiki](./wiki/README.md)，优化状态与路线图见 [架构优化计划](./wiki/06-architecture-optimization-plan.md)。贡献约定见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ---
 
@@ -346,7 +346,7 @@ npm run package:linux
 
 JanusX 是一个真实投入社区使用的开源实验项目，目标是让 AI 辅助开发有一个顺手的桌面落点：项目、终端、AI CLI 与常用工具同处一室，稳定的基础体验在前，激进的协作实验在后。
 
-欢迎讨论、建议与贡献。Fork 本仓库提交 Pull Request，或在 Issues 中分享你的使用场景与问题，贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎讨论、建议与贡献。Fork 本仓库提交 Pull Request，或在 Issues 中分享你的使用场景与问题，贡献约定见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 公众号：**TreeX-AI** · 如果对你有帮助，欢迎 Star。
 

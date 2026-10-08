@@ -244,7 +244,7 @@ test('knowledge pipeline: observe → propose → review → truth → search �
   }
 })
 
-// Note: verify the published Wiki revision through real IPC, storage and UI — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: verify the published Wiki revision through real IPC, storage and UI — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 test('knowledge settlement: extraction and both reviews gate Wiki publication, updates and revocation', async () => {
   test.setTimeout(180_000)
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-wiki-settlement-'))

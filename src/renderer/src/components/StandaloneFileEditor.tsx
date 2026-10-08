@@ -110,7 +110,7 @@ export function StandaloneFileEditor() {
     return unsubscribe
   }, [editorParams, openFile])
 
-  // Note: standalone editors auto-refresh clean tabs on external disk changes — see .agents/notes/2026-09-27-standalone-editor-auto-refresh--fe22dc2d.md
+  // Note: standalone editors auto-refresh clean tabs on external disk changes — see .agents/notes/workbench/standalone-editor-auto-refresh.md
   useEffect(() => {
     if (!editorParams) return
     const workspacePath = editorParams.workspacePath

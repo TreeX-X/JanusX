@@ -23,7 +23,7 @@ import { BlueprintViewSelector } from './BlueprintArchitecturePanel'
 import { Select } from '../ui/Select'
 import { STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, type NoteKindFilter, getBlueprintStatusVisual } from './blueprintStatus'
 
-// Note: two chrome rows and recoverable local layout — see .agents/notes/2026-09-25-blueprint-note-workbench-repair--62e857d3.md
+// Note: two chrome rows and recoverable local layout — see .agents/notes/blueprint/tasks/blueprint-note-workbench-repair.md
 
 export type ToolbarStatusFilter = BlueprintNodeStatus | 'all'
 /** kind 下拉直接过滤 note 原始 kind（高保真同构），不再按映射后的 type 过滤 */
@@ -182,7 +182,7 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
     [t],
   )
 
-  // Note: canvas controls only apply to a loaded workspace graph — see .agents/notes/2026-10-04-blueprint-empty-init--4f49c9ba.md
+  // Note: canvas controls only apply to a loaded workspace graph — see .agents/notes/blueprint/requirements/blueprint-empty-init.md
   // Keep the shell's second grid row empty while setup owns the surface.
   if (!currentBlueprint?.nodeIds.length || selectedWorkspaceId !== activeWorkspaceId) return <div aria-hidden="true" />
 

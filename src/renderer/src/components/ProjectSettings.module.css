@@ -6,7 +6,7 @@
  * 入场按 --card-index 错峰升起（时长与曲线对齐 blueprint-workbench-card-rise）。
  * 分组卡与设置内卡同料（柔和发丝线 + 浅抬升底，两主题共用）；planche 加法层
  * 给纸面墨框。色值全部走主题令牌，白字/白 alpha 边框/黑底填充清零。
- * 见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
+ * 见 .agents/notes/workbench/run-config-island-cards.md
  */
 
 .container {

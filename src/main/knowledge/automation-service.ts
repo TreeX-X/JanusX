@@ -1,4 +1,4 @@
-// Note: durable candidate and topic tasks publish only revalidated snapshots — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: durable candidate and topic tasks publish only revalidated snapshots — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -41,7 +41,7 @@ const ledgerSchema = z.object({ schema: z.literal(1), backfillThrough: z.string(
 type Ledger = z.infer<typeof ledgerSchema>
 interface Snapshot { observations: Observation[]; candidates: CandidateFact[]; patches: CandidateWikiPatch[]; facts: MemoryFact[]; pages: WikiPage[] }
 interface Plan { task: KnowledgeAutomationTask; observation?: Observation; observations?: Observation[]; candidate?: CandidateFact; patch?: CandidateWikiPatch; facts?: MemoryFact[]; page?: WikiPage; title?: string; topicKey?: string; generationHash?: string }
-// Note: current candidate state explains historical outcomes without rewriting them; see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: current candidate state explains historical outcomes without rewriting them; see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 function subjectState(task: KnowledgeAutomationTask, snapshot: Snapshot): AutomationSubjectState {
   if (task.stage === 'extraction') return { kind: task.status === 'succeeded' ? 'extraction-output' : 'no-candidate' }
   const id = task.stage === 'wikiGeneration' ? `auto-wiki:${task.id}` : task.subject
@@ -144,7 +144,7 @@ export class KnowledgeAutomationService {
     const counts: KnowledgeAutomationStatus['counts'] = { pending: 0, running: 0, succeeded: 0, 'needs-review': 0, failed: 0, cancelled: 0 }
     const engineeringTasks = ledger.tasks.filter(task => task.workspaceId !== 'user')
     for (const task of engineeringTasks) counts[task.status]++
-    // Note: current plans separate automatic work from human review — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+    // Note: current plans separate automatic work from human review — see .agents/notes/knowledge/assistant-persona-layout.md
     const stages = Object.fromEntries(KNOWLEDGE_STAGES.map(stage => {
       const model = settings.config.stages[stage]
       return [stage, model.provider === 'off' ? stage === 'extraction' ? 'rules-only' : 'manual'

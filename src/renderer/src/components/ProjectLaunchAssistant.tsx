@@ -1,4 +1,4 @@
-// Note: 助手卡顶栏与输入框吃蓝图右栏的对话卡语言（光点 Janus 头 + opencode 方框 composer） — see .agents/notes/2026-10-07-right-chat-column-card-language--5f33b918.md
+// Note: 助手卡顶栏与输入框吃蓝图右栏的对话卡语言（光点 Janus 头 + opencode 方框 composer） — see .agents/notes/workbench/right-chat-column-card-language.md
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ArrowUp, LoaderCircle, Square } from 'lucide-react'

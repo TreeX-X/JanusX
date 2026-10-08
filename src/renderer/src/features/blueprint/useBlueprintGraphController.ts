@@ -295,7 +295,7 @@ export function useBlueprintGraphController({
       pinnedRef.current = null
       return
     }
-    if (pinnedRef.current === null) pinnedRef.current = { ...(blueprint.canvasLayout ?? {}) }
+    if (!persistLayout || pinnedRef.current === null) pinnedRef.current = { ...(blueprint.canvasLayout ?? {}) }
     const flow = deriveBlueprintFlow(
       blueprint,
       pinnedRef.current,

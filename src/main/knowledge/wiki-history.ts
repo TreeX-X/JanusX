@@ -1,4 +1,4 @@
-// Note: published snapshots are bounded and excluded from recall — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: published snapshots are bounded and excluded from recall — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

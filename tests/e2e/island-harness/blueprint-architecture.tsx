@@ -36,6 +36,32 @@ module.note!.metadata!.interfaces = [{ name: 'read', direction: 'needs', provide
 module.note!.relations = [{ type: 'related-to', target: task.sourceUri! }, { type: 'governed-by', target: decision.sourceUri! }, { type: 'related-to', target: `note://${R}/99999999-9999-4999-8999-999999999999` }]
 decision.kind = decision.note!.kind = 'decision'; decision.title = decision.note!.title = 'Storage decision'
 const params = new URLSearchParams(location.search)
+if (params.has('v2')) {
+  for (const node of [root, module, orphan]) {
+    node.kind = node.note!.kind = 'module'; node.tags = node.note!.tags = []
+    node.note!.moduleState = node === orphan ? 'planned' : 'partial'
+    node.note!.metadata = { ...node.note!.metadata!, schema: 'harness-note/2', kind: 'module', tags: [], role: node === root ? 'project' : undefined, moduleState: node.note!.moduleState, updated: '2026-10-08T00:00:00Z' }
+  }
+  orphan.title = orphan.note!.title = 'Planned module'
+  orphan.note!.parent = root.sourceUri!
+  orphan.note!.metadata!.parent = root.sourceUri!
+  for (const node of [task, decision]) {
+    node.note!.module = module.sourceUri!
+    node.note!.metadata = { ...node.note!.metadata!, schema: 'harness-note/2', module: module.sourceUri, updated: '2026-10-08T00:00:00Z' }
+  }
+  for (const [index, kind] of ['note', 'idea', 'requirement', 'decision'].entries()) {
+    const node = structuredClone(decision)
+    node.id = `0000000${index}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`
+    node.sourceUri = `note://${R}/${node.id}`
+    node.title = node.note!.title = `${index === 3 ? 'Root' : 'Child'} ${kind}`
+    node.kind = node.note!.kind = kind
+    node.note!.id = node.id
+    node.note!.module = index === 3 ? root.sourceUri! : module.sourceUri!
+    node.note!.metadata = { ...node.note!.metadata!, id: node.id, kind: kind as any, module: node.note!.module }
+    graph.nodes[node.id] = node; graph.nodeIds.push(node.id)
+    graph.noteSnapshot!.entries.push({ ...graph.noteSnapshot!.entries[0], uri: node.sourceUri, doc: node.note })
+  }
+}
 if (params.has('collapsed')) graph.collapsedNodeIds = [root.id]
 if (params.has('untagged')) for (const node of Object.values(graph.nodes)) { node.tags = []; node.note!.tags = [] }
 installWorkbenchBoundary(() => graph, workspace.path)
@@ -54,4 +80,4 @@ useBlueprintStore.setState({ currentBlueprint: graph, blueprintWorkspace: { [gra
     useNoteFocusStore.getState().receive({ id: crypto.randomUUID(), workspacePath: workspace.path, conversationId: 'fixture', mode: 'display', focus: 'explicit', notes: [{ uri: task.sourceUri!, role: 'target' }], source: 'assistant', createdAt: new Date().toISOString() } as any)
   },
 }
-void initI18n().then(() => createRoot(document.getElementById('root')!).render(params.has('workbench') ? <JanusChatProvider><BlueprintWorkbench isOpen onClose={() => {}} /></JanusChatProvider> : <main style={{ height: '100vh' }}><BlueprintCanvas blueprintId={graph.id} /></main>))
+void initI18n().then(() => createRoot(document.getElementById('root')!).render(params.has('workbench') ? <JanusChatProvider><BlueprintWorkbench isOpen onClose={() => {}} /></JanusChatProvider> : <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><BlueprintCanvas blueprintId={graph.id} /></main>))

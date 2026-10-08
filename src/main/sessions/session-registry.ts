@@ -1,8 +1,8 @@
 // Note: stable session identity over volatile terminal ids for workspace
 // session cards, scoped checkpoints, and Continue handoff — see
-// .agents/notes/2026-09-21-workspace-sessions-v1--b3704d91.md
+// .agents/notes/sessions/workspace-sessions-v1.md
 // Note: external provider sessions import by transcript backfill — see
-// .agents/notes/2026-09-22-external-session-backfill--18fffeff.md
+// .agents/notes/sessions/external-session-backfill.md
 import { randomUUID } from 'node:crypto'
 import { copyFile, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -66,7 +66,7 @@ export class AgentSessionRegistry {
   // Bulk-import suppression: scans import hundreds of rows; each row must
   // not emit its own session:event or the panel refetches per row.
   // beginBatch/endBatch collapse one bulk pass into a single notify.
-  // See .agents/notes/2026-09-22-session-flicker-storm--3f2c9a41.md
+  // See .agents/notes/sessions/session-flicker-storm.md
   private batchDepth = 0
   private batchDirty = false
 

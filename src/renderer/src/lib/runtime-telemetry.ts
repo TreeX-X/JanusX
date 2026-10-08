@@ -1,4 +1,4 @@
-// Note: per-terminal model detection with confidence merges — see .agents/notes/2026-06-28-terminal-model-lifecycle--2f4d605c.md
+// Note: per-terminal model detection with confidence merges — see .agents/notes/terminal/terminal-model-lifecycle.md
 import type { TerminalPreset } from '@/types'
 import { matchAiModel } from '@janusx/llm-core/model-registry'
 import type {
@@ -92,11 +92,11 @@ export function detectModelFromText(text: string): string | undefined {
   const normalized = stripAnsi(text)
   const explicit = normalized.match(MODEL_FIELD_PATTERN) ?? normalized.match(MODEL_FLAG_PATTERN)
   // Prose false-positive guard: `model: the behavior` captures "the" without
-  // this check — see .agents/notes/2026-09-30-dsh-terminal-integration--b28d07a3.md (telemetry boundaries). Real ids
+  // this check — see .agents/notes/terminal/dsh-terminal-integration.md (telemetry boundaries). Real ids
   // are single tokens with a version/separator hint (isPlausibleModelId).
   if (explicit?.[1] && isPlausibleModelId(explicit[1])) return normalizeModelName(explicit[1])
   // Note: janus/pi emit no hook events, so PTY text is the live model source —
-  // see .agents/notes/2026-09-11-janus-pi-context-recognition--e34329c5.md
+  // see .agents/notes/terminal/janus-pi-context-recognition.md
   const janusStatus = normalized.match(JANUS_STATUS_MODEL_PATTERN)
   if (janusStatus?.[1] && isPlausibleModelId(janusStatus[1])) return normalizeModelName(janusStatus[1])
   // dsh-TUI status bar carries the live model id next to the effort segment.
@@ -457,7 +457,7 @@ function extractExplicitContext(text: string): Pick<RuntimeTelemetryPatch, 'cont
   if (fraction?.[1] && fraction[2]) {
     const used = parseTokenAmount(fraction[1])
     const window = parseTokenAmount(fraction[2])
-    // Prose guard (see .agents/notes/2026-09-30-dsh-terminal-integration--b28d07a3.md): help text like
+    // Prose guard (see .agents/notes/terminal/dsh-terminal-integration.md): help text like
     // "tokens 5/10" must not become telemetry. Real windows are k-scale and
     // bound the used count.
     if (used !== undefined && isPlausibleContextWindow(window) && used <= window) {

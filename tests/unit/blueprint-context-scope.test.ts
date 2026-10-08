@@ -2,7 +2,7 @@
  * Canvas focus → Janus context scope.
  * Pure helper — no stores, no IPC.
  *
- * Note: the batch replaces the removed "维护此节点" pin — see .agents/notes/2026-09-30-blueprint-batch-context--7c1e4a92.md
+ * Note: the batch replaces the removed "维护此节点" pin — see .agents/notes/blueprint/blueprint-batch-context.md
  */
 import { describe, expect, it } from 'vitest'
 import {

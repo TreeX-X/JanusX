@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-// Note: desktop entry to task runs incl. the xdo host — see .agents/notes/2026-09-18-desktop-xdo-executor--b057b3f0.md
-// Note: external runner backflow surface — see .agents/notes/2026-09-18-external-runner-backflow--5352fb79.md
-// Note: thread registry, activation, and close — see .agents/notes/2026-09-18-thread-registry-activation--d9f1d453.md
-// Note: independent review and limited repair — see .agents/notes/2026-09-18-independent-review-repair--b055c1fe.md
-// Note: reversible managed writes — see .agents/notes/2026-09-18-harness-undo--ee0e8ff1.md
+// Note: desktop entry to task runs incl. the xdo host — see .agents/notes/agent/desktop-xdo-executor.md
+// Note: external runner backflow surface — see .agents/notes/agent/external-runner-backflow.md
+// Note: thread registry, activation, and close — see .agents/notes/sessions/thread-registry-activation.md
+// Note: independent review and limited repair — see .agents/notes/agent/independent-review-repair.md
+// Note: reversible managed writes — see .agents/notes/blueprint/harness-undo.md
 import { useI18n } from '@/i18n/useI18n'
 import { getTerminalDefault, getTerminalProviders, listModels } from '@/services/llm'
 import type { HarnessTaskDraft } from '../../../../shared/ipc/harness'
@@ -310,7 +310,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
         runId: selected.runId,
         ...(providerId.trim() ? { providerId: providerId.trim() } : {}),
         ...(modelId.trim() ? { modelId: modelId.trim() } : {}),
-        ...(selected.mode === 'xflow' ? {
+        ...(selected.mode !== 'xdel' ? {
           ...(reviewer.trim() ? { reviewer: reviewer.trim() } : {}),
           ...(reviewerProvider.trim() ? { reviewerProviderId: reviewerProvider.trim() } : {}),
           ...(reviewerModel.trim() ? { reviewerModelId: reviewerModel.trim() } : {}),
@@ -320,7 +320,9 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
           .map(([stepId, item]) => ({ stepId, observer: item.observer.trim(), observation: item.observation.trim() })),
       })
       setLastResult(result)
-      if (result.repairedAttempt != null && !result.completed) {
+      if (result.reviewPending) {
+        setNotice(result.diagnostics?.map(item => item.message).join('\n') ?? null)
+      } else if (result.repairedAttempt != null && !result.completed) {
         setNotice(t('janus:harness.runs.autoRepaired', { attempt: result.repairedAttempt }))
       } else {
         setNotice(t('janus:harness.runs.executed', { receipt: shortId(result.receiptId), completed: String(result.completed) }))
@@ -922,6 +924,7 @@ export function HarnessRunPanel({ cwd, taskUri }: HarnessRunPanelProps) {
         <div className="harness-run-panel__result" role="status">
           <span>{t('janus:harness.runs.receiptLabel', { receipt: shortId(lastResult.receiptId) })}</span>
           <span>{t(lastResult.completed ? 'janus:harness.runs.completedLabel' : 'janus:harness.runs.uncompletedLabel')}</span>
+          {lastResult.implementationResult ? <pre>{lastResult.implementationResult}</pre> : null}
           <ul>
             {lastResult.checks.map((check) => (
               <li key={check.id}>{`${check.id} [${check.kind}/${check.status}] ${check.summary.slice(0, 160)}`}</li>

@@ -40,8 +40,8 @@ The Phase 1-5 modular-monolith optimization is complete at commit `c6bc283`. Sin
 
 ## Research Notes
 
-- [`research/pi架构与JanusX-Chat扩展设计借鉴分析.md`](research/pi架构与JanusX-Chat扩展设计借鉴分析.md) - JanusX Chat 设置与扩展能力盘点、Pi 对比、目标架构和分阶段演进建议。
-- [`research/BridgeMind产品调研与JanusX Agent Runtime借鉴方案.md`](research/BridgeMind产品调研与JanusX-Agent-Runtime借鉴方案.md) - BridgeMind 产品调研与 Agent Runtime 借鉴方案。
+- [`research/pi架构与JanusX-Chat扩展设计借鉴分析.md`](./research/pi%E6%9E%B6%E6%9E%84%E4%B8%8EJanusX-Chat%E6%89%A9%E5%B1%95%E8%AE%BE%E8%AE%A1%E5%80%9F%E9%89%B4%E5%88%86%E6%9E%90.md) - JanusX Chat 设置与扩展能力盘点、Pi 对比、目标架构和分阶段演进建议。
+- [`research/BridgeMind产品调研与JanusX Agent Runtime借鉴方案.md`](./research/BridgeMind%E4%BA%A7%E5%93%81%E8%B0%83%E7%A0%94%E4%B8%8EJanusX-Agent-Runtime%E5%80%9F%E9%89%B4%E6%96%B9%E6%A1%88.md) - BridgeMind 产品调研与 Agent Runtime 借鉴方案。
 
 ## Current Project Shape
 

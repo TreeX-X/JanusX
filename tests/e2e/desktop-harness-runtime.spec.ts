@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { parseNote, serializeNote } from '@janus-agent/harness-core'
 import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
 import type { HarnessAPI } from '../../src/shared/ipc/harness'
 import type { LlmAPI } from '../../src/shared/ipc/llm'
@@ -13,7 +14,9 @@ import { createDesktopTestEnv } from './desktop-test-env'
 type HarnessWindow = Window & { electron: { harness: HarnessAPI; llm: LlmAPI } }
 
 // A deterministic HTTP model exercises the built transport and tools, not model quality.
-for (const mode of ['xdo', 'xdel', 'xflow'] as const) test(`built desktop ${mode} implements, checks, persists receipts and reloads local history`, async () => {
+for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'independent'], ['xdo', 'independent'], ['xdel', 'independent']] as const) test(`built desktop v2 ${mode}/${review} implements, checks, persists receipts and reloads local history`, async () => {
+  const independent = mode !== 'xdel' && review === 'independent'
+  const pending = mode === 'xdel' && review === 'independent'
   const root = await mkdtemp(join(tmpdir(), 'janusx-harness-runtime-'))
   const workspace = join(root, 'workspace')
   const userDataDir = join(root, 'profile')
@@ -103,10 +106,18 @@ for (const mode of ['xdo', 'xdel', 'xflow'] as const) test(`built desktop ${mode
       `      program: ${process.execPath}`, `      args: ${JSON.stringify(['-e', 'const fs=require("fs");process.exit(fs.readFileSync("src/value.txt","utf8")==="43"?0:1)'])}`,
       '---', '', '# Runtime task', '', '## Scope', '', 'Read src/value.txt and change 42 to 43.', '', '## Acceptance criteria', '', '- [ ] AC-1: src/value.txt contains 43.', '', '## Verification', '', 'Run V-1.', '',
     ].join('\n'))
+    const taskPath = join(workspace, '.agents/notes/task.md')
+    const task = parseNote(await readFile(taskPath, 'utf8'))
+    task.meta.schema = 'harness-note/2'; task.meta.updated = '2026-10-08T00:00:00Z'
+    task.meta.module = 'note://' + repoId + '/22222222-2222-4222-8222-222222222222'
+    task.meta.work!.review = review
+    task.body += '\n## Progress\n\nMain owns progress.\n\n## Evidence\n\nRuntime receipts supply evidence.\n\n## Handoff\n\nContinue from the repository Task.\n'
+    await writeFile(taskPath, serializeNote(task))
+    await writeFile(join(workspace, '.agents/notes/module.md'), '---\n' + JSON.stringify({ schema: 'harness-note/2', id: '22222222-2222-4222-8222-222222222222', kind: 'module', lifecycle: 'accepted', role: 'project', created: '2026-10-08', updated: '2026-10-08T00:00:00Z', moduleState: 'partial' }) + '\n---\n# Runtime module\n\nOwns the probe.\n')
     const git = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' }).toString()
     git('init'); git('config', 'user.name', 'test'); git('config', 'user.email', 'test@example.invalid')
     git('add', '.'); git('commit', '--no-gpg-sign', '-m', 'fixture')
-    const launch = () => electron.launch({ args: [resolve('out/main/index.js'), `--user-data-dir=${userDataDir}`], env: createDesktopTestEnv(root) })
+    const launch = () => electron.launch({ args: [resolve(process.env.JANUS_DESKTOP_MAIN ?? 'out/main/index.js'), `--user-data-dir=${userDataDir}`], env: createDesktopTestEnv(root) })
     application = await launch()
     let page = await application.firstWindow()
     const saved = await page.evaluate(async (baseURL) => (window as HarnessWindow).electron.llm.saveTerminalProvider('janus', {
@@ -125,15 +136,20 @@ for (const mode of ['xdo', 'xdel', 'xflow'] as const) test(`built desktop ${mode
       throw new Error(`${String(error)}; ${JSON.stringify({ requests, failures, history })}`)
     })
     expect(failures).toEqual([])
-    expect(executed).toMatchObject({ completed: true, checks: [{ status: 'passed' }] })
+    expect(executed).toMatchObject({ completed: !pending, reviewPending: pending, implementationResult: 'Updated src/value.txt to 43.', checks: [{ status: 'passed' }] })
     expect(await readFile(join(workspace, 'src/value.txt'), 'utf8')).toBe('43')
-    expect(requests).toEqual(['implementation', 'implementation', 'implementation', 'self-review', 'self-review', ...(mode === 'xflow' ? ['independent-review', 'independent-review'] : [])])
+    expect(requests).toEqual(['implementation', 'implementation', 'implementation', 'self-review', 'self-review', ...(independent ? ['independent-review', 'independent-review'] : [])])
     const receipt = JSON.parse(await readFile(join(workspace, '.agents/evidence', `${executed.receiptId}.json`), 'utf8'))
     expect(receipt.checks[0].status).toBe('passed')
     expect(receipt.mode).toBe(mode)
-    expect(receipt.review.kind).toBe(mode === 'xflow' ? 'independent' : 'self')
-    expect(receipt.review.actor === receipt.actor).toBe(mode !== 'xflow')
+    expect(receipt.review.kind).toBe(independent ? 'independent' : 'self')
+    expect(receipt.review.actor === receipt.actor).toBe(!independent)
     expect(receipt.codeManifest).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'src/value.txt', sha256: createHash('sha256').update('43').digest('hex') })]))
+    if (pending) {
+      expect(executed.diagnostics).toEqual([expect.objectContaining({ code: 'NOT_READY' })])
+      expect(await readFile(taskPath, 'utf8')).toContain('independent review remains pending')
+      return
+    }
     git('add', 'src', '.agents/notes', '.agents/evidence'); git('commit', '--no-gpg-sign', '-m', 'complete task')
     expect(git('ls-files', '.agents/.local')).toBe('')
     await application.close()

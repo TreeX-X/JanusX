@@ -135,7 +135,7 @@ export class KnowledgeAuditService {
     return eventStats(filterEvents(readEvents(content), querySchema.parse(query)))
   }
 
-  // Note: freeze the append-only prefix while paging, including backdated appends — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+  // Note: freeze the append-only prefix while paging, including backdated appends — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
   async page(input: AuditPageQuery = {}): Promise<AuditPage> {
     const { cursor, limit, ...query } = querySchema.parse(input)
     const content = await serialized(async () => readFile(await ensureAuditFile(), 'utf8'))

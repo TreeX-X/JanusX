@@ -1,4 +1,4 @@
-// Note: verified per-shard migration preserves backups and resumes after interruption — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: verified per-shard migration preserves backups and resumes after interruption — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, readdir, rename } from 'node:fs/promises'
 import { join } from 'node:path'

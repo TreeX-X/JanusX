@@ -1,4 +1,4 @@
-// Note: personal habits require attributable evidence, including engineering conversations — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: personal habits require attributable evidence, including engineering conversations — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import type { MemoryFact, MemoryScope, MemorySourceEvidence, Observation } from '../../shared/knowledge'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 import { isRuntimeNotification } from './personal-memory-content'

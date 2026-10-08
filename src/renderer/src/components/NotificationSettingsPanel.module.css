@@ -216,7 +216,7 @@
 }
 
 /* Note: 底栏底色必须吃 --shell-canvas 令牌，写死 rgba(21,21,23,.9) 会在默认的
-   planche 纸面主题上压出近黑横条 — 见 .agents/notes/2026-09-29-settings-footer-scrim-token--16ff77a0.md */
+   planche 纸面主题上压出近黑横条 — 见 .agents/notes/workbench/settings-footer-scrim-token.md */
 .footer {
   position: sticky;
   /* 负的 bottom 抵掉 .body 的 padding-bottom，让底栏的出血边与滚动视口底边齐平；

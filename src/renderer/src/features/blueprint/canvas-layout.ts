@@ -51,6 +51,7 @@ export function deriveBlueprintCardData(
     status: node.status,
     nodeType: node.type,
     kind: node.kind ?? null,
+    moduleState: node.note?.moduleState,
     progress: node.progress,
     workspaceName: node.workspaceId ? workspaceNameById[node.workspaceId] ?? node.workspaceSnapshot?.name ?? null : null,
     boundTerminalId: node.boundTerminalId,

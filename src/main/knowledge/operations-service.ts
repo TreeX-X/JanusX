@@ -1,4 +1,4 @@
-// Note: revocation preserves unreadable truth and shares review ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: revocation preserves unreadable truth and shares review ownership — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {

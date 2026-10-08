@@ -1,8 +1,8 @@
-// Note: rail plus singleton tools with shared icon taxonomy — see .agents/notes/2026-07-19-right-dock--a73f2f05.md
+// Note: rail plus singleton tools with shared icon taxonomy — see .agents/notes/workbench/right-dock.md
 import type { RightToolDefinition, RightToolId } from './types'
 import type { ExperimentalFeatures } from '../../../shared/ipc/experimental'
 
-// Note: either enabled domain can use its review queue — see .agents/notes/2026-10-04-memory-domain-controls--908d675a.md
+// Note: either enabled domain can use its review queue — see .agents/notes/knowledge/memory-domain-controls.md
 export function isRightToolEnabled(toolId: RightToolId, features: Pick<ExperimentalFeatures, 'knowledge' | 'persona'>): boolean {
   if (toolId === 'assist' || toolId === 'review') return features.knowledge || features.persona
   if (toolId === 'persona') return features.persona

@@ -1,6 +1,6 @@
 import type { NoteReadEntry, NoteReadSnapshot } from './notes'
 
-// Note: a disposable wiki view, never another relation store — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+// Note: a disposable wiki view, never another relation store — see .agents/notes/blueprint/tasks/note-wiki-r3.md
 export function noteWikiView(snapshot: NoteReadSnapshot, uri: string, maxItems = 32, maxChars = 18000) {
   const groups = new Map<string, NoteReadEntry[]>()
   for (const entry of snapshot.entries) {
@@ -18,6 +18,9 @@ export function noteWikiView(snapshot: NoteReadSnapshot, uri: string, maxItems =
     targets.add(edge.targetUri); parents.set(edge.sourceUri, [...targets])
   }
   const ancestors: string[] = []
+  for (const entry of entries.values()) {
+    if (entry.doc?.metadata?.schema === 'harness-note/2' && entry.doc.kind !== 'module' && entry.doc.module) parents.set(entry.uri!, [entry.doc.module])
+  }
   const seen = new Set([uri])
   let cursor = uri
   while (ancestors.length < 128) {
@@ -60,6 +63,9 @@ export function noteDirectory(snapshot: NoteReadSnapshot): Array<{ entry: NoteRe
     set.add(edge.targetUri); parents.set(edge.sourceUri, set)
   }
   const paths = new Map<string, string[]>()
+  for (const entry of entries) {
+    if (entry.doc?.metadata?.schema === 'harness-note/2' && entry.doc.kind !== 'module' && entry.doc.module) parents.set(entry.uri!, new Set([entry.doc.module]))
+  }
   const warnings = new Map<string, string>()
   for (const entry of entries) {
     const path = [entry.uri!]

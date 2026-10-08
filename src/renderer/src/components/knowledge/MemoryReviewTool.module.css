@@ -40,7 +40,7 @@
 .factReview p { margin: 4px 0; }
 
 
-/* Note: bounded reading keeps review actions reachable — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md */
+/* Note: bounded reading keeps review actions reachable — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md */
 .card { display: flex; flex-direction: column; min-height: 0; max-height: min(700px, calc(100dvh - 130px)); overflow: hidden; }
 .card.card, .root:not([data-expanded='true']) .card { padding: 0; }
 .cardHeader { flex: 0 0 auto; padding: 12px; border-bottom: 1px solid var(--shell-border); max-height: 26vh; overflow: auto; }

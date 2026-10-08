@@ -14,7 +14,7 @@
  * 同 requestId，渲染端行为不变，仅徽标出现时机后移）。
  */
 
-// Note: policy-neutral loop core with shell-side duties only — see .agents/notes/2026-08-08-agent-loop-refactor--33f0f481.md
+// Note: policy-neutral loop core with shell-side duties only — see .agents/notes/agent/agent-loop-refactor.md
 import { llmService } from './LlmService'
 import { configService, DEFAULT_AGENT_MAX_STEPS } from '../config/service'
 import { knowledgeObservationService } from '../knowledge/observation-service'
@@ -372,7 +372,7 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
     scheduleSettled: (workspaceId) => {
       knowledgeProcessingQueue.scheduleImmediate(workspaceId)
     },
-    // Note: strict providers reject mid-conversation system follow-ups — see .agents/notes/2026-09-26-chat-system-mid-conversation--e373dd26.md
+    // Note: strict providers reject mid-conversation system follow-ups — see .agents/notes/agent/chat-system-mid-conversation.md
     streamTextFn: (async (options: Record<string, unknown>) => {
       const messages = (options as { messages?: Array<{ role: string }> }).messages
       if (!Array.isArray(messages)) return streamText(options as never)
@@ -390,7 +390,7 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
   })
 }
 
-// Note: single-turn lock and project domain isolation — see .agents/notes/2026-09-17-chat-turn-guard-domain-s6--fd109997.md
+// Note: single-turn lock and project domain isolation — see .agents/notes/agent/chat-turn-guard-domain-s6.md
 /** 流式对话编排：由 llm-handlers 的 ipcMain.on(chatStream) 委托调用 */
 export async function handleChatStream(event: ChatStreamReplyTarget, request: ChatStreamRequest): Promise<void> {
   const { requestId, messages, providerId, modelId, sourceTag, conversationId, workspaceId, workspacePath, workspaceResources, toolTraces, domain } = request

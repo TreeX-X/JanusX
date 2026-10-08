@@ -2,7 +2,7 @@
  * Dispatch brief: schema bounds, host-side rendering, and the guards that keep a
  * model-invented reference or a cross-scope node out of the terminal.
  *
- * Note: dispatch is not a change-set operation — see .agents/notes/2026-09-30-blueprint-dispatch-panel--5d2a6f31.md
+ * Note: dispatch is not a change-set operation — see .agents/notes/blueprint/blueprint-dispatch-panel.md
  */
 import { describe, expect, it } from 'vitest'
 import {

@@ -1,4 +1,4 @@
-// Note: saved credentials use a mask and explicit reveal — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: saved credentials use a mask and explicit reveal — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { useEffect, useId, useState } from 'react'
 import { Check, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'

@@ -134,7 +134,7 @@ async function assertCandidateAllowed(candidate: ReviewCandidate, operation: 'pr
 }
 
 export async function proposeDerivedCandidates(candidates: Array<CandidateWikiPatch | CandidateGraphEdge>): Promise<void> {
-  // Note: new relationships belong to Wiki review; retain old records for cleanup — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+  // Note: new relationships belong to Wiki review; retain old records for cleanup — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
   if (candidates.some(candidate => candidate.type === 'graph-edge')) throw new Error('standalone-graph-proposals-disabled')
   for (const type of ['wiki-patch', 'graph-edge'] as const) {
     const incoming = candidates.filter(candidate => candidate.type === type)
@@ -491,7 +491,7 @@ export class KnowledgeReviewService {
   }
 
   async applyCandidate(input: ReviewCandidateInput): Promise<ReviewResult> {
-    // Note: offline candidates always require explicit review — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+    // Note: offline candidates always require explicit review — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
     if (input.actor === 'auto-policy') throw new Error('Automatic acceptance is unavailable; explicit review is required')
     const commit = () => withMutationLock(candidateRelativePath(input.type), async () => {
       try { return await this.applyLocked(input) }

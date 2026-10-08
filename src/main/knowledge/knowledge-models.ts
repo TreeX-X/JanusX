@@ -1,5 +1,5 @@
 import { jevThreshold } from '../../shared/knowledge-automation'
-// Note: per-stage providers never fall back to an unselected model — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: per-stage providers never fall back to an unselected model — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { withKnowledgeLocalModel } from './knowledge-local-runtime'
 export { stopKnowledgeLocalModel } from './knowledge-local-runtime'
 import { z } from 'zod'

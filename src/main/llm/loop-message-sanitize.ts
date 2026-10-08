@@ -12,7 +12,7 @@
  *  untouched. Nothing is dropped or merged, so tool-call pairing stays intact.
  */
 
-// Note: mid-loop system follow-ups break strict providers — see .agents/notes/2026-09-26-chat-system-mid-conversation--e373dd26.md
+// Note: mid-loop system follow-ups break strict providers — see .agents/notes/agent/chat-system-mid-conversation.md
 
 export interface LoopMessage {
   role: string

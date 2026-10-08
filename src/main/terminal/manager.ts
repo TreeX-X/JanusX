@@ -1,4 +1,4 @@
-// Note: console configuration matching the reference terminal — see .agents/notes/2026-06-22-ime-candidate-drift--d50b6b23.md
+// Note: console configuration matching the reference terminal — see .agents/notes/terminal/ime-candidate-drift.md
 import { spawn, type IPty } from 'node-pty'
 import { spawn as spawnProcess } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'

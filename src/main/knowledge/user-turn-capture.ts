@@ -1,4 +1,4 @@
-// Note: project turns skip personal capture — see .agents/notes/2026-09-17-chat-turn-guard-domain-s6--fd109997.md
+// Note: project turns skip personal capture — see .agents/notes/agent/chat-turn-guard-domain-s6.md
 /**
  * @file Person turn capture (user memory MVP closeout).
  * @description Writes one workspace-free janus-chat turn into person scope:

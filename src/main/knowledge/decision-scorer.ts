@@ -1,4 +1,4 @@
-// Note: scorer advice never grants truth or source authority — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: scorer advice never grants truth or source authority — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { createHash } from 'node:crypto'
 import { memoryCandidateSnapshot } from '../../shared/memory-candidate-snapshot'
 import type { CandidateFact, FactKind, MemoryScope, MemorySourceEvidence } from '../../shared/knowledge'

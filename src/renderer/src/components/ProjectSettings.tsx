@@ -4,7 +4,7 @@
  * 项目设置窗口
  * 集成：项目类型选择 + 配置表单 + JSON 编辑
  *
- * Note: 三栏改分体浮岛卡（错峰入场 + 框线定界 + 主题令牌收编）— see .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
+ * Note: 三栏改分体浮岛卡（错峰入场 + 框线定界 + 主题令牌收编）— see .agents/notes/workbench/run-config-island-cards.md
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'

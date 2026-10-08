@@ -1,5 +1,5 @@
 import { reviewCandidateInput, reviewCandidateSnapshot } from '../../../../shared/review-candidate-snapshot'
-// Note: wiki proposals use host source receipts — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+// Note: wiki proposals use host source receipts — see .agents/notes/blueprint/tasks/note-wiki-r3.md
 import { useEffect, useRef, useState } from 'react'
 import type { CandidateWikiPatch, WikiNoteStatus, WikiPage } from '../../../../shared/knowledge'
 import type { NoteWikiDraft, NoteWikiPage } from '../../../../shared/ipc/knowledge'

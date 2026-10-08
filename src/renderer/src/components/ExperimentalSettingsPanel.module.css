@@ -1,5 +1,5 @@
 .dialog {
-  /* Note: preserve centering under global resets — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md */
+  /* Note: preserve centering under global resets — see .agents/notes/knowledge/assistant-persona-layout.md */
   /* Compact confirm metrics mirror PromptDialog (360px / 12px text / 32px buttons),
      so this nested confirm reads as one of the shell's small dialogs. */
   position: fixed;

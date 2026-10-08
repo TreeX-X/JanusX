@@ -10,7 +10,8 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { ParsedNote } from '@janus-agent/harness-core'
-import { readMarkdownView } from '@janus-agent/harness-core'
+import { collectTaskSnapshot } from '@janus-agent/harness-node'
+import { readMarkdownView, taskExecutionPolicy } from '@janus-agent/harness-core'
 import {
   applyNodePatch,
   archiveNoteOp,
@@ -143,7 +144,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   })
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.initApply, (event, cwd: string, id: string, foreign: boolean) => workspaceBlueprintService.apply(cwd, id, event.sender.id, foreign))
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.initUndo, (event, cwd: string, id: string) => workspaceBlueprintService.undo(cwd, id, event.sender.id))
-  // Note: wiki and blueprint resolve the same source — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+  // Note: wiki and blueprint resolve the same source — see .agents/notes/blueprint/tasks/note-wiki-r3.md
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteRead, async (_e, cwd: string, uri: string) => {
     if (typeof uri !== 'string' || !uri.startsWith('note://')) throw new Error('A complete Note URI is required')
     const source = await harnessNoteService.readNote(await withRoot(cwd), uri)
@@ -542,7 +543,10 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
         const reviewerProviderId = input?.reviewerProviderId?.trim() || thread.reviewerModel?.providerId || providerId
         const reviewerModelId = input?.reviewerModelId?.trim() || thread.reviewerModel?.modelId || modelId
         const reviewer = input?.reviewer?.trim() || thread.reviewer
-        if (loaded.run?.mode === 'xflow' && reviewerProviderId && reviewerModelId) {
+        const contract = await collectTaskSnapshot(root, taskUri)
+        if (!contract.ok) throwRunFailure(contract.errors)
+        const policy = taskExecutionPolicy(loaded.run!.mode, loaded.run!.lease?.owner ?? 'desktop', runId, contract.work.review)
+        if (policy.independent && reviewerProviderId && reviewerModelId) {
           thread = await setThreadReviewer(root, runId, { providerId: reviewerProviderId, modelId: reviewerModelId }, reviewer).catch(threadError)
         }
         const maxTurns = await configService.getAgentMaxSteps().catch(() => DEFAULT_AGENT_MAX_STEPS)
@@ -575,10 +579,13 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
           }),
           command: (step, signal) => runDesktopCommand(root, step, { ...(timeoutMs === undefined ? {} : { timeoutMs }), signal }),
           review: reviewPort('self'),
-          ...(loaded.run?.mode === 'xflow' ? { independentReview: reviewPort('independent') } : {}),
+          ...(policy.independent ? { independentReview: reviewPort('independent') } : {}),
         }, { manualEvidence, reviewer, ...(timeoutMs === undefined ? {} : { timeoutMs }), signal: controller.signal })
-        if (!executed.ok) throwRunFailure(executed.errors)
+        if (!executed.ok && !executed.data.reviewPending) throwRunFailure(executed.errors)
         return {
+          implementationResult: executed.data.implementationResult,
+          reviewPending: executed.data.reviewPending ?? false,
+          diagnostics: executed.errors.map(({ code, message }) => ({ code, message })),
           receiptId: executed.data.receiptId,
           completed: executed.data.completed,
           checks: executed.data.checks.map((check) => ({ id: check.id, kind: check.kind, status: check.status, summary: check.summary })),
@@ -792,7 +799,7 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   )
 
   ipcMain.handle(HARNESS_COMMAND_CHANNELS.noteChatChanges, async (_e, cwd: string, conversationId: string) => {
-    // Note: preserve useful diagnostics through Electron's Error serialization — see .agents/notes/2026-10-04-blueprint-empty-init--4f49c9ba.md
+    // Note: preserve useful diagnostics through Electron's Error serialization — see .agents/notes/blueprint/requirements/blueprint-empty-init.md
     try {
       if (typeof conversationId !== 'string' || !conversationId.trim() || conversationId.length > 128) throwFailure('SCHEMA_INVALID', 'Invalid conversation id')
       return await listNoteChatChanges(await withRoot(cwd), conversationId)
@@ -851,9 +858,10 @@ export function registerHarnessHandlers(getWindow: () => BrowserWindow | null): 
   ipcMain.handle(
     HARNESS_COMMAND_CHANNELS.migratePreview,
     async (_e, cwd: string, blueprintId: string): Promise<HarnessMigrationPreview> => {
-      const { repoId, blueprint, audits } = await migrationSource(cwd, blueprintId)
+      const { root, repoId, blueprint, audits } = await migrationSource(cwd, blueprintId)
       try {
-        return previewMigration(blueprint, repoId, audits)
+        const { noteAuthoringContext } = await import('../harness/note-authoring')
+        return previewMigration(blueprint, repoId, audits, await noteAuthoringContext(harnessNoteService, root))
       } catch (error) {
         throwMigrationFailure(error)
       }

@@ -1,4 +1,4 @@
-// Note: runtime messages and quoted text cannot establish personal habits — see .agents/notes/2026-10-06-memory-noise-progress-audit--81b578b4.md
+// Note: runtime messages and quoted text cannot establish personal habits — see .agents/notes/knowledge/requirements/memory-noise-progress-audit.md
 
 /** Match only the complete, known task envelope; mentioning a tag is ordinary text. */
 const TASK_NOTIFICATION = /<task-notification>\s*<task-id>[^<>]+<\/task-id>\s*(?:<tool-use-id>[^<>]+<\/tool-use-id>\s*)?(?:<output-file>[^<>]+<\/output-file>\s*)?<status>(?:completed|failed|killed|cancelled)<\/status>\s*<summary>[^<>]+<\/summary>\s*<\/task-notification>/g

@@ -4,7 +4,7 @@ import type { ReviewCandidateInput } from '../../../../shared/ipc/knowledge'
 import { FactReviewControls } from './FactReviewControls'
 import { AutomationStatus } from './AutomationStatus'
 import { LegacyEpisodeMigrationControl } from './LegacyEpisodeMigrationControl'
-// Note: one review surface preserves engineering and private memory ownership — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: one review surface preserves engineering and private memory ownership — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
@@ -146,7 +146,7 @@ interface ReviewCardProps {
   detail?: boolean
 }
 
-// Note: both review entrances share content, evidence and applicable actions — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: both review entrances share content, evidence and applicable actions — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export function MemoryReviewCard(props: ReviewCardProps) {
   return <ReviewCardContent key={reviewCandidateSnapshot(props.candidate)} {...props} />
 }

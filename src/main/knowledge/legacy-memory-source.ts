@@ -1,4 +1,4 @@
-// Note: legacy records require fresh confirmation against unchanged source content — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: legacy records require fresh confirmation against unchanged source content — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { readFile } from 'node:fs/promises'
 import { assertFactReviewReady } from './fact-review-recovery'
 import { join } from 'node:path'

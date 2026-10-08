@@ -6,7 +6,7 @@
  *  original metadata, URI relations and diagnostics
  *  alongside canvas vocabulary. No renderer interprets frontmatter.
  *  Pure: no filesystem, no Electron, no network, no harness imports.
- *  See .agents/notes/2026-09-22-blueprint-note-graph-readonly--1432f7b8.md
+ *  See .agents/notes/blueprint/blueprint-note-graph-readonly.md
  */
 import type {
   Blueprint,
@@ -31,6 +31,7 @@ export function kindToNodeType(kind: string): BlueprintNodeType {
     case 'requirement':
       return 'feature'
     case 'decision':
+    case 'module':
     case 'initiative':
       return 'epic'
     case 'idea':
@@ -139,9 +140,9 @@ export function applyNodePatch(
     edit.title = patch.title.trim()
   }
   const sectionFor: Record<string, string[]> = {
-    description: kind === 'idea' ? ['Background'] : kind === 'initiative' ? ['Goal'] : ['Problem'],
+    description: kind === 'module' ? ['Responsibility'] : kind === 'note' ? ['Description'] : kind === 'idea' && doc.metadata?.schema === 'harness-note/2' ? ['Intent'] : kind === 'idea' ? ['Background'] : kind === 'initiative' ? ['Goal'] : ['Problem'],
     positioning: ['Background', 'Goal'],
-    techSolution: kind === 'decision' ? ['Proposal', 'Decision'] : ['Scope'],
+    techSolution: kind === 'module' ? ['Design'] : kind === 'decision' && doc.metadata?.schema === 'harness-note/2' ? ['Decision'] : kind === 'decision' ? ['Proposal', 'Decision'] : ['Scope'],
     notes: ['Open questions'],
   }
   for (const [field, names] of Object.entries(sectionFor)) {
@@ -151,6 +152,7 @@ export function applyNodePatch(
   if (patch.tags !== undefined) edit.frontmatter.tags = [...patch.tags]
   if (patch.parentUri !== undefined) edit.frontmatter.parent = patch.parentUri
   if (patch.status !== undefined) {
+    if (kind === 'module') return { code: 'HARNESS_MANAGED', message: 'Module state must be maintained explicitly through moduleState; document status does not complete a module' }
     const mapped = mapStatusToLifecycle(kind, patch.status)
     if (!mapped.ok) return { code: mapped.code, message: mapped.message }
     edit.frontmatter.lifecycle = mapped.lifecycle
@@ -187,16 +189,16 @@ export function projectNode(repoId: string | null, entry: NoteGraphEntry): Bluep
     id: doc.id,
     title: doc.title,
     type: kindToNodeType(doc.kind),
-    status: lifecycleToStatus(doc.lifecycle),
+    status: doc.kind === 'module' ? ({ planned: 'planning', partial: 'in-progress', implemented: 'done', retired: 'archived' } as const)[doc.moduleState ?? 'planned'] ?? 'planning' : lifecycleToStatus(doc.lifecycle),
     kind: doc.kind,
     lifecycle: doc.lifecycle,
     progress: 0,
     statusSource: 'manual',
     positioning: sectionText(doc, ['Background', 'Goal']),
-    description: sectionText(doc, ['Problem', 'Goal', 'Background', 'Idea']),
+    description: sectionText(doc, ['Responsibility', 'Description', 'Intent', 'Expected behavior', 'Problem', 'Goal', 'Background', 'Idea']),
     features: featuresFromAcs(doc),
     completedItems: [],
-    techSolution: sectionText(doc, ['Proposal', 'Decision']),
+    techSolution: sectionText(doc, ['Design', 'Decision', 'Proposal']),
     notes: sectionText(doc, ['Open questions', 'Scope']),
     todos: [],
     issues: [],
@@ -217,7 +219,7 @@ export function projectNode(repoId: string | null, entry: NoteGraphEntry): Bluep
     parentId: null,
     tags: [...doc.tags],
     createdAt: doc.created ?? now,
-    updatedAt: now,
+    updatedAt: doc.updated ?? now,
     sourceUri: repoId ? `note://${repoId}/${doc.id}` : undefined,
     sourceHash: sha256,
     sourceRelPath: relPath,
@@ -269,7 +271,7 @@ export function projectRelations(entries: NoteGraphEntry[], repoId: string | nul
  * on repoId / sourceUri, never on this id. Windows forbids case-only sibling
  * directories, so lowercasing is safe canonicalization for slash/case
  * spelling variants of one checkout.
- * See .agents/notes/2026-09-23-blueprint-notev2-implementation-plan--e7c03317.md (E0-1).
+ * See .agents/notes/blueprint/requirements/blueprint-notev2-implementation-plan.md (E0-1).
  */
 export function projectGraphId(repoId: string | null, rootKey: string): string {
   void repoId
@@ -323,7 +325,7 @@ export function projectGraph(input: NoteGraph, rootKey: string): Blueprint {
     projectionDiagnostics.push({ code: 'INVALID_RELATION', message: 'Parent cycle; declaration retained outside the directory tree', path: nodes[id].sourceUri })
   }
   for (const node of Object.values(nodes)) if (node.parentId) nodes[node.parentId].children.push(node.id)
-  const now = input.entries.map((e) => e.doc.created ?? '1970-01-01').sort().at(-1) ?? '1970-01-01'
+  const now = input.entries.map((e) => e.doc.updated ?? e.doc.created ?? '1970-01-01').sort().at(-1) ?? '1970-01-01'
   return {
     contentRevision: input.revision,
     source: 'harness',

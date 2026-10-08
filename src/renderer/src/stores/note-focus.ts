@@ -1,4 +1,4 @@
-// Note: assistant highlighting never changes mouse selection or execution scope — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
+// Note: assistant highlighting never changes mouse selection or execution scope — see .agents/notes/blueprint/requirements/blueprint-conversation-development.md
 import { create } from 'zustand'
 import type { NoteFocusEvent, NoteScopeItem } from '../../../shared/note-chat'
 import { sameCheckoutPath } from '../features/blueprint/resolveNodeWorkspace'

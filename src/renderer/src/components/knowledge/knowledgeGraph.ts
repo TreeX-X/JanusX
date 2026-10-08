@@ -8,7 +8,7 @@ import type {
 import type { InspectorRecord } from './KnowledgeWorkbench'
 import type { KnowledgeWorkbenchSnapshot } from '../../services/knowledge'
 
-// Note: the main graph projects published Wiki revisions; evidence is a separate read-only view — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: the main graph projects published Wiki revisions; evidence is a separate read-only view — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 
 export type KnowledgeGraphNodeKind = 'fact' | 'proposal' | 'wiki' | 'entity' | 'observation'
 
@@ -241,7 +241,7 @@ export function layoutLocalKnowledgeGraph(nodes: KnowledgeGraphNode[], root: str
   return positions
 }
 
-// Note: readable cards use bounded component grids and two-dimensional packing — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: readable cards use bounded component grids and two-dimensional packing — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export function layoutKnowledgeGraph(nodes: KnowledgeGraphNode[], edges: KnowledgeGraphEdge[]): Map<string, GraphPosition> {
   const ids = nodes.map(node => node.id).sort()
   const neighbors = new Map<string, Set<string>>(ids.map(id => [id, new Set()]))

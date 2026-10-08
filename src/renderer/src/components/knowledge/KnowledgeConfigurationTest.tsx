@@ -6,7 +6,7 @@ import { KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeConfi
 import styles from '../KnowledgeSettingsPanel.module.css'
 import automationStyles from '../KnowledgeAutomationPanel.module.css'
 
-// Note: hot-reloaded settings may outlive their main/preload API — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: hot-reloaded settings may outlive their main/preload API — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 type TestRow = KnowledgeConfigurationTestResult | { status: 'waiting' | 'testing' }
 export function KnowledgeConfigurationTest({ config, credential, disabled }: {
   config: KnowledgeAutomationSettings; credential: { key?: string; revision: number }; disabled: boolean

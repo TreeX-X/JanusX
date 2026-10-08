@@ -1,4 +1,4 @@
-// Note: renderer copy pipeline with gated keys — see .agents/notes/2026-08-06-i18n-pipeline--95812dc5.md
+// Note: renderer copy pipeline with gated keys — see .agents/notes/desktop/i18n-pipeline.md
 export const SUPPORTED_LANGUAGES = ['zh-CN', 'en'] as const
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]
 

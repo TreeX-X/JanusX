@@ -11,7 +11,7 @@ import { clientEntry, desiredEntry, MCP_KEY, updateClientConfig, type McpConfigF
 import type { ExternalMcpClientId, ExternalMcpStatus, ExternalMcpRegisterResult, ExternalMcpProbeResult } from '../../shared/ipc/knowledge'
 export type { ExternalMcpClientId, ExternalMcpStatus, ExternalMcpRegisterResult } from '../../shared/ipc/knowledge'
 
-// Note: client-specific configuration and live service diagnostics — see .agents/notes/2026-10-04-mcp-terminal-coverage--b74b3c92.md
+// Note: client-specific configuration and live service diagnostics — see .agents/notes/terminal/mcp-terminal-coverage.md
 export const EXTERNAL_MCP_SERVER_KEY = MCP_KEY
 export const EXTERNAL_MCP_CLIENTS: ReadonlyArray<{ id: ExternalMcpClientId; label: string; format?: McpConfigFormat }> = [
   { id: 'claude-code', label: 'Claude Code', format: 'mcpServers' },

@@ -139,7 +139,7 @@ export interface AuditQuery {
   limit?: number
 }
 
-// Note: audit pages bind filters and preserve event snapshots — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: audit pages bind filters and preserve event snapshots — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export interface AuditPageQuery extends AuditQuery { cursor?: string }
 export interface AuditRecord extends AuditEvent { displayTitle?: string }
 export interface AuditPage extends AuditStats {

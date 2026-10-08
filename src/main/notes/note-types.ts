@@ -5,11 +5,11 @@
  *  below must stay usable from a fixture upgrade that touches only
  *  `note-to-blueprint.ts` plus golden snapshots. `note-provider.ts` converts the
  *  parsed representation into these shapes at the boundary.
- *  See .agents/notes/2026-09-22-blueprint-note-graph-readonly--1432f7b8.md
+ *  See .agents/notes/blueprint/blueprint-note-graph-readonly.md
  */
 
 /** Frontmatter schema claimed by harness notes. */
-export const NOTE_SCHEMA_VERSION = 'harness-note/1'
+export const NOTE_SCHEMA_VERSION = 'harness-note/2'
 
 /** NoteAdapter version surfaced as `projectView.adapterVersion`. */
 export const ADAPTER_VERSION = 'v2'
@@ -17,7 +17,7 @@ export const ADAPTER_VERSION = 'v2'
 import type { NoteDoc, NoteReadSnapshot } from '../../shared/notes'
 export type { NoteDoc } from '../../shared/notes'
 
-export type NoteKind = 'idea' | 'initiative' | 'requirement' | 'decision' | 'task'
+export type NoteKind = 'module' | 'note' | 'idea' | 'initiative' | 'requirement' | 'decision' | 'task'
 
 export interface NoteSection {
   name: string

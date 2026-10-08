@@ -341,7 +341,7 @@ export interface MemoryFact {
   updatedBy?: string | null
 }
 
-// Note: wiki sources are host-read snapshots — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+// Note: wiki sources are host-read snapshots — see .agents/notes/blueprint/tasks/note-wiki-r3.md
 export interface WikiNoteRef { uri: string; sourceHash: string }
 export interface WikiNoteStatus {
   uri: string
@@ -379,7 +379,7 @@ export interface WikiPage {
   updatedBy?: string | null
 }
 
-// Note: relationships publish with their owning Wiki revision — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: relationships publish with their owning Wiki revision — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export interface WikiPageRelation {
   type: 'references' | 'depends_on' | 'conflicts_with'
   target: { workspaceId: string; slug: string; title: string; version: number; contentHash: string }

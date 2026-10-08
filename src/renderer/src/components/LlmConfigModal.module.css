@@ -380,7 +380,7 @@
   padding: 13px var(--so-body-pad-x, 22px);
   backdrop-filter: blur(16px);
   /* 吃 --shell-canvas 令牌，不写死 #151517 — 见
-     .agents/notes/2026-09-29-settings-footer-scrim-token--16ff77a0.md */
+     .agents/notes/workbench/settings-footer-scrim-token.md */
   background: color-mix(in srgb, var(--shell-canvas) 90%, transparent);
 }
 

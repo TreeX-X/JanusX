@@ -559,7 +559,7 @@ export async function runDeterministicStage(
     })
   }
   candidates = await proposeFactCandidates(candidates)
-  // Note: habit promotion shares the queue and Inbox review — see .agents/notes/2026-09-15-user-memory-m1--fd02d3bc.md
+  // Note: habit promotion shares the queue and Inbox review — see .agents/notes/knowledge/user-memory-m1.md
   // Frequency reinforces explicit preferences only; incomplete evidence cannot establish a habit.
   const habitInputs = prepared.filter(item => !item.truncated && !item.observation.truncated).map((item) => ({
     ...item.observation,
@@ -597,7 +597,7 @@ export async function runDeterministicStage(
         fileRefs: [], actor: 'habit-aggregator', createdAt: nowIso },
     })
   }
-  // Note: shared-file links do not create review work — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+  // Note: shared-file links do not create review work — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
   if (candidates.length > 0 || habitCandidates.length > 0) {
     await knowledgeAuditService.record({
       action: 'candidate_proposed',

@@ -1,4 +1,4 @@
-// Note: asserted current-source recording — see .agents/notes/2026-10-03-readme-showcase--7b4800da.md
+// Note: asserted current-source recording — see .agents/notes/desktop/readme-showcase.md
 import { expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';

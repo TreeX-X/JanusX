@@ -1,4 +1,4 @@
-// Note: explainable review keeps scores and targeted actions — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: explainable review keeps scores and targeted actions — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 import type { CandidateStatus } from './knowledge'
 
 export function jevThreshold(value: unknown): number {

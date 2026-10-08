@@ -1,4 +1,4 @@
-// Note: validated visual scope is separate from edit and execution authority — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
+// Note: validated visual scope is separate from edit and execution authority — see .agents/notes/blueprint/requirements/blueprint-conversation-development.md
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { NOTE_URI_RE } from '@janus-agent/harness-core'

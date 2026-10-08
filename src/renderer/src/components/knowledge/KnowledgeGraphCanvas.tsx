@@ -71,7 +71,7 @@ function edgeStyle(edge: KnowledgeGraphEdge): Edge['style'] {
   return { stroke: 'var(--shell-muted)', strokeWidth: 1.5, ...(edge.synthetic ? { strokeDasharray: '4 4' } : {}) }
 }
 
-// Note: explicit Wiki reading scopes and card layouts keep detail clicks stable — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: explicit Wiki reading scopes and card layouts keep detail clicks stable — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export function KnowledgeGraphCanvas({ snapshot, selectedId, resolveRecord, onSelect }: Props) {
   const { t } = useI18n('knowledge')
   const reducedMotion = useReducedMotion()

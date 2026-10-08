@@ -56,7 +56,7 @@ node scripts/showcase/compose.mjs --manifest .cache/showcase/product-xxxxxx --ou
 
 ## 调整公共参数
 
-修改 [showcase-config.mjs](showcase-config.mjs)：
+修改 [showcase-config.mjs](./showcase-config.mjs)：
 
 | 参数 | 控制内容 | 是否需要重录 |
 | --- | --- | --- |

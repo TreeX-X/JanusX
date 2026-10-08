@@ -1,4 +1,4 @@
-// Note: expose budget provenance and apply model-scoped overrides on the next turn — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
+// Note: expose budget provenance and apply model-scoped overrides on the next turn — see .agents/notes/blueprint/requirements/blueprint-conversation-development.md
 import { useEffect, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import type { UseJanusChatReturn } from './useJanusChat'

@@ -1,4 +1,4 @@
-// Note: host reads own wiki provenance — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+// Note: host reads own wiki provenance — see .agents/notes/blueprint/tasks/note-wiki-r3.md
 import { createHash, randomUUID } from 'node:crypto'
 import { harnessNoteService } from '../harness/service'
 import { resolveWorkspaceIdentity, workspacePathKey } from './workspace-identity'

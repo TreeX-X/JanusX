@@ -1,4 +1,4 @@
-// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/2026-09-18-officecli-bundled--02b7c101.md
+// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/desktop/officecli-bundled.md
 import { stat } from 'node:fs/promises'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { execa } from 'execa'

@@ -10,7 +10,7 @@ export interface TerminalStatusVisual {
 }
 
 // Note: internal status keeps six values for hook routing and sort order, but
-// approval and input share one attention visual — see .agents/notes/2026-09-12-terminal-status-display--27891818.md
+// approval and input share one attention visual — see .agents/notes/terminal/terminal-status-display.md
 // 色值唯一来源：theme definition status 槽（M1 统一结构），禁止各处自建。
 export function getTerminalStatusVisual(
   status: Terminal['status'],

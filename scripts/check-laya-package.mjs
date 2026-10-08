@@ -1,4 +1,4 @@
-// Note: optional model assets must stay outside the app — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: optional model assets must stay outside the app — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'

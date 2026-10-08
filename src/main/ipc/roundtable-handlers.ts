@@ -32,6 +32,7 @@ export function registerRoundtableHandlers(getMainWindow: () => BrowserWindow | 
     if (!input || typeof input !== 'object') throw new Error('Invalid bundle build input')
     const value = input as Record<string, unknown>
     if (typeof value.repoId !== 'string' || !value.repoId) throw new Error('Bundle build needs a repoId')
+    if (value.root !== undefined && typeof value.root !== 'string') throw new Error('Invalid bundle checkout root')
     if (value.factIds !== undefined && (!Array.isArray(value.factIds) || value.factIds.some((id) => typeof id !== 'string'))) {
       throw new Error('Invalid bundle fact ids')
     }

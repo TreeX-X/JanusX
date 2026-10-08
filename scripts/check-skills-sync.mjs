@@ -1,4 +1,4 @@
-// Note: dual-end sync gate lives here — see .agents/notes/2026-09-19-note-mechanical-checks--3b7d1e9b.md
+// Note: dual-end sync gate lives here — see .agents/notes/blueprint/note-mechanical-checks.md
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join as joinPath } from 'node:path'
@@ -13,9 +13,7 @@ function listMd(dir, base = dir, out = []) {
   return out
 }
 
-// Host-specific files: same contract, different surface wording. Checked for
-// host markers instead of byte equality.
-const HOST_SPECIFIC = new Set(['orchestrateX/modules/09-dispatch-adapter.md'])
+// WorkflowX v2 uses the same dispatch contract on both hosts.
 // Known single-end modules (warn only, not drift).
 const SINGLE_END_ALLOWLIST = new Set(['orchestrateX/modules/05-parallel-setup.md'])
 
@@ -50,15 +48,6 @@ export function checkSkillsSync(root = process.cwd()) {
     const codexFiles = new Set(listMd(joinPath(codexDir, name)))
     for (const rel of claudeFiles) {
       const key = `${name}/${rel}`
-      if (HOST_SPECIFIC.has(key)) {
-        compared += 1
-        const a = readFileSync(joinPath(claudeDir, name, rel), 'utf8')
-        const b = readFileSync(joinPath(codexDir, name, rel), 'utf8')
-        if (!/Claude/i.test(a)) errors.push(`skill ${key}: .claude copy lost its Claude host marker`)
-        if (!/Codex/i.test(b)) errors.push(`skill ${key}: .codex copy lost its Codex host marker`)
-        if (!/dispatch/i.test(a) || !/dispatch/i.test(b)) errors.push(`skill ${key}: host adapter lost dispatch content`)
-        continue
-      }
       if (!codexFiles.has(rel)) {
         if (SINGLE_END_ALLOWLIST.has(key)) {
           warnings.push(`skill ${key}: single-end module, .codex copy intentionally absent`)

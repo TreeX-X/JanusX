@@ -1,4 +1,4 @@
-// Note: Janus extends the shared agentX runtime — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+// Note: Janus extends the shared agentX runtime — see .agents/notes/blueprint/agentx-harness-inheritance.md
 export type { NoteChatChange } from '@janus-agent/harness-node'
 
 export interface NoteScopeItem {

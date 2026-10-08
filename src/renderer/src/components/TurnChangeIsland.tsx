@@ -10,7 +10,7 @@ const EMPTY_TURNS: TerminalTurnChangesEvent[] = []
 type FileChange = TerminalTurnChangesEvent['files'][number]
 type IslandView = 'latest' | 'history'
 
-// Note: latest clears independently of immutable change history — see .agents/notes/2026-09-23-terminal-right-island-turn-history--70beb72a.md
+// Note: latest clears independently of immutable change history — see .agents/notes/terminal/terminal-right-island-turn-history.md
 export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; focused: boolean }) {
   const { t, currentLanguage } = useI18n('terminal')
   const change = useTurnChangesStore(s => s.changesByTerminal[terminalId])

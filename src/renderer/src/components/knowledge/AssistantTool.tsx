@@ -10,7 +10,7 @@ import { MemoryReviewTool } from './MemoryReviewTool'
 import styles from './AssistantTool.module.css'
 import surface from './MemorySurface.module.css'
 
-// Note: assistant sections share the session tab pattern — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: assistant sections share the session tab pattern — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export function AssistantTool({ active, workspaceId, workspacePath }: {
   active: boolean; workspaceId: string | null; workspacePath: string | null
 }) {

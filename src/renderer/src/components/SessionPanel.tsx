@@ -57,7 +57,7 @@ function formatSize(bytes: number): string {
 
 // Note: 会话表面混色档位只服务详情窗（turn 卡/孤儿卡/diff 面）；右栏列表面板的
 // 地走 --shell-canvas 令牌、卡/内卡走 A 方案高保真逐值，在 SessionPanel.module.css — 见
-// .agents/notes/2026-09-29-session-card-surface--764d5d26.md
+// .agents/notes/workbench/session-card-surface.md
 //
 // 为什么不能直接用 --shell-card / --shell-chrome：planche 的 --shell-void /
 // --shell-canvas / --shell-pane / --shell-chrome / --shell-card 全是 #EFE4C5，纸面里
@@ -74,7 +74,7 @@ const CARD_BORDER_SOFT = '1px solid var(--shell-border-soft)'
 // Note: windowed session reading with orca-aligned preview layers — internal
 // turns keep scoped checkpoints with inline diff, external rows stay
 // transcript-only — see
-// .agents/notes/2026-09-22-session-windowed-reading--e968d1ae.md
+// .agents/notes/sessions/session-windowed-reading.md
 
 /** Provider resume command for external rows (orca parity); null when the engine has no known resume shape. */
 function buildResumeCommand(session: AgentSessionSummary): string | null {
@@ -124,7 +124,7 @@ export function SessionPanel() {
   const scopePath = activeWorktreePath ?? activeWorkspace?.path ?? null
   const activeWorktree = worktrees.find((w) => w.path === scopePath) ?? null
   const setUiForPath = useWorktreeStore((s) => s.setUiForPath)
-  // Note: single card expand subscribes to uiByPath so timeline toggles re-render — see .agents/notes/2026-09-22-session-checkpoint-expand--d216f355.md
+  // Note: single card expand subscribes to uiByPath so timeline toggles re-render — see .agents/notes/sessions/session-checkpoint-expand.md
   const expandedId = useWorktreeStore((s) =>
     scopePath ? (s.uiByPath[scopePath]?.expandedSessionId ?? null) : null,
   )
@@ -135,7 +135,7 @@ export function SessionPanel() {
   const [allCounts, setAllCounts] = useState<{ all: number; archived: number } | null>(null)
   // Note: open-card live refresh follows the same session:event — debounced
   // so submit/checkpoint/turn bursts reload the timeline once — see
-  // .agents/notes/2026-09-22-session-timeline-live--2b60cc2c.md
+  // .agents/notes/sessions/session-timeline-live.md
   const [timelineTick, setTimelineTick] = useState(0)
 
   useEffect(() => {
@@ -419,12 +419,12 @@ function promptTitle(prompt: string): string {
 
 // Note: session-owned checkpoints with review-gated restore absorb the retired
 // standalone checkpoints tool — see
-// .agents/notes/2026-09-21-session-checkpoint-migration--bb3ef36c.md
+// .agents/notes/sessions/session-checkpoint-migration.md
 
 // Note: unified turn timeline follows HiFi v5 — one expand owns Q/A plus the
 // bound checkpoint strip, file lists stay collapsed, diff opens in a
 // traffic-bar modal — see
-// .agents/notes/2026-09-22-session-timeline-v5--e782007f.md
+// .agents/notes/sessions/session-timeline-v5.md
 
 /**
  * Traffic-light title bar shared by the session modals. Matches the
@@ -882,9 +882,9 @@ function SessionCard({
   // SessionDetailWindow below; the dock keeps only the L2 preview.
 
   // Note: expand motion keeps the body mounted and animates grid rows; the
-  // closed body is inert — see .agents/notes/2026-10-06-session-card-expand-motion--106b60b4.md
+  // closed body is inert — see .agents/notes/workbench/session-card-expand-motion.md
   // Note: L1 summary rows (header / prompt preview / meta) follow the v6 HiFi
-  // collapsed design — see .agents/notes/2026-10-06-session-card-l1-summary--cca3e58f.md
+  // collapsed design — see .agents/notes/workbench/session-card-l1-summary.md
 
   return (
     <div

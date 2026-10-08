@@ -1,4 +1,4 @@
-// Note: candidate actions use the existing queue and never grant approval — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: candidate actions use the existing queue and never grant approval — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { z } from 'zod'
 import { configService } from '../config/service'
 import { memoryDomainPolicy } from './memory-domain-policy'
@@ -17,7 +17,7 @@ export const candidateActionSchema = z.object({
 /** Called inside the processing queue; IPC cannot supply evidence or scorer identity. */
 export async function runCandidateAction(raw: unknown): Promise<void> {
   const input = candidateActionSchema.parse(raw)
-  // Note: the current pipeline never queues legacy scoring/refinement — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+  // Note: the current pipeline never queues legacy scoring/refinement — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
   if ((await configService.getKnowledgeSettings()).automation) throw new Error('legacy-candidate-action-disabled')
   const candidate = (await knowledgeExtractService.listFactCandidates()).find(item => item.id === input.candidateId)
   if (!candidate || candidate.status !== 'proposed' || candidate.derivation !== 'deterministic'

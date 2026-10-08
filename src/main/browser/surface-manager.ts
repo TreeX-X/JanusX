@@ -1,4 +1,4 @@
-// Note: embedded browsing without agent operation — see .agents/notes/2026-07-11-browser-surface--48db2e15.md
+// Note: embedded browsing without agent operation — see .agents/notes/desktop/browser-surface.md
 import { BrowserWindow, WebContentsView, shell } from 'electron'
 import { randomUUID } from 'node:crypto'
 import {

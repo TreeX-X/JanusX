@@ -1,4 +1,4 @@
-// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/2026-09-18-officecli-bundled--02b7c101.md
+// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/desktop/officecli-bundled.md
 import type { OfficecliInfo, OfficePrompt, OfficeSkillId } from '../../shared/office'
 import { OFFICE_SKILL_IDS } from '../../shared/office'
 import { officecliManager, type OfficecliManager } from './officecli-manager'

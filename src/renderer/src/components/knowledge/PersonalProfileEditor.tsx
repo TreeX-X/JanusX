@@ -1,4 +1,4 @@
-// Note: explicit profile overrides stay private and bind the displayed snapshot — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: explicit profile overrides stay private and bind the displayed snapshot — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { PersonalProfileEditContext, PersonalProfileOverrides } from '../../../../shared/ipc/knowledge'
 import { useI18n } from '@/i18n/useI18n'

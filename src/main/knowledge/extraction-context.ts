@@ -1,4 +1,4 @@
-// Note: task windows keep corrections and source attribution together — see .agents/notes/2026-10-05-hook-evidence-extraction--a61e849c.md
+// Note: task windows keep corrections and source attribution together — see .agents/notes/knowledge/hook-evidence-extraction.md
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import type { CandidateFact, MemoryFact, Observation } from '../../shared/knowledge'

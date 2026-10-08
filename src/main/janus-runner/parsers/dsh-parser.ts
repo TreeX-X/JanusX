@@ -3,7 +3,7 @@ import type { AgentEvent, StreamParser } from '../types'
 /**
  * Parser for `dsh --profile headless --json` newline-delimited run events.
  * Protocol verified against dsh 0.2.0-rc.2 (see
- * .agents/notes/2026-09-30-dsh-terminal-integration--b28d07a3.md, headless protocol): `session` opens, `status`
+ * .agents/notes/terminal/dsh-terminal-integration.md, headless protocol): `session` opens, `status`
  * carries turn/step phases, `thinking`/`text` carry committed blocks,
  * `tool_call`/`tool_result` bracket tool use, `final` repeats the lossless
  * answer (already streamed as `text`, so it maps to nothing; process close

@@ -13,7 +13,7 @@ export function useAuditLabels() {
   return { t, action, type, title, time }
 }
 
-// Note: task records and immutable audit events have separate readers — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: task records and immutable audit events have separate readers — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export function AuditRecords({ selectedId, onSelect }: { selectedId?: string; onSelect: (event: AuditRecord | null) => void }) {
   const { t, action, title, time } = useAuditLabels()
   const [workspace, setWorkspace] = useState('')

@@ -283,7 +283,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
     if (auditId) requestAnimationFrame(() => document.querySelector<HTMLButtonElement>(`[data-audit-id="${CSS.escape(auditId)}"]`)?.focus())
   }, [selectedAudit])
 
-  // Note: Escape dismisses the active detail even when the graph owns focus — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+  // Note: Escape dismisses the active detail even when the graph owns focus — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
   useEffect(() => {
     if (!isOpen) return
     const onKeyDown = (event: KeyboardEvent) => {
@@ -529,7 +529,7 @@ export function KnowledgeWorkbench({ isOpen, onClose }: Props) {
               {tab === 'graph' && <KnowledgeGraphCanvas key={snapshot.loadedAt} snapshot={snapshot} selectedId={selectedId} resolveRecord={resolveCanvasRecord} onSelect={selectGraph} />}
             </>}
               {tab === 'audit' && <div className={styles.recordsContent}>
-                {/* Note: record views use the settings-style text tabs — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md */}
+                {/* Note: record views use the settings-style text tabs — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md */}
                 <nav className={`${tabStyles.strip} ${styles.recordsTabs}`} role="tablist" aria-label={t('knowledge:summary.recordArea')}>
                   {RECORD_TABS.map((item, index) => <button key={item} type="button" role="tab" className={tabStyles.tab}
                     id={`${recordTabId}-${item}`} aria-controls={`${recordTabId}-panel`} aria-selected={recordTab === item}

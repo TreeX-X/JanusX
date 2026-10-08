@@ -1,4 +1,4 @@
-import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
+import { LEGACY_HARNESS_PROFILE as SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'

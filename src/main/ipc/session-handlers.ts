@@ -14,7 +14,7 @@ import { continueAgentSession } from './terminal-handlers'
 // hundreds of transcript files for ~60s. Overlapping passes redo the same
 // work and emit duplicate event bursts, so concurrent callers share one
 // in-flight pass instead of starting their own.
-// See .agents/notes/2026-09-22-session-flicker-storm--3f2c9a41.md
+// See .agents/notes/sessions/session-flicker-storm.md
 let scanInFlight: Promise<ExternalScanSummary> | null = null
 
 function runScanSerialized(): Promise<ExternalScanSummary> {

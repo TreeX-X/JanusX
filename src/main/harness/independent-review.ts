@@ -1,4 +1,4 @@
-// Note: independent review and limited repair — see .agents/notes/2026-09-18-independent-review-repair--b055c1fe.md
+// Note: independent review and limited repair — see .agents/notes/agent/independent-review-repair.md
 /**
  * @file Independent review host (S8-JanusX, delegated-review P1).
  * @description Audits pinned evidence through a read-only evaluator turn that

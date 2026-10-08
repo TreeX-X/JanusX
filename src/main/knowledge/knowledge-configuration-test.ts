@@ -1,4 +1,4 @@
-// Note: configuration tests use synthetic data without publishing knowledge — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: configuration tests use synthetic data without publishing knowledge — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { z } from 'zod'
 import { defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeConfigurationTestResult,
   type KnowledgeConfigurationTestReason } from '../../shared/knowledge-automation'

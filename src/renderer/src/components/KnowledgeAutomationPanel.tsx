@@ -1,4 +1,4 @@
-// Note: extraction, entry review, handbook generation and review have independent providers — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: extraction, entry review, handbook generation and review have independent providers — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { useCallback, useEffect, useId, useState, type CSSProperties } from 'react'
 import { KeyRound, Workflow } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
@@ -79,7 +79,7 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
       <legend><KeyRound size={14} aria-hidden />Jev</legend>
       <label className={automationStyles.connectionField}><span>{t('knowledge:automation.jevEndpoint')}</span><input value={config.jev.endpoint}
         onChange={event => onChange({ ...config, jev: { ...config.jev, endpoint: event.target.value } })} /></label>
-      {/* Note: threshold controls follow settings tokens and retain explicit save semantics; see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md */}
+      {/* Note: threshold controls follow settings tokens and retain explicit save semantics; see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md */}
       <div className={automationStyles.thresholdField}>
         <label id={`${thresholdId}-label`} htmlFor={thresholdId}>{t('knowledge:automationExplain.threshold')}</label>
         <div className={automationStyles.thresholdControls}>

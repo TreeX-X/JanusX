@@ -1,4 +1,4 @@
-// Note: source revocation invalidates derived views without deleting evidence — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: source revocation invalidates derived views without deleting evidence — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

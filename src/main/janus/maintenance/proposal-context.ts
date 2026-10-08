@@ -1,4 +1,4 @@
-// Note: preserve required context without treating unknown windows as 16K — see .agents/notes/2026-09-29-blueprint-maintenance-approval-gap--a1b2c3d4.md
+// Note: preserve required context without treating unknown windows as 16K — see .agents/notes/blueprint/blueprint-maintenance-approval-gap.md
 import { ChatSessionRuntime, estimateContextTokens } from '@janus-agent/chat-core'
 import { matchAiModel } from '@janusx/llm-core'
 

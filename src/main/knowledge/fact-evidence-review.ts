@@ -1,4 +1,4 @@
-// Note: approval validates source snapshots and merges exact duplicates — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: approval validates source snapshots and merges exact duplicates — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { createHash } from 'node:crypto'
 import type { CandidateFact, MemoryFact, MemorySourceEvidence } from '../../shared/knowledge'
 import { knowledgeObservationService } from './observation-service'

@@ -1,5 +1,5 @@
 // Note: GitLab self-hosted provider over instance v4 API — see
-// .agents/notes/2026-09-21-gitlab-provider-reviews--640a69dd.md
+// .agents/notes/remote/gitlab-provider-reviews.md
 import { execFile } from 'node:child_process'
 import { request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'

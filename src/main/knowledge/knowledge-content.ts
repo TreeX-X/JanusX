@@ -1,4 +1,4 @@
-// Note: execution envelopes and source listings remain evidence, not knowledge statements — see .agents/notes/2026-10-06-memory-noise-progress-audit--81b578b4.md
+// Note: execution envelopes and source listings remain evidence, not knowledge statements — see .agents/notes/knowledge/requirements/memory-noise-progress-audit.md
 import type { Observation } from '../../shared/knowledge'
 import { isUserStatement } from './memory-evidence'
 import { isRuntimeNotification } from './personal-memory-content'

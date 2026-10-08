@@ -2,7 +2,7 @@
  * src/renderer/src/components/ProjectConfigForm/QuickConfigForm.module.css
  * 快速配置表单样式。分组卡与设置内卡同料（柔和发丝线 + 浅抬升底），选中态
  * 文字提亮 + 2px 强调条；色值走主题令牌，planche 加法层给输入纸面墨框。
- * 见 .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
+ * 见 .agents/notes/workbench/run-config-island-cards.md
  */
 
 .form {

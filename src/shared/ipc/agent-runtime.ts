@@ -1,4 +1,4 @@
-// Note: shared contracts with Janus conversation event routing — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+// Note: shared contracts with Janus conversation event routing — see .agents/notes/blueprint/agentx-harness-inheritance.md
 import type { AgentRuntimeAPI as SharedAPI, AgentRuntimeEvent as SharedEvent } from '@janus-agent/agent-core/contracts'
 export * from '@janus-agent/agent-core/contracts'
 

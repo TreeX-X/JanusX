@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-// Note: roundtable result card builds/applies native bundles — see .agents/notes/2026-09-16-roundtable-artifact-card-s5--6471d8f2.md
+// Note: roundtable result card builds/applies native bundles — see .agents/notes/agent/roundtable-artifact-card-s5.md
 import { useI18n } from '@/i18n/useI18n'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useHarnessStore } from '@/stores/harness'
@@ -162,6 +162,7 @@ export function RoundtableArtifactCard({ sessionId, facts, roundNumber, cwd }: R
       const result = await window.electron.roundtable.buildBundle(sessionId, {
         factIds: facts.map((fact) => fact.id),
         repoId: scope.repoId,
+        root: scope.root,
         ...(parentUri ? { parentUri } : {}),
         excluded: facts.filter((fact) => !selected.has(fact.id)).map((fact) => ({ factId: fact.id, reason: t('janus:roundtable.artifact.reasonDeselected') })),
       })

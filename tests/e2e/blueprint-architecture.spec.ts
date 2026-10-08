@@ -38,7 +38,7 @@ for (const mode of ['', '?workbench']) test(`current structure and original-sour
   const bounds = (await draggable.boundingBox())!
   await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
   await page.mouse.down(); await page.mouse.move(bounds.x + bounds.width / 2 + 18, bounds.y + bounds.height / 2 + 8, { steps: 5 }); await page.mouse.up()
-  await expect(draggable).not.toHaveAttribute('style', beforeDrag!)
+  await expect(draggable).toHaveAttribute('style', beforeDrag!)
   expect(await page.evaluate(() => (window as any).workbenchFixture.saves)).toEqual([])
   await page.locator('.react-flow__node').filter({ hasText: 'Reader module' }).dblclick()
   const related = page.getByRole('region', { name: '决策与相关工作' })

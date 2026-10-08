@@ -3,7 +3,7 @@
 // win-unpacked/JanusX.exe next to the repo used to find any package missing from
 // the archive in the repo's own node_modules — the check passed on a build whose
 // portable and setup artifacts died during bootstrap with no window and no log.
-// Note: entry — see .agents/notes/2026-09-20-packaged-hoisted-deps--39f58575.md
+// Note: entry — see .agents/notes/desktop/packaged-hoisted-deps.md
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -14,7 +14,7 @@ import { getRawHeader, listPackage } from '@electron/asar'
 
 const root = process.cwd()
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-// Note: staged delivery verifies a separate output directory — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: staged delivery verifies a separate output directory — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 const releaseArg = process.argv.indexOf('--release-dir')
 if (releaseArg !== -1 && (!process.argv[releaseArg + 1] || process.argv[releaseArg + 1].startsWith('--'))) {
   throw new Error('--release-dir requires a directory')

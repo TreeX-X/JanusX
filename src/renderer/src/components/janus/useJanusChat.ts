@@ -573,7 +573,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     })
   }, [updateConversation])
 
-  // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/2026-09-25-blueprint-dialog-separation--2ec6c79b.md
+  // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/blueprint/tasks/blueprint-dialog-separation.md
   const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }, compact?: { keepRecentUnits: number }) => {
     const runtime = runtimesRef.current[id]
     const conversation = conversationsRef.current.find((item) => item.id === id)
@@ -590,7 +590,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.pendingBuffer = ''
     handles.reasoning = emptyReasoning()
 
-    // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/2026-10-02-blueprint-review-conversation-loop--9c426f18.md
+    // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/blueprint/requirements/blueprint-review-conversation-loop.md
     const nextMessages = maintenanceTaskId || compact ? history : [...history, userMessage]
     if (!recovery) updateConversation(id, (current) => ({
       ...current,
@@ -951,7 +951,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     setRuntime(id, () => ({ ...emptyRuntime(), ...(panel ? { approvalMode: 'plan' as const } : {}) }))
   }, [invalidateRuntime, setRuntime, updateConversation])
 
-  // Note: workspace lifetime survives panel unmounts — see .agents/notes/2026-09-25-blueprint-workspace-dialog--5480ef6d.md
+  // Note: workspace lifetime survives panel unmounts — see .agents/notes/blueprint/tasks/blueprint-workspace-dialog.md
   useEffect(() => useWorkspaceStore.subscribe((state) => {
     if (panelWorkspaceRef.current === null) return
     const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId)

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-// Note: one assistant entry preserves independent domains — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+// Note: one assistant entry preserves independent domains — see .agents/notes/knowledge/assistant-persona-layout.md
 export type AssistantSection = 'engineering' | 'personal' | 'review'
 export const useAssistantStore = create<{
   automationView: 'processing' | 'attention' | 'settings' | null

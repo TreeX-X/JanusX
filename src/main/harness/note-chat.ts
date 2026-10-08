@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { NOTE_URI_RE } from '@janus-agent/harness-core'
 import { NOTE_TOOL_DEFINITIONS } from '@janus-agent/node-hosts'
-// Note: Janus extends the shared agentX runtime — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+// Note: Janus extends the shared agentX runtime — see .agents/notes/blueprint/agentx-harness-inheritance.md
 import { randomUUID } from 'node:crypto'
 import { resolve, relative } from 'node:path'
 import { createToolManifests, type ToolDefinition, type ToolResult } from '@janus-agent/agent-core'
@@ -83,7 +83,11 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
         if (!resource || !live || live.status !== 'running' || live.workspaceId !== resource.workspaceId || live.workspaceRoot !== resource.workspacePath) throw new Error('PERMISSION_DENIED: Note workspace session unavailable')
         if (options.signal.aborted) throw new Error('Note operation cancelled')
         let output: unknown
-        if (input.call.toolName === 'note.list') output = await editor.list(resource.workspacePath, z.string().max(1000).parse(input.call.input.query ?? ''), z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.relatedTo))
+        if (input.call.toolName === 'note.list') output = await editor.list(resource.workspacePath, z.string().max(1000).parse(input.call.input.query ?? ''), z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.relatedTo), {
+          kind: z.enum(['module', 'note', 'idea', 'requirement', 'decision', 'task', 'initiative']).optional().parse(input.call.input.kind),
+          module: z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.module),
+          moduleState: z.enum(['planned', 'partial', 'implemented', 'retired']).optional().parse(input.call.input.moduleState),
+        })
         else if (input.call.toolName === 'note.read') {
           const read = await editor.readPage(resource.workspacePath, z.string().parse(input.call.input.uri), input.call.input)
           output = read

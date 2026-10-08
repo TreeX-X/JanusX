@@ -37,7 +37,7 @@
    地吃 --shell-canvas：planche 解析为纸面 #EFE4C5（= 软件底色），dark 为 v6 HiFi 画布 #151517。
    卡/内卡仍走 A 方案高保真逐值：牛皮卡 #E2D9BD → 暖白纸内卡 #F8F2E0；
    dark：卡 #1c1c1f → 内卡提亮块。
-   见 .agents/notes/2026-09-29-session-card-surface--764d5d26.md */
+   见 .agents/notes/workbench/session-card-surface.md */
 .panelGround {
   background: var(--shell-canvas);
 }

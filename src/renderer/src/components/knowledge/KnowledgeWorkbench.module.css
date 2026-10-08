@@ -410,7 +410,7 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/2026-09-21-workbench-close-hit-slop--8688b5ab.md */
+/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/sessions/workbench-close-hit-slop.md */
 /* 交互约定（与 modal-close-light 统一）：红灯本身即关闭，悬浮不冒叉，直接点即可。
    位置：顶栏首位（左上），与蓝图工作台同位。左边距靠 .header 的 padding-left 14px
    留出，比 ::before 的 8px 命中外扩多 6px 余量，贴边点击不会溢出卡片。 */
@@ -569,7 +569,7 @@
   margin-top: 12px;
 }
 
-/* Note: Match settings navigation states across themes — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md */
+/* Note: Match settings navigation states across themes — see .agents/notes/knowledge/assistant-persona-layout.md */
 .navButton {
   position: relative;
   width: 100%;

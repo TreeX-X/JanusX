@@ -15,7 +15,7 @@ interface TurnChangesStore {
 let subscribers = 0
 let unsubscribe: (() => void) | undefined
 
-// Note: one IPC subscription feeds latest state and nonempty history independently — see .agents/notes/2026-09-23-terminal-right-island-turn-history--70beb72a.md
+// Note: one IPC subscription feeds latest state and nonempty history independently — see .agents/notes/terminal/terminal-right-island-turn-history.md
 export const useTurnChangesStore = create<TurnChangesStore>((set) => ({
   changesByTerminal: {},
   historyByTerminal: {},

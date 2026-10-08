@@ -1,4 +1,4 @@
-// Note: bounded evidence windows preserve ranges without inventing aggregate confidence — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: bounded evidence windows preserve ranges without inventing aggregate confidence — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import type { MemoryDecisionInput } from './decision-scorer'
 
 export const DECISION_CHUNK_CHARS = 800

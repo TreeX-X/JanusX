@@ -1,5 +1,5 @@
-// Note: shared usage filters and cumulative snapshot curves — see .agents/notes/2026-10-02-usage-telemetry-fix-and-stats--61b5d05c.md
-// Note: custom date range with snapshot-bucket aggregation — see .agents/notes/2026-10-05-usage-stats-custom-range-detail--241cfe30.md
+// Note: shared usage filters and cumulative snapshot curves — see .agents/notes/terminal/requirements/usage-telemetry-fix-and-stats.md
+// Note: custom date range with snapshot-bucket aggregation — see .agents/notes/terminal/requirements/usage-stats-custom-range-detail.md
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import { useWorkspaceStore } from '@/stores/workspace'

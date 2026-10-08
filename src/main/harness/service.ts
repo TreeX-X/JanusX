@@ -1,4 +1,4 @@
-// Note: Janus extends the shared agentX runtime — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+// Note: Janus extends the shared agentX runtime — see .agents/notes/blueprint/agentx-harness-inheritance.md
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -28,7 +28,7 @@ export interface ProjectView {
 export class HarnessNoteService extends NoteService {
   private compositionHashes = new Map<string, Record<string, string>>()
   async projectView(root: string): Promise<ProjectView> {
-    // Note: explicit checkout projections compose outside the source adapter — see .agents/notes/2026-09-25-blueprint-r4--9b7b1e15.md
+    // Note: explicit checkout projections compose outside the source adapter — see .agents/notes/blueprint/tasks/blueprint-r4.md
     const view = await this.singleProjectView(root)
     const bindings = await this.getBindings(root)
     // Bound checkouts project independently: run them concurrently and keep
@@ -95,7 +95,7 @@ export class HarnessNoteService extends NoteService {
       classification: item.classification,
       diagnostics: item.diagnostics.map((d) => ({ code: d.code, message: d.message })),
     }))
-    // Note: coverage comes from portable receipts - see .agents/notes/2026-09-18-harness-portable-results--11d8826d.md
+    // Note: coverage comes from portable receipts - see .agents/notes/agent/harness-portable-results.md
     if (index.repoId) {
       const overlay = await this.coverageOverlay(root, rev, entries, index.repoId)
       for (const node of Object.values(blueprint.nodes)) {

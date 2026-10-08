@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { getIndexRev, onHarnessChanged } from '@/services/harness'
 import { useBlueprintStore } from '@/stores/blueprint'
 
-// Note: refresh is owned by the mounted view — see .agents/notes/2026-09-25-note-blueprint-r2-read--fa17e06b.md
+// Note: refresh is owned by the mounted view — see .agents/notes/blueprint/tasks/note-blueprint-r2-read.md
 export function useNoteRefresh(blueprintId: string | undefined, root: string | undefined): void {
   useEffect(() => {
     if (!blueprintId || !root) return

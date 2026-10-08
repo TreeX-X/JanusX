@@ -33,7 +33,7 @@ export function NoteWorkingScope({ conversationId, workspacePath }: { conversati
   </section>
 }
 
-// Note: per-turn evidence stays folded beside its reply — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
+// Note: per-turn evidence stays folded beside its reply — see .agents/notes/blueprint/requirements/blueprint-conversation-development.md
 export function NoteTurnActivity({ conversationId, workspacePath, turnId, live = false }: {
   conversationId: string; workspacePath: string; turnId?: string; live?: boolean
 }) {

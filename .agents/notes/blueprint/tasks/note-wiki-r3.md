@@ -1,0 +1,101 @@
+---
+{
+  "schema": "harness-note/2",
+  "id": "844bc2f1-3be4-4b47-83ca-0ef792bc5c1d",
+  "kind": "task",
+  "lifecycle": "accepted",
+  "created": "2026-09-25",
+  "class": "architecture",
+  "tags": ["note","wiki","blueprint","r3"],
+  "relations": [
+    {"type":"parent","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5"},
+    {
+      "type": "implements",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5",
+      "criteria": ["AC-4","AC-5"]
+    },
+    {"type":"depends-on","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/fa17e06b-5f62-4d42-9020-4fb77bcf54de"}
+  ],
+  "work": {
+    "scope": [
+      {
+        "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+        "paths": [
+          "src/main/notes/",
+          "src/main/harness/",
+          "src/main/knowledge/",
+          "src/main/ipc/",
+          "src/shared/",
+          "src/preload/",
+          "src/renderer/src/",
+          "tests/unit/",
+          "tests/e2e/",
+          ".agents/notes/"
+        ]
+      }
+    ],
+    "acceptanceRefs": [
+      {"uri":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5","criterionId":"AC-4"},
+      {"uri":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e7c03317-8bb8-4d1d-a1b2-832be6c5a3c5","criterionId":"AC-5"}
+    ],
+    "verification": [
+      {
+        "id": "V-1",
+        "kind": "command",
+        "required": true,
+        "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+        "cwd": ".",
+        "program": "npm",
+        "args": ["run","typecheck"]
+      }
+    ],
+    "review": "independent"
+  },
+  "updated": "2026-10-08T02:54:24.778Z",
+  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd"
+}
+---
+
+# R3 — 工程 wiki 浏览和知识页来源审核
+
+## Scope
+
+R2 已在 c2c9982 落地，独立 review02 为 PASS。本段复用共同读快照及现有知识候选审核，不新增工程正文副本、数据库或反向关系存储。以完整 URI 和明确 checkout 定位 Note；知识 wiki 保留 fact 来源，并增加宿主实际读取的 Note 来源。视觉沿用当前三列蓝图与 v11 参考，组合装配和维护写链继续属于 R4/R5。
+
+## Acceptance criteria
+
+- [x] AC-1: 工程 wiki 从蓝图详情可达，按 parent 展示目录并能定位同一 Note 节点；提供当前原文、正式字段、代码入口、正式出入关系和独立正文引用/反链，未解析与覆盖范围可见。
+- [x] AC-2: 默认上下文为选中 Note、一跳邻居及祖先链，有界去重且显示截断；相对链接和锚点由共享索引解析，跨仓未绑定不猜测 checkout，刷新与过期响应不串条目。
+- [x] AC-3: 知识 wiki 支持多 Note sourceNoteRefs，URI 与原始字节 hash 由宿主读取层生成；原有 sourceFactIds 保留，页面身份为 workspace 与 slug，旧页面继续读取并明确来源未记录。
+- [x] AC-4: 当前来源匹配、变化、缺失、不明确、未接入及未知状态分别显示；反向知识页面由 sourceNoteRefs 派生；刷新不改持久 hash。冲突来源不覆盖旧引用，必须进入待复核流程。
+- [x] AC-5: Note 来源候选可通过现有审核入口发布；完整页面复核或重写才可更新旧来源 hash，并检查页面版本与实际来源并发变化。增量补丁不能冒充全页复核；失败和撤销回滚保持正文及索引一致。
+- [x] AC-6: 针对性来源/目录/链接/审核/隔离回归、类型检查和可达 UI 检查通过；独立 reviewer 通过后才进入 R4。
+
+## Verification
+
+覆盖同 UUID 跨仓、父环与重复、局部扫描、正文提及区别于正式依赖、读取竞态，以及多来源/变化/缺失/未绑定/旧页面无 hash、同 slug 不同工作区、增量冲突、完整复核、来源变更和发布回滚。运行相关 Vitest 与 npm run typecheck。UI 检查覆盖蓝图选择→工程 wiki→关系定位、Note 整理为 wiki 候选→既有审核→来源状态和反查；未执行的 live 操作如实注明。
+
+## Results
+
+已完成 R3 实施并通过独立验收。工程 wiki 使用共享 Note 快照和独立的中间视图，支持目录、原文、正式字段、代码入口、正式关系、正文引用/反链、上下文边界、覆盖诊断和过期竞态隔离；知识 wiki 使用宿主读取的完整 URI/原始字节 hash，保留 sourceFactIds，按 workspace+slug 定位，并通过现有候选审核、版本检查、来源复核和回滚路径发布。
+
+实际验证：
+
+- 主仓库：`npx vitest run tests/unit/note-wiki.test.ts tests/unit/knowledge-note-sources.test.ts tests/unit/knowledge-note-ui.test.ts`，3 files / 22 tests PASS。
+- 主仓库：`npm run typecheck` PASS。
+- 浏览器 fixture：`NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost JANUS_E2E_PORT=41847 npx playwright test tests/e2e/note-wiki.spec.ts --workers=1`，2 tests PASS；该检查覆盖目录→正文链接→锚点→正式关系/反链→上下文、延迟响应、失败重试和 stale hash 提示，不代表 live Electron。
+- 独立 evaluatorX（run `01a0d727-3323-70f1-9214-b58acf0a7cbb`，model `gpt-5.6-terra`，只读）：同一 3 files / 22 tests 和 `npm run typecheck` PASS，未编辑工作区，无 blockers。
+
+本阶段不把生命周期、执行结果与来源新鲜度混为一谈；后续交付及全局完成状态见[实施计划](../requirements/blueprint-notev2-implementation-plan.md)。
+
+## Progress
+
+Historical delivery statements remain in this document; no v2 execution receipt is asserted.
+
+## Evidence
+
+Original source: Git e433bb8627150126b782a301352da05e2149c18b:.agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md. See docs/migrations/note-v2.json for the raw-source hash and historical execution.
+
+## Handoff
+
+Main Agent owns this Task. Reassess scope, fixed acceptance sources and verification before any new run. Preserve independent-review obligations; subagents read only.

@@ -1,4 +1,4 @@
-﻿import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
+import { LEGACY_HARNESS_PROFILE, SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -70,11 +70,37 @@ async function makeRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'blueprint-migrate-'))
   roots.push(root)
   await mkdir(join(root, '.agents', 'notes'), { recursive: true })
-  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Migrate', profile: SUPPORTED_HARNESS_PROFILE }))
+  await writeFile(join(root, '.agents', 'harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'Migrate', profile: LEGACY_HARNESS_PROFILE }))
   return root
 }
 
 describe('legacy blueprint migration', () => {
+  it('imports v2 documents under their module, keeps duplicate titles distinct, and refuses a mismatched checkout', async () => {
+    const root = await makeRoot()
+    const moduleId = '22222222-2222-4222-8222-222222222222'
+    const moduleUri = `note://${REPO}/${moduleId}`
+    await writeFile(join(root, '.agents/harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'V2', profile: SUPPORTED_HARNESS_PROFILE }))
+    await writeFile(join(root, '.agents/notes/module.md'), `---\n${JSON.stringify({ schema: 'harness-note/2', id: moduleId, kind: 'module', role: 'project', lifecycle: 'accepted', created: '2026-10-08', updated: '2026-10-08T00:00:00Z', moduleState: 'partial' })}\n---\n# Project\n\nOwns imported history.\n`)
+    const blueprint = fixture()
+    blueprint.nodes.work.title = blueprint.nodes.feat.title
+    const context = { schema: 'harness-note/2' as const, module: moduleUri, directory: '' }
+    const preview = previewMigration(blueprint, REPO, audits, context)
+    expect(preview.notes.some(note => ['task', 'initiative'].includes(note.kind))).toBe(false)
+    expect(preview.relationCount).toBeGreaterThan(0)
+    await expect(applyMigration(root, moduleId, blueprint, audits, async () => '')).rejects.toThrow('selected checkout')
+    const result = await applyMigration(root, REPO, blueprint, audits, async () => '/archived/source.json')
+    const index = await buildNoteIndex(root)
+    expect(index.diagnostics).toEqual([])
+    expect(index.byId.size).toBe(result.uris.length + 1)
+    for (const entry of index.entries.filter(entry => entry.note?.meta.kind !== 'module')) {
+      expect(entry.diagnostics).toEqual([])
+      expect(entry.note!.meta).toMatchObject({ schema: 'harness-note/2', module: moduleUri, lifecycle: 'draft' })
+      expect(entry.note!.meta.kind).not.toBe('task')
+    }
+    expect(index.entries.some(entry => entry.relPath === '.agents/notes/feature-a-2.md')).toBe(true)
+    expect(index.entries.some(entry => `note://${REPO}/${entry.note?.meta.id}` === result.reportUri)).toBe(true)
+  })
+
   it('previews kinds, lifecycles, relations, and warnings without writing', async () => {
     const root = await makeRoot()
     const preview = previewMigration(fixture(), REPO, audits)

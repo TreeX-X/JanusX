@@ -1,4 +1,4 @@
-// Note: setup and runtime status remain separate from review — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: setup and runtime status remain separate from review — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Download, FolderOpen, Loader2, Play, Square } from 'lucide-react'
 import type { LayaAction, LayaSettings, LayaStatus } from '../../../shared/laya'

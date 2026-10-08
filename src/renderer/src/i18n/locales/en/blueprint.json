@@ -68,7 +68,9 @@
     "initiative": "initiative",
     "requirement": "requirement",
     "decision": "decision",
-    "task": "task"
+    "task": "task",
+    "module": "Module",
+    "note": "Note"
   },
   "issueSeverity": {
     "low": "Low",
@@ -541,7 +543,9 @@
     "invalidKept": "{{count}} invalid files kept, not executed"
   },
   "noteFocus": {
-    "read": "Accessed Notes", "addScope": "Add to working Notes", "hidden": "{{count}} highlighted Notes are hidden. Locate to reveal them.",
+    "read": "Accessed Notes",
+    "addScope": "Add to working Notes",
+    "hidden": "{{count}} highlighted Notes are hidden. Locate to reveal them.",
     "scope": "Working Notes",
     "locate": "Locate",
     "clear": "Reset scope",
@@ -560,9 +564,15 @@
     "structure": "System structure",
     "notes": "All Notes",
     "coverage": "Checkout coverage",
-    "currentOnly": "Current accepted declarations. Planned, example and historical Notes remain available in All Notes.",
+    "currentOnly": "Shows planned, partial and implemented modules. Click to expand documents; double-click for details.",
     "related": "Decisions and related work",
     "noRelated": "No declared related work.",
     "unresolved": "Unresolved target"
+  },
+  "moduleState": {
+    "planned": "Planned",
+    "partial": "Partially implemented",
+    "implemented": "Implemented",
+    "retired": "Retired"
   }
 }

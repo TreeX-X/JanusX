@@ -1,4 +1,4 @@
-// Note: pane tree focus with island as sole subagent surface — see .agents/notes/2026-06-27-pane-tree-subagent--93151b7b.md
+// Note: pane tree focus with island as sole subagent surface — see .agents/notes/terminal/pane-tree-subagent.md
 export type PaneSplitDirection = 'horizontal' | 'vertical'
 export type PaneSplitPlacement = 'before' | 'after'
 export type PaneDropEdge = 'left' | 'right' | 'top' | 'bottom'
@@ -394,7 +394,7 @@ export function retainWorkspacePaneContent(
   return pruneEmptyPanes(retain(node))
 }
 
-// Note: tab reorder keeps insertion-index-after-removal so the gap preview matches the drop result — see .agents/notes/2026-10-04-pane-tab-reorder--233a32a0.md
+// Note: tab reorder keeps insertion-index-after-removal so the gap preview matches the drop result — see .agents/notes/workbench/pane-tab-reorder.md
 function clampTabInsertIndex(length: number, index: number): number {
   if (!Number.isFinite(index)) return length
   return Math.min(length, Math.max(0, Math.floor(index)))

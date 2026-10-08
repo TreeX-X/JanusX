@@ -1,5 +1,5 @@
 // Note: the single control surface for the blueprint panel — see
-// .agents/notes/2026-09-30-blueprint-action-bar--8b40c7d2.md
+// .agents/notes/blueprint/blueprint-action-bar.md
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Blueprint } from '@/services/blueprint'
 import { bindTerminal, composeDispatchBrief } from '@/services/blueprint'

@@ -93,7 +93,7 @@ export interface ChatAnswerQuestionPayload {
  * Safe, request-scoped Agent lifecycle events for the Chat renderer.
  * Raw tool events stay in Main; the event set tracks chat-core's ChatAgentEvent
  * one-to-one (tool display follows the upstream raw tool call and execution events).
- * Note: alignment trade-offs live with the contract — see .agents/notes/2026-09-12-janus-agent-chat-alignment--6813a52b.md
+ * Note: alignment trade-offs live with the contract — see .agents/notes/agent/janus-agent-chat-alignment.md
  */
 export type ChatAgentEvent =
   | { type: 'context_state'; requestId: string; state: import('../chat-context').ChatContextStatus }

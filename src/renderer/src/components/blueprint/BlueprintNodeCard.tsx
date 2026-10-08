@@ -17,6 +17,8 @@ export const BlueprintCardActionsContext = createContext<{
   toggleCollapse: (nodeId: string) => void
   structureMode?: boolean
   architectureRoles?: Record<string, 'project' | 'module'>
+  moduleDocuments?: Record<string, string[]>
+  expandedModules?: ReadonlySet<string>
 } | null>(null)
 
 /** ?????????? */
@@ -26,6 +28,7 @@ export interface BlueprintNodeData extends Record<string, unknown> {
   nodeType: BlueprintNodeType
   /** note 原始 kind（harness 透传；缺省时 kindtag 按 type 回退） */
   kind?: string | null
+  moduleState?: string
   progress: number
   workspaceName: string | null
   boundTerminalId: string | null
@@ -50,8 +53,8 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
   const minimal = useStore((s) => s.transform[2] < SEMANTIC_ZOOM_THRESHOLD)
   const visual = getBlueprintStatusVisual(d.status) 
   const progress = Math.max(0, Math.min(100, d.progress ?? 0))
-  const childCount = d.childCount ?? 0
-  const collapsed = d.collapsed ?? false
+  const childCount = actions?.structureMode ? actions.moduleDocuments?.[id]?.length ?? 0 : d.childCount ?? 0
+  const collapsed = actions?.structureMode ? !actions.expandedModules?.has(id) : d.collapsed ?? false
   const noteKind = noteKindOf({ kind: d.kind ?? undefined, type: d.nodeType })
   const architectureRole = actions?.structureMode ? actions.architectureRoles?.[id] : undefined
 
@@ -106,7 +109,7 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
           </div>}
 
           <div className="bp-node-card__footer">
-            <span>{actions?.structureMode ? t('blueprint:architecture.structure') : t(visual.labelKey)}</span>
+            <span>{d.moduleState ? t('blueprint:moduleState.' + d.moduleState) : actions?.structureMode ? t('blueprint:architecture.structure') : t(visual.labelKey)}</span>
             <span className={`bp-node-card__workspace${d.workspaceName ? '' : ' bp-node-card__workspace--empty'}`}>
               {d.workspaceName ?? t('blueprint:nodeCard.noWorkspace')}
             </span>

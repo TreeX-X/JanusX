@@ -15,6 +15,7 @@ import {
   ReactFlow,
   Background,
   MiniMap,
+  ViewportPortal,
   type Node,
   type Edge,
   type ReactFlowInstance,
@@ -52,6 +53,8 @@ import { useI18n } from '@/i18n/useI18n'
 import { NoteWikiPanel } from './NoteWikiPanel'
 import { BlueprintCompositionPanel } from './BlueprintCompositionPanel'
 import { projectArchitecture, type BlueprintViewMode } from '@/features/blueprint/architecture-view'
+import { expandModules } from '@/features/blueprint/module-expansion'
+import './module-groups.css'
 import { BlueprintViewSelector, BlueprintArchitecturePanel } from './BlueprintArchitecturePanel'
 import { nodeNoteSnapshot, resolveCompositionNote } from '@/features/blueprint/composition-view'
 
@@ -118,6 +121,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const { t } = useI18n('blueprint')
   const sourceBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const architecture = useMemo(() => sourceBlueprint ? projectArchitecture(sourceBlueprint) : null, [sourceBlueprint])
+  const [expandedModules, setExpandedModules] = useState<Set<string>>(() => new Set())
+  const moduleExpansion = useMemo(() => sourceBlueprint && architecture ? expandModules(sourceBlueprint, architecture, expandedModules) : null, [sourceBlueprint, architecture, expandedModules])
   const loading = useBlueprintStore((s) => s.loading)
   const error = useBlueprintStore((s) => s.error)
   const loadBlueprint = useBlueprintStore((s) => s.loadBlueprint)
@@ -142,9 +147,9 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const requestedViewMode = toolbarState?.viewMode ?? innerViewMode
   const setViewMode = toolbarState?.setViewMode ?? setInnerViewMode
   const structureMode = requestedViewMode === 'structure' || (requestedViewMode === null && !!architecture?.graph.nodeIds.length)
-  const currentBlueprint = structureMode ? architecture?.graph ?? null : sourceBlueprint
+  const currentBlueprint = structureMode ? moduleExpansion?.graph ?? null : sourceBlueprint
   const viewKey = blueprintId + (structureMode ? ':structure' : ':notes')
-  useEffect(() => { setInnerViewMode(null) }, [blueprintId])
+  useEffect(() => { setInnerViewMode(null); setExpandedModules(new Set()) }, [blueprintId])
   const [innerSearchQuery, setInnerSearchQuery] = useState('')
   const [innerStatusFilter, setInnerStatusFilter] = useState<StatusFilter>('all')
   const [innerKindFilter, setInnerKindFilter] = useState<KindFilter>('all')
@@ -188,6 +193,9 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const fitFrameRef = useRef<number | null>(null)
   const initialFitBlueprintRef = useRef<string | null>(null)
   const detailOpenRef = useRef<boolean | null>(null)
+  const moduleClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (moduleClickTimer.current) clearTimeout(moduleClickTimer.current) }, [])
+  const navigationViewport = useRef<{ x: number; y: number; zoom: number } | null>(null)
   const collapseInitRef = useRef<string | null>(null)
   const pendingSourceRevealRef = useRef<string[]>([])
   const detailInitRef = useRef<string | null>(null)
@@ -421,9 +429,18 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     }
     if (detailOpenRef.current === isDetailOpen) return
     detailOpenRef.current = isDetailOpen
+    if (structureMode) {
+      if (isDetailOpen) navigationViewport.current = rfInstanceRef.current?.getViewport() ?? null
+      else if (navigationViewport.current) {
+        const viewport = navigationViewport.current
+        const timer = window.setTimeout(() => { void rfInstanceRef.current?.setViewport(viewport) }, 260)
+        return () => window.clearTimeout(timer)
+      }
+      return
+    }
     const timer = window.setTimeout(() => fitViewWhenReady(180), 220)
     return () => window.clearTimeout(timer)
-  }, [activeDetailNode, fitViewWhenReady])
+  }, [activeDetailNode, fitViewWhenReady, structureMode])
 
   useEffect(() => {
     onDetailOpenChange?.(Boolean(detailNode))
@@ -433,6 +450,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   // 后续单击选中即展开预览，保证左列始终有内容而非常开空白。
   useEffect(() => {
     if (!currentBlueprint || currentBlueprint.id !== blueprintId) return
+    if (structureMode) return
     if (detailInitRef.current === blueprintId) return
     const root = currentBlueprint.rootNodeId && currentBlueprint.nodes[currentBlueprint.rootNodeId]
       ? currentBlueprint.rootNodeId
@@ -441,7 +459,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
     detailInitRef.current = blueprintId
     setSelectedId(root)
     setDetailNodeId(root)
-  }, [currentBlueprint, blueprintId, detailNodeId, selectedId])
+  }, [currentBlueprint, blueprintId, detailNodeId, selectedId, structureMode])
 
   // 统一顶栏接线（workbench）：注册 fit 入口，回報选中与保存态
   useEffect(() => {
@@ -475,17 +493,22 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   useEffect(() => () => onDetailOpenChange?.(false), [onDetailOpenChange])
 
   const toggleCollapse = useCallback((nodeId: string) => {
+    if (structureMode) {
+      setExpandedModules(previous => { const next = new Set(previous); if (!next.delete(nodeId)) next.add(nodeId); return next })
+      return
+    }
     const next = new Set(effectiveCollapsedNodeIds)
     if (!next.delete(nodeId)) next.add(nodeId)
     setCollapsedNodeIds(next)
     void persistCollapsedNodeIds(next).catch((error: unknown) => {
       setActionError(error instanceof Error ? error.message : String(error))
     })
-  }, [effectiveCollapsedNodeIds, persistCollapsedNodeIds])
-  const cardActions = useMemo(() => ({ toggleCollapse, structureMode, architectureRoles: architecture?.roles }), [toggleCollapse, structureMode, architecture?.roles])
+  }, [effectiveCollapsedNodeIds, persistCollapsedNodeIds, structureMode])
+  const cardActions = useMemo(() => ({ toggleCollapse, structureMode, architectureRoles: architecture?.roles, moduleDocuments: moduleExpansion?.owned, expandedModules }), [toggleCollapse, structureMode, architecture?.roles, moduleExpansion?.owned, expandedModules])
 
   const onNodeDoubleClick: NodeMouseHandler = useCallback(
     (_e, node) => {
+      if (moduleClickTimer.current) clearTimeout(moduleClickTimer.current)
       setSelectedId(node.id)
       setDetailNodeId(node.id)
       if (onNodeOpen) onNodeOpen(node.id)
@@ -751,7 +774,17 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         onNodesChange={onNodesChange}
         onNodeDragStop={() => { void flushLayoutSave() }}
         onNodeDoubleClick={onNodeDoubleClick}
-        onNodeClick={(_event, node) => { setSelectedId(node.id); setDetailNodeId(node.id) }}
+        onNodeClick={(event, node) => {
+          if (event.detail > 1) return
+          setSelectedId(node.id)
+          if (structureMode && architecture?.roles[node.id]) {
+            if (moduleClickTimer.current) clearTimeout(moduleClickTimer.current)
+            moduleClickTimer.current = setTimeout(() => toggleCollapse(node.id), 220)
+          }
+          else setDetailNodeId(node.id)
+        }}
+        nodesDraggable={!structureMode}
+        zoomOnDoubleClick={false}
         onNodeContextMenu={onNodeContextMenu}
         onInit={(inst) => {
           rfInstanceRef.current = inst
@@ -768,6 +801,12 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
         style={{ background: 'transparent' }}
       >
         <Background color={plancheCanvas ? 'rgba(28,52,59,0.16)' : 'rgba(255,255,255,0.05)'} gap={24} />
+        {structureMode && <ViewportPortal>
+          {moduleExpansion?.groups.map(group => <div key={group.id} className="bp-module-document-group" data-module-id={group.moduleId} data-kind={group.kind}
+            style={{ left: group.x, top: group.y, width: group.width, height: group.height }}>
+            <span>{t(NOTE_KIND_LABEL_KEY[group.kind] ?? group.kind)}</span>
+          </div>)}
+        </ViewportPortal>}
         {!structureMode && rfNodes.length <= 250 ? (
           <MiniMap
             pannable

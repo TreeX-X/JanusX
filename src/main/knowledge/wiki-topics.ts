@@ -13,7 +13,7 @@ function topic(fact: MemoryFact) {
   const key = JSON.stringify([kind, concept ?? ''])
   return { key, slug: concept ? `${kind}/${createHash('sha256').update(key).digest('hex').slice(0, 24)}` : kind, title: concept ? `${concept} · ${label}` : label }
 }
-// Note: existing pages keep identity; new topics use explicit concepts — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: existing pages keep identity; new topics use explicit concepts — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export function groupWikiTopics(facts: MemoryFact[], pages: WikiPage[]) {
   const groups = new Map<string, { workspaceId: string; slug: string; title: string; topicKey: string; facts: MemoryFact[]; page?: WikiPage }>()
   for (const fact of [...facts].sort((a, b) => a.id.localeCompare(b.id))) {

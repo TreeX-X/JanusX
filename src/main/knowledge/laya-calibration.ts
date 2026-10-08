@@ -1,4 +1,4 @@
-// Note: only pinned, independently evaluated calibration artifacts affect advice — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: only pinned, independently evaluated calibration artifacts affect advice — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

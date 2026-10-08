@@ -11,7 +11,7 @@
  *      旧版把选中项、provider 卡片、badge、notice 全做成带边框的橙色/白色填充块，
  *      叠在一起就是"大量色块"的来源。
  *   3. 分组靠低对比发丝线、轻微底色和留白，弱于外壳与控件边界。
- * Note: 设置内卡采用柔和层级 — see .agents/notes/2026-10-07-run-config-island-cards--8de1e0b8.md
+ * Note: 设置内卡采用柔和层级 — see .agents/notes/workbench/run-config-island-cards.md
  *
  * 遮罩与进出场动效不在这里：它们由 shared/ModalFrame.css 统一提供，
  * 本文件只保留设置中心自己的安全边距与主题覆写。

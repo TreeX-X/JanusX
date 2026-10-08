@@ -59,7 +59,7 @@ export function ProcessingAction({ task, enabled, onChanged, onReview }: { task:
   </div>
 }
 
-// Note: task cards share aligned controls and readable status hierarchy; see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: task cards share aligned controls and readable status hierarchy; see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export function AutomationRecords({ active, attentionOnly, onFilterChange, onChanged, selectedId, onSelect, onReview }: {
   active: boolean; attentionOnly: boolean; onFilterChange: (value: boolean) => void; onChanged: () => void
   selectedId?: string; onSelect?: (task: ProcessingRecord) => void; onReview?: (target: AutomationReviewTarget) => Promise<void>

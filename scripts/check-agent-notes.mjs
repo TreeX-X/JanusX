@@ -1,8 +1,9 @@
-// Note: mechanical noteX gate lives here — see .agents/notes/2026-09-19-note-mechanical-checks--3b7d1e9b.md
+// Note: mechanical noteX gate lives here — see .agents/notes/blueprint/note-mechanical-checks.md
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseNote, validateNote, splitFrontmatter } from '@janus-agent/harness-core'
+import { claimsHarnessSchema, sha256HexBytes } from '@janus-agent/harness-node'
 import { markdownDestinations, relativeLinkTarget } from './migrate-agent-notes.mjs'
 
 export const LIFECYCLES = ['proposed', 'implemented', 'rejected', 'archived']
@@ -41,11 +42,7 @@ function walk(dir, out = []) {
 }
 
 function isHarnessNote(text) {
-  text = text.replace(/^\uFEFF/, '')
-  if (!text.startsWith('---')) return false
-  const end = text.indexOf('\n---', 3)
-  if (end === -1) return false
-  return /schema\s*:\s*harness-note\//.test(text.slice(0, end))
+  return claimsHarnessSchema(text)
 }
 
 function parseSections(text) {
@@ -71,6 +68,14 @@ function checkLinks(root, relPath, body, id, errors, diagnostics) {
       continue
     }
     if (!existsSync(target)) {
+      const inventoryPath = join(root, 'docs/migrations/note-v2.json')
+      const inventory = existsSync(inventoryPath) ? JSON.parse(readFileSync(inventoryPath, 'utf8')) : null
+      const protectedSource = inventory?.deferred?.find(row => row.path === relPath)
+      const moved = inventory?.sources?.find(row => row.source === local)
+      if (protectedSource && moved && existsSync(join(root, moved.target)) && sha256HexBytes(readFileSync(join(root, relPath))) === protectedSource.sha256) {
+        diagnostics.push({ code: 'protected-migrated-link', path: relPath, destination: link.destination, target: moved.target, reason: 'Original dirty source is preserved; repair this link when its owner resumes editing.' })
+        continue
+      }
       const reason = PREEXISTING_LINKS.get(id + ':' + local)
       if (reason) diagnostics.push({ code: 'known-broken-link', path: relPath, destination: link.destination, target: local, reason })
       else errors.push(relPath + ': broken relative link ' + link.destination)

@@ -9,11 +9,11 @@ import confirmationStyles from './ExperimentalSettingsPanel.module.css'
 
 type FeatureKey = keyof ExperimentalFeatures
 
-// Note: persona stays in development while project knowledge matures — see .agents/notes/2026-10-04-memory-domain-controls--908d675a.md
+// Note: persona stays in development while project knowledge matures — see .agents/notes/knowledge/memory-domain-controls.md
 const PREVIEW_FEATURES: FeatureKey[] = ['blueprint', 'knowledge']
 const DEV_FEATURES: FeatureKey[] = ['persona', 'roundtable', 'remoteControl', 'teamCollab']
 
-// Note: every feature transition requires explicit confirmation — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+// Note: every feature transition requires explicit confirmation — see .agents/notes/knowledge/assistant-persona-layout.md
 export function ExperimentalSettingsPanel() {
   const { t } = useI18n('settings')
   const loaded = useExperimentalStore((s) => s.loaded)

@@ -11,7 +11,7 @@ export function BlueprintViewSelector({ value, available, onChange }: { value: B
   </div>
 }
 
-// Note: one view selector per surface; canvas information stays folded — see .agents/notes/2026-10-03-module-structure-view--785a2a8e.md
+// Note: one view selector per surface; canvas information stays folded — see .agents/notes/blueprint/tasks/module-structure-view.md
 export function BlueprintArchitecturePanel({ source, projection, nodeId, onSelect }: { source: Blueprint; projection: ArchitectureProjection; nodeId?: string; onSelect: (id: string) => void }) {
   const { t } = useI18n('blueprint')
   const related = nodeId ? projection.related[nodeId] ?? [] : []

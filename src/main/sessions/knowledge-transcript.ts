@@ -1,4 +1,4 @@
-// Note: capture bounded turn evidence, not UI excerpts or a mutable history mirror — see .agents/notes/2026-10-05-hook-evidence-extraction--a61e849c.md
+// Note: capture bounded turn evidence, not UI excerpts or a mutable history mirror — see .agents/notes/knowledge/hook-evidence-extraction.md
 import { createHash } from 'node:crypto'
 import { open } from 'node:fs/promises'
 import { resolve } from 'node:path'

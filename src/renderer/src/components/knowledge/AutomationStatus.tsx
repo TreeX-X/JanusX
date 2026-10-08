@@ -12,7 +12,7 @@ export function openAutomationView(view: 'processing' | 'attention' | 'settings'
   useAppStore.getState().setActiveWorkbench('knowledge')
 }
 
-// Note: compact status links to records; configuration stays in settings — see .agents/notes/2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md
+// Note: compact status links to records; configuration stays in settings — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
 export function AutomationStatus({ active, hidden = false, onChanged, onOpenRecords, onOpenSettings }: {
   active: boolean; hidden?: boolean; onChanged?: () => void
   onOpenRecords?: (attention: boolean) => void; onOpenSettings?: () => void

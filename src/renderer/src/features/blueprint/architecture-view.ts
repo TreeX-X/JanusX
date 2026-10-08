@@ -1,4 +1,4 @@
-// Note: document-driven structure keeps decisions and task contracts independent — see .agents/notes/2026-10-03-document-driven-module-view--47c7be36.md
+// Note: document-driven structure keeps decisions and task contracts independent — see .agents/notes/blueprint/document-driven-module-view.md
 import type { Blueprint, BlueprintNode } from '@/services/blueprint'
 import type { CompositionDiagnostic, CompositionInterface } from '../../../../shared/blueprint-composition'
 
@@ -57,6 +57,16 @@ export function projectArchitecture(source: Blueprint): ArchitectureProjection {
     const node = source.nodes[id]
     if (!node) continue
     const tags = node.note?.tags ?? node.tags
+    const kind = node.note?.kind ?? node.kind
+    if (kind === 'module') {
+      const metadata = node.note?.metadata
+      if (node.note?.moduleState === 'retired' || ['rejected', 'archived'].includes(node.note?.lifecycle ?? node.lifecycle ?? '')) continue
+      if (!node.sourceUri || !noteUri.test(node.sourceUri) || resolveArchitectureNote(source, id, node.sourceUri) !== id) {
+        report('INVALID_ARCHITECTURE_IDENTITY', id, 'Missing or duplicate source identity'); continue
+      }
+      roles[id] = metadata?.role === 'project' ? 'project' : 'module'
+      continue
+    }
     const project = tags.includes('architecture:project'), module = tags.includes('architecture:module')
     if (!project && !module) continue
     if (tags.filter(tag => tag === 'architecture:project' || tag === 'architecture:module').length !== 1 || (node.note?.kind ?? node.kind) !== 'initiative') {
@@ -126,12 +136,15 @@ export function projectArchitecture(source: Blueprint): ArchitectureProjection {
     return result
   }
   const add = (module: string, id: string | undefined, uri: string, via: string) => {
-    if (id && (roles[id] || !['decision', 'task', 'requirement'].includes(source.nodes[id]?.note?.kind ?? source.nodes[id]?.kind ?? ''))) return
+    if (id && (roles[id] || !['note', 'idea', 'decision', 'task', 'requirement'].includes(source.nodes[id]?.note?.kind ?? source.nodes[id]?.kind ?? ''))) return
     if (!related[module].some(row => id ? row.nodeId === id : row.uri === uri)) related[module].push({ nodeId: id, uri, via })
   }
   for (const id of source.nodeIds) {
     const node = source.nodes[id]
     if (!node) continue
+    const ownerUri = node.note?.module ?? node.note?.metadata?.module
+    const owner = ownerUri ? resolveArchitectureNote(source, id, ownerUri) : undefined
+    if (owner && roles[owner]) add(owner, id, node.sourceUri ?? id, 'module')
     for (const module of ancestors(id)) if (module !== id) add(module, id, node.sourceUri ?? id, 'parent')
     const relations = node.note?.relations ?? source.relations.filter(edge => edge.sourceNodeId === id && edge.type !== 'parent').map(edge => ({ type: edge.type, target: edge.targetUri ?? source.nodes[edge.targetNodeId]?.sourceUri ?? edge.targetNodeId }))
     for (const relation of relations) {

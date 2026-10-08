@@ -25,7 +25,7 @@ interface AppSettingsModalProps {
   initialTab?: SettingsTab
 }
 
-// Note: grouped navigation preserves independent feature gates — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+// Note: grouped navigation preserves independent feature gates — see .agents/notes/knowledge/assistant-persona-layout.md
 const TAB_GROUPS: { id: string; tabs: SettingsTab[] }[] = [
   { id: 'application', tabs: ['general', 'notifications', 'experimental'] },
   { id: 'memory', tabs: ['knowledge', 'personal'] },
@@ -41,7 +41,7 @@ const TAB_ICONS: Record<SettingsTab, LucideIcon> = {
 
 // Note: the modal mounts only while open, so ModalFrame owns the whole
 // open/closing/hidden lifecycle — see shared/ModalFrame.css and
-// .agents/notes/2026-09-18-settings-workbench-transition--5a07c410.md
+// .agents/notes/terminal/settings-workbench-transition.md
 export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: AppSettingsModalProps) {
   const { t } = useI18n('settings')
   const { t: tTeam } = useI18n('team')
@@ -61,7 +61,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
       (tab !== 'personal' || personaEnabled)),
   })).filter((group) => group.tabs.length > 0)
   const tabOrder = groups.flatMap((group) => group.tabs)
-  // Note: disabled knowledge entries never mount, including direct navigation — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+  // Note: disabled knowledge entries never mount, including direct navigation — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
   const activeTab = tabOrder.includes(selectedTab) ? selectedTab : 'general'
 
   useEffect(() => {

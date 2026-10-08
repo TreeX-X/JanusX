@@ -1,5 +1,5 @@
 import { useAssistantPendingCount } from '@/components/knowledge/useAssistantPendingCount'
-// Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/2026-09-16-right-dock-empty-collapse--9f855a20.md
+// Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/workbench/right-dock-empty-collapse.md
 import { ListChecks, Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { isRightToolEnabled, RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
 import type { RightToolId } from '@/right-tools/types'

@@ -10,7 +10,7 @@ interface TerminalTracking {
   queue: Promise<void>
 }
 
-// Note: adjacent completed turns own independent file baselines — see .agents/notes/2026-09-23-terminal-right-island-turn-history--70beb72a.md
+// Note: adjacent completed turns own independent file baselines — see .agents/notes/terminal/terminal-right-island-turn-history.md
 export class TerminalTurnChangeTracker {
   private terminals = new Map<string, TerminalTracking>()
 

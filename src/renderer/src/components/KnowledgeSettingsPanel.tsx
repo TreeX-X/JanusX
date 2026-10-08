@@ -1,5 +1,5 @@
 import { ExternalMcpPanel } from './ExternalMcpPanel'
-// Note: compact knowledge controls share explicit typography and theme tokens — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: compact knowledge controls share explicit typography and theme tokens — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { KnowledgeAutomationPanel } from './KnowledgeAutomationPanel'
 import { Database } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'

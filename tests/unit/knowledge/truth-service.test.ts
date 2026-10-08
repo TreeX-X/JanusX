@@ -25,7 +25,7 @@ describe('KnowledgeTruthService', () => {
   })
 
   afterEach(async () => {
-    // Note: settle real audit writes before removing their storage — see .agents/notes/2026-09-20-reproducible-verification--914a7e92.md
+    // Note: settle real audit writes before removing their storage — see .agents/notes/desktop/reproducible-verification.md
     await Promise.all(auditWrites.mock.results.filter(result => result.type === 'return').map(result => result.value))
     await rm(root, { recursive: true, force: true })
     if (previousRoot === undefined) delete process.env.JANUSX_KNOWLEDGE_ROOT

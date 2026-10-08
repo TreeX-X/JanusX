@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseNote, serializeNote, taskContractHash, validateNote } from '@janus-agent/harness-core'
-import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
+import { SUPPORTED_HARNESS_PROFILE, LEGACY_HARNESS_PROFILE } from '@janus-agent/harness-node'
 
 // R1: note://972afef3-2fc7-49de-a3ee-7e041225d28c/81fc137e-9c56-4d3a-88e4-10f175852c97
 const standard = resolve('../WorkFlowX/standards/harness-note/1')
@@ -14,8 +14,10 @@ describe('installed S1.2 consumer compatibility', () => {
     const manifest = readFileSync(resolve(standard, 'manifest.json'), 'utf8').replace(/\r\n/g, '\n')
     const actual = JSON.parse(readFileSync('.agents/harness.json', 'utf8')).profile
     expect(JSON.parse(manifest)).toMatchObject({ version: '1.0.0-s1.2', status: 'final' })
-    expect(SUPPORTED_HARNESS_PROFILE).toEqual({ id: 'workflowx', version: '1.0.0-s1.2',
+    expect(LEGACY_HARNESS_PROFILE).toEqual({ id: 'workflowx', version: '1.0.0-s1.2',
       digest: createHash('sha256').update(manifest).digest('hex') })
+    const v2 = readFileSync(resolve(standard, '../2/manifest.json'), 'utf8').replace(/\r\n/g, '\n')
+    expect(SUPPORTED_HARNESS_PROFILE).toEqual({ id: 'workflowx', version: '2.0.0', digest: createHash('sha256').update(v2).digest('hex') })
     expect(actual).toEqual(SUPPORTED_HARNESS_PROFILE)
   })
   it('accepts every positive fixture through the installed dependency', () => {
