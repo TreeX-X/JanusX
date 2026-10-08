@@ -42,7 +42,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/dda0c41e-4581-4de5-af98-8fbdc2e768f5"},
     {"type":"governed-by","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/47c7be36-5a48-4a27-aa86-d4f9dffb641c"}
   ],
-  "updated": "2026-10-08T04:35:16.597Z",
+  "updated": "2026-10-08T05:26:35.881Z",
   "moduleState": "partial"
 }
 ---
@@ -56,6 +56,8 @@
 ## Design
 
 当前文档采用 WorkflowX v2：每个模块有一个 module.md，普通文档通过 module 声明归属；moduleState 单独记录 planned、partial、implemented、retired。初始蓝图只显示模块，单击展开本模块内按类型分组的文档，双击查看正文，返回保留视口。wiki 与 Chat 读取同一共享快照，写入经 agentX 事务完成。具体接入、历史迁移和验证见 [WorkflowX v2 接入](workflowx-v2-adoption.md)。
+
+下一轮界面调整见 [模块浏览交互需求](requirements/module-browsing.md)：统一蓝图入口，单击左侧预览，双击进入可返回的模块浏览，并区分模块与文件节点样式。该需求尚未实施。
 
 交付路线见 [Note、wiki 与蓝图交付专题](./requirements/blueprint-notev2-implementation-plan.md)，性能约束见 [蓝图性能专题](./requirements/blueprint-performance.md)。相关工作包括历史方案和当前实现；列表中的存在或关联不代表已采纳、已交付或拥有写入权限。
 
