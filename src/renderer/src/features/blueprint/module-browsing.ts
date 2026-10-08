@@ -1,0 +1,105 @@
+// Note: scoped module navigation — see .agents/notes/blueprint/requirements/module-browsing.md
+import type { Blueprint } from '@/services/blueprint'
+import { resolveArchitectureNote, type ArchitectureProjection } from './architecture-view'
+
+export const DOCUMENT_KINDS = ['note', 'idea', 'requirement', 'decision', 'task'] as const
+export interface ModuleDocumentGroup {
+  id: string; moduleId: string; kind: string; nodeIds: string[]
+  x: number; y: number; width: number; height: number
+}
+
+/** Ownership resolves within the selected checkout. References never confer ownership. */
+export function moduleOwners(source: Blueprint, projection: ArchitectureProjection): Record<string, string> {
+  const owners: Record<string, string> = {}
+  for (const id of source.nodeIds) {
+    if (projection.roles[id]) {
+      const parent = projection.graph.nodes[id].parentId
+      if (parent) owners[id] = parent
+      continue
+    }
+    const node = source.nodes[id]
+    if (!node) continue
+    const ownerUri = node.note?.module ?? node.note?.metadata?.module
+    if (ownerUri) {
+      const owner = resolveArchitectureNote(source, id, ownerUri)
+      if (owner && projection.roles[owner]) owners[id] = owner
+      continue
+    }
+    // V1 documents used parent for ownership; v2 requires an explicit module.
+    if (node.note?.metadata?.schema === 'harness-note/2') continue
+    const seen = new Set([id])
+    let cursor = id
+    while (source.nodes[cursor]) {
+      const current = source.nodes[cursor]
+      const uri = current.note?.parent ?? current.note?.metadata?.parent
+      const parent = uri ? resolveArchitectureNote(source, cursor, uri) : current.parentId
+      if (!parent || seen.has(parent)) break
+      if (projection.roles[parent]) { owners[id] = parent; break }
+      seen.add(parent); cursor = parent
+    }
+  }
+  return owners
+}
+
+export function moduleTrail(projection: ArchitectureProjection, id: string | null): string[] {
+  const trail: string[] = [], seen = new Set<string>()
+  let cursor = id
+  while (cursor && projection.graph.nodes[cursor] && !seen.has(cursor)) {
+    seen.add(cursor); trail.unshift(cursor)
+    cursor = projection.graph.nodes[cursor].parentId
+  }
+  return trail
+}
+
+/** A disposable page of immediate children. Complete source data stays available to search/wiki. */
+export function projectModuleBrowse(source: Blueprint, projection: ArchitectureProjection, scopeId: string | null) {
+  const owners = moduleOwners(source, projection)
+  const owned: Record<string, string[]> = Object.fromEntries(projection.graph.nodeIds.map(id => [id, []]))
+  for (const id of source.nodeIds) if (!projection.roles[id] && owners[id]) owned[owners[id]].push(id)
+  const unassigned = source.nodeIds.filter(id => !projection.roles[id] && !owners[id])
+  const groups: ModuleDocumentGroup[] = []
+  if (!projection.graph.nodeIds.length) return { graph: source, groups, owners, owned, unassigned: [] }
+  const scope = scopeId ? projection.graph.nodes[scopeId] : undefined
+  const roots = projection.graph.nodeIds.filter(id => !projection.graph.nodes[id].parentId)
+  const moduleIds = scope ? scope.children : roots.flatMap(id => [id, ...projection.graph.nodes[id].children])
+  const documents = scope ? owned[scope.id] : []
+  const nodeIds = [...new Set([...moduleIds, ...documents])]
+  const graph: Blueprint = { ...projection.graph, nodeIds,
+    nodes: Object.fromEntries(nodeIds.map(id => {
+      const node = source.nodes[id]
+      const parent = !scope && moduleIds.includes(id) ? projection.graph.nodes[id].parentId : null
+      return [id, { ...node, parentId: parent, children: [] }]
+    })),
+    rootNodeId: scope ? moduleIds[0] ?? documents[0] ?? '' : roots[0] ?? '',
+    canvasLayout: {}, collapsedNodeIds: [],
+    relations: source.relations.filter(edge => nodeIds.includes(edge.sourceNodeId) && nodeIds.includes(edge.targetNodeId)),
+  }
+  for (const id of nodeIds) {
+    const parent = graph.nodes[id].parentId
+    if (parent && graph.nodes[parent]) graph.nodes[parent].children.push(id)
+  }
+  if (!scope) {
+    let x = 0
+    for (const root of roots) {
+      const children = graph.nodes[root].children, width = Math.max(1, children.length) * 304
+      graph.canvasLayout[root] = { x: x + width / 2 - 120, y: 0 }
+      children.forEach((id, i) => { graph.canvasLayout[id] = { x: x + i * 304 + 32, y: 190 } })
+      x += width + 100
+    }
+  } else {
+    moduleIds.forEach((id, i) => { graph.canvasLayout[id] = { x: i % 3 * 304 + 24, y: Math.floor(i / 3) * 164 } })
+    const columns = [Math.ceil(moduleIds.length / 3) * 164 + 24, Math.ceil(moduleIds.length / 3) * 164 + 24]
+    const kinds = [...DOCUMENT_KINDS, ...new Set(documents.map(id => source.nodes[id].note?.kind ?? source.nodes[id].kind ?? 'note').filter(kind => !DOCUMENT_KINDS.includes(kind as typeof DOCUMENT_KINDS[number])))]
+    for (const kind of kinds) {
+      const ids = documents.filter(id => (source.nodes[id].note?.kind ?? source.nodes[id].kind ?? 'note') === kind)
+      if (!ids.length) continue
+      const column = columns[0] <= columns[1] ? 0 : 1
+      const group = { id: `${scope.id}:${kind}`, moduleId: scope.id, kind, nodeIds: ids,
+        x: column * 604, y: columns[column], width: 568, height: 48 + Math.ceil(ids.length / 2) * 150 }
+      groups.push(group)
+      ids.forEach((id, i) => { graph.canvasLayout[id] = { x: group.x + 24 + i % 2 * 280, y: group.y + 40 + Math.floor(i / 2) * 150 } })
+      columns[column] += group.height + 28
+    }
+  }
+  return { graph, groups, owners, owned, unassigned }
+}

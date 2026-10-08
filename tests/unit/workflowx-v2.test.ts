@@ -8,7 +8,7 @@ import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import { HarnessNoteService } from '../../src/main/harness/service'
 import { attachNoteChatTools } from '../../src/main/harness/note-chat'
 import { projectArchitecture } from '../../src/renderer/src/features/blueprint/architecture-view'
-import { expandModules } from '../../src/renderer/src/features/blueprint/module-expansion'
+import { moduleTrail, projectModuleBrowse } from '../../src/renderer/src/features/blueprint/module-browsing'
 import { noteDirectory, noteWikiView } from '../../src/shared/note-wiki'
 import { noteAuthoringContext } from '../../src/main/harness/note-authoring'
 import { buildArtifactBundle } from '../../src/main/roundtable/artifact-bundle'
@@ -23,6 +23,7 @@ afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { rec
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'janus-v2-')); roots.push(root)
   await mkdir(join(root, '.agents/notes/child'), { recursive: true })
+  await mkdir(join(root, '.agents/notes/child/parser'), { recursive: true })
   await writeFile(join(root, '.agents/harness.json'), JSON.stringify({ schemaVersion: 1, repoId: repo, name: 'V2', profile: SUPPORTED_HARNESS_PROFILE }))
   for (const [n, file, extra] of [
     [1, 'module.md', { kind: 'module', role: 'project', moduleState: 'partial' }],
@@ -30,23 +31,32 @@ async function fixture() {
     [3, 'detail.md', { kind: 'note', module: uri(1) }],
     [4, 'child/detail.md', { kind: 'note', module: uri(2), parent: uri(3) }],
     [5, 'child/idea.md', { kind: 'idea', module: uri(2) }],
+    [6, 'child/parser/module.md', { kind: 'module', parent: uri(2), moduleState: 'partial' }],
+    [7, 'child/parser/deep.md', { kind: 'note', module: uri(6) }],
   ] as const) {
     await writeFile(join(root, '.agents/notes', file), `---\n${JSON.stringify({ schema: 'harness-note/2', id: id(n), lifecycle: 'accepted', created: '2026-10-07', updated: '2026-10-08T00:00:00Z', ...extra })}\n---\n# Subject ${n}\n\n## Intent\n\nMaintained source ${n}.\n`)
   }
   return { root, service: new HarnessNoteService() }
 }
 
-it('projects planned modules, expands directly owned documents, and uses ownership in wiki navigation', async () => {
+it('browses immediate module ownership without changing the source, and shares wiki ancestry', async () => {
   const { root, service } = await fixture()
   const source = (await service.projectView(root)).blueprint, before = structuredClone(source)
   const projection = projectArchitecture(source)
   expect(projection.graph.nodeIds).toEqual(expect.arrayContaining([id(1), id(2)]))
-  expect(projection.graph.nodeIds).toHaveLength(2)
+  expect(projection.graph.nodeIds).toHaveLength(3)
   expect(source.nodes[id(2)].status).toBe('planning')
   expect(source.nodes[id(3)].updatedAt).toBe('2026-10-08T00:00:00Z')
-  expect(expandModules(source, projection, new Set()).groups).toEqual([])
-  const expanded = expandModules(source, projection, new Set([id(1), id(2)]))
-  expect(expanded.groups.map(g => [g.moduleId, g.kind, g.nodeIds])).toEqual([[id(1), 'note', [id(3)]], [id(2), 'note', [id(4)]], [id(2), 'idea', [id(5)]]])
+  const overview = projectModuleBrowse(source, projection, null)
+  expect(overview.groups).toEqual([])
+  expect(overview.graph.nodeIds).toEqual([id(1), id(2)])
+  const rootPage = projectModuleBrowse(source, projection, id(1))
+  expect(rootPage.graph.nodeIds).toEqual([id(2), id(3)])
+  const expanded = projectModuleBrowse(source, projection, id(2))
+  expect(expanded.graph.nodeIds).toEqual([id(6), id(4), id(5)])
+  expect(expanded.groups.map(g => [g.moduleId, g.kind, g.nodeIds])).toEqual([[id(2), 'note', [id(4)]], [id(2), 'idea', [id(5)]]])
+  expect(projectModuleBrowse(source, projection, id(6)).graph.nodeIds).toEqual([id(7)])
+  expect(moduleTrail(projection, id(6))).toEqual([id(1), id(2), id(6)])
   for (const group of expanded.groups) for (const child of group.nodeIds) {
     const point = expanded.graph.canvasLayout[child]
     expect(point.x).toBeGreaterThan(group.x); expect(point.x + 240).toBeLessThan(group.x + group.width)
@@ -57,6 +67,40 @@ it('projects planned modules, expands directly owned documents, and uses ownersh
   expect(noteWikiView(snapshot, uri(4)).ancestors).toEqual([uri(2), uri(1)])
   expect(noteDirectory(snapshot).find(r => r.entry.uri === uri(4))?.depth).toBe(2)
 })
+
+it('retains unassigned and retired documents, while cross-module references do not change ownership', async () => {
+  const { root, service } = await fixture()
+  const source = (await service.projectView(root)).blueprint
+  source.nodes[id(3)].note!.module = uri(999)
+  source.nodes[id(3)].note!.metadata!.module = uri(999)
+  source.nodes[id(6)].note!.moduleState = 'retired'
+  source.nodes[id(2)].note!.relations.push({ type: 'related-to', target: uri(3) })
+  const projection = projectArchitecture(source)
+  const browse = projectModuleBrowse(source, projection, id(2))
+  expect(browse.unassigned).toEqual(expect.arrayContaining([id(3), id(6), id(7)]))
+  expect(browse.graph.nodeIds).not.toContain(id(3))
+  expect(browse.graph.nodeIds).not.toContain(id(6))
+  for (const id of source.nodeIds) { source.nodes[id].kind = 'note'; source.nodes[id].note!.kind = 'note' }
+  expect(projectModuleBrowse(source, projectArchitecture(source), null).graph).toBe(source)
+})
+
+it('keeps every document in the maintained JanusX corpus reachable through its owner or the unassigned list', async () => {
+  const source = (await new HarnessNoteService().projectView(process.cwd())).blueprint
+  const before = JSON.stringify(source), projection = projectArchitecture(source)
+  const overview = projectModuleBrowse(source, projection, null)
+  const accessible = new Set([...projection.graph.nodeIds, ...overview.unassigned])
+  expect(projection.graph.nodeIds.length).toBeGreaterThan(0)
+  for (const id of projection.graph.nodeIds) {
+    const page = projectModuleBrowse(source, projection, id)
+    for (const child of page.graph.nodeIds) {
+      accessible.add(child)
+      expect(page.owners[child]).toBe(id)
+    }
+    expect(moduleTrail(projection, id).at(-1)).toBe(id)
+  }
+  expect([...accessible].sort()).toEqual([...source.nodeIds].sort())
+  expect(JSON.stringify(source)).toBe(before)
+}, 15000)
 
 it('routes Chat v2 filters and writes through shared tools and refreshes the same wiki/blueprint source', async () => {
   const { root, service } = await fixture()

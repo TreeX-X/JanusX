@@ -1,17 +1,9 @@
 import type { Blueprint } from '@/services/blueprint'
-import type { ArchitectureProjection, BlueprintViewMode } from '@/features/blueprint/architecture-view'
+import type { ArchitectureProjection } from '@/features/blueprint/architecture-view'
 import { useI18n } from '@/i18n/useI18n'
 import { BlueprintCompositionPanel } from './BlueprintCompositionPanel'
 
-export function BlueprintViewSelector({ value, available, onChange }: { value: BlueprintViewMode; available: boolean; onChange: (value: BlueprintViewMode) => void }) {
-  const { t } = useI18n('blueprint')
-  return <div className="bp-view-selector" role="group" aria-label={t('blueprint:architecture.view')}>
-    <button className="blueprint-btn" aria-pressed={value === 'structure'} disabled={!available && value !== 'structure'} onClick={() => onChange('structure')}>{t('blueprint:architecture.structure')}</button>
-    <button className="blueprint-btn" aria-pressed={value === 'notes'} onClick={() => onChange('notes')}>{t('blueprint:architecture.notes')}</button>
-  </div>
-}
-
-// Note: one view selector per surface; canvas information stays folded — see .agents/notes/blueprint/tasks/module-structure-view.md
+// Note: unified module browsing — see .agents/notes/blueprint/requirements/module-browsing.md
 export function BlueprintArchitecturePanel({ source, projection, nodeId, onSelect }: { source: Blueprint; projection: ArchitectureProjection; nodeId?: string; onSelect: (id: string) => void }) {
   const { t } = useI18n('blueprint')
   const related = nodeId ? projection.related[nodeId] ?? [] : []
@@ -20,8 +12,8 @@ export function BlueprintArchitecturePanel({ source, projection, nodeId, onSelec
     {!nodeId && <details className="bp-composition">
       <summary>{t('blueprint:architecture.info')}</summary>
       <section>
-        <p>{t('blueprint:architecture.structure')} · {projection.graph.nodeIds.length} · {t('blueprint:architecture.coverage')}</p>
-        <p>{t('blueprint:architecture.currentOnly')}</p>
+        <p>{t('blueprint:architecture.module')} · {projection.graph.nodeIds.length} · {t('blueprint:architecture.coverage')}</p>
+        <p>{t('blueprint:browse.moduleHint')}</p>
         {snapshots.map((snapshot, index) => <p key={index}>{snapshot.coverage.checkoutRoot} · {snapshot.coverage.status}</p>)}
         {source.invalidNotes?.map((note, index) => <p className="bp-note-warning" key={index}>{note.relPath}: {note.diagnostics.map(item => item.message).join('; ')}</p>)}
         {snapshots.flatMap(snapshot => snapshot.diagnostics.map((item, index) => <p className="bp-note-warning" key={snapshot.coverage.checkoutRoot + index}>{item.code}: {item.message}</p>))}

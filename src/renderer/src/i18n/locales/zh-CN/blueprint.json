@@ -1,4 +1,18 @@
 {
+  "browse": {
+    "navigation": "模块导航",
+    "related": "关联文档与接口",
+    "back": "返回",
+    "overview": "蓝图概览",
+    "noModules": "尚无模块声明，可浏览现有文档。",
+    "results": "文档搜索结果",
+    "resultCount": "找到 {{count}} 份文档",
+    "unassigned": "未归属与历史文档（{{count}}）",
+    "enterModule": "进入模块 {{name}}",
+    "contents": "{{modules}} 个子模块 · {{documents}} 份文件",
+    "emptyModule": "此模块尚无直属文件或子模块，可在左侧阅读模块说明。",
+    "moduleHint": "单击预览模块说明，双击进入模块；使用返回恢复上次浏览位置。"
+  },
   "workspace": {
     "select": "切换工作区",
     "noWorkspace": "请先添加工作区",
@@ -560,11 +574,7 @@
     "info": "蓝图信息",
     "project": "项目",
     "module": "模块",
-    "view": "蓝图视图",
-    "structure": "系统结构",
-    "notes": "全部 Note",
     "coverage": "检出范围",
-    "currentOnly": "显示规划中、部分实现和已实现的模块；单击展开文档，双击查看详情。",
     "related": "决策与相关工作",
     "noRelated": "暂无明确关联的工作。",
     "unresolved": "目标未解析"

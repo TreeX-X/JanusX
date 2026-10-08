@@ -9,6 +9,7 @@ import { useBlueprintStore } from '../../../src/renderer/src/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '../../../src/renderer/src/stores/blueprint-maintenance'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { useNoteFocusStore } from '../../../src/renderer/src/stores/note-focus'
+import { useThemeStore } from '../../../src/renderer/src/stores/theme'
 import { createWorkbenchGraph, installWorkbenchBoundary } from './workbench-fixture'
 import { DEFAULT_APP_THEME } from '../../../src/shared/ipc/theme'
 import '../../../src/renderer/src/styles/globals.css'
@@ -61,6 +62,28 @@ if (params.has('v2')) {
     graph.nodes[node.id] = node; graph.nodeIds.push(node.id)
     graph.noteSnapshot!.entries.push({ ...graph.noteSnapshot!.entries[0], uri: node.sourceUri, doc: node.note })
   }
+  for (const [index, title, kind, owner] of [
+    [4, 'Parser submodule', 'module', module.sourceUri],
+    [5, 'Deep parsing document', 'note', `note://${R}/00000004-aaaa-4aaa-8aaa-aaaaaaaaaaaa`],
+    [6, 'Legacy unassigned document', 'note', null],
+    [7, 'Retired module', 'module', null],
+  ] as const) {
+    const node = structuredClone(module)
+    node.id = `0000000${index}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`; node.sourceUri = `note://${R}/${node.id}`
+    node.title = node.note!.title = title; node.kind = node.note!.kind = kind
+    node.note!.id = node.id; node.note!.relations = []
+    node.note!.parent = kind === 'module' ? owner : null
+    node.note!.module = kind !== 'module' ? owner ?? undefined : undefined
+    node.note!.moduleState = index === 7 ? 'retired' : kind === 'module' ? 'partial' : undefined
+    node.note!.metadata = { schema: 'harness-note/2', id: node.id, kind, lifecycle: 'accepted', created: '2026-10-08', updated: '2026-10-08T00:00:00Z', ...(node.note!.parent ? { parent: node.note!.parent } : {}), ...(owner && kind !== 'module' ? { module: owner } : {}), ...(node.note!.moduleState ? { moduleState: node.note!.moduleState } : {}) }
+    node.note!.body = `# ${title}\n\nOriginal ${title} content.`
+    graph.nodes[node.id] = node; graph.nodeIds.push(node.id)
+    graph.noteSnapshot!.entries.push({ ...graph.noteSnapshot!.entries[0], uri: node.sourceUri, doc: node.note })
+  }
+  module.note!.body = '# Reader module\n\nReader module responsibilities from module.md.'
+  orphan.note!.body = '# Planned module\n\nPlanned module responsibilities from module.md.'
+  module.note!.relations.push({ type: 'related-to', target: graph.nodes['00000003-aaaa-4aaa-8aaa-aaaaaaaaaaaa'].sourceUri! })
+  graph.noteSnapshot!.diagnostics.push({ code: 'FIXTURE_PARSE_DIAGNOSTIC', message: 'Invalid historical document remains visible' } as any)
 }
 if (params.has('collapsed')) graph.collapsedNodeIds = [root.id]
 if (params.has('untagged')) for (const node of Object.values(graph.nodes)) { node.tags = []; node.note!.tags = [] }
@@ -70,6 +93,7 @@ useBlueprintMaintenanceStore.setState({ initialized: true })
 useBlueprintStore.setState({ currentBlueprint: graph, blueprintWorkspace: { [graph.id]: workspace.path }, loading: false })
 ;(window as any).architectureFixture = {
   graph,
+  theme: (theme: string) => { document.documentElement.dataset.theme = theme; useThemeStore.setState({ theme }) },
   refresh: () => {
     graph.nodes[module.id].title = 'Reader module refreshed'
     graph.contentRevision++
@@ -78,6 +102,12 @@ useBlueprintStore.setState({ currentBlueprint: graph, blueprintWorkspace: { [gra
   focusTask: () => {
     useNoteFocusStore.getState().activate('fixture')
     useNoteFocusStore.getState().receive({ id: crypto.randomUUID(), workspacePath: workspace.path, conversationId: 'fixture', mode: 'display', focus: 'explicit', notes: [{ uri: task.sourceUri!, role: 'target' }], source: 'assistant', createdAt: new Date().toISOString() } as any)
+  },
+  focus: (title: string, focus = 'explicit', reference?: string) => {
+    const target = Object.values(graph.nodes).find(node => node.title === title)!
+    const related = Object.values(graph.nodes).find(node => node.title === reference)
+    useNoteFocusStore.getState().activate('fixture')
+    useNoteFocusStore.getState().receive({ id: crypto.randomUUID(), workspacePath: workspace.path, conversationId: 'fixture', mode: 'display', focus, notes: [{ uri: target.sourceUri!, role: 'target' }, ...(related ? [{ uri: related.sourceUri, role: 'reference' }] : [])], source: 'assistant', createdAt: new Date().toISOString() } as any)
   },
 }
 void initI18n().then(() => createRoot(document.getElementById('root')!).render(params.has('workbench') ? <JanusChatProvider><BlueprintWorkbench isOpen onClose={() => {}} /></JanusChatProvider> : <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><BlueprintCanvas blueprintId={graph.id} /></main>))

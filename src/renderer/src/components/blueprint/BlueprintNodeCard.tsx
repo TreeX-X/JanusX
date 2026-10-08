@@ -8,6 +8,7 @@ import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/r
 import type { BlueprintNodeStatus, BlueprintNodeType } from '@/services/blueprint'
 import { NODE_TYPE_LABEL, NOTE_KIND_LABEL_KEY, noteKindOf, getBlueprintStatusVisual } from './blueprintStatus'
 import { useI18n } from '@/i18n/useI18n'
+import { Folder, FileText, ChevronRight } from 'lucide-react'
 
 /** 低于该缩放阈值时卡片进入极简渲染（只保留状态点 + 标题 + 折叠入口） */
 const SEMANTIC_ZOOM_THRESHOLD = 0.5
@@ -15,10 +16,11 @@ const SEMANTIC_ZOOM_THRESHOLD = 0.5
 /** 画布注入的卡片交互；脱离画布上下文（如测试）时为 null，卡片隐藏折叠入口 */
 export const BlueprintCardActionsContext = createContext<{
   toggleCollapse: (nodeId: string) => void
-  structureMode?: boolean
+  moduleBrowsing?: boolean
   architectureRoles?: Record<string, 'project' | 'module'>
   moduleDocuments?: Record<string, string[]>
-  expandedModules?: ReadonlySet<string>
+  moduleChildren?: Record<string, { children: string[] }>
+  openModule?: (id: string) => void
 } | null>(null)
 
 /** ?????????? */
@@ -53,15 +55,16 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
   const minimal = useStore((s) => s.transform[2] < SEMANTIC_ZOOM_THRESHOLD)
   const visual = getBlueprintStatusVisual(d.status) 
   const progress = Math.max(0, Math.min(100, d.progress ?? 0))
-  const childCount = actions?.structureMode ? actions.moduleDocuments?.[id]?.length ?? 0 : d.childCount ?? 0
-  const collapsed = actions?.structureMode ? !actions.expandedModules?.has(id) : d.collapsed ?? false
+  const childCount = d.childCount ?? 0
+  const collapsed = d.collapsed ?? false
   const noteKind = noteKindOf({ kind: d.kind ?? undefined, type: d.nodeType })
-  const architectureRole = actions?.structureMode ? actions.architectureRoles?.[id] : undefined
+  const architectureRole = actions?.architectureRoles?.[id]
 
   return (
     <div
       className={[
         'bp-node-card',
+        architectureRole ? 'bp-node-card--module' : 'bp-node-card--document',
         `bp-node-card--type-${d.nodeType}`,
         minimal ? 'bp-node-card--minimal' : '',
         selected ? 'bp-node-card--selected' : '',
@@ -75,12 +78,15 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
       <Handle type="target" id="right" position={Position.Right} style={{ opacity: 0 }} />
 
       <div className="bp-node-card__header">
+        <span className="bp-node-card__symbol" aria-hidden="true">{architectureRole ? <Folder size={17} /> : <FileText size={14} />}</span>
         <span className="bp-node-card__dot" style={{ background: architectureRole ? 'var(--shell-muted)' : visual.color, color: architectureRole ? 'var(--shell-muted)' : visual.color }} />
         <span className="bp-node-card__kindtag">{architectureRole ? t('blueprint:architecture.' + architectureRole) : NOTE_KIND_LABEL_KEY[noteKind] ? t(NOTE_KIND_LABEL_KEY[noteKind]) : noteKind}</span>
         {minimal || architectureRole ? null : (
           <span className="bp-node-card__type">{NODE_TYPE_LABEL[d.nodeType]?.toUpperCase() ?? d.nodeType}</span>
         )}
-        {childCount > 0 && actions ? (
+        {architectureRole && <button type="button" className="bp-node-card__enter nodrag" aria-label={t('blueprint:browse.enterModule', { name: d.title })} title={t('blueprint:browse.enterModule', { name: d.title })}
+          onClick={event => { event.stopPropagation(); actions?.openModule?.(id) }} onDoubleClick={event => event.stopPropagation()}><ChevronRight size={17} /></button>}
+        {childCount > 0 && actions && !actions.moduleBrowsing ? (
           <button
             type="button"
             className="bp-node-card__collapse nodrag"
@@ -104,12 +110,13 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
 
       {minimal ? null : (
         <>
-          {!actions?.structureMode && <div className="bp-node-card__progress">
+          {architectureRole && <div className="bp-node-card__contents">{t('blueprint:browse.contents', { documents: actions?.moduleDocuments?.[id]?.length ?? 0, modules: actions?.moduleChildren?.[id]?.children.length ?? 0 })}</div>}
+          {!actions?.moduleBrowsing && <div className="bp-node-card__progress">
             <div className="bp-node-card__progress-bar" style={{ width: `${progress}%` }} />
           </div>}
 
           <div className="bp-node-card__footer">
-            <span>{d.moduleState ? t('blueprint:moduleState.' + d.moduleState) : actions?.structureMode ? t('blueprint:architecture.structure') : t(visual.labelKey)}</span>
+            <span>{d.moduleState ? t('blueprint:moduleState.' + d.moduleState) : t(visual.labelKey)}</span>
             <span className={`bp-node-card__workspace${d.workspaceName ? '' : ' bp-node-card__workspace--empty'}`}>
               {d.workspaceName ?? t('blueprint:nodeCard.noWorkspace')}
             </span>
@@ -119,7 +126,7 @@ function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNode
               </span>
             ) : null}
           </div>
-          {!actions?.structureMode && (d.childSummary || d.issueSummary || d.blockedReason || d.analysisSummary || d.collapsedSummary) ? (
+          {!actions?.moduleBrowsing && (d.childSummary || d.issueSummary || d.blockedReason || d.analysisSummary || d.collapsedSummary) ? (
             <div className="bp-node-card__signals" aria-label={t('blueprint:nodeCard.signalsAria')}>
               {d.childSummary ? <span>{d.childSummary}</span> : null}
               {d.issueSummary ? <span className="bp-node-card__signal--risk">{d.issueSummary}</span> : null}

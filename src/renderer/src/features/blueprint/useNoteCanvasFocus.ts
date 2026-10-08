@@ -7,7 +7,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { sameCheckoutPath } from './resolveNodeWorkspace'
 import { resolveFocusNodes } from './note-focus'
 
-export function useNoteCanvasFocus(blueprint: Blueprint | null, ownerPath: string | null, nodes: Node<BlueprintNodeData, 'blueprint'>[], edges: Edge[], instance: RefObject<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>, reveal: (ids: string[]) => void) {
+export function useNoteCanvasFocus(blueprint: Blueprint | null, ownerPath: string | null, nodes: Node<BlueprintNodeData, 'blueprint'>[], edges: Edge[], instance: RefObject<ReactFlowInstance<Node<BlueprintNodeData, 'blueprint'>, Edge> | null>, reveal: (ids: string[]) => boolean) {
   const display = useNoteFocusStore(state => state.display)
   const activePath = useWorkspaceStore(state => state.workspaces.find(workspace => workspace.id === state.activeWorkspaceId)?.path)
   const event = display && activePath && sameCheckoutPath(display.workspacePath, activePath) ? display : null
@@ -26,14 +26,19 @@ export function useNoteCanvasFocus(blueprint: Blueprint | null, ownerPath: strin
     return () => { window.removeEventListener('pointerup', release); window.removeEventListener('pointercancel', release) }
   }, [])
   useEffect(() => {
-    if (!event || event.id === handled.current || !instance.current || !nodes.length) return
+    if (!event || event.id === handled.current || !instance.current) return
     const editing = document.activeElement?.closest('.blueprint-workbench-detail-slot input, .blueprint-workbench-detail-slot textarea, .bp-node-detail input, .bp-node-detail textarea, [contenteditable="true"]')
     if (event.focus === 'none' || interaction.current.busy || editing || (event.focus === 'auto' && Date.now() - interaction.current.last < 1500)) { handled.current = event.id; return }
-    const visible = nodes.filter(node => resolved.roles.has(node.id) && !node.hidden)
-    if (visible.length < resolved.roles.size) {
-      if (revealing.current !== event.id) { revealing.current = event.id; reveal([...resolved.roles.keys()]) }
+    const primary = [...resolved.roles].find(([, role]) => role === 'target')?.[0] ?? resolved.roles.keys().next().value
+    if (!primary) { handled.current = event.id; return }
+    if (revealing.current !== event.id) {
+      revealing.current = event.id
+      // Navigation previews even visible targets. Unassigned documents have no canvas card.
+      if (!reveal([primary])) handled.current = event.id
       return
     }
+    const visible = nodes.filter(node => resolved.roles.has(node.id) && !node.hidden)
+    if (!visible.some(node => node.id === primary)) return
     handled.current = event.id
     if (!visible.length) return
     // Do not enqueue a later jump after a user's drag or edit.

@@ -1,4 +1,18 @@
 {
+  "browse": {
+    "navigation": "Module navigation",
+    "related": "Related documents and interfaces",
+    "back": "Back",
+    "overview": "Blueprint overview",
+    "noModules": "No modules declared yet. Existing documents remain available.",
+    "results": "Document search results",
+    "resultCount": "{{count}} documents found",
+    "unassigned": "Unassigned and historical documents ({{count}})",
+    "enterModule": "Enter module {{name}}",
+    "contents": "{{modules}} submodules · {{documents}} files",
+    "emptyModule": "This module has no direct files or submodules yet. Its description is available in the left preview.",
+    "moduleHint": "Click to preview a module, double-click to enter it. Back restores your previous browsing position."
+  },
   "workspace": {
     "select": "Switch workspace",
     "noWorkspace": "Add a workspace to begin",
@@ -560,11 +574,7 @@
     "info": "Blueprint information",
     "project": "Project",
     "module": "Module",
-    "view": "Blueprint view",
-    "structure": "System structure",
-    "notes": "All Notes",
     "coverage": "Checkout coverage",
-    "currentOnly": "Shows planned, partial and implemented modules. Click to expand documents; double-click for details.",
     "related": "Decisions and related work",
     "noRelated": "No declared related work.",
     "unresolved": "Unresolved target"

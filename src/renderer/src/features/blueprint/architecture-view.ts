@@ -3,7 +3,6 @@ import type { Blueprint, BlueprintNode } from '@/services/blueprint'
 import type { CompositionDiagnostic, CompositionInterface } from '../../../../shared/blueprint-composition'
 
 export type ArchitectureRole = 'project' | 'module'
-export type BlueprintViewMode = 'structure' | 'notes'
 const uuid = '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
 const noteUri = new RegExp(`^note://${uuid}/${uuid}$`, 'i')
 export interface ArchitectureAssociation { nodeId?: string; uri: string; via: string }

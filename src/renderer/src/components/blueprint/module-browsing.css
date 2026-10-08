@@ -1,0 +1,27 @@
+/* Note: container cards and scoped browsing — see .agents/notes/blueprint/requirements/module-browsing.md */
+.bp-browser-bar { padding: 8px 12px; border-bottom: 1px solid var(--shell-border); color: var(--shell-text); }
+.bp-browser-navigation, .bp-browser-crumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bp-browser-navigation [aria-current='page'] { font-weight: 650; background: var(--shell-hover); }
+.bp-browser-navigation button { display: inline-flex; align-items: center; gap: 5px; }
+.bp-browser-hint { margin: 6px 0 0; font-size: 12px; color: var(--shell-muted); }
+.bp-browser-results, .bp-browser-unassigned { margin-top: 8px; font-size: 12px; }
+.bp-browser-results__title, .bp-browser-unassigned summary { color: var(--shell-muted); padding: 4px 0; }
+.bp-browser-unassigned summary { cursor: pointer; }
+.bp-browser-document-list { list-style: none; margin: 0; padding: 0; max-height: 160px; overflow: auto; }
+.bp-browser-document-list button { width: 100%; display: flex; justify-content: space-between; gap: 12px; text-align: left; padding: 6px 8px; background: transparent; color: inherit; border: 0; border-radius: 4px; cursor: pointer; }
+.bp-browser-document-list button:hover, .bp-browser-document-list button:focus-visible { background: var(--shell-hover); }
+.bp-browser-document-list small { color: var(--shell-muted); white-space: nowrap; }
+.bp-browser-empty { position: absolute; inset: 35% 16px auto; text-align: center; pointer-events: none; color: var(--shell-muted); font-size: 13px; }
+.bp-browser-related > summary { cursor: pointer; padding: 10px 14px; font-size: 12px; color: var(--shell-muted); border-bottom: 1px solid var(--shell-border); }
+.blueprint-canvas-wrapper .bp-node-card.bp-node-card--module { position: relative; overflow: visible; background: var(--shell-card); border: 2px solid var(--shell-muted, #888); border-radius: 0 10px 10px 10px; }
+.bp-node-card--module::before { content: ''; position: absolute; left: -2px; top: -11px; width: 76px; height: 11px; border: 2px solid var(--shell-muted, #888); border-bottom: 0; border-radius: 6px 10px 0 0; background: var(--shell-card); }
+.blueprint-canvas-wrapper .bp-node-card--module.bp-node-card--selected, .bp-node-card--module.bp-node-card--selected::before { border-color: var(--shell-accent, #5797c8); }
+.bp-node-card--module .bp-node-card__header { gap: 7px; }
+.bp-node-card__symbol { flex-shrink: 0; color: var(--shell-muted); }
+.bp-node-card__enter { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border: 1px solid var(--shell-border); border-radius: 4px; color: var(--shell-text); background: transparent; cursor: pointer; }
+.bp-node-card__enter:hover { background: var(--shell-hover); }
+.bp-node-card__contents { margin-top: 7px; font-size: 11px; color: var(--shell-muted); }
+.blueprint-canvas-wrapper .bp-node-card.bp-node-card--document { border-radius: 3px; }
+.bp-node-card--document .bp-node-card__symbol { margin-right: 3px; }
+.blueprint-canvas-wrapper--browsing > .bp-node-detail { order: -1; }
+.bp-node-card--minimal.bp-node-card--module::before { top: -8px; height: 8px; width: 50px; }
