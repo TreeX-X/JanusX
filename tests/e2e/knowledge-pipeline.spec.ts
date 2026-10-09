@@ -338,9 +338,11 @@ test('knowledge settlement: extraction and both reviews gate Wiki publication, u
 
     await save()
     await observe(statements[0]!)
-    await run()
-    const candidates = await page.evaluate(() => window.electron.knowledge.listCandidates())
-    expect(candidates.filter(item => item.status === 'proposed')).toHaveLength(1)
+    // A run may join an existing cycle whose snapshot predates this observation.
+    await expect.poll(async () => {
+      await run()
+      return (await page!.evaluate(() => window.electron.knowledge.listCandidates())).filter(item => item.status === 'proposed').length
+    }, { timeout: 15_000, intervals: [500] }).toBe(1)
     expect((await truth()).facts).toHaveLength(0)
     config.stages.entryReview.provider = 'local'
     await save(); await run()
@@ -355,13 +357,17 @@ test('knowledge settlement: extraction and both reviews gate Wiki publication, u
     expect(graph(await truth()).nodes).toHaveLength(0)
     config.stages.wikiReview.provider = 'local'
     await save()
-    const held = await run()
+    let held = await run()
+    await expect.poll(async () => {
+      held = await run()
+      return held.queue.find(item => item.stage === 'wikiReview')?.status
+    }, { timeout: 15_000, intervals: [500] }).toBe('needs-review')
     const failedReview = held.queue.find(item => item.stage === 'wikiReview')
     expect(failedReview).toMatchObject({ status: 'needs-review', reason: 'Fixture requires Wiki review' })
     expect((await truth()).wikiPages).toHaveLength(0)
     blockWikiReview = false
     await page.evaluate(id => window.electron.knowledge.automationRetry(id), failedReview!.id!)
-    await run()
+    await expect.poll(async () => { await run(); return (await truth()).wikiPages.length }, { timeout: 15_000, intervals: [500] }).toBe(1)
     const first = (await truth()).wikiPages[0]!
     expect(first).toMatchObject({ status: 'published', version: 1, freshness: 'current', markdown: statements[0] + '\n' })
 
@@ -384,7 +390,7 @@ test('knowledge settlement: extraction and both reviews gate Wiki publication, u
 
     // Use the real rail, workbench and graph, not an injected renderer component.
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.reload()
+    await page.reload({ waitUntil: 'domcontentloaded' })
     await page.getByRole('toolbar').getByRole('button', { name: /^助手/ }).click()
     await page.getByRole('button', { name: '打开知识库工作台', exact: true }).click()
     const workbench = page.getByRole('region', { name: '知识与记忆', exact: true })
