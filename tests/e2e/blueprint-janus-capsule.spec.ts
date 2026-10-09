@@ -177,10 +177,11 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       }
     }
 
-    // 两个视图选择按钮与四个画布操作均须保持在工作台内且互不重叠。
+    // 来源入口与四个画布操作均须保持在工作台内且互不重叠。
     const toolbarActions = workbenchToolbar.locator('.blueprint-btn')
-    await expect(toolbarActions).toHaveCount(6)
-    await expect(workbenchToolbar.getByRole('button', { name: '系统结构', exact: true })).toBeDisabled()
+    await expect(toolbarActions).toHaveCount(5)
+    await expect(workbenchToolbar.getByRole('button', { name: '系统结构', exact: true })).toHaveCount(0)
+    await expect(workbenchToolbar.getByRole('button', { name: /^数据来源/ })).toBeVisible()
     const toolbarActionBoxes = await toolbarActions.evaluateAll((elements) =>
       elements.map((element) => {
         const { bottom, left, right, top } = element.getBoundingClientRect()
