@@ -302,6 +302,8 @@ test('knowledge settlement: extraction and both reviews gate Wiki publication, u
       env: { ...createDesktopTestEnv(fixtureRoot), NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost' } })
     page = await application.firstWindow({ timeout: 30_000 })
     await page.waitForFunction(() => Boolean(window.electron?.knowledge?.automationRun))
+    // The UI assertions below use Chinese labels even on an English Windows runner.
+    await page.evaluate(() => window.electron.system.setLanguage('zh-CN'))
     const errors: string[] = []
     page.on('pageerror', error => errors.push(error.message))
     const bootstrap = await page.evaluate(async ({ endpoint }) => {
