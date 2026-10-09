@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-09T02:39:08Z",
+  "updated": "2026-10-09T02:54:51Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -41,6 +41,8 @@ Chat persistence checks compare the complete ordered message history together wi
 The desktop capsule test exercises the conversation composer with empty, filled and cleared input while retaining its independent-card layout assertions. Note proposals originate in the conversation; an always-present preparation button is not part of the current panel contract. This smoke test does not send a provider request or approve a Note change.
 
 The personal-memory correction browser fixture commits each explicit activation with React `flushSync`. Consecutive inactive/active renders can otherwise be batched into a single active render, so the test waits forever for a refresh it never triggered. The fixture preserves the real component effects, draft state and submission assertions instead of extending the timeout or retrying a lost transition.
+
+Standalone-editor desktop fixtures wait for the preload's `openEditor` bridge before invoking it: Electron's first window can exist before its document exposes IPC. The OpenCode transcript-window fixture seeds its 105 turns in one SQLite transaction, then closes the writer before testing the production reader. This retains the truncation and ordering assertions while avoiding hundreds of separate durable commits that exceeded the runner's test timeout.
 
 Truth-service fixtures track the promises returned by real schema-audit writes and await every write before removing the temporary knowledge root. Seeing one audit record is insufficient when several writes are queued: cleanup can race a later rename and produce Windows `ENOTEMPTY`. Audit failures remain test failures; the fixture neither mocks persistence nor retries directory deletion.
 

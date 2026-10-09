@@ -40,13 +40,13 @@ function insertSession(path: string, row: { id: string; directory?: string; titl
 
 let messageSeq = 0
 function insertMessage(
-  path: string,
+  path: string | DatabaseSync,
   sessionId: string,
   role: string,
   texts: string[],
   created: number,
 ): void {
-  const database = new DatabaseSync(path)
+  const database = typeof path === 'string' ? new DatabaseSync(path) : path
   const messageId = `msg-${sessionId}-${messageSeq}`
   database
     .prepare('INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)')
@@ -58,7 +58,7 @@ function insertMessage(
       .run(`part-${messageSeq}`, messageId, sessionId, created + index, JSON.stringify({ type: 'text', text }))
   })
   messageSeq += 1
-  database.close()
+  if (typeof path === 'string') database.close()
 }
 
 describe('opencode sessions', async () => {
@@ -110,9 +110,17 @@ describe('opencode sessions', async () => {
   it('caps turns to the most recent window and truncates long text', async () => {
     const path = await fixtureDb()
     insertSession(path, { id: 's' })
-    for (let i = 0; i < TRANSCRIPT_TURN_CAP + 5; i += 1) {
-      insertMessage(path, 's', 'user', [`q${i}`], 1000 + i * 2)
-      insertMessage(path, 's', 'assistant', [`${'y'.repeat(TRANSCRIPT_TEXT_CAP + 10)}`], 1000 + i * 2 + 1)
+    // Seed the window in one transaction; hundreds of durable commits test disk latency.
+    const database = new DatabaseSync(path)
+    try {
+      database.exec('BEGIN')
+      for (let i = 0; i < TRANSCRIPT_TURN_CAP + 5; i += 1) {
+        insertMessage(database, 's', 'user', [`q${i}`], 1000 + i * 2)
+        insertMessage(database, 's', 'assistant', [`${'y'.repeat(TRANSCRIPT_TEXT_CAP + 10)}`], 1000 + i * 2 + 1)
+      }
+      database.exec('COMMIT')
+    } finally {
+      database.close()
     }
     const list = readOpencodeTurns(path, 's')
     expect(list?.totalTurns).toBe(TRANSCRIPT_TURN_CAP + 5)
