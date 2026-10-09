@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-09T03:29:25Z",
+  "updated": "2026-10-09T03:48:12Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -45,6 +45,8 @@ The personal-memory correction browser fixture commits each explicit activation 
 Standalone-editor desktop fixtures wait for the preload's `openEditor` bridge before invoking it: Electron's first window can exist before its document exposes IPC. The OpenCode transcript-window fixture seeds its 105 turns in one SQLite transaction, then closes the writer before testing the production reader. This retains the truncation and ordering assertions while avoiding hundreds of separate durable commits that exceeded the runner's test timeout.
 
 Knowledge settlement waits for each persisted milestone: exactly one proposed extraction candidate, the blocked Wiki review, and the first published page. Automation coalesces concurrent runs into an existing cycle, whose input snapshot may predate a newly captured observation or enabled stage; awaiting that cycle alone does not establish the milestone. Fixture reloads await DOM readiness and then the actual workbench controls. The capsule also waits for its preload bridge before setting language, preserving layout assertions without depending on an unrelated page-load event.
+
+The run-config assistant's overflow regression waits for the last line of its 40-line model reply before measuring the composer and scroll container. Approval persists the config before that follow-up reply arrives, so file existence alone cannot establish the long-output layout. Both containment and overflow assertions remain required.
 
 Truth-service fixtures track the promises returned by real schema-audit writes and await every write before removing the temporary knowledge root. Seeing one audit record is insufficient when several writes are queued: cleanup can race a later rename and produce Windows `ENOTEMPTY`. Audit failures remain test failures; the fixture neither mocks persistence nor retries directory deletion.
 

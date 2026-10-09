@@ -164,17 +164,17 @@ test('run-config assistant edits via launch-config tools and applies through the
     expect(landed.configurations[0].program).toBe('debug-start.exe')
 
     // 5. 布局回归：长回复落定后 composer 仍完整在弹窗内（未被下沿撑开挤没），消息区内部滚动。
+    await expect(launchModal).toContainText('第 39 行：运行配置助手生成的较长回复', { timeout: 20_000 })
     await expect(composer).toBeVisible()
     await expect.poll(async () => {
       const modal = await launchModal.boundingBox()
       const box = await composer.boundingBox()
       return Boolean(modal && box && box.y + box.height <= modal.y + modal.height + 1 && box.x + box.width <= modal.x + modal.width + 1)
     }, { timeout: 10_000 }).toBe(true)
-    const messagesScrollable = await launchModal.evaluate((el) => {
+    await expect.poll(() => launchModal.evaluate((el) => {
       const messages = el.querySelector('[class*="messages"]') as HTMLElement | null
       return Boolean(messages && messages.scrollHeight > messages.clientHeight)
-    })
-    expect(messagesScrollable).toBe(true)
+    })).toBe(true)
 
     await page.screenshot({ path: test.info().outputPath('run-config-assistant-applied.png') })
   } finally {
