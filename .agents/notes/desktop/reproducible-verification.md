@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-09T01:48:00Z",
+  "updated": "2026-10-09T02:04:30Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -29,6 +29,8 @@ On Windows, libuv's short-path directory watcher assertion terminates the worker
 The v0.9.0 replacement pins both workflows to agentX `df661f5034f2a9e77ffb5a996e45d6e8298a5a43`; verify also pins WorkflowX `efaf5ae7aac24362286251dc931487d5cfd2e2a5`. Both source revisions are pushed before JanusX consumes them. The previous agentX pin `6feb575bab1b067e6e4d8abc54d1f1d11a7bee23` existed only locally, so both remote jobs stopped at checkout with `not our ref`. Moving a dependency pin requires checking its remote availability as well as its local build. This replacement is explicitly authorized to reuse `v0.9.0`; branch protection and review requirements remain intact.
 
 Release regression tests parse the initialized Note metadata instead of requiring the older YAML spelling. Static persona and dock tests own their translation fixture; the dock layout test stubs the unrelated live pending-count subscription. Personal-memory interaction tests explicitly expand recent memories and use the current refresh control, retaining the source-hash and failed-write retry assertions. Refreshing the installed shared core also exposed missing tool results at two steering boundaries; the source repair lives in agentX and the consumer pairing assertions remain unchanged.
+
+The clean checkout also repairs three relative links in the committed legacy knowledge drafts. The migration's deferred hashes describe pre-existing local edits, so they cannot exempt the different committed originals on a runner. Only link destinations change in those originals; draft content, identities and historical metadata remain intact. The user's current working drafts retain their exact bytes, and the historical migration inventory is unchanged.
 
 Harness IPC tests own config discovery and reset mocks between cases; suspended executions finish in `finally` blocks. Audit tests use a private temporary user-data directory. Theme tests enforce visible line tint and stronger text tint without fixing obsolete color literals. Skill-checker tests use matching, missing, and divergent fixtures; the checker remains strict when explicitly run against a local installation. Product verification includes Note validation; `verify:local` additionally checks personal skill parity.
 

@@ -24,7 +24,7 @@ tags: [knowledge, automation, extraction, review, jev, settings, testing]
 
 “生成 Wiki 后保留条目、Wiki 作为默认阅读入口”“有时间上限的小批触发”“固定条目身份”“上下文不足自动补取”等属于讨论中提出的建议；不能因为写入本 Note 就视为完整实现方案已获确认。继续讨论时应聚焦本文件末尾的未决问题，不重复询问已确认的产品方向。
 
-此前的[知识库噪声与运行状态需求](./2026-10-06-memory-noise-progress-audit--81b578b4.md)及其[实施任务](./2026-10-06-knowledge-review-status-audit-plan--76ef32d1.md)记录已实现的防线与验证。本草案提出新的机制方向，不将旧实现记录改写为未完成，也不将旧测试通过视为真实自动化收益已得到证明。
+此前的[知识库噪声与运行状态需求](./knowledge/requirements/memory-noise-progress-audit.md)及其[实施任务](./knowledge/tasks/knowledge-review-status-audit-plan.md)记录已实现的防线与验证。本草案提出新的机制方向，不将旧实现记录改写为未完成，也不将旧测试通过视为真实自动化收益已得到证明。
 
 ### 2026-10-07 只读诊断
 
