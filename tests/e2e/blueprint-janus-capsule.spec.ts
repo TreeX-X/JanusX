@@ -239,8 +239,8 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     // 知识库工作台入口受 knowledge 实验开关门控（默认关闭）；用例显式开启后再打开。
     await page.evaluate(() => (window as TestWindow).electron.experimental.update({ knowledge: true }))
     await page.reload()
-    await page.getByRole('button', { name: /打开知识库工作台|Open Knowledge Workbench/ }).click()
-    const knowledgeShell = page.getByRole('region', { name: /知识引擎|Knowledge Engine/ })
+    await page.getByRole('button', { name: /打开知识与记忆工作台|Open Knowledge & memory workbench/ }).click()
+    const knowledgeShell = page.getByRole('region', { name: /知识与记忆|Knowledge & memory/ })
     await expect(knowledgeShell).toBeVisible()
     const knowledgeShellBox = await knowledgeShell.boundingBox()
     expect(knowledgeShellBox).not.toBeNull()

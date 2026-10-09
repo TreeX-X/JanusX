@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-09T02:12:51Z",
+  "updated": "2026-10-09T02:21:28Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -30,7 +30,7 @@ The v0.9.0 replacement pins both workflows to agentX `df661f5034f2a9e77ffb5a996e
 
 Release regression tests parse the initialized Note metadata instead of requiring the older YAML spelling. Static persona and dock tests own their translation fixture; the dock layout test stubs the unrelated live pending-count subscription. Personal-memory interaction tests explicitly expand recent memories and use the current refresh control, retaining the source-hash and failed-write retry assertions. Refreshing the installed shared core also exposed missing tool results at two steering boundaries; the source repair lives in agentX and the consumer pairing assertions remain unchanged.
 
-The desktop capsule regression checks the current five toolbar actions and the data-source entry, with the removed system-view selector absent. It retains the toolbar bounds, non-overlap and independent-card checks; source-window behavior has separate browser coverage.
+The desktop capsule regression checks the current five toolbar actions and the data-source entry, with the removed system-view selector absent. It retains the toolbar bounds, non-overlap and independent-card checks; source-window behavior has separate browser coverage. Its final knowledge-workbench size check uses the current Knowledge & memory entry and region labels.
 
 The clean checkout also repairs three relative links in the committed legacy knowledge drafts. The migration's deferred hashes describe pre-existing local edits, so they cannot exempt the different committed originals on a runner. Only link destinations change in those originals; draft content, identities and historical metadata remain intact. The user's current working drafts retain their exact bytes, and the historical migration inventory is unchanged.
 
