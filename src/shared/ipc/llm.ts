@@ -54,6 +54,11 @@ export interface ChatRequest {
   noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
   noteWorkingSet?: string
   maintenanceTaskId?: string
+  /**
+   * 运行配置轮内文档：当前表单的真实 LaunchConfig + 落盘相对路径（脱敏只发生在进模型上下文的边界）。
+   * `attachLaunchConfigTools` 以它为草稿底本 — see .agents/notes/agent/run-config-assistant-edit-tools.md
+   */
+  launchDraft?: { config: import('./project').LaunchConfig; projectPath: string }
 }
 export interface ChatStreamRequest extends ChatRequest { requestId: string }
 export interface ChatStreamEvent { requestId: string; delta?: string; done?: boolean; error?: string }
@@ -106,6 +111,7 @@ export interface ChatAnswerQuestionPayload {
 export type ChatAgentEvent =
   | { type: 'context_state'; requestId: string; state: import('../chat-context').ChatContextStatus }
   | { type: 'note_change'; requestId: string; change: import('../note-chat').NoteChatChange }
+  | { type: 'config_change'; requestId: string; change: import('../launch-config-chat').LaunchConfigChange }
   | { type: 'note_focus'; requestId: string; focus: import('../note-chat').NoteFocusEvent }
   | { type: 'maintenance_result'; requestId: string; task: BlueprintMaintenanceTask }
   | { type: 'agent_start'; requestId: string }

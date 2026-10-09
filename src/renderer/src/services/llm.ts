@@ -141,6 +141,7 @@ export function chatStream(
     workspaceResources?: ChatWorkspaceResource[]
     toolTraces?: ChatToolTraceEntry[]
     toolAllowlist?: string[]
+    launchDraft?: { config: import('../../../shared/ipc/project').LaunchConfig; projectPath: string }
     domain?: 'personal' | 'project'
     noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
     noteWorkingSet?: string
@@ -272,6 +273,7 @@ export function chatStream(
         workspaceResources: options?.workspaceResources,
         toolTraces: options?.toolTraces,
         ...(options?.toolAllowlist ? { toolAllowlist: options.toolAllowlist } : {}),
+        ...(options?.launchDraft ? { launchDraft: options.launchDraft } : {}),
         ...(options?.domain ? { domain: options.domain } : {}),
         ...(options?.noteRefs ? { noteRefs: options.noteRefs } : {}),
         ...(options?.noteWorkingSet ? { noteWorkingSet: options.noteWorkingSet } : {}),

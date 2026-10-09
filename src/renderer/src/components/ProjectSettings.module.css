@@ -12,6 +12,7 @@
 .container {
   display: grid;
   grid-template-columns: 176px minmax(420px, 1fr) 320px;
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   padding: 0;
   height: 100%;
@@ -301,6 +302,8 @@
 .userMessage { align-self: flex-end; padding: 7px 9px; border: 1px solid var(--shell-border); border-radius: 6px; color: var(--shell-text); }
 .streamingMessage { min-height: 28px; color: var(--shell-muted); }
 .streamingMessage :global(.janus-chat-streaming-cursor) { --accent-color: var(--shell-accent); }
+.turnStatus { display: flex; align-items: center; gap: 6px; color: var(--shell-muted); font-size: 10px; }
+.turnElapsed { color: var(--shell-dim); font-family: 'SF Mono', monospace; font-size: 9px; }
 
 /* 输入框对齐蓝图右栏 minimalComposer：opencode 方框（› 前缀 + 无边框输入 + 38 方块发送），
    度量与令牌同源（min-height 46px / max-height 150px / --shell-pane 卡面）。 */

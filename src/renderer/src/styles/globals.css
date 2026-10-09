@@ -387,7 +387,7 @@ textarea::placeholder {
 .ws-config-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   flex: 0 0 auto;
   min-height: 44px;

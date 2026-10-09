@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { UserPersonaCards } from '../../../src/renderer/src/components/knowledge/UserPersonaCards'
 import type { UserMemoryOverview } from '../../../src/shared/knowledge'
 
+vi.mock('../../../src/renderer/src/i18n/useI18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+
 function overview(): UserMemoryOverview {
   return {
     profile: {

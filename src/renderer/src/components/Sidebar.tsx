@@ -1706,8 +1706,9 @@ export function Sidebar() {
         >
           {({ requestClose }) => (
             <>
-              {/* Header：顶栏卡——分体布局的一员，不是窗上的条 */}
+              {/* Header：顶栏卡——分体布局的一员，不是窗上的条。关闭红灯在左上角 */}
               <div className="ws-config-head">
+                <ModalCloseButton onClose={requestClose} />
                 <div
                   className="font-semibold flex items-center"
                   style={{ fontSize: 13, color: 'var(--shell-text)', gap: 8 }}
@@ -1717,10 +1718,9 @@ export function Sidebar() {
                   </svg>
                   <span>{t('common:workspace.launcherTitle')}</span>
                 </div>
-                <ModalCloseButton onClose={requestClose} />
               </div>
-              {/* Body */}
-              <div style={{ padding: '0', overflow: 'visible', flex: 1 }}>
+              {/* Body：min-height:0 让 flex:1 能收缩到模态内高，避免内容把 body 撑出弹窗 */}
+              <div style={{ padding: '0', overflow: 'visible', flex: 1, minHeight: 0 }}>
                 <ProjectLauncher
                   projectPath={projectCandidate?.projectPath ?? configTarget.path}
                   workspaceId={configTarget.id}

@@ -26,7 +26,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-09T01:34:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -38,6 +38,8 @@
 The portable installer of 0.8.7 ships 301 MiB because app.asar carries the entire installed node_modules. The archive holds 870 MiB of file payload, and 612 MiB of that belongs to packages the production dependency closure never reaches: `electron`'s own dist (284 MiB, including the 192 MiB electron.exe that electron-builder also places beside the app), every platform binary of `app-builder-bin` (207 MiB), `typescript` (19 MiB) and the test and build toolchain. smart unpacking writes the same 490 MiB a second time into app.asar.unpacked, because it flags every .exe and .dll inside those trees as unpacked, so the packaged build holds 1.3 GiB on disk for an app whose own code is 39 MiB. node_modules reaches the archive verbatim so that hoisted dependencies stay resolvable from the archive root, and the note that introduced that copy records the size as a follow-up for a resolution audit: [Packaged node_modules is copied verbatim, not re-derived](./packaged-hoisted-deps.md).
 
 ## Decision
+
+Local Codex scratch directories `.codex-cache`, `.codex-session`, `.codex-sessions` and `.codex-tmp` are excluded alongside the existing local tool directories. A stale checkout under `.codex-tmp/prepush-*` otherwise contributes its dependencies to the packaged archive. Release candidates are packaged from an isolated committed checkout so untracked screenshots, discussions and local drafts are not distribution inputs.
 
 `files` in `electron-builder.yml` negates every top-level package that the production dependency closure does not reach, plus `node_modules/electron`, `node_modules/typescript` and `**/*.map`. The closure is `npm ls --omit=dev --all`: it reports 501 root-level names against 936 installed at the root, and the 436 installed names outside it are negated as 416 patterns, with a scope collapsed into one directory only when every member of that scope is dev-only. `scripts/sync-packaging-exclusions.mjs` rewrites that block between markers in `electron-builder.yml`. `package:win`, `package:win:publish` and the release workflow run it before electron-builder, so packaging always uses the closure of the tree it is packing, and `npm run exclusions:check` fails `verify` when the committed block is stale.
 

@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-07",
   "class": "process",
-  "updated": "2026-10-08T03:43:42.558Z",
+  "updated": "2026-10-09T01:34:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -20,6 +20,8 @@ The 0.9.0 portable line needs a shareable no-install build that identifies when 
 ## Decision
 
 A dated preview portable is delivered as `release/preview-<date>/JanusX-<version>-preview-<date>-x64-portable.exe` with three companions in the same folder: `README-preview.txt` stating what the preview contains, `SHA256SUMS.txt` over the delivered executable, and `preview-manifest.json` recording `date`, `version`, `sourceCommit`, per-file sha256 of the packaged `out` tree, `scratchRoots`, `preservedWorktree` (sha256 of each dirty worktree file present at build time), the portable's own path/bytes/sha256, and a `verification` block naming the logs. The builder config lives at `artifacts/preview-<date>-builder.cjs` and only redirects `directories.output` and drops `playwright.desktop.config.ts`; the shipped `electron-builder.yml` exclusions apply as-is. The cut runs: build → `check:package-boundary` → `exclusions:sync` → `electron-builder --config … --win portable --x64 --publish never` → `check-packaged-runtime.mjs --release-dir … --portable` → packaged `knowledge-pipeline.spec.ts` under `JANUSX_DESKTOP_EXECUTABLE` → copy, rename, hash, manifest. The 2026-10-07 delivery follows this shape exactly: source commit `d86de88ff5692d437e3d17cc26d9d0f306d9230a`, executable 112122226 bytes, sha256 `536a2949feefaf2b7b045caec6ac42ed8d5f3bcaf1e7126c21dfc467a527bea0`, 210 build files hashed, runtime gate exit 0, 2 packaged e2e tests passed. The date marker identifies the artifact only; the program base version stays 0.9.0.
+
+For the explicitly requested v0.9.0 replacement, use `release/0.9.0/JanusX-0.9.0-x64-portable.exe` as the delivery location. Build from the committed release candidate in an isolated checkout, run the packaged-runtime checks before copying the replacement, and refresh `BUILDINFO.json`, `SHA256SUMS.txt` and the preview README with the actual source and verification results. Preserve the existing `data` directory. This authorized replacement is an exception to the dated-cut default; it neither changes the application version nor rewrites the older dated preview directories.
 
 ## Alternatives considered
 

@@ -1,6 +1,9 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../src/renderer/src/i18n/useI18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('../../src/renderer/src/components/knowledge/useAssistantPendingCount', () => ({ useAssistantPendingCount: () => null }))
 import {
   CENTER_WORKSPACE_MIN_WIDTH,
   getRightDockLayout,

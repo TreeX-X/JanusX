@@ -1,16 +1,21 @@
 // Note: 助手卡顶栏与输入框吃蓝图右栏的对话卡语言（光点 Janus 头 + opencode 方框 composer） — see .agents/notes/workbench/right-chat-column-card-language.md
+// Note: config edits flow through launch-config.* + config_change; action-dispatch props retired (run/test/stop live on the window toolbar) — see .agents/notes/agent/run-config-assistant-edit-tools.md
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ArrowUp, LoaderCircle, Square } from 'lucide-react'
 import type { LaunchConfig } from '@/types/project'
+import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../../shared/ipc/llm'
+import type { LaunchConfigChange } from '../../../shared/launch-config-chat'
 import type { RunningProjectSummary } from '../../../shared/ipc/project'
 import {
   streamWorkspaceLaunchAssistant,
-  type LaunchAssistantResponse,
   type WorkspaceLaunchAnalysis,
 } from '@/services/workspace-launch-assistant'
 import { useStreamingPrinter } from '@/hooks/useStreamingPrinter'
 import { MarkdownContent, StreamingText } from './chat/ChatContent'
+import { ToolCallGroup } from './janus/ToolCallCard'
+import { ThinkingRegion } from './janus/ThinkingRegion'
+import { emptyReasoning, appendReasoningDelta, formatThinkingDuration, type ReasoningSnapshot } from './janus/janusReasoning'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './ProjectSettings.module.css'
 
@@ -19,20 +24,18 @@ type Message = { role: 'user' | 'assistant'; content: string }
 interface ProjectLaunchAssistantProps {
   analysis: WorkspaceLaunchAnalysis | null
   config: LaunchConfig | null
+  projectPath: string
+  workspaceResources: ChatWorkspaceResource[]
   busy: boolean
   runningProjects: RunningProjectSummary[]
   /** 浮岛卡索引等装饰变量（见 ProjectSettings 三栏错峰入场）。 */
   style?: CSSProperties
   onAnalyze: () => Promise<WorkspaceLaunchAnalysis | null>
-  onConfig: (config: LaunchConfig) => void
-  onSave: (config?: LaunchConfig) => Promise<boolean>
-  onTest: (script?: string) => Promise<void>
-  onRun: (config?: LaunchConfig) => Promise<void>
-  onStop: () => Promise<void>
+  onConfig: (config: LaunchConfig, applied?: boolean) => void
 }
 
 export function ProjectLaunchAssistant({
-  analysis, config, busy, runningProjects, style, onAnalyze, onConfig, onSave, onTest, onRun, onStop,
+  analysis, config, projectPath, workspaceResources, busy, runningProjects, style, onAnalyze, onConfig,
 }: ProjectLaunchAssistantProps) {
   const { t } = useI18n('editor')
   const [input, setInput] = useState('')
@@ -44,9 +47,23 @@ export function ProjectLaunchAssistant({
   }])
   const abortRef = useRef<(() => void) | null>(null)
   const streamIdRef = useRef(0)
+  const toolTracesRef = useRef<ChatToolTraceEntry[]>([])
+  const latestToolsRef = useRef<ChatToolTraceEntry[]>([])
+  const [reasoning, setReasoning] = useState<ReasoningSnapshot>(emptyReasoning())
+  const [liveTools, setLiveTools] = useState<ChatToolTraceEntry[]>([])
+  const turnStartRef = useRef<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const { output: pendingContent, append, complete, flush, reset } = useStreamingPrinter()
+
+  // 加载计时：流式期间每 250ms 刷新 elapsed。
+  useEffect(() => {
+    if (!streaming) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [streaming])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' })
@@ -64,17 +81,6 @@ export function ProjectLaunchAssistant({
     streamIdRef.current += 1
     abortRef.current?.()
   }, [])
-
-  const applyResponse = async (response: LaunchAssistantResponse) => {
-    if (response.config) onConfig(response.config)
-    if (response.action === 'save') await onSave(response.config ?? undefined)
-    if (response.action === 'test') await onTest(response.testScript)
-    if (response.action === 'run') {
-      if (response.config && !await onSave(response.config)) return
-      await onRun(response.config ?? undefined)
-    }
-    if (response.action === 'stop') await onStop()
-  }
 
   const stop = () => {
     streamIdRef.current += 1
@@ -101,34 +107,47 @@ export function ProjectLaunchAssistant({
       if (!workspaceAnalysis) throw new Error(t('editor:project.analysisIncomplete'))
       reset()
       setStreaming(true)
+      setReasoning(emptyReasoning())
+      setLiveTools([])
+      latestToolsRef.current = []
+      turnStartRef.current = Date.now()
+      setNow(Date.now())
+      const replayTraces = toolTracesRef.current
       const { abort } = streamWorkspaceLaunchAssistant({
         request,
         analysis: workspaceAnalysis,
         config,
+        projectPath,
+        workspaceResources,
+        toolTraces: replayTraces.length ? replayTraces : undefined,
         runningProjects,
         history: messages,
         onDelta: (delta) => {
           if (streamIdRef.current === streamId) append(delta)
         },
-        onDone: (response) => {
+        onReasoningDelta: (delta) => {
+          if (streamIdRef.current !== streamId) return
+          setReasoning((current) => appendReasoningDelta(current, delta))
+        },
+        onConfigChange: (change: LaunchConfigChange) => {
+          if (streamIdRef.current !== streamId) return
+          onConfig(change.config, change.applied)
+        },
+        onToolTraces: (entries) => {
+          if (streamIdRef.current !== streamId) return
+          latestToolsRef.current = entries
+          setLiveTools(entries)
+        },
+        onDone: (message) => {
           if (streamIdRef.current !== streamId) return
           abortRef.current = null
-          void complete().then(async () => {
+          void complete().then(() => {
             if (streamIdRef.current !== streamId) return
-            setMessages((current) => [...current, { role: 'assistant', content: response.message }])
+            toolTracesRef.current = [...toolTracesRef.current, ...latestToolsRef.current].slice(-40)
+            setMessages((current) => [...current, { role: 'assistant', content: message }])
             reset()
             setStreaming(false)
-            try {
-              await applyResponse(response)
-            } catch (error) {
-              if (streamIdRef.current !== streamId) return
-              setMessages((current) => [...current, {
-                role: 'assistant',
-                content: error instanceof Error ? error.message : t('editor:launcher.actionFailed'),
-              }])
-            } finally {
-              if (streamIdRef.current === streamId) setSending(false)
-            }
+            setSending(false)
           })
         },
         onError: (error) => {
@@ -156,6 +175,11 @@ export function ProjectLaunchAssistant({
     }
   }
 
+  const elapsed = streaming && typeof turnStartRef.current === 'number'
+    ? formatThinkingDuration(Math.max(0, now - turnStartRef.current))
+    : null
+  const workspaceNames = new Map(workspaceResources.map((resource) => [resource.workspaceId, resource.workspaceName]))
+
   return (
     <aside className={styles.assistant} style={style} aria-label="Janus workspace launch assistant">
       <div className={styles.assistantHeader}>
@@ -173,9 +197,13 @@ export function ProjectLaunchAssistant({
         ))}
         {(streaming || pendingContent) && (
           <div className={`${styles.assistantMessage} ${styles.streamingMessage}`}>
-            {pendingContent
-              ? <StreamingText content={pendingContent} />
-              : <LoaderCircle size={14} className={styles.spinIcon} />}
+            <div className={styles.turnStatus}>
+              {!pendingContent && <LoaderCircle size={11} className={styles.spinIcon} />}
+              {elapsed && <span className={styles.turnElapsed} data-turn-elapsed>{elapsed}</span>}
+            </div>
+            <ThinkingRegion snapshot={reasoning} streaming={streaming} startedAt={turnStartRef.current} />
+            {liveTools.length > 0 && <ToolCallGroup entries={liveTools} workspaceNames={workspaceNames} />}
+            {pendingContent && <StreamingText content={pendingContent} />}
           </div>
         )}
         <div ref={messagesEndRef} />

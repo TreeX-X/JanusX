@@ -1,14 +1,15 @@
 import type { ToolResult } from '../../../shared/ipc/agent-runtime'
+import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../../shared/ipc/llm'
 import { ProjectType, type LaunchConfig, type RunningProjectSummary, type ValidationResult } from '../../../shared/ipc/project'
+import type { LaunchConfigChange } from '../../../shared/launch-config-chat'
 import { chatStream, type ChatMessage } from './llm'
 
 // Note: launch-assistant sourceTag keeps this dialog out of persona capture (recall/capture/timeline gates) — see .agents/notes/agent/run-config-assistant-edit-tools.md
+// Note: config exchange runs through the launch-config.* tool surface (get/edit/apply + config_change); the <janus-launch-action> text protocol is retired — see .agents/notes/agent/run-config-assistant-edit-tools.md
 
 const MANIFEST_PATTERN = /(^|\/)(package\.json|pyproject\.toml|cargo\.toml|go\.mod|cmakelists\.txt|readme(?:\.md)?)$/i
 const MAX_CONTEXT_FILES = 5
 const ROOT_CONTEXT_FILES = ['package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'CMakeLists.txt', 'README.md']
-const ACTION_OPEN = '<janus-launch-action>'
-const ACTION_CLOSE = '</janus-launch-action>'
 
 /**
  * 助手轮次固定工具面：只读理解 + 专属配置写入口。git 只读按需追加，
@@ -57,8 +58,6 @@ export function redactWorkspaceExcerpt(content: string): string {
     .replace(/(https?:\/\/)[^\s/@:]+:[^\s/@]+@/g, '$1[REDACTED]@')
 }
 
-export type LaunchAssistantAction = 'none' | 'save' | 'test' | 'run' | 'stop'
-
 export interface WorkspaceLaunchAnalysis {
   workspaceId: string
   projectPath: string
@@ -74,13 +73,6 @@ export interface WorkspaceLaunchAnalysis {
   validation: ValidationResult
   files: string[]
   excerpts: Array<{ path: string; content: string }>
-}
-
-export interface LaunchAssistantResponse {
-  message: string
-  config: LaunchConfig | null
-  action: LaunchAssistantAction
-  testScript?: string
 }
 
 function completed<T>(result: ToolResult): T {
@@ -159,20 +151,9 @@ export async function analyzeWorkspaceLaunch(input: {
   }
 }
 
-function redactConfig(config: LaunchConfig): LaunchConfig {
-  return {
-    ...config,
-    configurations: config.configurations.map((item) => ({
-      ...item,
-      env: item.env ? Object.fromEntries(Object.keys(item.env).map((key) => [key, '[REDACTED]'])) : undefined,
-    })),
-  }
-}
-
 export function buildLaunchAssistantMessages(input: {
   request: string
   analysis: WorkspaceLaunchAnalysis
-  config: LaunchConfig
   runningProjects?: RunningProjectSummary[]
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
 }): ChatMessage[] {
@@ -180,26 +161,21 @@ export function buildLaunchAssistantMessages(input: {
     detection: input.analysis.detection,
     files: input.analysis.files.slice(0, 160),
     excerpts: input.analysis.excerpts,
-    currentConfig: redactConfig(input.config),
     runningProjects: input.runningProjects ?? [],
   }
   return [
     {
       role: 'system',
       content: [
-        'You are the JanusX workspace launch assistant.',
+        'You are the JanusX workspace launch assistant. You read and edit the JanusX LaunchConfig exclusively through the launch-config tools.',
+        'Use launch-config.get to read the current draft and its validation result (env values are redacted).',
+        'Use launch-config.edit to change the draft: prefer granular ops (setField / addConfiguration / updateConfiguration / removeConfiguration / setEnv) over whole-config replacement; the full config is only for first generation or an explicit restart. Each receipt feeds the ValidationResult back so you can fix errors.',
+        'Use launch-config.apply to validate the draft and write .janusX/janusX.launch.json; it asks the user for one approval before the file lands.',
         'Analyze the supplied workspace evidence and the user request. Do not invent files, scripts, ports, or commands.',
         'Detected project type is advisory evidence, not a restriction. The user description of how the project is actually launched is authoritative.',
         'If the user names an external workspace script or executable, create a complete custom LaunchConfig using type "custom", program, args, cwd and env as needed. Do not force CMake or another detected default.',
         'Distinguish the detected project type from the requested launch method in your explanation.',
-        'Write a concise user-facing answer first, then append one machine action block.',
-        `The action block format is ${ACTION_OPEN}{"config":null,"action":"none","testScript":null}${ACTION_CLOSE}.`,
-        'Never place user-facing prose inside the action block and never use Markdown fences around it.',
-        'action must be one of none, save, test, run, stop. Use an action only when the user explicitly asks for it.',
-        'runningProjects contains the shared JanusX-managed processes for this workspace. Use stop only when the user asks to stop them.',
-        'config in the action block must be the complete JanusX LaunchConfig or null. Preserve existing fields unless the user asks to change them.',
-        'testScript must be a package script name visible in package.json, otherwise omit it.',
-        'Always close the action block. Keep it compact.',
+        'Answer the user in concise prose first. The tool calls perform the edits. Never output a machine action block and never wrap config JSON in Markdown fences.',
       ].join('\n'),
     },
     { role: 'system', content: `Workspace evidence:\n${JSON.stringify(context)}` },
@@ -208,106 +184,57 @@ export function buildLaunchAssistantMessages(input: {
   ]
 }
 
-export function parseLaunchAssistantResponse(raw: string): LaunchAssistantResponse {
-  const trimmed = raw.trim()
-  const blockStart = trimmed.indexOf(ACTION_OPEN)
-  const blockEnd = blockStart >= 0 ? trimmed.indexOf(ACTION_CLOSE, blockStart + ACTION_OPEN.length) : -1
-  const visibleMessage = blockStart >= 0 ? trimmed.slice(0, blockStart).trim() : ''
-  const block = blockStart >= 0
-    ? trimmed.slice(blockStart + ACTION_OPEN.length, blockEnd >= 0 ? blockEnd : undefined).trim()
-    : trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim() ?? trimmed
-  let candidate: Partial<LaunchAssistantResponse> = {}
-  try {
-    candidate = JSON.parse(block) as Partial<LaunchAssistantResponse>
-  } catch {
-    const legacyMessage = block.match(/"message"\s*:\s*"((?:\\.|[^"\\])*)"/)?.[1]
-    if (legacyMessage) {
-      try {
-        candidate.message = JSON.parse(`"${legacyMessage}"`) as string
-      } catch {
-        candidate.message = legacyMessage
-      }
-    }
-  }
-  const action: LaunchAssistantAction = ['none', 'save', 'test', 'run', 'stop'].includes(candidate.action ?? '')
-    ? candidate.action as LaunchAssistantAction
-    : 'none'
-  const config = candidate.config && typeof candidate.config === 'object' && Array.isArray(candidate.config.configurations)
-    ? candidate.config as LaunchConfig
-    : null
-  return {
-    message: visibleMessage || (typeof candidate.message === 'string' ? candidate.message : '') || (
-      trimmed && !trimmed.startsWith('{') && !trimmed.startsWith('```') ? trimmed : '已完成分析，但未收到完整的配置动作。'
-    ),
-    config,
-    action,
-    testScript: typeof candidate.testScript === 'string' && /^[\w:.-]+$/.test(candidate.testScript)
-      ? candidate.testScript
-      : undefined,
-  }
-}
-
-export function visibleLaunchAssistantText(raw: string): string {
-  const trimmedStart = raw.trimStart()
-  if (trimmedStart.startsWith('{') || /^```(?:json)?/i.test(trimmedStart)) return ''
-  const blockStart = raw.indexOf(ACTION_OPEN)
-  if (blockStart >= 0) return raw.slice(0, blockStart)
-  for (let length = Math.min(ACTION_OPEN.length - 1, raw.length); length > 0; length -= 1) {
-    if (ACTION_OPEN.startsWith(raw.slice(-length))) return raw.slice(0, -length)
-  }
-  return raw
-}
-
 export function streamWorkspaceLaunchAssistant(input: {
   request: string
   analysis: WorkspaceLaunchAnalysis
   config: LaunchConfig
+  projectPath: string
+  workspaceResources: ChatWorkspaceResource[]
+  toolTraces?: ChatToolTraceEntry[]
   runningProjects?: RunningProjectSummary[]
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
   onDelta: (delta: string) => void
-  onDone: (response: LaunchAssistantResponse) => void
+  onReasoningDelta: (delta: string) => void
+  onConfigChange: (change: LaunchConfigChange) => void
+  onToolTraces: (entries: ChatToolTraceEntry[]) => void
+  onDone: (message: string) => void
   onError: (error: string) => void
 }): { abort: () => void } {
   let raw = ''
-  let emitted = ''
+  const liveTools = new Map<string, ChatToolTraceEntry>()
   return chatStream(
     buildLaunchAssistantMessages(input),
     (delta) => {
       raw += delta
-      const visible = visibleLaunchAssistantText(raw)
-      if (visible.startsWith(emitted) && visible.length > emitted.length) {
-        const addition = visible.slice(emitted.length)
-        emitted = visible
-        input.onDelta(addition)
-      }
+      input.onDelta(delta)
     },
-    () => {
-      const response = parseLaunchAssistantResponse(raw)
-      if (response.message.startsWith(emitted) && response.message.length > emitted.length) {
-        input.onDelta(response.message.slice(emitted.length))
-      } else if (!emitted) {
-        input.onDelta(response.message)
-      }
-      input.onDone(response)
-    },
+    () => input.onDone(raw),
     input.onError,
-    { sourceTag: 'launch-assistant', workspaceId: input.analysis.workspaceId, toolAllowlist: [...LAUNCH_ASSISTANT_TOOL_ALLOWLIST] },
+    {
+      sourceTag: 'launch-assistant',
+      workspaceId: input.analysis.workspaceId,
+      workspacePath: input.workspaceResources[0]?.workspacePath,
+      workspaceResources: input.workspaceResources,
+      toolAllowlist: [...LAUNCH_ASSISTANT_TOOL_ALLOWLIST],
+      toolTraces: input.toolTraces,
+      launchDraft: { config: input.config, projectPath: input.projectPath },
+      onAgentEvent: (event) => {
+        if (event.type === 'config_change') {
+          input.onConfigChange(event.change)
+        } else if (event.type === 'reasoning_delta') {
+          input.onReasoningDelta(event.delta)
+        } else if (event.type === 'tool_execution_start') {
+          liveTools.set(event.callId, { toolName: event.toolName, workspaceId: input.analysis.workspaceId, status: 'running', summary: '' })
+          input.onToolTraces([...liveTools.values()])
+        } else if (event.type === 'tool_execution_end') {
+          liveTools.set(event.callId, { toolName: event.toolName, workspaceId: input.analysis.workspaceId, status: event.status, summary: '' })
+          input.onToolTraces([...liveTools.values()])
+        }
+      },
+      onToolTrace: (entries) => {
+        for (const entry of entries) liveTools.set(entry.turnId ?? entry.toolName, entry)
+        input.onToolTraces([...liveTools.values()])
+      },
+    },
   )
-}
-
-export async function askWorkspaceLaunchAssistant(input: {
-  request: string
-  analysis: WorkspaceLaunchAnalysis
-  config: LaunchConfig
-  runningProjects?: RunningProjectSummary[]
-  history?: Array<{ role: 'user' | 'assistant'; content: string }>
-}): Promise<LaunchAssistantResponse> {
-  return new Promise((resolve, reject) => {
-    streamWorkspaceLaunchAssistant({
-      ...input,
-      onDelta: () => undefined,
-      onDone: resolve,
-      onError: (error) => reject(new Error(error)),
-    })
-  })
 }

@@ -13,6 +13,7 @@ import { ProjectType } from '@/types/project'
 import type { LaunchConfig, DetectResult, ProjectTypeSchema } from '@/types/project'
 import type { ApprovalRequest } from '../../../shared/ipc/agent-runtime'
 import type { ProjectTaskResult, RunningProjectSummary } from '../../../shared/ipc/project'
+import type { ChatWorkspaceResource } from '../../../shared/ipc/llm'
 import {
   createLatestRequestGuard,
   getProjectConfigDiff,
@@ -74,8 +75,31 @@ export function ProjectSettings({
   const saveGuardRef = useRef(createLatestRequestGuard())
   const applySessionRef = useRef<string | null>(null)
   const approvalUnsubscribeRef = useRef<(() => void) | null>(null)
+  const dialogSessionRef = useRef<{ id: string } | null>(null)
+  const [workspaceResources, setWorkspaceResources] = useState<ChatWorkspaceResource[]>([])
   const configDiff = useMemo(() => getProjectConfigDiff(baselineConfig, config), [baselineConfig, config])
   const suggestedTestScript = useMemo(() => ['test:unit', 'test', 'verify'].find((name) => detection?.availableScripts?.includes(name)), [detection])
+
+  // 运行配置助手工具面：为该工作面建（或复用）一个 agent 会话，供 launch-config.* 落在工作区根上；
+  // 助手 apply 的审批框复用本组件 pendingApproval（与 handleSave 共用）— see run-config-assistant-edit-tools.md
+  useEffect(() => {
+    let cancelled = false
+    const workspaceName = projectPath.split(/[/\\]/).pop() || workspaceId || ''
+    void (async () => {
+      if (!workspaceId || !workspaceRoot) { setWorkspaceResources([]); return }
+      let session = dialogSessionRef.current
+      if (!session) {
+        session = await window.electron.agentRuntime.createSession({ workspaceId, workspaceRoot })
+        if (cancelled) return
+        dialogSessionRef.current = session
+      }
+      setWorkspaceResources([{ workspaceId, workspacePath: workspaceRoot, workspaceName, agentSessionId: session.id }])
+    })()
+    const unsubscribe = window.electron.agentRuntime.onEvent((event) => {
+      if (event.type === 'approval-requested' && event.request.workspaceId === workspaceId) setPendingApproval(event.request)
+    })
+    return () => { cancelled = true; unsubscribe() }
+  }, [workspaceId, workspaceRoot, projectPath])
 
   // 初始化：检测项目并创建默认配置
   useEffect(() => {
@@ -215,11 +239,16 @@ export function ProjectSettings({
     }
   }, [t])
 
-  const handleAssistantConfig = useCallback((nextConfig: LaunchConfig) => {
+  const handleAssistantConfig = useCallback((nextConfig: LaunchConfig, applied?: boolean) => {
     setConfig(structuredClone(nextConfig))
-    setUnsavedChanges(true)
-    setActiveView('diff')
     setError(null)
+    if (applied) {
+      setBaselineConfig(structuredClone(nextConfig))
+      setUnsavedChanges(false)
+    } else {
+      setUnsavedChanges(true)
+      setActiveView('diff')
+    }
   }, [])
 
   const handleAnalyze = useCallback(async (): Promise<WorkspaceLaunchAnalysis | null> => {
@@ -517,15 +546,13 @@ export function ProjectSettings({
       <ProjectLaunchAssistant
         analysis={analysis}
         config={config}
+        projectPath={projectRelativePath}
+        workspaceResources={workspaceResources}
         busy={analyzing || saving || executing !== null}
         runningProjects={runningProjects}
         style={cardIndexStyle(2)}
         onAnalyze={handleAnalyze}
         onConfig={handleAssistantConfig}
-        onSave={handleSave}
-        onTest={handleTest}
-        onRun={handleRun}
-        onStop={handleStop}
       />
     </div>
   )

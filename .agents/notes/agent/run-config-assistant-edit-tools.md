@@ -3,7 +3,7 @@
   "schema": "harness-note/2",
   "id": "f481b0db-5010-45f8-9723-50b0c8fca03a",
   "kind": "decision",
-  "lifecycle": "proposed",
+  "lifecycle": "implemented",
   "created": "2026-10-07",
   "class": "architecture",
   "codeRefs": [
@@ -18,14 +18,18 @@
       "role": "implementation"
     },
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/llm/chat-orchestrator.ts","role":"implementation"},
+    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/harness/launch-config-chat.ts","role":"entry"},
+    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/shared/launch-config-chat.ts","role":"implementation"},
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/harness/note-chat.ts","role":"entry"},
     {
       "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
       "path": "tests/unit/workspace-launch-assistant.test.ts",
       "role": "test"
-    }
+    },
+    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"tests/unit/launch-config-chat.test.ts","role":"test"},
+    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"tests/e2e/run-config-assistant.spec.ts","role":"test"}
   ],
-  "updated": "2026-10-08T03:43:42.487Z",
+  "updated": "2026-10-09T01:29:32Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -64,7 +68,7 @@
 
 ## Proposal
 
-实施分六步，顺序即合入顺序，第 1 步可独立先行。
+实施分六步，顺序即合入顺序，第 1 步可独立先行。（进度 2026-10-08：六步全部落地——工具面经 `launchDraft`/`workspaceResources` 点亮、`config_change` 回表单、`toolTraces` 回放、`<janus-launch-action>` 协议退役、`onSave/onTest/onRun/onStop` props 收缩、测试改写为工具面；单测 + 桌面 e2e 全链（受限工具面 + edit→表单 + apply→审批→落盘）全绿，本 Note 已置 `implemented`。）
 
 **1. sourceTag 切割（画像隔离，独立小步）**。把 `src/shared/ipc/llm.ts`（`ChatRequest` 公共契约）、`src/renderer/src/services/llm.ts`、`src/main/ipc/llm-handlers.ts`、`src/main/llm/chat-orchestrator.ts` 四处的 `sourceTag?: 'janus-chat'` 字面量类型放宽为 `'janus-chat' | 'launch-assistant'`（`ChatStreamRequest` 与非流式 `chat` 同源改；原文记三处，实测公共契约另持一份）。`streamWorkspaceLaunchAssistant` 改传 `sourceTag: 'launch-assistant'`。切割后 `chat-turn.ts` 的召回注入与 `captureTurn`、`chat-orchestrator.ts` 的轮末个人时间线写入三闸全不命中，`recallTrace` 转发同闸门一并停。回归测试以 `tests/unit/knowledge/janus-chat-recall.test.ts` 与 `tests/unit/knowledge/user-turn-capture.test.ts` 为反证基座，钉死 `'launch-assistant'` 轮次零召回、零采集、零时间线写入。**（已落地 2026-10-08：反证测试 3 项——工作区已绑定与无工作区两形状下零 `search`/`capture`/`capturePersonTurn`/`capturePersonEpisode`、零 `recall-trace` 事件，加 `workspace-launch-assistant.test.ts` 源头钉 `sourceTag: 'launch-assistant'`；`tsc` 干净，四测试文件 42 项通过。）**
 
@@ -76,11 +80,11 @@
 - `launch-config.edit`：唯一编辑面。输入 `{ ops: [...] }` 或 `{ config: LaunchConfig }`。ops 词汇固定五种：`setField`（`path` + `value`，path 形如 `configurations[0].program`）、`addConfiguration`、`updateConfiguration`、`removeConfiguration`、`setEnv`（configuration 定位 + 键值对）。整包 `config` 是首次生成与推倒重来的逃生舱。每次应用的回执含草稿摘要与 `ValidationResult`，模型据此自修；连续两次修复仍非法则停手，把错误交还用户。
 - `launch-config.apply`：`ProjectConfig.validate` 通过后写 `.janusX/janusX.launch.json`。审批复用 `ProjectSettings.tsx` `handleSave` 的既有回路——`agentRuntime.createSession` + `onEvent('approval-requested')` → `pendingApproval` → `resolveApproval` + `executeTool('project.apply-config')` 的 preview 形状。
 
-编辑以 ops 为默认路径；进模型上下文的 env 值沿用 `redactConfig` 脱敏规则。
+编辑以 ops 为默认路径；进模型上下文的 env 值沿用 `redactConfig` 脱敏规则。**（已落地 2026-10-08：ops 引擎 `src/shared/launch-config-chat.ts`（`applyLaunchConfigOps` 五种 ops + `redactConfig` + `LaunchConfigChange`）与 `src/main/harness/launch-config-chat.ts`（`LAUNCH_CONFIG_TOOLS` get/edit/apply + `attachLaunchConfigTools` 端口拦截，含连续两次非法即停手、`[REDACTED]` 保持原值、`apply`→`project.apply-config` 带 preview 审批）全部落码；`chat-orchestrator.ts` 563-572 按 `sourceTag === 'launch-assistant' && launchDraft` 挂载并把 `onChange` 转 `config_change` 事件桥。但工具面尚未在真实路径点亮：渲染端 `streamWorkspaceLaunchAssistant` 未随请求发 `launchDraft`/`workspaceResources`，助手仍走 `<janus-launch-action>` 文本协议，激活依赖第 4/5 步切换。单测已补 `tests/unit/launch-config-chat.test.ts` 15 项（ops 五种 + 路径/查重报错、get/edit/apply、`ValidationResult` 回灌、两连非法即停手、`[REDACTED]` 保持原值、权限闸 `PERMISSION_DENIED`、`apply`→`project.apply-config` 带 preview 与 fallthrough），`tsc` 干净、eslint 零 error——工具族代码与验证完整，只差第 4 步接线点亮。）**
 
-**4. 状态与事件**。草稿所有权留在渲染端表单：每轮请求把当前 `config` 脱敏副本送进上下文并随请求到达 main，`attachLaunchConfigTools` 以该副本为轮内文档；编辑经 `config_change` agentEvent（照 `note_change` 事件桥）回 `ProjectSettings.setConfig`，中栏表单即时反映。会话连续性不建：历史仍由 `ProjectLaunchAssistant` 自持 `messages.slice(-8)`，但每轮须把上一轮的 `toolTraces`（`ChatToolTraceEntry[]`）随 `ChatStreamRequest.toolTraces` 回放，否则模型上一轮读过的文件在下一轮从上下文消失。流式展示简化：正文不再夹带动作块，`visibleLaunchAssistantText` 的剥离逻辑随协议退役删除，delta 直出。
+**4. 状态与事件**。草稿所有权留在渲染端表单：每轮请求把当前 `config` 脱敏副本送进上下文并随请求到达 main，`attachLaunchConfigTools` 以该副本为轮内文档；编辑经 `config_change` agentEvent（照 `note_change` 事件桥）回 `ProjectSettings.setConfig`，中栏表单即时反映。会话连续性不建：历史仍由 `ProjectLaunchAssistant` 自持 `messages.slice(-8)`，但每轮须把上一轮的 `toolTraces`（`ChatToolTraceEntry[]`）随 `ChatStreamRequest.toolTraces` 回放，否则模型上一轮读过的文件在下一轮从上下文消失。流式展示简化：正文不再夹带动作块，`visibleLaunchAssistantText` 的剥离逻辑随协议退役删除，delta 直出。**（已落地 2026-10-08：`LaunchConfigChange` + `config_change` agentEvent 进 `ChatAgentEvent` 契约并回 `handleAssistantConfig`（`applied` 时结算基线）；`streamWorkspaceLaunchAssistant` 每轮发 `launchDraft`（真实 config + `projectPath`）与 `workspaceResources`（`ProjectSettings` 建/复用 agent 会话）点亮 `attachLaunchConfigTools`；`toolTraces` 跨轮回放（`toolTracesRef` 累积 → `ChatStreamRequest.toolTraces` 回灌）；`visibleLaunchAssistantText` 退役、delta 直出。审批框复用 `ProjectSettings.pendingApproval`（新增按 workspaceId 捕 `approval-requested` 的常驻监听）。手测未跑。）**
 
-**5. 退役清单**。`<janus-launch-action>` 协议与 `parseLaunchAssistantResponse`、`buildLaunchAssistantMessages` 的动作块指令段；`ProjectLaunchAssistant.applyResponse` 的 save/test/run/stop 分发与 `onSave` / `onTest` / `onRun` / `onStop` props。窗口工具栏的 Play / Test / Stop 人类按钮保留，运行脚本能力留在人手里。`analyzeWorkspaceLaunch` 保留为轮前证据构建（检测、候选配置、manifest 摘录仍是首轮上下文的来源）。
+**5. 退役清单**。`<janus-launch-action>` 协议与 `parseLaunchAssistantResponse`、`buildLaunchAssistantMessages` 的动作块指令段；`ProjectLaunchAssistant.applyResponse` 的 save/test/run/stop 分发与 `onSave` / `onTest` / `onRun` / `onStop` props。窗口工具栏的 Play / Test / Stop 人类按钮保留，运行脚本能力留在人手里。`analyzeWorkspaceLaunch` 保留为轮前证据构建（检测、候选配置、manifest 摘录仍是首轮上下文的来源）。**（已落地 2026-10-08：`<janus-launch-action>` 协议、`parseLaunchAssistantResponse`、`buildLaunchAssistantMessages` 动作块指令段、`visibleLaunchAssistantText` 全退役；`ProjectLaunchAssistant.applyResponse` 与 `onSave`/`onTest`/`onRun`/`onStop` props 收缩（Play/Test/Stop 留工具栏人类按钮）；`tests/unit/workspace-launch-assistant.test.ts` 改写为工具面/ops 回灌测试（10 项）。`analyzeWorkspaceLaunch` 保留为轮前证据构建。）**
 
 **6. 实施顺序与验证**。顺序：① sourceTag 切割 + 反证测试；② `ChatStreamRequest` 双闸透传；③ `attachLaunchConfigTools` 三工具 + `config_change` 事件桥；④ `ProjectLaunchAssistant` 收编（协议退役、props 收缩）；⑤ `tests/unit/workspace-launch-assistant.test.ts` 从协议解析测试改写为 ops 应用与校验回灌测试；⑥ 本 Note 更新为 `implemented` 并在 `launch-config-chat.ts` 模块顶留逆向注释。验证命令：
 
@@ -88,6 +92,8 @@
 - `npx vitest run tests/unit/workspace-launch-assistant.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/knowledge/janus-chat-recall.test.ts tests/unit/knowledge/user-turn-capture.test.ts tests/unit/assistant-ui.test.ts --maxWorkers=2`。
 - 钉点断言：`'launch-assistant'` 轮次零 `captureTurn`、零个人时间线写入；allowlist 外工具调用被 `toolGate` block；非法 config 两连失败后错误回到用户而非静默重试。
 - 手测场景：「运行 debug 版 start.exe」→ `launch-config.edit` 生成配置 → 审批框 → `.janusX/janusX.launch.json` 落盘 → 中栏表单与 diff 视图一致。
+
+**（已落地 2026-10-08，全绿）**：`npx tsc --noEmit` 干净 + `--noUnusedLocals` 严格型检过 + 触达文件 eslint 零 error；74 项单测（`launch-config-chat`15 + `workspace-launch-assistant`10 + `llm/chat-turn-guard`17 + `note-chat`24 + `assistant-ui`8）+ `planche-theme`14 过。桌面 e2e `tests/e2e/run-config-assistant.spec.ts` 全链绿（`npm run build` 后 `--config=playwright.desktop.config.ts` 23s）：mock-LLM 驱动「运行 debug 版 start.exe」→ 断言受限工具面 → `launch-config.edit` 回中栏表单（出现 `debug-start.exe`）→ `launch-config.apply` 弹审批框 →「批准」→ `.janusX/janusX.launch.json` 落盘（`configurations[0].program='debug-start.exe'`）。第 6 步手测场景已自动化覆盖。**留痕**：e2e 用 mock-LLM 驱动工具调用，真 LLM 生成质量手测另属产品验收（非实现完备闸）；两个待确认默认值（run/test/stop 模型触发已移除、生成即 `launch-config.apply` 弹一次审批落盘）维持默认，用户反对再改；逆向注释已在 `launch-config-chat.ts` 顶。）**
 
 ## Alternatives considered
 
@@ -100,12 +106,14 @@
 
 ## Risks
 
+字段路径编辑拒绝 `__proto__`、`prototype` 和 `constructor`，并只遍历草稿自身的字段，避免模型提供的路径改变共享对象原型。对应单测验证根对象与配置项的原型路径均被拒绝。
+
 - 工具循环把单轮从一次流式变成模型多轮工具往返，复杂配置的生成时延上升；以 `getMaxTurns`（`configService.getAgentMaxSteps`）封顶，超限报错交还用户。
 - `config_change` 与用户手改表单并发：ops 只动被点名字段以降低冲突面，同一字段撞车仍以事件到达序为准；表单既有 diff 视图与 `baselineConfig` 兜底，用户可回看再改。
 - allowlist 漂移：全局新增工具若被 staged offering 自动供给助手轮次会破边界；`toolGate` 兜底 block，allowlist 须在工具注册表变动的 review 中对表。
 - `ChatStreamRequest` 扩型牵动 `llm-handlers`、preload、`electron.d.ts` 公共契约链路；字段全部可选，向后兼容，但三处类型须同步。
 - 两个待确认点在实施前落定；默认值已记录，新会话可按默认推进。
-- 包侧 `resolvesTrustedResources`（`@janus-agent/janus-agent` `chat-turn.js`）只认 `'janus-chat' | 'maintenance' | 'harness'`，`'launch-assistant'` 轮次不解析 trusted resources、工具装配为空；步骤 2 传 `workspaceResources` 之前须先让包侧认新标签（包升级或等价改法），否则只读工具族拿不到工作区根。步骤 1 已验证该缺口无副作用（助手今日本就不传 `workspaceResources`）。
+- 包侧 `resolvesTrustedResources`（`@janus-agent/janus-agent` `chat-turn.js`）只认 `'janus-chat' | 'maintenance' | 'harness'`，`'launch-assistant'` 轮次不解析 trusted resources。**已用等价改法缓解（2026-10-08）**：`chat-orchestrator.ts` 把 `turnSourceTag` 在进 `runChatTurn` 前重映射 `sourceTag === 'launch-assistant' ? 'maintenance' : sourceTag`，借闭名单内标签解析工作区资源；画像三闸仍看请求上的 `sourceTag: 'launch-assistant'`，不受重映射影响（见步骤 1 闸门）。彻底修法仍是包侧认新标签（包升级）。第 4 步已接线：渲染端每轮发 `workspaceResources`（agent 会话）与 `launchDraft`，只读工具族与 `attachLaunchConfigTools` 今已吃到工作区根。
 
 ## Consequences
 

@@ -75,6 +75,8 @@ export interface ChatStreamRequest {
    */
   toolAllowlist?: string[]
   toolGate?: (call: { name: string; arguments: unknown }) => Promise<{ block: true; reason: string; terminate?: boolean } | undefined>
+  /** 运行配置轮内文档（真实值；脱敏只发生在进模型上下文的边界）。 */
+  launchDraft?: { config: import('../../shared/ipc/project').LaunchConfig; projectPath: string }
   /**
    * S6 engineering domain. Missing = legacy personal behavior.
    * `project` never falls back to personal memory capture/injection.
@@ -422,7 +424,12 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
 // Note: single-turn lock and project domain isolation — see .agents/notes/agent/chat-turn-guard-domain-s6.md
 /** 流式对话编排：由 llm-handlers 的 ipcMain.on(chatStream) 委托调用 */
 export async function handleChatStream(event: ChatStreamReplyTarget, request: ChatStreamRequest): Promise<void> {
-  const { requestId, messages, providerId, modelId, sourceTag, conversationId, workspaceId, workspacePath, workspaceResources, toolTraces, toolAllowlist, toolGate, domain } = request
+  const { requestId, messages, providerId, modelId, sourceTag, conversationId, workspaceId, workspacePath, workspaceResources, toolTraces, toolAllowlist, toolGate, launchDraft, domain } = request
+  // 供给入口搭车（照 note.focus 搭 janus-chat 的车）：'launch-assistant' 尚未进包侧
+  // resolvesTrustedResources 闭名单，轮次以 'maintenance' 身份进 runChatTurn 解析
+  // 工作区资源；画像三闸看的是请求上的 sourceTag，不受此重映射影响 — see
+  // .agents/notes/agent/run-config-assistant-edit-tools.md
+  const turnSourceTag = sourceTag === 'launch-assistant' ? 'maintenance' : sourceTag
 
   // S6: same conversationId shares one active turn across assistant/blueprint entries.
   const activeTurn = activeSteerTargets.get(conversationId || requestId)
@@ -485,7 +492,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     const turnToolGate = gateFromToolAllowlist(toolAllowlist, toolGate)
     const modeCommand = parseWorkflowXCommand([...messages].reverse().find(message => message.role === 'user')?.content ?? '')
     if (modeCommand && !modeCommand.prompt && !request.maintenanceTaskId) {
-      await runChatTurn({ requestId, messages, providerId, modelId, sourceTag, toolAllowlist, toolGate: turnToolGate }, ports, { onEvent: agentEvent => {
+      await runChatTurn({ requestId, messages, providerId, modelId, sourceTag: turnSourceTag, toolAllowlist, toolGate: turnToolGate }, ports, { onEvent: agentEvent => {
         sendAgentEvent(agentEvent)
         if (agentEvent.type === 'text_delta') queueDelta(agentEvent.delta)
       } }, controller.signal)
@@ -550,6 +557,20 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       if (!roots.length) ports.knowledgeCapture = undefined
     }
 
+    // 运行配置专属工具族（照 attachNoteChatTools 端口拦截样板，只挂助手轮次）：
+    // get/edit/apply 自处理，config_change 照 note_change 事件桥回表单 — see
+    // .agents/notes/agent/run-config-assistant-edit-tools.md
+    if (sourceTag === 'launch-assistant' && launchDraft) {
+      const { attachLaunchConfigTools } = await import('../harness/launch-config-chat')
+      attachLaunchConfigTools(ports, {
+        draft: launchDraft,
+        workspaceId: workspaceId ?? '',
+        resources: workspaceResources ?? [],
+        signal: controller.signal,
+        onChange: change => sendAgentEvent({ type: 'config_change', requestId, change }),
+      })
+    }
+
     if (request.maintenanceTaskId) {
       if (domain !== 'project' || !conversationId) throw new Error('NOT_READY: maintenance requires a project conversation')
       const { blueprintMaintenanceService } = await import('../janus/maintenance/service')
@@ -584,7 +605,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         workflowMode: resolveWorkflowXMode(messages),
         providerId,
         modelId,
-        sourceTag,
+        sourceTag: turnSourceTag,
         conversationId,
         workspaceId,
         workspacePath,

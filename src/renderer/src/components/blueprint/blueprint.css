@@ -14,6 +14,15 @@
   overflow: hidden;
 }
 
+/* 工作台中列卡的圆角轮廓由 .blueprint-canvas-main 的 8px 圆角边框承担，
+   但底色由 view 自己刷（workbench 纸面 / 空态 / 加载态），是方角的。
+   view 本就 overflow: hidden，这里把裁切角对齐到 8px：圆角切口处的方角
+   纸面被裁掉，轮廓跟随圆角边框，否则视觉成为“方框内置圆角边框”。
+   embedded 视图是整页铺底，保持方角不动。 */
+.blueprint-view--workbench {
+  border-radius: 8px;
+}
+
 /* —— 顶部工具栏 —— */
 .blueprint-toolbar {
   display: flex;
@@ -4109,6 +4118,15 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   color: var(--ink, #1C343B);
+}
+
+/* 中列的 .blueprint-workbench-card--canvas 只是透明布局壳（见基础规则
+   border:0/background:transparent/border-radius:0）。上面的纸面统一覆写若把壳
+   也刷上纸底墨框，直角壳就会在圆角的 .blueprint-canvas-main 外再套一圈框，
+   视觉成为“方框中有圆角”。壳保持透明，卡片观感由内层画布独自承担。 */
+[data-theme='planche'] .blueprint-workbench-card--canvas {
+  background: transparent;
+  border: 0;
 }
 
 [data-theme='planche'] .blueprint-workbench-tab {

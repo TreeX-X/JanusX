@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyHarnessInit, previewHarnessInit, hasNoteMutationIntent } from '@janus-agent/harness-node'
+import { parseNote } from '@janus-agent/harness-core'
 import { HarnessNoteService } from '../../src/main/harness/service'
 import { WorkspaceBlueprintService } from '../../src/main/harness/workspace-blueprint'
 import zh from '../../src/renderer/src/i18n/locales/zh-CN/blueprint.json'
@@ -24,7 +25,7 @@ describe('workspace blueprint initialization', () => {
     const preview = await service.preview(root, '示例项目', 1)
     expect(await readdir(root)).toEqual([])
     expect(preview.files).toHaveLength(2)
-    expect(preview.files[1].content).toContain('lifecycle: draft')
+    expect(parseNote(preview.files[1].content).meta).toMatchObject({ kind: 'module', lifecycle: 'draft', moduleState: 'planned', role: 'project' })
     await service.apply(root, preview.id, 1, false)
     expect((await service.status(root)).state).toBe('ok')
     const graph = await notes.projectView(root)
