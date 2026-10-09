@@ -1,4 +1,4 @@
-// Note: the audit batch commits page, sources, history and candidate together — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: the audit batch commits page, sources, history and candidate together — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { randomUUID } from 'node:crypto'
 import { readFile, unlink } from 'node:fs/promises'
 import { join } from 'node:path'

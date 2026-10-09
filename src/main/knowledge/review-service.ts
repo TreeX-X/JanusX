@@ -33,6 +33,7 @@ import { knowledgeAuditService } from './audit-service'
 import { prepareWikiHistory, wikiContentHash } from './wiki-history'
 import { prepareWikiReview, recoverPendingWikiReview } from './wiki-review-recovery'
 import { wikiFreshness } from './wiki-freshness'
+import { assertWikiRelations, normalizeWikiRelations } from './wiki-relations'
 import type { KnowledgeStageModel } from '../../shared/knowledge-automation'
 import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
 import { candidateDecisionHash } from './decision-scorer'
@@ -40,6 +41,7 @@ import { reviewedFactHash } from './profile-projection'
 import { readLegacyJsonl, validateLegacyCandidate } from './legacy-memory-source'
 import { validatePersonalCorrection } from './personal-correction-source'
 import { isExactFactDuplicate, mergeFactEvidence, validateFactEvidence } from './fact-evidence-review'
+import { isRawKnowledgeContent } from './knowledge-content'
 import type { MemoryDecisionAnnotation } from '../../shared/memory-decision'
 import type {
   ReviewCandidateInput,
@@ -65,6 +67,8 @@ interface WikiPagesIndex {
 }
 
 interface WikiPageIndexEntry {
+  topicKey?: string
+  relations?: WikiPage['relations']
   sourceFactRefs?: WikiPage['sourceFactRefs']
   managed?: boolean
   generationHash?: string
@@ -130,6 +134,8 @@ async function assertCandidateAllowed(candidate: ReviewCandidate, operation: 'pr
 }
 
 export async function proposeDerivedCandidates(candidates: Array<CandidateWikiPatch | CandidateGraphEdge>): Promise<void> {
+  // Note: new relationships belong to Wiki review; retain old records for cleanup — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
+  if (candidates.some(candidate => candidate.type === 'graph-edge')) throw new Error('standalone-graph-proposals-disabled')
   for (const type of ['wiki-patch', 'graph-edge'] as const) {
     const incoming = candidates.filter(candidate => candidate.type === type)
     if (!incoming.length) continue
@@ -196,6 +202,7 @@ export function withFactCandidatesLock<T>(operation: () => Promise<T>): Promise<
 /** Single fact admission path: producers propose, explicit review applies. */
 export async function proposeFactCandidates(candidates: CandidateFact[], mergeExact = false): Promise<CandidateFact[]> {
   if (candidates.length === 0) return []
+  if (candidates.some(candidate => isRawKnowledgeContent(candidate.fact.content))) throw new Error('Raw execution evidence cannot be proposed as knowledge')
   return withFactCandidatesLock(async () => {
     for (const candidate of candidates) await assertCandidateAllowed(candidate, 'propose')
     const file = absolute(FACT_CANDIDATES_FILE)
@@ -220,6 +227,9 @@ export async function proposeFactCandidates(candidates: CandidateFact[], mergeEx
         if (target) {
           target.fact = mergeFactEvidence(target.fact, candidate.fact)
           target.evidence = { observationIds: target.fact.provenance.sourceObservationIds, sources: target.fact.provenance.sourceEvidence,
+            ...((target.evidence.contextSources || candidate.evidence.contextSources) ? { contextSources: [...new Map([
+              ...(target.evidence.contextSources ?? []), ...(candidate.evidence.contextSources ?? []),
+            ].map(source => [JSON.stringify([source.workspaceId, source.observationId]), source])).values()] } : {}),
             snippets: [...new Set([...(target.evidence.snippets ?? []), ...(candidate.evidence.snippets ?? [])])],
             quotes: [...new Map([...(target.evidence.quotes ?? []), ...(candidate.evidence.quotes ?? [])].map(quote => [JSON.stringify(quote), quote])).values()] }
           delete target.decision
@@ -469,7 +479,7 @@ export class KnowledgeReviewService {
     try {
       audit = await knowledgeAuditService.record({
         action: 'candidate_rejected', targetType: auditTargetType(type), targetId: id,
-        before: { status: current.status }, after: { status: 'rejected', reviewNotes: reviewNotes ?? null }, provenance,
+        before: { status: current.status, ...(current.type === 'fact' ? { content: current.fact.content } : current.type === 'wiki-patch' ? { title: current.title, markdown: current.patchMarkdown } : {}) }, after: { status: 'rejected', reviewNotes: reviewNotes ?? null }, provenance,
       })
     } catch (error) {
       records[index] = current
@@ -481,7 +491,7 @@ export class KnowledgeReviewService {
   }
 
   async applyCandidate(input: ReviewCandidateInput): Promise<ReviewResult> {
-    // Note: offline candidates always require explicit review — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+    // Note: offline candidates always require explicit review — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
     if (input.actor === 'auto-policy') throw new Error('Automatic acceptance is unavailable; explicit review is required')
     const commit = () => withMutationLock(candidateRelativePath(input.type), async () => {
       try { return await this.applyLocked(input) }
@@ -559,7 +569,7 @@ export class KnowledgeReviewService {
       action: 'candidate_approved',
       targetType,
       targetId: id,
-      before: { status: current.status },
+      before: { status: current.status, ...(current.type === 'fact' ? { content: current.fact.content } : current.type === 'wiki-patch' ? { title: current.title, markdown: current.patchMarkdown } : {}) },
       after: { status: 'applied', reviewNotes: reviewNotes ?? null,
         ...(automatic ? { taskId: automatic.taskId, provider: automatic.model.provider, model: automatic.model.model } : {}),
         ...(input.replacement ? { replacementId: input.replacement.id, replacementHash: input.replacement.hash } : {}) },
@@ -597,7 +607,7 @@ export class KnowledgeReviewService {
       action: 'candidate_applied',
       targetType,
       targetId: id,
-      before: { status: current.status },
+      before: { status: current.status, ...(current.type === 'fact' ? { content: current.fact.content } : current.type === 'wiki-patch' ? { title: current.title, markdown: current.patchMarkdown } : {}) },
       after: {
         status: 'applied',
         appliedId:
@@ -729,9 +739,10 @@ export class KnowledgeReviewService {
     const workspaceId = candidate.provenance.workspaceId
     const index = await readWikiIndex()
     const samePage = (page: WikiPageIndexEntry) => page.slug === slug && page.workspaceId === workspaceId
+    if (index.pages.filter(samePage).length > 1) throw new Error('Wiki page identity is ambiguous; resolve duplicate records before review')
     const existingEntry = index.pages.find(samePage)
     const fullReview = candidate.reviewMode === 'full-page'
-    if ((fullReview || candidate.sourceNoteRefs?.length) && candidate.expectedVersion !== (existingEntry?.version ?? 0)) {
+    if ((fullReview || candidate.sourceNoteRefs?.length || candidate.relations !== undefined || existingEntry?.relations?.length) && candidate.expectedVersion !== (existingEntry?.version ?? 0)) {
       throw new Error('Wiki page version changed; create a new proposal from the current full page')
     }
     const refs = new Map((fullReview ? [] : existingEntry?.sourceNoteRefs ?? []).map(ref => [ref.uri, ref]))
@@ -757,6 +768,8 @@ export class KnowledgeReviewService {
     const now = new Date().toISOString()
     const version = (existingEntry?.version ?? 0) + 1
     const entry: WikiPageIndexEntry = {
+      topicKey: existingEntry?.topicKey ?? candidate.topicKey,
+      relations: normalizeWikiRelations([...(fullReview ? [] : existingEntry?.relations ?? []), ...(candidate.relations ?? [])]),
       slug,
       title: candidate.title || existingEntry?.title || slug,
       relativePath: relativePath.replace(/\\/g, '/'),
@@ -777,6 +790,7 @@ export class KnowledgeReviewService {
       ...(refs.size ? { sourceNoteRefs: [...refs.values()] } : {}),
     }
     const page: WikiPage = {
+      topicKey: entry.topicKey, relations: entry.relations,
       slug,
       title: entry.title,
       markdown,
@@ -791,6 +805,7 @@ export class KnowledgeReviewService {
       workspaceId: entry.workspaceId,
     }
     const previousPage: WikiPage | undefined = existingEntry && existingMarkdown !== null ? {
+      topicKey: existingEntry.topicKey, relations: existingEntry.relations,
       slug, title: existingEntry.title, markdown: existingMarkdown, tags: existingEntry.tags,
       status: existingEntry.status, sourceFactIds: existingEntry.sourceFactIds,
       sourceNoteRefs: existingEntry.sourceNoteRefs, workspacePath: existingEntry.workspacePath,
@@ -802,6 +817,9 @@ export class KnowledgeReviewService {
       if (wikiFreshness(page, facts) === 'stale' || page.sourceFactIds.length !== candidate.sourceFactRefs.length
         || candidate.sourceFactRefs.some(ref => !page.sourceFactIds.includes(ref.id))) throw new Error('Wiki fact sources changed; regenerate the page')
     }
+    // The Wiki and fact locks cover target revisions, source withdrawal and publication together.
+    const { knowledgeTruthService } = await import('./truth-service')
+    assertWikiRelations(page, page.relations?.length ? (await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages : [])
     if (previousPage?.status === 'published' && wikiContentHash(previousPage) === wikiContentHash(page)) {
       return { value: previousPage, changed: false, rollback: async () => undefined }
     }

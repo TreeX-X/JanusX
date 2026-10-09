@@ -4,7 +4,7 @@ import { build } from 'esbuild'
 
 let browser: Browser
 let script: string
-// Note: commit fixture activation transitions before asserting refresh — see .agents/notes/2026-09-20-reproducible-verification--914a7e92.md
+// Note: commit fixture activation transitions before asserting refresh — see .agents/notes/desktop/reproducible-verification.md
 beforeAll(async () => {
   browser = await chromium.launch({ headless: true })
   const result = await build({
@@ -48,6 +48,7 @@ describe('personal memory correction UI', () => {
       await page.getByRole('button', { name: 'Correct this memory', exact: true }).waitFor()
       await page.evaluate(() => { (window as any).events=[{id:'recent',content:'Recent event',contentHash:'b'.repeat(64),createdAt:'2026-09-29',expiresAt:'2099-01-01',tags:[]}];(window as any).renderActive(false) })
       await page.evaluate(() => (window as any).renderActive(true))
+      await page.locator('summary').filter({ hasText: /^Recent/ }).click()
       await page.getByText('Recent event', {exact:true}).waitFor()
       await page.getByRole('button', { name: 'Forget this memory', exact: true }).last().click()
       await page.getByRole('button', { name: 'Confirm forgetting', exact: true }).click()
@@ -70,7 +71,7 @@ describe('personal memory correction UI', () => {
       await page.getByRole('button', { name: 'Confirm forgetting', exact: true }).click()
       expect(await page.getByRole('button', { name: 'Confirm forgetting', exact: true }).isDisabled()).toBe(true)
       await page.evaluate(() => (window as any).finish())
-      await page.getByRole('button', { name: 'Refresh Knowledge Engine', exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Refresh memories', exact: true }).waitFor()
       expect(await page.getByRole('button', { name: 'Forget this memory', exact: true }).count()).toBe(0)
       expect(await page.evaluate(() => (window as any).calls)).toEqual([
         { targetId: 'old', targetHash: 'a'.repeat(64) }, { targetId: 'old', targetHash: 'a'.repeat(64) },

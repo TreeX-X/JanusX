@@ -53,7 +53,7 @@ export class ModelCatalogService {
     return catalog
   }
 
-  // Note: chat budgets consume the same live registry as settings — see .agents/notes/2026-07-09-model-registry--31cda2d8.md
+  // Note: chat budgets consume the same live registry as settings — see .agents/notes/agent/model-registry.md
   async resolveModel(modelId: string): Promise<AiModelRegistryDocument['models'][number] | undefined> {
     const catalog = await this.getCatalog()
     const cached = modelWithContext(modelId, catalog.models)

@@ -8,6 +8,7 @@
  */
 
 import { knowledgeRootPath } from './constants'
+import { knowledgeTranscriptRecovery } from './transcript-recovery'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeExtractService } from './extract-service'
 import { knowledgeTruthService } from './truth-service'
@@ -122,6 +123,7 @@ export class KnowledgeDiagnosticsService {
       indexUpdatedAt,
       captureFailures: knowledgeCaptureFailureCount(),
       captureRecovery: await knowledgeCaptureInbox.status(query.workspaceId),
+      transcriptRecovery: await knowledgeTranscriptRecovery.status(query.workspaceId),
     }
   }
 }

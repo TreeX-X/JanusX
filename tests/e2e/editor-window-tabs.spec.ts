@@ -39,6 +39,7 @@ test('file opens share one workspace editor window and switch existing tabs', as
       env: createDesktopTestEnv(root),
     })
     const mainPage = await application.firstWindow({ timeout: 30_000 })
+    await mainPage.waitForFunction(() => typeof (window as EditorWindowAPI).electron?.window?.openEditor === 'function')
 
     await mainPage.evaluate(
       async ({ first, second, workspace }) => {

@@ -1,4 +1,4 @@
-// Note: persist refinement intent before advancing the observation cursor — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: persist refinement intent before advancing the observation cursor — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import type { LlmStageBatch, LlmStageStatus } from './processing-queue'
 import { isActiveObservation, isUserStatement, observationScope } from './memory-evidence'
 import { knowledgeDecisionStage, type RefinementPlan } from './decision-stage'

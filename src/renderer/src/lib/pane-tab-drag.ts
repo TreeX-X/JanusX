@@ -19,7 +19,7 @@ interface Strip {
   spacer: HTMLElement
 }
 
-// Note: pointer previews use untransformed tab geometry and commit only on release — see .agents/notes/2026-10-04-pane-tab-reorder--233a32a0.md
+// Note: pointer previews use untransformed tab geometry and commit only on release — see .agents/notes/workbench/pane-tab-reorder.md
 export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }: PaneTabDragOptions): () => void {
   const pointerId = event.pointerId
   const origin = { x: event.clientX, y: event.clientY }

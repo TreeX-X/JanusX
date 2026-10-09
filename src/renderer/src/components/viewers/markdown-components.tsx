@@ -152,7 +152,7 @@ function ResolvedMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   )
 }
 
-// Note: emphasis renders as orange type with no fill blocks — see .agents/notes/2026-09-27-markdown-emphasis-orange-text--0d703ca1.md
+// Note: emphasis renders as orange type with no fill blocks — see .agents/notes/workbench/markdown-emphasis-orange-text.md
 export const MARKDOWN_COMPONENTS: Components = {
   h1: ({ children }) => (
     <h1 style={{ color: 'var(--shell-text)', fontSize: 22, fontWeight: 700, marginBottom: 12, marginTop: 20, lineHeight: 1.3, paddingBottom: 8, borderBottom: '1px solid var(--control-border)' }}>

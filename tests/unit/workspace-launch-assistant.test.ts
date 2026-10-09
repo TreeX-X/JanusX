@@ -1,32 +1,37 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ProjectType } from '../../src/shared/ipc/project'
+import { ProjectType, type LaunchConfig, type RunningProjectSummary } from '../../src/shared/ipc/project'
+import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../src/shared/ipc/llm'
+import type { LaunchConfigChange } from '../../src/shared/launch-config-chat'
 import { chatStream } from '../../src/renderer/src/services/llm'
 import {
   analyzeWorkspaceLaunch,
   buildLaunchAssistantMessages,
-  parseLaunchAssistantResponse,
+  LAUNCH_ASSISTANT_TOOL_ALLOWLIST,
   redactWorkspaceExcerpt,
   selectLaunchContextFiles,
   streamWorkspaceLaunchAssistant,
-  visibleLaunchAssistantText,
 } from '../../src/renderer/src/services/workspace-launch-assistant'
 
 vi.mock('../../src/renderer/src/services/llm', () => ({ chatStream: vi.fn() }))
 
-const config = {
+const config: LaunchConfig = {
   version: '0.1.0',
   projectType: ProjectType.Vite,
   projectName: 'demo',
-  configurations: [{ name: 'dev', type: ProjectType.Vite, request: 'launch' as const, env: { TOKEN: 'secret' } }],
+  configurations: [{ name: 'dev', type: ProjectType.Vite, request: 'launch', env: { TOKEN: 'secret' } }],
 }
 
 const analysis = {
-  workspaceId: 'workspace-1', projectPath: '', relativePath: '',
+  workspaceId: 'workspace-1', projectPath: 'apps/web', relativePath: 'apps/web',
   detection: { type: ProjectType.Vite, confidence: 0.9, evidence: ['package.json'], candidates: [] },
   candidateConfig: config,
   validation: { valid: true, errors: [], warnings: [] },
   files: ['package.json'], excerpts: [{ path: 'package.json', content: '{"scripts":{"dev":"vite","test":"vitest"}}' }],
 }
+
+const resources: ChatWorkspaceResource[] = [
+  { workspaceId: 'workspace-1', workspacePath: 'C:/ws', workspaceName: 'ws', agentSessionId: 'session-1' },
+]
 
 describe('workspace launch assistant', () => {
   afterEach(() => {
@@ -34,95 +39,107 @@ describe('workspace launch assistant', () => {
     vi.unstubAllGlobals()
   })
 
-  it('redacts config environment values in model context', () => {
-    const messages = buildLaunchAssistantMessages({ request: '优化配置', analysis, config })
-    expect(JSON.stringify(messages)).not.toContain('secret')
-    expect(JSON.stringify(messages)).toContain('[REDACTED]')
+  it('pins the assistant tool surface to read-only workspace tools and launch-config writes', () => {
+    expect([...LAUNCH_ASSISTANT_TOOL_ALLOWLIST]).toEqual([
+      'workspace.list', 'workspace.read', 'project.detect',
+      'launch-config.get', 'launch-config.edit', 'launch-config.apply',
+    ])
   })
 
-  it('treats user launch intent as authoritative and shares managed process context', () => {
-    const messages = buildLaunchAssistantMessages({
-      request: '虽然是 CMake，但请用 scripts/start.cmd 启动',
-      analysis,
-      config,
-      runningProjects: [{
-        id: 'C:\\workspace::dev::1',
-        pid: 42,
-        type: ProjectType.Custom,
-        name: 'external-script',
-        startTime: '2026-07-31T00:00:00.000Z',
-        uptime: 100,
-      }],
-    })
+  it('builds a tool-oriented prompt and retires the action envelope', () => {
+    const messages = buildLaunchAssistantMessages({ request: '优化配置', analysis })
     const prompt = JSON.stringify(messages)
-
+    expect(prompt).toContain('launch-config.get')
+    expect(prompt).toContain('launch-config.edit')
+    expect(prompt).toContain('launch-config.apply')
     expect(prompt).toContain('Detected project type is advisory evidence')
-    expect(prompt).toContain('type \\\"custom\\\"')
+    expect(prompt).not.toContain('<janus-launch-action>')
+  })
+
+  it('shares workspace evidence and managed process context', () => {
+    const runningProjects: RunningProjectSummary[] = [{
+      id: 'C:\\workspace::dev::1',
+      pid: 42,
+      type: ProjectType.Custom,
+      name: 'external-script',
+      startTime: '2026-07-31T00:00:00.000Z',
+      uptime: 100,
+    }]
+    const prompt = JSON.stringify(buildLaunchAssistantMessages({
+      request: '虽然是 CMake，但请用 scripts/start.cmd 启动', analysis, runningProjects,
+    }))
     expect(prompt).toContain('external-script')
-    expect(prompt).toContain('save, test, run, stop')
+    expect(prompt).toContain('package.json')
+    expect(prompt).toContain('type \\\"custom\\\"')
   })
 
-  it('parses a fenced structured response and validates actions', () => {
-    expect(parseLaunchAssistantResponse('```json\n{"message":"ok","config":null,"action":"test","testScript":"test:unit"}\n```')).toEqual({
-      message: 'ok', config: null, action: 'test', testScript: 'test:unit',
-    })
-    expect(parseLaunchAssistantResponse('{"message":"no","action":"shell","testScript":"test;rm"}')).toEqual({
-      message: 'no', config: null, action: 'none', testScript: undefined,
-    })
-    expect(parseLaunchAssistantResponse('{"message":"stopping","action":"stop"}')).toMatchObject({
-      message: 'stopping', action: 'stop',
-    })
+  it('keeps only the recent history tail', () => {
+    const history = Array.from({ length: 12 }, (_, index) => ({ role: 'user' as const, content: `m${index}` }))
+    const messages = buildLaunchAssistantMessages({ request: 'r', analysis, history })
+    const carried = messages.filter((message) => /^m\d+$/.test(message.content)).map((message) => message.content)
+    expect(carried).toEqual(['m4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 'm11'])
   })
 
-  it('parses the hidden action envelope without exposing it in the message', () => {
-    expect(parseLaunchAssistantResponse([
-      '配置已准备好。',
-      '<janus-launch-action>{"config":null,"action":"run","testScript":null}</janus-launch-action>',
-    ].join('\n'))).toEqual({
-      message: '配置已准备好。', config: null, action: 'run', testScript: undefined,
-    })
-  })
-
-  it('degrades truncated structured output instead of throwing', () => {
-    expect(parseLaunchAssistantResponse(
-      '分析完成。<janus-launch-action>{"config":{"version":"0.1.0"',
-    )).toMatchObject({ message: '分析完成。', config: null, action: 'none' })
-
-    expect(parseLaunchAssistantResponse('{"message":"保留已完成的答复","config":')).toMatchObject({
-      message: '保留已完成的答复', config: null, action: 'none',
-    })
-  })
-
-  it('hides complete and partial action markers while streaming', () => {
-    expect(visibleLaunchAssistantText('正在分析<janus-la')).toBe('正在分析')
-    expect(visibleLaunchAssistantText(
-      '正在分析<janus-launch-action>{"action":"none"}</janus-launch-action>',
-    )).toBe('正在分析')
-  })
-
-  it('streams only visible prose and returns the parsed action', () => {
+  it('streams through the tool surface, sending the draft, resources and traces', () => {
     let emitDelta: ((delta: string) => void) | undefined
     let emitDone: (() => void) | undefined
-    vi.mocked(chatStream).mockImplementation((_messages, onDelta, onDone) => {
+    let options: Record<string, unknown> | undefined
+    vi.mocked(chatStream).mockImplementation((_messages, onDelta, onDone, _onError, opts) => {
       emitDelta = onDelta
       emitDone = onDone
+      options = opts as Record<string, unknown>
       return { abort: vi.fn() }
     })
     const onDelta = vi.fn()
     const onDone = vi.fn()
+    const onConfigChange = vi.fn()
+    const onToolTraces = vi.fn()
+    const traces: ChatToolTraceEntry[] = [
+      { toolName: 'workspace.read', workspaceId: 'workspace-1', status: 'completed', summary: 'read package.json' },
+    ]
 
     streamWorkspaceLaunchAssistant({
-      request: '运行项目', analysis, config, onDelta, onDone, onError: vi.fn(),
+      request: '运行 debug 版 start.exe', analysis, config, projectPath: 'apps/web',
+      workspaceResources: resources, toolTraces: traces,
+      onDelta, onReasoningDelta: vi.fn(), onConfigChange, onToolTraces, onDone, onError: vi.fn(),
     })
-    emitDelta?.('可以启动。<janus-la')
-    emitDelta?.('unch-action>{"config":null,"action":"run"}</janus-launch-action>')
-    emitDone?.()
 
-    expect(onDelta).toHaveBeenCalledTimes(1)
-    expect(onDelta).toHaveBeenCalledWith('可以启动。')
-    expect(onDone).toHaveBeenCalledWith({
-      message: '可以启动。', config: null, action: 'run', testScript: undefined,
+    expect(options).toMatchObject({
+      sourceTag: 'launch-assistant',
+      workspacePath: 'C:/ws',
+      workspaceResources: resources,
+      toolAllowlist: [...LAUNCH_ASSISTANT_TOOL_ALLOWLIST],
+      toolTraces: traces,
+      launchDraft: { config, projectPath: 'apps/web' },
     })
+
+    emitDelta?.('可以启动。')
+    emitDone?.()
+    expect(onDelta).toHaveBeenCalledWith('可以启动。')
+    expect(onDone).toHaveBeenCalledWith('可以启动。')
+  })
+
+  it('round-trips config_change and tool traces through the stream callbacks', () => {
+    let options: Record<string, any> | undefined
+    vi.mocked(chatStream).mockImplementation((_m, _d, _done, _e, opts) => {
+      options = opts as Record<string, any>
+      return { abort: vi.fn() }
+    })
+    const onConfigChange = vi.fn()
+    const onToolTraces = vi.fn()
+    streamWorkspaceLaunchAssistant({
+      request: 'run', analysis, config, projectPath: 'apps/web', workspaceResources: resources,
+      onDelta: vi.fn(), onReasoningDelta: vi.fn(), onConfigChange, onToolTraces, onDone: vi.fn(), onError: vi.fn(),
+    })
+    const change: LaunchConfigChange = {
+      id: 'c1', config, summary: 'set configurations[0].program', validation: { valid: true, errors: [], warnings: [] },
+    }
+    options?.onAgentEvent({ type: 'config_change', requestId: 'r', change })
+    expect(onConfigChange).toHaveBeenCalledWith(change)
+
+    const edited: ChatToolTraceEntry = { toolName: 'launch-config.edit', workspaceId: 'workspace-1', status: 'completed', summary: 'edit' }
+    options?.onToolTrace([edited])
+    expect(onToolTraces).toHaveBeenCalledWith([edited])
   })
 
   it('redacts common secrets from workspace excerpts', () => {

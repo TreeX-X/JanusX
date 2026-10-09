@@ -1,4 +1,46 @@
 {
+  "sourceInfo": {
+    "title": "Data sources",
+    "attention": "Needs attention",
+    "description": "Inspect the repositories, document read status, and issues behind this blueprint.",
+    "attentionDescription": "Some sources or module relationships need attention. See the details below.",
+    "repositories": "Repositories and document sources",
+    "noSources": "This blueprint has no document source information.",
+    "bound": "Connected",
+    "unbound": "Not connected",
+    "stale": "Source needs refresh",
+    "complete": "Document scan complete",
+    "incomplete": "Document scan incomplete",
+    "revision": "Read revision: {{value}}",
+    "unknown": "Unknown",
+    "selected": "Currently used",
+    "dirty": "Local changes",
+    "diagnostics": "Issues to review",
+    "noDiagnostics": "No additional parsing issues.",
+    "technical": "Technical details",
+    "moduleInterfaces": "Module interfaces · {{count}}",
+    "interfaces": "Cross-module interfaces · {{count}}",
+    "interfaceDetails": "Interface connections",
+    "issue": {
+      "document": "Document reading needs review",
+      "scan": "Document scan is incomplete",
+      "module": "Module or repository relationship needs review"
+    }
+  },
+  "browse": {
+    "navigation": "Module navigation",
+    "related": "Related documents and interfaces",
+    "back": "Back",
+    "overview": "Blueprint overview",
+    "noModules": "No modules declared yet. Existing documents remain available.",
+    "results": "Document search results",
+    "resultCount": "{{count}} documents found",
+    "unassigned": "Unassigned and historical documents ({{count}})",
+    "enterModule": "Enter module {{name}}",
+    "contents": "{{modules}} submodules · {{documents}} files",
+    "emptyModule": "This module has no direct files or submodules yet. Its description is available in the left preview.",
+    "moduleHint": "Click to preview a module, double-click to enter it. Back restores your previous browsing position."
+  },
   "workspace": {
     "select": "Switch workspace",
     "noWorkspace": "Add a workspace to begin",
@@ -68,7 +110,9 @@
     "initiative": "initiative",
     "requirement": "requirement",
     "decision": "decision",
-    "task": "task"
+    "task": "task",
+    "module": "Module",
+    "note": "Note"
   },
   "issueSeverity": {
     "low": "Low",
@@ -330,6 +374,7 @@
     "engineLabel": "JANUS // BLUEPRINT ENGINE",
     "controlLabel": "COPILOT CONTROL",
     "closeConsole": "Close console",
+    "greeting": "Tell me how this blueprint should be maintained. I can bring in the Note context of the canvas focus, analyze nodes, update Notes per your instructions, and undo applied changes.",
     "viewAria": "Blueprint JanusX views",
     "viewConversation": "Conversation",
     "viewHistory": "History",
@@ -540,7 +585,20 @@
     "invalidKept": "{{count}} invalid files kept, not executed"
   },
   "noteFocus": {
-    "read": "Accessed Notes", "addScope": "Add to working Notes", "hidden": "{{count}} highlighted Notes are hidden. Locate to reveal them.",
+    "read": "Accessed Notes",
+    "addScope": "Add to working Notes",
+    "primary": "Primary",
+    "enter": "Enter module",
+    "documents": "Documents",
+    "unassigned": "Unassigned documents",
+    "unavailableGroup": "Unavailable documents",
+    "location": {
+      "current": "Current page",
+      "otherModule": "Other module; locate to visit",
+      "unassigned": "Unassigned; preview available",
+      "unavailable": "Missing or ambiguous source",
+      "outsideView": "Outside this page; locate to visit"
+    },
     "scope": "Working Notes",
     "locate": "Locate",
     "clear": "Reset scope",
@@ -552,16 +610,22 @@
     "unavailable": "Not available in this canvas: {{names}}"
   },
   "architecture": {
-    "info": "Blueprint information",
     "project": "Project",
     "module": "Module",
-    "view": "Blueprint view",
-    "structure": "System structure",
-    "notes": "All Notes",
-    "coverage": "Checkout coverage",
-    "currentOnly": "Current accepted declarations. Planned, example and historical Notes remain available in All Notes.",
     "related": "Decisions and related work",
     "noRelated": "No declared related work.",
+    "governedBy": "Governed by",
+    "derivedFrom": "Derived from",
+    "supersedes": "Supersedes",
+    "acceptance": "Acceptance source",
+    "reference": "Document reference",
+    "ownership": "Module ownership",
     "unresolved": "Unresolved target"
+  },
+  "moduleState": {
+    "planned": "Planned",
+    "partial": "Partially implemented",
+    "implemented": "Implemented",
+    "retired": "Retired"
   }
 }

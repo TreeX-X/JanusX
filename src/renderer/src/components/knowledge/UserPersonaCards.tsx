@@ -3,7 +3,7 @@ import { useI18n } from '@/i18n/useI18n'
 import styles from './UserPersonaCards.module.css'
 import surface from './MemorySurface.module.css'
 
-// Note: compact summaries keep sources and explicit edits reachable — see .agents/notes/2026-10-04-assistant-persona-layout--6e9c114d.md
+// Note: compact summaries keep sources and explicit edits reachable — see .agents/notes/knowledge/assistant-persona-layout.md
 export function UserPersonaCards({ overview, onOpenInbox, onCorrect, onForget, onForgetEpisode, onRefresh, onEditProfile }: {
   overview: UserMemoryOverview
   onOpenInbox?: () => void

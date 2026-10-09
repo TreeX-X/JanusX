@@ -1,4 +1,4 @@
-// Note: models emit calls while the shell executes supervised — see .agents/notes/2026-07-05-llm-tool-runtime--15a5d590.md
+// Note: models emit calls while the shell executes supervised — see .agents/notes/agent/llm-tool-runtime.md
 /**
  * @file JanusX shell-owned agent assembly (stays in the shell permanently).
  * @description All agent logic lives in `@janus-agent/agent-core`; this module

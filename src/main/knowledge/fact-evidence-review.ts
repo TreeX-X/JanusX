@@ -1,11 +1,13 @@
-// Note: approval validates source snapshots and merges exact duplicates — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: approval validates source snapshots and merges exact duplicates — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { createHash } from 'node:crypto'
 import type { CandidateFact, MemoryFact, MemorySourceEvidence } from '../../shared/knowledge'
 import { knowledgeObservationService } from './observation-service'
 import { factScope, isActiveObservation, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
 import { sameFactDomain } from './fact-conflicts'
+import { isRawKnowledgeContent } from './knowledge-content'
 
 export async function validateFactEvidence(candidate: CandidateFact): Promise<void> {
+  if (isRawKnowledgeContent(candidate.fact.content)) throw new Error('Raw execution evidence cannot be accepted as knowledge')
   if (candidate.legacySource || candidate.personalCorrection) return
   const sources = candidate.evidence?.sources ?? candidate.fact.provenance.sourceEvidence ?? []
   // Legacy candidates without attribution remain reviewable, but cannot claim a verified source.
@@ -17,6 +19,15 @@ export async function validateFactEvidence(candidate: CandidateFact): Promise<vo
     throw new Error('Candidate source references do not match; regenerate before reviewing')
   }
   const observations = await knowledgeObservationService.listAll(true)
+  for (const expected of candidate.evidence.contextSources ?? []) {
+    const matches = observations.filter(row => row.id === expected.observationId && row.workspaceId === candidate.fact.provenance.workspaceId)
+    const current = matches[0]
+    if (matches.length !== 1 || !current || !isActiveObservation(current) || observationScope(current) !== factScope(candidate.fact)
+      || JSON.stringify(sourceEvidence(current)) !== JSON.stringify(expected)
+      || createHash('sha256').update(await knowledgeObservationService.resolveContent(current)).digest('hex') !== expected.contentHash) {
+      throw new Error('Candidate task context changed; regenerate before reviewing')
+    }
+  }
   for (const expected of sources) {
     const matches = observations.filter(row => row.id === expected.observationId && row.workspaceId === expected.workspaceId)
     const current = matches[0]

@@ -1,4 +1,4 @@
-// Note: one script owns each demo; visual defaults are shared — see .agents/notes/2026-10-03-readme-showcase--7b4800da.md
+// Note: one script owns each demo; visual defaults are shared — see .agents/notes/desktop/readme-showcase.md
 export const layout = {
   width: 1920, height: 1080,
   appWidth: 1760, appHeight: 884, appX: 80, appY: 28,

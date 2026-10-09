@@ -89,11 +89,13 @@ export const NODE_TYPE_LABEL: Record<string, string> = {
 }
 
 /** note kind 列表（NoteDoc 原始词汇，对齐 NoteAdapter v1 与高保真 kind 过滤） */
-export const NOTE_KINDS = ['initiative', 'requirement', 'task', 'decision', 'idea'] as const
+export const NOTE_KINDS = ['module', 'note', 'idea', 'requirement', 'decision', 'task', 'initiative'] as const
 export type NoteKindFilter = (typeof NOTE_KINDS)[number] | 'all'
 
 /** note kind → i18n key（未知 kind 回退原文直显） */
 export const NOTE_KIND_LABEL_KEY: Record<string, string> = {
+  module: 'blueprint:noteKind.module',
+  note: 'blueprint:noteKind.note',
   idea: 'blueprint:noteKind.idea',
   initiative: 'blueprint:noteKind.initiative',
   requirement: 'blueprint:noteKind.requirement',

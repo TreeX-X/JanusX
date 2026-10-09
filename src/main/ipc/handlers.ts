@@ -219,7 +219,7 @@ function emitWorkspaceFsChange(
     setTimeout(() => {
       watcherTimers.delete(workspacePath)
       const changedFilePath = filename ? join(workspacePath, filename.toString()) : null
-      // Note: standalone editor windows share the file-tree change channel so double-click editors auto-refresh — see .agents/notes/2026-09-27-standalone-editor-auto-refresh--fe22dc2d.md
+      // Note: standalone editor windows share the file-tree change channel so double-click editors auto-refresh — see .agents/notes/workbench/standalone-editor-auto-refresh.md
       const targets = new Set<BrowserWindow>()
       for (const window of watcherWindows.get(workspacePath) ?? []) targets.add(window)
       for (const window of getWorkspaceAllowedWindows()) {

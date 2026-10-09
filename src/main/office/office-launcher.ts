@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/2026-09-18-officecli-bundled--02b7c101.md
+// Note: OfficeCLI is a bundled asset, not a managed download — see .agents/notes/desktop/officecli-bundled.md
 import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
 import { readFile, realpath, stat } from 'node:fs/promises'

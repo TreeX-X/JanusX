@@ -6,13 +6,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import type { ChatTurnPorts } from '@janus-agent/janus-agent'
-import { codeManifestHash, type ReceiptCoverage } from '@janus-agent/harness-core'
+import { codeManifestHash, parseNote, serializeNote, taskContractHash, type ReceiptCoverage } from '@janus-agent/harness-core'
 import { runGit } from '@janus-agent/harness-node'
 import { prepareTaskRun, startTaskRun, getTaskRun, pauseTaskRun, rebaselineTaskRun } from '../../src/main/harness/execution-adapter'
 import { executeDesktopTask, executeDesktopXdo, runDesktopCommand, type DesktopExecutorPorts } from '../../src/main/harness/desktop-executor'
 import { createDesktopImplementationPort, generateDesktopReviewText, prepareDesktopTaskTurn } from '../../src/main/harness/desktop-task-turn'
 import { readTaskTranscript } from '../../src/main/harness/task-transcript'
-import { buildDesktopReviewPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
+import { buildDesktopReviewPrompt, buildEvaluatorPrompt, createModelReviewPort, parseDesktopReviewClaim } from '../../src/main/harness/desktop-review'
 import { BRIEF_MAX_FILES, buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles } from '../../src/main/harness/task-brief'
 
 const REPO = '8fa19f17-c717-43a8-93a7-810a5e0cbc91'
@@ -69,7 +69,7 @@ function taskNote(extraVerification: string): string {
   ].join('\n')
 }
 
-async function makeRoot(opts?: { exitCode?: number; manual?: boolean; implementation?: boolean }): Promise<string> {
+async function makeRoot(opts?: { exitCode?: number; manual?: boolean; implementation?: boolean; v2?: boolean; review?: 'self' | 'independent' }): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'desktop-xdo-'))
   roots.push(root)
   await mkdir(join(root, '.agents', 'notes'), { recursive: true })
@@ -95,6 +95,16 @@ async function makeRoot(opts?: { exitCode?: number; manual?: boolean; implementa
       ? taskNote(manual).replace("paths: ['./']", "paths: ['src/']").replace("      args: ['-e', 'process.exit(0)']", `      args: ${JSON.stringify(['-e', 'const fs=require("fs");process.exit(fs.readFileSync("src/value.txt","utf8")==="43"?0:1)'])}`)
       : taskNote(manual).replace('process.exit(0)', `process.exit(${exitCode})`),
   )
+  if (opts?.v2) {
+    const old = join(root, '.agents/notes', '2026-09-18-probe--' + TASK_ID.slice(0, 8) + '.md')
+    const task = parseNote(await readFile(old, 'utf8'))
+    task.meta.schema = 'harness-note/2'; task.meta.updated = '2026-10-08T00:00:00Z'
+    task.meta.module = 'note://' + REPO + '/22222222-2222-4222-8222-222222222222'
+    task.meta.work!.review = opts.review ?? 'self'
+    task.body += '\n## Progress\n\nAuthored progress stays.\n\n## Evidence\n\nAuthored evidence stays.\n\n## Handoff\n\nMain Agent owns all writes.\n'
+    await writeFile(join(root, '.agents/notes/task.md'), serializeNote(task)); await rm(old)
+    await writeFile(join(root, '.agents/notes/module.md'), '---\n' + JSON.stringify({ schema: 'harness-note/2', id: '22222222-2222-4222-8222-222222222222', kind: 'module', role: 'project', lifecycle: 'accepted', created: '2026-10-08', updated: '2026-10-08T00:00:00Z', moduleState: 'partial' }) + '\n---\n# Probe project\n\nOwns probe behavior.\n')
+  }
   git(root, 'init')
   git(root, 'config', 'core.autocrlf', 'false')
   git(root, 'config', 'user.name', 'test')
@@ -118,6 +128,7 @@ function approvingPorts(root: string): DesktopExecutorPorts {
   return {
     command: (step, signal) => runDesktopCommand(root, step, { signal }),
     review: async (input) => {
+      await input.runTests?.({ tests: [{ name: 'declared behavior check', criteria: input.criteria, checkId: input.checks[0].id }] })
       const criterion = input.criteria[0] as { uri: string; criterionId: string; criterionHash: string }
       const coverage: ReceiptCoverage[] = [{
         uri: criterion.uri, criterionId: criterion.criterionId, criterionHash: criterion.criterionHash,
@@ -129,6 +140,73 @@ function approvingPorts(root: string): DesktopExecutorPorts {
 }
 
 describe('desktop implementation loop', () => {
+  it('runs reviewer-generated assertions before the model verdict and records their identity', async () => {
+    const root = await makeRoot({ implementation: true })
+    const { runId, token } = await startedRun(root, 'xflow')
+    let calls = 0
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root),
+      implement: async () => { await writeFile(join(root, 'src/value.txt'), '43'); return { cancelled: false } },
+      independentReview: async input => createModelReviewPort(TASK_URI, 1, {
+        providerId: 'test', modelId: 'test', getModel: async () => ({}),
+        generateReviewText: async (_model, prompt) => {
+          if (++calls === 1) {
+            expect(prompt).toContain('Independent evaluator:')
+            return JSON.stringify({ tests: [{ name: 'updated value is 43', criteria: input.criteria,
+              source: "import assert from 'node:assert/strict'; import { readFileSync } from 'node:fs'; assert.equal(readFileSync('src/value.txt', 'utf8'), '43');" }] })
+          }
+          expect(prompt).toContain('updated value is 43')
+          expect(prompt).toContain('[command/passed]')
+          const testId = prompt.match(/- (eval-[a-f0-9-]+) \[command\/passed\]/)![1]
+          return JSON.stringify({ verdict: 'approved', coverage: input.criteria.map(c => ({ ...c, checkIds: [testId] })) })
+        },
+      }, buildEvaluatorPrompt)(input),
+    })
+    expect(result.errors).toEqual([])
+    expect(result.data.completed).toBe(true)
+    expect(calls).toBe(2)
+    const receipt = JSON.parse(await readFile(join(root, '.agents/evidence', `${result.data.receiptId}.json`), 'utf8'))
+    expect(receipt.checks.find((check: { id: string }) => check.id.startsWith('eval-'))).toMatchObject({ status: 'passed', performedBy: receipt.review.actor })
+  })
+
+  it('refuses an independent approval that never executes a test plan', async () => {
+    const root = await makeRoot()
+    const { runId, token } = await startedRun(root, 'xflow')
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root),
+      implement: async () => ({ cancelled: false }), independentReview: async () => ({ verdict: 'approved', coverage: [] }),
+    })
+    expect(result.data.completed).toBe(false)
+    expect(result.errors[0].message).toContain('must execute')
+  })
+
+  it.each(['xdel', 'xdo', 'xflow'] as const)('v2 %s preserves review obligations and fresh-session handoff', async mode => {
+    const root = await makeRoot({ implementation: true, v2: true, review: 'independent' })
+    const before = parseNote(await readFile(join(root, '.agents/notes/task.md'), 'utf8'))
+    const { runId, token } = await startedRun(root, mode)
+    const first = await prepareDesktopTaskTurn(root, runId, token)
+    const second = await prepareDesktopTaskTurn(root, runId, token)
+    expect(second.request.systemPromptPrefix).toContain('Authored progress stays.')
+    expect(await first.request.toolGate!({ name: 'workspace.edit', arguments: { path: '.agents/notes/task.md', content: 'bad' } })).toMatchObject({ block: true })
+    const independentReview = vi.fn(async (input) => {
+      const review = await prepareDesktopTaskTurn(root, runId, token, 'independent')
+      expect(review.request.systemPromptPrefix).not.toContain('Authored progress stays.')
+      expect(review.request.systemPromptPrefix).not.toContain('Authored evidence stays.')
+      return approvingPorts(root).review(input)
+    })
+    const result = await executeDesktopTask(root, runId, token, { ...approvingPorts(root), independentReview,
+      implement: async () => { await writeFile(join(root, 'src/value.txt'), '43'); return { cancelled: false, text: 'Change Summary: value updated. Note draft: probe behavior.' } },
+    })
+    expect(independentReview).toHaveBeenCalledTimes(mode === 'xdel' ? 0 : 1)
+    expect(result.data.completed).toBe(mode !== 'xdel')
+    expect(result.data.implementationResult).toContain('Note draft')
+    if (mode === 'xdel') expect(result.errors[0].message).toContain('independent review remains pending')
+    else expect(result.errors).toEqual([])
+    const after = parseNote(await readFile(join(root, '.agents/notes/task.md'), 'utf8'))
+    expect(taskContractHash(after)).toBe(taskContractHash(before))
+    expect(after.body.match(/<!-- agentx-checkpoint -->/g)).toHaveLength(1)
+    expect(after.body).toContain('Authored evidence stays.')
+    expect(after.body).toContain('Main Agent')
+    expect(parseNote(await readFile(join(root, '.agents/notes/module.md'), 'utf8')).meta.moduleState).toBe('partial')
+  })
   it.each(['xdel', 'xflow'] as const)('executes %s with separate actors and the expected review stages', async (mode) => {
     const root = await makeRoot({ implementation: true })
     const { runId, token } = await startedRun(root, mode)
@@ -164,7 +242,10 @@ describe('desktop implementation loop', () => {
         if (++attempts === 2) expect(turn.request.systemPromptPrefix).toContain('Handle the empty value in src/value.txt')
         await writeFile(join(root, 'src/value.txt'), '43'); return { cancelled: false }
       },
-      independentReview: async () => ({ verdict: 'needs-fix', coverage: [], summary: 'Handle the empty value in src/value.txt' }),
+      independentReview: async (input) => {
+        await input.runTests?.({ tests: [{ name: 'declared behavior check', criteria: input.criteria, checkId: input.checks[0].id }] })
+        return { verdict: 'needs-fix', coverage: [], summary: 'Handle the empty value in src/value.txt' }
+      },
     })
     expect(result.data.completed).toBe(false)
     expect(attempts).toBe(2)
@@ -305,7 +386,7 @@ describe('desktop implementation loop', () => {
         const path = join(root, '.agents/notes', `2026-09-18-probe--${TASK_ID.slice(0, 8)}.md`)
         await writeFile(path, (await readFile(path, 'utf8')).replace('Probe the desktop', 'Changed task: probe the desktop'))
       }
-      if (change === 'profile') await writeFile(join(root, '.agents/harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'T', profile: { ...SUPPORTED_HARNESS_PROFILE, version: '2.0.0' } }))
+      if (change === 'profile') await writeFile(join(root, '.agents/harness.json'), JSON.stringify({ schemaVersion: 1, repoId: REPO, name: 'T', profile: { ...SUPPORTED_HARNESS_PROFILE, version: '999.0.0' } }))
       return calls('workspace_create', { path: 'src/new.txt', content: 'forbidden' })
     })
     await expect(implement(turn)).rejects.toThrow('PERMISSION_DENIED')

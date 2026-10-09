@@ -3,7 +3,7 @@
 // win-unpacked/JanusX.exe next to the repo used to find any package missing from
 // the archive in the repo's own node_modules — the check passed on a build whose
 // portable and setup artifacts died during bootstrap with no window and no log.
-// Note: entry — see .agents/notes/2026-09-20-packaged-hoisted-deps--39f58575.md
+// Note: entry — see .agents/notes/desktop/packaged-hoisted-deps.md
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises'
@@ -14,7 +14,12 @@ import { getRawHeader, listPackage } from '@electron/asar'
 
 const root = process.cwd()
 const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const releaseDirectory = join(root, 'release', packageJson.version)
+// Note: staged delivery verifies a separate output directory — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
+const releaseArg = process.argv.indexOf('--release-dir')
+if (releaseArg !== -1 && (!process.argv[releaseArg + 1] || process.argv[releaseArg + 1].startsWith('--'))) {
+  throw new Error('--release-dir requires a directory')
+}
+const releaseDirectory = releaseArg === -1 ? join(root, 'release', packageJson.version) : resolve(process.argv[releaseArg + 1])
 const appAsar = join(releaseDirectory, 'win-unpacked', 'resources', 'app.asar')
 const unpackedExecutable = join(releaseDirectory, 'win-unpacked', 'JanusX.exe')
 const portableExecutable = join(releaseDirectory, `JanusX-${packageJson.version}-x64-portable.exe`)
@@ -235,6 +240,7 @@ async function runSmoke(executable, mode, stage, label) {
       const child = spawn(resolve(executable), [`--smoke-test=${mode}`, `--user-data-dir=${profile}`], {
         stdio: 'inherit',
         windowsHide: true,
+        env: { ...process.env, JANUSX_KNOWLEDGE_ROOT: join(profile, 'knowledge') },
       })
       const timeout = setTimeout(() => {
         child.kill()
@@ -307,6 +313,7 @@ async function verifyPortableStub(stage) {
     const stub = spawn(resolve(portableExecutable), [`--smoke-test=module-graph`, `--user-data-dir=${profile}`], {
       stdio: 'ignore',
       windowsHide: true,
+      env: { ...process.env, JANUSX_KNOWLEDGE_ROOT: join(profile, 'knowledge') },
     })
     const deadline = Date.now() + STARTUP_TIMEOUT_MS
     let started = null

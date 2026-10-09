@@ -34,9 +34,17 @@ export interface ChatRequest {
   contextCheckpoint?: import('../chat-context').ChatContextCheckpoint
   contextEpoch?: number
   compact?: { keepRecentUnits: number }
-  messages: ChatMessage[]; providerId: string; modelId?: string; sourceTag?: 'janus-chat'; conversationId?: string; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[]
+  messages: ChatMessage[]; providerId: string; modelId?: string; sourceTag?: 'janus-chat' | 'launch-assistant'; conversationId?: string; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[]
   /** Compact trace of tool calls from earlier turns, replayed into the model's context. */
   toolTraces?: ChatToolTraceEntry[]
+  /**
+   * Host-owned tool surface for this turn: names absent here are never offered
+   * to the model, and the host blocks their execution at call time (backstop
+   * against future registered tools). Absent = the standard staged offering.
+   * The call-time gate itself is a host function and never crosses IPC — see
+   * .agents/notes/agent/run-config-assistant-edit-tools.md
+   */
+  toolAllowlist?: string[]
   /**
    * S6 engineering domain. Missing = legacy personal behavior for backward
    * compatibility; `project` must never fall back to personal memory capture.
@@ -46,6 +54,11 @@ export interface ChatRequest {
   noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
   noteWorkingSet?: string
   maintenanceTaskId?: string
+  /**
+   * 运行配置轮内文档：当前表单的真实 LaunchConfig + 落盘相对路径（脱敏只发生在进模型上下文的边界）。
+   * `attachLaunchConfigTools` 以它为草稿底本 — see .agents/notes/agent/run-config-assistant-edit-tools.md
+   */
+  launchDraft?: { config: import('./project').LaunchConfig; projectPath: string }
 }
 export interface ChatStreamRequest extends ChatRequest { requestId: string }
 export interface ChatStreamEvent { requestId: string; delta?: string; done?: boolean; error?: string }
@@ -93,11 +106,12 @@ export interface ChatAnswerQuestionPayload {
  * Safe, request-scoped Agent lifecycle events for the Chat renderer.
  * Raw tool events stay in Main; the event set tracks chat-core's ChatAgentEvent
  * one-to-one (tool display follows the upstream raw tool call and execution events).
- * Note: alignment trade-offs live with the contract — see .agents/notes/2026-09-12-janus-agent-chat-alignment--6813a52b.md
+ * Note: alignment trade-offs live with the contract — see .agents/notes/agent/janus-agent-chat-alignment.md
  */
 export type ChatAgentEvent =
   | { type: 'context_state'; requestId: string; state: import('../chat-context').ChatContextStatus }
   | { type: 'note_change'; requestId: string; change: import('../note-chat').NoteChatChange }
+  | { type: 'config_change'; requestId: string; change: import('../launch-config-chat').LaunchConfigChange }
   | { type: 'note_focus'; requestId: string; focus: import('../note-chat').NoteFocusEvent }
   | { type: 'maintenance_result'; requestId: string; task: BlueprintMaintenanceTask }
   | { type: 'agent_start'; requestId: string }

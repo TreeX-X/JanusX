@@ -54,7 +54,7 @@ vi.mock('../../../src/main/agent/runtime/shell-runtime', () => ({
   },
 }))
 
-import { abortChatStream, answerChatQuestion, handleChatStream, prepareJanusChatRecall, steerChatStream } from '../../../src/main/llm/chat-orchestrator'
+import { abortChatStream, answerChatQuestion, gateFromToolAllowlist, handleChatStream, prepareJanusChatRecall, steerChatStream } from '../../../src/main/llm/chat-orchestrator'
 import { llmService } from '../../../src/main/llm/LlmService'
 
 const emptyResult: KnowledgeContextResult = {
@@ -344,5 +344,36 @@ describe('chat turn guard (S6-a)', () => {
     expect(executeFunctionCall).not.toHaveBeenCalled()
     expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'manual-compact' })
     expect(JSON.stringify(messages)).toBe(original)
+  })
+})
+
+describe('dual-gate tool surface (launch assistant)', () => {
+  it('blocks calls outside the allowlist and feeds the reason back to the model', async () => {
+    const gate = gateFromToolAllowlist(['workspace.list', 'workspace.read', 'launch-config.apply'])
+    const blocked = await gate!({ name: 'command.run', arguments: {} })
+    expect(blocked).toEqual({ block: true, reason: expect.stringContaining('command.run') })
+    const future = await gate!({ name: 'mcp_status', arguments: {} })
+    expect(future).toEqual({ block: true, reason: expect.stringContaining('mcp_status') })
+  })
+
+  it('matches allowlist names loosely like the offered-tool normalizer', async () => {
+    const gate = gateFromToolAllowlist(['workspace.list'])
+    expect(await gate!({ name: 'workspace_list', arguments: {} })).toBeUndefined()
+    expect(await gate!({ name: 'Workspace.List', arguments: {} })).toBeUndefined()
+  })
+
+  it('delegates listed calls to the host policy gate and keeps its refusal', async () => {
+    const policy = vi.fn(async () => ({ block: true as const, reason: 'lease changed' }))
+    const gate = gateFromToolAllowlist(['workspace.read'], policy)
+    expect(await gate!({ name: 'workspace.read', arguments: { path: 'a' } })).toEqual({ block: true, reason: 'lease changed' })
+    expect(policy).toHaveBeenCalledWith({ name: 'workspace.read', arguments: { path: 'a' } })
+    expect(await gate!({ name: 'git.push', arguments: {} })).toEqual({ block: true, reason: expect.stringContaining('git.push') })
+    expect(policy).toHaveBeenCalledTimes(1)
+  })
+
+  it('without an allowlist the policy gate stands alone and legacy turns stay unchanged', async () => {
+    expect(gateFromToolAllowlist(undefined)).toBeUndefined()
+    const policy = vi.fn(async () => undefined)
+    expect(gateFromToolAllowlist(undefined, policy)).toBe(policy)
   })
 })

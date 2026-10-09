@@ -1,4 +1,4 @@
-// Note: independent review and limited repair — see .agents/notes/2026-09-18-independent-review-repair--b055c1fe.md
+// Note: independent review and limited repair — see .agents/notes/agent/independent-review-repair.md
 /**
  * @file Independent review host (S8-JanusX, delegated-review P1).
  * @description Audits pinned evidence through a read-only evaluator turn that
@@ -16,13 +16,15 @@ import {
   codeKey,
   codeManifestHash,
   validateReceiptShape,
+  reviewTestVerdict,
+  type RunReviewTests,
   type Diagnostic,
   type Receipt,
   type ReceiptCoverage,
 } from '@janus-agent/harness-core'
-import { collectLiveSnapshot, collectTaskSnapshot, TaskScope } from '@janus-agent/harness-node'
+import { collectLiveSnapshot, collectTaskSnapshot, createReviewTestSession, TaskScope } from '@janus-agent/harness-node'
 import { finishTaskRun, getTaskRun, recordTaskReceipt } from './execution-adapter'
-import { checkCoverageClaims } from './desktop-executor'
+import { checkCoverageClaims, runDesktopCommand } from './desktop-executor'
 import { ensureTaskThread, recordThreadEvaluation } from './task-thread'
 import { buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles } from './task-brief'
 import type { DesktopReviewCriterion } from './desktop-review'
@@ -37,6 +39,7 @@ export interface IndependentReviewPorts {
       checks: Receipt['checks']
       criteria: DesktopReviewCriterion[]
       brief: Parameters<typeof renderBriefSection>[0]
+      runTests?: RunReviewTests
     },
     signal?: AbortSignal,
   ): Promise<{ verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[] }>
@@ -162,6 +165,7 @@ export async function requestIndependentReview(
   const criteria: DesktopReviewCriterion[] = snapshot.work.acceptanceRefs.map((ref) => ({
     uri: ref.uri,
     criterionId: ref.criterionId,
+    text: snapshot.notes.find(note => note.uri === ref.uri)?.sections.find(section => section.name === 'Acceptance criteria')?.text,
     criterionHash: (snapshot.criterionHashes.find(([uri]) => uri === ref.uri)?.[1].find(([id]) => id === ref.criterionId)?.[1] ?? '') as string,
   }))
   if (criteria.some((item) => !item.criterionHash)) {
@@ -185,9 +189,22 @@ export async function requestIndependentReview(
     // Audit-only; the live brief above is what the review uses.
   }
   let claim: { verdict: 'approved' | 'needs-fix' | 'blocked'; coverage: ReceiptCoverage[] }
+  const checkCurrent = async () => {
+    const live = (await getTaskRun(root, runId)).run
+    if (!live || live.state !== 'verifying' || live.attempt !== run.attempt || live.lease?.token !== token) throw new Error('BUSY: independent review lost its attempt or lease')
+    const current = await collectTaskSnapshot(root, run.taskUri)
+    if (!current.ok || current.baseline.taskContractHash !== run.baseline.taskContractHash || !sameInputs(current.baseline.inputs, run.baseline.inputs)) throw new Error('STALE_BASELINE: acceptance changed during review')
+  }
+  const tests = createReviewTestSession({ root, repoId: snapshot.repoId, actor: reviewer, manifest: pinned, criteria,
+    verification: snapshot.work.verification, command: (step, signal) => runDesktopCommand(root, step, { signal }), checkCurrent })
+  const checks = structuredClone(prior.checks)
   try {
     opts.signal?.throwIfAborted()
-    claim = await ports.review({ manifest: pinned, manifestHash, checks: prior.checks, criteria, brief }, opts.signal)
+    claim = await ports.review({ manifest: structuredClone(pinned), manifestHash, checks: structuredClone(checks), criteria, brief, runTests: tests.run }, opts.signal)
+    tests.assertExecuted()
+    checks.push(...tests.checks)
+    claim.verdict = reviewTestVerdict(claim.verdict, checks)
+    await checkCurrent()
   } catch (error) {
     return fail(run, hostError(error), { receiptId: '', verdict: 'blocked' as const })
   }
@@ -195,13 +212,13 @@ export async function requestIndependentReview(
     return fail(run, [diag('SCHEMA_INVALID', 'independent verdict must be approved, needs-fix, or blocked; refusing completion', 'review.verdict')], { receiptId: '', verdict: 'blocked' as const })
   }
   const criterionMap = new Map(criteria.map((item) => [`${item.uri}#${item.criterionId}`, item.criterionHash]))
-  const passed = new Set(prior.checks.filter((check) => check.status === 'passed').map((check) => check.id))
+  const passed = new Set(checks.filter((check) => check.status === 'passed').map((check) => check.id))
   const coverageProblems = checkCoverageClaims(claim.coverage, criterionMap, passed)
   if (coverageProblems.length > 0) return fail(run, coverageProblems, { receiptId: '', verdict: 'blocked' as const })
   const receipt: Receipt = {
     schema: 'harness-receipt/1', id: randomUUID(), taskUri: run.taskUri, mode: run.mode, attempt: run.attempt,
     taskContractHash: run.baseline.taskContractHash, inputs: run.baseline.inputs, codeManifest: pinned,
-    checks: prior.checks, coverage: claim.coverage,
+    checks, coverage: claim.coverage,
     review: { kind: 'independent', verdict: claim.verdict, reviewedManifestHash: manifestHash, actor: reviewer },
     createdAt: new Date().toISOString(), actor: prior.actor,
   }

@@ -4,7 +4,7 @@ import { promisify } from 'node:util'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 
-// Note: source tests cannot prove that external re-exports load after bundling — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+// Note: source tests cannot prove that external re-exports load after bundling — see .agents/notes/blueprint/agentx-harness-inheritance.md
 const repo = resolve(import.meta.dirname, '../..')
 const fixtures: string[] = []
 afterEach(async () => {

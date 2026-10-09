@@ -1,4 +1,4 @@
-// Note: host call identity survives async policy approval without entering model payloads — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: host call identity survives async policy approval without entering model payloads — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import type { WorkspaceAgentRuntime } from '@janus-agent/agent-core'

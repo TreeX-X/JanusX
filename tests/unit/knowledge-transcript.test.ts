@@ -3,11 +3,28 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { readKnowledgeTurn } from '../../src/main/sessions/knowledge-transcript'
+import { taskNotification } from './knowledge/memory-observation.fixture'
 let root: string, path: string
 beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'knowledge-transcript-')); path = join(root, 'session.jsonl') })
 afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 const claude = (role: string, content: unknown, uuid: string) => ({ type: role, uuid, message: { role, content } })
 async function rows(items: unknown[]) { await writeFile(path, items.map(JSON.stringify).join('\n') + '\n') }
+it('binds a delayed reread to the original completion when a later prompt repeats', async () => {
+  await rows([
+    { ...claude('user', 'Fix cache', 'u1'), timestamp: '2026-10-06T00:00:00Z' },
+    { ...claude('assistant', 'First answer', 'a1'), timestamp: '2026-10-06T00:00:11Z' },
+    { ...claude('user', 'Fix cache', 'u2'), timestamp: '2026-10-06T00:01:00Z' },
+    { ...claude('assistant', 'Unrelated later answer', 'a2'), timestamp: '2026-10-06T00:01:10Z' },
+  ])
+  const result = await readKnowledgeTurn(path, 'claude', 'session', 'Fix cache', '2026-10-06T00:00:10Z')
+  expect(result.messages.map(message => message.content)).toEqual(['Fix cache', 'First answer'])
+})
+it('does not guess between repeated prompts without timestamps during delayed capture', async () => {
+  await rows([claude('user', 'Fix cache', 'u1'), claude('assistant', 'First answer', 'a1'),
+    claude('user', 'Fix cache', 'u2'), claude('assistant', 'Later answer', 'a2')])
+  const result = await readKnowledgeTurn(path, 'claude', 'session', 'Fix cache', '2026-10-06T00:00:10Z')
+  expect(result).toEqual({ messages: [], reason: 'transcript-turn-boundary-ambiguous' })
+})
 it('captures full user, assistant and tool evidence for the matching turn, excluding later requests', async () => {
   const answer = 'result '.repeat(900)
   await rows([claude('user', 'Implement B', 'u1'), claude('assistant', [{ type: 'text', text: answer }], 'a1'),
@@ -17,6 +34,29 @@ it('captures full user, assistant and tool evidence for the matching turn, exclu
   expect(first.reason).toBeUndefined(); expect(first.messages.map(message => message.speaker)).toEqual(['user', 'assistant', 'tool'])
   expect(first.messages[1].content).toBe(answer.trim())
   expect((await readKnowledgeTurn(path, 'claude', 'session', 'Implement B')).messages).toEqual(first.messages)
+})
+it('keeps the real turn boundary and later answer across runtime and trusted meta messages', async () => {
+  await rows([claude('user', 'Fix the cache', 'u1'),
+    claude('user', taskNotification(), 'notification'),
+    { ...claude('user', 'Runtime context reminder', 'meta'), isMeta: true },
+    claude('assistant', 'Cache fixed', 'a1')])
+  for (const prompt of [undefined, 'Fix the cache']) {
+    const result = await readKnowledgeTurn(path, 'claude', 's', prompt)
+    expect(result.reason).toBeUndefined()
+    expect(result.messages.map(message => message.content)).toEqual(['Fix the cache', 'Cache fixed'])
+  }
+})
+it('preserves notification quotations as real user requests', async () => {
+  const prompt = `解释这条通知\n${taskNotification()}`
+  await rows([claude('user', prompt, 'u1'), claude('assistant', '这是后台任务完成通知', 'a1')])
+  expect((await readKnowledgeTurn(path, 'claude', 's', prompt)).messages[0].content).toBe(prompt)
+})
+it.each(['codex', 'pi', 'janus'])('filters known notifications without changing %s turn boundaries', async engine => {
+  const messages = [{ role: 'user', content: 'Fix' }, { role: 'user', content: taskNotification() }, { role: 'assistant', content: 'Fixed' }]
+  if (engine === 'janus') await writeFile(path, JSON.stringify({ messages }))
+  else if (engine === 'codex') await rows(messages.map(message => ({ type: 'response_item', payload: { type: 'message', ...message } })))
+  else await rows(messages.map((message, id) => ({ type: 'message', id: String(id), message })))
+  expect((await readKnowledgeTurn(path, engine, 's')).messages.map(message => message.content)).toEqual(['Fix', 'Fixed'])
 })
 it('uses Codex source messages once and preserves tool results', async () => {
   await rows([{ type: 'event_msg', payload: { type: 'user_message', message: 'Fix' } },
@@ -50,6 +90,22 @@ it('reads OpenCode multipart user messages as one boundary and preserves tool ou
   expect(result.reason).toBeUndefined()
   expect(result.messages.map(message => message.speaker)).toEqual(['user', 'assistant', 'tool'])
   expect(result.messages[0].content).toBe('Fix\nthe cache')
+})
+it('recovers only the matching OpenCode workspace and turn before the recorded completion', async () => {
+  const { DatabaseSync } = await import('node:sqlite')
+  const db = new DatabaseSync(path)
+  try {
+    db.exec('CREATE TABLE session (id TEXT, directory TEXT); CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT); CREATE TABLE part (id TEXT, message_id TEXT, time_created INTEGER, data TEXT)')
+    db.prepare('INSERT INTO session VALUES (?, ?)').run('s', '/project')
+    for (const [id, time, role, text] of [['u', 100, 'user', 'First'], ['a', 200, 'assistant', 'First answer'], ['u2', 400, 'user', 'Later'], ['a2', 500, 'assistant', 'Later answer']] as const) {
+      db.prepare('INSERT INTO message VALUES (?, ?, ?, ?)').run(id, 's', time, JSON.stringify({ role }))
+      db.prepare('INSERT INTO part VALUES (?, ?, ?, ?)').run(id, id, time, JSON.stringify({ type: 'text', text }))
+    }
+  } finally { db.close() }
+  const ended = new Date(300).toISOString()
+  expect((await readKnowledgeTurn(path, 'opencode', 's', undefined, ended, '/wrong')).reason).toBe('transcript-workspace-mismatch')
+  const result = await readKnowledgeTurn(path, 'opencode', 's', undefined, ended, '/project')
+  expect(result.messages.map(item => item.content)).toEqual(['First', 'First answer'])
 })
 it('reports incomplete and unmatched sources rather than returning a misleading partial task', async () => {
   await rows([claude('user', 'Fix', 'u1')]); expect((await readKnowledgeTurn(path, 'claude')).reason).toBe('transcript-answer-not-ready')

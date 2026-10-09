@@ -192,6 +192,9 @@ export interface HarnessRunExecuteInput {
 }
 
 export interface HarnessRunExecuteResult {
+  implementationResult?: string
+  reviewPending?: boolean
+  diagnostics?: Array<{ code: string; message: string }>
   receiptId: string
   completed: boolean
   checks: Array<{ id: string; kind: string; status: string; summary: string }>

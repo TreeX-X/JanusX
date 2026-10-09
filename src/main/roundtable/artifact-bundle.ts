@@ -8,7 +8,7 @@
  *  saved as formal notes. Retry reuses the same bundle (same ids); a changed
  *  source snapshot demands a new bundle revision. No filesystem, no Electron.
  */
-// Note: roundtable natively produces harness bundles — see .agents/notes/2026-09-16-roundtable-artifact-bundle-s5--46d65946.md
+// Note: roundtable natively produces harness bundles — see .agents/notes/agent/roundtable-artifact-bundle-s5.md
 import { createHash, randomUUID } from 'node:crypto'
 import {
   HEX64_RE,
@@ -19,12 +19,14 @@ import {
   validateBundle,
   validateChangeSet,
   validateNote,
+  createNoteInput,
   type ChangeOperation,
   type Diagnostic,
   type NoteKind,
 } from '@janus-agent/harness-core'
 import { setSection } from '../harness/artifact-producer'
 import type { RoundtableFact } from '../../shared/roundtable/events'
+import { maintainedNotePath, type NoteAuthoringContext } from '../harness/note-authoring'
 
 export interface BundleBuildItem {
   fact: RoundtableFact
@@ -38,6 +40,7 @@ export interface BundleBuildItem {
 }
 
 export interface BuildBundleInput {
+  authoring?: NoteAuthoringContext
   sessionId: string
   roundNumber: number
   /** Target repo UUID; the producer never guesses it from names or paths. */
@@ -187,7 +190,17 @@ function createMarkdown(opts: {
   roundNumber: number
   factId: string
   content: string
+  authoring?: NoteAuthoringContext
 }): string {
+  if (opts.authoring?.schema === 'harness-note/2') {
+    const sections = Object.fromEntries(sectionsFor(opts.kind, opts.content).map(([name, text]) => [name === 'Proposal' ? 'Decision' : name === 'Risks' ? 'Consequences' : name === 'Background' ? 'Intent' : name, text]))
+    if (opts.kind === 'idea') delete sections.Idea
+    const made = createNoteInput(opts.kind, opts.title, opts.parentUri, { schema: 'harness-note/2', module: opts.authoring.module, lifecycle: opts.lifecycle, tags: ['roundtable'], sections })
+    const note = parseNote(made.markdown)
+    note.meta.id = opts.noteId
+    note.meta.extensions = { workflowx: { provenance: { session: opts.sessionId, round: opts.roundNumber, fact: opts.factId } } }
+    return serializeNote(note)
+  }
   const head = [
     '---',
     'schema: harness-note/1',
@@ -280,7 +293,9 @@ export function buildArtifactBundle(input: BuildBundleInput): { bundle: Artifact
           diagnostics.push({ code: 'SCHEMA_INVALID', message: 'base note id mismatches uri', path: `${at}.update.baseMarkdown` })
           return
         }
-        after = serializeNote({ ...base, body: setSection(base.body, up.section, up.text) })
+        after = base.sections.some(section => section.name === up.section && section.text.trim() === up.text.trim())
+          ? up.baseMarkdown
+          : serializeNote({ ...base, meta: { ...base.meta, ...(base.meta.schema === 'harness-note/2' ? { updated: new Date().toISOString() } : {}) }, body: setSection(base.body, up.section, up.text) })
       } catch (error) {
         diagnostics.push({
           code: 'SCHEMA_INVALID',
@@ -315,7 +330,12 @@ export function buildArtifactBundle(input: BuildBundleInput): { bundle: Artifact
       diagnostics.push({ code: 'SCHEMA_INVALID', message: `bad parentUri ${item.parentUri}`, path: `${at}.parentUri` })
       return
     }
+    if (input.authoring?.schema === 'harness-note/2' && target.kind === 'task') {
+      diagnostics.push({ code: 'NOT_READY', message: 'Roundtable action needs a Task contract (scope, acceptance, verification and review) before it can be saved as a Task; create it with note.write.', path: at })
+      return
+    }
     const after = createMarkdown({
+      authoring: input.authoring,
       noteId,
       kind: target.kind,
       lifecycle: target.lifecycle,
@@ -337,6 +357,7 @@ export function buildArtifactBundle(input: BuildBundleInput): { bundle: Artifact
       type: 'create',
       uri: `note://${input.repoId}/${noteId}`,
       expectedHash: null,
+      ...(input.authoring?.schema === 'harness-note/2' ? { relativePath: maintainedNotePath(input.authoring.directory!, cleanTitle(fact)) } : {}),
       afterMarkdown: after,
       dependsOn: [],
       reason: `roundtable ${input.sessionId} round ${input.roundNumber}`,

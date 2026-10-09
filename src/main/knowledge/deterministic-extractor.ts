@@ -13,15 +13,13 @@
  *              uses review-service; this stage never applies truth.
  */
 
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { canMergeFactText, factSlot } from '../../shared/fact-slot'
 import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
   CandidateFact,
-  CandidateGraphEdge,
   FactKind,
-  GraphEdge,
   KnowledgeProvenance,
   KnowledgeSource,
   MemoryFact,
@@ -35,8 +33,10 @@ export { observationDedupeKey } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { deriveHabitPromotions, habitPromotionToCandidate } from './habit-aggregator'
 import { knowledgeTruthService } from './truth-service'
-import { proposeDerivedCandidates, proposeFactCandidates } from './review-service'
+import { proposeFactCandidates } from './review-service'
 import { isActiveObservation, isUserStatement, observationEventKey, observationScope, sourceEvidence } from './memory-evidence'
+import { isRuntimeNotification, personalPreferenceText, personalStatementText } from './personal-memory-content'
+import { isRawConversationEvidence, isRawKnowledgeContent } from './knowledge-content'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 
 const DERIVED_DIR = join('processing', 'derived')
@@ -52,7 +52,7 @@ const FILE_TOKEN_RE = /(?:^|[\s"'`([{])([a-zA-Z]:[\\/][\w.~\-/\\]+|[\w.~\-/\\]*\
 const TIME_TAG_RE = /\b\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?\b/g
 
 const DECISION_RE = /决定|采用|弃用|决议|we decided|decided to|use [\w.~-]+ instead of/i
-const PREFERENCE_RE = /我习惯|不要用|别用|always|never|prefer/i
+const PREFERENCE_RE = /我习惯|不要用|别用|\b(?:always|never|prefer)\b/i
 const COMMAND_OR_ERROR_RE = /(^|\n)\s*[$#>]\s*\S|error|fail|exception|\bE[A-Z0-9-]{2,}\b|exit code \d+/i
 
 export interface NormalizedText {
@@ -84,8 +84,6 @@ export interface DeterministicStageResult {
 export interface DeterministicStageDeps {
   resolveContent: (observation: Observation) => Promise<string>
   listTruthFacts: () => Promise<MemoryFact[]>
-  /** Accepted graph edges, used to skip already-linked truth pairs. */
-  listTruthEdges: () => Promise<GraphEdge[]>
   listHabitObservations: () => Promise<Observation[]>
   allowHabitSource?: (observation: Observation) => Promise<boolean>
   nowIso: () => string
@@ -96,7 +94,6 @@ function defaultDeps(): DeterministicStageDeps {
     listHabitObservations: () => knowledgeObservationService.list({ limit: 200 }),
     resolveContent: (observation) => knowledgeObservationService.resolveContent(observation),
     listTruthFacts: async () => (await knowledgeTruthService.list()).facts,
-    listTruthEdges: async () => (await knowledgeTruthService.list()).graphEdges,
     nowIso: () => new Date().toISOString(),
   }
 }
@@ -240,6 +237,7 @@ export function classifyDeterministic(
   normalizedText: string,
   signalRepeats: number,
 ): PatternMatch | null {
+  if (isRawKnowledgeContent(normalizedText)) return null
   const slot = factSlot(normalizedText)
   if (slot) return { kind: slot.factKey === 'release.command' ? 'procedure' : 'preference', confidence: 0.7 }
   if (observationType === 'git-event' || observationType === 'checkpoint-event') {
@@ -322,64 +320,6 @@ async function writeDerived(derived: DerivedObservation): Promise<void> {
   await writeFileAtomic(file, `${JSON.stringify(derived)}\n`)
 }
 
-const appendCandidateGraphEdges = proposeDerivedCandidates
-
-/**
- * Truth–truth `mentions` proposals: settled facts in one workspace sharing a
- * file ref with no stored edge between them (either direction, any type).
- * Human-gated through the normal candidate flow; keeps the stored graph from
- * depending solely on the LLM ever emitting edges.
- */
-export const MAX_DETERMINISTIC_MENTIONS = 20
-
-export function synthesizeMentionEdges(
-  truthFacts: MemoryFact[],
-  existingEdges: Pick<GraphEdge, 'from' | 'to'>[],
-  workspaceId: string,
-  nowIso: string,
-): CandidateGraphEdge[] {
-  const linked = new Set<string>()
-  const pairKey = (a: string, b: string): string => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
-  for (const edge of existingEdges) {
-    linked.add(pairKey(edge.from, edge.to))
-  }
-  const scoped = truthFacts.filter((fact) => fact.provenance.workspaceId === workspaceId)
-  const results: CandidateGraphEdge[] = []
-  for (let i = 0; i < scoped.length && results.length < MAX_DETERMINISTIC_MENTIONS; i++) {
-    const left = scoped[i]!
-    const leftFiles = new Set(left.files)
-    if (leftFiles.size === 0) continue
-    for (let j = i + 1; j < scoped.length && results.length < MAX_DETERMINISTIC_MENTIONS; j++) {
-      const right = scoped[j]!
-      if (right.provenance.workspaceId !== workspaceId) continue
-      const shared = right.files.some((file) => leftFiles.has(file))
-      if (!shared) continue
-      const key = pairKey(left.id, right.id)
-      if (linked.has(key)) continue
-      linked.add(key)
-      const [from, to] = left.id < right.id ? [left.id, right.id] : [right.id, left.id]
-      results.push({
-        id: randomUUID(),
-        type: 'graph-edge',
-        status: 'proposed',
-        edge: {
-          id: randomUUID(),
-          from,
-          to,
-          type: 'mentions',
-          confidence: 0.6,
-          sourceFactIds: [from, to],
-          workspaceId,
-          createdAt: nowIso,
-        },
-        derivation: 'deterministic',
-        evidence: { observationIds: [] },
-      })
-    }
-  }
-  return results
-}
-
 interface PreparedObservation {
   observation: Observation
   text: string
@@ -435,7 +375,9 @@ export async function runDeterministicStage(
     } else {
       raw = observation.content
     }
-    const normalized = normalizeObservationText(raw)
+    if (isRuntimeNotification(raw) && observation.memoryIntent !== 'remember') continue
+    const normalized = normalizeObservationText(observationScope(observation) === 'user' && observation.memoryIntent !== 'remember'
+      ? personalStatementText(raw) : raw)
     prepared.push({ observation, ...normalized, duplicateOf: null })
   }
 
@@ -465,12 +407,14 @@ export async function runDeterministicStage(
   // Repeat counts (§4.4 procedure) observe every occurrence, duplicates included.
   const signalCounts = new Map<string, number>()
   for (const item of prepared) {
+    if (isRawConversationEvidence(item.observation) || isRawKnowledgeContent(item.text)) continue
     if (observationScope(item.observation) === 'user' && !isUserStatement(item.observation)) continue
     const signal = firstLine(item.text)
     if (signal) signalCounts.set(signal, (signalCounts.get(signal) ?? 0) + 1)
   }
   const signalMembers = new Map<string, string[]>()
   for (const item of prepared) {
+    if (isRawConversationEvidence(item.observation) || isRawKnowledgeContent(item.text)) continue
     if (observationScope(item.observation) === 'user' && !isUserStatement(item.observation)) continue
     const signal = firstLine(item.text)
     if (!signal) continue
@@ -499,7 +443,9 @@ export async function runDeterministicStage(
   }
 
   const groups = clusterNearDuplicates(
-    unique.filter((item) => item.observation.memoryIntent !== 'remember' && (observationScope(item.observation) !== 'user' || isUserStatement(item.observation))).sort((a, b) =>
+    unique.filter((item) => !isRawConversationEvidence(item.observation) && !isRawKnowledgeContent(item.text)
+      && item.observation.memoryIntent !== 'remember' && (observationScope(item.observation) !== 'user'
+      || isUserStatement(item.observation) && !item.truncated && !item.observation.truncated && item.text.trim())).sort((a, b) =>
       a.observation.createdAt.localeCompare(b.observation.createdAt)
       || a.observation.id.localeCompare(b.observation.id),
     ),
@@ -511,12 +457,14 @@ export async function runDeterministicStage(
   for (const group of groups) {
     const primary = group.primary
     const signal = firstLine(primary.text)
-    const match = classifyDeterministic(
+    const preference = observationScope(primary.observation) === 'user' ? personalPreferenceText(primary.text) : undefined
+    const match = preference ? { kind: 'preference' as const, confidence: 0.7 } : classifyDeterministic(
       primary.observation.type,
       primary.text,
       signal ? (signalCounts.get(signal) ?? 0) : 0,
     )
     if (!match) continue
+    if (observationScope(primary.observation) === 'user' && !preference && (match.kind === 'preference' || match.kind === 'procedure')) continue
 
     // Evidence: near-dupe group members (+ exact dupes); procedure additionally
     // cites every observation repeating the same command/error signal.
@@ -548,11 +496,12 @@ export async function runDeterministicStage(
       actor: 'knowledge-deterministic',
       createdAt: nowIso,
     }
-    const content = factSlot(primary.text) ? primary.text : match.kind === 'fact'
+    const content = preference ?? (factSlot(primary.text) ? primary.text : match.kind === 'fact'
       ? firstLine(primary.text) + (files.length > 0 ? ` [${files.join(', ')}]` : '')
       : match.kind === 'procedure'
         ? signal
-        : matchedLine(primary.text, match.kind === 'decision' ? DECISION_RE : PREFERENCE_RE)
+        : matchedLine(primary.text, match.kind === 'decision' ? DECISION_RE : PREFERENCE_RE))
+    if (isRawKnowledgeContent(content)) continue
     const scope = observationScope(primary.observation)
     const identity = createHash('sha256').update(JSON.stringify([
       scope, batch.workspaceId, match.kind, content, [...evidenceIds].sort(),
@@ -610,11 +559,9 @@ export async function runDeterministicStage(
     })
   }
   candidates = await proposeFactCandidates(candidates)
-  // Note: habit promotion shares the queue and Inbox review — see .agents/notes/2026-09-15-user-memory-m1--fd02d3bc.md
-  // User memory closeout: repeated preference/habit observations promote to
-  // scope=user candidates on the same queue with no new cursors. The frequency
-  // threshold plus Inbox review keeps the promotion noise out of truth.
-  const habitInputs = prepared.map((item) => ({
+  // Note: habit promotion shares the queue and Inbox review — see .agents/notes/knowledge/user-memory-m1.md
+  // Frequency reinforces explicit preferences only; incomplete evidence cannot establish a habit.
+  const habitInputs = prepared.filter(item => !item.truncated && !item.observation.truncated).map((item) => ({
     ...item.observation,
     content: item.text,
   }))
@@ -627,7 +574,9 @@ export async function runDeterministicStage(
       const raw = observation.blobRef
         ? await deps.resolveContent(observation).catch(() => observation.contentPreview ?? observation.content)
         : observation.content
-      habitInputs.push({ ...observation, content: normalizeObservationText(raw).text })
+      const normalized = normalizeObservationText(raw)
+      if (observation.truncated || normalized.truncated || isRuntimeNotification(raw)) continue
+      habitInputs.push({ ...observation, content: normalized.text })
     }
   }
   const allowedHabitInputs: Observation[] = []
@@ -639,16 +588,17 @@ export async function runDeterministicStage(
     nowIso,
   )
   const habitCandidates = await proposeFactCandidates(habitPromotions.map((promotion) => habitPromotionToCandidate(promotion, nowIso)))
-  // Truth–truth mentions discovered from shared file refs. Human-gated
-  // through the normal graph-candidate flow; an empty truth set yields none.
-  const mentionEdges = synthesizeMentionEdges(
-    truthFacts,
-    await deps.listTruthEdges().catch(() => []),
-    batch.workspaceId,
-    nowIso,
-  )
-  await appendCandidateGraphEdges(mentionEdges)
-  if (candidates.length > 0 || habitCandidates.length > 0 || mentionEdges.length > 0) {
+  if (habitCandidates.length) {
+    await knowledgeAuditService.record({
+      action: 'habit_candidate_proposed', targetType: 'fact', targetId: `habits:${habitCandidates.length}`,
+      before: null, after: { count: habitCandidates.length, candidateIds: habitCandidates.map(candidate => candidate.id) },
+      provenance: { workspaceId: 'user', workspaceName: 'user', workspacePath: '', source: 'system',
+        sourceObservationIds: habitCandidates.flatMap(candidate => candidate.evidence.observationIds),
+        fileRefs: [], actor: 'habit-aggregator', createdAt: nowIso },
+    })
+  }
+  // Note: shared-file links do not create review work — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
+  if (candidates.length > 0 || habitCandidates.length > 0) {
     await knowledgeAuditService.record({
       action: 'candidate_proposed',
       targetType: 'fact',
@@ -656,7 +606,7 @@ export async function runDeterministicStage(
       before: null,
       after: {
         factCandidateIds: [...candidates, ...habitCandidates].map((candidate) => candidate.id),
-        graphCandidateIds: mentionEdges.map((candidate) => candidate.id),
+        graphCandidateIds: [],
         sourceObservationIds: prepared.map((item) => item.observation.id),
         derivation: 'deterministic',
       },
@@ -673,5 +623,5 @@ export async function runDeterministicStage(
     })
   }
 
-  return { derived: unique.length, proposals: candidates.length + habitCandidates.length + mentionEdges.length, autoAccepted: 0 }
+  return { derived: unique.length, proposals: candidates.length + habitCandidates.length, autoAccepted: 0 }
 }

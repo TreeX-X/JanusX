@@ -80,6 +80,15 @@ describe('loadKnowledgeWorkbenchSnapshot', () => {
     expect(knowledge.listTruth).toHaveBeenCalledWith()
   })
 
+  it('asks the host to filter engineering audits before applying the list limit', async () => {
+    const knowledge = makeKnowledgeApi()
+    knowledge.listObservations.mockResolvedValue([])
+    vi.stubGlobal('window', { electron: { knowledge } })
+    const snapshot = await loadKnowledgeWorkbenchSnapshot(true)
+    expect(knowledge.listAudit).toHaveBeenCalledWith({ domain: 'engineering', limit: 30 })
+    expect(snapshot.auditEvents).toEqual([{ id: 'audit-marker' }])
+  })
+
   it('reports each parallel read failure instead of showing an empty collection', async () => {
     const cases = [
       { method: 'listObservations', field: 'observations', fallback: [] },

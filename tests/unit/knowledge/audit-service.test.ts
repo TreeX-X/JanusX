@@ -158,6 +158,76 @@ describe('KnowledgeAuditService', () => {
     expect(stats.total).toBe(0)
   })
 
+  it('filters engineering before pagination and keeps totals and stats in the same scope', async () => {
+    const personal = Array.from({ length: 40 }, (_, i) => makeEventInput({ targetId: `personal-${i}`, provenance: { ...makeEventInput().provenance, workspaceId: 'user', createdAt: '2026-10-06T01:00:00Z' } }))
+    const engineering = Array.from({ length: 35 }, (_, i) => makeEventInput({ targetId: `project-${i}` }))
+    await knowledgeAuditService.recordBatch([...engineering, ...personal])
+    const first = await knowledgeAuditService.page({ domain: 'engineering', limit: 30 })
+    expect(first.total).toBe(35)
+    expect(first.items).toHaveLength(30)
+    const second = await knowledgeAuditService.page({ domain: 'engineering', limit: 30, cursor: first.nextCursor })
+    expect(second.items).toHaveLength(5)
+    expect(second.nextCursor).toBeUndefined()
+    expect(new Set([...first.items, ...second.items].map(event => event.id)).size).toBe(35)
+    expect(first.byAction.capture).toBe(35)
+    expect(await knowledgeAuditService.stats({ domain: 'engineering' })).toMatchObject({ total: 35, byAction: { capture: 35 } })
+    expect((await knowledgeAuditService.list({ domain: 'engineering', limit: 30 })).every(event => event.provenance.workspaceId === 'ws')).toBe(true)
+    expect((await knowledgeAuditService.list()).length).toBe(50)
+    expect((await knowledgeAuditService.page({ domain: 'personal' })).total).toBe(40)
+  })
+
+  it('freezes a stable time/id order across new, equal-time and backdated appends', async () => {
+    await knowledgeAuditService.recordBatch(Array.from({ length: 7 }, (_, i) => makeEventInput({ targetId: `original-${i}` })))
+    const all = await knowledgeAuditService.list()
+    const first = await knowledgeAuditService.page({ domain: 'engineering', limit: 3 })
+    await knowledgeAuditService.recordBatch(['2025-01-01Z', '2024-01-01T00:00:00.000Z', '2023-01-01Z'].map(createdAt => makeEventInput({ targetId: 'new', provenance: { ...makeEventInput().provenance, createdAt } })))
+    const second = await knowledgeAuditService.page({ domain: 'engineering', limit: 4, cursor: first.nextCursor })
+    expect([...first.items, ...second.items].map(event => event.id)).toEqual(all.map(event => event.id))
+    expect(second.total).toBe(7)
+    expect((await knowledgeAuditService.page({ domain: 'engineering' })).total).toBe(10)
+  })
+
+  it('binds cursors to filters and rejects malformed or rewritten snapshots', async () => {
+    await knowledgeAuditService.recordBatch([makeEventInput(), makeEventInput()])
+    const { nextCursor } = await knowledgeAuditService.page({ domain: 'engineering', limit: 1 })
+    for (const changed of [{ domain: 'personal' as const }, { workspaceId: 'ws' }, { action: 'extract' as const }]) {
+      await expect(knowledgeAuditService.page({ domain: 'engineering', cursor: nextCursor, ...changed })).rejects.toThrow('audit-cursor-stale')
+    }
+    await expect(knowledgeAuditService.page({ cursor: 'invalid' })).rejects.toThrow('audit-cursor-invalid')
+    await expect(knowledgeAuditService.page({ domain: 'typo' as any })).rejects.toThrow()
+    const path = join(knowledgeRoot, 'audit/audit.jsonl')
+    await writeFile(path, (await readFile(path, 'utf8')).replace('obs-1', 'other'), 'utf8')
+    await expect(knowledgeAuditService.page({ domain: 'engineering', cursor: nextCursor })).rejects.toThrow('audit-cursor-stale')
+  })
+
+  it('keeps unknown provenance out of project/personal scopes and tolerates legacy snapshots', async () => {
+    const base = makeEventInput()
+    await knowledgeAuditService.recordBatch([
+      { ...base, provenance: undefined as any, after: undefined, action: 'future-action' as any },
+      { ...base, provenance: { ...base.provenance, workspaceId: 'global', createdAt: 'invalid' } },
+      { ...base, provenance: { ...base.provenance, workspaceId: 'another', workspaceName: 'Another project' } },
+      base,
+    ])
+    expect((await knowledgeAuditService.page()).total).toBe(4)
+    expect((await knowledgeAuditService.page({ domain: 'engineering' })).total).toBe(2)
+    expect((await knowledgeAuditService.page({ domain: 'personal' })).total).toBe(0)
+    const filtered = await knowledgeAuditService.page({ domain: 'engineering', workspaceId: 'another', action: 'capture' })
+    expect(filtered.total).toBe(1)
+    expect(filtered.workspaces).toEqual(expect.arrayContaining([{ id: 'another', name: 'Another project' }, { id: 'ws', name: 'ws' }]))
+  })
+
+  it('derives bounded redacted titles without rewriting event snapshots or the log', async () => {
+    const secret = 'sk-' + 'a'.repeat(48)
+    const event = await knowledgeAuditService.record(makeEventInput({ after: { fact: { content: `API_KEY=${secret}\n` + 'Readable knowledge '.repeat(20) } } }))
+    const path = join(knowledgeRoot, 'audit/audit.jsonl')
+    const original = await readFile(path, 'utf8')
+    const page = await knowledgeAuditService.page({ domain: 'engineering' })
+    expect(page.items[0]?.displayTitle).not.toContain(secret)
+    expect(page.items[0]?.displayTitle?.length).toBeLessThanOrEqual(120)
+    expect(page.items[0]?.after).toEqual(event.after)
+    expect(await readFile(path, 'utf8')).toBe(original)
+  })
+
   it('reads events from a pre-existing audit file with partial garbage lines', async () => {
     await mkdir(join(knowledgeRoot, 'audit'), { recursive: true })
     const validEvent = {

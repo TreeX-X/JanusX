@@ -14,20 +14,18 @@
   color: var(--shell-text);
 }
 
-/* 每 section 一张灰卡，与通用页 generalRow 对齐：
-   padding 12px 14px / radius 10px / bg shell-card（偏黑） */
+/* 分组轮廓与通用页 generalRow 对齐，弱于输入控件和窗口外壳。 */
 .section {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px solid var(--shell-border);
-  border-radius: 10px;
-  background: var(--shell-card);
+  border: 1px solid var(--shell-border-soft);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
 }
 
 .section:last-of-type {
-  border-bottom: 1px solid var(--shell-border);
   padding-bottom: 12px;
 }
 
@@ -218,7 +216,7 @@
 }
 
 /* Note: 底栏底色必须吃 --shell-canvas 令牌，写死 rgba(21,21,23,.9) 会在默认的
-   planche 纸面主题上压出近黑横条 — 见 .agents/notes/2026-09-29-settings-footer-scrim-token--16ff77a0.md */
+   planche 纸面主题上压出近黑横条 — 见 .agents/notes/workbench/settings-footer-scrim-token.md */
 .footer {
   position: sticky;
   /* 负的 bottom 抵掉 .body 的 padding-bottom，让底栏的出血边与滚动视口底边齐平；

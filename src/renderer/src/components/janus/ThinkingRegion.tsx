@@ -15,7 +15,7 @@ import {
   type ReasoningSnapshot,
 } from './janusReasoning'
 
-// Note: agentX Activity/thinking parity (elapsed + collapsed live tail) — see .agents/notes/2026-09-26-janus-chat-feedback-parity--54b1046a.md
+// Note: agentX Activity/thinking parity (elapsed + collapsed live tail) — see .agents/notes/agent/janus-chat-feedback-parity.md
 export interface ThinkingRegionProps {
   snapshot: ReasoningSnapshot
   streaming: boolean

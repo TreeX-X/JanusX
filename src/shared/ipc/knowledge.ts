@@ -57,8 +57,10 @@ export const KNOWLEDGE_CHANNELS = {
   automationStatus: 'knowledge:automation:status',
   automationRun: 'knowledge:automation:run',
   automationRetry: 'knowledge:automation:retry',
+  testConfiguration: 'knowledge:configuration:test',
   jevCredential: 'knowledge:jev:credential',
   jevCredentialStatus: 'knowledge:jev:credential-status',
+  jevCredentialReveal: 'knowledge:jev:credential-reveal',
   localModelStop: 'knowledge:local-model:stop',
   localModelConfigure: 'knowledge:local-model:configure',
   localResourcesInstall: 'knowledge:local-model:install',
@@ -84,6 +86,7 @@ export const KNOWLEDGE_CHANNELS = {
   resolveObservationContent: 'knowledge:observations:resolve-content',
   retentionStats: 'knowledge:retention:stats',
   listAudit: 'knowledge:audit:list',
+  auditPage: 'knowledge:audit:page',
   auditStats: 'knowledge:audit:stats',
   // Phase 5: `knowledge:extract` direct IPC removed — LLM enhancement runs only
   // via the processing queue (`runLlmStage` → `knowledgeExtractService.extract`).
@@ -128,10 +131,21 @@ export interface KnowledgeBootstrapResult {
 }
 
 export interface AuditQuery {
-  action?: AuditAction
+  action?: AuditAction | (string & {})
+  domain?: 'all' | 'engineering' | 'personal'
+  workspaceId?: string
   targetType?: AuditEvent['targetType']
   targetId?: string
   limit?: number
+}
+
+// Note: audit pages bind filters and preserve event snapshots — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
+export interface AuditPageQuery extends AuditQuery { cursor?: string }
+export interface AuditRecord extends AuditEvent { displayTitle?: string }
+export interface AuditPage extends AuditStats {
+  items: AuditRecord[]
+  nextCursor?: string
+  workspaces: Array<{ id: string; name: string }>
 }
 
 export interface AuditStats {
@@ -240,6 +254,7 @@ export interface KnowledgeDiagnostics {
   indexUpdatedAt: string | null
   captureFailures: number
   captureRecovery?: { batches: number; events: number; lastError?: string }
+  transcriptRecovery?: { pending: number; lastError?: string }
 }
 
 /** Phase 1-1: manual trigger input for the knowledge processing queue. */
@@ -330,9 +345,11 @@ export interface ExternalMcpRegisterResult {
 
 export interface KnowledgeAPI {
   automationStatus: () => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
-  automationRun: (input?: { backfill?: boolean }) => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
-  automationRetry: (id: string) => Promise<void>
+  automationRun: (input?: import('../knowledge-automation').AutomationRunInput) => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
+  automationRetry: (id: string | import('../knowledge-automation').AutomationRetryInput) => Promise<string | void>
+  testConfiguration: (input: import('../knowledge-automation').KnowledgeConfigurationTestRequest) => Promise<import('../knowledge-automation').KnowledgeConfigurationTestResult>
   setJevCredential: (key: string) => Promise<void>
+  revealJevCredential: () => Promise<string | null>
   jevCredentialStatus: () => Promise<{ configured: boolean }>
   stopLocalModel: () => Promise<void>
   installLocalResources: () => Promise<import('../knowledge-automation').KnowledgeLocalResources>
@@ -357,7 +374,8 @@ export interface KnowledgeAPI {
   resolveObservationContent: (observation: Observation) => Promise<string>
   retentionStats: () => Promise<RetentionStats>
   listAudit: (query?: AuditQuery) => Promise<AuditEvent[]>
-  auditStats: () => Promise<AuditStats>
+  auditPage: (query?: AuditPageQuery) => Promise<AuditPage>
+  auditStats: (query?: AuditQuery) => Promise<AuditStats>
   listCandidates: () => Promise<CandidateFact[]>
   listGraphCandidates: () => Promise<CandidateGraphEdge[]>
   listWikiPatchCandidates: () => Promise<CandidateWikiPatch[]>

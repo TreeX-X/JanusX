@@ -38,6 +38,8 @@ export interface CandidateEvidence {
   sources?: MemorySourceEvidence[]
   /** Exact per-claim excerpts, verified against the complete source digest before review. */
   quotes?: Array<{ observationId: string; quote: string }>
+  /** Host-bound task context, including constraints and corrections not selected as citations. */
+  contextSources?: MemorySourceEvidence[]
 }
 
 export type RetentionClass = 'noise' | 'operational' | 'evidence' | 'derived'
@@ -339,7 +341,7 @@ export interface MemoryFact {
   updatedBy?: string | null
 }
 
-// Note: wiki sources are host-read snapshots — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+// Note: wiki sources are host-read snapshots — see .agents/notes/blueprint/documents/tasks/note-wiki-r3.md
 export interface WikiNoteRef { uri: string; sourceHash: string }
 export interface WikiNoteStatus {
   uri: string
@@ -349,6 +351,10 @@ export interface WikiNoteStatus {
   detail?: string
 }
 export interface WikiPage {
+  topicKey?: string
+  relations?: WikiPageRelation[]
+  /** Derived from current published targets; never saved as review evidence. */
+  relationIssues?: WikiRelationIssue[]
   /** Host-owned dependencies and topic ownership for maintained project pages. */
   sourceFactRefs?: Array<{ id: string; contentHash: string }>
   managed?: boolean
@@ -371,6 +377,19 @@ export interface WikiPage {
   projectId?: string | null
   ownerUserId?: string | null
   updatedBy?: string | null
+}
+
+// Note: relationships publish with their owning Wiki revision — see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md
+export interface WikiPageRelation {
+  type: 'references' | 'depends_on' | 'conflicts_with'
+  target: { workspaceId: string; slug: string; title: string; version: number; contentHash: string }
+  reason: string
+  sourceFactIds: string[]
+}
+export interface WikiRelationIssue {
+  targetSlug: string
+  type: WikiPageRelation['type']
+  status: 'missing' | 'ambiguous' | 'changed' | 'stale' | 'invalid'
 }
 
 export interface GraphEdge {
@@ -537,6 +556,8 @@ export interface CandidateFact {
 }
 
 export interface CandidateWikiPatch {
+  topicKey?: string
+  relations?: WikiPageRelation[]
   generatedSections?: Array<{ markdown: string; ids: string[] }>
   sourceFactRefs?: Array<{ id: string; contentHash: string }>
   managed?: boolean

@@ -26,6 +26,15 @@ files:
   - "!.cache{,/**/*}"
   - "!.claude{,/**/*}"
   - "!.codex{,/**/*}"
+  # Local scratch from the same toolchain family as .codex and .janusX above:
+  # gitignored, never part of a packaged runtime, and large enough to matter.
+  # .codex-tmp/prepush-* held a stale sibling checkout whose node_modules added
+  # 10k archive entries and 63 MiB to the 0.9.0 portable before this line.
+  - "!.codex-cache{,/**/*}"
+  - "!.codex-session{,/**/*}"
+  - "!.codex-sessions{,/**/*}"
+  - "!.codex-tmp{,/**/*}"
+  - "!.hybrid{,/**/*}"
   - "!.github{,/**/*}"
   - "!.janusX{,/**/*}"
   - "!.agents{,/**/*}"

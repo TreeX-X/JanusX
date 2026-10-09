@@ -73,7 +73,7 @@ export async function loadKnowledgeWorkbenchSnapshot(projectOnly = false): Promi
     window.electron.knowledge.listCandidates(),
     window.electron.knowledge.listWikiPatchCandidates(),
     window.electron.knowledge.listGraphCandidates(),
-    window.electron.knowledge.listAudit({ limit: 30 }),
+    window.electron.knowledge.listAudit({ limit: 30, ...(projectOnly ? { domain: 'engineering' as const } : {}) }),
     window.electron.knowledge.retentionStats(),
     window.electron.knowledge.listTruth(),
     window.electron.knowledge.getSettings(),
@@ -107,7 +107,7 @@ export async function loadKnowledgeWorkbenchSnapshot(projectOnly = false): Promi
     factCandidates,
     wikiPatches,
     graphCandidates,
-    auditEvents: projectOnly ? auditEvents.filter(item => item.provenance.workspaceId !== 'user') : auditEvents,
+    auditEvents,
     retentionStats,
     libraryCards,
     conflicts,
@@ -185,13 +185,17 @@ export type KnowledgeReviewCandidateInput = ReviewCandidateInput
 export async function rejectKnowledgeCandidate(
   input: KnowledgeReviewCandidateInput,
 ): Promise<unknown> {
-  return window.electron.knowledge.rejectCandidate(input)
+  const result = await window.electron.knowledge.rejectCandidate(input)
+  window.dispatchEvent(new Event('janusx-memory-changed'))
+  return result
 }
 
 export async function applyKnowledgeCandidate(
   input: KnowledgeReviewCandidateInput,
 ): Promise<unknown> {
-  return window.electron.knowledge.applyCandidate(input)
+  const result = await window.electron.knowledge.applyCandidate(input)
+  window.dispatchEvent(new Event('janusx-memory-changed'))
+  return result
 }
 
 export async function revokeKnowledgeTruth(input: RevokeTruthInput): Promise<void> {

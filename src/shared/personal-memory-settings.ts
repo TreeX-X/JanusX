@@ -1,4 +1,4 @@
-// Note: independent memory controls preserve domain ownership — see .agents/notes/2026-10-04-memory-domain-controls--908d675a.md
+// Note: independent memory controls preserve domain ownership — see .agents/notes/knowledge/memory-domain-controls.md
 export interface PersonalMemorySettings {
   captureConversations: boolean
   inferEngineeringHabits: boolean

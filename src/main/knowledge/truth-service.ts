@@ -14,6 +14,7 @@ import type {
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
 import { wikiFreshness } from './wiki-freshness'
+import { wikiRelationIssues, wikiRelationsSchema } from './wiki-relations'
 import { assertWikiReviewReady } from './wiki-review-recovery'
 import { isMemoryScope, isSourceEvidence } from './memory-evidence'
 
@@ -213,6 +214,7 @@ async function readPublishedWikiPages(): Promise<WikiPage[]> {
     parsed.pages
       .filter(isPublishedWikiEntry)
       .map(async (page): Promise<WikiPage | null> => {
+        if ('relations' in page && page.relations !== undefined) wikiRelationsSchema.parse(page.relations)
         const markdown = await readFile(join(knowledgeRootPath(), page.relativePath), 'utf8')
         return { ...page, markdown }
       }),
@@ -249,7 +251,8 @@ export class KnowledgeTruthService {
     await assertWikiReviewReady(wikiRevision)
     return {
       facts: visibleFacts,
-      wikiPages: options.includeStaleWiki ? pages : pages.filter(page => page.freshness !== 'stale'),
+      wikiPages: (options.includeStaleWiki ? pages : pages.filter(page => page.freshness !== 'stale'))
+        .map(page => ({ ...page, relationIssues: wikiRelationIssues(page, pages) })),
       graphEdges: graphEdges.filter(edge => !revocations.blocksFactIds(edge.workspaceId, edge.sourceFactIds)),
     }
   }

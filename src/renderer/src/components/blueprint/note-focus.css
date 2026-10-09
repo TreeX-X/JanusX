@@ -13,7 +13,36 @@
 .bp-note-locations details { font-size: 12px; padding: 8px 0; border-bottom: 1px solid var(--shell-border); }
 .bp-note-locations summary { cursor: pointer; color: var(--shell-muted); }
 .bp-note-locations ul { max-height: 170px; overflow: auto; overflow-wrap: anywhere; padding-left: 20px; }
-.bp-assistant-target .bp-node-card { outline: 3px solid var(--shell-accent); outline-offset: 4px; }
-.bp-assistant-reference .bp-node-card { outline: 2px dashed var(--shell-accent); outline-offset: 4px; }
-.bp-assistant-dependency .bp-node-card { outline: 2px dotted var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-target .bp-node-card { --bp-focus-stroke-width: 3px; --bp-focus-dash: none; outline: 3px solid var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-reference .bp-node-card { --bp-focus-stroke-width: 2px; --bp-focus-dash: 6 4; outline: 2px dashed var(--shell-accent); outline-offset: 4px; }
+.bp-assistant-dependency .bp-node-card { --bp-focus-stroke-width: 2px; --bp-focus-dash: 0 4; outline: 2px dotted var(--shell-accent); outline-offset: 4px; }
+/* Note: an offset folder contour keeps focus distinct from selection — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md */
+.blueprint-canvas-wrapper :is(.bp-assistant-target, .bp-assistant-reference, .bp-assistant-dependency) .bp-node-card.bp-node-card--module {
+  outline: none;
+}
+.bp-node-card__module-focus {
+  display: none;
+  position: absolute;
+  left: -2px;
+  top: -2px;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+  stroke: var(--shell-accent);
+  stroke-width: var(--bp-focus-stroke-width);
+  stroke-dasharray: var(--bp-focus-dash);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+:is(.bp-assistant-target, .bp-assistant-reference, .bp-assistant-dependency) .bp-node-card__module-focus {
+  display: block;
+}
 .bp-assistant-edge path { stroke: var(--shell-accent) !important; stroke-width: 3px !important; }
+.bp-note-groups { max-height: 250px; overflow: auto; }
+.bp-note-group h4 { margin: 8px 0 4px; font: inherit; font-weight: 600; overflow-wrap: anywhere; }
+.bp-note-group ul { max-height: none; padding: 0; margin: 0; list-style: none; }
+.bp-note-group li { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 4px 0; }
+.bp-note-group .bp-note-title { flex: 1; text-align: left; overflow-wrap: anywhere; }
+.bp-note-group li p { flex-basis: 100%; margin: 0; opacity: .7; overflow-wrap: anywhere; }
+.bp-note-location { flex-basis: 100%; color: var(--shell-muted); }
+.bp-note-group button:disabled { cursor: default; opacity: .6; }

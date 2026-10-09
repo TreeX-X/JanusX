@@ -1,4 +1,4 @@
-// Note: a recoverable review intent prevents crashes leaving unaudited active facts — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: a recoverable review intent prevents crashes leaving unaudited active facts — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile, unlink } from 'node:fs/promises'
 import { join } from 'node:path'

@@ -1,4 +1,4 @@
-// Note: queue owns observation-to-candidate bookkeeping — see .agents/notes/2026-09-03-knowledge-pipeline--dcc5e8a0.md
+// Note: queue owns observation-to-candidate bookkeeping — see .agents/notes/knowledge/knowledge-pipeline.md
 /**
  * @file Knowledge processing queue (Phase 1-1, deterministic stage wired since Phase 1-2).
  * @description Owns the observation → candidate pipeline bookkeeping from

@@ -23,7 +23,7 @@
 ![Codex](https://img.shields.io/badge/Codex-CLI-1C343B?style=flat-square&logo=openai&logoColor=white)
 ![Janus-agentX](https://img.shields.io/badge/Janus_agentX-CLI-E5A422?style=flat-square)
 
-[下载安装](https://treex-x.github.io/JanusX/) · [版本发布](https://github.com/TreeX-X/JanusX/releases) · [使用与架构文档](wiki/README.md) · [反馈问题](https://github.com/TreeX-X/JanusX/issues)
+[下载安装](https://treex-x.github.io/JanusX/) · [版本发布](https://github.com/TreeX-X/JanusX/releases) · [使用与架构文档](./wiki/README.md) · [反馈问题](https://github.com/TreeX-X/JanusX/issues)
 
 > Second test Oct 10 (not v1.0 stable) · 10.10 二测（非正式版）
 
@@ -166,18 +166,18 @@ JanusX 桌面工作台（planche 石板色）
 
 ### 07 · 蓝图：把项目拆成看得见的结构
 
-在设置的创新功能中开启蓝图后，点击标题栏 **蓝图工作台**。顶部按工作区切换，**系统结构** 展示项目、模块与接口连接，**全部 Note** 展示规划和决策等记录；左侧阅读节点正文与关联信息，右侧 Janus Copilot 围绕当前焦点对话。
+在设置的创新功能中开启蓝图后，点击标题栏 **蓝图工作台**。单根项目直接展示根模块页：模块自身、直属子模块和文件同屏呈现。单击模块在左侧预览正文，双击进入该模块，保留父节点；通过面包屑逐层返回。
 
 <p align="center">
-  <img src="wiki/assets/showcase/feature-blueprint-workbench.gif" alt="蓝图演示：系统结构、模块接口、关联决策、全部 Note 与上下文对话" width="880" />
+  <img src="wiki/assets/showcase/feature-blueprint-workbench.gif" alt="蓝图演示：模块预览与逐层浏览、跨模块关注定位、原位维护 Note 和 Task 交接示例" width="880" />
   <br/>
-  <sub>真实应用录制：打开项目与模块结构 → 查看文件对照模块的职责和接口 → 追溯关联决策 → 切换全部 Note → 聚焦模块并起草维护指令。示例 Note 保存在隔离演示仓库；指令未发送，不调用模型。</sub>
+  <sub>真实应用录制：预览模块 → 进入子模块并返回 → 跨模块关注与定位 → 原位更新阅读约定 → 查看 Task 交接示例。九篇示例文档覆盖六种类型；本地脚本模型驱动真实读取、写入和界面更新，不调用外部模型。Task 是尚未执行的示例待办。</sub>
 </p>
 
-- **三列布局**：节点预览（目标 / 验收项 / 关联文件）· 项目规划图（parent / 接口 / 跨工作区边）· Janus 对话（带着当前焦点的一批 Note）。
-- **接口契约**：模块声明`提供 / 需要`的接口，悬空需求与闲置供给在图上一眼看出。
-- **单一控制面**：画布不承载写操作。对话框上方一条动作栏，三个主动作：`整理 Note` 把讨论整理成可审批提案（一次点击可全批非删除项，删除需单独确认）、`目标终端` 选派发目标、`派发` 让 Janus 整理涉及 Note 并写成实施简报预填进终端。需求正文以 Note 为准，经提案审批落盘。
-- **只读优先**：结构编辑本地可体验；AI 分析和维护需要模型配置。蓝图存为标准 harness note，规划与证据分离又可绑定。
+- **模块与文件有区别**：模块使用容器卡片，普通文件按类型分组。每层可同时保留主题文档和子模块，不要求所有内容都放到最底层。
+- **关注与浏览分开**：关注列表按模块分组；加入关注保留当前页面，明确预览、进入或定位时才导航。返回恢复先前选中、正文与视口。
+- **文档持续维护**：对话可调用共享 Note 工具，原位维护已有主题并刷新 `updated`。普通 `xdo` 不新建 Task；需要模型配置才能使用 AI 分析与维护。
+- **Task 承接交接**：主 Agent 在交接前更新同一 Task 的进展、证据和 Handoff；子智能体只读 Task 并返回结果。模块状态与执行验收分别维护。
 
 ---
 
@@ -211,7 +211,7 @@ JanusX 桌面工作台（planche 石板色）
 - **就地预览**：支持 HTML、Markdown、图片、文本及 Office 文件；本演示使用 HTML 与 JSON。
 - **对照与刷新**：标签切换、拖动面板宽度；文件修改后可点击「从磁盘重新加载」查看内容。
 
-演示的步骤与字幕按功能独立维护，背景、鼠标和节奏共用配置。录制与合成命令见 [演示脚本说明](scripts/showcase/README.md)。
+演示的步骤与字幕按功能独立维护，背景、鼠标和节奏共用配置。录制与合成命令见 [演示脚本说明](./scripts/showcase/README.md)。
 
 ---
 
@@ -285,7 +285,7 @@ npm run package:linux
 
 打包产物位于 `release/<version>/`。平台打包需具备对应系统及构建环境。
 
-架构与模块导航见 [Wiki](wiki/README.md)，优化状态与路线图见 [架构优化计划](wiki/06-architecture-optimization-plan.md)。贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+架构与模块导航见 [Wiki](./wiki/README.md)，优化状态与路线图见 [架构优化计划](./wiki/06-architecture-optimization-plan.md)。贡献约定见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ---
 
@@ -314,17 +314,9 @@ npm run package:linux
 <details>
 <summary><b>蓝图 · 把项目拆成可查看的结构</b></summary>
 
-点击标题栏的 **蓝图工作台**，用树状节点组织目标、功能、任务和问题，查看节点详情、进度与关联信息。节点聚焦和 Janus Copilot 为围绕具体任务工作提供入口。新的石板色演示见上文「07 · 蓝图」。
+蓝图把 `.agents/notes/` 中的模块文档呈现为可逐层浏览的页面，左侧读取文档原文，右侧对话使用当前模块、选中项和关注列表。搜索可从完整来源定位所属模块；未归属文档、历史文档与解析诊断保留入口。
 
-**创新功能**：
-
-- **三列联动**：节点预览（目标 / 验收项 / 关联文件）· 项目规划图（parent / 接口 / 跨工作区边）· Janus 对话（带着当前焦点的一批 Note），点一个节点即三列联动。
-- **接口契约可视化**：模块声明`提供 / 需要`的接口，悬空需求与闲置供给在图上一眼看出。
-- **AI 驱动维护**：对话上下文跟着画布焦点走——选中节点读整棵子树，用搜索/状态/kind 筛选就读命中的那一批；Copilot 可分析节点、生成维护指令、提案 diff，对话确认后由 agent 核验指引宿主应用。
-- **对话派发到终端**：点「派发」一次，Janus 依据本次对话整理出涉及的 Note 并写成实施简报（目标 / 步骤 / 验收 / 约束），预填进目标终端。终端就是审阅面——读、改、回车才开工；终端绑定到节点，关闭时自动触发该节点的最终分析。
-- **规划证据分离**：蓝图存为标准 harness note，规划与证据分离又可绑定，支持跨工作区依赖追踪。
-
-结构编辑可在本地体验；AI 分析和维护需要模型配置。
+文档使用 `harness-note/2`：module、note、idea、requirement、decision、task 各自承担职责，稳定 UUID 标识文档。模块状态、文档生命周期和 Task 执行结果分别显示。当前导航与维护录制见上文「07 · 蓝图」；跨仓接入与独立评审进度见[接入计划](.agents/notes/blueprint/workflowx-v2-adoption.md)。
 
 </details>
 
@@ -346,7 +338,7 @@ npm run package:linux
 
 JanusX 是一个真实投入社区使用的开源实验项目，目标是让 AI 辅助开发有一个顺手的桌面落点：项目、终端、AI CLI 与常用工具同处一室，稳定的基础体验在前，激进的协作实验在后。
 
-欢迎讨论、建议与贡献。Fork 本仓库提交 Pull Request，或在 Issues 中分享你的使用场景与问题，贡献约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎讨论、建议与贡献。Fork 本仓库提交 Pull Request，或在 Issues 中分享你的使用场景与问题，贡献约定见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 公众号：**TreeX-AI** · 如果对你有帮助，欢迎 Star。
 

@@ -1,4 +1,4 @@
-// Note: only a verified, warmed local process can score memory — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: only a verified, warmed local process can score memory — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, join } from 'node:path'

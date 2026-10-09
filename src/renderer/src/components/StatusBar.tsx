@@ -1,4 +1,4 @@
-// Note: bottom bar as application running-state layer — see .agents/notes/2026-06-27-runtime-statusbar--b1978fa7.md
+// Note: bottom bar as application running-state layer — see .agents/notes/desktop/runtime-statusbar.md
 import { useEffect, useState } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'

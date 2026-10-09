@@ -6,7 +6,7 @@
  *              公网 Relay 仅在 transport 层留接口，本步只走 lan（见 transport.ts）。
  */
 
-// Note: same-account gate with LAN pairing codes — see .agents/notes/2026-08-20-tob-lan-remote--97efe07c.md
+// Note: same-account gate with LAN pairing codes — see .agents/notes/remote/tob-lan-remote.md
 import { randomBytes, randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'

@@ -1,4 +1,4 @@
-// Note: proposal and execution stay separate — see .agents/notes/2026-08-04-blueprint-maintenance--4b49f066.md
+// Note: proposal and execution stay separate — see .agents/notes/blueprint/maintenance/history/blueprint-maintenance.md
 import { randomUUID } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -264,7 +264,7 @@ function isAuditRecord(value: unknown): value is BlueprintMaintenanceAuditRecord
     && validEvidence
 }
 
-// Note: project graphs land through the harness transaction — see .agents/notes/2026-09-17-maintenance-harness-apply-s6--66bf1be8.md
+// Note: project graphs land through the harness transaction — see .agents/notes/agent/maintenance-harness-apply-s6.md
 /**
  * S6-c slice 2b: project graphs are harness-managed, and the service now
  * routes them instead of refusing. Legacy JSON blueprints keep the old lane.
@@ -359,7 +359,7 @@ class BlueprintMaintenanceService {
     }
   }
 
-  // Note: completion returns a file-translatable proposal to the requesting turn — see .agents/notes/2026-09-29-blueprint-maintenance-approval-gap--a1b2c3d4.md
+  // Note: completion returns a file-translatable proposal to the requesting turn — see .agents/notes/blueprint/maintenance/blueprint-maintenance-approval-gap.md
   async proposeForConversation(input: {
     taskId: string; conversationId: string; messages: Array<{ role: string; content: string }>
     providerId: string; modelId?: string; signal: AbortSignal; chatSession: ChatSessionRuntime; workspaceIds: string[]

@@ -1,4 +1,4 @@
-// Note: local deployment is opt-in and bounded by measured resources — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: local deployment is opt-in and bounded by measured resources — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { execFile } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import { createServer } from 'node:net'

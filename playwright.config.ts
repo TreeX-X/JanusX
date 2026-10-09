@@ -29,7 +29,7 @@ export default defineConfig({
     },
     {
       name: 'desktop',
-      testMatch: ['desktop-smoke.spec.ts', 'desktop-harness-runtime.spec.ts', 'editor-definition.spec.ts', 'editor-find-widget.spec.ts', 'editor-window-tabs.spec.ts', 'blueprint-janus-capsule.spec.ts', 'knowledge-pipeline.spec.ts'],
+      testMatch: ['desktop-smoke.spec.ts', 'desktop-harness-runtime.spec.ts', 'editor-definition.spec.ts', 'editor-find-widget.spec.ts', 'editor-window-tabs.spec.ts', 'blueprint-janus-capsule.spec.ts', 'knowledge-pipeline.spec.ts', 'run-config-assistant.spec.ts'],
       timeout: 90_000,
       expect: { timeout: 10_000 },
       use: {

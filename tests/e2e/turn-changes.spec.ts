@@ -1,0 +1,48 @@
+import { expect, test } from '@playwright/test'
+
+for (const theme of ['dark', 'planche']) {
+  test(`latest clears while history remains reachable in ${theme}`, async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    await page.goto(`/turn-changes.html?theme=${theme}&zh=1`)
+    const island = page.locator('[data-turn-island][data-terminal-id="a"]')
+    await expect(island).toBeVisible()
+    await page.getByRole('button', { name: 'Change two files' }).click()
+    await expect(island.locator('.turn-change-count')).toHaveText('2')
+    await island.locator('.turn-change-dock').click()
+    await expect(island.getByRole('region', { name: '最近' })).toBeVisible()
+    await expect(island.locator('.turn-change-file')).toHaveCount(2)
+    await expect.poll(async () => (await island.boundingBox())!.width).toBeGreaterThan(330)
+    await page.screenshot({ path: test.info().outputPath(`latest-${theme}.png`) })
+    await island.getByRole('button', { name: '历史' }).click()
+    await expect(island.locator('.turn-change-history')).toHaveCount(1)
+    await page.getByRole('button', { name: 'No changes' }).click()
+    await page.getByRole('button', { name: 'No changes' }).click()
+    await expect(island.locator('.turn-change-count')).toHaveCount(0)
+    await island.locator('.turn-change-dock').click()
+    await expect(island.getByText('本轮无文件变化')).toBeVisible()
+    await expect(island.locator('.turn-change-file')).toHaveCount(0)
+    await island.getByRole('button', { name: '历史' }).click()
+    await expect(island.locator('.turn-change-history')).toHaveCount(1)
+    await page.screenshot({ path: test.info().outputPath(`history-${theme}.png`) })
+    await page.keyboard.press('Escape')
+    await expect(island).toHaveAttribute('data-stage', 'collapsed')
+    expect(errors).toEqual([])
+  })
+}
+
+test('large counts fit the dock and keyboard access opens the current view', async ({ page }) => {
+  await page.goto('/turn-changes.html')
+  const island = page.locator('[data-turn-island][data-terminal-id="a"]')
+  await expect(island).toBeVisible()
+  await page.getByRole('button', { name: 'Many files' }).click()
+  await expect(island.locator('.turn-change-count')).toHaveText('99+')
+  await island.locator('.turn-change-dock').focus()
+  await page.keyboard.press('Enter')
+  await expect(island).toHaveAttribute('data-view', 'latest')
+  await expect(island.locator('.turn-change-summary')).toContainText('120')
+  await page.getByRole('button', { name: 'No changes' }).click()
+  await island.locator('.turn-change-dock').dblclick()
+  await expect(island).toHaveAttribute('data-view', 'history')
+  await expect(island.locator('.turn-change-history')).toHaveCount(1)
+})

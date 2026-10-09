@@ -37,11 +37,13 @@ interface ChatRequest {
   messages: ChatMessage[]
   providerId: string
   modelId?: string
-  sourceTag?: 'janus-chat'
+  sourceTag?: 'janus-chat' | 'launch-assistant'
   conversationId?: string
   workspaceId?: string
   workspacePath?: string
   workspaceResources?: ChatWorkspaceResource[]
+  /** Contract mirror of shared ChatRequest; the non-stream path has no tool loop. */
+  toolAllowlist?: string[]
 }
 
 let connectionStatus: LlmRuntimeStatus['connection'] = { state: 'checking' }

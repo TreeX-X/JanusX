@@ -1,20 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentHookPayload } from '../../../src/main/notifications/agent-hook-types'
+import { taskNotification } from './memory-observation.fixture'
 
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   getKnowledgeSettings: vi.fn(),
   scheduleImmediate: vi.fn(),
+  listAll: vi.fn(),
 }))
 
 vi.mock('../../../src/main/knowledge/capture-inbox', () => ({ knowledgeCaptureInbox: {
   submit: async entries => Promise.all(entries.map(entry => mocks.capture(entry.input, entry.context))), drain: vi.fn(),
 } }))
+vi.mock('../../../src/main/knowledge/transcript-recovery', () => ({ knowledgeTranscriptRecovery: { drain: vi.fn().mockResolvedValue([]), submit: vi.fn() } }))
 
 vi.mock('../../../src/main/knowledge/observation-service', () => ({
   knowledgeObservationService: {
     capture: mocks.capture,
-    listAll: async () => [],
+    listAll: mocks.listAll,
+    resolveContent: async row => row.content,
   },
 }))
 
@@ -37,12 +41,54 @@ async function loadRecorder() {
 }
 
 describe('AgentTurnRecorder', () => {
+  it('connects an OpenCode completion to its exact session database recovery', async () => {
+    const { agentTurnRecorder } = await loadRecorder()
+    const { knowledgeTranscriptRecovery } = await import('../../../src/main/knowledge/transcript-recovery')
+    vi.mocked(knowledgeTranscriptRecovery.submit).mockResolvedValue([{ id: 'completed', workspaceId: 'workspace-1' } as any])
+    agentTurnRecorder.registerTerminal({ terminalId: 'oc', engine: 'opencode', workspaceId: 'workspace-1', cwd: 'C:/work' })
+    await agentTurnRecorder.handleHookPayload({ source: 'opencode', event: 'session.idle', terminalId: 'oc', sessionId: 'exact-session', timestamp: '2026-10-07T00:00:00Z' })
+    expect(knowledgeTranscriptRecovery.submit).toHaveBeenCalledWith(expect.objectContaining({
+      engine: 'opencode', path: expect.stringMatching(/opencode[\\/]opencode\.db$/),
+      end: expect.objectContaining({ input: expect.objectContaining({ workspaceId: 'workspace-1', workspacePath: 'C:/work', sessionId: 'exact-session' }) }),
+    }), expect.any(Function))
+  })
   beforeEach(() => {
     mocks.capture.mockReset()
     mocks.capture.mockResolvedValue({ workspaceId: 'workspace-1' })
     mocks.getKnowledgeSettings.mockReset()
     mocks.getKnowledgeSettings.mockResolvedValue({ enabled: true })
     mocks.scheduleImmediate.mockReset()
+    mocks.listAll.mockReset().mockResolvedValue([])
+  })
+
+  it('ignores injected notifications without replacing the active user turn', async () => {
+    const { agentTurnRecorder } = await loadRecorder()
+    agentTurnRecorder.registerTerminal({ terminalId: 'terminal', engine: 'claude', workspaceId: 'workspace-1', cwd: 'C:/work' })
+    const payload: AgentHookPayload = { source: 'claude', event: 'UserPromptSubmit', terminalId: 'terminal', sessionId: 'session',
+      message: 'Fix the cache', timestamp: '2026-10-06T00:00:00Z' }
+    await agentTurnRecorder.handleHookPayload(payload)
+    for (let index = 0; index < 4; index++) await agentTurnRecorder.handleHookPayload({ ...payload, message: taskNotification(`task-${index}`), timestamp: '2026-10-06T00:00:01Z' })
+    await agentTurnRecorder.handleHookPayload({ ...payload, message: 'Runtime context reminder', raw: { isMeta: true } })
+    await agentTurnRecorder.handleHookPayload({ ...payload, event: 'Stop', message: undefined, timestamp: '2026-10-06T00:00:05Z' })
+    expect(mocks.capture).toHaveBeenCalledTimes(2)
+    const [start, end] = mocks.capture.mock.calls.map(call => call[0])
+    expect(end.correlationId).toBe(start.correlationId)
+    expect(end.metadata).toMatchObject({ prompt: 'Fix the cache', durationMs: 5000 })
+    agentTurnRecorder.dispose()
+  })
+
+  it('skips legacy notification starts while recovering the real user turn after restart', async () => {
+    const { agentTurnRecorder } = await loadRecorder()
+    agentTurnRecorder.registerTerminal({ terminalId: 'terminal', engine: 'claude', workspaceId: 'workspace-1', cwd: 'C:/work' })
+    mocks.listAll.mockResolvedValue([
+      { workspaceId: 'workspace-1', sessionId: 's', agentId: 'claude', tags: ['turn-started'], createdAt: '2026-10-06T00:00:01Z',
+        correlationId: 'noise', content: taskNotification(), sourceEvidence: { speaker: 'user' } },
+      { workspaceId: 'workspace-1', sessionId: 's', agentId: 'claude', tags: ['turn-started'], createdAt: '2026-10-06T00:00:00Z',
+        correlationId: 'real', content: 'Fix the cache', sourceEvidence: { speaker: 'user' } },
+    ])
+    await agentTurnRecorder.handleHookPayload({ source: 'claude', event: 'Stop', terminalId: 'terminal', sessionId: 's', timestamp: '2026-10-06T00:00:05Z' })
+    expect(mocks.capture.mock.calls[0][0]).toMatchObject({ correlationId: 'real', metadata: { prompt: 'Fix the cache', durationMs: 5000 } })
+    agentTurnRecorder.dispose()
   })
 
   it('records hook-driven terminal turn start and completion with duration metadata', async () => {

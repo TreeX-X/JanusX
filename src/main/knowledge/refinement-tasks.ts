@@ -1,5 +1,5 @@
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
-// Note: durable refinement survives observation cursors and rechecks snapshots — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: durable refinement survives observation cursors and rechecks snapshots — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'

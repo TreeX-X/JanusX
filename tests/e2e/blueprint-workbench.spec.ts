@@ -56,7 +56,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       })
     })
     // Note: the canvas is inspection-only; writing and dispatching both live in
-    // the Janus panel — see .agents/notes/2026-09-30-blueprint-dispatch-panel--5d2a6f31.md
+    // the Janus panel — see .agents/notes/blueprint/maintenance/blueprint-dispatch-panel.md
     test('the canvas carries no work, terminal or dispatch control', async ({ page }) => {
       await open(page)
       await node(page, childId).click()

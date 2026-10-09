@@ -1,0 +1,57 @@
+---
+{
+  "schema": "harness-note/2",
+  "id": "5fdf2273-99b3-5416-9e4a-ef42c63bbfb2",
+  "kind": "decision",
+  "lifecycle": "implemented",
+  "created": "2026-07-14",
+  "class": "feature",
+  "extensions": {
+    "r6Organization": {
+      "sourcePath": ".agents/notes/2026-07-14-agent-note-win-app-auto-update-via-github-releases--5fdf2273.md",
+      "sourceHash": "627e4047096740223a890f7a1f8405cff07a1c20c920d950023b7a83d2febf9e",
+      "originalBodyHash": "81caf16d1162b911d170883f64dbbe95594aa5e8add027951f2957b436fe7112",
+      "category": "formal",
+      "reason": "Retains the source decision in implemented lifecycle; body documents Win app auto-update via GitHub Releases. No age-based archival.",
+      "edits": ["Removed redundant Agent Note title prefix","Removed lifecycle duplicated by frontmatter"],
+      "baseline": {
+        "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+        "path": ".agents/notes/implemented/feature/2026-07-14-app-auto-update-win.md",
+        "sourceHash": "5480c3fe21fe1ccbff9445fa5e3d8a41e7367ef88e08db8a06ebd43cdf4cac37",
+        "originalBodyHash": "3b0b29e5105e5c03ea6efd083a44c762de123cd476ff98f4176ae90f29d397f1"
+      }
+    }
+  },
+  "updated": "2026-10-08T02:54:24.778Z",
+  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
+}
+---
+# Win app auto-update via GitHub Releases
+
+
+## Problem
+
+Every JanusX release scatters installed versions because no in-app update path exists. The scope boundary in `../../proposed/process/2026-07-14-cli-manager-scope.md` names automatic updates as the sole adoption from the adjacent suite, and its acceptance criterion stays open until a packaged build updates itself.
+
+## Decision
+
+The Windows nsis installer build checks the owning repository's GitHub Releases feed and installs newer versions in-app. `electron-builder.yml` declares a `github` publish target (`TreeX-X/JanusX`, `latest` channel), so each tagged release uploads the installer plus the generated `latest.yml`; no separate update server exists. The target pins `releaseType: release` because the publisher defaults to draft, and drafts never enter the feed the client reads. `src/main/updater/service.ts` owns the update state machine over `electron-updater` with background download and install-on-restart, and it loads the updater library only on a supported runtime. `src/main/updater/guards.ts` restricts automatic updates to the packaged Win32 nsis build; dev mode, portable builds, and non-Windows platforms report an explicit unsupported reason and never attempt a silent install. Renderer visibility lives in the general settings page through `src/renderer/src/components/UpdaterSettings.tsx` over the `updater:` IPC contract in `src/shared/ipc/updater.ts`, showing check, progress, restart-to-install, and the downgrade hint. `.github/workflows/release-win.yml` publishes the Win build on version tags with the repository-provided token. Unsigned builds still update; the missing signature only surfaces as a first-install SmartScreen prompt, never as an update failure.
+
+An `autoCheck` preference (`updaterSettings` in the global config, default true) governs the background schedule only. Turning it off stops the launch-delayed first check and the 6h poll without touching manual check or restart-to-install; turning it back on reschedules immediately when the service is armed. The persisted value applies at startup before the first schedule, and the settings IPC applies it to the running scheduler only after a successful disk write.
+
+The title bar shows an update badge right of the JanusX wordmark only while an update carries action value (available, downloading, downloaded). The badge shares its event-to-state mapping with the settings panel through `src/renderer/src/lib/updater-badge.ts`. Clicking a downloaded badge restarts into the installer at once; clicking earlier states opens the settings general tab where progress and the install entry live.
+
+The release workflow guards the first-publish footguns: the tag must equal `v` plus the `package.json` version because the publisher derives the release tag and the feed version from the package, and the sibling `janus-agentX` checkout resolves to the public same-owner repository. Available and downloaded states carry the release body as tag-stripped plain text (`formatReleaseNotes` in the updater contract), so installs never happen blind. The updater library and the service failures log through `electron-log` to `userData/logs` with a console mirror. Unsupported runtimes get a fixed download-page entry (`updater:openReleases`, URL allowlist of one) instead of a dead button. The allowlisted URL is `https://treex-x.github.io/JanusX/#downloads`, the gh-pages package chooser, so portable and dev users land on the designed install/portable selection rather than the raw Releases listing; the landing page's own changelog links still target Releases. The auto-check switch disables where no schedule exists.
+
+## Alternatives considered
+
+- Self-hosted generic feed (`generic` provider on internal HTTPS): strongest case serves private deployments without touching github.com. The driver that defers it is operational cost before any customer demands it; the publish shape (yml plus artifacts) stays identical, so the switch costs a config change, not a rewrite.
+- Lightweight checker that prompts a manual download: strongest case covers portable builds and dev mode today with zero signing or CI work. The driver that rejects it as the primary path is fragmentation: skipped installs keep old versions in the field, which fails the scope acceptance. It survives only as the downgrade hint for unsupported runtimes.
+- Do nothing / reuse manual download releases: staying put keeps zero updater machinery. The cost is permanent version fragmentation plus a relitigated scope boundary every release.
+
+## Consequences
+
+- Win nsis gains background check (30s after launch, every 6h), manual check, and restart-to-install; every other runtime gains an honest unsupported message instead of a broken button.
+- macOS signing plus notarization and the Linux AppImage/deb matrix stay open work under the owning scope note; the guards give those stages explicit extension points.
+- Release discipline tightens: only `v*` tags publish, and the feed check script must verify yml-to-artifact alignment before wider rollout.
+- Retracting a bad release has no staged rollout or kill switch yet: deleting the Release stops further detection (the feed entry disappears), and already-downloaded copies still install on restart, so the recovery is a patched version published the same way. All clients update at once until channels land.

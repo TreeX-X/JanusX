@@ -1,8 +1,8 @@
 // Note: engine differences live here as data, never in branches (orca
 // TUI_AGENT_CONFIG pattern) — see
-// .agents/notes/2026-09-22-session-engine-capabilities--e29da5b4.md
+// .agents/notes/sessions/records/session-engine-capabilities.md
 // Note: external transcript backfill reads provider session stores — see
-// .agents/notes/2026-09-22-external-session-transcript-backfill--d0720a3c.md
+// .agents/notes/sessions/records/external-session-transcript-backfill.md
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentHookSource } from './agent-hook-types'

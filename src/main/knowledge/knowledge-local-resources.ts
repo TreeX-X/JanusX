@@ -1,4 +1,4 @@
-// Note: verified first-use resources stay outside release packages — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: verified first-use resources stay outside release packages — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { app, net } from 'electron'
 import { execFile } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'

@@ -170,7 +170,6 @@
   min-width: 0;
 }
 
-.statusCard > section { border-top: 1px solid var(--shell-border-soft); padding-top: 4px; }
 
 /* Phase 4 top status strip (§6): pipeline metrics + manual trigger. */
 .statusBar {
@@ -228,7 +227,7 @@
 /* Phase 4 Graph canvas (§10.1). */
 .graphWrap {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 8px;
   height: 100%;
   min-height: 0;
@@ -347,68 +346,28 @@
   height: 0;
 }
 
-/* Settled-knowledge dot nodes: dark core matching the workbench panels with
-   a kind-colored ring; sized inline by connection degree. The caption is an
-   overlay so edges anchor to the dot rather than the text box. */
-.dotNode {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+/* Wiki titles remain readable at the default local scale. */
+.graphCard { box-sizing: border-box; width: 208px; height: 84px; padding: 10px 12px; border: 1px solid var(--shell-border, #42424a); border-left: 3px solid; border-radius: 6px; background: var(--shell-card, #18181c); color: var(--shell-text); cursor: pointer; }
+.graphCard strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 13px; line-height: 18px; font-weight: 500; min-height: 36px; }
+.graphCard small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--shell-muted); font-size: 10px; line-height: 16px; margin-top: 6px; }
+.graphCard:hover, .graphCardSelected { outline: 2px solid var(--shell-accent, #6ba6ff); outline-offset: 2px; }
+.graphToolbar { min-width: 0; }
+.graphFilter { min-width: 0; max-width: 100%; }
+.graphFilter select { max-width: 230px; min-width: 0; text-overflow: ellipsis; }
+.graphCount, .graphHint, .graphLegend { color: var(--shell-muted); }
+.graphLegend { flex-wrap: wrap; }
+.graphSearch:focus-visible, .graphFilter select:focus-visible, .graphButton:focus-visible { outline: 2px solid var(--shell-accent, #6ba6ff); outline-offset: 2px; }
+.graphHint details { max-height: 140px; overflow: auto; overflow-wrap: anywhere; }
+.graphWrap { container-type: inline-size; }
+@container (max-width: 640px) {
+  .graphToolbar { gap: 6px; }
+  .graphFilter select { max-width: 185px; }
+  .graphSearch { width: 170px; }
+  .graphCanvas :global(.react-flow__minimap) { display: none; }
 }
-
-.dot {
-  position: relative;
-  border: 2px solid;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #1d1d22, #0e0e11 75%);
-  cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
-}
-
-.dot:hover {
-  transform: scale(1.25);
-}
-
-.dot:hover .dotCaption {
-  color: #e7e7e8;
-}
-
-.dotKindFact { border-color: #6ba6ff; box-shadow: 0 0 10px rgba(107, 166, 255, 0.35); }
-.dotKindProposal { border-color: #ff995f; box-shadow: 0 0 10px rgba(255, 153, 95, 0.35); }
-.dotKindWiki { border-color: #4ade80; box-shadow: 0 0 10px rgba(74, 222, 128, 0.3); }
-.dotKindEntity { border-color: #c084fc; box-shadow: 0 0 10px rgba(192, 132, 252, 0.3); }
-.dotKindObservation { border-color: #71717a; box-shadow: 0 0 8px rgba(113, 113, 122, 0.3); }
-
-.dotKindFact:hover { box-shadow: 0 0 16px rgba(107, 166, 255, 0.6); }
-.dotKindProposal:hover { box-shadow: 0 0 16px rgba(255, 153, 95, 0.6); }
-.dotKindWiki:hover { box-shadow: 0 0 16px rgba(74, 222, 128, 0.55); }
-.dotKindEntity:hover { box-shadow: 0 0 16px rgba(192, 132, 252, 0.55); }
-.dotKindObservation:hover { box-shadow: 0 0 14px rgba(113, 113, 122, 0.55); }
-
-.dotSelected {
-  border-color: #fff;
-  box-shadow: 0 0 0 2px rgba(107, 166, 255, 0.85), 0 0 18px rgba(107, 166, 255, 0.5);
-}
-
-.dotCaption {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  max-width: 140px;
-  overflow: hidden;
-  transform: translateX(-50%);
-  color: #c7c7cc;
-  font-size: 10px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
 .graphCanvas[data-reduced-motion="true"] :global(.react-flow__node),
 .graphCanvas[data-reduced-motion="true"] :global(.react-flow__edge),
-.graphCanvas[data-reduced-motion="true"] .dot {
+.graphCanvas[data-reduced-motion="true"] .graphCard {
   transition: none;
   animation: none;
 }
@@ -451,7 +410,7 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/2026-09-21-workbench-close-hit-slop--8688b5ab.md */
+/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/workbench/workbench-close-hit-slop.md */
 /* 交互约定（与 modal-close-light 统一）：红灯本身即关闭，悬浮不冒叉，直接点即可。
    位置：顶栏首位（左上），与蓝图工作台同位。左边距靠 .header 的 padding-left 14px
    留出，比 ::before 的 8px 命中外扩多 6px 余量，贴边点击不会溢出卡片。 */
@@ -610,33 +569,56 @@
   margin-top: 12px;
 }
 
+/* Note: Match settings navigation states across themes — see .agents/notes/knowledge/assistant-persona-layout.md */
 .navButton {
+  position: relative;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  padding: 10px 10px 10px 12px;
+  border: 0;
+  border-radius: 5px;
   background: transparent;
-  color: #c7c7cc;
+  color: var(--shell-muted);
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
   text-align: left;
-  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.navButton::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: transparent;
+  transition: background 0.16s ease;
 }
 
 .navButton:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--shell-text);
 }
 
-.navActive {
-  border-color: rgba(59, 130, 246, 0.3);
-  background: rgba(59, 130, 246, 0.1);
-  color: #fff;
+.navButton:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+}
+
+.navActive,
+.navActive:hover {
+  background: var(--shell-active);
+  color: var(--shell-text);
+}
+
+.navActive::before {
+  background: var(--shell-accent);
 }
 
 /* Detail header: single provenance row with an explicit close entry. */
@@ -700,7 +682,6 @@
 }
 
 .viewStack,
-.timeline,
 .searchResults {
   display: flex;
   flex-direction: column;
@@ -708,8 +689,7 @@
 }
 
 .wikiPageButton,
-.resultRow,
-.auditEvent {
+.resultRow {
   width: 100%;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -721,16 +701,14 @@
 }
 
 .wikiPageButton:hover,
-.resultRow:hover,
-.auditEvent:hover {
+.resultRow:hover {
   background: rgba(255, 255, 255, 0.04);
   color: #fff;
 }
 
 .cardFoot,
 .wikiPageButton small,
-.resultRow small,
-.auditEvent small {
+.resultRow small {
   overflow: hidden;
   color: #707078;
   font-size: 10px;
@@ -776,7 +754,6 @@
 
 .stage > .wikiSections,
 .stage > .searchLab,
-.stage > .timeline,
 .stage > .graphWrap {
   flex: 1 1 auto;
   min-height: 0;
@@ -1075,46 +1052,6 @@
   font-size: 12px;
 }
 
-.timeline {
-  height: 100%;
-  overflow-y: auto;
-}
-
-.auditEvent {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border-color: rgba(255, 255, 255, 0.055);
-  background: rgba(255, 255, 255, 0.026);
-}
-
-.auditDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #3b82f6;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
-}
-
-.auditEvent span:not(.auditDot) {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.auditEvent strong {
-  color: #f4f4f5;
-  font-size: 12px;
-}
-
-.auditEvent time {
-  color: #6f6f76;
-  font-size: 10px;
-}
-
 .inspector {
   display: flex;
   height: 100%;
@@ -1193,10 +1130,8 @@
   background: rgba(59, 130, 246, 0.18);
 }
 
-.navButton:focus-visible,
 .detailClose:focus-visible,
 .reviewCard:focus-visible,
-.auditEvent:focus-visible,
 .graphNode:focus-visible,
 .actionRow button:focus-visible {
   outline: 2px solid rgba(59, 130, 246, 0.68);
@@ -1509,56 +1444,25 @@
   background: var(--paper-deep, #DCCFA8);
 }
 
-:global([data-theme='planche']) .dot {
-  background: var(--paper-deep, #DCCFA8);
-}
-
-:global([data-theme='planche']) .dot:hover .dotCaption {
-  color: var(--ink, #1C343B);
-}
-
-:global([data-theme='planche']) .dotKindFact { border-color: #2F5D8A; box-shadow: none; }
-:global([data-theme='planche']) .dotKindProposal { border-color: var(--planche-red, #D43D2A); box-shadow: none; }
-:global([data-theme='planche']) .dotKindWiki { border-color: var(--planche-green-deep, #2E6B5E); box-shadow: none; }
-:global([data-theme='planche']) .dotKindEntity { border-color: #6E5A9E; box-shadow: none; }
-:global([data-theme='planche']) .dotKindObservation { border-color: var(--ink-faint, rgba(28, 52, 59, 0.38)); box-shadow: none; }
-
-:global([data-theme='planche']) .dotKindFact:hover,
-:global([data-theme='planche']) .dotKindProposal:hover,
-:global([data-theme='planche']) .dotKindWiki:hover,
-:global([data-theme='planche']) .dotKindEntity:hover,
-:global([data-theme='planche']) .dotKindObservation:hover {
-  box-shadow: none;
-}
-
-:global([data-theme='planche']) .dotSelected {
-  border-color: var(--planche-red, #D43D2A);
-  box-shadow: 0 0 0 2px var(--shell-accent-soft);
-}
-
-:global([data-theme='planche']) .dotCaption {
-  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
-}
-
+:global([data-theme='planche']) .graphCard { background: var(--paper, #EFE4C5); }
+:global([data-theme='planche']) .graphCanvas :global(.react-flow__edge-textbg) { fill: var(--paper, #EFE4C5); }
 /* 左轨导航 / 详情头 */
 :global([data-theme='planche']) .navLabel,
 :global([data-theme='planche']) .paneTitle {
   color: var(--ink-soft, rgba(28, 52, 59, 0.62));
 }
 
-:global([data-theme='planche']) .navButton {
-  color: var(--ink, #1C343B);
-}
-
 :global([data-theme='planche']) .navButton:hover {
   background: var(--paper-deep, #DCCFA8);
-  color: var(--ink, #1C343B);
 }
 
-:global([data-theme='planche']) .navActive {
-  border-color: var(--shell-accent-border);
-  background: var(--shell-accent-soft);
-  color: var(--planche-red, #D43D2A);
+:global([data-theme='planche']) .navActive,
+:global([data-theme='planche']) .navActive:hover {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .navActive::before {
+  background: var(--planche-red, #D43D2A);
 }
 
 :global([data-theme='planche']) .detailClose {
@@ -1578,22 +1482,19 @@
 
 /* 列表行 / 候选卡 / 标签 */
 :global([data-theme='planche']) .wikiPageButton,
-:global([data-theme='planche']) .resultRow,
-:global([data-theme='planche']) .auditEvent {
+:global([data-theme='planche']) .resultRow {
   color: var(--ink, #1C343B);
 }
 
 :global([data-theme='planche']) .wikiPageButton:hover,
-:global([data-theme='planche']) .resultRow:hover,
-:global([data-theme='planche']) .auditEvent:hover {
+:global([data-theme='planche']) .resultRow:hover {
   background: var(--paper-deep, #DCCFA8);
   color: var(--ink, #1C343B);
 }
 
 :global([data-theme='planche']) .cardFoot,
 :global([data-theme='planche']) .wikiPageButton small,
-:global([data-theme='planche']) .resultRow small,
-:global([data-theme='planche']) .auditEvent small {
+:global([data-theme='planche']) .resultRow small {
   color: var(--ink-soft, rgba(28, 52, 59, 0.62));
 }
 
@@ -1666,24 +1567,6 @@
   color: var(--ink, #1C343B);
 }
 
-:global([data-theme='planche']) .auditEvent {
-  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
-  background: var(--paper, #EFE4C5);
-}
-
-:global([data-theme='planche']) .auditDot {
-  background: var(--planche-red, #D43D2A);
-  box-shadow: none;
-}
-
-:global([data-theme='planche']) .auditEvent strong {
-  color: var(--ink, #1C343B);
-}
-
-:global([data-theme='planche']) .auditEvent time {
-  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
-}
-
 :global([data-theme='planche']) .inspectorTitle {
   color: var(--ink, #1C343B);
 }
@@ -1721,10 +1604,8 @@
   background: var(--shell-accent-soft);
 }
 
-:global([data-theme='planche']) .navButton:focus-visible,
 :global([data-theme='planche']) .detailClose:focus-visible,
 :global([data-theme='planche']) .reviewCard:focus-visible,
-:global([data-theme='planche']) .auditEvent:focus-visible,
 :global([data-theme='planche']) .graphNode:focus-visible,
 :global([data-theme='planche']) .actionRow button:focus-visible,
 :global([data-theme='planche']) .closeButton:focus-visible {
@@ -1770,3 +1651,19 @@
   .header { flex-wrap: wrap; padding: 8px 12px; }
   .breadcrumb { display: none; }
 }
+
+
+/* Detail header and actions stay visible while the reading area scrolls. */
+.inspector { overflow: hidden; min-width: 0; gap: 10px; padding: 12px; }
+.detailBar { flex-shrink: 0; }
+.detailReading { flex: 1; min-height: 0; overflow: auto; overflow-wrap: anywhere; scrollbar-gutter: stable; }
+.detailReading > h3 { margin: 10px 0; }
+.detailReading:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: -2px; }
+.statusCard[data-domain='engineering'] { min-height: 0; padding: 4px 8px; }
+.recordsContent { min-height: 0; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.recordsContent > .recordsTabs { height: 34px; flex-shrink: 0; border-bottom: 1px solid var(--shell-border-soft); overflow-x: auto; }
+.recordsPanel { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.recordsPanel:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: -1px; }
+.legacyProcessing { padding-top: 10px; border-top: 1px solid var(--shell-border); font-size: 11px; color: var(--shell-muted); }
+.legacyProcessing > summary { cursor: pointer; }
+.legacyProcessing .statusBar { flex-wrap: wrap; }

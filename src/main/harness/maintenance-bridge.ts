@@ -1,4 +1,4 @@
-// Note: maintenance-to-harness translation table lives here — see .agents/notes/2026-09-17-maintenance-harness-bridge-s6--1f21d390.md
+// Note: maintenance-to-harness translation table lives here — see .agents/notes/agent/maintenance-harness-bridge-s6.md
 /**
  * @file Maintenance -> harness operation bridge (S6-c slice 2a, pure)
  * @description Translates BlueprintMaintenance operations into harness
@@ -52,6 +52,7 @@ import {
 } from './artifact-producer'
 import { toNoteDoc } from '../notes/note-provider'
 import type { BlueprintOperation } from '../../shared/janus/maintenance-types'
+import type { NoteAuthoringContext } from './note-authoring'
 
 export interface BridgeNoteSnapshot {
   uri: string
@@ -61,6 +62,7 @@ export interface BridgeNoteSnapshot {
 
 export interface MaintenanceBridgeContext {
   repoId: string
+  authoring?: NoteAuthoringContext
   resolveNote: (nodeId: string) => BridgeNoteSnapshot | null
 }
 
@@ -290,6 +292,7 @@ export function translateMaintenanceOpsToHarness(
       meta: { ...parsed.note.meta, ...(relations.length > 0 || parsed.note.meta.relations ? { relations } : {}) },
       body: parsed.note.body,
     }
+    if (merged.meta.schema === 'harness-note/2' && JSON.stringify(merged.meta.relations) !== JSON.stringify(parsed.note.meta.relations)) merged.meta.updated = new Date().toISOString()
     return setMarkdown(file, operationId, serializeNote(merged))
   }
 
@@ -428,7 +431,15 @@ function translateCreate(
     }
   }
   const kind = nodeTypeToKind(op.after.type)
-  const { id, markdown } = createNoteInput(kind, op.after.title.trim(), parentUri)
+  if (ctx.authoring?.schema === 'harness-note/2' && kind === 'task') {
+    h.refuse(op.operationId, 'Create a Task through note.write with its explicit scope, acceptance, verification and review contract')
+    return
+  }
+  const parent = op.parentId ? ctx.resolveNote(op.parentId) : null
+  const parentMeta = parent ? parseNote(parent.markdown).meta : undefined
+  const module = parentMeta?.kind === 'module' ? parent!.uri : parentMeta?.module ?? ctx.authoring?.module
+  const actualKind = ctx.authoring?.schema === 'harness-note/2' && kind === 'initiative' ? 'note' : kind
+  const { id, markdown } = createNoteInput(actualKind, op.after.title.trim(), parentUri, { ...ctx.authoring, module })
   const uri = `note://${ctx.repoId}/${id}`
   const patch: NodeFieldPatch = {}
   if (op.after.description) patch.description = op.after.description

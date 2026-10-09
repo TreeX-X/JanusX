@@ -1,4 +1,4 @@
-// Note: Inbox person/engineering columns share one scope rule — see .agents/notes/2026-09-18-personal-engineering-separation--296ddf52.md
+// Note: Inbox person/engineering columns share one scope rule — see .agents/notes/knowledge/personal-engineering-separation.md
 /**
  * @file Inbox scope split (memory separation, pure)
  * @description One scope rule for the person/engineering Inbox columns: a
@@ -13,7 +13,6 @@ import type {
   CandidateGraphEdge,
   CandidateWikiPatch,
 } from '../../../../shared/knowledge'
-import type { KnowledgeAutomationStatus } from '../../../../shared/knowledge-automation'
 
 export type InboxCandidate = CandidateFact | CandidateWikiPatch | CandidateGraphEdge
 export type InboxScopeFilter = 'all' | 'user' | 'engineering'
@@ -41,24 +40,6 @@ export function countInboxScopes(candidates: InboxCandidate[]): { user: number; 
     if (isUserScopeCandidate(candidate)) user += 1
   }
   return { user, engineering: candidates.length - user }
-}
-
-/** Only current host plans can move project candidates out of the human inbox. */
-export function splitReviewCandidates(candidates: InboxCandidate[], automation: KnowledgeAutomationStatus | null) {
-  const pending = new Map<string, 'pending' | 'running'>()
-  if (automation?.enabled) for (const task of automation.queue ?? []) {
-    if (task.status !== 'pending' && task.status !== 'running') continue
-    const type = task.stage === 'entryReview' ? 'fact' : task.stage === 'wikiReview' ? 'wiki-patch' : null
-    if (type) pending.set(`${type}:${task.subject}`, task.status)
-  }
-  const manual: InboxCandidate[] = []
-  const automatic: Array<{ candidate: InboxCandidate; status: 'pending' | 'running' }> = []
-  for (const candidate of candidates) {
-    const status = !isUserScopeCandidate(candidate) && pending.get(`${candidate.type}:${candidate.id}`)
-    if (status) automatic.push({ candidate, status })
-    else manual.push(candidate)
-  }
-  return { manual, automatic }
 }
 
 export function competingCorrections(candidates: InboxCandidate[], candidate: InboxCandidate): number {

@@ -1,4 +1,4 @@
-// Note: isolate dev chunks without changing application identity or checkout discovery — see .agents/notes/2026-09-20-reproducible-verification--914a7e92.md
+// Note: isolate dev chunks without changing application identity or checkout discovery — see .agents/notes/desktop/reproducible-verification.md
 import { app } from 'electron'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

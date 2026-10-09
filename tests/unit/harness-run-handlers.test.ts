@@ -51,6 +51,12 @@ const mocks = vi.hoisted(() => ({
 
 const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
 
+vi.mock('@janus-agent/harness-node', async importOriginal => ({
+  ...await importOriginal<typeof import('@janus-agent/harness-node')>(),
+  collectTaskSnapshot: vi.fn(async () => ({ ok: true, work: { review: 'self' } })),
+}))
+vi.mock('../../src/main/harness/note-authoring', () => ({ noteAuthoringContext: vi.fn(async () => ({ schema: 'harness-note/1' })) }))
+
 // Note: tests own config discovery — see .agents/notes/2026-09-20-reproducible-verification.md
 vi.mock('node:fs', async (importOriginal) => {
   const fs = await importOriginal<typeof import('node:fs')>()
@@ -478,7 +484,7 @@ describe('harness run IPC mapping (S8-JanusX surface)', () => {
     mocks.listAudits.mockResolvedValueOnce([])
     mocks.previewMigration.mockReturnValueOnce({ blueprintId: 'bp-1', notes: [], warnings: [] })
     await expect(preview({}, ROOT, 'bp-1')).resolves.toEqual({ blueprintId: 'bp-1', notes: [], warnings: [] })
-    expect(mocks.previewMigration).toHaveBeenCalledWith({ id: 'bp-1', source: 'json' }, 'repo-1', [])
+    expect(mocks.previewMigration).toHaveBeenCalledWith({ id: 'bp-1', source: 'json' }, 'repo-1', [], { schema: 'harness-note/1' })
     await expect(preview({}, ROOT, '')).rejects.toMatchObject({ code: 'SCHEMA_INVALID', path: 'blueprintId' })
 
     const apply = await handler(HARNESS_COMMAND_CHANNELS.migrateApply)

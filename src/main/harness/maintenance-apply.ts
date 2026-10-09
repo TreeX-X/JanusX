@@ -1,4 +1,4 @@
-// Note: maintenance proposals land on project graphs here — see .agents/notes/2026-09-17-maintenance-harness-apply-s6--66bf1be8.md
+// Note: maintenance proposals land on project graphs here — see .agents/notes/agent/maintenance-harness-apply-s6.md
 /**
  * @file Maintenance -> harness apply wiring (S6-c slice 2b)
  * @description Consumes the pure translator from maintenance-bridge and lands
@@ -19,6 +19,7 @@ import type { Blueprint } from '../../shared/janus/types'
 import type { BlueprintOperation, BlueprintMaintenanceFilePreview } from '../../shared/janus/maintenance-types'
 import { translateMaintenanceOpsToHarness, type BridgeResult } from './maintenance-bridge'
 import type { HarnessNoteService } from './service'
+import { noteAuthoringContext, maintainedNotePath } from './note-authoring'
 
 export interface ProjectCheckout {
   root: string
@@ -167,7 +168,7 @@ export interface PreparedMaintenanceSelection {
   bundleId: string
 }
 
-// Note: preview and application consume the same translated bytes — see .agents/notes/2026-09-29-blueprint-maintenance-approval-gap--a1b2c3d4.md
+// Note: preview and application consume the same translated bytes — see .agents/notes/blueprint/maintenance/blueprint-maintenance-approval-gap.md
 export async function prepareMaintenanceSelection(
   service: HarnessNoteService,
   req: HarnessSelectionRequest,
@@ -205,6 +206,7 @@ export async function prepareMaintenanceSelection(
   })
   const bridge = translateMaintenanceOpsToHarness(operations, {
     repoId: req.repoId,
+    authoring: operations.some(op => op.type === 'create-node') ? await noteAuthoringContext(service, req.root) : undefined,
     resolveNote: (nodeId: string) => {
       const snapshot = snapshots.get(nodeId)
       if (req.sourceHashes && snapshot && req.sourceHashes[nodeId] !== snapshot.expectedHash) {
@@ -218,10 +220,12 @@ export async function prepareMaintenanceSelection(
     throw new Error(`项目 Note 转换失败，未写入任何内容：${reasons.slice(0, 5).join('；')}${reasons.length > 5 ? ` 等 ${reasons.length} 项` : ''}`)
   }
   const taken = new Set([...snapshots.values()].map(item => item.path?.split('/').pop()?.toLowerCase() ?? ''))
-  const files = bridge.ops.map(op => {
+  const files = await Promise.all(bridge.ops.map(async op => {
     const original = snapshots.get(op.uri.split('/').pop()!)
     const note = op.type === 'create' ? parseNote(op.afterMarkdown) : null
-    const path = note
+    const authoring = note?.meta.schema === 'harness-note/2' ? await noteAuthoringContext(service, req.root, note.meta.module) : undefined
+    const path = note && authoring
+      ? `.agents/notes/${maintainedNotePath(authoring.directory!, note.title)}` : note
       ? `.agents/notes/${noteFileName(note.meta.created, note.title, note.meta.id, taken)}`
       : original!.path
     return {
@@ -229,7 +233,7 @@ export async function prepareMaintenanceSelection(
       before: original?.markdown ?? '', after: op.afterMarkdown,
       ...(op.downgraded ? { archivedInsteadOfDeleted: true } : {}),
     }
-  })
+  }))
   return { request: structuredClone(req), bridge, files, bundleId: `maintenance-${req.taskId}-${randomUUID()}` }
 }
 

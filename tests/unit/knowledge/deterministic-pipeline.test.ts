@@ -48,11 +48,7 @@ describe('deterministic pipeline (Phase 1-2, no LLM)', () => {
     await capture({ workspacePath: 'C:\\pipe', source: 'manual', type: 'user-note', content: '今天天气不错', actor: 'user' })
     await capture({ workspacePath: 'C:\\pipe', source: 'manual', type: 'user-note', content: '决定：采用软删除方案', actor: 'user' })
     const errorContent = '$ npm run build\nerror TS2304: Cannot find name \'foo\''
-    // Same signal, distinct ledger rows: capture-time exact dedupe (§3.1) keys on
-    // workspace + type + content, so identical repeats would collapse into one
-    // row. The repeats ride different observation types (call vs result) and the
-    // last one carries a trailing marker — same first line, still one near-dupe
-    // group — while the procedure rule counts the shared first line.
+    // Repeated commands/errors remain source evidence; frequency does not make a procedure.
     await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'tool-call', content: errorContent, actor: 'engine' })
     await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'tool-result', content: errorContent, actor: 'engine' })
     await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'tool-result', content: `${errorContent} (retry 2)`, actor: 'engine' })
@@ -62,21 +58,19 @@ describe('deterministic pipeline (Phase 1-2, no LLM)', () => {
     try {
       const first = await queue.processNow()
       expect(first.handlerMissing).toBe(false)
-      // 7 ledger rows → 1 near-dupe error group → 4 proposals (plain note is derived-only).
+      // Seven rows remain processed, but only the two git events and decision become candidates.
       expect(first.processed).toBe(7)
       expect(first.failed).toBe(0)
 
       const candidates = await knowledgeExtractService.listFactCandidates()
       const deterministic = candidates.filter((c) => c.derivation === 'deterministic')
-      expect(deterministic).toHaveLength(4)
-      expect(deterministic.map((c) => c.fact.kind).sort()).toEqual(['decision', 'fact', 'fact', 'procedure'])
+      expect(deterministic).toHaveLength(3)
+      expect(deterministic.map((c) => c.fact.kind).sort()).toEqual(['decision', 'fact', 'fact'])
       for (const candidate of deterministic) {
         expect(candidate.evidence.observationIds.length).toBeGreaterThan(0)
         expect(candidate.fact.status).toBe('proposed')
       }
-      const procedure = deterministic.find((c) => c.fact.kind === 'procedure')!
-      expect(procedure.evidence.observationIds).toHaveLength(3)
-      expect(procedure.fact.confidence).toBeCloseTo(0.6, 5)
+      expect((await knowledgeObservationService.listAll(true)).filter(row => row.type === 'tool-result')).toHaveLength(2)
 
       // Apply the first git proposal → truth carries the deterministic kind.
       const gitCandidate = deterministic.find((c) => c.fact.content.includes('add user index'))!

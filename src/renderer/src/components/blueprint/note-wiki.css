@@ -20,6 +20,30 @@
 .bp-note-wiki__metadata dd { margin: 0; }
 .bp-note-wiki__actions { display: flex; gap: 5px; margin: 10px 0; }
 .bp-note-wiki .bp-note-link { color: #f3ae83; background: transparent; border: 0; padding: 0; text-align: left; overflow-wrap: anywhere; }
+/* Note: inline navigation keeps prose spacing and baseline — see .agents/notes/blueprint/documents/module.md */
+.bp-note-wiki .markdown-preview .bp-note-link {
+  display: inline-block;
+  max-width: calc(100% - 1.6em);
+  margin: .12em .3em;
+  padding: .04em .4em;
+  border: 1px solid var(--shell-accent-border, #82583d);
+  border-radius: 4px;
+  background: var(--shell-accent-soft, #34271f);
+  font: inherit;
+  line-height: 1.35;
+  vertical-align: baseline;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.bp-note-wiki .markdown-preview .bp-note-link:is(:hover, :focus-visible) {
+  border-color: var(--shell-accent, #f39861);
+  background: var(--accent-mid, rgba(244, 125, 67, .18));
+  color: var(--shell-text, #fafafa);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bp-note-wiki .markdown-preview .bp-note-link { transition: none; }
+}
 .bp-note-source { white-space: pre-wrap; overflow-wrap: anywhere; background: #18171b; padding: 10px; border: 1px solid #333238; border-radius: 5px; font-size: 11px; max-height: 520px; overflow: auto; }
 .bp-note-wiki__group { border-top: 1px solid #363539; padding-top: 10px; margin-top: 12px; }
 .bp-note-wiki__group h4 { margin: 6px 0 10px; font-size: 12px; color: #dddce0; }
@@ -39,7 +63,6 @@
 .bp-composition section { max-height: 300px; overflow: auto; }
 .bp-composition button { background: transparent; border: 0; color: #e78b63; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
 .bp-composition button:disabled { color: #93939d; cursor: default; }
-.bp-composition-overlay { position: absolute; top: 12px; left: 12px; z-index: 4; max-width: min(460px, 65%); background: rgba(25, 25, 29, .94); border: 1px solid #34343b; border-radius: 8px; }
 
 /* ── Planche 纸面覆盖（加法层，dark 原样不动） ── */
 [data-theme='planche'] .bp-note-wiki { color: var(--ink, #1C343B); }
@@ -91,8 +114,3 @@
 [data-theme='planche'] .bp-composition summary { color: var(--shell-text); }
 [data-theme='planche'] .bp-composition button { color: var(--planche-red, #D43D2A); }
 [data-theme='planche'] .bp-composition button:disabled { color: var(--ink-faint, rgba(28, 52, 59, 0.38)); }
-[data-theme='planche'] .bp-composition-overlay {
-  background: var(--paper, #EFE4C5);
-  border: 1px solid var(--line, #1C343B);
-  box-shadow: 3px 3px 0 var(--line, #1C343B);
-}

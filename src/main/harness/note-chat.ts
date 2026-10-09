@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { NOTE_URI_RE } from '@janus-agent/harness-core'
 import { NOTE_TOOL_DEFINITIONS } from '@janus-agent/node-hosts'
-// Note: Janus extends the shared agentX runtime — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+// Note: Janus extends the shared agentX runtime — see .agents/notes/blueprint/agentx-harness-inheritance.md
 import { randomUUID } from 'node:crypto'
 import { resolve, relative } from 'node:path'
 import { createToolManifests, type ToolDefinition, type ToolResult } from '@janus-agent/agent-core'
@@ -9,14 +9,15 @@ import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import { NoteChatEditor, hasNoteMutationIntent } from '@janus-agent/harness-node'
 export { NoteChatEditor, hasNoteMutationIntent, listNoteChatChanges } from '@janus-agent/harness-node'
 import { harnessNoteService } from './service'
-import { NOTE_FOCUS_SCHEMA, resolveNoteFocus } from './note-focus'
+import { NOTE_FOCUS_SCHEMA, NOTE_SCOPE_SCHEMA, resolveNoteFocus } from './note-focus'
 import type { NoteChatChange, NoteFocusEvent } from '../../shared/note-chat'
 const rootKey = (root: string) => process.platform === 'win32' ? resolve(root).toLowerCase() : resolve(root)
 const fail = (error: unknown) => error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
 
+// Note: module browsing actions and passive scope — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
 export const NOTE_CHAT_TOOLS = [
-  { name: 'note.focus', actionRisk: 'read', description: 'Highlight existing Notes without changing the working scope or the user selection. Use explicit focus only when the user asks to locate/show Notes; ordinary background reads never move the canvas. No execution is started.', inputSchema: NOTE_FOCUS_SCHEMA },
-  { name: 'note.scope', actionRisk: 'read', description: 'Set the current multi-Note working scope. Find and read relevant Notes first. Give each a target/reference/dependency role and a reason. Reference and dependency Notes are not edit or execution targets. User pins and removals take precedence. Auto focus only when entering a new primary target.', inputSchema: NOTE_FOCUS_SCHEMA },
+  { name: 'note.focus', actionRisk: 'read', description: 'Request a user-directed UI action: preview a Note, enter a module, or locate a Note with its module parent. The first target (otherwise first Note) is primary; other Notes remain individually accessible in the list. May change page, selection and source preview; preserves working Notes and navigation history. Use only when the user asks to view or navigate. Returns validation/request status, not proof the UI navigated. No editing or execution.', inputSchema: NOTE_FOCUS_SCHEMA },
+  { name: 'note.scope', actionRisk: 'read', description: 'Set the conversation working Notes after finding and reading them. Give each a target/reference/dependency role and reason. User pins and removals take precedence. Never changes page, selection, preview or viewport, including legacy focus parameters. This collection grants no editing or execution authority. Use note.focus for an explicit UI navigation request.', inputSchema: NOTE_SCOPE_SCHEMA },
   ...NOTE_TOOL_DEFINITIONS,
 ] as ToolDefinition[]
 
@@ -83,7 +84,11 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
         if (!resource || !live || live.status !== 'running' || live.workspaceId !== resource.workspaceId || live.workspaceRoot !== resource.workspacePath) throw new Error('PERMISSION_DENIED: Note workspace session unavailable')
         if (options.signal.aborted) throw new Error('Note operation cancelled')
         let output: unknown
-        if (input.call.toolName === 'note.list') output = await editor.list(resource.workspacePath, z.string().max(1000).parse(input.call.input.query ?? ''), z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.relatedTo))
+        if (input.call.toolName === 'note.list') output = await editor.list(resource.workspacePath, z.string().max(1000).parse(input.call.input.query ?? ''), z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.relatedTo), {
+          kind: z.enum(['module', 'note', 'idea', 'requirement', 'decision', 'task', 'initiative']).optional().parse(input.call.input.kind),
+          module: z.string().regex(NOTE_URI_RE).optional().parse(input.call.input.module),
+          moduleState: z.enum(['planned', 'partial', 'implemented', 'retired']).optional().parse(input.call.input.moduleState),
+        })
         else if (input.call.toolName === 'note.read') {
           const read = await editor.readPage(resource.workspacePath, z.string().parse(input.call.input.uri), input.call.input)
           output = read
@@ -94,7 +99,9 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
           const event = await resolveNoteFocus(harnessNoteService, resource.workspacePath, options.conversationId, input.call.toolName === 'note.scope' ? 'scope' : 'display', args, options.userText)
           if (options.signal.aborted) throw new Error('Note operation cancelled')
           options.onFocus?.(event)
-          output = { status: 'validated', notes: event.notes, message: 'Display requested. Hidden or unavailable canvas nodes are reported by the UI; this does not edit or execute Notes.' }
+          output = { status: 'validated', notes: event.notes, action: event.action,
+            navigation: options.onFocus && event.focus === 'explicit' ? 'requested' : 'not-requested',
+            message: event.mode === 'scope' ? 'Working Notes update requested; page, selection and preview stay unchanged.' : 'UI intent validated. Navigation is not confirmed; the active UI may suppress it during interaction or when a target is unavailable. Working Notes, edits and execution are unchanged.' }
         } else if (input.call.toolName === 'note.write') {
           const { workspaceId: _workspaceId, ...args } = input.call.input
           const change = await editor.write(resource.workspacePath, options.conversationId, correlationId, args, authorized, options.signal)

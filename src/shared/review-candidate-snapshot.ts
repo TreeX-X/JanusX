@@ -1,4 +1,4 @@
-// Note: approval binds the displayed proposal — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: approval binds the displayed proposal — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import type { CandidateFact, CandidateGraphEdge, CandidateWikiPatch } from './knowledge'
 
 export type ReviewCandidate = CandidateFact | CandidateGraphEdge | CandidateWikiPatch

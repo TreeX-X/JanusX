@@ -1,4 +1,4 @@
-// Note: chat queries and selected episodes commit the same durable forgetting decision — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: chat queries and selected episodes commit the same durable forgetting decision — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import { z } from 'zod'
 import type { CandidateFact, MemoryFact, UserEpisode } from '../../shared/knowledge'
 import { writeFileAtomic } from '../lib/atomic-file'

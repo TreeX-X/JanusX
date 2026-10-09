@@ -17,7 +17,7 @@ const statusLabel: Record<string, string> = { resolved: '已解析', missing: '�
 const errorText = (error: unknown): string => error instanceof Error ? error.message : typeof error === 'object' && error && 'message' in error ? String(error.message) : String(error)
 type Props = { snapshot: NoteReadSnapshot; rootPath: string; uri?: string; anchor?: string; compact?: boolean; canNavigate?: (uri: string) => boolean; onNavigate: (uri: string, anchor?: string) => void; onRefresh: () => void }
 
-// Note: the engineering wiki reads the same Note, without a page copy — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+// Note: the engineering wiki reads the same Note, without a page copy — see .agents/notes/blueprint/documents/tasks/note-wiki-r3.md
 export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false, canNavigate, onNavigate, onRefresh }: Props) {
   const [tab, setTab] = useState<'body' | 'links' | 'context'>('body')
   const [query, setQuery] = useState('')
@@ -101,7 +101,7 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
   const current = source?.uri === uri ? source : null
   const metadata = current?.doc.metadata
   const identity = <div className="bp-note-wiki__identity"><code title={uri}>{uri}</code><span>{current?.relPath ?? view.entry?.relPath}</span><span>{current ? 'sha256 ' + current.sourceHash.slice(0, 12) : '读取原文…'}</span></div>
-  const fields = current && <dl className="bp-note-wiki__metadata"><dt>类型 / 领域</dt><dd>{current.doc.kind} / {metadata?.class ?? '未分类'}</dd><dt>生命周期</dt><dd>{current.doc.lifecycle}</dd>{current.doc.kind === 'task' && <><dt>任务执行</dt><dd>{metadata?.execution?.state ?? '无执行记录'}</dd></>}</dl>
+  const fields = current && <dl className="bp-note-wiki__metadata"><dt>类型</dt><dd>{current.doc.kind}</dd><dt>生命周期</dt><dd>{current.doc.lifecycle}</dd>{current.doc.moduleState && <><dt>模块状态</dt><dd>{current.doc.moduleState}</dd></>}{current.doc.updated && <><dt>维护时间</dt><dd>{current.doc.updated}</dd></>}{current.doc.kind === 'task' && <><dt>任务执行</dt><dd>{metadata?.execution?.state ?? '无执行记录'}</dd></>}</dl>
   return <section className={`bp-note-wiki${compact ? ' bp-note-wiki--compact' : ''}`} aria-label="工程 wiki">
     <div className="bp-note-wiki__scope">{!compact && <strong>工程 wiki</strong>}<span title={rootPath}>{snap.coverage.status === 'complete' ? (compact ? '完整索引 · 当前工作区' : '当前 checkout 完整扫描') : '扫描不完整 · 反链覆盖有限'}</span>{!compact && <small title={rootPath}>{rootPath}</small>}</div>
     <details className="bp-note-wiki__directory" open={!uri || undefined}>

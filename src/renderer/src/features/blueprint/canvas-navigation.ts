@@ -97,7 +97,7 @@ export interface BlueprintConnectivity {
  * 全根图（如 189 节点 0 parent）下，同簇根在布局时相邻，
  * 144 个孤立根可整体折叠，巨大矩形矩阵收成可读块。
  * 纯函数：同输入必同输出，可单测。
- * Note: 矩阵治理的分组依据 — see .agents/notes/2026-09-25-blueprint-matrix-governance--ef6d2f79.md
+ * Note: 矩阵治理的分组依据 — see .agents/notes/blueprint/navigation/tasks/blueprint-matrix-governance.md
  */
 export function groupRootsByConnectivity(
   nodes: Record<string, BlueprintNode>,

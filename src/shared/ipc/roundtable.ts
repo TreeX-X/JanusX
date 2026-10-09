@@ -19,6 +19,7 @@ export interface RoundtableAPI {
     input: {
       factIds?: string[]
       repoId: string
+      root?: string
       bundleId?: string
       revision?: number
       parentUri?: string

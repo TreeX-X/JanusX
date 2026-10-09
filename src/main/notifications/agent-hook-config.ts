@@ -266,7 +266,7 @@ public static class JanusxHookRunner {
 `
 }
 
-// Note: hook commands follow each CLI's shell contract — see .agents/notes/2026-10-02-terminal-hook-adapters--493e1f10.md
+// Note: hook commands follow each CLI's shell contract — see .agents/notes/terminal/terminal-hook-adapters.md
 function buildHookCommand(
   platform: NodeJS.Platform,
   executablePath: string,
@@ -452,7 +452,7 @@ export const JanusXNotifyPlugin = async ({ directory }) => ({
 `
 }
 
-// Note: janus/pi hook coverage — see .agents/notes/2026-09-13-janus-pi-hook-management--a8a80c8f.md
+// Note: janus/pi hook coverage — see .agents/notes/terminal/janus-pi-hook-management.md
 export function buildPiExtension(): string {
   return `function env(name) {
   const value = process.env[name];
@@ -723,7 +723,7 @@ export class AgentHookConfigManager {
     }
 
     // dsh has no hook contract yet (phase 1 = bare PTY via `dsh --profile dsh-tui`,
-    // see .agents/notes/2026-09-30-dsh-terminal-integration--b28d07a3.md): no-op so a dsh launch never
+    // see .agents/notes/terminal/dsh-terminal-integration.md): no-op so a dsh launch never
     // touches the opencode plugin dir as a side effect.
     if (engine === 'dsh') {
       return { engine, installed: true, path: this.getHooksRootDir() }

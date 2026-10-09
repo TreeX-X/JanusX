@@ -320,8 +320,17 @@
     "linkedIssue": "Linked issue"
   },
   "turnChanges": {
+    "waiting": "Waiting for the first turn",
+    "unavailable": "File comparison unavailable for this turn",
+    "latestHeading": "This turn",
+    "viewLabel": "File change views",
+    "historyLabel": "History",
+    "historyEmpty": "No file changes recorded",
+    "collapse": "Collapse file changes",
+    "kind": { "done": "Completed", "failed": "Failed", "interrupted": "Interrupted" },
+    "status": { "added": "Added", "deleted": "Deleted", "modified": "Modified", "binary": "Binary", "oversized": "Large file" },
     "files": "{{count}} files",
-    "more": "+{{count}} more in Sessions",
+    "more": "{{count}} additional files not listed",
     "narrowHint": "Pane too narrow to expand — widen to view changes",
     "empty": "No file changes this turn",
     "latest": "Latest",

@@ -1,8 +1,9 @@
-// Note: host reads own wiki provenance — see .agents/notes/2026-09-25-note-wiki-r3--844bc2f1.md
+// Note: host reads own wiki provenance — see .agents/notes/blueprint/documents/tasks/note-wiki-r3.md
 import { createHash, randomUUID } from 'node:crypto'
 import { harnessNoteService } from '../harness/service'
 import { resolveWorkspaceIdentity, workspacePathKey } from './workspace-identity'
 import { knowledgeTruthService } from './truth-service'
+import { bindWikiReferences } from './wiki-relations'
 import type { CandidateWikiPatch, WikiNoteRef, WikiNoteStatus } from '../../shared/knowledge'
 import type { NoteWikiDraft, NoteWikiPage, PrepareNoteWikiInput } from '../../shared/ipc/knowledge'
 
@@ -115,6 +116,7 @@ export async function buildNoteWikiCandidate(input: { draftId: string; title: st
   await assertWikiSources(prepared.input.rootPath, refs)
   const { workspaceId, workspaceName, workspacePath } = prepared.workspace
   const candidate: CandidateWikiPatch = {
+    relations: bindWikiReferences(input.markdown, workspaceId, prepared.input.pageSlug, (await knowledgeTruthService.list()).wikiPages),
     id: randomUUID(), type: 'wiki-patch', status: 'proposed', pageSlug: prepared.input.pageSlug,
     title: input.title.trim(), patchMarkdown: input.markdown, rationale: input.rationale, confidence: 1,
     sourceNoteRefs: refs, reviewMode: prepared.input.reviewMode, expectedVersion: prepared.input.expectedVersion,

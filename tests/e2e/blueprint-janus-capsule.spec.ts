@@ -44,6 +44,7 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       env: createDesktopTestEnv(root),
     })
     const page = await application.firstWindow({ timeout: 30_000 })
+    await page.waitForFunction(() => typeof (window as TestWindow).electron?.system?.setLanguage === 'function')
     await page.evaluate(() => (window as TestWindow).electron.system.setLanguage('zh-CN'))
     // Enable the target workbench in the isolated desktop profile before reload.
     await page.evaluate(async () => {
@@ -60,7 +61,7 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       (path) => (window as TestWindow).electron.workspace.create({ name: 'Blueprint UI fixture', path }),
       workspacePath,
     )
-    await page.reload()
+    await page.reload({ waitUntil: 'domcontentloaded' })
     expect(await page.evaluate(path => (window as TestWindow).electron.janus.listBlueprintSummaries(path), workspacePath)).toHaveLength(1)
     await expect(page.getByRole('button', { name: /打开蓝图工作台|Open Blueprint Workbench/ })).toBeVisible()
     await page.getByRole('button', { name: /打开蓝图工作台|Open Blueprint Workbench/ }).click()
@@ -177,10 +178,11 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       }
     }
 
-    // 两个视图选择按钮与四个画布操作均须保持在工作台内且互不重叠。
+    // 来源入口与四个画布操作均须保持在工作台内且互不重叠。
     const toolbarActions = workbenchToolbar.locator('.blueprint-btn')
-    await expect(toolbarActions).toHaveCount(6)
-    await expect(workbenchToolbar.getByRole('button', { name: '系统结构', exact: true })).toBeDisabled()
+    await expect(toolbarActions).toHaveCount(5)
+    await expect(workbenchToolbar.getByRole('button', { name: '系统结构', exact: true })).toHaveCount(0)
+    await expect(workbenchToolbar.getByRole('button', { name: /^数据来源/ })).toBeVisible()
     const toolbarActionBoxes = await toolbarActions.evaluateAll((elements) =>
       elements.map((element) => {
         const { bottom, left, right, top } = element.getBoundingClientRect()
@@ -237,9 +239,9 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await page.setViewportSize({ width: 1920, height: 1080 })
     // 知识库工作台入口受 knowledge 实验开关门控（默认关闭）；用例显式开启后再打开。
     await page.evaluate(() => (window as TestWindow).electron.experimental.update({ knowledge: true }))
-    await page.reload()
-    await page.getByRole('button', { name: /打开知识库工作台|Open Knowledge Workbench/ }).click()
-    const knowledgeShell = page.getByRole('region', { name: /知识引擎|Knowledge Engine/ })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.getByRole('button', { name: /打开知识与记忆工作台|Open Knowledge & memory workbench/ }).click()
+    const knowledgeShell = page.getByRole('region', { name: /知识与记忆|Knowledge & memory/ })
     await expect(knowledgeShell).toBeVisible()
     const knowledgeShellBox = await knowledgeShell.boundingBox()
     expect(knowledgeShellBox).not.toBeNull()

@@ -85,7 +85,7 @@ export async function chat(
   messages: ChatMessage[],
   providerId?: string,
   modelId?: string,
-  options?: { sourceTag?: 'janus-chat'; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[] }
+  options?: { sourceTag?: 'janus-chat' | 'launch-assistant'; workspaceId?: string; workspacePath?: string; workspaceResources?: ChatWorkspaceResource[] }
 ): Promise<string> {
   const targetProvider = providerId || (await getTerminalDefault('janus').catch(() => null))?.provider.id
   if (!targetProvider) throw new Error('未配置 LLM Provider')
@@ -134,12 +134,14 @@ export function chatStream(
   options?: {
     providerId?: string
     modelId?: string
-    sourceTag?: 'janus-chat'
+    sourceTag?: 'janus-chat' | 'launch-assistant'
     conversationId?: string
     workspaceId?: string
     workspacePath?: string
     workspaceResources?: ChatWorkspaceResource[]
     toolTraces?: ChatToolTraceEntry[]
+    toolAllowlist?: string[]
+    launchDraft?: { config: import('../../../shared/ipc/project').LaunchConfig; projectPath: string }
     domain?: 'personal' | 'project'
     noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
     noteWorkingSet?: string
@@ -270,6 +272,8 @@ export function chatStream(
         workspacePath: options?.workspacePath,
         workspaceResources: options?.workspaceResources,
         toolTraces: options?.toolTraces,
+        ...(options?.toolAllowlist ? { toolAllowlist: options.toolAllowlist } : {}),
+        ...(options?.launchDraft ? { launchDraft: options.launchDraft } : {}),
         ...(options?.domain ? { domain: options.domain } : {}),
         ...(options?.noteRefs ? { noteRefs: options.noteRefs } : {}),
         ...(options?.noteWorkingSet ? { noteWorkingSet: options.noteWorkingSet } : {}),

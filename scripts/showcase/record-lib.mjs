@@ -1,5 +1,5 @@
 // Showcase v3 shared record helpers: fixture, launch, sidebar, terminals, mouse-tracked snaps.
-// Zero model calls: disposable TEMP fixture (creds never committed), waits for ready screens only.
+// Disposable TEMP fixture; each feature owns its model/credential setup and readiness checks.
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile, copyFile, rm } from 'node:fs/promises';
 import { tmpdir, homedir } from 'node:os';
@@ -86,7 +86,7 @@ export async function seedFixture() {
 
 export async function launchApp(fixtureRoot, claudeConfig) {
   const application = await electron.launch({
-    args: [resolve('out/main/index.js'), `--user-data-dir=${join(fixtureRoot, 'user-data')}`],
+    args: [resolve(process.env.SHOWCASE_ENTRY ?? 'out/main/index.js'), `--user-data-dir=${join(fixtureRoot, 'user-data')}`],
     env: {
       ...testEnv(fixtureRoot),
       TERM: 'xterm-256color',

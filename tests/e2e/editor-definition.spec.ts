@@ -39,6 +39,7 @@ test('F12 opens an unopened TypeScript definition in the workspace editor', asyn
       env: createDesktopTestEnv(root),
     })
     const mainPage = await application.firstWindow({ timeout: 30_000 })
+    await mainPage.waitForFunction(() => typeof (window as EditorWindowAPI).electron?.window?.openEditor === 'function')
     await mainPage.evaluate(
       ({ filePath, workspace }) => (window as EditorWindowAPI).electron.window.openEditor({ filePath, workspacePath: workspace }),
       { filePath: usagePath, workspace: workspacePath },

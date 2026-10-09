@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 import { resolveConfig } from 'electron-vite'
 
 // Note: a live process must retain its lazy chunks across validation builds — see
-// .agents/notes/2026-09-20-reproducible-verification--914a7e92.md
+// .agents/notes/desktop/reproducible-verification.md
 const repo = resolve(import.meta.dirname, '../..')
 const scripts = JSON.parse(await readFile(join(repo, 'package.json'), 'utf8')).scripts as Record<string, string>
 const devOut = scripts.dev.match(/--outDir\s+(\S+)/)?.[1] ?? 'out'

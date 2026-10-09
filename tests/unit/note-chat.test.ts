@@ -126,9 +126,13 @@ describe('direct Note conversation', () => {
     const created = (await editor.write(root, 'chat', 'create', input, true, signal))!
     const args = { reason: 'Related Notes', focus: 'explicit', notes: created.files.map(file => ({ uri: file.uri, role: 'target', reason: 'Goal' })) }
     const focused = await resolveNoteFocus(service, root, 'chat', 'scope', args, 'Locate these Notes')
-    expect(focused.focus).toBe('explicit')
+    expect(focused.focus).toBe('none')
     expect(focused.notes.map(note => note.title)).toEqual(['First', 'Second'])
-    expect((await resolveNoteFocus(service, root, 'chat', 'display', args, 'Read these Notes')).focus).toBe('auto')
+    expect((await resolveNoteFocus(service, root, 'chat', 'display', args, 'Read these Notes')).focus).toBe('none')
+    expect(await resolveNoteFocus(service, root, 'chat', 'display', args, 'Locate these Notes')).toMatchObject({ focus: 'explicit', action: 'locate' })
+    expect(await resolveNoteFocus(service, root, 'chat', 'display', { ...args, action: 'preview' }, 'Preview these Notes')).toMatchObject({ focus: 'explicit', action: 'preview' })
+    await expect(resolveNoteFocus(service, root, 'chat', 'display', { ...args, action: 'enter' }, 'Enter this module')).rejects.toThrow('enter requires a current module')
+    await expect(resolveNoteFocus(service, root, 'chat', 'scope', { ...args, action: 'enter' }, 'Enter')).rejects.toBeTruthy()
     await expect(resolveNoteFocus(service, root, 'chat', 'scope', { ...args, notes: [...args.notes, { uri: 'note://00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000001', role: 'target', reason: 'Missing' }] }, 'Locate')).rejects.toBeTruthy()
     expect((await editor.list(root, '')).notes).toHaveLength(2)
   })

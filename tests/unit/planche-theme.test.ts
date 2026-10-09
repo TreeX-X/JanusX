@@ -198,10 +198,24 @@ describe('planche theme contract', () => {
     expect(session).toContain(
       "const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'",
     )
-    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(3)
-    expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(10)
+    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(2)
+    // 内容卡（首轮提示/最近轮次）走 module .sheet 浅纸面，不占 SURFACE_INSET 名额
+    expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(8)
+    // 会话面板三阶：地吃 --shell-canvas（planche=软件纸面底色，dark=v6 画布），
+    // 卡/内卡仍走 A 方案高保真逐值
+    const sessionMod = read('components/SessionPanel.module.css')
+    expect(sessionMod).toContain('background: var(--shell-canvas)')
+    expect(sessionMod).not.toContain('#E8E6E2')
+    expect(sessionMod).toContain('background: #E2D9BD')
+    expect(sessionMod).toContain('background: #F8F2E0')
+    expect(sessionMod).toContain(":global([data-theme='dark']) .cardSurface")
+    expect(sessionMod).toContain(":global([data-theme='dark']) .sheet")
+    expect(sessionMod).toContain('color-mix(in srgb, var(--shell-chrome) 88%, white)')
+    // 折叠控件走发丝线框 chevron 按钮（token 化，不吃填充）
+    expect(sessionMod).toContain('.foldBtn')
+    expect(sessionMod).toContain('var(--shell-accent-border)')
     expect(session.match(/background: SURFACE_DEEP/g) ?? []).toHaveLength(2)
-    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(3)
+    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(2)
     expect(session).not.toMatch(/background: 'rgba\(255,\s*255,\s*255/)
     expect(session).not.toMatch(/background: 'rgba\(0,\s*0,\s*0,\s*0\.[1-5]\d\)'/)
     expect(session).not.toMatch(/(solid|dashed) rgba\(255,\s*255,\s*255/)
@@ -229,6 +243,23 @@ describe('planche theme contract', () => {
     expect(notif).toContain(":global([data-theme='planche']) .labelText")
     const project = read('components/ProjectSettings.module.css')
     expect(project).toContain(":global([data-theme='planche']) .promptBox textarea")
+    // 运行配置分体浮岛：错峰入场 + reduced-motion 兜底，卡片层吃 --card-index
+    expect(project).toContain('projectIslandRise')
+    expect(project).toContain('var(--card-index')
+    expect(project).toContain('prefers-reduced-motion')
+    expect(read('components/ProjectSettings.tsx')).toContain('cardIndexStyle')
+    // 彻底分体：弹窗壳透明不做窗面（无底/无框/无影），顶栏是一张独立浮岛卡，
+    // 内层容器不垫整块地色——缝隙直接露出共享遮罩。
+    const globalsAll = read('styles/globals.css')
+    expect(globalsAll).toMatch(/\.ws-config-modal\s*\{[^}]*background:\s*transparent/)
+    expect(globalsAll).toMatch(/\.ws-config-modal\s*\{[^}]*box-shadow:\s*none/)
+    expect(globalsAll).toContain('.ws-config-head')
+    expect(globalsAll).toContain('ws-config-card-rise')
+    expect(globalsAll).toContain("[data-theme='planche'] .ws-config-head")
+    const launcherCss = stripCssComments(read('components/ProjectLauncher.module.css'))
+    expect(launcherCss).toContain('background: transparent')
+    expect(launcherCss).not.toMatch(/background:\s*var\(--shell-canvas\)/)
+    expect(stripCssComments(project)).not.toMatch(/background:\s*var\(--shell-canvas\)/)
     // 设置底栏不再写死 dark 的 canvas 色值。#151517 只在 dark 成立，留在声明里
     // 会让默认的 planche 纸面主题在内容底部压一条近黑横条，并永久盖住尾部内容。
     for (const mod of [
@@ -247,6 +278,34 @@ describe('planche theme contract', () => {
     const fileTree = read('components/file-tree/file-tree.module.css')
     expect(fileTree).toContain('color: var(--shell-text)')
     expect(fileTree).not.toMatch(/color:\s*#(d4d4d4|ccc|999)/)
+    // 运行配置四表收编主题令牌（2026-10-07-run-config-island-cards）：
+    // 无白字/手写色文字、无白 alpha 边框、无黑底填充；文字与边框走 --shell-*
+    for (const mod of [
+      'components/ProjectSettings.module.css',
+      'components/ProjectConfigForm/QuickConfigForm.module.css',
+      'components/ProjectTypeSelector.module.css',
+      'components/ProjectConfigForm/JsonEditor.module.css',
+      'components/ProjectLauncher.module.css',
+    ]) {
+      const source = stripCssComments(read(mod))
+      expect(source, mod).not.toMatch(/color:\s*#/)
+      expect(source, mod).not.toMatch(/border[a-z-]*:\s*[^;{}]*rgba\(\s*255\s*,\s*255\s*,\s*255/)
+      expect(source, mod).not.toMatch(/background:\s*rgba\(\s*0\s*,\s*0\s*,\s*0/)
+      expect(source, mod).not.toMatch(/background:\s*#/)
+    }
+    // 左栏类型 tab 选中态与设置导航同构：主题底色 + 左 2px 强调条，无整块染色
+    const typeSel = read('components/ProjectTypeSelector.module.css')
+    expect(typeSel).toContain('.typeItem.selected::before')
+    expect(typeSel).toContain('var(--shell-active)')
+    expect(typeSel).toContain('var(--shell-accent)')
+    // configTab 选中态：文字提亮 + 2px 强调条，不吃白色填充块
+    const quick = stripCssComments(read('components/ProjectConfigForm/QuickConfigForm.module.css'))
+    expect(quick).toContain('.configTab.active::after')
+    expect(quick).not.toMatch(/\.configTab\.active\s*\{[^}]*background/)
+    // 中部组卡与设置内卡同料：柔和发丝线 + 12% 抬升底色，两主题共用一条规则
+    const innerCard = 'color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas))'
+    expect(quick).toContain(innerCard)
+    expect(stripCssComments(project)).toContain(innerCard)
   })
 
   it('covers expanded deep surfaces (brand/tabs/chat/monitor/roundtable/auxiliary)', () => {
@@ -346,8 +405,7 @@ describe('planche theme contract', () => {
       ":global([data-theme='planche']) .graphCanvas",
       ":global([data-theme='planche']) .reviewCard",
       ":global([data-theme='planche']) .inspectorTitle",
-      ":global([data-theme='planche']) .dotKindProposal",
-      ":global([data-theme='planche']) .auditEvent strong",
+      ":global([data-theme='planche']) .graphCard",
       ":global([data-theme='planche']) .actionRow button:not(:disabled)",
     ]) {
       expect(wb, selector).toContain(selector)

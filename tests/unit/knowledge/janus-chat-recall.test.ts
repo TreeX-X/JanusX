@@ -253,6 +253,49 @@ describe('Janus Chat knowledge recall', () => {
     expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'stream-global' })
   })
 
+  it('keeps launch-assistant turns out of recall and capture even with a workspace bound', async () => {
+    search.mockResolvedValue(emptyResult)
+    fakeStream('配置已生成。')
+    const registration = registerAndFindHandler('llm:chat-stream')
+    const reply = vi.fn()
+
+    await registration?.[1]({ reply }, {
+      requestId: 'stream-launch',
+      messages,
+      providerId: 'provider-a',
+      sourceTag: 'launch-assistant',
+      workspaceId: 'workspace-a',
+      workspacePath: 'C:/workspace-a',
+    })
+
+    expect(search).not.toHaveBeenCalled()
+    expect(capture).not.toHaveBeenCalled()
+    expect(capturePersonTurn).not.toHaveBeenCalled()
+    expect(capturePersonEpisode).not.toHaveBeenCalled()
+    expect(reply.mock.calls.some(([channel]) => channel === 'llm:chat:recall-trace')).toBe(false)
+    expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'stream-launch' })
+  })
+
+  it('never writes the person timeline for workspace-free launch-assistant turns', async () => {
+    search.mockResolvedValue(emptyResult)
+    fakeStream('可以运行。')
+    const registration = registerAndFindHandler('llm:chat-stream')
+    const reply = vi.fn()
+
+    await registration?.[1]({ reply }, {
+      requestId: 'stream-launch-free',
+      messages,
+      providerId: 'provider-a',
+      sourceTag: 'launch-assistant',
+    })
+
+    expect(search).not.toHaveBeenCalled()
+    expect(capture).not.toHaveBeenCalled()
+    expect(capturePersonTurn).not.toHaveBeenCalled()
+    expect(capturePersonEpisode).not.toHaveBeenCalled()
+    expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'stream-launch-free' })
+  })
+
   it('adds trusted Runtime tools for every validated attached workspace session', async () => {
     search.mockResolvedValue(emptyResult)
     getSession.mockImplementation((sessionId: string) => ({

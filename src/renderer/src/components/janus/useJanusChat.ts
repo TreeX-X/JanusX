@@ -14,6 +14,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useNoteChatStore } from '@/stores/note-chat'
 import { useNoteFocusStore } from '@/stores/note-focus'
+import { useBlueprintStore } from '@/stores/blueprint'
+import { noteBrowserContext } from '@/features/blueprint/note-focus'
 import type { Workspace } from '@/types'
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, type ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
@@ -573,7 +575,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     })
   }, [updateConversation])
 
-  // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/2026-09-25-blueprint-dialog-separation--2ec6c79b.md
+  // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/blueprint/tasks/blueprint-dialog-separation.md
   const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }, compact?: { keepRecentUnits: number }) => {
     const runtime = runtimesRef.current[id]
     const conversation = conversationsRef.current.find((item) => item.id === id)
@@ -590,7 +592,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.pendingBuffer = ''
     handles.reasoning = emptyReasoning()
 
-    // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/2026-10-02-blueprint-review-conversation-loop--9c426f18.md
+    // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/blueprint/maintenance/requirements/blueprint-review-conversation-loop.md
     const nextMessages = maintenanceTaskId || compact ? history : [...history, userMessage]
     if (!recovery) updateConversation(id, (current) => ({
       ...current,
@@ -697,7 +699,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           ...(maintenanceTaskId ? { maintenanceTaskId } : {}),
           workspaceResources: agentResources,
           toolTraces: latest.toolTraces,
-          noteWorkingSet: JSON.stringify(useNoteFocusStore.getState().scopes[id] ?? null),
+          noteWorkingSet: JSON.stringify({ workingSet: useNoteFocusStore.getState().scopes[id] ?? null,
+            browsing: latest.engineeringContext?.viewRef?.viewId === 'workspace-dialog'
+              ? noteBrowserContext(useBlueprintStore.getState().currentBlueprint, useNoteFocusStore.getState().browser, agentResources.map(resource => resource.workspacePath)) : null }),
           // S6: explicit domain; missing = legacy personal. Project never falls back to personal memory.
           ...(latest.engineeringContext?.domain ? { domain: latest.engineeringContext.domain } : {}),
           ...(latest.engineeringContext?.noteRefs?.length
@@ -951,7 +955,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     setRuntime(id, () => ({ ...emptyRuntime(), ...(panel ? { approvalMode: 'plan' as const } : {}) }))
   }, [invalidateRuntime, setRuntime, updateConversation])
 
-  // Note: workspace lifetime survives panel unmounts — see .agents/notes/2026-09-25-blueprint-workspace-dialog--5480ef6d.md
+  // Note: workspace lifetime survives panel unmounts — see .agents/notes/blueprint/maintenance/tasks/blueprint-workspace-dialog.md
   useEffect(() => useWorkspaceStore.subscribe((state) => {
     if (panelWorkspaceRef.current === null) return
     const workspace = state.workspaces.find(item => item.id === state.activeWorkspaceId)

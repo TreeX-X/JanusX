@@ -58,7 +58,7 @@ export class UserEpisodeService {
   private readonly writeQueue = new SerialQueue()
   withLegacyMutation<T>(operation: () => Promise<T>): Promise<T> { return this.writeQueue.run(operation) }
 
-  // Note: new episodes are observations; legacy files remain readable — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+  // Note: new episodes are observations; legacy files remain readable — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
   async capture(input: { content: string; ttlDays?: number; tags?: string[]; sourceObservationIds?: string[]; createdAt?: string; sessionId?: string; sourceEventId?: string }, context?: Pick<ObservationCaptureContext, 'speaker'>): Promise<UserEpisode> {
     const trimmed = input.content.trim()
     if (!trimmed) throw new Error('Episode content is required')

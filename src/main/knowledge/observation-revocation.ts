@@ -11,7 +11,7 @@ const targetSchema = z.object({ id: z.string().min(1), workspaceId: z.string().m
 const revokeSchema = targetSchema.extend({ sourceHash: z.string().regex(/^[a-f0-9]{64}$/) })
 
 /** Resolve only the requested page; historical impact counts come from the receipt. */
-// Note: withdrawal history remains readable when original sources disappear — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: withdrawal history remains readable when original sources disappear — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 export async function listObservationRevocations(input: unknown): Promise<ObservationRevocationsPage> {
   const { offset, limit } = z.object({ offset: z.number().int().nonnegative().default(0), limit: z.number().int().min(1).max(100).default(20) }).strict().parse(input)
   const records = [...(await readObservationRevocationBarrier()).records].sort((a, b) => b.revokedAt.localeCompare(a.revokedAt) || a.source.localeCompare(b.source))

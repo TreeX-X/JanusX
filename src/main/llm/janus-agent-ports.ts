@@ -88,7 +88,14 @@ export interface JanusChatTurnPortsDeps {
  */
 export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnPorts {
   // Narrowed once: the async capture closure below keeps the check.
-  const captureObservation = deps.captureObservation
+  // Note: disabled capture is an expected no-op — see .agents/notes/knowledge/memory-domain-controls.md
+  const captureObservation = deps.captureObservation ? async (input: JanusCaptureInput) => {
+    try { return await deps.captureObservation!(input) }
+    catch (error) {
+      if (error instanceof Error && error.message === 'memory-capture-disabled') return undefined
+      throw error
+    }
+  } : undefined
   return {
     model: {
       resolve: async (providerId, modelId) => {
@@ -145,7 +152,7 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
     ...(captureObservation ? {
       knowledgeCapture: {
       captureTurn: async (capture) => {
-        // Note: project domain keeps turns out of personal memory — see .agents/notes/2026-09-17-chat-turn-guard-domain-s6--fd109997.md
+        // Note: project domain keeps turns out of personal memory — see .agents/notes/agent/chat-turn-guard-domain-s6.md
         // Empty targets mean a workspace-free turn; fall back to the person
         // sentinel so the observation still compounds. The seam stays generic:
         // only plain workspace-id strings cross into janus-agentX.

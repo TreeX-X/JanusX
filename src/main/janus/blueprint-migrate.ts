@@ -1,4 +1,4 @@
-﻿// Note: on-demand JSON migration — see .agents/notes/2026-09-18-blueprint-migration--1915e29e.md
+﻿// Note: on-demand JSON migration — see .agents/notes/blueprint/documents/history/blueprint-migration.md
 /**
  * @file On-demand legacy JSON blueprint migration (S8-JanusX).
  * @description Converts one legacy JSON blueprint into harness Note drafts in
@@ -14,7 +14,8 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, rename } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parseNote, validateNote } from '@janus-agent/harness-core'
+import { parseNote, serializeNote, validateNote } from '@janus-agent/harness-core'
+import { noteAuthoringContext, maintainedNotePath, type NoteAuthoringContext } from '../harness/note-authoring'
 import type {
   Blueprint,
   BlueprintIssue,
@@ -25,7 +26,7 @@ import { harnessNoteService } from '../harness/service'
 import { blueprintsDir, blueprintFile, indexFile } from './blueprint-paths'
 import { readJson, writeJson } from './blueprint-persistence'
 
-export type MigratedKind = 'requirement' | 'task' | 'decision' | 'idea' | 'initiative'
+export type MigratedKind = 'note' | 'requirement' | 'task' | 'decision' | 'idea' | 'initiative'
 
 export interface MigrationNodePlan {
   nodeId: string
@@ -198,8 +199,9 @@ export function buildMigrationDocuments(blueprint: Blueprint, repoId: string): {
         const { markdown, fileName } = taskFor(node, null, noteId)
         built.push({ plan: { nodeId: node.id, title: node.title, kind: 'task', lifecycle: 'draft', noteId, uri }, markdown, fileName, parentNodeId, governedByNodeId: null })
       }
-      for (const issue of open) {
-        const issueId = randomUUID().toLowerCase()
+      for (const [index, issue] of open.entries()) {
+        // Relations to the legacy issue node resolve to its first open issue.
+        const issueId = index === 0 ? noteId : randomUUID().toLowerCase()
         const base = taskFor(node, issue, issueId)
         const markdown = resolvedLines.length > 0
           ? base.markdown.replace('## Evidence', `## Evidence\n${resolvedLines.join('\n')}`)
@@ -309,11 +311,44 @@ function reportFor(blueprint: Blueprint, plans: MigrationNodePlan[], audits: Blu
   return { markdown, fileName: `${today()}-migrated-report--${reportId.slice(0, 8)}.md`, uri: '' }
 }
 
+function adaptImportedMarkdown(markdown: string, context: NoteAuthoringContext): string {
+  const note = parseNote(markdown), originalKind = note.meta.kind
+  note.meta.schema = 'harness-note/2'
+  note.meta.module = context.module
+  note.meta.updated = new Date().toISOString()
+  note.meta.extensions = { ...note.meta.extensions, legacyBlueprint: { kind: originalKind } }
+  // Legacy feature descriptions have no fixed acceptance criteria either.
+  if (['task', 'initiative', 'requirement'].includes(originalKind)) note.meta.kind = 'note'
+  if (originalKind === 'decision') {
+    note.body = note.body.replace(/^## Proposal$/m, '## Decision').replace(/^## Risks$/m, '## Consequences')
+    if (!/^## Consequences$/m.test(note.body)) note.body += '\n## Consequences\n\nThe legacy source did not record consequences; assess before accepting this choice.\n'
+  }
+  if (originalKind === 'idea') note.body = note.body.replace(/^## Background$/m, '## Intent').replace(/^## Idea$/m, '## Description')
+  // Legacy checklist/dependency arrows are historical associations, never a fabricated Task contract.
+  note.meta.relations = note.meta.relations?.map(relation => ['implements', 'depends-on'].includes(relation.type) ? { type: 'related-to', target: relation.target } : relation)
+  return serializeNote(note)
+}
+
+function adaptImportedDocuments(built: ReturnType<typeof buildMigrationDocuments>['built'], context: NoteAuthoringContext | undefined, warnings: string[]) {
+  if (context?.schema !== 'harness-note/2') return
+  const paths = new Set<string>()
+  for (const item of built) {
+    item.markdown = adaptImportedMarkdown(item.markdown, context)
+    item.plan.kind = parseNote(item.markdown).meta.kind as MigratedKind
+    const base = maintainedNotePath(context.directory!, item.plan.title)
+    item.fileName = base
+    for (let suffix = 2; paths.has(item.fileName.toLowerCase()); suffix++) item.fileName = base.replace(/\.md$/, `-${suffix}.md`)
+    paths.add(item.fileName.toLowerCase())
+  }
+  warnings.push('Legacy task checklists are imported as ordinary Notes. Main Agent must author an explicit Task contract before execution.')
+}
+
 /** Builds the migration preview without writing anything. */
-export function previewMigration(blueprint: Blueprint, repoId: string, audits: BlueprintMaintenanceAuditRecord[]): MigrationPreview {
+export function previewMigration(blueprint: Blueprint, repoId: string, audits: BlueprintMaintenanceAuditRecord[], authoring?: NoteAuthoringContext): MigrationPreview {
   if (blueprint.source === 'harness') throw { code: 'SCHEMA_INVALID', message: 'harness blueprints need no migration' }
   const { built, warnings } = buildMigrationDocuments(blueprint, repoId)
-  const relationCount = built.reduce((count, item) => count + (item.markdown.match(/^ {2}- type: /gm) ?? []).length, 0)
+  adaptImportedDocuments(built, authoring, warnings)
+  const relationCount = built.reduce((count, item) => count + (parseNote(item.markdown).meta.relations?.length ?? 0), 0)
   return {
     blueprintId: blueprint.id,
     name: blueprint.name,
@@ -341,9 +376,17 @@ export async function applyMigration(
 ): Promise<MigrationResult> {
   if (blueprint.source === 'harness') throw { code: 'SCHEMA_INVALID', message: 'harness blueprints need no migration' }
   const { built, warnings } = buildMigrationDocuments(blueprint, repoId)
+  const authoring = await noteAuthoringContext(harnessNoteService, root, undefined, repoId)
+  adaptImportedDocuments(built, authoring, warnings)
   const reportId = randomUUID().toLowerCase()
   const report = reportFor(blueprint, built.map((item) => item.plan), audits, warnings, reportId)
   report.uri = `note://${repoId}/${reportId}`
+  if (authoring.schema === 'harness-note/2') {
+    report.markdown = adaptImportedMarkdown(report.markdown, authoring)
+    const base = maintainedNotePath(authoring.directory!, `Migration ${blueprint.name} report`)
+    report.fileName = base
+    for (let suffix = 2; built.some(item => item.fileName.toLowerCase() === report.fileName.toLowerCase()); suffix++) report.fileName = base.replace(/\.md$/, `-${suffix}.md`)
+  }
   const documents = [...built.map((item) => ({ markdown: item.markdown, fileName: item.fileName })), { markdown: report.markdown, fileName: report.fileName }]
   for (const document of documents) {
     let parsed: ReturnType<typeof parseNote>

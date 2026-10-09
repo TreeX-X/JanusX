@@ -12,6 +12,7 @@ import { roundtableStore } from './store'
 import { app } from 'electron'
 import { join } from 'node:path'
 import { resolveRegisteredWorkspace } from '../companion/workspace-registry'
+import { noteAuthoringContext } from '../harness/note-authoring'
 import { z } from 'zod'
 
 export class RoundtableService {
@@ -173,6 +174,7 @@ export class RoundtableService {
     input: {
       factIds?: string[]
       repoId: string
+      root?: string
       bundleId?: string
       revision?: number
       parentUri?: string
@@ -189,6 +191,7 @@ export class RoundtableService {
     const facts = input.factIds ? state.facts.filter((fact) => input.factIds!.includes(fact.id)) : state.facts
     const excludedById = new Map((input.excluded ?? []).map((e) => [e.factId, e.reason]))
     const built = buildArtifactBundle({
+      authoring: input.root ? await noteAuthoringContext(harnessNoteService, input.root, input.parentUri, input.repoId) : undefined,
       sessionId,
       roundNumber: state.roundNumber,
       repoId: input.repoId,

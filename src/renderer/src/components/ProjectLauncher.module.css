@@ -2,32 +2,46 @@
  * src/renderer/src/components/ProjectLauncher.module.css
  * 项目启动器主容器样式
  *
- * 容器本身不再画边框和圆角：它永远渲染在 .ws-config-modal 内部，
- * 自带边框会在弹窗边框内侧再套一圈，读起来是双层画框。
+ * 容器只做排布，不画任何窗面：.ws-config-modal 壳透明，卡片直接浮在
+ * 共享遮罩上，这里再垫底色就又造出一块"窗"。
  */
 
 .container {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--shell-canvas);
+  background: transparent;
 }
 
+/* 加载/错误态也是浮岛卡：壳透明后它们直接浮在遮罩上，裸文字读不清 */
 .loadingState,
 .errorState {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  flex: 0 0 auto;
   gap: 16px;
+  margin: auto;
+  width: fit-content;
+  padding: 28px 40px;
+  background: var(--shell-card);
+  border: 1px solid var(--shell-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+:global([data-theme='planche']) .loadingState,
+:global([data-theme='planche']) .errorState {
+  border-color: var(--line, #1C343B);
+  box-shadow: none;
 }
 
 .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(255, 120, 48, 0.2);
-  border-top: 3px solid var(--primary);
+  border: 3px solid color-mix(in srgb, var(--shell-accent) 20%, transparent);
+  border-top: 3px solid var(--shell-accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -45,7 +59,7 @@
 }
 
 .errorText {
-  color: #ff6b6b;
+  color: var(--shell-diff-del);
   text-align: center;
   max-width: 300px;
 }
@@ -53,8 +67,8 @@
 .retryBtn {
   padding: 8px 16px;
   background: transparent;
-  color: #e6a077;
-  border: 1px solid rgba(255, 120, 48, 0.3);
+  color: var(--shell-accent);
+  border: 1px solid var(--shell-accent-border);
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
@@ -62,10 +76,10 @@
 }
 
 .retryBtn:hover {
-  background: rgba(255, 120, 48, 0.08);
-  border-color: rgba(255, 120, 48, 0.5);
+  background: var(--shell-accent-soft);
+  border-color: var(--shell-accent);
 }
 
 .retryBtn:active {
-  background: rgba(255, 120, 48, 0.08);
+  background: var(--shell-accent-soft);
 }

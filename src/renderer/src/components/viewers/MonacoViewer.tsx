@@ -48,7 +48,7 @@ function LoadingIndicator() {
 }
 
 export function MonacoViewer({ content, language, onChange, readOnly = false, onEditorMount, originalContent, modelPath, workspacePath, navigationTarget, onDefinitionNavigate, onNavigationComplete, definitionActionLabel, definitionErrorMessage }: MonacoViewerProps) {
-  // Note: one number per pane keeps the preview readable — see .agents/notes/2026-09-19-monaco-diff-single-line-number--5c873080.md
+  // Note: one number per pane keeps the preview readable — see .agents/notes/terminal/monaco-diff-single-line-number.md
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
   const contentRef = useRef(content)
   const diffChangeSubscriptionRef = useRef<{ dispose(): void } | null>(null)

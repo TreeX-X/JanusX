@@ -1,4 +1,4 @@
-// Note: queue scoring filters evidence before refinement — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: queue scoring filters evidence before refinement — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import type { CandidateFact, MemoryFact, Observation } from '../../shared/knowledge'
 import type { MemoryDecisionAnnotation } from '../../shared/memory-decision'
 import type { DeterministicBatch } from './processing-queue'

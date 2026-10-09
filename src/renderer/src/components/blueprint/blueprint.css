@@ -14,6 +14,15 @@
   overflow: hidden;
 }
 
+/* 工作台中列卡的圆角轮廓由 .blueprint-canvas-main 的 8px 圆角边框承担，
+   但底色由 view 自己刷（workbench 纸面 / 空态 / 加载态），是方角的。
+   view 本就 overflow: hidden，这里把裁切角对齐到 8px：圆角切口处的方角
+   纸面被裁掉，轮廓跟随圆角边框，否则视觉成为“方框内置圆角边框”。
+   embedded 视图是整页铺底，保持方角不动。 */
+.blueprint-view--workbench {
+  border-radius: 8px;
+}
+
 /* —— 顶部工具栏 —— */
 .blueprint-toolbar {
   display: flex;
@@ -2494,6 +2503,18 @@
 /* 纯对话框不展示空态 JANUSX 像素 banner 与会话侧边栏（后者由 compactNavigation 关闭）。 */
 .bp-maintenance-panel .janus-chat-empty { display: none; }
 
+/* 入场开场引导语：借运行配置助手的开场消息样式（左强调发丝线 + 安静墨字）。
+   纯展示空态，不写入会话历史；消息流出现内容后由 emptyState 槽位自然退场。 */
+.bp-maintenance-greeting {
+  margin: 2px 0 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--shell-accent-border);
+  color: var(--shell-muted);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
 .bp-maintenance-panel {
   display: flex;
   flex-direction: column;
@@ -4099,6 +4120,15 @@
   color: var(--ink, #1C343B);
 }
 
+/* 中列的 .blueprint-workbench-card--canvas 只是透明布局壳（见基础规则
+   border:0/background:transparent/border-radius:0）。上面的纸面统一覆写若把壳
+   也刷上纸底墨框，直角壳就会在圆角的 .blueprint-canvas-main 外再套一圈框，
+   视觉成为“方框中有圆角”。壳保持透明，卡片观感由内层画布独自承担。 */
+[data-theme='planche'] .blueprint-workbench-card--canvas {
+  background: transparent;
+  border: 0;
+}
+
 [data-theme='planche'] .blueprint-workbench-tab {
   color: var(--ink, #1C343B);
 }
@@ -4370,6 +4400,11 @@
 
 [data-theme='planche'] .bp-maintenance-panel__header {
   border-bottom: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22));
+}
+
+[data-theme='planche'] .bp-maintenance-greeting {
+  border-left-color: var(--planche-red, #D43D2A);
+  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
 }
 
 [data-theme='planche'] .bp-maintenance-janus-head {
@@ -4732,4 +4767,3 @@
 .bp-view-selector { display: flex; gap: 4px; flex-shrink: 0; }
 .bp-view-selector [aria-pressed="true"] { background: var(--shell-hover); outline: 1px solid var(--shell-muted); }
 .bp-architecture-panel { max-height: 45vh; overflow: auto; }
-.bp-architecture-overview { flex: none; max-height: 30%; overflow: auto; padding: 4px 12px; border-bottom: 1px solid var(--shell-muted); }

@@ -1,6 +1,8 @@
 import { controlLaya } from '../knowledge/laya-runtime'
+import { z } from 'zod'
 import { listWikiHistory, readWikiRevision, pinWikiRevision } from '../knowledge/wiki-history'
 import { knowledgeAutomationService } from '../knowledge/automation-service'
+import { testKnowledgeConfiguration } from '../knowledge/knowledge-configuration-test'
 import { getJevKey, setJevKey } from '../knowledge/knowledge-credentials'
 import { configureKnowledgeLocalModel, disableKnowledgeLocalModel, startKnowledgeLocalResources } from '../knowledge/knowledge-local-settings'
 import { knowledgeLocalResources } from '../knowledge/knowledge-local-resources'
@@ -32,6 +34,7 @@ import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import {
   KNOWLEDGE_CHANNELS,
   type AuditQuery,
+  type AuditPageQuery,
   type ExternalMcpClientId,
   type KnowledgeDiagnosticsQuery,
   type ReviewCandidateInput,
@@ -51,15 +54,24 @@ import type {
 export function registerKnowledgeHandlers(): void {
   const assertEnabled = async () => { if (!(await configService.getExperimentalFeatures()).knowledge) throw new Error('knowledge-disabled') }
   ipcMain.handle(KNOWLEDGE_CHANNELS.automationStatus, () => knowledgeAutomationService.status())
-  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRun, async (_event, input?: { backfill?: boolean }) => {
+  ipcMain.handle(KNOWLEDGE_CHANNELS.testConfiguration, (_event, input: unknown) => testKnowledgeConfiguration(input))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRun, async (_event, input?: import('../../shared/knowledge-automation').AutomationRunInput) => {
     await assertEnabled()
-    if (input?.backfill === true) await knowledgeAutomationService.backfill()
-    else await knowledgeAutomationService.run()
+    input = z.object({ backfill: z.boolean().optional(), reevaluate: z.boolean().optional(), taskId: z.string().trim().min(1).optional() }).strict()
+      .refine(value => Number(!!value.backfill) + Number(!!value.reevaluate) + Number(!!value.taskId) <= 1).parse(input ?? {})
+    if (input?.reevaluate) await knowledgeAutomationService.reevaluate()
+    else if (input?.backfill === true) await knowledgeAutomationService.backfill()
+    else await knowledgeAutomationService.run(input?.taskId)
     return knowledgeAutomationService.status()
   })
-  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRetry, async (_event, id: string) => { await assertEnabled(); await knowledgeAutomationService.retry(id) })
+  ipcMain.handle(KNOWLEDGE_CHANNELS.automationRetry, async (_event, input: unknown) => {
+    await assertEnabled()
+    const id = z.union([z.string().trim().min(1), z.object({ candidateId: z.string().min(1), workspaceId: z.string().min(1), candidateHash: z.string().regex(/^[a-f0-9]{64}$/) }).strict()]).parse(input)
+    return knowledgeAutomationService.retry(id)
+  })
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredential, async (_event, input: unknown) => { await assertEnabled(); knowledgeAutomationService.stop(); return setJevKey(input) })
   ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredentialStatus, async () => ({ configured: Boolean(await getJevKey()) }))
+  ipcMain.handle(KNOWLEDGE_CHANNELS.jevCredentialReveal, async () => { await assertEnabled(); return getJevKey() })
   ipcMain.handle(KNOWLEDGE_CHANNELS.localModelConfigure, (_event, input: unknown) => configureKnowledgeLocalModel(input))
   ipcMain.handle(KNOWLEDGE_CHANNELS.localResourcesInstall, () => startKnowledgeLocalResources())
   ipcMain.handle(KNOWLEDGE_CHANNELS.localResourcesStatus, () => knowledgeLocalResources.status())
@@ -125,8 +137,10 @@ export function registerKnowledgeHandlers(): void {
     return knowledgeAuditService.list(query ?? {})
   })
 
-  ipcMain.handle(KNOWLEDGE_CHANNELS.auditStats, async () => {
-    return knowledgeAuditService.stats()
+  ipcMain.handle(KNOWLEDGE_CHANNELS.auditPage, async (_event, query?: AuditPageQuery) => knowledgeAuditService.page(query))
+
+  ipcMain.handle(KNOWLEDGE_CHANNELS.auditStats, async (_event, query?: AuditQuery) => {
+    return knowledgeAuditService.stats(query)
   })
 
   ipcMain.handle(

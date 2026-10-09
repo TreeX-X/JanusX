@@ -1,4 +1,4 @@
-// Note: personal corrections replace only the exact source version the user reviewed — see .agents/notes/2026-09-28-unified-memory-laya-primary--736081fc.md
+// Note: personal corrections replace only the exact source version the user reviewed — see .agents/notes/knowledge/requirements/unified-memory-laya-primary.md
 import type { CandidateFact, MemoryFact } from '../../shared/knowledge'
 import { factScope } from './memory-evidence'
 import { profileContentHash, reviewedFactHash } from './profile-projection'

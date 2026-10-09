@@ -1,9 +1,10 @@
-// Note: published snapshots are bounded and excluded from recall — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
+// Note: published snapshots are bounded and excluded from recall — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { WikiPage } from '../../shared/knowledge'
+import { wikiRelationKey } from '../../shared/wiki-relations'
 import { WIKI_HISTORY_LIMIT, type WikiHistoryPage, type WikiRevision, type WikiRevisionSummary } from '../../shared/wiki-history'
 import { writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeRootPath } from './constants'
@@ -34,12 +35,16 @@ function historyPath(identity: Identity): string {
 
 /** Content and evidence identify a revision; publication time and retention flags do not. */
 export function wikiContentHash(page: WikiPage): string {
-  return createHash('sha256').update(JSON.stringify([
+  const content: unknown[] = [
     page.workspaceId, page.slug, page.title, page.markdown, [...page.tags].sort(),
     [...page.sourceFactIds].sort(),
     [...(page.sourceFactRefs ?? [])].sort((a, b) => a.id.localeCompare(b.id)).map(ref => [ref.id, ref.contentHash]), page.managed === true,
     [...(page.sourceNoteRefs ?? [])].sort((a, b) => a.uri.localeCompare(b.uri)).map(ref => [ref.uri, ref.sourceHash]),
-  ])).digest('hex')
+  ]
+  // Preserve pre-relationship history hashes byte-for-byte for old revisions.
+  if (page.topicKey || page.relations?.length) content.push(page.topicKey ?? null,
+    [...(page.relations ?? [])].sort((a, b) => wikiRelationKey(a).localeCompare(wikiRelationKey(b))))
+  return createHash('sha256').update(JSON.stringify(content)).digest('hex')
 }
 
 async function readLedger(identity: Identity): Promise<{ ledger: Ledger; raw: string | null }> {

@@ -1,4 +1,5 @@
-// Note: desktop xdo self-review evidence — see .agents/notes/2026-09-18-desktop-xdo-executor--b057b3f0.md
+// Note: desktop xdo self-review evidence — see .agents/notes/agent/desktop-xdo-executor.md
+// Note: host-executed evaluator plans — see .agents/notes/agent/independent-review-repair.md
 /**
  * @file Desktop xdo self-review prompt and strict JSON parsing (S8-JanusX host).
  * @description Builds the read-only review prompt from the tested manifest,
@@ -9,7 +10,7 @@
  *  Electron-free: the model text arrives through an injected function so unit
  *  tests drive refusals without singletons.
  */
-import type { Receipt, ReceiptCheck, ReceiptCoverage } from '@janus-agent/harness-core'
+import { REVIEW_TEST_PLAN_INSTRUCTIONS, type RunReviewTests, type Receipt, type ReceiptCheck, type ReceiptCoverage } from '@janus-agent/harness-core'
 import { renderBriefSection, type TaskBrief } from './task-brief'
 export interface DesktopReviewCriterion {
   uri: string
@@ -26,6 +27,7 @@ export interface DesktopReviewPromptInput {
   checks: ReceiptCheck[]
   criteria: DesktopReviewCriterion[]
   brief: TaskBrief
+  runTests?: RunReviewTests
 }
 
 export type DesktopReviewVerdict = 'approved' | 'needs-fix' | 'blocked'
@@ -152,8 +154,18 @@ export function createModelReviewPort(
       throw new Error('CAPABILITY_UNAVAILABLE: review needs a provider and model; pick the review model and retry')
     }
     if (signal?.aborted) throw new Error('BUSY: review aborted; the run is paused')
-    const prompt = buildPrompt({ taskUri, attempt, ...input })
     const model = await deps.getModel(deps.providerId, deps.modelId)
+    let checks = input.checks
+    if (buildPrompt === buildEvaluatorPrompt) {
+      if (!input.runTests) throw new Error('CAPABILITY_UNAVAILABLE: evaluator test execution is unavailable')
+      const planned = await deps.generateReviewText(model, [REVIEW_TEST_PLAN_INSTRUCTIONS,
+        buildEvaluatorPrompt({ taskUri, attempt, ...input }).split('Reply with exactly one JSON object')[0],
+      ].join('\n'), signal)
+      let plan: unknown
+      try { plan = JSON.parse(planned.trim()) } catch { throw new Error('SCHEMA_INVALID: evaluator did not return a test plan') }
+      checks = [...checks, ...await input.runTests(plan, signal)]
+    }
+    const prompt = buildPrompt({ taskUri, attempt, ...input, checks })
     const text = (await deps.generateReviewText(model, prompt, signal))?.trim() ?? ''
     if (!text) throw new Error('NOT_READY: self-review returned no text; refusing completion')
     const claim = parseDesktopReviewClaim(text)

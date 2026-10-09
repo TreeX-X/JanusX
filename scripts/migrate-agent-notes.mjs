@@ -1,4 +1,4 @@
-// Note: migration preserves source facts — see .agents/notes/2026-09-25-note-blueprint-r2-read--fa17e06b.md
+// Note: migration preserves source facts — see .agents/notes/blueprint/documents/tasks/note-blueprint-r2-read.md
 import { createHash } from 'node:crypto'
 import { readFile, mkdir, writeFile, lstat } from 'node:fs/promises'
 import { basename, dirname, resolve, relative, join } from 'node:path'

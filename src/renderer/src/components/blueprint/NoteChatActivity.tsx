@@ -1,4 +1,4 @@
-// Note: chat edits are displayed after the committed write — see .agents/notes/2026-10-02-blueprint-conversation-development--3efc89cf.md
+// Note: chat edits are displayed after the committed write — see .agents/notes/blueprint/maintenance/requirements/blueprint-conversation-development.md
 import { useEffect, useState } from 'react'
 import { useNoteChatStore } from '@/stores/note-chat'
 import { useI18n } from '@/i18n/useI18n'

@@ -37,7 +37,7 @@ export async function readTaskDraft(root: string, uri: string): Promise<HarnessT
   })
 }
 
-// Note: explicit adoption fills the executable contract - see .agents/notes/2026-09-18-task-contract-adoption--6b7c688e.md
+// Note: explicit adoption fills the executable contract - see .agents/notes/agent/task-contract-adoption.md
 export function acceptedTaskMarkdown(note: ParsedNote, uri: string, repoId: string, input: HarnessTaskContractInput, index: NoteIndex): string {
   if (note.meta.execution) fail('BUSY', 'A task with execution cannot be adopted again')
   if (!['draft', 'proposed'].includes(note.meta.lifecycle)) fail('NOT_READY', 'Only draft or proposed tasks can be adopted')
@@ -72,7 +72,7 @@ export function acceptedTaskMarkdown(note: ParsedNote, uri: string, repoId: stri
       continue
     }
     const target = ref.uri.startsWith(`note://${repoId}/`) ? index.byId.get(ref.uri.split('/').pop()!) : undefined
-    if (!target?.note || target.diagnostics.length || !['requirement', 'initiative'].includes(target.note.meta.kind)
+    if (!target?.note || target.diagnostics.length || !(target.note.meta.schema === 'harness-note/2' ? ['requirement', 'task'] : ['requirement', 'initiative']).includes(target.note.meta.kind)
       || target.note.meta.lifecycle !== 'accepted' || !target.note.acs.some((criterion) => criterion.id === ref.criterionId)) fail('UNRESOLVED_REFERENCE', `Acceptance target must be an accepted requirement or initiative: ${ref.uri}#${ref.criterionId}`)
     if (target!.note!.meta.kind === 'requirement') implementsByUri.set(ref.uri, [...(implementsByUri.get(ref.uri) ?? []), ref.criterionId])
   }
@@ -80,7 +80,7 @@ export function acceptedTaskMarkdown(note: ParsedNote, uri: string, repoId: stri
   body = setSection(body, 'Acceptance criteria', input.criteria.map((item) => `- [ ] ${item.id}: ${item.text.trim()}`).join('\n') || 'See work.acceptanceRefs.')
   body = setSection(body, 'Verification', work.verification.map((step) => `- ${step.id}: ${step.kind === 'command' ? [step.program, ...(step.args ?? [])].join(' ') : step.description}`).join('\n'))
   const markdown = serializeNote({ ...note, body, meta: {
-    ...note.meta, lifecycle: 'accepted', repositories: { ...note.meta.repositories, primary: repoId }, work,
+    ...note.meta, lifecycle: 'accepted', ...(note.meta.schema === 'harness-note/2' ? { updated: new Date().toISOString() } : { repositories: { ...note.meta.repositories, primary: repoId } }), work,
     relations: [
       ...(note.meta.relations ?? []).filter((relation) => relation.type !== 'implements'),
       ...[...implementsByUri].map(([target, criteria]) => ({ type: 'implements' as const, target, criteria })),

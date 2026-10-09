@@ -1,4 +1,4 @@
-// Note: workspace setup keeps technical diagnostics behind an explicit detail control — see .agents/notes/2026-10-04-blueprint-empty-init--4f49c9ba.md
+// Note: workspace setup keeps technical diagnostics behind an explicit detail control — see .agents/notes/blueprint/workspaces/requirements/blueprint-empty-init.md
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronRight, FilePlus2, FolderOpen, LoaderCircle, Network, RefreshCw } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'

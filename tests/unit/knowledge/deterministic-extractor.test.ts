@@ -19,7 +19,7 @@ import {
   tokenJaccard,
 } from '../../../src/main/knowledge/deterministic-extractor'
 import { knowledgeExtractService } from '../../../src/main/knowledge/extract-service'
-import type { Observation } from '../../../src/shared/knowledge'
+import type { MemoryFact, Observation } from '../../../src/shared/knowledge'
 
 const ESC = String.fromCharCode(27)
 const BEL = String.fromCharCode(7)
@@ -57,6 +57,16 @@ describe('deterministic extractor (Phase 1-2)', () => {
     await rm(root, { recursive: true, force: true })
   })
 
+  it('does not create graph proposals when shared-file facts are scanned repeatedly', async () => {
+    const facts = ['a', 'b'].map(id => ({ id, kind: 'fact', content: id, status: 'active', concepts: [], files: ['src/db.ts'],
+      provenance: { workspaceId: 'ws-1', sourceObservationIds: [], fileRefs: ['src/db.ts'] } })) as MemoryFact[]
+    for (let index = 0; index < 2; index++) {
+      const result = await runDeterministicStage({ workspaceId: 'ws-1', observations: [obs({id:'plain',content:'A temporary progress update.'})] }, { listTruthFacts: async () => facts })
+      expect(result.proposals).toBe(0)
+      expect(await knowledgeExtractService.listGraphCandidates()).toEqual([])
+    }
+  })
+
   it('normalizes ANSI, control chars, secrets, and long content', () => {
     const dirty = `${ESC}[31mred${ESC}[0m text with ${BEL}control and sk-abcdefghijklmnop secret`;
     const result = normalizeObservationText(dirty)
@@ -67,6 +77,35 @@ describe('deterministic extractor (Phase 1-2)', () => {
     const long = normalizeObservationText('x'.repeat(5000))
     expect(long.truncated).toBe(true)
     expect(long.text).toHaveLength(4000)
+  })
+
+  it('keeps raw tools and assistant reports as evidence without proposing keyword fragments', async () => {
+    const raw = JSON.stringify({ chunk_id: 'fixture', wall_time_seconds: 0.5, exit_code: 0, output: 'we decided to use sqlite' })
+    const observations = [
+      obs({ id: 'wrapper', type: 'tool-result', content: raw }),
+      obs({ id: 'call', type: 'tool-call', content: 'rg "never" src' }),
+      obs({ id: 'css', type: 'tool-result', content: '2255\t@media (prefers-reduced-motion: reduce) {' }),
+      obs({ id: 'comment', type: 'tool-result', content: '696\t/* never reveal an edge before its child */' }),
+      obs({ id: 'assistant', type: 'conversation-turn', content: 'We decided to use sqlite. Build failed today.' }),
+      obs({ id: 'structured', type: 'analysis-result', content: '决定采用事务保证原子性' }),
+    ]
+    const result = await runDeterministicStage({ workspaceId: 'ws-1', observations })
+    expect(result.proposals).toBe(1)
+    expect((await knowledgeExtractService.listFactCandidates()).map(row => row.fact.content)).toEqual(['决定采用事务保证原子性'])
+    for (const row of observations) expect(await readDerivedObservation(row.id)).not.toBeNull()
+    expect(observations[0].content).toBe(raw)
+    expect(classifyDeterministic('user-note', raw, 3)).toBeNull()
+    expect(classifyDeterministic('user-note', '@media (prefers-reduced-motion: reduce) {', 1)).toBeNull()
+  })
+
+  it('does not count raw reports toward repeated procedure proposals', async () => {
+    const observations = [
+      obs({ id: 'explicit', content: '$ npm run build failed' }),
+      obs({ id: 'tool', type: 'tool-result', content: '$ npm run build failed' }),
+      obs({ id: 'assistant', type: 'conversation-turn', content: '$ npm run build failed' }),
+    ]
+    await runDeterministicStage({ workspaceId: 'ws-1', observations })
+    expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
   })
 
   it('computes stable exact-dedupe keys', () => {

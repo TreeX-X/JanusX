@@ -83,6 +83,8 @@ interface JanusChatProps {
   minimalComposer?: boolean
   /** Host-owned actions rendered after the discussion, inside its scroll area. */
   discussionFooter?: React.ReactNode
+  /** Host-owned empty transcript state; falls back to the JANUSX banner. */
+  emptyState?: React.ReactNode
   /** Host-owned evidence attached to an assistant turn; undefined is the live turn. */
   renderTurnFooter?: (turnId?: string) => React.ReactNode
   /**
@@ -385,6 +387,7 @@ export function JanusChat({
   discussionOnly = false,
   minimalComposer = false,
   discussionFooter,
+  emptyState,
   renderTurnFooter,
   aboveComposer,
   messagesHidden = false,
@@ -1394,11 +1397,11 @@ export function JanusChat({
         style={messagesHidden ? { display: 'none' } : undefined}
         onScroll={handleScroll}
       >
-        {messages.length === 0 && (
+        {messages.length === 0 && (emptyState ?? (
           <div className="janus-chat-empty">
             <JanusXTerminalBanner />
           </div>
-        )}
+        ))}
 
         {messages.length > historyPageSize && <button type="button" className="janus-chat-load-history" onClick={() => setHistoryPageSize(size => size + 100)}>{t('janus:chat.context.older')}</button>}
         {[...messages.slice(-historyPageSize).map((msg) => ({ kind: 'message' as const, timestamp: msg.timestamp, msg })), ...roundtableCards.map((card) => ({ kind: 'card' as const, timestamp: Date.parse(card.updatedAt || card.createdAt) || 0, card })), ...roundtableQuestions.map((block) => ({ kind: 'questions' as const, timestamp: block.timestamp, block}))]

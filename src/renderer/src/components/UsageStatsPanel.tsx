@@ -1,5 +1,5 @@
-// Note: shared usage filters and cumulative snapshot curves — see .agents/notes/2026-10-02-usage-telemetry-fix-and-stats--61b5d05c.md
-// Note: custom date range with snapshot-bucket aggregation — see .agents/notes/2026-10-05-usage-stats-custom-range-detail--241cfe30.md
+// Note: shared usage filters and cumulative snapshot curves — see .agents/notes/terminal/requirements/usage-telemetry-fix-and-stats.md
+// Note: custom date range with snapshot-bucket aggregation — see .agents/notes/terminal/requirements/usage-stats-custom-range-detail.md
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -213,7 +213,7 @@ function CacheDonut({ hits, misses, rate, hasData, hitColor, missColor, trackCol
   )
 }
 
-type TrendMetric = { key: 'hits' | 'misses' | 'unknown' | 'output'; label: string; color: string }
+type TrendMetric = { key: 'hits' | 'output'; label: string; color: string }
 
 function TrendLines({ series, range, metrics, label, emptyLabel }: {
   series: TimeBucket[]
@@ -253,7 +253,7 @@ function TrendLines({ series, range, metrics, label, emptyLabel }: {
             ? `M ${x(index)} ${y(bucket[key])}`
             : `C ${(x(index - 1) + x(index)) / 2} ${y(buckets[index - 1][key])}, ${(x(index - 1) + x(index)) / 2} ${y(bucket[key])}, ${x(index)} ${y(bucket[key])}`).join(' ')
           return <g key={key}>
-            <path data-series={key} d={path} fill="none" stroke={color} strokeWidth="2" strokeDasharray={key === 'unknown' ? '4 4' : undefined} vectorEffect="non-scaling-stroke" />
+            <path data-series={key} d={path} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
             {buckets.map((bucket, index) => bucket[key] > 0.5 && <circle key={bucket.key} cx={x(index)} cy={y(bucket[key])} r="3" fill={color} />)}
           </g>
         })}
@@ -315,10 +315,9 @@ export function UsageStatsPanel() {
   const customErrorKey = range !== 'custom' ? undefined
     : normalized.error === 'invalid' ? 'customInvalid' : normalized.error === 'future' ? 'customFuture' : normalized.error === 'span' ? 'customSpan' : undefined
   const isEmpty = view.terminals === 0
+  // 趋势图只保留命中与输出两条曲线；未命中与未区分留在缓存环形与聚合口径中，不上趋势图。
   const metrics: TrendMetric[] = [
     { key: 'hits', label: t('settings:usageStats.hit'), color: hitColor },
-    { key: 'misses', label: t('settings:usageStats.miss'), color: missColor },
-    { key: 'unknown', label: t('settings:usageStats.unknown'), color: 'var(--shell-muted)' },
     { key: 'output', label: t('settings:usageStats.output'), color: 'var(--shell-text)' },
   ]
   const trendBucketHint = useMemo(() => {

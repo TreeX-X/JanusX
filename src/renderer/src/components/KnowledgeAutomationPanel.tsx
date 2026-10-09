@@ -1,11 +1,13 @@
-// Note: extraction, entry review, handbook generation and review have independent providers — see .agents/notes/2026-10-03-knowledge-accumulate-review-wiki-rereview--3944b368.md
-import { useEffect, useState } from 'react'
+// Note: extraction, entry review, handbook generation and review have independent providers — see .agents/notes/knowledge/requirements/knowledge-accumulate-review-wiki-rereview.md
+import { useCallback, useEffect, useId, useState, type CSSProperties } from 'react'
 import { KeyRound, Workflow } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
-import { defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeProvider, type KnowledgeStage } from '../../../shared/knowledge-automation'
+import { jevThreshold, defaultKnowledgeAutomation, KNOWLEDGE_STAGES, type KnowledgeAutomationSettings, type KnowledgeProvider, type KnowledgeStage } from '../../../shared/knowledge-automation'
 import { KnowledgeLocalModelPanel } from './KnowledgeLocalModelPanel'
 import { Select } from './ui/Select'
-import { AutomationStatus } from './knowledge/AutomationStatus'
+import { JevCredentialFields } from './knowledge/JevCredentialFields'
+import { KnowledgeConfigurationTest } from './knowledge/KnowledgeConfigurationTest'
+import { AutomationSettingsStatus } from './knowledge/AutomationStatus'
 import styles from './KnowledgeSettingsPanel.module.css'
 import automationStyles from './KnowledgeAutomationPanel.module.css'
 
@@ -16,26 +18,23 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
 }) {
   const { t } = useI18n('knowledge')
   const config = value ?? defaultKnowledgeAutomation()
+  const thresholdId = useId()
+  const thresholdValue = jevThreshold(config.jev.threshold)
+  const [thresholdText, setThresholdText] = useState(thresholdValue.toFixed(2))
+  useEffect(() => { setThresholdText(thresholdValue.toFixed(2)) }, [thresholdValue])
   const [providers, setProviders] = useState<Array<{ id: string; name: string; models: string[] }>>([])
-  const [configured, setConfigured] = useState(false)
-  const [key, setKey] = useState('')
   const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [credential, setCredential] = useState<{ key?: string; revision: number }>({ revision: 0 })
+  const credentialChanged = useCallback((key?: string) => setCredential(current => ({ key, revision: current.revision + 1 })), [])
   useEffect(() => {
     let alive = true
-    void Promise.resolve().then(() => Promise.all([window.electron.llm.getTerminalProviders('janus'), window.electron.knowledge.jevCredentialStatus()]))
-      .then(([items, credential]) => { if (alive) { setProviders(items.filter(item => item.enabled !== false).map(item => ({ id: item.id, name: item.name, models: item.models ?? (item.modelId ? [item.modelId] : []) }))); setConfigured(credential.configured) } })
+    void Promise.resolve().then(() => window.electron.llm.getTerminalProviders('janus'))
+      .then(items => { if (alive) { setProviders(items.filter(item => item.enabled !== false).map(item => ({ id: item.id, name: item.name, models: item.models ?? (item.modelId ? [item.modelId] : []) }))) } })
       .catch(() => { if (alive) setError(t('knowledge:automation.loadFailed')) })
     return () => { alive = false }
   }, [t])
   const updateStage = (stage: KnowledgeStage, changes: Partial<KnowledgeAutomationSettings['stages'][KnowledgeStage]>) =>
     onChange({ ...config, stages: { ...config.stages, [stage]: { ...config.stages[stage], ...changes } } })
-  const credential = async (clear = false) => {
-    setBusy(true); setError('')
-    try { await window.electron.knowledge.setJevCredential(clear ? '' : key); setKey(''); setConfigured(!clear) }
-    catch { setError(t('knowledge:automation.credentialFailed')) }
-    finally { setBusy(false) }
-  }
   return <section className={`${styles.section} ${automationStyles.panel}`} aria-label={t('knowledge:automation.title')}>
     <h3 className={styles.sectionTitle}><Workflow size={14} aria-hidden />{t('knowledge:automation.title')}</h3>
     <p className={styles.hint}>{t('knowledge:automation.description')}</p>
@@ -76,18 +75,34 @@ export function KnowledgeAutomationPanel({ value, disabled, knowledgeEnabled, on
       </fieldset>
     })}</div>
     <KnowledgeLocalModelPanel value={config.local} disabled={disabled} onPersist={onLocalPersist} />
-    {KNOWLEDGE_STAGES.some(stage => config.stages[stage].provider === 'jev') && <fieldset className={automationStyles.credential} disabled={disabled || busy}>
+    {KNOWLEDGE_STAGES.some(stage => config.stages[stage].provider === 'jev') && <fieldset className={automationStyles.credential} disabled={disabled}>
       <legend><KeyRound size={14} aria-hidden />Jev</legend>
       <label className={automationStyles.connectionField}><span>{t('knowledge:automation.jevEndpoint')}</span><input value={config.jev.endpoint}
         onChange={event => onChange({ ...config, jev: { ...config.jev, endpoint: event.target.value } })} /></label>
-      <p className={styles.hint}>{t(configured ? 'knowledge:automation.keyConfigured' : 'knowledge:automation.keyMissing')}</p>
-      <label className={automationStyles.connectionField}><span>{t('knowledge:automation.key')}</span><input type="password" autoComplete="off" value={key} onChange={event => setKey(event.target.value)} /></label>
-      <div className={styles.actions}>
-      <button type="button" className={styles.button} disabled={!key.trim()} onClick={() => void credential()}>{t('knowledge:automation.saveKey')}</button>
-      <button type="button" className={styles.button} disabled={!configured} onClick={() => void credential(true)}>{t('knowledge:automation.clearKey')}</button>
+      {/* Note: threshold controls follow settings tokens and retain explicit save semantics; see .agents/notes/knowledge/tasks/knowledge-review-status-audit-plan.md */}
+      <div className={automationStyles.thresholdField}>
+        <label id={`${thresholdId}-label`} htmlFor={thresholdId}>{t('knowledge:automationExplain.threshold')}</label>
+        <div className={automationStyles.thresholdControls}>
+          <div className={automationStyles.thresholdScale}>
+            <input className={automationStyles.thresholdSlider} type="range" min="0.5" max="1" step="0.01"
+              aria-labelledby={`${thresholdId}-label`} aria-describedby={`${thresholdId}-hint`} value={thresholdValue}
+              style={{ '--threshold-fill': `${(thresholdValue - 0.5) * 200}%` } as CSSProperties}
+              onChange={event => onChange({ ...config, jev: { ...config.jev, threshold: Number(event.target.value) } })} />
+            <div className={automationStyles.thresholdLimits} aria-hidden="true"><span>0.50</span><span>1.00</span></div>
+          </div>
+          <input id={thresholdId} className={automationStyles.thresholdNumber} aria-describedby={`${thresholdId}-hint`}
+            type="number" min="0.5" max="1" step="0.01" value={thresholdText} onBlur={() => setThresholdText(thresholdValue.toFixed(2))} onChange={event => {
+              setThresholdText(event.target.value)
+              const threshold = Number(event.target.value)
+              if (threshold >= 0.5 && threshold <= 1) onChange({ ...config, jev: { ...config.jev, threshold } })
+            }} />
+        </div>
+        <p id={`${thresholdId}-hint`} className={styles.hint}>{t('knowledge:automationExplain.thresholdHint')}</p>
       </div>
+      <JevCredentialFields disabled={disabled} onCredentialChange={credentialChanged} />
     </fieldset>}
+    <KnowledgeConfigurationTest config={config} credential={credential} disabled={disabled} />
     {error && <p className={`${styles.status} ${styles.statusError}`} role="alert">{error}</p>}
-    <AutomationStatus active beforeRun={onSave} disabled={disabled || !knowledgeEnabled || !config.enabled} />
+    <AutomationSettingsStatus beforeRun={onSave} disabled={disabled || !knowledgeEnabled || !config.enabled} />
   </section>
 }

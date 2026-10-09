@@ -5,7 +5,7 @@ import type { NoteFocusEvent } from '../../src/shared/note-chat'
 import type { Blueprint } from '../../src/shared/janus/types'
 
 const event = (id: string, uris = ['note://repo/a', 'note://repo/b']): NoteFocusEvent => ({ id, conversationId: 'chat', workspacePath: 'C:/project', mode: 'scope', focus: 'auto', reason: 'Related work', notes: uris.map((uri, i) => ({ uri, title: uri, role: i ? 'reference' : 'target', reason: 'Relevant' })) })
-beforeEach(() => useNoteFocusStore.setState({ scopes: {}, history: [], display: null, displays: {}, hidden: {}, activeConversationId: 'chat' }))
+beforeEach(() => useNoteFocusStore.setState({ scopes: {}, history: [], display: null, displays: {}, activeConversationId: 'chat', browser: null }))
 describe('assistant visual scope', () => {
   it('merges paged access by turn, document and checkout without losing write roles', () => {
     const state = useNoteFocusStore.getState()
@@ -57,16 +57,26 @@ describe('assistant visual scope', () => {
     expect(useNoteFocusStore.getState().scopes.chat.notes.map(note => note.uri)).toEqual(['note://repo/a', 'note://repo/c'])
     expect(useNoteFocusStore.getState().scopes.chat.notes[0].pinned).toBe(true)
   })
-  it('does not refocus the same primary target, and history location does not replace scope', () => {
+  it('scope updates never navigate, and history location does not replace scope', () => {
     const state = useNoteFocusStore.getState()
     state.receive(event('one'))
-    expect(useNoteFocusStore.getState().display?.focus).toBe('auto')
+    expect(useNoteFocusStore.getState().display?.focus).toBe('none')
     state.receive(event('two'))
     expect(useNoteFocusStore.getState().display?.focus).toBe('none')
     const scope = useNoteFocusStore.getState().scopes.chat
     state.locate(event('old', ['note://repo/z']))
     expect(useNoteFocusStore.getState().scopes.chat).toBe(scope)
     expect(useNoteFocusStore.getState().display?.focus).toBe('explicit')
+  })
+  it('never replays navigation when activating a conversation with cached display intent', () => {
+    const state = useNoteFocusStore.getState()
+    state.receive({ ...event('one'), mode: 'display', action: 'enter', focus: 'explicit' })
+    expect(useNoteFocusStore.getState().display?.action).toBe('enter')
+    state.activate('other')
+    state.activate('chat')
+    expect(useNoteFocusStore.getState().display?.focus).toBe('none')
+    state.receive({ ...event('passive'), focus: 'explicit' })
+    expect(useNoteFocusStore.getState().display?.focus).toBe('none')
   })
   it('resolves exact URI and checkout, reports ambiguous and missing nodes', () => {
     const blueprint = { nodeIds: ['a', 'b', 'other'], nodes: { a: { sourceUri: 'note://repo/a' }, b: { sourceUri: 'note://repo/b' }, other: { sourceUri: 'note://repo/a' } }, composition: { nodes: { other: { path: 'C:/other' } } } } as unknown as Blueprint

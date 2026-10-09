@@ -3,7 +3,7 @@ import { detectWorkflowX } from '@janus-agent/node-hosts'
 import { WORKFLOWX_CHANNELS, type WorkflowXSnapshot } from '../../shared/ipc/workflowx'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
 
-// Note: quiet external WorkflowX import detection — see .agents/notes/2026-10-04-workflowx-onboarding--b69b7ec5.md
+// Note: quiet external WorkflowX import detection — see .agents/notes/blueprint/workspaces/requirements/workflowx-onboarding.md
 export function registerWorkflowXHandlers(options: {
   getAllowedWindows: () => readonly BrowserWindow[]
   resolveWorkspaceRoot: ResolveWorkspaceRoot

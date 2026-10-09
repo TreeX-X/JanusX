@@ -1,5 +1,17 @@
-// Note: Janus extends the shared agentX runtime — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+// Note: Janus extends the shared agentX runtime — see .agents/notes/blueprint/agentx-harness-inheritance.md
 export type { NoteChatChange } from '@janus-agent/harness-node'
+
+// Note: explicit UI intent is separate from working Notes — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
+export type NoteFocusAction = 'preview' | 'enter' | 'locate'
+
+export interface NoteBrowserState {
+  blueprintId: string
+  workspacePath: string
+  moduleBrowsing: boolean
+  moduleId: string | null
+  selectedId: string | null
+  visibleIds: string[]
+}
 
 export interface NoteScopeItem {
   uri: string
@@ -17,6 +29,8 @@ export interface NoteFocusEvent {
   workspacePath: string
   mode: 'display' | 'scope' | 'access'
   focus: 'auto' | 'explicit' | 'none'
+  /** Missing in historical events means locate. Scope/access events never navigate. */
+  action?: NoteFocusAction
   reason: string
   notes: NoteScopeItem[]
 }

@@ -1,4 +1,4 @@
-// Note: agentX owns command execution; Janus owns its process surface — see .agents/notes/2026-10-04-agentx-harness-inheritance--bd7fd0c6.md
+// Note: agentX owns command execution; Janus owns its process surface — see .agents/notes/blueprint/agentx-harness-inheritance.md
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { createCommandRunTool, type JobStartInput } from '@janus-agent/node-hosts'
 import type { ToolRegistry } from '@janus-agent/agent-core'

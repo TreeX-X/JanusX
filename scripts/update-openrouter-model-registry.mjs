@@ -1,4 +1,4 @@
-// Note: single registry with OpenRouter as sole auto source — see .agents/notes/2026-07-09-model-registry--31cda2d8.md
+// Note: single registry with OpenRouter as sole auto source — see .agents/notes/agent/model-registry.md
 #!/usr/bin/env node
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises'

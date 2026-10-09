@@ -14,7 +14,7 @@ function baseConversation(overrides: Record<string, unknown> = {}) {
   }
 }
 
-// Note: verification follows the persisted chat contract — see .agents/notes/2026-09-20-reproducible-verification--914a7e92.md
+// Note: verification follows the persisted chat contract — see .agents/notes/desktop/reproducible-verification.md
 describe('janus chat engineering persistence (S6-b)', () => {
   it('keeps engineering refs and the complete message history', () => {
     const messages = Array.from({ length: 210 }, (_, index) => ({

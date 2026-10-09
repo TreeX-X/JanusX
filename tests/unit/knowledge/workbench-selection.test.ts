@@ -40,6 +40,19 @@ function snapshot(): KnowledgeWorkbenchSnapshot {
 }
 
 describe('Knowledge Workbench tab selection', () => {
+  it('selects only current Wiki pages by workspace and opens their full body', () => {
+    const data = snapshot()
+    data.wikiPages = ['ws-1', 'ws-2'].map(workspaceId => ({ workspaceId, slug: 'shared', title: workspaceId,
+      markdown: 'Full Wiki body for ' + workspaceId, sourceFactIds: [], tags: [], status: 'published',
+      freshness: 'current', version: 1, updatedAt: '2026-10-06' }))
+    const id = 'wiki:' + JSON.stringify(['ws-1', 'shared'])
+    expect(selectionIdForTab(data, 'graph', 'candidate-proposed')).toBe(id)
+    expect(resolveRecordForTab(data, 'graph', id)).toMatchObject({ pageSlug: 'shared', workspaceId: 'ws-1', body: 'Full Wiki body for ws-1' })
+    expect(resolveRecordForTab(data, 'graph', 'proposal:candidate-proposed')).toBeNull()
+    data.wikiPages[0]!.freshness = 'stale'
+    expect(resolveRecordForTab(data, 'graph', id)).toBeNull()
+  })
+
   it('replaces a candidate selection with truth when Library becomes active', () => {
     const data = snapshot()
 

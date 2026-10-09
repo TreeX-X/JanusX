@@ -38,7 +38,8 @@ it('captures full transcript evidence, survives recorder restart, deduplicates r
   config.stages.extraction = { provider: 'external', providerId: 'test', model: 'model', thinking: false }
   config.stages.entryReview = { ...config.stages.extraction }
   const model = vi.fn(async request => {
-    if (request.input.candidates) return { complete: true, selections: request.input.candidates.map((_item, index) => ({ index, action: 'keep', equivalentTo: null, duplicateOf: null })) }
+    if (request.input.evidence?.[0]?.key) return { complete: true, coveredEvidenceIds: request.input.evidence.map(part => part.key), missing: [], invalidCandidateIds: [], reason: 'All evidence checked.' }
+    if (request.input.candidates) return { complete: true, selections: request.input.candidates.map((_item, index) => ({ index, action: 'keep', equivalentTo: null, duplicateOf: null, reason: 'Durable project decision.' })) }
     expect(request.input.evidence.some(row => row.authority === 'tool-observed')).toBe(true)
     return { complete: true, facts: [{ content: prompt, kind: 'decision', concepts: ['cache'], citations: [{ observationId: source.id, quote: prompt }] }] }
   })

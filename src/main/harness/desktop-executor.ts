@@ -1,4 +1,5 @@
-// Note: desktop xdo host owns checks and self-review — see .agents/notes/2026-09-18-desktop-xdo-executor--b057b3f0.md
+// Note: desktop xdo host owns checks and self-review — see .agents/notes/agent/desktop-xdo-executor.md
+// Note: evaluator tests precede the verdict — see .agents/notes/agent/independent-review-repair.md
 /**
  * @file Desktop verification and delegated execution host.
  * @description Runs an accepted task's declared verification on the desktop:
@@ -19,13 +20,15 @@ import {
   codeKey,
   codeManifestHash,
   taskExecutionPolicy,
+  reviewTestVerdict,
+  type RunReviewTests,
   type Diagnostic,
   type Receipt,
   type ReceiptCheck,
   type ReceiptCoverage,
   type VerificationStep,
 } from '@janus-agent/harness-core'
-import { TaskScope, collectLiveSnapshot, collectTaskSnapshot } from '@janus-agent/harness-node'
+import { TaskScope, checkpointTaskHandoff, collectLiveSnapshot, collectTaskSnapshot, createReviewTestSession } from '@janus-agent/harness-node'
 import { ensureTaskThread, recordThreadAttempt, recordThreadEvaluation } from './task-thread'
 import { buildTaskBrief, renderBriefSection, saveBriefCopy, verifyBriefFiles, type TaskBrief } from './task-brief'
 import {
@@ -54,6 +57,7 @@ export interface DesktopReviewPortInput {
   checks: ReceiptCheck[]
   criteria: DesktopReviewCriterion[]
   brief: TaskBrief
+  runTests?: RunReviewTests
 }
 
 export interface DesktopExecutorPorts {
@@ -77,6 +81,8 @@ export interface DesktopExecuteOptions {
 }
 
 export interface DesktopExecuteResult {
+  implementationResult?: string
+  reviewPending?: boolean
   receiptId: string
   completed: boolean
   checks: ReceiptCheck[]
@@ -207,11 +213,13 @@ export async function verifyDesktopTask(
   }
   const run = loaded.run
   if (!run) return fail(null, loaded.errors, { receiptId: '', completed: false, checks: [] })
-  const policy = taskExecutionPolicy(run.mode, run.lease?.owner ?? 'desktop', runId)
+  const contract = await collectTaskSnapshot(root, run.taskUri)
+  if (!contract.ok) return fail(run, contract.errors, { receiptId: '', completed: false, checks: [] })
+  const policy = taskExecutionPolicy(run.mode, run.lease?.owner ?? 'desktop', runId, contract.work.review)
   const implementor = opts?.implementor ?? policy.implementor
   const reviewer = opts?.reviewer?.trim() || policy.reviewer
   if (policy.independent && (!ports.independentReview || reviewer === implementor || reviewer === run.lease?.owner)) {
-    return fail(run, [diag('CAPABILITY_UNAVAILABLE', 'xflow requires a separate independent reviewer', 'review')], { receiptId: '', completed: false, checks: [] })
+    return fail(run, [diag('CAPABILITY_UNAVAILABLE', 'Task execution requires a separate independent reviewer', 'review')], { receiptId: '', completed: false, checks: [] })
   }
   if (run.executor !== 'internal') {
     return fail(run, [diag('CAPABILITY_UNAVAILABLE', 'external runs finish through their own host and handoff', 'executor')], { receiptId: '', completed: false, checks: [] })
@@ -343,11 +351,18 @@ export async function verifyDesktopTask(
   }
   try {
     await checkCurrent()
+    await checkpointTaskHandoff(root, run.taskUri, run.baseline.taskContractHash, 'Self-review; preserve authored progress and evidence')
     claim = await ports.review({ manifest, manifestHash, checks, criteria, brief }, opts?.signal)
     if (!['approved', 'needs-fix', 'blocked'].includes(claim.verdict)) throw new Error('SCHEMA_INVALID: invalid self-review verdict')
     if (policy.independent) {
       await checkCurrent()
-      claim = await ports.independentReview!({ manifest, manifestHash, checks, criteria, brief: { ...brief, prior: [] } }, opts?.signal)
+      await checkpointTaskHandoff(root, run.taskUri, run.baseline.taskContractHash, 'Independent review against fixed acceptance criteria')
+      const tests = createReviewTestSession({ root, repoId: snapshot.repoId, actor: reviewer, manifest, criteria,
+        verification: snapshot.work.verification, command: ports.command, checkCurrent })
+      claim = await ports.independentReview!({ manifest: structuredClone(manifest), manifestHash, checks: structuredClone(checks), criteria, brief: { ...brief, prior: [] }, runTests: tests.run }, opts?.signal)
+      tests.assertExecuted()
+      checks.push(...tests.checks)
+      claim.verdict = reviewTestVerdict(claim.verdict, checks)
     }
     await checkCurrent()
   } catch (error) {
@@ -396,6 +411,10 @@ export async function verifyDesktopTask(
   if (policy.independent) {
     await recordThreadEvaluation(root, runId, { attempt: run.attempt, reviewer, verdict: receipt.review.verdict, receiptId: receipt.id }).catch(() => undefined)
   }
+  if (run.mode === 'xdel' && snapshot.work.review === 'independent' && claim.verdict === 'approved' && checks.every(check => check.status === 'passed')) {
+    await checkpointTaskHandoff(root, run.taskUri, run.baseline.taskContractHash, 'Main Agent integrates Change Summary and Note draft; independent review remains pending under the existing contract')
+    return fail(stored.run ?? run, [diag('NOT_READY', 'xdel self-review is recorded; independent review remains pending')], { receiptId: receipt.id, completed: false, checks, reviewPending: true })
+  }
   let live: Awaited<ReturnType<typeof collectLiveSnapshot>>
   try {
     live = await collectLiveSnapshot(root, run.taskUri, implementor, current.map((row) => [codeKey(row.repoId, row.path), row.deleted === true ? null : (row.sha256 as string)]))
@@ -414,6 +433,7 @@ export async function verifyDesktopTask(
     }
     return fail(finished.run ?? run, finished.errors, { receiptId: receipt.id, completed: false, checks })
   }
+  await checkpointTaskHandoff(root, run.taskUri, run.baseline.taskContractHash, 'Main Agent integrates returned drafts and completes closeout')
   return { ok: true, run: finished.run ?? run, errors: [], data: { receiptId: receipt.id, completed: true, checks } }
 }
 
@@ -430,22 +450,26 @@ export function reviewClaimFromText(text: string): { ok: true; claim: { verdict:
 /** Implementation and bounded repair precede immutable verification on each attempt. */
 export async function executeDesktopTask(
   root: string, runId: string, token: string,
-  ports: DesktopExecutorPorts & { implement(turn: DesktopTaskTurn, signal?: AbortSignal): Promise<{ cancelled: boolean }> },
+  ports: DesktopExecutorPorts & { implement(turn: DesktopTaskTurn, signal?: AbortSignal): Promise<{ cancelled: boolean; text?: string }> },
   opts?: DesktopExecuteOptions,
 ): Promise<OpResult<DesktopExecuteResult>> {
   let repairedAttempt: number | null = null
+  let implementationResult: string | undefined
   try {
     for (;;) {
       opts?.signal?.throwIfAborted()
       const loaded = await getTaskRun(root, runId)
-      if (loaded.run?.mode === 'xflow') {
-        const policy = taskExecutionPolicy(loaded.run.mode, loaded.run.lease?.owner ?? 'desktop', runId)
+      if (loaded.run) {
+        const contract = await collectTaskSnapshot(root, loaded.run.taskUri)
+        if (!contract.ok) return { ok: false, run: loaded.run, errors: contract.errors, data: { receiptId: '', completed: false, checks: [] } }
+        const policy = taskExecutionPolicy(loaded.run.mode, loaded.run.lease?.owner ?? 'desktop', runId, contract.work.review)
         const reviewer = opts?.reviewer?.trim() || policy.reviewer
-        if (!ports.independentReview || reviewer === (opts?.implementor ?? policy.implementor) || reviewer === loaded.run.lease?.owner) throw new Error('CAPABILITY_UNAVAILABLE: xflow requires a separate independent reviewer')
+        if (policy.independent && (!ports.independentReview || reviewer === (opts?.implementor ?? policy.implementor) || reviewer === loaded.run.lease?.owner)) throw new Error('CAPABILITY_UNAVAILABLE: Task execution requires a separate independent reviewer')
       }
       if (loaded.run?.state === 'running') {
         const turn = await prepareDesktopTaskTurn(root, runId, token)
         const implementation = await ports.implement(turn, opts?.signal)
+        implementationResult = implementation.text
         if (implementation.cancelled || opts?.signal?.aborted) {
           await pauseTaskRun(root, runId, token)
           throw new Error('NOT_READY: implementation cancelled; task paused')
@@ -454,7 +478,7 @@ export async function executeDesktopTask(
       }
       const result = await verifyDesktopTask(root, runId, token, ports, opts)
       if (!result.ok || !result.data.repairedAttempt) {
-        return { ...result, data: { ...result.data, repairedAttempt } }
+        return { ...result, data: { ...result.data, repairedAttempt, implementationResult } }
       }
       repairedAttempt = result.data.repairedAttempt
     }
