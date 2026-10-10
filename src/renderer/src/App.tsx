@@ -38,6 +38,12 @@ import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
 import dockStyles from '@/components/right-tools/RightDock.module.css'
 import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
+// Terminal event subscriptions live at app level, not inside TerminalArea:
+// the area unmounts whenever the pane tree is null (empty workspace or after
+// the last terminal closes), so a Continue/Resume-spawned terminal's
+// `terminal:created` event would arrive with no subscriber and the workbench
+// could never bootstrap its first terminal from a main-side launch.
+import { useTerminalLifecycle } from '@/features/terminal/useTerminalLifecycle'
 import { useTeamStore } from '@/stores/team'
 import { TeamSetupGate } from '@/components/team/TeamSetupGate'
 import { FolderOpen } from 'lucide-react'
@@ -86,6 +92,7 @@ interface EditorResizeSession {
 
 export default function App() {
   useWorkspaceBootstrap()
+  useTerminalLifecycle()
   // ToB M2：启动即恢复团队会话（refresh 静默续期），失败即 guest 由挡板接管。
   useEffect(() => { void useTeamStore.getState().bootstrap() }, [])
   // 主题：首屏加载持久化值并挂载 [data-theme]（石板色默认、经典黑第二，两边都显式挂载）。

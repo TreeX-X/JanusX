@@ -55,7 +55,9 @@ import {
   warmDefaultShellCache,
   warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
-import { useTerminalLifecycle } from '@/features/terminal/useTerminalLifecycle'
+// Note: terminal event subscriptions (created/status/exit/focus) are owned by
+// App via useTerminalLifecycle — mounting them here dropped main-side launches
+// whenever this area was unmounted (empty pane tree).
 import { useTurnChangesStore } from '@/stores/turn-changes'
 import { useThemeStore } from '@/stores/theme'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
@@ -1367,7 +1369,6 @@ function LeafPane({
 
 export function TerminalArea() {
   const { t } = useI18n('terminal')
-  useTerminalLifecycle()
   // 底部抽屉折叠箭头等纸面点睛走分支（与菜单 plancheMenu 同构，作用域独立）
   const plancheBottomBar = useThemeStore((s) => s.theme) === 'planche'
   // P5: useShallow 细粒度订阅——整 store 订阅会让任意无关字段变化都重渲染这棵大组件树

@@ -280,10 +280,17 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     await page.getByRole('button', { name: '展开', exact: true }).first().click()
     const continueButtons = page.getByRole('button', { name: '在新会话中继续', exact: true })
     await expect(continueButtons).toHaveCount(3, { timeout: 10_000 })
+    const xtermsBeforeUiContinue = await page.locator('.xterm-rows').count()
     await continueButtons.first().click()
     await expect(page.getByRole('button', { name: '开始新会话', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '开始新会话', exact: true }).click()
     await expect(continueButtons).toHaveCount(4, { timeout: 15_000 })
+    // The workbench must mount the new terminal view, not just the ledger row:
+    // the terminal:created subscription is app-level, so a main-side launch
+    // bootstraps even when the pane tree was empty before it.
+    await expect
+      .poll(async () => page.locator('.xterm-rows').count(), { timeout: 15_000 })
+      .toBeGreaterThan(xtermsBeforeUiContinue)
 
     // AC-8 machine side: an external row keeps Resume and 在新会话中继续 side by
     // side, and Resume re-enters the provider session id in a fresh terminal.
@@ -313,6 +320,7 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     // fake-agent argv file, and an empty workspaceId hides the terminal from
     // the workspace the user is viewing.
     const argvBefore = (await readFakeAgentState(binDir)).argvs.length
+    const xtermsBeforeExtContinue = await page.locator('.xterm-rows').count()
     const rowsBeforeContinue = await listLive(page)
     await externalCard.getByRole('button', { name: '在新会话中继续', exact: true }).click()
     await expect(page.getByRole('button', { name: '开始新会话', exact: true })).toBeVisible()
@@ -320,6 +328,9 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     await expect
       .poll(async () => (await readFakeAgentState(binDir)).argvs.length, { timeout: 20_000 })
       .toBe(argvBefore + 1)
+    await expect
+      .poll(async () => page.locator('.xterm-rows').count(), { timeout: 15_000 })
+      .toBeGreaterThan(xtermsBeforeExtContinue)
     await expect
       .poll(async () => (await readFakeAgentState(binDir)).inputs, { timeout: 20_000 })
       .toContain('完整原始转录')
