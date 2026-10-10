@@ -296,7 +296,7 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
       .first()
     const externalFold = externalCard.getByRole('button', { name: '展开', exact: true })
     if ((await externalFold.count()) > 0) await externalFold.click()
-    const resumeButton = externalCard.getByRole('button', { name: 'Resume', exact: true })
+    const resumeButton = externalCard.getByRole('button', { name: '回到原会话', exact: true })
     await expect(resumeButton).toHaveCount(1, { timeout: 10_000 })
     await resumeButton.click()
     await expect
@@ -307,6 +307,27 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
         timeout: 15_000,
       })
       .toBe(1)
+
+    // Regression: 在新会话中继续 on an external row must launch the row's own
+    // engine and land in the active workspace. A bare-shell spawn writes no
+    // fake-agent argv file, and an empty workspaceId hides the terminal from
+    // the workspace the user is viewing.
+    const argvBefore = (await readFakeAgentState(binDir)).argvs.length
+    const rowsBeforeContinue = await listLive(page)
+    await externalCard.getByRole('button', { name: '在新会话中继续', exact: true }).click()
+    await expect(page.getByRole('button', { name: '开始新会话', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '开始新会话', exact: true }).click()
+    await expect
+      .poll(async () => (await readFakeAgentState(binDir)).argvs.length, { timeout: 20_000 })
+      .toBe(argvBefore + 1)
+    await expect
+      .poll(async () => (await readFakeAgentState(binDir)).inputs, { timeout: 20_000 })
+      .toContain('完整原始转录')
+    const extContinued = (await listLive(page)).find(
+      (row) => !rowsBeforeContinue.some((before) => before.id === row.id),
+    )
+    expect(extContinued?.continuedFrom).toBe(external!.id)
+    expect(extContinued?.workspaceId).toBe(workspace.id)
 
     // A create that never comes up archives its empty row: no ghost card.
     await page.evaluate(

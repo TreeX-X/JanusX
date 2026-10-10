@@ -119,6 +119,8 @@ export type ContinueSessionOptions = {
   engine?: string
   /** `resume` re-enters the provider session; `continue` opens a fresh session. */
   mode?: 'resume' | 'continue'
+  /** Target workspace for the new terminal when the source row carries none (external rows). */
+  workspaceId?: string
 }
 
 let continueSessionImpl:
@@ -1204,12 +1206,16 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     source: AgentSessionRecord,
     resumeArgs: string[],
     shell: string,
+    workspaceIdFallback?: string,
   ): Promise<{ sessionId: string; terminalId: string }> => {
     const preset = isTerminalPreset(source.engine) ? source.engine : undefined
+    // External rows carry no workspace of their own; without a fallback the
+    // created terminal lands in an empty workspace snapshot and never shows.
+    const workspaceId = source.workspaceId || workspaceIdFallback || ''
     const terminalId = randomUUID()
     const record = agentSessionRegistry.createSession({
       terminalId,
-      workspaceId: source.workspaceId,
+      workspaceId,
       engine: source.engine,
       cwd: source.cwd,
       shell,
@@ -1222,7 +1228,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     try {
       await createTerminalLifecycle({
         id: terminalId,
-        workspaceId: source.workspaceId || undefined,
+        workspaceId: workspaceId || undefined,
         cwd: source.cwd,
         shell,
         preset,
@@ -1254,7 +1260,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         throw new Error(`Resume is not supported for engine: ${source.engine}`)
       }
       assertOpencodeResumeAvailable(source)
-      return spawnResumeTerminal(source, resumeArgs, getDefaultShell())
+      return spawnResumeTerminal(source, resumeArgs, getDefaultShell(), opts?.workspaceId)
     }
     // Internal opencode rows keep their provider session id from hook turn
     // starts, so native resume re-enters full history where the typed handoff
@@ -1264,7 +1270,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       const nativeResumeArgs = buildContinueResumeArgs(source, opts?.engine)
       if (nativeResumeArgs) {
         assertOpencodeResumeAvailable(source)
-        return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShell())
+        return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShell(), opts?.workspaceId)
       }
     }
     const engine = (opts?.engine ?? source.engine) as CheckpointEngine
@@ -1273,14 +1279,18 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     if (!shell) {
       throw new Error('Session predates shell capture; open a terminal manually')
     }
+    // Imported rows carry no preset; without the engine fallback the spawn
+    // resolves to a bare shell and the new session gets no claude/codex CLI.
+    const preset = source.preset ?? (isTerminalPreset(engine) ? engine : undefined)
+    const workspaceId = source.workspaceId || opts?.workspaceId || ''
     const terminalId = randomUUID()
     const record = agentSessionRegistry.createSession({
       terminalId,
-      workspaceId: source.workspaceId,
+      workspaceId,
       engine,
       cwd: source.cwd,
       shell,
-      preset: source.preset ?? (isTerminalPreset(engine) ? engine : undefined),
+      preset,
       command: source.command,
       args: source.args,
       branch: source.branch,
@@ -1291,10 +1301,10 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     try {
       await createTerminalLifecycle({
         id: terminalId,
-        workspaceId: source.workspaceId,
+        workspaceId: workspaceId || undefined,
         cwd: source.cwd,
         shell,
-        preset: source.preset,
+        preset,
         command: source.command,
         args: source.args,
       })

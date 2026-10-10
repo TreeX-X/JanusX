@@ -1056,11 +1056,11 @@ function SessionCard({
                 })
               )}
             </div>
-            <div className="flex" style={{ gap: 6, marginTop: 9 }}>
+            <div className="flex" style={{ gap: 6, marginTop: 9, flexWrap: 'wrap' }}>
               <button
                 onClick={onDetail}
                 className="flex-1 rounded cursor-pointer"
-                style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)' }}
+                style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', whiteSpace: 'nowrap' }}
               >
                 {t('terminal:agentSession.viewDetail')}
               </button>
@@ -1076,7 +1076,7 @@ function SessionCard({
                         }}
                         disabled={resuming}
                         className="flex-1 rounded cursor-pointer"
-                        style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1 }}
+                        style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1, whiteSpace: 'nowrap' }}
                       >
                         {t('terminal:agentSession.resume')}
                       </button>
@@ -1085,9 +1085,9 @@ function SessionCard({
                       <button
                         disabled
                         className="flex-1 rounded"
-                        style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
+                        style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, whiteSpace: 'nowrap' }}
                       >
-                        {t('terminal:agentSession.resumeCopy')}
+                        {t('terminal:agentSession.resume')}
                       </button>
                       </ThemedTooltip>
                     )
@@ -1095,7 +1095,7 @@ function SessionCard({
                   <button
                     onClick={onContinue}
                     className="flex-1 rounded cursor-pointer"
-                    style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
+                    style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', whiteSpace: 'nowrap' }}
                   >
                     {t('terminal:agentSession.continue')}
                   </button>
@@ -1664,7 +1664,7 @@ function SessionDetailWindow({
         </div>
         <div
           className="flex items-center"
-          style={{ gap: 8, padding: '10px 14px', borderTop: '1px solid var(--shell-border-soft)', flexShrink: 0 }}
+          style={{ gap: 8, padding: '10px 14px', borderTop: '1px solid var(--shell-border-soft)', flexShrink: 0, flexWrap: 'wrap' }}
         >
           <span style={{ fontSize: 11, color: 'var(--shell-muted)', flex: 1 }}>
             {readableOnly
@@ -1674,7 +1674,7 @@ function SessionDetailWindow({
           <button
             onClick={onClose}
             className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-border-soft)', background: SURFACE_INSET, color: 'var(--shell-muted)', flexShrink: 0 }}
+            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-border-soft)', background: SURFACE_INSET, color: 'var(--shell-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}
           >
             {t('common:action.close')}
           </button>
@@ -1685,7 +1685,7 @@ function SessionDetailWindow({
                   <button
                     onClick={onResume}
                     className="rounded cursor-pointer"
-                    style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', flexShrink: 0 }}
+                    style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', flexShrink: 0, whiteSpace: 'nowrap' }}
                   >
                     {t('terminal:agentSession.resume')}
                   </button>
@@ -1694,9 +1694,9 @@ function SessionDetailWindow({
                   <button
                     disabled
                     className="rounded"
-                    style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, flexShrink: 0 }}
+                    style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, flexShrink: 0, whiteSpace: 'nowrap' }}
                   >
-                    {t('terminal:agentSession.resumeCopy')}
+                    {t('terminal:agentSession.resume')}
                   </button>
                   </ThemedTooltip>
                 )
@@ -1704,7 +1704,7 @@ function SessionDetailWindow({
               <button
                 onClick={onContinue}
                 className="rounded cursor-pointer"
-                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
+                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0, whiteSpace: 'nowrap' }}
               >
                 {t('terminal:agentSession.continue')}
               </button>

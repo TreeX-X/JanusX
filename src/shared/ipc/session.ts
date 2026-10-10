@@ -85,6 +85,11 @@ export interface SessionContinueInput {
   sessionId: string
   engine?: string
   mode?: SessionContinueMode
+  /**
+   * Workspace the new terminal should show in. External rows carry no
+   * workspace of their own, so the caller passes the one it is viewing.
+   */
+  workspaceId?: string
 }
 
 export interface SessionContinueResult {

@@ -238,7 +238,7 @@
     "noCheckpointExternal": "No checkpoints (external session)",
     "externalHint": "External session from a terminal outside JanusX; transcript is read-only and checkpoints are unavailable.",
     "resumeCopy": "Copy resume command",
-    "resumeUnavailable": "Resume command assembly is not supported for this engine yet.",
+    "resumeUnavailable": "Resume is not supported for this engine yet.",
     "resume": "Resume",
     "handoffUnconfirmed": "The handoff was written but receipt was not confirmed. Check the new session; resend or paste it yourself if its input is empty.",
     "handoffFailed": "The handoff could not be delivered. Resend it, or paste it into the new session yourself.",

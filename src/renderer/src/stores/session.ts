@@ -112,7 +112,14 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   continueSession: async (sessionId, engine, mode) => {
     set({ error: null })
     try {
-      const result = await window.electron.session.continue({ sessionId, engine, mode })
+      // External rows carry no workspace; the new terminal must show in the
+      // workspace the user is looking at, so pass the active one as fallback.
+      const result = await window.electron.session.continue({
+        sessionId,
+        engine,
+        mode,
+        workspaceId: activeWorkspaceId() ?? undefined,
+      })
       await get().fetchSessions(get().lastFilter ?? {}, { silent: true })
       return result
     } catch (err) {

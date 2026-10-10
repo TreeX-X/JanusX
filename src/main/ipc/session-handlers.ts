@@ -57,7 +57,11 @@ export function registerSessionHandlers(getMainWindow: () => BrowserWindow | nul
   })
 
   ipcMain.handle(SESSION_CHANNELS.continue, async (_event, input: SessionContinueInput) => {
-    return continueAgentSession(input.sessionId, { engine: input.engine, mode: input.mode })
+    return continueAgentSession(input.sessionId, {
+      engine: input.engine,
+      mode: input.mode,
+      workspaceId: input.workspaceId,
+    })
   })
 
   ipcMain.handle(SESSION_CHANNELS.resendHandoff, async (_event, { sessionId }: { sessionId: string }) => {
