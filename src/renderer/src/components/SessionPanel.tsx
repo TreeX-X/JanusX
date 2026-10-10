@@ -11,6 +11,7 @@ import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { buildProviderResumeCommand, type TranscriptDetail } from '../../../shared/ipc/session'
 import { TerminalPresetIcon } from './ui/TerminalPresetIcon'
 import type { TerminalPreset } from '@/types'
+import { mergeTranscriptTurns } from '@/lib/session-turn-merge'
 import styles from './SessionPanel.module.css'
 
 /** 会话 engine 与终端 preset 同名；未知 engine 落到 shell 字形（与旧 fallback 一致）。 */
@@ -21,6 +22,11 @@ function sessionEnginePreset(engine: string): TerminalPreset {
 }
 
 type Scope = 'workspace' | 'project' | 'all' | 'archived'
+
+/** L2 first-prompt cap: longer prompts clamp to this many lines until expanded. */
+const PROMPT_CLAMP_LINES = 4
+/** Prompts above this budget get the expand-to-full affordance. */
+const PROMPT_CLAMP_CHARS = 160
 
 const SCOPE_KEYS = {
   workspace: 'terminal:agentSession.scopeWorkspace',
@@ -71,12 +77,12 @@ const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-te
 const CARD_BORDER = '1px solid var(--shell-border)'
 const CARD_BORDER_SOFT = '1px solid var(--shell-border-soft)'
 
-// Note: windowed session reading with orca-aligned preview layers — internal
+// Note: windowed session reading with layered preview — internal
 // turns keep scoped checkpoints with inline diff, external rows stay
 // transcript-only — see
 // .agents/notes/sessions/records/session-windowed-reading.md
 
-/** Provider resume command for external rows (orca parity); null when the engine has no known resume shape. */
+/** Provider resume command for external rows (provider-native resume); null when the engine has no known resume shape. */
 function buildResumeCommand(session: AgentSessionSummary): string | null {
   return buildProviderResumeCommand(session.engine, session.providerSessionId, session.transcriptPath)
 }
@@ -313,15 +319,14 @@ export function SessionPanel() {
           session={detailTarget}
           timelineTick={timelineTick}
           onClose={() => setDetailTarget(null)}
+          onResume={() => {
+            // Re-enter the provider's own session id in a fresh terminal;
+            // failures surface on the panel error line.
+            const id = detailTarget.id
+            setDetailTarget(null)
+            void continueSession(id, undefined, 'resume')
+          }}
           onContinue={() => {
-            // External rows resume through the provider CLI in a fresh
-            // terminal; failures surface on the panel error line.
-            if (detailTarget.external === true) {
-              const id = detailTarget.id
-              setDetailTarget(null)
-              void continueSession(id)
-              return
-            }
             setDetailTarget(null)
             setContinueTarget(detailTarget)
           }}
@@ -377,7 +382,9 @@ export function SessionPanel() {
               </button>
               <button
                 onClick={async () => {
-                  await continueSession(continueTarget.id)
+                  // Explicit fresh session: an external row would otherwise
+                  // default to re-entering the provider's own session id.
+                  await continueSession(continueTarget.id, undefined, 'continue')
                   setContinueTarget(null)
                 }}
                 className="rounded cursor-pointer"
@@ -844,6 +851,9 @@ function SessionCard({
   const [detail, setDetail] = useState<AgentSessionDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [resuming, setResuming] = useState(false)
+  const [resending, setResending] = useState(false)
+  // L2 first-prompt display cap (AC-10): clamped until the reader asks for full text.
+  const [promptFull, setPromptFull] = useState(false)
   const runContinue = useSessionStore((s) => s.continueSession)
   // Stale-while-revalidate marker: the card instance is keyed by session.id,
   // so one flag covers first-load vs background refresh.
@@ -894,7 +904,6 @@ function SessionCard({
         opacity: session.archived ? 0.62 : 1,
       }}
     >
-      <ThemedTooltip label={expanded ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}>
       <div
         className="flex items-center"
         style={{ gap: 7, cursor: 'pointer' }}
@@ -935,6 +944,7 @@ function SessionCard({
         >
           {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)}
         </span>
+        <ThemedTooltip label={expanded ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}>
         <button
           type="button"
           className={styles.foldBtn}
@@ -948,8 +958,8 @@ function SessionCard({
         >
           <ChevronDown size={13} strokeWidth={2} aria-hidden="true" />
         </button>
+        </ThemedTooltip>
       </div>
-      </ThemedTooltip>
 
       {session.firstPrompt && (
         <div style={{ marginTop: 5, fontSize: 12, lineHeight: 1.5, color: 'var(--shell-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -978,9 +988,38 @@ function SessionCard({
                     <CopyButton text={session.firstPrompt} />
                   </span>
                 </div>
-                <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--shell-text)', wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                    color: 'var(--shell-text)',
+                    wordBreak: 'break-all',
+                    whiteSpace: 'pre-wrap',
+                    ...(session.firstPrompt.length > PROMPT_CLAMP_CHARS && !promptFull
+                      ? { display: '-webkit-box', WebkitLineClamp: PROMPT_CLAMP_LINES, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }
+                      : {}),
+                  }}
+                >
                   {session.firstPrompt}
                 </div>
+                {session.firstPrompt.length > PROMPT_CLAMP_CHARS && (
+                  <button
+                    type="button"
+                    onClick={() => setPromptFull((open) => !open)}
+                    style={{
+                      marginTop: 4,
+                      padding: 0,
+                      border: 0,
+                      background: 'transparent',
+                      color: 'var(--shell-accent)',
+                      fontSize: 10,
+                      fontFamily: "'SF Mono', monospace",
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {promptFull ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}
+                  </button>
+                )}
               </div>
             )}
             <div className={styles.sheet} style={{ marginTop: 8, display: 'flex', flexDirection: 'column', padding: '2px 10px' }}>
@@ -1025,41 +1064,76 @@ function SessionCard({
               >
                 {t('terminal:agentSession.viewDetail')}
               </button>
-              {session.archived ? null : session.external === true ? (
-                resumeCommand ? (
+              {session.archived ? null : (
+                <>
+                  {session.external === true && (
+                    resumeCommand ? (
+                      <button
+                        onClick={() => {
+                          if (resuming) return
+                          setResuming(true)
+                          void runContinue(session.id, undefined, 'resume').finally(() => setResuming(false))
+                        }}
+                        disabled={resuming}
+                        className="flex-1 rounded cursor-pointer"
+                        style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1 }}
+                      >
+                        {t('terminal:agentSession.resume')}
+                      </button>
+                    ) : (
+                      <ThemedTooltip label={t('terminal:agentSession.resumeUnavailable')}>
+                      <button
+                        disabled
+                        className="flex-1 rounded"
+                        style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
+                      >
+                        {t('terminal:agentSession.resumeCopy')}
+                      </button>
+                      </ThemedTooltip>
+                    )
+                  )}
                   <button
-                    onClick={() => {
-                      if (resuming) return
-                      setResuming(true)
-                      void runContinue(session.id).finally(() => setResuming(false))
-                    }}
-                    disabled={resuming}
+                    onClick={onContinue}
                     className="flex-1 rounded cursor-pointer"
-                    style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1 }}
+                    style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
                   >
-                    {t('terminal:agentSession.resume')}
+                    {t('terminal:agentSession.continue')}
                   </button>
-                ) : (
-                  <ThemedTooltip label={t('terminal:agentSession.resumeUnavailable')}>
-                  <button
-                    disabled
-                    className="flex-1 rounded"
-                    style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
-                  >
-                    {t('terminal:agentSession.resumeCopy')}
-                  </button>
-                  </ThemedTooltip>
-                )
-              ) : (
-                <button
-                  onClick={onContinue}
-                  className="flex-1 rounded cursor-pointer"
-                  style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
-                >
-                  {t('terminal:agentSession.continue')}
-                </button>
+                </>
               )}
             </div>
+            {detail?.pendingHandoff && (
+              <div
+                style={{
+                  marginTop: 8, padding: '7px 9px',
+                  border: '1px dashed var(--shell-border)', borderRadius: 4, lineHeight: 1.6,
+                }}
+              >
+                <div style={{ fontSize: 10.5, color: 'var(--shell-dim)' }}>
+                  {detail.pendingHandoffState === 'failed'
+                    ? t('terminal:agentSession.handoffFailed')
+                    : t('terminal:agentSession.handoffUnconfirmed')}
+                </div>
+                <button
+                  onClick={() => {
+                    if (resending) return
+                    setResending(true)
+                    void window.electron.session
+                      .resendHandoff(session.id)
+                      .finally(() => setResending(false))
+                  }}
+                  disabled={resending}
+                  className="rounded cursor-pointer"
+                  style={{
+                    marginTop: 6, height: 22, padding: '0 12px', fontSize: 10,
+                    border: '1px solid var(--control-border)', background: 'transparent',
+                    color: 'var(--shell-text)', opacity: resending ? 0.6 : 1,
+                  }}
+                >
+                  {t('terminal:agentSession.handoffResend')}
+                </button>
+              </div>
+            )}
             <div style={{ fontSize: 10, color: 'var(--shell-dim)', marginTop: 7, lineHeight: 1.6 }}>
               {t('terminal:agentSession.detailHint', { count: session.turnCount })}
             </div>
@@ -1089,11 +1163,14 @@ function SessionDetailWindow({
   session,
   timelineTick,
   onClose,
+  onResume,
   onContinue,
 }: {
   session: AgentSessionSummary
   timelineTick: number
   onClose: () => void
+  /** External rows only: re-enter the provider's own session id. */
+  onResume: () => void
   onContinue: () => void
 }) {
   const { t } = useI18n('terminal')
@@ -1207,26 +1284,14 @@ function SessionDetailWindow({
     }
   }, [session.id])
 
-  const displayTurns = useMemo(() => {
-    const base = detail?.turns ?? []
-    if (!transcript || transcript.turns.length === 0) return base
-    if (transcript.turns.length > base.length) {
-      return transcript.turns.map((turn, index) => ({
-        id: `transcript-${index}`,
-        kind: 'done' as const,
-        checkpointId: undefined as string | undefined,
-        startedAt: detail?.createdAt ?? session.createdAt,
-        endedAt: detail?.updatedAt ?? session.updatedAt,
-        prompt: turn.prompt,
-        excerpt: turn.excerpt,
-      }))
-    }
-    return base.map((turn, index) => {
-      const extra = transcript.turns[index]
-      if (!extra) return turn
-      return { ...turn, prompt: turn.prompt ?? extra.prompt, excerpt: turn.excerpt ?? extra.excerpt }
-    })
-  }, [detail, transcript, session.createdAt, session.updatedAt])
+  const displayTurns = useMemo(
+    () =>
+      mergeTranscriptTurns(detail?.turns ?? [], transcript?.turns ?? [], {
+        createdAt: detail?.createdAt ?? session.createdAt,
+        updatedAt: detail?.updatedAt ?? session.updatedAt,
+      }),
+    [detail, transcript, session.createdAt, session.updatedAt],
+  )
 
   const handleRestore = async (checkpoint: CheckpointSummary) => {
     const pruned = checkpoints
@@ -1613,34 +1678,37 @@ function SessionDetailWindow({
           >
             {t('common:action.close')}
           </button>
-          {session.archived ? null : session.external === true ? (
-            resumeCommand ? (
+          {session.archived ? null : (
+            <>
+              {session.external === true && (
+                resumeCommand ? (
+                  <button
+                    onClick={onResume}
+                    className="rounded cursor-pointer"
+                    style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', flexShrink: 0 }}
+                  >
+                    {t('terminal:agentSession.resume')}
+                  </button>
+                ) : (
+                  <ThemedTooltip label={t('terminal:agentSession.resumeUnavailable')}>
+                  <button
+                    disabled
+                    className="rounded"
+                    style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, flexShrink: 0 }}
+                  >
+                    {t('terminal:agentSession.resumeCopy')}
+                  </button>
+                  </ThemedTooltip>
+                )
+              )}
               <button
                 onClick={onContinue}
                 className="rounded cursor-pointer"
-                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', flexShrink: 0 }}
+                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
               >
-                {t('terminal:agentSession.resume')}
+                {t('terminal:agentSession.continue')}
               </button>
-            ) : (
-              <ThemedTooltip label={t('terminal:agentSession.resumeUnavailable')}>
-              <button
-                disabled
-                className="rounded"
-                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, flexShrink: 0 }}
-              >
-                {t('terminal:agentSession.resumeCopy')}
-              </button>
-              </ThemedTooltip>
-            )
-          ) : (
-            <button
-              onClick={onContinue}
-              className="rounded cursor-pointer"
-              style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
-            >
-              {t('terminal:agentSession.continue')}
-            </button>
+            </>
           )}
         </div>
       </div>

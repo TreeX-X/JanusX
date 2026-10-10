@@ -32,6 +32,11 @@ export class TerminalTurnChangeTracker {
     if (state && !state.activeTurn) state.activeTurn = randomUUID()
   }
 
+  /** True while a started turn has not finished; duplicate ends check this. */
+  hasActiveTurn(id: string): boolean {
+    return this.terminals.get(id)?.activeTurn !== undefined
+  }
+
   finish(id: string, kind: TurnChangeKind, checkpointId: string | null): Promise<void> {
     const state = this.terminals.get(id)
     if (!state?.activeTurn) return Promise.resolve()

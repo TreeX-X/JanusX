@@ -11,6 +11,32 @@ import {
 import type { AgentHookSource } from '../notifications/agent-hook-types'
 import type { AgentSessionRegistry, ImportExternalSessionInput } from './session-registry'
 import { listOpencodeSessions } from './opencode-sessions'
+// One per-engine record classification shared with the detail reader; the
+// session pipeline and the knowledge pipeline read the same shapes.
+import {
+  claudeAssistantText,
+  claudeUserText,
+  codexAssistantText,
+  codexUserText,
+  extractKernelMessages,
+  firstCleanPrompt,
+  parseJsonLine,
+  piAssistantText,
+  piUserText,
+  segmentTurns,
+  textOfContent,
+} from './transcript-kernel'
+
+export {
+  claudeAssistantText,
+  claudeUserText,
+  codexAssistantText,
+  codexUserText,
+  parseJsonLine,
+  piAssistantText,
+  piUserText,
+  textOfContent,
+}
 
 export interface ExternalScanOptions {
   env?: NodeJS.ProcessEnv
@@ -69,15 +95,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
-export function parseJsonLine(line: string): Record<string, unknown> | null {
-  try {
-    const parsed = JSON.parse(line) as unknown
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
-  } catch {
-    return null
-  }
-}
-
 function toIso(value: unknown): string | undefined {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
     const ms = value < 1_000_000_000_000 ? Math.round(value * 1000) : Math.round(value)
@@ -88,97 +105,6 @@ function toIso(value: unknown): string | undefined {
     if (Number.isFinite(parsed)) return new Date(parsed).toISOString()
   }
   return undefined
-}
-
-/** Message content as string or text blocks, across claude and codex shapes. */
-export function textOfContent(content: unknown): string | undefined {
-  if (typeof content === 'string') return content.trim() || undefined
-  if (!Array.isArray(content)) return undefined
-  const texts: string[] = []
-  for (const block of content) {
-    const record = asRecord(block)
-    if (!record) {
-      if (typeof block === 'string' && block.trim()) texts.push(block.trim())
-      continue
-    }
-    const type = readString(record.type)?.toLowerCase()
-    if (type && !['text', 'input_text', 'output_text'].includes(type)) continue
-    const text = readString(record.text)
-    if (text) texts.push(text)
-  }
-  const joined = texts.join('').trim()
-  return joined || undefined
-}
-
-export function claudeUserText(record: Record<string, unknown>): string | undefined {
-  if (readString(record.type)?.toLowerCase() !== 'user') return undefined
-  const message = asRecord(record.message)
-  if (!message || readString(message.role)?.toLowerCase() !== 'user') return undefined
-  return textOfContent(message.content)
-}
-
-export function claudeAssistantText(record: Record<string, unknown>): string | undefined {
-  if (readString(record.type)?.toLowerCase() !== 'assistant') return undefined
-  const message = asRecord(record.message)
-  if (!message || readString(message.role)?.toLowerCase() !== 'assistant') return undefined
-  return textOfContent(message.content)
-}
-
-export function codexUserText(record: Record<string, unknown>): string | undefined {
-  const payload = asRecord(record.payload)
-  const rootType = readString(record.type)?.toLowerCase()
-  if (payload) {
-    const role = readString(payload.role)?.toLowerCase()
-    if (rootType === 'response_item' && role === 'user') {
-      const text = textOfContent(payload.content)
-      if (text) return text
-    }
-    const payloadType = readString(payload.type)?.toLowerCase()
-    if (payloadType === 'user_message') {
-      const text =
-        readString(payload.message) ?? readString(payload.text) ?? textOfContent(payload.content)
-      if (text) return text
-    }
-  }
-  const message = asRecord(record.message)
-  if (message && readString(message.role)?.toLowerCase() === 'user') {
-    const text = textOfContent(message.content)
-    if (text) return text
-  }
-  return undefined
-}
-
-export function codexAssistantText(record: Record<string, unknown>): string | undefined {
-  const payload = asRecord(record.payload)
-  if (payload) {
-    const role = readString(payload.role)?.toLowerCase()
-    if (readString(record.type)?.toLowerCase() === 'response_item' && role === 'assistant') {
-      const text = textOfContent(payload.content)
-      if (text) return text
-    }
-    const payloadType = readString(payload.type)?.toLowerCase()
-    if (payloadType === 'agent_message') {
-      const text =
-        readString(payload.message) ?? readString(payload.text) ?? textOfContent(payload.content)
-      if (text) return text
-    }
-  }
-  return undefined
-}
-
-function piMessageText(record: Record<string, unknown>, role: string): string | undefined {
-  if (readString(record.type)?.toLowerCase() !== 'message') return undefined
-  const message = asRecord(record.message)
-  if (!message || readString(message.role)?.toLowerCase() !== role) return undefined
-  return textOfContent(message.content)
-}
-
-export function piUserText(record: Record<string, unknown>): string | undefined {
-  return piMessageText(record, 'user')
-}
-
-export function piAssistantText(record: Record<string, unknown>): string | undefined {
-  return piMessageText(record, 'assistant')
 }
 
 function codexThreadFromFilename(path: string): string | undefined {
@@ -222,6 +148,8 @@ async function collectCandidates(root: string, maxFiles: number): Promise<FileCa
 
 export interface BoundedContent {
   lines: string[]
+  /** Lines belonging to the head window; beyond this index a windowed read has a gap. */
+  headLines: number
   size: number
   mtimeMs: number
 }
@@ -238,7 +166,8 @@ export async function readBounded(path: string): Promise<BoundedContent | null> 
   try {
     if (info.size <= MAX_FULL_BYTES) {
       const raw = await readFile(path, 'utf-8')
-      return { lines: raw.split(/\r?\n/), size: info.size, mtimeMs }
+      const lines = raw.split(/\r?\n/)
+      return { lines, headLines: lines.length, size: info.size, mtimeMs }
     }
     const handle = await open(path, 'r')
     try {
@@ -254,7 +183,12 @@ export async function readBounded(path: string): Promise<BoundedContent | null> 
       headLines.pop()
       const tailLines = tailLength > 0 ? tailBuffer.toString('utf-8').split(/\r?\n/) : []
       if (tailLength > 0) tailLines.shift()
-      return { lines: [...headLines, ...tailLines], size: info.size, mtimeMs }
+      return {
+        lines: [...headLines, ...tailLines],
+        headLines: headLines.length,
+        size: info.size,
+        mtimeMs,
+      }
     } finally {
       await handle.close().catch(() => undefined)
     }
@@ -275,12 +209,17 @@ function recordTimestamp(record: Record<string, unknown>): string | undefined {
   )
 }
 
-function parseClaudeFile(lines: string[], path: string, mtimeMs: number): ParsedTranscript | null {
+function lastExcerptOf(turns: { prompt?: string; excerpt?: string }[]): string | undefined {
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const excerpt = turns[i].excerpt
+    if (excerpt) return excerpt
+  }
+  return undefined
+}
+
+function parseClaudeFile(lines: string[], path: string, mtimeMs: number, headLines: number): ParsedTranscript | null {
   let providerSessionId: string | undefined
   let cwd: string | undefined
-  let firstPrompt: string | undefined
-  let lastExcerpt: string | undefined
-  let turnCount = 0
   let earliest: string | undefined
   for (const line of lines) {
     const trimmed = line.trim()
@@ -291,15 +230,12 @@ function parseClaudeFile(lines: string[], path: string, mtimeMs: number): Parsed
     cwd ??= readString(record.cwd)
     const stamp = recordTimestamp(record)
     if (stamp && (!earliest || stamp < earliest)) earliest = stamp
-    if (!firstPrompt) firstPrompt = claudeUserText(record)
-    const answer = claudeAssistantText(record)
-    if (answer) {
-      turnCount += 1
-      lastExcerpt = answer
-    }
   }
   providerSessionId ??= basename(path).endsWith('.jsonl') ? basename(path).slice(0, -6) : undefined
   if (!providerSessionId || !cwd) return null
+  const turns = segmentTurns(lines, headLines, 'claude')
+  const firstPrompt = firstCleanPrompt(extractKernelMessages(lines, 'claude'))
+  const lastExcerpt = lastExcerptOf(turns)
   if (!firstPrompt && !lastExcerpt) return null
   const updatedAt = new Date(mtimeMs).toISOString()
   return {
@@ -307,18 +243,15 @@ function parseClaudeFile(lines: string[], path: string, mtimeMs: number): Parsed
     cwd,
     firstPrompt: firstPrompt ?? '',
     ...(lastExcerpt ? { lastExcerpt: truncate(lastExcerpt) } : {}),
-    turnCount,
+    turnCount: turns.length,
     ...(earliest ? { createdAt: earliest } : {}),
     updatedAt,
   }
 }
 
-function parseCodexFile(lines: string[], path: string, mtimeMs: number): ParsedTranscript | null {
+function parseCodexFile(lines: string[], path: string, mtimeMs: number, headLines: number): ParsedTranscript | null {
   let providerSessionId: string | undefined
   let cwd: string | undefined
-  let firstPrompt: string | undefined
-  let lastExcerpt: string | undefined
-  let turnCount = 0
   let earliest: string | undefined
   for (const line of lines) {
     const trimmed = line.trim()
@@ -336,15 +269,12 @@ function parseCodexFile(lines: string[], path: string, mtimeMs: number): ParsedT
     }
     const stamp = recordTimestamp(record)
     if (stamp && (!earliest || stamp < earliest)) earliest = stamp
-    if (!firstPrompt) firstPrompt = codexUserText(record)
-    const answer = codexAssistantText(record)
-    if (answer) {
-      turnCount += 1
-      lastExcerpt = answer
-    }
   }
   providerSessionId ??= codexThreadFromFilename(path)
   if (!providerSessionId || !cwd) return null
+  const turns = segmentTurns(lines, headLines, 'codex')
+  const firstPrompt = firstCleanPrompt(extractKernelMessages(lines, 'codex'))
+  const lastExcerpt = lastExcerptOf(turns)
   if (!firstPrompt && !lastExcerpt) return null
   const updatedAt = new Date(mtimeMs).toISOString()
   return {
@@ -352,7 +282,7 @@ function parseCodexFile(lines: string[], path: string, mtimeMs: number): ParsedT
     cwd,
     firstPrompt: firstPrompt ?? '',
     ...(lastExcerpt ? { lastExcerpt: truncate(lastExcerpt) } : {}),
-    turnCount,
+    turnCount: turns.length,
     ...(earliest ? { createdAt: earliest } : {}),
     updatedAt,
   }
@@ -379,12 +309,9 @@ function piSessionIdFromFilename(path: string): string | undefined {
   return base.endsWith('.jsonl') && base.length > 6 ? base.slice(0, -6) : undefined
 }
 
-function parsePiFile(lines: string[], path: string, mtimeMs: number): ParsedTranscript | null {
+function parsePiFile(lines: string[], path: string, mtimeMs: number, headLines: number): ParsedTranscript | null {
   let providerSessionId: string | undefined
   let cwd: string | undefined
-  let firstPrompt: string | undefined
-  let lastExcerpt: string | undefined
-  let turnCount = 0
   let earliest: string | undefined
   for (const line of lines) {
     const trimmed = line.trim()
@@ -397,16 +324,13 @@ function parsePiFile(lines: string[], path: string, mtimeMs: number): ParsedTran
     }
     const stamp = recordTimestamp(record)
     if (stamp && (!earliest || stamp < earliest)) earliest = stamp
-    if (!firstPrompt) firstPrompt = piUserText(record)
-    const answer = piAssistantText(record)
-    if (answer) {
-      turnCount += 1
-      lastExcerpt = answer
-    }
   }
   providerSessionId ??= piSessionIdFromFilename(path)
   cwd ??= decodePiSlugDir(basename(dirname(path)))
   if (!providerSessionId || !cwd) return null
+  const turns = segmentTurns(lines, headLines, 'pi')
+  const firstPrompt = firstCleanPrompt(extractKernelMessages(lines, 'pi'))
+  const lastExcerpt = lastExcerptOf(turns)
   if (!firstPrompt && !lastExcerpt) return null
   const updatedAt = new Date(mtimeMs).toISOString()
   return {
@@ -414,13 +338,18 @@ function parsePiFile(lines: string[], path: string, mtimeMs: number): ParsedTran
     cwd,
     firstPrompt: firstPrompt ?? '',
     ...(lastExcerpt ? { lastExcerpt: truncate(lastExcerpt) } : {}),
-    turnCount,
+    turnCount: turns.length,
     ...(earliest ? { createdAt: earliest } : {}),
     updatedAt,
   }
 }
 
-type TranscriptFileParser = (lines: string[], path: string, mtimeMs: number) => ParsedTranscript | null
+type TranscriptFileParser = (
+  lines: string[],
+  path: string,
+  mtimeMs: number,
+  headLines: number,
+) => ParsedTranscript | null
 
 /**
  * File-based transcript parsers keyed by the capability-table store kind. A
@@ -522,7 +451,7 @@ export async function scanExternalSessions(
           summary.skipped += 1
           continue
         }
-        const parsed = parser(bounded.lines, candidate.path, bounded.mtimeMs)
+        const parsed = parser(bounded.lines, candidate.path, bounded.mtimeMs, bounded.headLines)
         if (!parsed) {
           summary.skipped += 1
           continue

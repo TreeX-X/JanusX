@@ -1,5 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { buildContinueResumeArgs } from '../../src/shared/ipc/session'
+import {
+  buildContinueResumeArgs,
+  buildProviderResumeArgs,
+  buildProviderResumeCommand,
+} from '../../src/shared/ipc/session'
+
+describe('buildProviderResumeArgs', () => {
+  it('spells each provider resume shape', () => {
+    expect(buildProviderResumeArgs('claude', 'sess-1')).toEqual(['--resume', 'sess-1'])
+    expect(buildProviderResumeArgs('codex', 'thread-1')).toEqual(['resume', 'thread-1'])
+    expect(buildProviderResumeArgs('opencode', 'ses_1')).toEqual(['--session', 'ses_1'])
+    expect(buildProviderResumeArgs('pi', 'sess-1', '/tmp/pi.jsonl')).toEqual(['--session', '/tmp/pi.jsonl'])
+  })
+
+  it('reports missing prerequisites as null so the panel can disable Resume', () => {
+    expect(buildProviderResumeArgs('claude')).toBeNull()
+    // Pi resumes from the session file, never from a bare id.
+    expect(buildProviderResumeArgs('pi', 'sess-1')).toBeNull()
+    expect(buildProviderResumeArgs('janus', 'sess-1')).toBeNull()
+    expect(buildProviderResumeArgs('dsh', 'sess-1')).toBeNull()
+  })
+
+  it('keeps the copy command aligned with the executed argv tail', () => {
+    expect(buildProviderResumeCommand('claude', 'sess-1')).toBe('claude --resume sess-1')
+    expect(buildProviderResumeCommand('codex', 'thread-1')).toBe('codex resume thread-1')
+    expect(buildProviderResumeCommand('opencode', 'ses_1')).toBe('opencode --session ses_1')
+    expect(buildProviderResumeCommand('pi', 'sess-1', '/tmp/pi.jsonl')).toBe('pi --session /tmp/pi.jsonl')
+    expect(buildProviderResumeCommand('janus', 'sess-1')).toBeNull()
+    expect(buildProviderResumeCommand('claude')).toBeNull()
+  })
+})
 
 describe('buildContinueResumeArgs', () => {
   it('resumes internal opencode rows with a provider session id', () => {

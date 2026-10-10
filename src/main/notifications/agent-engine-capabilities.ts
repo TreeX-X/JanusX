@@ -1,5 +1,5 @@
-// Note: engine differences live here as data, never in branches (orca
-// TUI_AGENT_CONFIG pattern) — see
+// Note: engine differences live here as data, never in branches (config-table
+// pattern) — see
 // .agents/notes/sessions/records/session-engine-capabilities.md
 // Note: external transcript backfill reads provider session stores — see
 // .agents/notes/sessions/records/external-session-transcript-backfill.md

@@ -301,6 +301,7 @@ export function installElectronApiFallback(): void {
       list: () => Promise.resolve([]),
       get: () => Promise.resolve(null),
       continue: unavailable,
+      resendHandoff: unavailable,
       onEvent: () => () => {},
       scanExternal: () => Promise.resolve({ scanned: 0, imported: 0, updated: 0, skipped: 0 }),
       getTranscript: () => Promise.resolve(null),

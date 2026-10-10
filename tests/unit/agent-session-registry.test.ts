@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -127,6 +127,231 @@ describe('agent session registry', () => {
     registry.detachTerminal('term-1')
     expect(registry.sessionIdForTerminal('term-1')).toBeNull()
     expect(registry.getSession(record.id)).not.toBeNull()
+  })
+
+  it('createSession reuses the row already bound to a terminal', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const first = registry.createSession(createInput('term-1'))
+    const second = registry.createSession(createInput('term-1'))
+    expect(second.id).toBe(first.id)
+    expect(registry.listSessions()).toHaveLength(1)
+    expect(registry.sessionIdForTerminal('term-1')).toBe(first.id)
+  })
+
+  it('createSession keeps the origin fields of the first row', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const first = registry.createSession({
+      ...createInput('term-1'),
+      continuedFrom: 'src-1',
+      branch: 'feat/a',
+      providerSessionId: 'p-1',
+      transcriptPath: '/tmp/a.jsonl',
+    })
+    // The terminal lifecycle's second call carries no origin; it must not blank it.
+    const second = registry.createSession(createInput('term-1'))
+    expect(second.id).toBe(first.id)
+    expect(second).toMatchObject({
+      continuedFrom: 'src-1',
+      branch: 'feat/a',
+      providerSessionId: 'p-1',
+      transcriptPath: '/tmp/a.jsonl',
+    })
+  })
+
+  it('createSession fills blanks from a later call', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    registry.createSession({ ...createInput('term-1'), continuedFrom: 'src-1' })
+    const merged = registry.createSession({
+      ...createInput('term-1'),
+      transcriptPath: '/tmp/later.jsonl',
+      providerSessionId: 'p-9',
+    })
+    expect(merged).toMatchObject({
+      continuedFrom: 'src-1',
+      transcriptPath: '/tmp/later.jsonl',
+      providerSessionId: 'p-9',
+    })
+    expect(registry.listSessions()).toHaveLength(1)
+  })
+
+  it('detachTerminal lets a replacement mint a fresh row', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const old = registry.createSession(createInput('term-1'))
+    registry.detachTerminal('term-1')
+    const fresh = registry.createSession(createInput('term-1'))
+    expect(fresh.id).not.toBe(old.id)
+    expect(registry.sessionIdForTerminal('term-1')).toBe(fresh.id)
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(2)
+  })
+
+  it('discardTerminal archives the row a failed create bound', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const record = registry.createSession(createInput('term-1'))
+    registry.discardTerminal('term-1')
+    expect(registry.sessionIdForTerminal('term-1')).toBeNull()
+    expect(registry.getSession(record.id)?.archived).toBe(true)
+    expect(registry.listSessions()).toHaveLength(0)
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(1)
+  })
+
+  it('dropEmptyOrphans removes rows whose terminal was taken over', async () => {
+    const dir = await userDataDir()
+    await mkdir(join(dir, 'janusx'), { recursive: true })
+    const now = new Date().toISOString()
+    // Legacy double-mint shape: one terminalId claimed by two rows, the
+    // survivor owning turns and the orphan holding nothing.
+    await writeFile(
+      join(dir, 'janusx', 'agent-sessions.json'),
+      JSON.stringify({
+        version: 1,
+        sessions: [
+          {
+            id: 'orphan',
+            workspaceId: 'ws-1',
+            engine: 'claude',
+            cwd: '/repo',
+            firstPrompt: '',
+            lastPrompt: '',
+            turnCount: 0,
+            checkpointCount: 0,
+            status: 'active',
+            continuedFrom: 'src-1',
+            terminalIds: ['term-1'],
+            turns: [],
+            checkpointIds: [],
+            createdAt: now,
+            updatedAt: now,
+            archived: false,
+          },
+          {
+            id: 'owner',
+            workspaceId: 'ws-1',
+            engine: 'claude',
+            cwd: '/repo',
+            firstPrompt: 'do the thing',
+            lastPrompt: 'do the thing',
+            turnCount: 1,
+            checkpointCount: 0,
+            status: 'active',
+            terminalIds: ['term-1'],
+            turns: [{ id: 't1', kind: 'done', startedAt: now, endedAt: now, prompt: 'do the thing' }],
+            checkpointIds: [],
+            createdAt: now,
+            updatedAt: now,
+            archived: false,
+          },
+        ],
+      }),
+    )
+    const registry = track(new AgentSessionRegistry(dir))
+    await registry.load()
+    expect(registry.getSession('orphan')).toBeNull()
+    expect(registry.getSession('owner')).not.toBeNull()
+    expect(registry.sessionIdForTerminal('term-1')).toBe('owner')
+    expect(registry.listSessions()).toHaveLength(1)
+  })
+
+  it('dropEmptyOrphans keeps rows that recorded anything', async () => {
+    const dir = await userDataDir()
+    await mkdir(join(dir, 'janusx'), { recursive: true })
+    const now = new Date().toISOString()
+    await writeFile(
+      join(dir, 'janusx', 'agent-sessions.json'),
+      JSON.stringify({
+        version: 1,
+        sessions: [
+          {
+            id: 'orphan-with-turns',
+            workspaceId: 'ws-1',
+            engine: 'claude',
+            cwd: '/repo',
+            firstPrompt: '',
+            lastPrompt: '',
+            turnCount: 1,
+            checkpointCount: 0,
+            status: 'done',
+            terminalIds: ['term-1'],
+            turns: [{ id: 't1', kind: 'done', startedAt: now, endedAt: now, excerpt: 'ok' }],
+            checkpointIds: [],
+            createdAt: now,
+            updatedAt: now,
+            archived: false,
+          },
+          {
+            id: 'owner',
+            workspaceId: 'ws-1',
+            engine: 'claude',
+            cwd: '/repo',
+            firstPrompt: 'do the thing',
+            lastPrompt: 'do the thing',
+            turnCount: 1,
+            checkpointCount: 0,
+            status: 'active',
+            terminalIds: ['term-1'],
+            turns: [{ id: 't2', kind: 'done', startedAt: now, endedAt: now, prompt: 'do the thing' }],
+            checkpointIds: [],
+            createdAt: now,
+            updatedAt: now,
+            archived: false,
+          },
+        ],
+      }),
+    )
+    const registry = track(new AgentSessionRegistry(dir))
+    await registry.load()
+    expect(registry.getSession('orphan-with-turns')).not.toBeNull()
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(2)
+  })
+
+  it('does not guess a merge for a hook row that holds no shared key', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    // A payload whitelist that drops the provider id leaves the hook row with
+    // nothing to prove identity on. Proximity is not proof: the two cards stay
+    // until the payload layer passes the id through.
+    const hook = registry.createSession(createInput('term-1'))
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: '/repo',
+      providerSessionId: 'p-1',
+      transcriptPath: '/tmp/sess.jsonl',
+      firstPrompt: 'wire the gateway',
+      turnCount: 2,
+    })
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(2)
+    expect(registry.getSession(hook.id)?.providerSessionId).toBeUndefined()
+  })
+
+  it('merges a scan row on transcript path when the hook row learns it first', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: '/repo',
+      providerSessionId: 'p-1',
+      transcriptPath: '/tmp/sess.jsonl',
+      firstPrompt: 'wire the gateway',
+      turnCount: 2,
+    })
+    // The hook row appears afterwards and learns the transcript path only: no
+    // provider id, so the merge must key on the path alone.
+    const hook = registry.createSession(createInput('term-1'))
+    registry.noteProviderSession('term-1', undefined, '/tmp/sess.jsonl')
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(1)
+    expect(registry.getSession(hook.id)?.external).toBeUndefined()
+    expect(registry.getSession(hook.id)?.providerSessionId).toBe('p-1')
+  })
+
+  it('never merges two rows that both claim a provider id', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    registry.createSession({ ...createInput('term-1'), providerSessionId: 'p-a' })
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: '/repo',
+      providerSessionId: 'p-b',
+      transcriptPath: '/tmp/other.jsonl',
+      firstPrompt: 'different conversation',
+      turnCount: 1,
+    })
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(2)
   })
 
   it('backfills a titleless hook-owned session from the transcript import', async () => {
@@ -303,5 +528,134 @@ describe('agent session registry', () => {
     expect(turns).toHaveLength(2)
     expect(turns[0]).toMatchObject({ prompt: 'do the thing', excerpt: 'did it' })
     expect(turns[1].prompt).toBeUndefined()
+  })
+
+  it('absorbs an external row when a hook session learns its provider id late', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const hook = registry.createSession({
+      ...createInput('term-1'),
+      cwd: 'C:/repo/proj',
+    })
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: 'C:/repo/proj',
+      providerSessionId: 'sess-1',
+      transcriptPath: '/tmp/sess-1.jsonl',
+      firstPrompt: 'from transcript',
+      lastExcerpt: 'tail answer',
+      turnCount: 3,
+    })
+    expect(registry.listSessions()).toHaveLength(2)
+    registry.noteProviderSession('term-1', 'sess-1', '/tmp/sess-1.jsonl')
+    const sessions = registry.listSessions()
+    expect(sessions).toHaveLength(1)
+    const merged = registry.getSession(hook.id)
+    expect(merged?.providerSessionId).toBe('sess-1')
+    expect(merged?.firstPrompt).toBe('from transcript')
+    expect(merged?.transcriptPath).toBe('/tmp/sess-1.jsonl')
+    expect(merged?.turns.some((turn) => turn.excerpt === 'tail answer')).toBe(true)
+    expect(merged?.external).toBeUndefined()
+  })
+
+  it('merges an import into a hook row that knows the transcript path', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const hook = registry.createSession({
+      ...createInput('term-1'),
+      transcriptPath: '/tmp/sess-2.jsonl',
+    })
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: '/repo',
+      providerSessionId: 'sess-2',
+      transcriptPath: '/tmp/sess-2.jsonl',
+      firstPrompt: 'transcript question',
+      turnCount: 1,
+    })
+    expect(registry.listSessions()).toHaveLength(1)
+    const merged = registry.getSession(hook.id)
+    expect(merged?.providerSessionId).toBe('sess-2')
+    expect(merged?.firstPrompt).toBe('transcript question')
+  })
+
+  it('recomputes turnCount on rescan instead of only growing it', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const input = {
+      engine: 'claude',
+      cwd: '/repo',
+      providerSessionId: 'sess-3',
+      transcriptPath: '/tmp/sess-3.jsonl',
+      firstPrompt: 'q',
+      turnCount: 4,
+    }
+    registry.importExternalSession(input)
+    expect(registry.listSessions()[0].turnCount).toBe(4)
+    registry.importExternalSession({ ...input, turnCount: 2 })
+    expect(registry.listSessions()[0].turnCount).toBe(2)
+  })
+
+  it('keeps sibling paths out of a workspace scope', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: 'C:/repo-server',
+      providerSessionId: 'sess-a',
+      transcriptPath: '/tmp/a.jsonl',
+      firstPrompt: 'q',
+      turnCount: 1,
+    })
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: 'C:/repo/proj',
+      providerSessionId: 'sess-b',
+      transcriptPath: '/tmp/b.jsonl',
+      firstPrompt: 'q',
+      turnCount: 1,
+    })
+    const scoped = registry.listSessions({ cwd: 'C:/repo' })
+    expect(scoped).toHaveLength(1)
+    expect(scoped[0].cwd).toBe('C:/repo/proj')
+    expect(registry.listSessions({ cwd: 'C:/repo-server' })).toHaveLength(1)
+  })
+
+  it('heals a stale AGENTS.md first prompt on rescan for external rows', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const input = {
+      engine: 'codex',
+      cwd: '/repo',
+      providerSessionId: 'sess-codex',
+      transcriptPath: '/tmp/sess-codex.jsonl',
+      firstPrompt: '# AGENTS.md instructions for C:\\repo\n\n<INSTRUCTIONS>\nnoise',
+      turnCount: 1,
+    }
+    registry.importExternalSession(input)
+    const [created] = registry.listSessions()
+    expect(created.firstPrompt).toContain('AGENTS.md')
+    // A rescan with the fixed parser heals title, last prompt, and seed turn.
+    registry.importExternalSession({ ...input, firstPrompt: 'real question' })
+    const sessions = registry.listSessions()
+    expect(sessions).toHaveLength(1)
+    const healed = registry.getSession(created.id)
+    expect(healed?.firstPrompt).toBe('real question')
+    expect(healed?.lastPrompt).toBe('real question')
+    expect(healed?.turns.find((turn) => turn.prompt)?.prompt).toBe('real question')
+    expect(healed?.turns.some((turn) => (turn.prompt ?? '').includes('AGENTS.md'))).toBe(false)
+  })
+
+  it('heals an injection-shaped title on a hook row without touching its turns', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const hook = registry.createSession({
+      ...createInput('term-1'),
+      transcriptPath: '/tmp/sess-hook.jsonl',
+    })
+    registry.recordTurnEnd('term-1', 'done', undefined, 'answer')
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: '/repo',
+      providerSessionId: 'sess-hook',
+      transcriptPath: '/tmp/sess-hook.jsonl',
+      firstPrompt: 'transcript question',
+      turnCount: 1,
+    })
+    expect(registry.getSession(hook.id)?.firstPrompt).toBe('transcript question')
   })
 })

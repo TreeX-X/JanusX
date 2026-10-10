@@ -569,6 +569,7 @@ const sessionAPI: SessionAPI = {
   list: (filter) => ipcRenderer.invoke(SESSION_CHANNELS.list, filter),
   get: (sessionId) => ipcRenderer.invoke(SESSION_CHANNELS.get, { sessionId }),
   continue: (input) => ipcRenderer.invoke(SESSION_CHANNELS.continue, input),
+  resendHandoff: (sessionId) => ipcRenderer.invoke(SESSION_CHANNELS.resendHandoff, { sessionId }),
   onEvent: (callback) => subscribeIpcEvent(SESSION_CHANNELS.event, callback),
   scanExternal: () => ipcRenderer.invoke(SESSION_CHANNELS.scanExternal),
   getTranscript: (sessionId) => ipcRenderer.invoke(SESSION_CHANNELS.getTranscript, { sessionId }),

@@ -11,7 +11,7 @@ vi.mock('electron', () => ({
   },
 }))
 
-const { AgentHookConfigManager, JANUSX_HOOK_COMMAND_MARKER, buildHookRunnerSource } = await import(
+const { AgentHookConfigManager, JANUSX_HOOK_COMMAND_MARKER, buildHookRunnerSource, buildWindowsHookScript } = await import(
   '../../src/main/notifications/agent-hook-config'
 )
 const electronApp = (await import('electron')).app as unknown as {
@@ -415,5 +415,15 @@ describe('AgentHookConfigManager', () => {
     // TS-template safety: no ${ interpolation or backticks that would corrupt the C#.
     expect(source).not.toContain('${')
     expect(source).not.toContain('`')
+  })
+
+  it('forwards codex thread ids through the windows hook sender', () => {
+    const script = buildWindowsHookScript()
+
+    // Codex identifies its session by thread_id: it must survive the raw
+    // whitelist and the sessionId fallback so provider identity lands.
+    expect(script).toContain('"thread_id", "threadId"')
+    expect(script).toContain('@("session_id", "sessionId", "thread_id", "threadId")')
+    expect(script).toContain('transcript_path')
   })
 })

@@ -3,9 +3,10 @@ import type { RightToolDefinition, RightToolId } from './types'
 import type { ExperimentalFeatures } from '../../../shared/ipc/experimental'
 
 // Note: either enabled domain can use its review queue — see .agents/notes/knowledge/memory-domain-controls.md
-export function isRightToolEnabled(toolId: RightToolId, features: Pick<ExperimentalFeatures, 'knowledge' | 'persona'>): boolean {
-  if (toolId === 'assist' || toolId === 'review') return features.knowledge || features.persona
+export function isRightToolEnabled(toolId: RightToolId, features: Pick<ExperimentalFeatures, 'knowledge' | 'persona' | 'sessions'>): boolean {
+  if (toolId === 'assist' || toolId === 'review') return features.persona
   if (toolId === 'persona') return features.persona
+  if (toolId === 'sessions') return features.sessions
   return true
 }
 

@@ -8,6 +8,7 @@ import { copyFile, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
+import { isEnvironmentInjectionText } from './transcript-kernel'
 import type {
   AgentSessionDetail,
   AgentSessionStatus,
@@ -52,6 +53,11 @@ const MAX_RESTORE_TERMINALS = 10
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** A stored first prompt that is empty or environment context, never a question. */
+function isStaleFirstPrompt(value: string | undefined): boolean {
+  return !value?.trim() || isEnvironmentInjectionText(value)
 }
 
 export class AgentSessionRegistry {
@@ -136,6 +142,14 @@ export class AgentSessionRegistry {
           external: record.external === true || undefined,
         })
       }
+      // Rebuild the terminal binding the map lost on restart: records carry it,
+      // and later records win, so a taken-over terminal points at its owner.
+      for (const record of this.sessions.values()) {
+        for (const terminalId of record.terminalIds) {
+          this.terminalToSession.set(terminalId, record.id)
+        }
+      }
+      this.dropEmptyOrphans()
       this.loadOk = true
     } catch (err) {
       if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
@@ -222,6 +236,15 @@ export class AgentSessionRegistry {
     await rm(this.layoutPath(), { force: true }).catch(() => undefined)
   }
 
+  /**
+   * Bind a terminal to a session row, minting one at most once per terminal.
+   *
+   * Why idempotent: Continue and Resume pre-create the row to carry its origin
+   * (continuedFrom / provider session identity) before the terminal lifecycle
+   * runs, and the lifecycle mints its own row for every agent terminal. Minting
+   * twice for one terminalId left the first row orphaned on screen as a second
+   * identical card. Reuse the bound row and fill only its blanks instead.
+   */
   createSession(input: {
     terminalId: string
     workspaceId: string
@@ -236,6 +259,10 @@ export class AgentSessionRegistry {
     transcriptPath?: string
     continuedFrom?: string
   }): AgentSessionRecord {
+    const boundId = this.terminalToSession.get(input.terminalId)
+    const bound = boundId ? this.sessions.get(boundId) : undefined
+    if (bound) return this.mergeSessionOrigin(bound, input)
+
     const now = new Date().toISOString()
     const record: AgentSessionRecord = {
       id: randomUUID(),
@@ -268,6 +295,63 @@ export class AgentSessionRegistry {
     this.persist()
     this.notify(record.id)
     return record
+  }
+
+  /** Fill a reused row's blanks from a later create; never overwrite a value. */
+  private mergeSessionOrigin(
+    record: AgentSessionRecord,
+    input: {
+      branch?: string
+      providerSessionId?: string
+      transcriptPath?: string
+      continuedFrom?: string
+    },
+  ): AgentSessionRecord {
+    let changed = false
+    if (!record.branch && input.branch) {
+      record.branch = input.branch
+      changed = true
+    }
+    if (!record.providerSessionId && input.providerSessionId) {
+      record.providerSessionId = input.providerSessionId
+      changed = true
+    }
+    if (!record.transcriptPath && input.transcriptPath) {
+      record.transcriptPath = input.transcriptPath
+      changed = true
+    }
+    if (!record.continuedFrom && input.continuedFrom) {
+      record.continuedFrom = input.continuedFrom
+      changed = true
+    }
+    if (!changed) return record
+    record.updatedAt = new Date().toISOString()
+    this.persist()
+    this.notify(record.id)
+    return record
+  }
+
+  /**
+   * Drop rows a taken-over terminal left behind.
+   *
+   * Only empty ones go: a row whose every terminal now belongs to another row
+   * and which never recorded a prompt, turn, or checkpoint has nothing to
+   * recover. Rows with content stay even when orphaned, and external imports
+   * (no terminalIds) are never candidates.
+   */
+  private dropEmptyOrphans(): void {
+    const orphans = Array.from(this.sessions.values()).filter((record) => {
+      if (record.external === true) return false
+      if (record.archived) return false
+      if (record.terminalIds.length === 0) return false
+      if (record.firstPrompt || record.lastPrompt) return false
+      if (record.turns.length > 0 || record.checkpointIds.length > 0) return false
+      return record.terminalIds.every((id) => this.terminalToSession.get(id) !== record.id)
+    })
+    if (orphans.length === 0) return
+    for (const record of orphans) this.sessions.delete(record.id)
+    this.persist()
+    this.notify()
   }
 
   sessionIdForTerminal(terminalId: string): string | null {
@@ -358,9 +442,69 @@ export class AgentSessionRegistry {
       changed = true
     }
     if (!changed) return
+    // A late provider identity may already own an external row from the boot
+    // or panel scan: absorb it instead of leaving two cards for one
+    // conversation.
+    if (this.absorbExternalRow(record)) changed = true
+    if (!changed) return
     record.updatedAt = new Date().toISOString()
     this.persist()
     this.notify(record.id)
+  }
+
+  /**
+   * Whether two rows describe the same conversation seen twice.
+   *
+   * Only a shared key counts. A hook-owned row and a scan row can both
+   * describe one conversation before either side holds the other's key, but
+   * merging on proximity alone would swallow two conversations a user started
+   * in one directory moments apart. The hook row stays authoritative and
+   * absorbs the scan row once it can prove identity; a hook row that never
+   * learns one is a payload-layer gap, not a merge to guess at.
+   */
+  private sameConversation(
+    hookRow: AgentSessionRecord,
+    scanRow: Pick<AgentSessionRecord, 'external' | 'engine' | 'providerSessionId' | 'transcriptPath'>,
+  ): boolean {
+    if (hookRow.external === true) return false
+    if (scanRow.external !== true) return false
+    if (hookRow.engine !== scanRow.engine) return false
+    if (hookRow.providerSessionId && hookRow.providerSessionId === scanRow.providerSessionId) {
+      return true
+    }
+    return Boolean(hookRow.transcriptPath && hookRow.transcriptPath === scanRow.transcriptPath)
+  }
+
+  /** Merge the external row of the same conversation into a hook-owned row. */
+  private absorbExternalRow(record: AgentSessionRecord): boolean {
+    const duplicate = Array.from(this.sessions.values()).find((other) =>
+      this.sameConversation(record, other),
+    )
+    if (!duplicate) return false
+    if (!record.providerSessionId && duplicate.providerSessionId) {
+      record.providerSessionId = duplicate.providerSessionId
+    }
+    if (!record.firstPrompt && duplicate.firstPrompt) {
+      record.firstPrompt = duplicate.firstPrompt
+      if (!record.lastPrompt) record.lastPrompt = duplicate.firstPrompt
+    }
+    if (!record.transcriptPath && duplicate.transcriptPath) {
+      record.transcriptPath = duplicate.transcriptPath
+    }
+    if (record.turns.length === 0 && duplicate.turns.length > 0) {
+      record.turns = duplicate.turns
+    }
+    if (duplicate.createdAt < record.createdAt) record.createdAt = duplicate.createdAt
+    if (duplicate.updatedAt > record.updatedAt) record.updatedAt = duplicate.updatedAt
+    this.sessions.delete(duplicate.id)
+    return true
+  }
+
+  /** True while a submit prompt or hook turn awaits its end record. */
+  hasPendingTurn(terminalId: string): boolean {
+    const record = this.recordForTerminal(terminalId)
+    if (!record) return false
+    return this.pendingTurnPrompt.has(record.id) || this.pendingTurnStart.has(record.id)
   }
 
   recordTurnEnd(
@@ -410,6 +554,25 @@ export class AgentSessionRegistry {
   }
 
   /**
+   * A terminal that never came up leaves no row behind: archive whatever it
+   * bound, then release the binding. Detaching alone stranded a live-looking
+   * card pointing at a terminal that does not exist.
+   */
+  discardTerminal(terminalId: string): void {
+    const sessionId = this.terminalToSession.get(terminalId)
+    this.terminalToSession.delete(terminalId)
+    if (sessionId) {
+      const record = this.sessions.get(sessionId)
+      if (record) {
+        record.archived = true
+        record.updatedAt = new Date().toISOString()
+        this.notify(record.id)
+      }
+    }
+    this.persist()
+  }
+
+  /**
    * Import a provider transcript as a read-only external session. Hook-owned
    * sessions stay the source of truth: when the same engine plus provider id
    * already exists as a live session, the import only backfills a missing
@@ -431,23 +594,39 @@ export class AgentSessionRegistry {
     const lastExcerpt = input.lastExcerpt?.trim() ? input.lastExcerpt.trim() : undefined
     const turnCount = Number.isFinite(input.turnCount) ? Math.max(0, Math.floor(input.turnCount)) : 0
 
-    const existing = Array.from(this.sessions.values()).find(
-      (record) => record.engine === engine && record.providerSessionId === providerSessionId,
-    )
+    const scanIdentity = {
+      external: true as const,
+      engine,
+      providerSessionId,
+      transcriptPath,
+    }
+    const existing =
+      Array.from(this.sessions.values()).find(
+        (record) => record.engine === engine && record.providerSessionId === providerSessionId,
+      ) ??
+      // A hook-owned row may know the transcript before it learns the provider
+      // id, or never learn it at all. Match on either shared key so the same
+      // conversation never becomes two cards.
+      Array.from(this.sessions.values()).find((record) => this.sameConversation(record, scanIdentity))
     if (existing) {
       if (existing.external !== true) {
         let changed = false
+        if (!existing.providerSessionId) {
+          existing.providerSessionId = providerSessionId
+          changed = true
+        }
         if (!existing.transcriptPath) {
           existing.transcriptPath = transcriptPath
           existing.updatedAt = updatedAt > existing.updatedAt ? updatedAt : existing.updatedAt
           changed = true
         }
         // Hook-owned rows whose prompt never reached submit-line stay
-        // titleless; the transcript first question restores their
-        // recognizability without touching their turns.
-        if (!existing.firstPrompt && firstPrompt) {
+        // titleless, and pre-fix rows can carry the AGENTS.md injection as
+        // their title; the transcript first question heals both without
+        // touching recorded turns.
+        if (firstPrompt && isStaleFirstPrompt(existing.firstPrompt)) {
           existing.firstPrompt = firstPrompt
-          existing.lastPrompt = firstPrompt
+          if (isStaleFirstPrompt(existing.lastPrompt)) existing.lastPrompt = firstPrompt
           changed = true
         }
         if (changed) {
@@ -457,12 +636,23 @@ export class AgentSessionRegistry {
         return existing
       }
       let changed = false
-      if (!existing.firstPrompt && firstPrompt) {
+      // Transcript is display truth for external rows: a rescan heals stale
+      // first prompts (pre-fix rows stored the AGENTS.md injection as title)
+      // and keeps the seed turns in step with the healed question.
+      if (firstPrompt && (isStaleFirstPrompt(existing.firstPrompt) || existing.firstPrompt !== firstPrompt)) {
+        const previous = existing.firstPrompt
         existing.firstPrompt = firstPrompt
-        existing.lastPrompt = firstPrompt
+        if (isStaleFirstPrompt(existing.lastPrompt) || existing.lastPrompt === previous) {
+          existing.lastPrompt = firstPrompt
+        }
+        for (const turn of existing.turns) {
+          if (turn.prompt === previous) turn.prompt = firstPrompt
+        }
         changed = true
       }
-      if (turnCount > existing.turnCount) {
+      // Rescan recomputes the count instead of only growing it, so a
+      // compacted or rewritten transcript stops presenting a stale total.
+      if (existing.turnCount !== turnCount) {
         existing.turnCount = turnCount
         changed = true
       }
@@ -474,14 +664,18 @@ export class AgentSessionRegistry {
         existing.updatedAt = updatedAt
         changed = true
       }
-      const seed = existing.turns[0]
-      if (seed && lastExcerpt && seed.excerpt !== lastExcerpt) {
-        seed.excerpt = lastExcerpt
-        seed.endedAt = existing.updatedAt
+      // Refresh the seed turns in place: question on the prompt seed, tail
+      // answer on the excerpt seed, never one hybrid pair.
+      const promptSeed = existing.turns.find((turn) => turn.prompt)
+      const excerptSeed = existing.turns.find((turn) => turn.excerpt)
+      if (excerptSeed && lastExcerpt && excerptSeed.excerpt !== lastExcerpt) {
+        excerptSeed.excerpt = lastExcerpt
+        excerptSeed.endedAt = existing.updatedAt
         changed = true
       }
-      if (seed && firstPrompt && !seed.prompt) {
-        seed.prompt = firstPrompt
+      if (firstPrompt && existing.turns.length > 0 && (!promptSeed || isStaleFirstPrompt(promptSeed.prompt))) {
+        const target = promptSeed ?? existing.turns[0]
+        target.prompt = firstPrompt
         changed = true
       }
       if (changed) {
@@ -510,19 +704,32 @@ export class AgentSessionRegistry {
       transcriptPath,
       continuedFrom: undefined,
       terminalIds: [],
-      turns:
-        firstPrompt || lastExcerpt
+      // Two seed turns keep the question and the tail answer apart instead
+      // of one hybrid pair that misreads as a single exchange.
+      turns: [
+        ...(firstPrompt
           ? [
               {
                 id: randomUUID(),
-                kind: 'done',
+                kind: 'done' as const,
                 startedAt: createdAt,
-                endedAt: updatedAt,
-                ...(firstPrompt ? { prompt: firstPrompt } : {}),
-                ...(lastExcerpt ? { excerpt: lastExcerpt } : {}),
+                endedAt: createdAt,
+                prompt: firstPrompt,
               },
             ]
-          : [],
+          : []),
+        ...(lastExcerpt
+          ? [
+              {
+                id: randomUUID(),
+                kind: 'done' as const,
+                startedAt: updatedAt,
+                endedAt: updatedAt,
+                excerpt: lastExcerpt,
+              },
+            ]
+          : []),
+      ],
       checkpointIds: [],
       createdAt,
       updatedAt,
@@ -536,13 +743,24 @@ export class AgentSessionRegistry {
     return record
   }
 
-  setPendingHandoff(sessionId: string, handoff: string | undefined): void {
+  setPendingHandoff(
+    sessionId: string,
+    handoff: string | undefined,
+    state?: 'unconfirmed' | 'failed',
+  ): void {
     const record = this.sessions.get(sessionId)
     if (!record) return
-    if (handoff === undefined) delete record.pendingHandoff
-    else record.pendingHandoff = handoff
+    if (handoff === undefined) {
+      delete record.pendingHandoff
+      delete record.pendingHandoffState
+    } else {
+      record.pendingHandoff = handoff
+      if (state) record.pendingHandoffState = state
+      else delete record.pendingHandoffState
+    }
     record.updatedAt = new Date().toISOString()
     this.persist()
+    this.notify(record.id)
   }
 
   archiveSession(sessionId: string): boolean {
@@ -633,8 +851,9 @@ function normalizeCwd(value: string): string {
 
 /**
  * Exact match still wins; external sessions may live under a child path of a
- * workspace scope, so fall back to prefix (boundary '/') or substring after
- * normalizing separators, trailing slashes, and case.
+ * workspace scope, so fall back to a path-boundary prefix after normalizing
+ * separators, trailing slashes, and case. No substring fallback: a sibling
+ * directory sharing a name prefix must never leak into the scope.
  */
 function matchesCwdScope(recordCwd: string, scopeCwd: string): boolean {
   if (recordCwd === scopeCwd) return true
@@ -642,8 +861,7 @@ function matchesCwdScope(recordCwd: string, scopeCwd: string): boolean {
   const scope = normalizeCwd(scopeCwd)
   if (!record || !scope) return false
   if (record === scope) return true
-  if (record.startsWith(`${scope}/`)) return true
-  return record.includes(scope)
+  return record.startsWith(`${scope}/`)
 }
 
 function toStatus(record: AgentSessionRecord): AgentSessionStatus {

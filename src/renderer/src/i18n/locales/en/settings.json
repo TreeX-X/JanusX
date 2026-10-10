@@ -108,6 +108,11 @@
         "label": "Team collaboration",
         "hint": "Show the sidebar team row, the first-run login gate, and the team page in Settings. Turning off hides the entries; login state and org data are kept and restored on re-enable.",
         "note": "Feature in development, may be unstable"
+      },
+      "sessions": {
+        "label": "Session management",
+        "hint": "Show the right-dock sessions entry (cards, timeline, details, and continue). Turning off hides the entry only; session data, transcript scans, and checkpoints are kept and restored on re-enable.",
+        "note": "Preview stage; session parsing and restore points are still maturing"
       }
     },
     "badge": "LAB",

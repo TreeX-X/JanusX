@@ -1,4 +1,4 @@
-// Note: orca-style transcript tail read per engine capability — see
+// Note: transcript tail read per engine capability — see
 // .agents/notes/sessions/records/session-engine-capabilities.md
 import { open, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -6,7 +6,7 @@ import { basename, join } from 'node:path'
 import { AGENT_ENGINE_CAPABILITIES } from '../notifications/agent-engine-capabilities'
 import type { AgentHookSource } from '../notifications/agent-hook-types'
 
-// Orca parity: backward chunk reads with a hard cap; full history never loads.
+// Bounded read: backward chunk reads with a hard cap; full history never loads.
 const TRANSCRIPT_TAIL_BYTES = 64 * 1024
 const EXCERPT_MAX_CHARS = 500
 /** Single-doc histories (janus) parse whole with a size cap instead. */

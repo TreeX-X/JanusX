@@ -10,7 +10,7 @@ import confirmationStyles from './ExperimentalSettingsPanel.module.css'
 type FeatureKey = keyof ExperimentalFeatures
 
 // Note: persona stays in development while project knowledge matures — see .agents/notes/knowledge/memory-domain-controls.md
-const PREVIEW_FEATURES: FeatureKey[] = ['blueprint', 'knowledge']
+const PREVIEW_FEATURES: FeatureKey[] = ['blueprint', 'sessions']
 const DEV_FEATURES: FeatureKey[] = ['persona', 'roundtable', 'remoteControl', 'teamCollab']
 
 // Note: every feature transition requires explicit confirmation — see .agents/notes/knowledge/assistant-persona-layout.md
@@ -25,6 +25,7 @@ export function ExperimentalSettingsPanel() {
   const persona = useExperimentalStore((s) => s.persona)
   const remoteControl = useExperimentalStore((s) => s.remoteControl)
   const teamCollab = useExperimentalStore((s) => s.teamCollab)
+  const sessions = useExperimentalStore((s) => s.sessions)
   const [savingKey, setSavingKey] = useState<FeatureKey | null>(null)
   const [error, setError] = useState('')
   const [pending, setPending] = useState<{ key: FeatureKey; value: boolean } | null>(null)
@@ -34,7 +35,7 @@ export function ExperimentalSettingsPanel() {
     void load()
   }, [load])
 
-  const checked: Record<FeatureKey, boolean> = { blueprint, knowledge, roundtable, persona, remoteControl, teamCollab }
+  const checked: Record<FeatureKey, boolean> = { blueprint, knowledge, roundtable, persona, remoteControl, teamCollab, sessions }
   const apiMissing = typeof window.electron?.experimental === 'undefined'
   const busy = !loaded || savingKey !== null || pending !== null
 

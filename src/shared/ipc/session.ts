@@ -5,6 +5,7 @@ export const SESSION_CHANNELS = {
   list: 'session:list',
   get: 'session:get',
   continue: 'session:continue',
+  resendHandoff: 'session:resend-handoff',
   event: 'session:event',
   scanExternal: 'session:scan-external',
   getTranscript: 'session:get-transcript',
@@ -52,6 +53,12 @@ export interface AgentSessionDetail extends AgentSessionSummary {
   terminalIds: string[]
   turns: SessionTurnRecord[]
   pendingHandoff?: string
+  /**
+   * Why the handoff is still pending. `unconfirmed` means it was written but no
+   * composer was ever observed; `failed` means nothing landed. Both need the
+   * user to check the new session, so the card offers a resend.
+   */
+  pendingHandoffState?: 'unconfirmed' | 'failed'
 }
 
 export interface SessionFilter {
@@ -61,9 +68,23 @@ export interface SessionFilter {
   includeArchived?: boolean
 }
 
+/**
+ * How a continuation re-enters the work:
+ * - `resume` re-enters the provider's own session id in a fresh terminal, so the
+ *   conversation continues inside the same provider session.
+ * - `continue` opens a fresh sequential session for the same unfinished task and
+ *   hands over context; the original stays intact.
+ *
+ * Continue in New Session is not a privilege of live rows: an external row's
+ * context lives in its own transcript file, so it can hand over too. Callers
+ * omit the field to keep the origin-derived default (external -> resume).
+ */
+export type SessionContinueMode = 'resume' | 'continue'
+
 export interface SessionContinueInput {
   sessionId: string
   engine?: string
+  mode?: SessionContinueMode
 }
 
 export interface SessionContinueResult {
@@ -95,7 +116,7 @@ export interface TranscriptDetail {
 }
 
 /**
- * Provider resume argv tail for external rows (orca parity). Null when the
+ * Provider resume argv tail for external rows (provider-native resume). Null when the
  * engine has no known resume shape, the id is missing, or (pi) the session
  * file path is missing — pi resumes from the file, never from a bare id.
  */
@@ -143,6 +164,8 @@ export interface SessionAPI {
   list(filter?: SessionFilter): Promise<AgentSessionSummary[]>
   get(sessionId: string): Promise<AgentSessionDetail | null>
   continue(input: SessionContinueInput): Promise<SessionContinueResult>
+  /** Redeliver a focused handoff that landed nowhere or unconfirmed. */
+  resendHandoff(sessionId: string): Promise<{ delivered: boolean; verdict: string }>
   onEvent(callback: (payload: { type: string; sessionId?: string }) => void): () => void
   scanExternal(): Promise<ExternalScanSummary>
   getTranscript(sessionId: string): Promise<TranscriptDetail | null>

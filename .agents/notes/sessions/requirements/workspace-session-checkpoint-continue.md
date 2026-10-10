@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-10T14:00:15.185Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/dc1aca7c-408f-406d-add4-ba78d556b662"
 }
 ---
@@ -65,7 +65,7 @@ Repository avatars ship without any login. Import resolves the git remote into h
 - [ ] AC-1: One workspace lists its agent sessions as cards with engine, cwd, branch, first prompt, message count, and turn state.
 - [ ] AC-2: Each card embeds its session's checkpoints with per-file change counts, lazy diffs, and explicit-confirm restore that never prunes other sessions.
 - [ ] AC-3: Oversized and binary files report size and kind without content diffing, and blob storage enforces a cap with eviction.
-- [ ] AC-4: Continue in New Session opens a new terminal in the original cwd, delivers a focused handoff after TUI ready, and leaves the original session resumable.
+- [x] AC-4: Continue in New Session opens a new terminal in the original cwd, delivers a focused handoff once the composer is ready, and leaves the original session resumable. One Continue produces exactly one new card, and a failed create leaves none.
 - [ ] AC-5: Checkpoint writes are atomic with rolling backups, and hydration failure blocks writes and surfaces instead of overwriting state.
 - [ ] AC-6: Session, turn, and checkpoint records carry reserved worktree identity without requiring worktrees.
 - [ ] AC-7: Worktree creation, explicit Ship merge timing, delete-with-preserved-branches, and quit-flush plus cold-restore shells follow the Proposal semantics.
@@ -74,6 +74,8 @@ Repository avatars ship without any login. Import resolves the git remote into h
 - [ ] AC-10: Switching the sidebar row re-scopes session cards, checkpoints, diffs, and the turn island to the new worktree, and returning restores cached right-side state.
 - [ ] AC-11: Shipped worktrees end through Archive or Delete with sessions centrally archived read-only, checkpoints following the disk, restore refusing without its path, and dirty delete gated on explicit confirmation.
 - [ ] AC-12: GitHub repositories show the cached owner avatar on project rows with letter fallback and no login; team login and hosted credentials stay separate.
+
+AC-4 由桌面演练 `tests/e2e/desktop-session-continue.spec.ts` 覆盖（构建产物 + 真 pty + 假 `claude`/`pi` shim）：一次 Continue 经确认弹窗后卡片恰增一张，交接文本到达新会话进程并清除 `pendingHandoff`，原会话行保持可续，创建失败不留卡。其余 AC 本次不动。
 
 ## Risks
 

@@ -63,9 +63,9 @@
   background: color-mix(in srgb, var(--shell-chrome) 88%, white);
 }
 
-/* 卡片折叠控件：右缘发丝线框 chevron 按钮。常驻可见（不做 hover-only），
-   透明底 + 1px 发丝线框，hover/聚焦走强调描边与强调色字形，不吃填充色块。
-   字形旋转 180° 与卡片展开同一条 240ms 曲线。 */
+/* 卡片折叠控件：无边框 chevron 按钮。常驻可见（不做 hover-only），
+   透明底、无发丝线框，hover/聚焦只走强调色字形；键盘聚焦保留 outline
+   作为可达性标记，不吃填充色块。字形旋转 180° 与卡片展开同一条 240ms 曲线。 */
 .foldBtn {
   display: inline-flex;
   align-items: center;
@@ -74,23 +74,22 @@
   height: 20px;
   flex-shrink: 0;
   padding: 0;
-  border: 1px solid var(--shell-border);
+  border: none;
   border-radius: 4px;
   background: transparent;
   color: var(--shell-muted);
   cursor: pointer;
-  transition: color 140ms ease, border-color 140ms ease;
+  transition: color 140ms ease;
 }
 
 .foldBtn:hover {
   color: var(--shell-accent);
-  border-color: var(--shell-accent-border);
 }
 
 .foldBtn:focus-visible {
-  outline: none;
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: 1px;
   color: var(--shell-accent);
-  border-color: var(--shell-accent-strong);
 }
 
 .foldBtn svg {

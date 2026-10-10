@@ -53,7 +53,8 @@ export function RightDock({
   const togglePanel = useAppStore((state) => state.togglePanel)
   const personaEnabled = useExperimentalStore((state) => state.persona)
   const knowledgeEnabled = useExperimentalStore((state) => state.knowledge)
-  const features = { persona: personaEnabled, knowledge: knowledgeEnabled }
+  const sessionsEnabled = useExperimentalStore((state) => state.sessions)
+  const features = { persona: personaEnabled, knowledge: knowledgeEnabled, sessions: sessionsEnabled }
   const openToolIds = storedOpenToolIds.filter(toolId => isRightToolEnabled(toolId, features))
   const activeToolId = storedActiveToolId && isRightToolEnabled(storedActiveToolId, features) ? storedActiveToolId : null
   const loadExperimental = useExperimentalStore((state) => state.load)
@@ -103,9 +104,9 @@ export function RightDock({
   // Close disabled tools as well as hiding them so re-enabling starts closed.
   useEffect(() => {
     for (const toolId of storedOpenToolIds) {
-      if (!isRightToolEnabled(toolId, { persona: personaEnabled, knowledge: knowledgeEnabled })) closeTool(toolId)
+      if (!isRightToolEnabled(toolId, { persona: personaEnabled, knowledge: knowledgeEnabled, sessions: sessionsEnabled })) closeTool(toolId)
     }
-  }, [personaEnabled, knowledgeEnabled, storedOpenToolIds, closeTool])
+  }, [personaEnabled, knowledgeEnabled, sessionsEnabled, storedOpenToolIds, closeTool])
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return

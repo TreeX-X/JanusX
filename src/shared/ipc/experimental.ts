@@ -1,6 +1,6 @@
 /**
  * 创新实验功能开关 IPC 契约。
- * 知识库 / 圆桌 / 个人画像 / 远程协作控制 / 团队协作五路独立控制，
+ * 蓝图 / 知识库 / 圆桌 / 个人画像 / 远程协作控制 / 团队协作 / 会话管理七路独立控制，
  * 默认全部关闭（打包默认隐藏，仅在设置中心开启后可用）。
  * 缺席/非法一律回落默认，兼容旧配置。
  */
@@ -24,6 +24,8 @@ export interface ExperimentalFeatures {
   remoteControl: boolean
   /** 团队协作（侧栏团队行 + 首屏登录挡板 + 设置中心 team 页；关闭仅隐藏入口，登录态数据保留）。 */
   teamCollab: boolean
+  /** 会话管理入口（右坞会话工具：卡片、时间线、详情与续接；关闭仅隐藏入口，会话数据与扫描保留）。 */
+  sessions: boolean
 }
 
 export const DEFAULT_EXPERIMENTAL_FEATURES: ExperimentalFeatures = {
@@ -33,6 +35,7 @@ export const DEFAULT_EXPERIMENTAL_FEATURES: ExperimentalFeatures = {
   persona: false,
   remoteControl: false,
   teamCollab: false,
+  sessions: false,
 }
 
 /** 无 IPC 环境（浏览器预览 / 用例 harness）下的降级：全部可见，避免旧用例误杀。 */
@@ -43,6 +46,7 @@ export const EXPERIMENTAL_ENABLED_ALL: ExperimentalFeatures = {
   persona: true,
   remoteControl: true,
   teamCollab: true,
+  sessions: true,
 }
 
 export function normalizeExperimentalFeatures(value: unknown): ExperimentalFeatures {
@@ -55,6 +59,7 @@ export function normalizeExperimentalFeatures(value: unknown): ExperimentalFeatu
     persona: record.persona === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.persona : record.persona === true,
     remoteControl: record.remoteControl === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.remoteControl : record.remoteControl === true,
     teamCollab: record.teamCollab === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.teamCollab : record.teamCollab === true,
+    sessions: record.sessions === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.sessions : record.sessions === true,
   }
 }
 

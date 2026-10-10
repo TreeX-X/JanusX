@@ -57,8 +57,11 @@ describe('external session scanner', () => {
     ])
     await writeJsonl(join(home, '.codex', 'sessions', 'rollout-20260922-thread-abc123.jsonl'), [
       { type: 'session_meta', payload: { id: 'thread-abc123', cwd: 'C:/repo/proj' } },
-      { type: 'response_item', payload: { role: 'user', content: [{ type: 'input_text', text: 'add ship merge' }] } },
-      { type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text', text: 'ship merge added' }] } },
+      // AGENTS.md environment context arrives as an unmarked user record; it
+      // must never become the first prompt.
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '# AGENTS.md instructions for C:\\repo\\proj\n\n<INSTRUCTIONS>\nnoise\n</INSTRUCTIONS>' }] }, metadata: {} },
+      { type: 'response_item', payload: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'add ship merge' }] }, metadata: { user_input_order: 0, retained_source: { revision: 'retained_1' } } },
+      { type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'ship merge added' }] }, metadata: { user_input_order: 0 } },
     ])
     // Missing cwd stays invisible; corrupt lines never fail the scan.
     await writeJsonl(join(home, '.claude', 'projects', 'proj', 'no-cwd.jsonl'), [
@@ -82,15 +85,16 @@ describe('external session scanner', () => {
     const claude = sessions.find((session) => session.engine === 'claude')
     expect(claude).toMatchObject({ cwd: 'C:/repo/proj', firstPrompt: 'fix the login retry', turnCount: 1 })
     const claudeDetail = registry.getSession(claude!.id)
-    expect(claudeDetail?.turns).toHaveLength(1)
-    expect(claudeDetail?.turns[0]).toMatchObject({ prompt: 'fix the login retry', excerpt: 'login retry fixed' })
+    // Seed turns keep the question and the tail answer apart.
+    expect(claudeDetail?.turns).toHaveLength(2)
+    expect(claudeDetail?.turns[0]).toMatchObject({ prompt: 'fix the login retry' })
+    expect(claudeDetail?.turns[1]).toMatchObject({ excerpt: 'login retry fixed' })
 
     const codex = sessions.find((session) => session.engine === 'codex')
     expect(codex).toMatchObject({ firstPrompt: 'add ship merge', turnCount: 1 })
-    expect(registry.getSession(codex!.id)?.turns[0]).toMatchObject({
-      prompt: 'add ship merge',
-      excerpt: 'ship merge added',
-    })
+    const codexDetail = registry.getSession(codex!.id)
+    expect(codexDetail?.turns[0]).toMatchObject({ prompt: 'add ship merge' })
+    expect(codexDetail?.turns[1]).toMatchObject({ excerpt: 'ship merge added' })
 
     // Parent workspace scope still surfaces child-path imports.
     expect(registry.listSessions({ cwd: 'C:/repo' })).toHaveLength(2)
@@ -126,7 +130,8 @@ describe('external session scanner', () => {
     const [session] = registry.listSessions()
     expect(session.turnCount).toBe(2)
     expect(session.firstPrompt).toBe('fix the login retry')
-    expect(registry.getSession(session.id)?.turns[0].excerpt).toBe('edge cases covered')
+    const seeds = registry.getSession(session.id)?.turns ?? []
+    expect(seeds.find((turn) => turn.excerpt)?.excerpt).toBe('edge cases covered')
   })
 
   it('leaves hook-owned sessions in place and backfills their transcript path', async () => {
@@ -173,7 +178,12 @@ describe('external session scanner', () => {
     expect(summary.imported).toBe(1)
     const [session] = registry.listSessions()
     expect(session.firstPrompt).toBe('head question')
-    expect(registry.getSession(session.id)?.turns[0].excerpt).toBe('tail answer')
+    // Head and tail windows pair internally: the visible pieces stay two
+    // partial turns instead of one fabricated question-answer pair.
+    expect(session.turnCount).toBe(2)
+    const seeds = registry.getSession(session.id)?.turns ?? []
+    expect(seeds.find((turn) => turn.prompt)?.prompt).toBe('head question')
+    expect(seeds.find((turn) => turn.excerpt)?.excerpt).toBe('tail answer')
   })
 
   it('skips engines without a readable store and empty homes without errors', async () => {
@@ -219,10 +229,9 @@ describe('external session scanner', () => {
     })
     expect(session.transcriptPath).toBe(dbPath)
     expect(session.providerSessionId).toBe('ses-1')
-    expect(registry.getSession(session.id)?.turns[0]).toMatchObject({
-      prompt: 'opencode question',
-      excerpt: 'opencode answer',
-    })
+    const seeds = registry.getSession(session.id)?.turns ?? []
+    expect(seeds[0]).toMatchObject({ prompt: 'opencode question' })
+    expect(seeds[1]).toMatchObject({ excerpt: 'opencode answer' })
     // Repeat scans converge without duplicating.
     const second = await scanExternalSessions(registry, { env: {}, home })
     expect(second.imported).toBe(0)
@@ -258,7 +267,9 @@ describe('external session scanner', () => {
     const first = sessions.find((session) => session.providerSessionId === 'pi-1')
     expect(first).toMatchObject({ engine: 'pi', cwd: 'C:/repo/proj', firstPrompt: 'pi question', turnCount: 1, external: true })
     expect(first?.transcriptPath).toContain('pi-1.jsonl')
-    expect(registry.getSession(first!.id)?.turns[0]).toMatchObject({ prompt: 'pi question', excerpt: 'pi answer' })
+    const piSeeds = registry.getSession(first!.id)?.turns ?? []
+    expect(piSeeds[0]).toMatchObject({ prompt: 'pi question' })
+    expect(piSeeds[1]).toMatchObject({ excerpt: 'pi answer' })
     const slug = sessions.find((session) => (session.transcriptPath ?? '').includes('pi-2.jsonl'))
     expect(slug?.providerSessionId).toBeTruthy()
     expect(slug?.cwd).toBe('C:/repo/other')

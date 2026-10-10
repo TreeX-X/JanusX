@@ -5,6 +5,8 @@ import { TerminalTurnChangeTracker } from '../terminal/turn-change-tracker'
 import { checkpointManager } from '@janus-agent/agent-core'
 import type { CheckpointEngine } from '@janus-agent/agent-core'
 import { agentSessionRegistry, type AgentSessionRecord } from '../sessions/session-registry'
+import { buildContinueHandoff } from '../sessions/continue-handoff'
+import { deliverHandoff, type HandoffTransport } from '../sessions/handoff-delivery'
 import { probeOpencodeSessionPresence } from '../sessions/opencode-sessions'
 import { analyzer } from '../janus/analyzer'
 import { isTerminalPreset, resolveTerminalLaunchProgram } from '../../shared/terminalLaunch'
@@ -113,14 +115,18 @@ function isHookInputRequest(payload: AgentHookPayload, lowerEvent: string): bool
 
 let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid: number }>) | null = null
 
-export type ContinueSessionOptions = { engine?: string }
+export type ContinueSessionOptions = {
+  engine?: string
+  /** `resume` re-enters the provider session; `continue` opens a fresh session. */
+  mode?: 'resume' | 'continue'
+}
 
 let continueSessionImpl:
   | ((sessionId: string, opts?: ContinueSessionOptions) => Promise<{ sessionId: string; terminalId: string }>)
   | null = null
 
 /** Continue in New Session: fresh terminal plus focused handoff for one task. */
-// Note: internal opencode rows resume natively via --session instead — see .agents/notes/sessions/records/opencode-continue-native-resume.md
+// Note: internal opencode rows resume natively via --session instead �?see .agents/notes/sessions/records/opencode-continue-native-resume.md
 export function continueAgentSession(
   sessionId: string,
   opts?: ContinueSessionOptions,
@@ -129,36 +135,85 @@ export function continueAgentSession(
   return continueSessionImpl(sessionId, opts)
 }
 
-// Pending focused-handoff deliveries keyed by new session id. A dead
-// terminal at fire time keeps the handoff on the record for manual resend.
-const handoffDeliveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const HANDOFF_DELIVERY_MS = 6000
+// In-flight focused-handoff deliveries keyed by new session id. Killing the
+// terminal marks its delivery dead so a late write cannot land in a recycled
+// pty, and the handoff stays on the record for manual resend.
+const handoffDeliveries = new Map<string, { cancelled: boolean }>()
 
 function clearHandoffDeliveryForTerminal(terminalId: string): void {
   const sessionId = agentSessionRegistry.sessionIdForTerminal(terminalId)
   if (!sessionId) return
-  const timer = handoffDeliveryTimers.get(sessionId)
-  if (timer) {
-    clearTimeout(timer)
-    handoffDeliveryTimers.delete(sessionId)
+  const delivery = handoffDeliveries.get(sessionId)
+  if (delivery) {
+    delivery.cancelled = true
+    handoffDeliveries.delete(sessionId)
   }
 }
 
-function truncateHandoffText(value: string, max: number): string {
-  const compact = value.replace(/\s+/g, ' ').trim()
-  return compact.length > max ? `${compact.slice(0, max)}…` : compact
+/**
+ * The pty side of handoff delivery. Writes go to the pty directly so a refused
+ * write is a real signal instead of the silent best-effort `terminalManager.write`.
+ */
+function buildHandoffTransport(terminalId: string): HandoffTransport {
+  return {
+    isAlive: () => Boolean(terminalManager.getInstance(terminalId)),
+    write: (data) => {
+      const instance = terminalManager.getInstance(terminalId)
+      if (!instance) return false
+      try {
+        instance.pty.write(data)
+        return true
+      } catch {
+        return false
+      }
+    },
+    observeOutput: (handler) => {
+      const instance = terminalManager.getInstance(terminalId)
+      if (!instance) return () => {}
+      // node-pty appends listeners, so this sidecar tap never displaces the
+      // primary handler that feeds the renderer.
+      const disposable = instance.pty.onData(handler)
+      return () => {
+        try {
+          disposable.dispose()
+        } catch {
+          // already gone
+        }
+      }
+    },
+  }
 }
 
-function buildContinueHandoff(source: AgentSessionRecord): string {
-  const title = source.firstPrompt ? truncateHandoffText(source.firstPrompt, 120) : '未命名任务'
-  const progress = source.lastPrompt ? truncateHandoffText(source.lastPrompt, 300) : '（暂无进展记录）'
-  const parts = [`继续任务「${title}」。`, `最近进展：${progress}。`]
-  if (source.transcriptPath) {
-    parts.push(`历史 transcript 仅作只读参考（${source.transcriptPath}），以当前仓库状态为准。`)
+/**
+ * Redeliver a focused handoff that landed nowhere or whose delivery could not
+ * be confirmed. The card keeps the text until a delivery is confirmed, so this
+ * never has to reconstruct what the user was promised.
+ */
+export async function resendSessionHandoff(
+  sessionId: string,
+): Promise<{ delivered: boolean; verdict: string }> {
+  const record = agentSessionRegistry.getSession(sessionId)
+  if (!record) throw new Error(`Session not found: ${sessionId}`)
+  const handoff = record.pendingHandoff
+  if (!handoff) throw new Error('Session has no pending handoff to resend')
+  const terminalId = record.terminalIds.at(-1)
+  if (!terminalId) throw new Error('Session has no terminal to deliver into')
+
+  const delivery: { cancelled: boolean } = { cancelled: false }
+  handoffDeliveries.set(sessionId, delivery)
+  const result = await deliverHandoff({ transport: buildHandoffTransport(terminalId), handoff })
+  if (delivery.cancelled) return { delivered: false, verdict: 'failed' }
+  handoffDeliveries.delete(sessionId)
+
+  if (result.verdict === 'delivered') {
+    agentSessionRegistry.notePrompt(terminalId, handoff)
+    enqueueCheckpointFromSubmit(terminalId, handoff)
+    agentSessionRegistry.setPendingHandoff(sessionId, undefined)
+  } else {
+    agentSessionRegistry.setPendingHandoff(sessionId, handoff, result.verdict)
+    console.error(`[sessions] handoff resend ${result.verdict}${result.reason ? `: ${result.reason}` : ''}`)
   }
-  const lastCheckpoint = source.checkpointIds.at(-1)
-  if (lastCheckpoint) parts.push(`还原点：${lastCheckpoint.slice(0, 8)}。`)
-  return parts.join('')
+  return { delivered: result.verdict === 'delivered', verdict: result.verdict }
 }
 
 /**
@@ -517,22 +572,30 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
             ? 'interrupted'
             : 'done'
         const baselineId = state.checkpointId ?? undefined
+        // A turn end closes an open turn only: SessionEnd after Stop and
+        // duplicate ends must not fabricate phantom turns. An end with no
+        // open hook turn and no pending submit is ignored.
+        const openTurn =
+          turnChangeTracker.hasActiveTurn(terminal.terminalId) ||
+          agentSessionRegistry.hasPendingTurn(terminal.terminalId)
         // Capture the boundary before transcript reads; duplicate end hooks are ignored.
         void turnChangeTracker.finish(terminal.terminalId, kind, baselineId ?? null)
-        // Answer prose resolves per engine capability (hook raw first,
-        // session record second). Failures yield undefined and never block.
-        const excerpt = await readAssistantExcerpt({
-          transcriptPath:
-            getRawString(payload.raw, ['transcript_path', 'transcriptPath']) ??
-            agentSessionRegistry.transcriptPathForTerminal(terminal.terminalId),
-          sessionId:
-            payload.sessionId ??
-            agentSessionRegistry.providerSessionIdForTerminal(terminal.terminalId),
-          threadId: getRawString(payload.raw, ['thread_id', 'threadId']),
-          cwd: state.cwd,
-          engine: terminal.engine,
-        })
-        agentSessionRegistry.recordTurnEnd(terminal.terminalId, kind, baselineId, excerpt)
+        if (openTurn) {
+          // Answer prose resolves per engine capability (hook raw first,
+          // session record second). Failures yield undefined and never block.
+          const excerpt = await readAssistantExcerpt({
+            transcriptPath:
+              getRawString(payload.raw, ['transcript_path', 'transcriptPath']) ??
+              agentSessionRegistry.transcriptPathForTerminal(terminal.terminalId),
+            sessionId:
+              payload.sessionId ??
+              agentSessionRegistry.providerSessionIdForTerminal(terminal.terminalId),
+            threadId: getRawString(payload.raw, ['thread_id', 'threadId']),
+            cwd: state.cwd,
+            engine: terminal.engine,
+          })
+          agentSessionRegistry.recordTurnEnd(terminal.terminalId, kind, baselineId, excerpt)
+        }
       }
       companionSessionState.handleHookPayload(payload)
       await agentTurnRecorder.handleHookPayload({ ...payload, raw: {
@@ -691,6 +754,10 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       }
       // 旧 pty 未 flush 的合批数据不再属于新终端，丢弃
       dropPendingTerminalData(id)
+      // Release the terminal's session binding so the replacement mints its
+      // own row. createSession is idempotent per terminalId, so leaving the
+      // old binding in place would reuse the previous conversation's row.
+      agentSessionRegistry.detachTerminal(id)
       if (priorState.engine && priorState.engine !== 'shell') {
         try {
           subAgentRunRegistry.finishRun(
@@ -1114,7 +1181,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
           terminalStates.delete(id)
           serviceErrorDetectors.delete(id)
           clearHandoffDeliveryForTerminal(id)
-          agentSessionRegistry.detachTerminal(id)
+          // Discard, not detach: a create that never came up must not leave a
+          // live-looking session card pointing at a terminal that does not exist.
+          agentSessionRegistry.discardTerminal(id)
         },
         unregisterCompanion: () => companionSessionState.unregisterTerminal(id),
         unregisterHook: () => hookCoordinator.unregisterTerminal(id),
@@ -1169,11 +1238,17 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   continueSessionImpl = async (sessionId, opts) => {
     const source = agentSessionRegistry.getSession(sessionId)
     if (!source) throw new Error(`Session not found: ${sessionId}`)
-    // External rows have no shell capture and no handoff to deliver: resume by
-    // spawning the provider CLI with its own resume argv in the recorded cwd.
-    // Hook env follows the engine preset, so turns track live from here; the
-    // pty inherits the app environment (including CODEX_HOME when set).
-    if (source.external === true) {
+    // Resume re-enters the provider's own session id in a fresh terminal, so the
+    // conversation continues inside the same provider session. It is the default
+    // for external rows, whose only entity is the provider transcript.
+    //
+    // Continue in New Session is not a privilege of live rows: an external row's
+    // context lives in its transcript file, so an explicit `mode: 'continue'`
+    // hands that over to a fresh session exactly like an internal row does.
+    const wantsContinue = opts?.mode === 'continue'
+    if (!wantsContinue && source.external === true) {
+      // Hook env follows the engine preset, so turns track live from here; the
+      // pty inherits the app environment (including CODEX_HOME when set).
       const resumeArgs = buildProviderResumeArgs(source.engine, source.providerSessionId, source.transcriptPath)
       if (!resumeArgs) {
         throw new Error(`Resume is not supported for engine: ${source.engine}`)
@@ -1182,16 +1257,20 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       return spawnResumeTerminal(source, resumeArgs, getDefaultShell())
     }
     // Internal opencode rows keep their provider session id from hook turn
-    // starts, so native resume re-enters full history where the fixed-delay
-    // typed handoff drops in a slow TUI. Engine switches and rows without a
-    // resumable id keep the focused handoff below.
-    const nativeResumeArgs = buildContinueResumeArgs(source, opts?.engine)
-    if (nativeResumeArgs) {
-      assertOpencodeResumeAvailable(source)
-      return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShell())
+    // starts, so native resume re-enters full history where the typed handoff
+    // drops in a slow TUI. Engine switches, rows without a resumable id, and an
+    // explicit request for a fresh session keep the focused handoff below.
+    if (!wantsContinue) {
+      const nativeResumeArgs = buildContinueResumeArgs(source, opts?.engine)
+      if (nativeResumeArgs) {
+        assertOpencodeResumeAvailable(source)
+        return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShell())
+      }
     }
     const engine = (opts?.engine ?? source.engine) as CheckpointEngine
-    if (!source.shell) {
+    // External rows carry no shell capture: their terminals were never ours.
+    const shell = source.external === true ? (source.shell ?? getDefaultShell()) : source.shell
+    if (!shell) {
       throw new Error('Session predates shell capture; open a terminal manually')
     }
     const terminalId = randomUUID()
@@ -1200,45 +1279,56 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       workspaceId: source.workspaceId,
       engine,
       cwd: source.cwd,
-      shell: source.shell,
+      shell,
       preset: source.preset ?? (isTerminalPreset(engine) ? engine : undefined),
       command: source.command,
       args: source.args,
       branch: source.branch,
       continuedFrom: source.id,
+      providerSessionId: source.external === true ? source.providerSessionId : undefined,
+      transcriptPath: source.external === true ? source.transcriptPath : undefined,
     })
     try {
       await createTerminalLifecycle({
         id: terminalId,
         workspaceId: source.workspaceId,
         cwd: source.cwd,
-        shell: source.shell,
+        shell,
         preset: source.preset,
         command: source.command,
         args: source.args,
       })
     } catch (err) {
-      agentSessionRegistry.archiveSession(record.id)
+      agentSessionRegistry.discardTerminal(terminalId)
       throw err
     }
     const handoff = buildContinueHandoff(source)
     agentSessionRegistry.setPendingHandoff(record.id, handoff)
-    const timer = setTimeout(() => {
-      handoffDeliveryTimers.delete(record.id)
-      try {
-        // TUI-ready is approximated: a live pty takes the handoff as its
-        // first submitted line (same path as remote-control submit). A dead
-        // terminal keeps the handoff on the record for manual resend.
-        if (!terminalManager.getInstance(terminalId)) return
-        terminalManager.write(terminalId, `${handoff}\r`)
-        agentSessionRegistry.notePrompt(terminalId, handoff)
-        enqueueCheckpointFromSubmit(terminalId, handoff)
-        agentSessionRegistry.setPendingHandoff(record.id, undefined)
-      } catch (err) {
+    const delivery: { cancelled: boolean } = { cancelled: false }
+    handoffDeliveries.set(record.id, delivery)
+    // Fire and forget: the panel reads the verdict off the record, and a dead
+    // terminal at any point leaves the handoff there for manual resend.
+    void deliverHandoff({ transport: buildHandoffTransport(terminalId), handoff })
+      .then(({ verdict, reason }) => {
+        if (delivery.cancelled) return
+        handoffDeliveries.delete(record.id)
+        if (verdict === 'delivered') {
+          agentSessionRegistry.notePrompt(terminalId, handoff)
+          enqueueCheckpointFromSubmit(terminalId, handoff)
+          agentSessionRegistry.setPendingHandoff(record.id, undefined)
+          return
+        }
+        // Nothing usable landed, or it landed somewhere unseen: keep the
+        // handoff and say which happened so the card can offer a resend.
+        agentSessionRegistry.setPendingHandoff(record.id, handoff, verdict)
+        console.error(`[sessions] handoff ${verdict}${reason ? `: ${reason}` : ''}`)
+      })
+      .catch((err) => {
+        if (delivery.cancelled) return
+        handoffDeliveries.delete(record.id)
+        agentSessionRegistry.setPendingHandoff(record.id, handoff, 'failed')
         console.error('[sessions] handoff delivery failed:', err)
-      }
-    }, HANDOFF_DELIVERY_MS)
-    handoffDeliveryTimers.set(record.id, timer)
+      })
     return { sessionId: record.id, terminalId }
   }
   ipcMain.handle(TERMINAL_INVOKE_CHANNELS.create, async (_event, config: TerminalCreateRequest) => (

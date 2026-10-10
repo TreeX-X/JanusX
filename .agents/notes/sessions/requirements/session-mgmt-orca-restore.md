@@ -11,7 +11,9 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e782007f-d07b-4f60-be32-63d1b22ec1f8"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/18fffeff-4922-423d-9f15-0e27f69048d2"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22"}
+    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22"},
+    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/7cc69d43-fa82-4b5e-9ac1-fe32fa4f0d5f"},
+    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/99a80260-0bb2-48a2-99ae-71275e2cb100"}
   ],
   "extensions": {
     "r5Migration": {
@@ -66,7 +68,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-10T14:00:37.171Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/dc1aca7c-408f-406d-add4-ba78d556b662"
 }
 ---
@@ -77,9 +79,11 @@
 
 JanusX renders the whole conversation inside the narrow right dock. Each expanded card stacks every turn with its bound checkpoint strip, file list, review box, and success banner, so a long session pushes the list off screen and forces timeline-versus-diff scroll fights. The ledger holds only turn snapshots plus excerpts, and full transcript prose stays unreachable from the panel even though the transcript path persists on every record. External rows share the same checkpoint chrome as internal rows, which implies restorable state where none exists. Orca solves the adjacent problem without inventing new storage: its Agent Session History scans each CLI's on-disk transcript store, shows a concise row per session, expands to first prompt plus recent turns, and resumes through the provider's own resume command. JanusX must borrow that presentation and scanner discipline while keeping its own restore-point model that Orca never built.
 
+Scope split: the L1/L2/L3 layering below owns presentation and windowed reading; transcript prose truth (what the input and answer sides actually display) is carried by [会话内容真值](./session-content-truth.md), and restore mechanics (capture timing, reversible restore, conflict semantics) are carried by [还原点可靠性](./restore-point-reliability.md). The restore-point model itself stays JanusX-owned as stated above.
+
 ## Proposal
 
-Land presentation and restore as one requirement in three progressive layers. L1 collapsed cards stay concise orca-style: engine icon with type name, truncated first prompt as title, status badge, and one mono line carrying turn count, checkpoint count, and recency. List rows keep only a short preview for search; the untruncated first prompt loads on expand. L2 inline preview expands inside the right dock and shows the full first prompt with Copy, session metadata (working directory, branch, model, message count), and the two most recent turns as question-plus-excerpt pairs with kind badges and timestamps. L2 never renders checkpoint file lists, review boxes, or diffs. A single 查看详情 action leaves the dock and opens the L3 reading window.
+Land presentation and restore as one requirement in three progressive layers. L1 collapsed cards stay concise orca-style: engine icon with type name, truncated first prompt as title, status badge, and one mono line carrying turn count, checkpoint count, and recency. List rows keep only a short preview for search; the first prompt loads on expand behind a display cap. L2 inline preview expands inside the right dock and shows the first prompt with Copy behind the same display cap plus an explicit expand-to-full affordance, session metadata (working directory, branch, model, message count), and the two most recent turns as question-plus-excerpt pairs with kind badges and timestamps. L2 never renders checkpoint file lists, review boxes, or diffs. A single 查看详情 action leaves the dock and opens the L3 reading window.
 
 The L3 window owns full reading. It centers over the workbench under the shared traffic-bar title, carries session metadata plus transcript reference in its header, and scrolls the full turn list with per-turn prompts, excerpts, kind badges, and timestamps. Transcript prose resolves orca-style at open time: the renderer requests a bounded server read of the persisted transcript path, parses first prompt plus turn pairs with head-plus-tail fallback above 512KB, tolerates unknown shapes and corrupt lines per file, and never blocks turn recording or card listing on parse failure. Registry turns stay authoritative for ordering and status; transcript text supplies only display prose, and cached excerpts render instantly while the full parse streams in.
 
@@ -105,7 +109,11 @@ Continue behavior splits by origin. Internal sessions continue through the exist
 - [ ] AC-5: Internal mutating turns bind one checkpoint each; pure question turns render a dashed no-change strip preserving alignment.
 - [ ] AC-6: External sessions show no checkpoint chrome in any layer and expose transcript actions only.
 - [ ] AC-7: Internal L3 turns expose inline diff with file list plus code pane, binary and oversized rows labelled unexpanded, and session-scoped two-step restore with prune warning and conflict disclosure.
-- [ ] AC-8: Internal Continue uses focused handoff; external Resume runs the provider resume command with missing-prerequisite disable plus Copy command fallback.
+- [x] AC-8: Internal Continue uses focused handoff; external Resume runs the provider resume command with missing-prerequisite disable plus Copy command fallback.
+- [x] AC-9: The card fold control renders borderless: no hairline frame on the chevron button, with hover/focus affordance and the 240ms rotation motion preserved.
+- [ ] AC-10: The L2 first-prompt block caps its display (line or character budget with surrogate-safe truncation) and offers an explicit expand-to-full affordance; unbounded first prompts never push the card open.
+
+AC-9 由 `planche-theme` 的 `.foldBtn` 无边框钉选覆盖。AC-8 执行侧由桌面演练 `tests/e2e/desktop-session-continue.spec.ts` 覆盖（内部 Continue 交付 focused handoff，外部 Resume 跑 `claude --resume <id>`，外部行 Resume 与在新会话中继续并排）；缺失前置的禁用与 Copy 兜底分支由 `session-continue-resume` 对 `buildProviderResumeArgs`/`buildProviderResumeCommand` 的空前置单测钉选——扫描产出的外部行今天总带 resume 真值，禁用分支无自然可达数据形态。AC-10 的四行 clamp 与 160 字符预算加展开/收起入口已实现（复用 `checkpoint.expand/collapse` 文案），Copy 始终复制全文、显示不截断文本（行预算 clamp 无截断面），活界面显示断言待补（AC-4 已由同一演练勾选）。
 
 ## Risks
 
@@ -114,3 +122,4 @@ Continue behavior splits by origin. Internal sessions continue through the exist
 - Windows path casing plus synonym paths misattribute external rows to workspaces; mitigation is the single normalizing cwd resolver already owned by the registry.
 - Restoring from L3 while the live conversation appends turns races the prune count; mitigation is recompute-on-confirm with the review box as the single confirm site.
 - Cross-session prune regression returns if restore drops the session scope parameter; mitigation is session-scoped restore IPC with legacy terminal fallback covered by unit checks.
+- The fold-control border is pinned by `tests/unit/planche-theme.test.ts` (`.foldBtn` plus accent-border literals), so the borderless revision must update that pin in the same change.

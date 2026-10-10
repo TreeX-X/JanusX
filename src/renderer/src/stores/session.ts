@@ -3,6 +3,7 @@ import { useWorkspaceStore } from './workspace'
 import type {
   AgentSessionDetail,
   AgentSessionSummary,
+  SessionContinueMode,
   SessionFilter,
 } from '../../../shared/ipc/session'
 
@@ -18,7 +19,11 @@ interface SessionStore {
 
   fetchSessions: (filter?: SessionFilter, opts?: { silent?: boolean }) => Promise<void>
   fetchSessionDetail: (sessionId: string) => Promise<void>
-  continueSession: (sessionId: string, engine?: string) => Promise<{ sessionId: string; terminalId: string } | null>
+  continueSession: (
+    sessionId: string,
+    engine?: string,
+    mode?: SessionContinueMode,
+  ) => Promise<{ sessionId: string; terminalId: string } | null>
   clearWorkspaceScope: () => void
   setSelected: (session: AgentSessionDetail | null) => void
   subscribeToEvents: () => () => void
@@ -104,10 +109,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     }
   },
 
-  continueSession: async (sessionId, engine) => {
+  continueSession: async (sessionId, engine, mode) => {
     set({ error: null })
     try {
-      const result = await window.electron.session.continue({ sessionId, engine })
+      const result = await window.electron.session.continue({ sessionId, engine, mode })
       await get().fetchSessions(get().lastFilter ?? {}, { silent: true })
       return result
     } catch (err) {

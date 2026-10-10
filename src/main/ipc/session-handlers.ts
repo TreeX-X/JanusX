@@ -8,7 +8,7 @@ import {
 import { agentSessionRegistry } from '../sessions/session-registry'
 import { scanExternalSessions, type ExternalScanSummary } from '../sessions/external-session-scanner'
 import { readTranscriptDetail } from '../sessions/transcript-reader'
-import { continueAgentSession } from './terminal-handlers'
+import { continueAgentSession, resendSessionHandoff } from './terminal-handlers'
 
 // Panel mounts, scope tabs, and boot each trigger a scan; one pass walks
 // hundreds of transcript files for ~60s. Overlapping passes redo the same
@@ -57,7 +57,11 @@ export function registerSessionHandlers(getMainWindow: () => BrowserWindow | nul
   })
 
   ipcMain.handle(SESSION_CHANNELS.continue, async (_event, input: SessionContinueInput) => {
-    return continueAgentSession(input.sessionId, { engine: input.engine })
+    return continueAgentSession(input.sessionId, { engine: input.engine, mode: input.mode })
+  })
+
+  ipcMain.handle(SESSION_CHANNELS.resendHandoff, async (_event, { sessionId }: { sessionId: string }) => {
+    return resendSessionHandoff(sessionId)
   })
 
   ipcMain.handle(SESSION_CHANNELS.scanExternal, async () => {
@@ -67,8 +71,11 @@ export function registerSessionHandlers(getMainWindow: () => BrowserWindow | nul
   ipcMain.handle(SESSION_CHANNELS.getTranscript, async (_event, { sessionId }: { sessionId: string }) => {
     await agentSessionRegistry.load().catch(() => undefined)
     const record = agentSessionRegistry.getSession(sessionId)
-    if (!record?.transcriptPath) return null
-    return readTranscriptDetail(record.transcriptPath, record.engine, record.providerSessionId)
+    if (!record) return null
+    // Janus history resolves from the provider session id when the record
+    // carries no transcript path; other engines need the recorded path.
+    if (!record.transcriptPath && record.engine !== 'janus') return null
+    return readTranscriptDetail(record.transcriptPath ?? '', record.engine, record.providerSessionId)
   })
 
   ipcMain.handle(SESSION_CHANNELS.saveLayout, async (_event, layout: ShellRestoreManifest) => {

@@ -559,7 +559,7 @@ export default function janusxNotify(pi) {
 `
 }
 
-function buildWindowsHookScript(): string {
+export function buildWindowsHookScript(): string {
   return `param(
   [Parameter(Mandatory = $true)][string]$Source,
   [Alias("Event")][Parameter(Mandatory = $true)][string]$EventName,
@@ -632,7 +632,7 @@ try {
     }
   }
 
-  $sessionId = Get-FirstString $rawValue @("session_id", "sessionId")
+  $sessionId = Get-FirstString $rawValue @("session_id", "sessionId", "thread_id", "threadId")
   # Toast/excerpt text never needs more than a head: tool prompts can carry
   # tens of KB that would otherwise ride every POST body inside 'message'.
   if ($message -and $message.Length -gt 2000) { $message = $message.Substring(0, 2000) }
@@ -643,7 +643,7 @@ try {
   # command text that only slow down serialization and the POST body.
   $rawFiltered = [ordered]@{}
   if ($null -ne $rawValue -and $rawValue -isnot [string]) {
-    foreach ($name in @("status", "state", "matcher", "notification_type", "type", "transcript_path", "transcriptPath", "session_id", "sessionId")) {
+    foreach ($name in @("status", "state", "matcher", "notification_type", "type", "transcript_path", "transcriptPath", "session_id", "sessionId", "thread_id", "threadId")) {
       try {
         if ($rawValue.PSObject.Properties.Name -contains $name) {
           $candidate = $rawValue.$name

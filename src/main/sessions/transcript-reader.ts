@@ -1,86 +1,110 @@
-// Note: bounded full-prose transcript reads back the windowed session
-// reading — see
-// .agents/notes/sessions/records/session-resume-detail.md
+// Note: transcript-driven display prose — user input and agent text replies
+// resolve from the provider store through the shared kernel — see
+// .agents/notes/sessions/requirements/session-content-truth.md
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type { TranscriptDetail, TranscriptTurn } from '../../shared/ipc/session'
+import { readBounded } from './external-session-scanner'
 import {
-  claudeAssistantText,
-  claudeUserText,
-  codexAssistantText,
-  codexUserText,
+  kernelMessagesFromRecords,
+  pairTurns,
   parseJsonLine,
-  piAssistantText,
-  piUserText,
-  readBounded,
-} from './external-session-scanner'
+  segmentTurns,
+  type KernelTurn,
+} from './transcript-kernel'
 import { readOpencodeTurns } from './opencode-sessions'
 
 /** Most-recent pairs kept; older pairs drop with the truncated flag set. */
 export const TRANSCRIPT_TURN_CAP = 100
-/** Per-side character cap; the provider store stays the lossless source. */
-export const TRANSCRIPT_TEXT_CAP = 2000
+/**
+ * Display prose stays full inside the bounded window; only a pathological
+ * single row is capped and marked, normal answers never truncate.
+ */
+export const TRANSCRIPT_TEXT_CAP = 200_000
+/** Single-doc histories (janus) parse whole with a size cap instead. */
+const JANUS_DOC_MAX_BYTES = 2 * 1024 * 1024
 
 export function truncateTranscriptText(text: string): string {
   return text.length > TRANSCRIPT_TEXT_CAP ? `${text.slice(0, TRANSCRIPT_TEXT_CAP)}…` : text
 }
 
-function truncateTurn(text: string): string {
-  return truncateTranscriptText(text)
+function toTurn(turn: KernelTurn): TranscriptTurn {
+  const out: TranscriptTurn = {}
+  if (turn.prompt) out.prompt = truncateTranscriptText(turn.prompt)
+  if (turn.excerpt) out.excerpt = truncateTranscriptText(turn.excerpt)
+  return out
+}
+
+/**
+ * Janus keeps one JSON document per conversation with a messages array.
+ * A missing, oversized or malformed doc resolves null like other engines.
+ */
+async function readJanusDoc(path: string): Promise<TranscriptTurn[] | null> {
+  let raw: string
+  try {
+    const content = await readFile(path, 'utf-8')
+    if (Buffer.byteLength(content) > JANUS_DOC_MAX_BYTES) return null
+    raw = content
+  } catch {
+    return null
+  }
+  const parsed = parseJsonLine(raw)
+  const messages = parsed?.messages
+  if (!Array.isArray(messages)) return null
+  const records = messages
+    .map((message) => (message && typeof message === 'object' ? ({ message } as Record<string, unknown>) : null))
+    .filter((record): record is Record<string, unknown> => record !== null)
+  return pairTurns(kernelMessagesFromRecords(records, 'janus')).map(toTurn)
 }
 
 /**
  * Bounded full-prose read of one provider transcript. Corrupt lines and
  * unknown shapes are skipped inline; a missing or unreadable file resolves
- * null so callers fall back to cached excerpts without failing.
+ * null so callers fall back to cached excerpts without failing. Windowed
+ * reads never pair a question from the head window with an answer from the
+ * tail window — segments pair internally and concatenate.
  */
 export async function readTranscriptDetail(
   transcriptPath: string,
   engine: string,
   sessionId?: string,
 ): Promise<TranscriptDetail | null> {
-  if (!transcriptPath) return null
   // Opencode detail reads query the sqlite store for one session; the
   // transcript path carries the database location.
   if (engine === 'opencode') {
-    if (!sessionId) return null
+    if (!sessionId || !transcriptPath) return null
     const list = readOpencodeTurns(transcriptPath, sessionId)
     if (!list) return null
     return { transcriptPath, turns: list.turns, totalTurns: list.totalTurns, truncated: list.truncated }
   }
+  if (engine === 'janus') {
+    const path =
+      transcriptPath?.trim() ||
+      (sessionId ? join(homedir(), '.janus', 'history', `${sessionId}.jsonl`) : '')
+    if (!path) return null
+    const turns = await readJanusDoc(path)
+    if (!turns || turns.length === 0) return null
+    const totalTurns = turns.length
+    const kept = turns.slice(-TRANSCRIPT_TURN_CAP)
+    return {
+      transcriptPath: path,
+      turns: kept,
+      totalTurns,
+      truncated: totalTurns > kept.length,
+    }
+  }
   if (engine !== 'claude' && engine !== 'codex' && engine !== 'pi') return null
+  if (!transcriptPath) return null
   const bounded = await readBounded(transcriptPath)
   if (!bounded) return null
-  const userOf = engine === 'claude' ? claudeUserText : engine === 'codex' ? codexUserText : piUserText
-  const assistantOf =
-    engine === 'claude' ? claudeAssistantText : engine === 'codex' ? codexAssistantText : piAssistantText
   const turns: TranscriptTurn[] = []
-  let pending: string | undefined
   let totalTurns = 0
-  const push = (turn: TranscriptTurn): void => {
+  for (const turn of segmentTurns(bounded.lines, bounded.headLines, engine)) {
     totalTurns += 1
-    turns.push(turn)
+    turns.push(toTurn(turn))
     if (turns.length > TRANSCRIPT_TURN_CAP) turns.shift()
   }
-  for (const line of bounded.lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const record = parseJsonLine(trimmed)
-    if (!record) continue
-    const question = userOf(record)
-    if (question) {
-      pending = question
-      continue
-    }
-    const answer = assistantOf(record)
-    if (!answer) continue
-    const turn: TranscriptTurn = {}
-    if (pending !== undefined) {
-      turn.prompt = truncateTurn(pending)
-      pending = undefined
-    }
-    turn.excerpt = truncateTurn(answer)
-    push(turn)
-  }
-  if (pending !== undefined) push({ prompt: truncateTurn(pending) })
   if (totalTurns === 0) return null
   return { transcriptPath, turns, totalTurns, truncated: totalTurns > turns.length }
 }
