@@ -10,6 +10,7 @@ export const RIGHT_TOOL_SCHEMA_VERSION = 1 as const
 export const RIGHT_TOOL_PANEL_MIN_WIDTH = 240
 export const RIGHT_TOOL_PANEL_DEFAULT_WIDTH = 280
 export const RIGHT_TOOL_PANEL_MAX_WIDTH = 420
+export const FILES_PANEL_DEFAULT_WIDTH = 260
 export const SESSION_PANEL_MIN_WIDTH = 340
 export const SESSION_PANEL_DEFAULT_WIDTH = 360
 export const SESSION_PANEL_MAX_WIDTH = 520
@@ -32,7 +33,7 @@ export function clampRightToolPanelWidth(
 ): number {
   const minimum = rightToolPanelMinWidth(toolId)
   const upperBound = rightToolPanelMaxWidth(toolId)
-  const defaultWidth = toolId === 'sessions' ? SESSION_PANEL_DEFAULT_WIDTH : RIGHT_TOOL_PANEL_DEFAULT_WIDTH
+  const defaultWidth = rightToolPanelDefaultWidth(toolId)
   const effectiveMaximum = maximum !== undefined && Number.isFinite(maximum)
     ? Math.min(upperBound, Math.max(minimum, maximum))
     : upperBound
@@ -45,11 +46,17 @@ export function clampRightToolPanelWidth(
 }
 
 export function rightToolPanelMinWidth(toolId?: RightToolId | null): number {
-  return toolId === 'sessions' ? SESSION_PANEL_MIN_WIDTH : RIGHT_TOOL_PANEL_MIN_WIDTH
+  return toolId === 'sessions' || toolId === 'git' ? SESSION_PANEL_MIN_WIDTH : RIGHT_TOOL_PANEL_MIN_WIDTH
 }
 
 export function rightToolPanelMaxWidth(toolId?: RightToolId | null): number {
-  return toolId === 'sessions' ? SESSION_PANEL_MAX_WIDTH : RIGHT_TOOL_PANEL_MAX_WIDTH
+  return toolId === 'sessions' || toolId === 'git' ? SESSION_PANEL_MAX_WIDTH : RIGHT_TOOL_PANEL_MAX_WIDTH
+}
+
+export function rightToolPanelDefaultWidth(toolId?: RightToolId | null): number {
+  if (toolId === 'sessions' || toolId === 'git') return SESSION_PANEL_DEFAULT_WIDTH
+  if (toolId === 'files') return FILES_PANEL_DEFAULT_WIDTH
+  return RIGHT_TOOL_PANEL_DEFAULT_WIDTH
 }
 
 export function preferredRightToolPanelWidth(
@@ -57,10 +64,10 @@ export function preferredRightToolPanelWidth(
   panelWidths: RightToolPreferencesV1['panelWidths'],
   toolId?: RightToolId | null,
 ): number {
-  if (toolId === 'sessions') {
-    return clampRightToolPanelWidth(panelWidths?.sessions ?? SESSION_PANEL_DEFAULT_WIDTH, undefined, toolId)
-  }
-  return clampRightToolPanelWidth(toolId ? panelWidths?.[toolId] ?? baseWidth : baseWidth)
+  const defaultWidth = toolId === 'sessions' || toolId === 'git' || toolId === 'files'
+    ? rightToolPanelDefaultWidth(toolId)
+    : baseWidth
+  return clampRightToolPanelWidth(toolId ? panelWidths?.[toolId] ?? defaultWidth : defaultWidth, undefined, toolId)
 }
 
 function normalizePanelWidths(value: unknown): RightToolPreferencesV1['panelWidths'] {

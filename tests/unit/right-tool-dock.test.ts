@@ -75,6 +75,16 @@ describe('right dock layout', () => {
     expect(input.panelWidths.sessions).toBe(480)
   })
 
+  it('starts file tree narrower and Git at the same width as sessions', () => {
+    const input = { availableWidth: 1100, panelCollapsed: false, panelWidth: 280, hasActiveTool: true }
+    expect(getRightDockLayout({ ...input, activeToolId: 'files' }))
+      .toMatchObject({ panelWidth: 260, dockWidth: 308 })
+    expect(getRightDockLayout({ ...input, activeToolId: 'git' }))
+      .toMatchObject({ panelWidth: 360, dockWidth: 408 })
+    expect(getRightDockLayout({ ...input, activeToolId: 'sessions' }))
+      .toMatchObject({ panelWidth: 360, dockWidth: 408 })
+  })
+
   it('keeps manual preference for product stage: default-hide is done by App, layout stays expandable', () => {
     const manual = getRightDockLayout({
       availableWidth: 1000,

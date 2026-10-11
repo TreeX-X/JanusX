@@ -5,6 +5,7 @@ import {
   clampRightToolPanelWidth,
   closeRightTool,
   createDefaultRightToolPreferences,
+  FILES_PANEL_DEFAULT_WIDTH,
   normalizeRightToolIds,
   openRightTool,
   reconcileRightToolPreferences,
@@ -234,7 +235,7 @@ describe('right tool persistence contract', () => {
 
     const state = useRightToolStore.getState()
     expect(state.openToolIds).toEqual([])
-    expect(state.panelWidths).toEqual({ sessions: 480, files: 310, git: 420 })
+    expect(state.panelWidths).toEqual({ sessions: 480, files: 310, git: 520 })
     expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'sessions')).toBe(480)
   })
 
@@ -374,10 +375,18 @@ describe('right tool panel width', () => {
     const state = useRightToolStore.getState()
     expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'sessions')).toBe(480)
     expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'files')).toBe(310)
-    expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'git')).toBe(280)
+    expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'git')).toBe(360)
     expect(state.panelWidth).toBe(280)
 
     const persisted = useRightToolStore.persist.getOptions().partialize!(state)
     expect(persisted.panelWidths).toEqual({ sessions: 480, files: 310 })
+  })
+
+  it('starts files narrower and gives Git the session width range', () => {
+    expect(FILES_PANEL_DEFAULT_WIDTH).toBe(260)
+    expect(preferredRightToolPanelWidth(280, undefined, 'files')).toBe(260)
+    expect(preferredRightToolPanelWidth(280, undefined, 'git')).toBe(360)
+    expect(clampRightToolPanelWidth(100, undefined, 'git')).toBe(340)
+    expect(clampRightToolPanelWidth(999, undefined, 'git')).toBe(520)
   })
 })
