@@ -11,6 +11,10 @@ import {
   RIGHT_TOOL_PANEL_DEFAULT_WIDTH,
   RIGHT_TOOL_PANEL_MAX_WIDTH,
   RIGHT_TOOL_PANEL_MIN_WIDTH,
+  SESSION_PANEL_DEFAULT_WIDTH,
+  SESSION_PANEL_MAX_WIDTH,
+  SESSION_PANEL_MIN_WIDTH,
+  preferredRightToolPanelWidth,
   toggleRightToolFromRail,
 } from '../../src/renderer/src/right-tools/state'
 import type { RightToolPreferencesV1 } from '../../src/renderer/src/right-tools/types'
@@ -219,6 +223,21 @@ describe('right tool persistence contract', () => {
     })
   })
 
+  it('restores separate tab widths across launches and clamps invalid saved values', async () => {
+    const { useRightToolStore } = (await loadStores(envelope({
+      schemaVersion: 1,
+      openToolIds: ['sessions', 'files'],
+      activeToolId: 'sessions',
+      panelWidth: 280,
+      panelWidths: { sessions: 480, files: 310, git: 999, assist: 'invalid' },
+    }))).storeModule
+
+    const state = useRightToolStore.getState()
+    expect(state.openToolIds).toEqual([])
+    expect(state.panelWidths).toEqual({ sessions: 480, files: 310, git: 420 })
+    expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'sessions')).toBe(480)
+  })
+
   it('migrates an old envelope to defaults and the current version', async () => {
     const { storage, storeModule } = await loadStores(
       envelope(
@@ -341,5 +360,24 @@ describe('right tool panel width', () => {
   it('honors a runtime effective maximum without going below the minimum', () => {
     expect(clampRightToolPanelWidth(400, 360)).toBe(360)
     expect(clampRightToolPanelWidth(400, 100)).toBe(240)
+  })
+
+  it('uses a wider session default and keeps per-tab drag preferences independent', async () => {
+    expect([SESSION_PANEL_MIN_WIDTH, SESSION_PANEL_DEFAULT_WIDTH, SESSION_PANEL_MAX_WIDTH]).toEqual([340, 360, 520])
+    expect(preferredRightToolPanelWidth(280, undefined, 'sessions')).toBe(360)
+    expect(clampRightToolPanelWidth(100, 520, 'sessions')).toBe(340)
+    expect(clampRightToolPanelWidth(999, 520, 'sessions')).toBe(520)
+
+    const { useRightToolStore } = (await loadStores()).storeModule
+    useRightToolStore.getState().setPanelWidth(480, 'sessions')
+    useRightToolStore.getState().setPanelWidth(310, 'files')
+    const state = useRightToolStore.getState()
+    expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'sessions')).toBe(480)
+    expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'files')).toBe(310)
+    expect(preferredRightToolPanelWidth(state.panelWidth, state.panelWidths, 'git')).toBe(280)
+    expect(state.panelWidth).toBe(280)
+
+    const persisted = useRightToolStore.persist.getOptions().partialize!(state)
+    expect(persisted.panelWidths).toEqual({ sessions: 480, files: 310 })
   })
 })

@@ -15,7 +15,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from '@/i18n/useI18n'
 import {
   clampRightToolPanelWidth,
-  RIGHT_TOOL_PANEL_MIN_WIDTH,
+  preferredRightToolPanelWidth,
+  rightToolPanelMinWidth,
 } from '@/right-tools/state'
 import { RightToolHost } from './RightToolHost'
 import { RightToolRail } from './RightToolRail'
@@ -46,6 +47,7 @@ export function RightDock({
   const storedOpenToolIds = useRightToolStore((state) => state.openToolIds)
   const storedActiveToolId = useRightToolStore((state) => state.activeToolId)
   const panelWidth = useRightToolStore((state) => state.panelWidth)
+  const panelWidths = useRightToolStore((state) => state.panelWidths)
   const activateTool = useRightToolStore((state) => state.activateTool)
   const closeTool = useRightToolStore((state) => state.closeTool)
   const toggleFromRail = useRightToolStore((state) => state.toggleFromRail)
@@ -65,14 +67,12 @@ export function RightDock({
   const [resizing, setResizing] = useState(false)
   const workspacePath = workspaces.find(({ id }) => id === activeWorkspaceId)?.path ?? null
   const contentVisible = !effectiveCollapsed && activeToolId !== null
-  const maximum = Math.max(RIGHT_TOOL_PANEL_MIN_WIDTH, effectiveMaxWidth)
-  const renderedPanelWidth = clampRightToolPanelWidth(panelWidth, maximum)
-
-  useEffect(() => {
-    if (effectiveMaxWidth < RIGHT_TOOL_PANEL_MIN_WIDTH) return
-    const width = clampRightToolPanelWidth(panelWidth, effectiveMaxWidth)
-    if (width !== panelWidth) setPanelWidth(width)
-  }, [effectiveMaxWidth, panelWidth, setPanelWidth])
+  // Per-tab drag preference and responsive display width stay separate.
+  // See .agents/notes/workbench/right-dock.md
+  const minimum = rightToolPanelMinWidth(activeToolId)
+  const maximum = Math.max(minimum, effectiveMaxWidth)
+  const preferredWidth = preferredRightToolPanelWidth(panelWidth, panelWidths, activeToolId)
+  const renderedPanelWidth = clampRightToolPanelWidth(preferredWidth, maximum, activeToolId)
 
   const finishResize = useCallback(() => {
     const session = resizeSessionRef.current
@@ -96,6 +96,8 @@ export function RightDock({
   useEffect(() => {
     if (effectiveCollapsed) finishResize()
   }, [effectiveCollapsed, finishResize])
+
+  useEffect(() => finishResize(), [activeToolId, finishResize])
 
   useEffect(() => {
     void loadExperimental()
@@ -132,7 +134,7 @@ export function RightDock({
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const session = resizeSessionRef.current
     if (!session || session.pointerId !== event.pointerId) return
-    setPanelWidth(clampRightToolPanelWidth(session.startWidth + session.startX - event.clientX, maximum))
+    setPanelWidth(clampRightToolPanelWidth(session.startWidth + session.startX - event.clientX, maximum, activeToolId), activeToolId)
   }
 
   const handlePointerEnd = (event: PointerEvent<HTMLDivElement>) => {
@@ -143,12 +145,12 @@ export function RightDock({
     const widths: Partial<Record<string, number>> = {
       ArrowLeft: renderedPanelWidth + 16,
       ArrowRight: renderedPanelWidth - 16,
-      Home: RIGHT_TOOL_PANEL_MIN_WIDTH,
+      Home: minimum,
       End: maximum,
     }
     const width = widths[event.key]
     if (width === undefined) return
-    setPanelWidth(clampRightToolPanelWidth(width, maximum))
+    setPanelWidth(clampRightToolPanelWidth(width, maximum, activeToolId), activeToolId)
     event.preventDefault()
   }
 
@@ -169,6 +171,7 @@ export function RightDock({
         id="right-tool-panel"
         style={{ width: renderedPanelWidth }}
         data-visible={contentVisible}
+        data-resizing={resizing}
         aria-hidden={!contentVisible}
         {...(!contentVisible ? { inert: '' } : {})}
         data-testid="right-tool-panel-shell"
@@ -179,7 +182,7 @@ export function RightDock({
             role="separator"
             aria-label={t('common:rightDock.resizeAria')}
             aria-orientation="vertical"
-            aria-valuemin={RIGHT_TOOL_PANEL_MIN_WIDTH}
+            aria-valuemin={minimum}
             aria-valuemax={Math.round(maximum)}
             aria-valuenow={Math.round(renderedPanelWidth)}
             tabIndex={0}

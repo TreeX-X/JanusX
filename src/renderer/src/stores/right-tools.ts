@@ -30,7 +30,7 @@ interface RightToolStore extends RightToolPreferencesV1 {
   activateTool: (toolId: RightToolId) => void
   closeTool: (toolId: RightToolId) => void
   toggleFromRail: (toolId: RightToolId) => void
-  setPanelWidth: (width: number) => void
+  setPanelWidth: (width: number, toolId?: RightToolId | null) => void
   reconcile: () => void
 }
 
@@ -45,6 +45,7 @@ export function selectPersistedRightToolPreferences(
     openToolIds: [],
     activeToolId: null,
     panelWidth: state.panelWidth,
+    ...(state.panelWidths ? { panelWidths: state.panelWidths } : {}),
   }
 }
 
@@ -88,7 +89,9 @@ export const useRightToolStore = create<RightToolStore>()(
         activateTool: (toolId) => route(toolId, activateRightTool),
         closeTool: (toolId) => applyTransition(closeRightTool(get(), toolId)),
         toggleFromRail: (toolId) => route(toolId, toggleRightToolFromRail),
-        setPanelWidth: (panelWidth) => set({ panelWidth: clampRightToolPanelWidth(panelWidth) }),
+        setPanelWidth: (panelWidth, toolId) => set((state) => toolId
+          ? { panelWidths: { ...state.panelWidths, [toolId]: clampRightToolPanelWidth(panelWidth, undefined, toolId) } }
+          : { panelWidth: clampRightToolPanelWidth(panelWidth) }),
         reconcile: () => set(reconcileRightToolPreferences(get())),
       }
     },

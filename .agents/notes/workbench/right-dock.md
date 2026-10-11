@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-11T07:32:23Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -37,6 +37,8 @@ The right side freezes four singleton tabs in a fixed strip while the file tree 
 
 The right side composes a fixed tool rail, open tool tabs, and a variable-width panel. Tools stay open in multiples with exactly one visible, each tool runs as a singleton, and registry order fixes tab sequence with no drag sorting. Collapse keeps a single source of truth and tool business state follows existing stores per workspace. File icons lead with semantic shape plus low-saturation color inside the monochrome-plus-accent language, and file kind, selection, and version-control states travel three independent visual channels. Icon taxonomy shares one source with the file viewer classification. Office preview stays a transient middle workspace outside the rail.
 
+Panel width now follows the active tool. Sessions start at 360px with a 340px minimum and 520px maximum; other tools retain the 280px default, 240px minimum and 420px maximum. Dragging records a preference for that tool, so tab switches restore each width. The layout may temporarily constrain the rendered width to preserve the 320px center workspace; it does not persist that responsive constraint. When available width falls below the active tool's minimum, the existing rail-only responsive collapse applies. Tab switches animate panel width on the same 240ms curve as the grid; pointer resizing stays immediate.
+
 ## Alternatives considered
 
 - Per-tool windows — strongest case gives every tool full space. The driver that rules it out is frame fragmentation: tools scatter beyond the working context.
@@ -48,3 +50,4 @@ The right side composes a fixed tool rail, open tool tabs, and a variable-width 
 
 - **Gains**: New tools arrive through registry order without squeezing chrome; file kinds read instantly across tree and viewer from one taxonomy.
 - **Costs and limits**: Singleton tools cannot split side by side; drag sorting and pinning stay explicitly out until range pressure demands them.
+- **Width behavior**: A narrow viewport may collapse the sessions panel sooner than other tools because its minimum is larger. Saved manual widths return when space is available again. The v1 persisted shared width remains the fallback for tools without a dedicated drag preference.

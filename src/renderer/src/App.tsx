@@ -117,6 +117,7 @@ export default function App() {
   const mountWorkspacePane = showWorkspacePane || hasRetainedWorkspacePane
   const visibleProductWorkspaceId = useProductWorkspaceStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)
+  const rightToolPanelWidths = useRightToolStore((s) => s.panelWidths)
   const rightToolActiveId = useRightToolStore((s) => s.activeToolId)
   const isEditorEmbedded = useEditorStore((s) => s.isEmbedded && s.isVisible)
   const embeddedEditorWidth = useEditorStore((s) => s.embeddedWidth)
@@ -168,6 +169,8 @@ export default function App() {
       - (isEditorEmbedded ? EMBEDDED_EDITOR_MIN_WIDTH : 0),
     panelCollapsed,
     panelWidth: rightToolPanelWidth,
+    panelWidths: rightToolPanelWidths,
+    activeToolId: rightToolActiveId,
     hasActiveTool: rightToolActiveId !== null,
   })
   const editorMaxWidth = Math.max(

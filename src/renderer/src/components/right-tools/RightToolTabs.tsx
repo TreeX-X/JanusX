@@ -31,8 +31,13 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
 
   useEffect(() => {
     updateOverflow()
+    const observer = new ResizeObserver(updateOverflow)
+    if (tablistRef.current) observer.observe(tablistRef.current)
     window.addEventListener('resize', updateOverflow)
-    return () => window.removeEventListener('resize', updateOverflow)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', updateOverflow)
+    }
   }, [openToolIds])
 
   useEffect(() => {

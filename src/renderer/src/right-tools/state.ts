@@ -10,6 +10,9 @@ export const RIGHT_TOOL_SCHEMA_VERSION = 1 as const
 export const RIGHT_TOOL_PANEL_MIN_WIDTH = 240
 export const RIGHT_TOOL_PANEL_DEFAULT_WIDTH = 280
 export const RIGHT_TOOL_PANEL_MAX_WIDTH = 420
+export const SESSION_PANEL_MIN_WIDTH = 340
+export const SESSION_PANEL_DEFAULT_WIDTH = 360
+export const SESSION_PANEL_MAX_WIDTH = 520
 
 const TOOL_ORDER = new Map(RIGHT_TOOL_IDS.map((id, index) => [id, index]))
 
@@ -24,17 +27,51 @@ export function createDefaultRightToolPreferences(): RightToolPreferencesV1 {
 
 export function clampRightToolPanelWidth(
   width: unknown,
-  maximum = RIGHT_TOOL_PANEL_MAX_WIDTH,
+  maximum?: number,
+  toolId?: RightToolId | null,
 ): number {
-  const effectiveMaximum = Number.isFinite(maximum)
-    ? Math.min(RIGHT_TOOL_PANEL_MAX_WIDTH, Math.max(RIGHT_TOOL_PANEL_MIN_WIDTH, maximum))
-    : RIGHT_TOOL_PANEL_MAX_WIDTH
+  const minimum = rightToolPanelMinWidth(toolId)
+  const upperBound = rightToolPanelMaxWidth(toolId)
+  const defaultWidth = toolId === 'sessions' ? SESSION_PANEL_DEFAULT_WIDTH : RIGHT_TOOL_PANEL_DEFAULT_WIDTH
+  const effectiveMaximum = maximum !== undefined && Number.isFinite(maximum)
+    ? Math.min(upperBound, Math.max(minimum, maximum))
+    : upperBound
 
   if (typeof width !== 'number' || !Number.isFinite(width)) {
-    return Math.min(RIGHT_TOOL_PANEL_DEFAULT_WIDTH, effectiveMaximum)
+    return Math.min(defaultWidth, effectiveMaximum)
   }
 
-  return Math.min(effectiveMaximum, Math.max(RIGHT_TOOL_PANEL_MIN_WIDTH, width))
+  return Math.min(effectiveMaximum, Math.max(minimum, width))
+}
+
+export function rightToolPanelMinWidth(toolId?: RightToolId | null): number {
+  return toolId === 'sessions' ? SESSION_PANEL_MIN_WIDTH : RIGHT_TOOL_PANEL_MIN_WIDTH
+}
+
+export function rightToolPanelMaxWidth(toolId?: RightToolId | null): number {
+  return toolId === 'sessions' ? SESSION_PANEL_MAX_WIDTH : RIGHT_TOOL_PANEL_MAX_WIDTH
+}
+
+export function preferredRightToolPanelWidth(
+  baseWidth: number,
+  panelWidths: RightToolPreferencesV1['panelWidths'],
+  toolId?: RightToolId | null,
+): number {
+  if (toolId === 'sessions') {
+    return clampRightToolPanelWidth(panelWidths?.sessions ?? SESSION_PANEL_DEFAULT_WIDTH, undefined, toolId)
+  }
+  return clampRightToolPanelWidth(toolId ? panelWidths?.[toolId] ?? baseWidth : baseWidth)
+}
+
+function normalizePanelWidths(value: unknown): RightToolPreferencesV1['panelWidths'] {
+  if (!isRecord(value)) return undefined
+  const widths: NonNullable<RightToolPreferencesV1['panelWidths']> = {}
+  for (const id of RIGHT_TOOL_IDS) {
+    if (typeof value[id] === 'number' && Number.isFinite(value[id])) {
+      widths[id] = clampRightToolPanelWidth(value[id], undefined, id)
+    }
+  }
+  return Object.keys(widths).length ? widths : undefined
 }
 
 export function canonicalRightToolId(id: unknown): unknown {
@@ -63,12 +100,14 @@ export function reconcileRightToolPreferences(value: unknown): RightToolPreferen
   const activeToolId = openToolIds.includes(canonicalRightToolId(value.activeToolId) as RightToolId)
     ? (canonicalRightToolId(value.activeToolId) as RightToolId)
     : (openToolIds[0] ?? null)
+  const panelWidths = normalizePanelWidths(value.panelWidths)
 
   return {
     schemaVersion: RIGHT_TOOL_SCHEMA_VERSION,
     openToolIds,
     activeToolId,
     panelWidth: clampRightToolPanelWidth(value.panelWidth),
+    ...(panelWidths ? { panelWidths } : {}),
   }
 }
 

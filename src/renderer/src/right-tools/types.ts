@@ -20,6 +20,8 @@ export interface RightToolPreferencesV1 {
   openToolIds: RightToolId[]
   activeToolId: RightToolId | null
   panelWidth: number
+  /** User-set widths by tab. Missing entries use the tool default. */
+  panelWidths?: Partial<Record<RightToolId, number>>
 }
 
 export type PanelCollapseCommand = 'none' | 'expand' | 'collapse' | 'toggle'

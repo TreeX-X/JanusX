@@ -57,6 +57,24 @@ describe('right dock layout', () => {
     })
   })
 
+  it('gives sessions its own width and restores each tab after a narrow window', () => {
+    const input = {
+      panelCollapsed: false,
+      panelWidth: 280,
+      panelWidths: { sessions: 480, files: 310 },
+      hasActiveTool: true,
+    } as const
+    expect(getRightDockLayout({ ...input, availableWidth: 1200, activeToolId: 'sessions' }))
+      .toMatchObject({ panelWidth: 480, dockWidth: 528, effectiveCollapsed: false })
+    expect(getRightDockLayout({ ...input, availableWidth: 1200, activeToolId: 'files' }))
+      .toMatchObject({ panelWidth: 310, dockWidth: 358, effectiveCollapsed: false })
+    expect(getRightDockLayout({ ...input, availableWidth: 760, activeToolId: 'sessions' }))
+      .toMatchObject({ panelWidth: 392, effectiveCollapsed: false })
+    expect(getRightDockLayout({ ...input, availableWidth: 690, activeToolId: 'sessions' }))
+      .toMatchObject({ effectiveCollapsed: true, dockWidth: 48 })
+    expect(input.panelWidths.sessions).toBe(480)
+  })
+
   it('keeps manual preference for product stage: default-hide is done by App, layout stays expandable', () => {
     const manual = getRightDockLayout({
       availableWidth: 1000,
