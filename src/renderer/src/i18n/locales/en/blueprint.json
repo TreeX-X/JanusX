@@ -18,13 +18,22 @@
     "diagnostics": "Issues to review",
     "noDiagnostics": "No additional parsing issues.",
     "technical": "Technical details",
+    "openSource": "View source Note: {{title}}",
+    "externalRepository": "an external repository",
+    "explanation": {
+      "document": "The document content or its references need review.",
+      "scan": "The document scan is incomplete, so this list may be incomplete.",
+      "module": "The module or repository connection needs review.",
+      "external": "This blueprint cannot verify {{count}} referenced Notes in {{repository}} yet; the source Note itself remains readable."
+    },
     "moduleInterfaces": "Module interfaces · {{count}}",
     "interfaces": "Cross-module interfaces · {{count}}",
     "interfaceDetails": "Interface connections",
     "issue": {
-      "document": "Document reading needs review",
+      "document": "Document or index needs review",
       "scan": "Document scan is incomplete",
-      "module": "Module or repository relationship needs review"
+      "module": "Module or repository relationship needs review",
+      "external": "External references cannot be verified yet"
     }
   },
   "browse": {

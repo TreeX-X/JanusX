@@ -39,7 +39,7 @@ for (const surface of ['', '&workbench']) {
     await expect(trigger).toBeVisible()
     await trigger.click()
     const dialog = page.getByRole('dialog', { name: '数据来源' })
-    await expect(dialog).toContainText('文档读取需要检查')
+    await expect(dialog).toContainText('文档或索引需要检查')
     await dialog.getByText('技术详情', { exact: true }).click()
     await expect(dialog).toContainText('FIXTURE_PARSE_DIAGNOSTIC')
     await dialog.getByRole('button', { name: '关闭', exact: true }).click()

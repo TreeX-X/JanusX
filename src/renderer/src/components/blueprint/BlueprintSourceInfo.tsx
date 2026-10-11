@@ -63,9 +63,15 @@ function SourceDialog({ source, info, onSelect, onClose }: { source: Blueprint; 
         {!info.issues.length && <p>{t('blueprint:sourceInfo.noDiagnostics')}</p>}
         {info.issues.map((item, index) => <article className="bp-source-issue" key={index}>
           <strong>{t(`blueprint:sourceInfo.issue.${item.category}`)}</strong>
-          {item.nodeId && source.nodes[item.nodeId] && <button type="button" onClick={() => select(item.nodeId!)}>{source.nodes[item.nodeId].title}</button>}
-          {item.path && <code>{item.path}</code>}
-          {(item.code || item.message) && <details><summary>{t('blueprint:sourceInfo.technical')}</summary><p>{item.code}{item.code && item.message ? ': ' : ''}{item.message}</p></details>}
+          <p className="bp-source-explanation">{t(`blueprint:sourceInfo.explanation.${item.category}`, item.category === 'external' ? { count: item.targets?.length ?? 1, repository: item.targetRepoName ?? t('blueprint:sourceInfo.externalRepository') } : undefined)}</p>
+          {item.nodeId && source.nodes[item.nodeId] ? <button type="button" onClick={() => select(item.nodeId!)}>{t('blueprint:sourceInfo.openSource', { title: item.sourceTitle ?? source.nodes[item.nodeId].title })}</button>
+            : item.sourceTitle && <span>{item.sourceTitle}</span>}
+          {item.path && !item.path.startsWith('note://') && <code>{item.path}</code>}
+          {(item.code || item.message || item.path || item.targets?.length) && <details><summary>{t('blueprint:sourceInfo.technical')}</summary>
+            {item.path && <code>{item.path}</code>}
+            {(item.code || item.message) && <p>{item.code}{item.code && item.message ? ': ' : ''}{item.message}</p>}
+            {item.targets?.map(target => <code key={target}>{target}</code>)}
+          </details>}
         </article>)}
       </section>
       <BlueprintCompositionPanel blueprint={info.graph} onSelect={select} />

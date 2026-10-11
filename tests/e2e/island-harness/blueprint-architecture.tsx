@@ -92,6 +92,12 @@ if (params.has('v2')) {
 }
 if (params.has('collapsed')) graph.collapsedNodeIds = [root.id]
 if (params.has('clean')) graph.noteSnapshot!.diagnostics = []
+if (params.has('external')) {
+  const target = 'note://22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333'
+  const diagnostic = { code: 'NOT_READY', message: 'repository not bound in this index: 22222222-2222-4222-8222-222222222222' }
+  graph.noteSnapshot!.relations.push({ sourceUri: decision.sourceUri!, targetUri: target, type: 'related-to', declarations: ['relations[0]'], resolution: { status: 'unavailable', reason: 'unbound-repository', diagnostics: [diagnostic] } })
+  graph.noteSnapshot!.diagnostics.push({ ...diagnostic, path: decision.sourceUri! })
+}
 if (params.has('untagged')) for (const node of Object.values(graph.nodes)) { node.tags = []; node.note!.tags = [] }
 // Real repository corpus supplied by the host test; production projection and lazy reads.
 if (params.has('corpus')) Object.assign(graph, (window as any).noteCorpus)

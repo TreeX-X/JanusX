@@ -19,6 +19,8 @@
 .bp-source-row span, .bp-source-row small, .bp-source-issue summary { color: var(--shell-muted); }
 .bp-source-issue summary { cursor: pointer; }
 .bp-source-issue p { margin: 6px 0; white-space: pre-wrap; }
+.bp-source-issue .bp-source-explanation { flex-basis: 100%; margin: 0; color: var(--shell-muted); }
+.bp-source-issue details code { display: block; overflow-wrap: anywhere; }
 .bp-source-body > .bp-composition { padding: 16px 0 0; }
 .bp-source-dialog .bp-composition { color: var(--shell-text); }
 .bp-source-dialog .bp-composition summary { color: var(--shell-text); }

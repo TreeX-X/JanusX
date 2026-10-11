@@ -18,13 +18,22 @@
     "diagnostics": "需要检查的问题",
     "noDiagnostics": "没有额外的解析问题。",
     "technical": "技术详情",
+    "openSource": "查看来源 Note：{{title}}",
+    "externalRepository": "外部仓库",
+    "explanation": {
+      "document": "这份文档的内容或关联信息需要核对。",
+      "scan": "文档扫描尚未完成，当前列表可能不完整。",
+      "module": "模块或仓库的连接关系需要核对。",
+      "external": "当前蓝图尚无法核对 {{repository}} 中被引用的 {{count}} 篇 Note；来源 Note 的正文仍可读取。"
+    },
     "moduleInterfaces": "模块接口 · {{count}}",
     "interfaces": "跨模块接口 · {{count}}",
     "interfaceDetails": "接口连接详情",
     "issue": {
-      "document": "文档读取需要检查",
+      "document": "文档或索引需要检查",
       "scan": "文档扫描尚未完成",
-      "module": "模块或仓库关系需要检查"
+      "module": "模块或仓库关系需要检查",
+      "external": "跨仓引用暂不可核对"
     }
   },
   "browse": {

@@ -43,4 +43,22 @@ describe('source inspection', () => {
     source.composition!.interfaces.push({ id: 'port', nodeId: 'module', name: 'read', direction: 'needs', status: 'dangling' })
     expect(blueprintSourceInfo(source, projection).hasAttention).toBe(true)
   })
+
+  it('explains cross-repository references without reporting a source read failure', () => {
+    const { source, snapshot, projection } = fixture()
+    const uri = 'note://repo/source', target = 'note://external/target'
+    const diagnostic = { code: 'NOT_READY', message: 'repository not bound in this index: external', path: uri }
+    source.nodeIds.push('source')
+    source.nodes.source = { id: 'source', title: 'Architecture decision', sourceUri: uri } as Blueprint['nodes'][string]
+    snapshot.entries.push({ uri, relPath: 'decision.md', classification: 'valid', sourceHash: 'hash', doc: { title: 'Architecture decision' } } as NoteReadSnapshot['entries'][number])
+    snapshot.relations.push({ sourceUri: uri, targetUri: target, resolution: { status: 'unavailable', reason: 'unbound-repository', diagnostics: [{ code: diagnostic.code, message: diagnostic.message }] } } as NoteReadSnapshot['relations'][number])
+    snapshot.diagnostics.push(diagnostic)
+    const result = blueprintSourceInfo(source, projection)
+    expect(result.issues).toEqual([expect.objectContaining({ category: 'external', nodeId: 'source', sourceTitle: 'Architecture decision', targets: [target] })])
+    expect(result.issues.some(issue => issue.category === 'document')).toBe(false)
+
+    source.composition!.checkouts.push({ repoId: 'external', checkoutId: 'external-1', path: 'C:/external', nodeIds: ['target'], revision: 1, status: 'bound' })
+    source.nodes.target = { id: 'target', sourceUri: target } as Blueprint['nodes'][string]
+    expect(blueprintSourceInfo(source, projection).issues).toEqual([])
+  })
 })
