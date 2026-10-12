@@ -460,7 +460,8 @@ test('Claude, Codex and Opencode restore native history and track follow-up turn
     await page.waitForLoadState('domcontentloaded')
     await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('zh-CN'))
     await page.locator('.ws').filter({ hasText: 'Recovery drill' }).first().click()
-    await page.getByRole('button', { name: /打开会话工具/ }).click()
+    // 这个用例只在 reload 之后才切中文，按钮名可能还停在英文；两种语言都匹配。
+    await page.getByRole('button', { name: /打开会话工具|Open Sessions tool/ }).click()
     for (const engine of ['claude', 'codex', 'opencode'] as const) {
       const sourceTerminal = 'source-' + engine
       terminalIds.push(sourceTerminal)
