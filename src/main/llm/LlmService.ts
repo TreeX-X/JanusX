@@ -17,6 +17,7 @@ import { llmConfigStore } from './ConfigStore'
 import type { LlmTerminalConsumer } from './ConfigStore'
 import { AuthType } from '@janusx/llm-core'
 import { getModelCatalogService } from './ModelCatalogService'
+import { detectChatModelBudget } from './chat-model-budget'
 import { app, session } from 'electron'
 
 const AUTH_TYPE_TO_ADAPTER: Record<string, string> = {
@@ -228,6 +229,15 @@ class LlmService {
 
   async resolveModelMetadata(modelId: string) {
     return getModelCatalogService().resolveModel(modelId)
+  }
+
+  async getChatModelBudget(providerId: string, modelId: string) {
+    const settings = await this.getProviderSettings('janus', providerId)
+    if (!settings || !modelId) throw new Error('Provider or model unavailable')
+    const { supportsFunctionCalling: _supportsFunctionCalling, ...budget } = await detectChatModelBudget(modelId, settings, {
+      listModels: () => this.listModels('janus', providerId), resolveModelMetadata: id => this.resolveModelMetadata(id),
+    })
+    return budget
   }
 
   /**

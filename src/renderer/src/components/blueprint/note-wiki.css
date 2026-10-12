@@ -6,12 +6,6 @@
 .bp-note-wiki__scope, .bp-note-wiki__identity { display: flex; flex-direction: column; gap: 3px; padding-bottom: 10px; overflow-wrap: anywhere; }
 .bp-note-wiki__scope strong { color: #f4aa78; letter-spacing: .05em; }
 .bp-note-wiki small, .bp-note-wiki__identity { color: #99989e; font-size: 10px; }
-.bp-note-wiki__directory { border-block: 1px solid #363539; padding: 8px 0; margin-bottom: 12px; }
-.bp-note-wiki__directory input { width: 100%; box-sizing: border-box; background: #17171b; border: 1px solid #414044; color: #eee; padding: 7px 9px; margin: 8px 0; border-radius: 5px; }
-.bp-note-wiki__directory nav { max-height: 270px; overflow-y: auto; display: grid; gap: 3px; }
-.bp-note-wiki__directory nav button { text-align: left; display: flex; flex-direction: column; border-color: transparent; background: transparent; }
-.bp-note-wiki__directory nav button[aria-current] { background: #392b24; border-color: #82583d; }
-.bp-note-wiki__directory nav button:hover { background: #2d2b2d; }
 .bp-note-diagnostic { padding: 7px 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
 .bp-note-wiki__tabs { display: flex; gap: 4px; padding-bottom: 12px; }
 .bp-note-wiki__tabs [aria-selected=true] { color: #ffb586; border-color: #9b653f; background: #34271f; }
@@ -54,7 +48,6 @@
 .bp-note-wiki .markdown-preview { font-size: 12px; overflow-wrap: anywhere; }
 .bp-note-wiki--compact { padding: 12px 14px; }
 .bp-note-wiki--compact .bp-note-wiki__scope { padding-bottom: 8px; color: #99989e; font-size: 10px; }
-.bp-note-wiki--compact .bp-note-wiki__directory { margin-bottom: 4px; padding: 6px 0; }
 .bp-note-wiki__provenance { margin: 0 0 10px; font-size: 11px; color: #99989e; }
 .bp-note-wiki__provenance > summary { padding: 5px 0; }
 .bp-note-wiki--compact .bp-note-wiki__tabs { padding-bottom: 2px; }
@@ -79,17 +72,6 @@
 [data-theme='planche'] .bp-note-wiki__identity,
 [data-theme='planche'] .bp-note-wiki--compact .bp-note-wiki__scope,
 [data-theme='planche'] .bp-note-wiki__provenance { color: var(--ink-soft, rgba(28, 52, 59, 0.62)); }
-[data-theme='planche'] .bp-note-wiki__directory { border-block: 1px solid var(--line-soft, rgba(28, 52, 59, 0.22)); }
-[data-theme='planche'] .bp-note-wiki__directory input {
-  background: var(--paper, #EFE4C5);
-  border: 1px solid var(--line, #1C343B);
-  color: var(--ink, #1C343B);
-}
-[data-theme='planche'] .bp-note-wiki__directory nav button[aria-current] {
-  background: var(--shell-accent-soft);
-  border-color: var(--shell-accent-border);
-}
-[data-theme='planche'] .bp-note-wiki__directory nav button:hover { background: var(--paper-deep, #DCCFA8); }
 [data-theme='planche'] .bp-note-wiki__tabs [aria-selected=true] {
   color: var(--planche-red, #D43D2A);
   border-color: var(--shell-accent-border);
@@ -114,3 +96,67 @@
 [data-theme='planche'] .bp-composition summary { color: var(--shell-text); }
 [data-theme='planche'] .bp-composition button { color: var(--planche-red, #D43D2A); }
 [data-theme='planche'] .bp-composition button:disabled { color: var(--ink-faint, rgba(28, 52, 59, 0.38)); }
+
+/* Only the compact navigation stays above reading targets. */
+.bp-note-wiki__body, .bp-note-review, .bp-note-wiki [data-note-anchor], .bp-note-wiki [data-finding-id], .bp-note-review__failure, .bp-note-review__coverage { scroll-margin-top: calc(var(--note-toolbar-height, 48px) + 12px); }
+
+/* Same underline navigation as automatic-review categories, in both panel layouts and themes. */
+.bp-note-wiki .bp-note-wiki__tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 2px 0 12px; border-bottom: 1px solid var(--shell-border-soft, var(--shell-border)); padding-bottom: 8px; }
+.bp-note-wiki .bp-note-wiki__tabs button { height: 28px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; margin-bottom: -9px; background: transparent; color: var(--shell-dim); font-size: 12px; font-weight: 600; transition: color 160ms ease, border-color 160ms ease; }
+.bp-note-wiki .bp-note-wiki__tabs button:hover { color: var(--shell-text); }
+.bp-note-wiki .bp-note-wiki__tabs button[aria-selected='true'] { color: var(--shell-text); border-bottom-color: var(--so-accent, var(--shell-accent)); background: transparent; }
+.bp-note-wiki .bp-note-wiki__tabs button:focus-visible { outline: 2px solid var(--shell-text); outline-offset: 3px; }
+.bp-note-wiki .bp-note-wiki__actions { justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 6px; }
+.bp-note-wiki .bp-note-wiki__actions button { padding: 5px 10px; color: var(--shell-muted); background: transparent; border: 1px solid var(--shell-border); transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease; }
+.bp-note-wiki .bp-note-wiki__actions button:is(:hover, :focus-visible, [aria-pressed='true']) { color: var(--shell-text); background: var(--shell-accent-soft); border-color: var(--shell-accent-border, var(--shell-accent)); }
+@media (prefers-reduced-motion: reduce) {
+  .bp-note-wiki .bp-note-wiki__tabs button, .bp-note-wiki .bp-note-wiki__actions button, .bp-note-wiki .bp-note-review__actions button { transition: none; }
+}
+
+.bp-note-wiki__toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; padding: 8px 0; margin-bottom: 12px; background: var(--shell-pane, #17171b); border-bottom: 1px solid var(--shell-border); }
+.bp-note-wiki .bp-note-wiki__toolbar .bp-note-wiki__tabs { margin: 0; padding: 0; border: 0; }
+.bp-note-wiki .bp-note-wiki__toolbar .bp-note-wiki__tabs button { margin-bottom: 0; padding-inline: 8px; }
+.bp-note-review-shortcut-host { margin-left: auto; }
+.bp-note-wiki .bp-note-review-shortcut { border: 1px solid var(--shell-border); background: transparent; color: var(--shell-muted); font-size: 11px; padding: 4px 7px; }
+.bp-note-wiki button:is(:hover, :focus-visible):not(:disabled) { background-color: var(--shell-accent-soft); color: var(--shell-text); }
+.bp-note-wiki__body[hidden] { display: none; }
+.bp-note-wiki__body > .bp-note-source { max-height: none; overflow: visible; }
+.bp-note-reader { min-width: 0; color: var(--shell-text); }
+.bp-note-reader__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; }
+.bp-note-wiki .bp-note-reader__tools .bp-note-toc-trigger { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 6px; border: 1px solid transparent; border-radius: 5px; background: transparent; font-size: 11px; color: var(--shell-muted); }
+.bp-note-reader__fold-actions { display: flex; align-items: center; gap: 2px; padding-left: 6px; border-left: 1px solid var(--shell-border); }
+.bp-note-toc { display: none; position: fixed; inset: auto; margin: 0; padding: 0; box-sizing: border-box; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-pane); color: var(--shell-text); box-shadow: 0 8px 30px rgba(0,0,0,.2); overflow: hidden; }
+.bp-note-toc:popover-open { display: flex; flex-direction: column; animation: bp-toc-open 140ms ease-out; }
+.bp-note-toc > header { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--shell-border); font-size: 12px; }
+.bp-note-toc > header > span { color: var(--shell-muted); font-size: 10px; }
+.bp-note-toc > header > button { margin-left: auto; }
+.bp-note-toc nav { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 6px; }
+.bp-note-wiki .bp-note-toc nav button { flex-shrink: 0; text-align: left; padding: 7px 10px; min-height: 30px; background: transparent; border: 0; border-radius: 4px; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
+.bp-note-wiki .bp-note-reader__tools .bp-note-toc-trigger:is(:hover, :focus-visible), .bp-note-wiki .bp-note-toc nav button:is(:hover, :focus-visible) { background: var(--shell-hover); color: var(--shell-text); }
+.bp-note-wiki .bp-note-toc nav button[aria-current] { background: var(--shell-accent-soft); color: var(--shell-text); }
+@keyframes bp-toc-open { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .bp-note-toc:popover-open { animation: none; } }
+.bp-note-reader .markdown-preview { font-size: 13px; line-height: 1.75; }
+.bp-note-reader .markdown-preview :is(h1,h2,h3,h4,h5,h6) { color: var(--shell-text); font-weight: 650; line-height: 1.4; margin: 20px 0 10px; overflow-wrap: anywhere; }
+.bp-note-reader .markdown-preview h1 { font-size: 22px; }
+.bp-note-reader .markdown-preview h2 { font-size: 18px; }
+.bp-note-reader .markdown-preview h3 { font-size: 15px; }
+.bp-note-reader .markdown-preview :is(h4,h5,h6) { font-size: 13px; }
+.bp-note-chapter { border-top: 1px solid var(--shell-border); padding: 8px 0; }
+.bp-note-chapter > summary { color: var(--shell-muted); }
+.bp-note-reader .markdown-preview .bp-note-chapter > summary > :is(h1,h2,h3,h4,h5,h6) { min-width: 0; flex: 1; margin: 0; }
+.bp-note-chapter[open] > summary { margin-bottom: 12px; }
+.bp-note-reader .markdown-preview pre { max-width: 100%; }
+.bp-note-reader .bp-note-external-link { color: var(--shell-accent-strong, var(--shell-accent)); text-underline-offset: 3px; }
+.bp-note-reader .bp-note-external-link:is(:hover, :focus-visible) { color: var(--shell-text); }
+.bp-note-relations > section { margin: 18px 0; }
+.bp-note-relations h3 { display: flex; justify-content: space-between; margin: 0 0 8px; font-size: 12px; color: var(--shell-muted); }
+.bp-note-relations h3 > span { font-weight: 400; }
+.bp-note-relation-card { margin: 8px 0; }
+.bp-note-relation-card .bp-reader-card__description { margin: 5px 0 0 22px; }
+.bp-note-relation-card .bp-note-relation-card__warning { color: var(--shell-accent); }
+.bp-note-relation-card__reference { margin: 0 12px 8px; color: var(--shell-muted); font-size: 11px; }
+.bp-note-relation-card .bp-note-relation-card__reference > summary { padding: 6px 0; }
+.bp-note-relation-card__reference code { display: block; padding: 6px 0; overflow-wrap: anywhere; }
+.bp-note-related-preview { border-top: 1px solid var(--shell-border); }
+.bp-note-relations__empty { color: var(--shell-muted); padding: 16px 0; }

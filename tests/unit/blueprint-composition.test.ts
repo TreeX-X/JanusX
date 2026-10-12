@@ -27,6 +27,15 @@ function graph(repo = R, path = 'C:/architect', meta: Partial<HarnessNoteMeta> =
 const checkout = (id = 'dev', meta: Partial<HarnessNoteMeta> = {}) => ({ repoId: D, checkoutId: id, path: 'C:/' + id, blueprint: graph(D, 'C:/' + id, meta) })
 
 describe('explicit blueprint composition', () => {
+  it('keeps local Notes readable without importing their implementation workspace in local-only mode', () => {
+    const skeleton = graph(R, 'C:/architect', { repositories: { primary: D }, interfaces: [{ name: 'read', direction: 'provides' }] })
+    const result = composeBlueprint({ skeleton, checkouts: [checkout()], localOnly: true })
+    expect(result.nodeIds).toEqual([A])
+    expect(result.composition.nodes[A].status).toBe('bound')
+    expect(result.composition.interfaces[0].status).toBe('idle')
+    expect(result.composition.checkouts).toEqual([])
+    expect(result.composition.diagnostics).toEqual([])
+  })
   it('preserves root identity, distinct worktree instances, snapshots and evidence ownership', () => {
     const skeleton = graph(R, 'C:/architect', { repositories: { primary: D } })
     const x = checkout('x', { codeRefs: [{ repoId: D, path: 'src/a.ts', role: 'entry' }] }), y = checkout('y')
@@ -89,24 +98,39 @@ async function root(repoId: string) {
   await writeFile(join(path, '.agents', 'notes', 'a.md'), raw())
   return path
 }
-describe('composition host gateway', () => {
-  it('refreshes explicitly bound checkout revisions and hashes independently', async () => {
+describe('workspace projection gateway', () => {
+  it('keeps referenced workspaces out of the graph and shows them only after switching roots', async () => {
+    const svc = new HarnessNoteService(), architecture = await root(R), dev = await root(D)
+    await writeFile(join(architecture, '.agents', 'notes', 'a.md'), raw(B, { relations: [{ type: 'related-to', target: uri(D) }] }))
+    const view = await svc.projectView(architecture)
+    expect(view.blueprint.nodeIds).toEqual([B])
+    expect(view.blueprint.composition?.checkouts).toEqual([])
+    expect(view.blueprint.relations[0].resolution?.status).toBe('unavailable')
+    const switched = await svc.projectView(dev)
+    expect(switched.blueprint.nodeIds).toEqual([A])
+    expect(switched.blueprint.noteSnapshot?.repoId).toBe(D)
+    expect(await svc.getBindings(architecture)).toEqual([])
+  })
+  it('keeps explicit bindings without loading their Note contents or revisions', async () => {
     const svc = new HarnessNoteService(), architecture = await root(R), dev = await root(D)
     await svc.setBinding(architecture, { repoId: D, checkoutId: 'dev', path: dev, selected: true })
     const first = await svc.projectView(architecture)
-    expect(first.blueprint.nodeIds).toHaveLength(2)
+    expect(first.blueprint.nodeIds).toEqual([A])
+    expect(first.blueprint.composition?.nodes[A].status).toBe('bound')
+    expect(first.blueprint.composition?.diagnostics).toEqual([])
     await writeFile(join(dev, '.agents', 'notes', 'a.md'), raw().replace('A goal.', 'Changed goal.'))
     const second = await svc.projectView(architecture)
     expect(second.rev).toBe(first.rev)
-    expect(second.blueprint.composition?.checkouts[0].revision).toBe(2)
-    expect(second.blueprint.composition?.checkouts[0].status).toBe('stale')
-    expect(second.blueprint.nodes[compositionNodeId(D, 'dev', uri(D))].positioning).toBe('Changed goal.')
+    expect(second.blueprint.composition?.checkouts).toEqual([])
+    expect(second.blueprint.nodes[A].positioning).toBe('A goal.')
+    expect((await svc.projectView(dev)).blueprint.nodes[A].positioning).toBe('Changed goal.')
+    expect(await svc.getBindings(architecture)).toMatchObject([{ checkoutId: 'dev', path: dev }])
   })
-  it('rejects wrong repository bindings and surfaces removed checkouts', async () => {
+  it('rejects wrong repository bindings while removed foreign checkouts do not affect the current graph', async () => {
     const svc = new HarnessNoteService(), architecture = await root(R), dev = await root(D)
     await expect(svc.setBinding(architecture, { repoId: R, checkoutId: 'bad', path: dev, selected: true })).rejects.toMatchObject({ code: 'SCHEMA_INVALID' })
     await svc.setBinding(architecture, { repoId: D, checkoutId: 'dev', path: dev, selected: true })
     await rm(join(dev, '.agents'), { recursive: true })
-    expect((await svc.projectView(architecture)).blueprint.composition?.checkouts[0]).toMatchObject({ checkoutId: 'dev', status: 'unbound' })
+    expect((await svc.projectView(architecture)).blueprint.composition?.checkouts).toEqual([])
   })
 })

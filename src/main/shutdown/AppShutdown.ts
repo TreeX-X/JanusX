@@ -3,6 +3,7 @@ import { app } from 'electron'
 export type ShutdownStep = () => void | Promise<void>
 
 export interface AppShutdownDeps {
+  stopNoteReview?: ShutdownStep
   stopKnowledge?: ShutdownStep
   abortChatStreams?: ShutdownStep
   cancelAnalyzer?: ShutdownStep
@@ -94,6 +95,7 @@ export class AppShutdown {
     //    the finalize window. finalizeCheckpoint only touches workspace files
     //    and does not require a live pty.
     const ordered: Array<[keyof AppShutdownDeps, ShutdownStep | undefined]> = [
+      ['stopNoteReview', this.deps.stopNoteReview],
       ['stopKnowledge', this.deps.stopKnowledge],
       ['destroyToast', this.deps.destroyToast],
       ['closeEditors', this.deps.closeEditors],

@@ -9,8 +9,8 @@ import type { Workspace } from '@/types'
 import type { HarnessInitPreview } from '../../../../shared/ipc/harness'
 import './blueprint-workspace.css'
 
-export function BlueprintWorkspaceSetup({ workspace, state, loading, hasNodes }: {
-  workspace?: Workspace; state?: BlueprintWorkspaceState; loading: boolean; hasNodes: boolean
+export function BlueprintWorkspaceSetup({ workspace, state, loading, waiting = false, hasNodes }: {
+  workspace?: Workspace; state?: BlueprintWorkspaceState; loading: boolean; waiting?: boolean; hasNodes: boolean
 }) {
   const { t } = useI18n('blueprint')
   const [preview, setPreview] = useState<{ workspaceId: string; value: HarnessInitPreview } | null>(null)
@@ -58,7 +58,8 @@ export function BlueprintWorkspaceSetup({ workspace, state, loading, hasNodes }:
   })
   const draft = () => useBlueprintStore.getState().requestDraft(workspace.id)
   const errorText = error?.workspaceId === workspace.id ? error.message : null
-  const stateName = loading || !state ? 'loading' : state.state
+  const stateName = loading || !state ? waiting ? 'waiting' : 'loading' : state.state
+  const isLoading = stateName === 'loading' || stateName === 'waiting'
   const needsRepair = stateName === 'invalid' || stateName === 'error'
   const diagnostics = needsRepair ? [...new Map((state?.diagnostics ?? []).map(item =>
     [JSON.stringify([item.code, item.path, item.message]), item])).values()] : []
@@ -78,11 +79,11 @@ export function BlueprintWorkspaceSetup({ workspace, state, loading, hasNodes }:
         <div className="blueprint-workspace-name"><FolderOpen size={14} aria-hidden="true" /><span>{workspace.name}</span></div>
         {!currentPreview && <>
           <div className="blueprint-workspace-symbol" aria-hidden="true">
-            {stateName === 'loading' ? <LoaderCircle className="blueprint-workspace-spinner" size={26} /> : <Network size={26} />}
+            {isLoading ? <LoaderCircle className="blueprint-workspace-spinner" size={26} /> : <Network size={26} />}
           </div>
           <h2>{t(`workspace.title.${stateName}`)}</h2>
           <p className="blueprint-workspace-description">{t(`workspace.description.${stateName}`)}</p>
-          {stateName !== 'loading' && <div className="blueprint-workspace-actions">
+          {!isLoading && <div className="blueprint-workspace-actions">
             {['not-found', 'foreign'].includes(stateName) && <button ref={initializeRef} className="blueprint-setup-button blueprint-setup-button--primary" type="button" disabled={!!busy} onClick={() => void begin()}><FilePlus2 size={15} aria-hidden="true" />{t('workspace.initialize')}</button>}
             {stateName === 'empty' && <button className="blueprint-setup-button blueprint-setup-button--primary" type="button" onClick={draft}>{t('workspace.draft')}<ChevronRight size={15} aria-hidden="true" /></button>}
             <button className={`blueprint-setup-button ${needsRepair ? '' : 'blueprint-setup-button--quiet'}`} type="button" disabled={!!busy} onClick={() => void run(refresh)}><RefreshCw size={14} aria-hidden="true" />{t('workspace.retry')}</button>

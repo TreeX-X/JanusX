@@ -62,6 +62,10 @@ export async function getModelCatalog(): Promise<ModelCatalogSnapshot> {
   return window.electron.llm.getModelCatalog()
 }
 
+export async function getChatModelBudget(providerId: string, modelId: string) {
+  return window.electron.llm.getChatModelBudget(providerId, modelId)
+}
+
 export async function refreshModelCatalog(): Promise<ModelCatalogRefreshResult> {
   return window.electron.llm.refreshModelCatalog()
 }
@@ -148,6 +152,7 @@ export function chatStream(
     contextCheckpoint?: import('../../../shared/chat-context').ChatContextCheckpoint
     contextEpoch?: number
     compact?: { keepRecentUnits: number }
+    noteRepairId?: string
     maintenanceTaskId?: string
     onAgentEvent?: (event: ChatAgentEvent) => void
     onRecallTrace?: (trace: KnowledgeRecallTrace) => void
@@ -280,6 +285,7 @@ export function chatStream(
         contextCheckpoint: options?.contextCheckpoint,
         contextEpoch: options?.contextEpoch,
         compact: options?.compact,
+        ...(options?.noteRepairId ? { noteRepairId: options.noteRepairId } : {}),
         ...(options?.maintenanceTaskId ? { maintenanceTaskId: options.maintenanceTaskId } : {}),
       })
     })

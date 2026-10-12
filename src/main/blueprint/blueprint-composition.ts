@@ -19,7 +19,7 @@ export interface BlueprintCheckoutInput {
   diagnostic?: string
   expectedSourceHashes?: Record<string, string>
 }
-export interface BlueprintCompositionInput { skeleton: Blueprint; checkouts: readonly BlueprintCheckoutInput[] }
+export interface BlueprintCompositionInput { skeleton: Blueprint; checkouts: readonly BlueprintCheckoutInput[]; localOnly?: boolean }
 export type BlueprintCompositionOutput = Blueprint & { composition: BlueprintComposition }
 export function checkoutKey(repoId: string | null, checkoutId: string): string { return (repoId ?? '') + '::' + checkoutId }
 export function compositionNodeId(repoId: string | null, checkoutId: string, uri: string): string {
@@ -28,7 +28,8 @@ export function compositionNodeId(repoId: string | null, checkoutId: string, uri
 const uriRepo = (uri?: string): string | undefined => uri?.startsWith('note://') && uri.split('/').length === 4 ? uri.split('/')[2] : undefined
 
 /** Pure assembly: no scan, registry guessing, derived frontmatter, or writes. */
-export function composeBlueprint({ skeleton: input, checkouts: inputs }: BlueprintCompositionInput): BlueprintCompositionOutput {
+export function composeBlueprint({ skeleton: input, checkouts: inputCheckouts, localOnly = false }: BlueprintCompositionInput): BlueprintCompositionOutput {
+  const inputs = localOnly ? [] : inputCheckouts
   const blueprint = structuredClone(input)
   const composition: BlueprintComposition = { version: 'r4', checkouts: [], nodes: {}, interfaces: [], evidence: [], diagnostics: [] }
   const rootRepo = blueprint.noteSnapshot?.repoId ?? uriRepo(blueprint.nodes[blueprint.rootNodeId]?.sourceUri) ?? null
@@ -64,7 +65,8 @@ export function composeBlueprint({ skeleton: input, checkouts: inputs }: Bluepri
     const targetRepo = node.note?.metadata?.repositories?.primary
     const binding = targetRepo ? select(targetRepo) : undefined
     const local = targetRepo === rootRepo
-    const status: CompositionStatus = targetRepo && !binding && !local ? 'unbound' : 'bound'
+    // A local Note stays readable even when its implementation repository is outside this workspace.
+    const status: CompositionStatus = !localOnly && targetRepo && !binding && !local ? 'unbound' : 'bound'
     composition.nodes[id] = { layer: 'skeleton', status, repoId: rootRepo, path: rootPath, sourceUri: node.sourceUri,
       ...(binding ? { binding: { repoId: binding.repoId!, checkoutId: binding.checkoutId, path: binding.path } } : {}) }
     if (binding) node.workspaceSnapshot = { name: binding.name ?? targetRepo!, path: binding.path }

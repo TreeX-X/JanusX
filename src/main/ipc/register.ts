@@ -18,6 +18,7 @@ import { registerGitHandlers } from './git-handlers'
 import { disposeWorkspaceWatchers, registerWorkspaceHandlers } from './handlers'
 import { registerJanusHandlers } from './janus-handlers'
 import { registerHarnessHandlers } from './harness-handlers'
+import { registerBlueprintReviewHandlers } from './blueprint-review-handlers'
 import { registerJanusChatHandlers } from './janus-chat-handlers'
 import { registerRoundtableHandlers } from './roundtable-handlers'
 import { registerKnowledgeHandlers } from './knowledge-handlers'
@@ -125,6 +126,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerWorkflowXHandlers(options)
   registerJanusHandlers()
   registerHarnessHandlers(getCurrentMainWindow)
+  registerBlueprintReviewHandlers()
   registerJanusChatHandlers()
   registerRoundtableHandlers(getCurrentMainWindow)
   registerRuntimeTelemetryHandlers()

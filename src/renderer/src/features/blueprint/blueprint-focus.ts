@@ -13,7 +13,9 @@
  *
  *  Pure: no stores, no IPC. Callers supply the active checkout path.
  */
-import type { Blueprint, BlueprintNode, BlueprintNodeStatus } from '@/services/blueprint'
+import type { Blueprint, BlueprintNode } from '@/services/blueprint'
+import { blueprintStatusFilter } from '../../../../shared/blueprint-note-status'
+import type { BlueprintStatusFilter } from '@/components/blueprint/blueprintStatus'
 import { noteKindOf, type NoteKindFilter } from '@/components/blueprint/blueprintStatus'
 import type { BlueprintMaintenanceScope } from '../../../../shared/janus/maintenance-types'
 import { buildEffectiveHierarchy } from './canvas-navigation'
@@ -21,7 +23,7 @@ import { sameCheckoutPath } from './resolveNodeWorkspace'
 import { projectArchitecture } from './architecture-view'
 import { projectModuleBrowse } from './module-browsing'
 
-export type FocusStatusFilter = BlueprintNodeStatus | 'all'
+export type FocusStatusFilter = BlueprintStatusFilter
 export type FocusKindFilter = NoteKindFilter
 
 /** Matches the shared IPC normalizer cap; main rejects larger ref lists. */
@@ -77,6 +79,9 @@ export function normalizeSearchText(value: string): string {
 export function buildNodeSearchText(node: BlueprintNode): string {
   return [
     node.title,
+    node.sourceUri,
+    node.sourceRelPath,
+    ...(node.note?.metadata?.codeRefs?.map(ref => ref.path) ?? []),
     node.kind,
     node.lifecycle,
     node.type,
@@ -110,7 +115,7 @@ export function nodeMatchesFocus(
   kindFilter: FocusKindFilter,
   searchText?: string,
 ): boolean {
-  const statusMatches = statusFilter === 'all' || node.status === statusFilter
+  const statusMatches = statusFilter === 'all' || blueprintStatusFilter(node) === statusFilter
   const kindMatches = kindFilter === 'all' || noteKindOf(node) === kindFilter
   const queryMatches = !query || (searchText ?? buildNodeSearchText(node)).includes(query)
   return statusMatches && kindMatches && queryMatches

@@ -2,6 +2,8 @@ import type { Edge, Node } from '@xyflow/react'
 import type { Blueprint, BlueprintNode } from '@/services/blueprint'
 import type { BlueprintNodeData } from '@/components/blueprint/BlueprintNodeCard'
 import { buildEffectiveHierarchy, groupRootsByConnectivity } from './canvas-navigation'
+import { nodeNoteSnapshot } from './composition-view'
+import { blueprintNoteStatusParts } from '../../../../shared/blueprint-note-status'
 
 const SEVERITY_RANK = { low: 0, medium: 1, high: 2, critical: 3 } as const
 const SEVERITY_LABEL = ['低', '中', '高', '严重'] as const
@@ -52,6 +54,9 @@ export function deriveBlueprintCardData(
     nodeType: node.type,
     kind: node.kind ?? null,
     moduleState: node.note?.moduleState,
+    noteStatus: blueprintNoteStatusParts(node),
+    reviewRoot: nodeNoteSnapshot(blueprint, node.id)?.coverage.checkoutRoot,
+    noteId: node.note?.id ?? node.sourceUri?.split('/').at(-1),
     progress: node.progress,
     workspaceName: node.workspaceId ? workspaceNameById[node.workspaceId] ?? node.workspaceSnapshot?.name ?? null : null,
     boundTerminalId: node.boundTerminalId,

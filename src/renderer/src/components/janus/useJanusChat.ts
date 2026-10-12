@@ -5,6 +5,7 @@ import {
   getTerminalDefault,
   getTerminalProviders,
   listModels,
+  getChatModelBudget,
   saveTerminalProvider,
   cancelSteerChat,
   steerChat,
@@ -12,6 +13,7 @@ import {
 } from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
+import { useNoteRepairStore } from '@/stores/note-repair'
 import { useNoteChatStore } from '@/stores/note-chat'
 import { useNoteFocusStore } from '@/stores/note-focus'
 import { useBlueprintStore } from '@/stores/blueprint'
@@ -22,6 +24,7 @@ import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, 
 import { getAgentSettings } from '@/services/agent-settings'
 import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../../../shared/ipc/llm'
 import type { ChatQuestionAnswer, ChatTodoItem } from '../../../../shared/ipc/llm'
+import { validChatModelLimits, type ChatModelLimits } from '../../../../shared/chat-model-limits'
 import type { JanusPendingQuestion } from './janusRuntimeState'
 import type {
   JanusChatMessage,
@@ -99,9 +102,10 @@ export interface JanusResourceController {
 export interface UseJanusChatReturn {
   activeTurnId?: string
   contextStatus?: import('../../../../shared/chat-context').ChatContextStatus
-  setContextWindow?: (tokens: number | null) => Promise<void>
+  setModelLimits?: (limits: ChatModelLimits | null) => Promise<void>
   engineeringContext?: EngineeringContext
   setEngineeringContext: (context: EngineeringContext) => void
+  repairNote: (planId: string, text: string) => boolean
   proposeMaintenance: (taskId: string, text: string) => void
   conversationId: string
   conversationTitle: string
@@ -383,6 +387,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
 
   const invalidateRuntime = useCallback((id: string, cancelAgentSessions = false) => {
     const handles = getHandles(id)
+    for (const [root, card] of Object.entries(useNoteRepairStore.getState().cards)) {
+      if (card.conversationId === id && card.started) useNoteRepairStore.getState().cancel(root)
+    }
     handles.generation += 1
     handles.active = false
     handles.abort?.()
@@ -576,7 +583,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   }, [updateConversation])
 
   // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/blueprint/tasks/blueprint-dialog-separation.md
-  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }, compact?: { keepRecentUnits: number }) => {
+  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }, compact?: { keepRecentUnits: number }, noteRepairId?: string) => {
     const runtime = runtimesRef.current[id]
     const conversation = conversationsRef.current.find((item) => item.id === id)
     const handles = getHandles(id)
@@ -642,6 +649,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
         },
         () => {
           if (handles.generation !== generation) return
+          if (noteRepairId) useNoteRepairStore.getState().receive({ id: noteRepairId, phase: 'failed', error: '未收到修复复核结果，请重新核对建议' })
           handles.active = false
           handles.proposalRetry = undefined
           handles.abort = null
@@ -661,11 +669,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
         },
         (error) => {
           if (handles.generation !== generation) return
+          if (noteRepairId) handles.abort?.()
           handles.active = false
           handles.abort = null
           const startedAt = runtimesRef.current[id]?.turnStartedAt ?? Date.now()
           const latestUser = conversationsRef.current.find(item => item.id === id)?.messages.filter(message => message.role === 'user').at(-1)
-          const canRecover = !maintenanceTaskId && !recovery && replaySafe
+          if (noteRepairId) useNoteRepairStore.getState().receive({ id: noteRepairId, phase: 'failed', error })
+          const canRecover = !noteRepairId && !maintenanceTaskId && !recovery && replaySafe
             && latestUser?.id === userMessage.id
             && /function response parts|function call parts/i.test(error)
           const final = flushPending(id)
@@ -696,6 +706,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           contextCheckpoint: latest.contextCheckpoint,
           contextEpoch: latest.contextEpoch,
           compact,
+          ...(noteRepairId ? { noteRepairId } : {}),
           ...(maintenanceTaskId ? { maintenanceTaskId } : {}),
           workspaceResources: agentResources,
           toolTraces: latest.toolTraces,
@@ -725,6 +736,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             }))
           },
           onAgentEvent: (agentEvent) => {
+            if (agentEvent.type === 'note_repair') {
+              if (agentEvent.update.id === noteRepairId) useNoteRepairStore.getState().receive(agentEvent.update)
+              return
+            }
             if (agentEvent.type === 'context_state') {
               if (handles.generation !== generation) return
               setRuntime(id, current => ({ ...current, contextStatus: agentEvent.state }))
@@ -775,6 +790,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       handles.abort = stream.abort
     })().catch((reason: unknown) => {
       if (handles.generation !== generation) return
+      if (noteRepairId) useNoteRepairStore.getState().receive({ id: noteRepairId, phase: 'failed', error: reason instanceof Error ? reason.message : String(reason) })
       handles.active = false
       handles.assistantMessageId = null
       setRuntime(id, (current) => ({
@@ -793,6 +809,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const handles = handlesRef.current.get(id)
     if (!runtime?.isStreaming && !handles?.abort && !handles?.active) return
     if (!handles) return
+    for (const [root, card] of Object.entries(useNoteRepairStore.getState().cards)) {
+      if (card.conversationId === id && card.started) useNoteRepairStore.getState().cancel(root)
+    }
     handles.generation += 1
     handles.active = false
     handles.abort?.()
@@ -1150,30 +1169,33 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
 
     return {
       contextStatus: runtime.contextStatus,
-      setContextWindow: async (tokens) => {
-        if (!activeModel || (tokens !== null && (!Number.isSafeInteger(tokens) || tokens < 1024 || tokens > 10_000_000))) throw new Error('Invalid context window')
+      setModelLimits: async (tokens) => {
+        if (!activeModel || (tokens !== null && !validChatModelLimits(tokens))) throw new Error('Invalid model limits')
+        const detected = await getChatModelBudget(activeModel.providerId, activeModel.modelId)
+        if (tokens !== null && detected.resolved && detected.source !== 'configured') throw new Error('Automatic model limits are available')
         const providers = await getTerminalProviders('janus')
         const provider = providers.find(item => item.id === activeModel.providerId)
         if (!provider) throw new Error('Provider unavailable')
         const limits = provider.extra?.chatModelLimits as Record<string, unknown> | undefined
         const modelLimits = { ...limits }
         if (tokens === null) delete modelLimits[activeModel.modelId]
-        else modelLimits[activeModel.modelId] = { contextWindow: tokens }
+        else modelLimits[activeModel.modelId] = { ...tokens }
         const saved = await saveTerminalProvider('janus', { ...provider, extra: { ...provider.extra,
           chatModelLimits: modelLimits } })
         if (!saved.success) throw new Error(saved.error ?? 'Failed to save model window')
         const latest = conversationsRef.current.find(item => item.id === id)
         if (!latest || (latest.providerId && latest.providerId !== activeModel.providerId)
           || (latest.modelId && latest.modelId !== activeModel.modelId)) return
-        if (tokens === null) {
-          setRuntime(id, current => ({ ...current, contextStatus: undefined }))
-          return
-        }
-        setRuntime(id, current => ({ ...current, contextStatus: { phase: 'ready', usedTokens: current.contextStatus?.usedTokens ?? 0,
-          windowTokens: tokens, source: 'configured', checkpoint: current.contextStatus?.checkpoint } }))
+        setRuntime(id, current => ({ ...current, contextStatus: undefined }))
       },
       engineeringContext: conversation?.engineeringContext,
       setEngineeringContext: (context) => updateConversation(id, (current) => ({ ...current, engineeringContext: context, updatedAt: Date.now() })),
+      repairNote: (planId, text) => {
+        const latest = conversationsRef.current.find(item => item.id === id)
+        if (!latest || runtimesRef.current[id]?.isStreaming || getHandles(id).active) return false
+        startRequest(id, latest.messages, { id: crypto.randomUUID(), role: 'user', content: text, timestamp: Date.now() }, undefined, undefined, undefined, planId)
+        return true
+      },
       proposeMaintenance: (taskId, text) => {
         const latest = conversationsRef.current.find((item) => item.id === id)
         if (latest) startRequest(id, latest.messages, { id: crypto.randomUUID(), role: 'user', content: text, timestamp: Date.now() }, taskId)
@@ -1227,6 +1249,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     answerQuestion,
     attachWorkspace,
     availableWorkspaces,
+    getHandles,
     cancelSteeredMessage,
     clear,
     conversations,

@@ -1,13 +1,12 @@
 // Note: Janus extends the shared agentX runtime — see .agents/notes/blueprint/agentx-harness-inheritance.md
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { BlueprintReadTasks } from '../blueprint/read-task'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import type { Diagnostic } from '@janus-agent/harness-core'
-import { NoteService, indexEntries, toSlimSnapshot } from '@janus-agent/harness-node'
+import { NoteService, indexEntries, toSlimSnapshot, type NoteIndex } from '@janus-agent/harness-node'
 import * as sharedHarness from '@janus-agent/harness-node'
 import { projectGraph, projectGraphId } from '../notes/note-to-blueprint'
-import { composeBlueprint, type BlueprintCheckoutInput } from '../blueprint/blueprint-composition'
+import { composeBlueprint } from '../blueprint/blueprint-composition'
 import { ADAPTER_VERSION } from '../notes/note-types'
 import type { Blueprint } from '../../shared/janus/types'
 // Keep value exports bound locally: the main bundle materializes this module's namespace during dynamic import.
@@ -26,35 +25,31 @@ export interface ProjectView {
 }
 
 export class HarnessNoteService extends NoteService {
-  private compositionHashes = new Map<string, Record<string, string>>()
+  // Note: startup and foreground reads share the cold scan — see .agents/notes/blueprint/requirements/blueprint-performance.md
+  private indexReads = new BlueprintReadTasks<{ rev: number; index: NoteIndex }>()
+
+  protected override refreshIndex(root: string): Promise<{ rev: number; index: NoteIndex }> {
+    const path = resolve(root)
+    const key = process.platform === 'win32' ? path.toLowerCase() : path
+    return this.indexReads.run(key, async signal => {
+      const result = await super.refreshIndex(path)
+      signal.throwIfAborted()
+      return result
+    })
+  }
+
+  override async warmup(root: string): Promise<{ rev: number; ms: number }> {
+    const started = Date.now()
+    const resolved = await this.resolveRoot(root)
+    if (!resolved.ok || !resolved.root) throw new Error(`no project notes under ${root}`)
+    const { rev } = await this.refreshIndex(resolved.root)
+    return { rev, ms: Date.now() - started }
+  }
+
+  // Note: display only this workspace; cross-workspace references stay in the source; see .agents/notes/blueprint/workspaces/module.md
   async projectView(root: string): Promise<ProjectView> {
-    // Note: explicit checkout projections compose outside the source adapter — see .agents/notes/blueprint/workspaces/tasks/blueprint-r4.md
     const view = await this.singleProjectView(root)
-    const bindings = await this.getBindings(root)
-    // Bound checkouts project independently: run them concurrently and keep
-    // binding order for a stable composition. Each checkout rides its own
-    // cached index, so this is projection-only work, never extra scans.
-    const foreign = bindings.filter((binding) => resolve(binding.path).toLowerCase() !== resolve(root).toLowerCase())
-    const checkouts = await Promise.all(foreign.map(async (binding): Promise<BlueprintCheckoutInput> => {
-      const key = root + '\0' + binding.repoId + '\0' + binding.checkoutId
-      try {
-        const resolved = await this.resolveRoot(binding.path)
-        if (!resolved.ok || !resolved.root) throw new Error('Checkout has no .agents directory')
-        const projection = await this.singleProjectView(resolved.root)
-        if (projection.repoId !== binding.repoId) throw new Error('Checkout repository identity does not match its binding')
-        let dirty: boolean | undefined
-        try {
-          const result = await promisify(execFile)('git', ['status', '--porcelain', '--untracked-files=normal'], { cwd: resolved.root, timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 })
-          dirty = result.stdout.trim().length > 0
-        } catch { /* A registered Note workspace may have no Git repository. */ }
-        const row: BlueprintCheckoutInput = { ...binding, path: resolved.root, name: projection.repoName, blueprint: projection.blueprint, snapshot: projection.blueprint.noteSnapshot, revision: projection.rev, expectedSourceHashes: this.compositionHashes.get(key), dirty }
-        this.compositionHashes.set(key, Object.fromEntries(Object.values(projection.blueprint.nodes).filter((node) => node.sourceUri && node.sourceHash).map((node) => [node.sourceUri!, node.sourceHash!])))
-        return row
-      } catch (error) {
-        return { ...binding, bound: false, diagnostic: error instanceof Error ? error.message : String(error) }
-      }
-    }))
-    return { ...view, blueprint: composeBlueprint({ skeleton: view.blueprint, checkouts }) }
+    return { ...view, blueprint: composeBlueprint({ skeleton: view.blueprint, checkouts: [], localOnly: true }) }
   }
 
   private async singleProjectView(root: string): Promise<ProjectView> {
@@ -101,6 +96,7 @@ export class HarnessNoteService extends NoteService {
       for (const node of Object.values(blueprint.nodes)) {
         const state = overlay.get(node.id)
         if (!state) continue
+        node.noteEvidence = { taskDone: Boolean(state.taskDone), ...(state.requirement ? { coveredACs: state.acCount - state.requirement.uncovered.length, totalACs: state.acCount } : {}) }
         if (state.taskDone) { node.status = 'done'; node.progress = 100 }
         if (state.requirement) {
           for (const feature of node.features) {

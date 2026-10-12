@@ -51,6 +51,43 @@ test('keeps failures actionable and shows technical details only on request', as
   await expect(page.locator('.react-flow__node').first()).toBeVisible()
 })
 
+test('waits through a busy workspace and displays the graph without a reload click', async ({ page }) => {
+  await select(page, 'Checkout B')
+  await page.evaluate(() => {
+    const status = window.electron.harness.workspaceStatus
+    ;(window as any).blueprintBusy = true
+    window.electron.harness.workspaceStatus = async (cwd) => cwd === 'C:/fixture' && (window as any).blueprintBusy
+      ? { root: cwd, state: 'error', noteCount: 0, diagnostics: [{ code: 'BUSY', message: 'notes busy: lock held' }] }
+      : status(cwd)
+  })
+  await select(page, 'Project ·')
+  await expect(page.getByText('正在准备蓝图', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '重新读取', exact: true })).toHaveCount(0)
+  await expect(page.getByText('暂时无法读取蓝图', { exact: true })).toHaveCount(0)
+  await page.evaluate(() => { (window as any).blueprintBusy = false })
+  await expect(page.locator('.react-flow__node').first()).toBeVisible()
+  await expect(page.getByText('正在准备蓝图', { exact: true })).toHaveCount(0)
+})
+
+test('cancels a busy graph retry when selecting another workspace', async ({ page }) => {
+  await select(page, 'Checkout B')
+  await page.evaluate(() => {
+    ;(window as any).busyGraphReads = 0
+    window.electron.janus.loadBlueprint = async () => {
+      ;(window as any).busyGraphReads++
+      throw new Error('notes busy: lock held')
+    }
+  })
+  await select(page, 'Project ·')
+  await expect(page.getByText('正在准备蓝图', { exact: true })).toBeVisible()
+  await select(page, 'Checkout B')
+  await expect(page.getByRole('button', { name: '初始化蓝图', exact: true })).toBeVisible()
+  const reads = await page.evaluate(() => (window as any).busyGraphReads)
+  await page.waitForTimeout(600)
+  expect(await page.evaluate(() => (window as any).busyGraphReads)).toBe(reads)
+  await expect(page.locator('.react-flow__node')).toHaveCount(0)
+})
+
 test('draft action sends a read-only proposal request to the selected workspace conversation', async ({ page }) => {
   await select(page, 'Empty project')
   await page.getByRole('button', { name: '让 Janus 起草蓝图', exact: true }).click()

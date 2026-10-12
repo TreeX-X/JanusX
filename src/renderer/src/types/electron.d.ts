@@ -6,6 +6,7 @@ import type { BrowserAPI } from '../../../shared/ipc/browser'
 import type { KnowledgeAPI } from '../../../shared/ipc/knowledge'
 import type { JanusAPI } from '../../../shared/ipc/janus'
 import type { HarnessAPI } from '../../../shared/ipc/harness'
+import type { BlueprintReviewAPI } from '../../../shared/ipc/blueprint-review'
 import type { OfficeAPI } from '../../../shared/office'
 import type { AgentAPI, SubAgentRunAPI } from '../../../shared/ipc/janus-runner'
 import type { AgentRuntimeAPI } from '../../../shared/ipc/agent-runtime'
@@ -41,6 +42,7 @@ interface ElectronAPI {
   knowledge: KnowledgeAPI
   janus: JanusAPI
   harness: HarnessAPI
+  blueprintReview: BlueprintReviewAPI
   office: OfficeAPI
   llm: LlmAPI
   externalCli: ExternalCliAPI

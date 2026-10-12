@@ -11,6 +11,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
+          'note-mcp': resolve(__dirname, 'src/main/blueprint/note-mcp.ts'),
           'knowledge-mcp': resolve(__dirname, 'src/main/knowledge/knowledge-mcp.ts'),
           'office-mcp': resolve(__dirname, 'src/main/office/office-mcp.ts'),
           'office-launcher': resolve(__dirname, 'src/main/office/office-launcher.ts')

@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
-import { getIndexRev, onHarnessChanged } from '@/services/harness'
+import { getIndexRev } from '@/services/harness'
+import { onBlueprintSourcesChanged } from '@/services/blueprint-sync'
 import { useBlueprintStore } from '@/stores/blueprint'
+import { isBlueprintBusy } from '../../../../shared/blueprint-loading'
 
 // Note: refresh is owned by the mounted view — see .agents/notes/blueprint/documents/tasks/note-blueprint-r2-read.md
 export function useNoteRefresh(blueprintId: string | undefined, root: string | undefined): void {
@@ -18,11 +20,7 @@ const lastRevByRoot = new Map<string, number>()
 function displayedRevs(blueprintId: string, root: string): Array<{ path: string; real: string; rev: number }> | null {
   const active = useBlueprintStore.getState().currentBlueprint
   if (!active || active.id !== blueprintId) return null
-  const rows: Array<{ path: string; real: string; rev: number }> = [{ path: key(root), real: root, rev: active.contentRevision }]
-  for (const row of active.composition?.checkouts ?? []) {
-    if (row.path && typeof row.revision === 'number') rows.push({ path: key(row.path), real: row.path, rev: row.revision })
-  }
-  return rows
+  return [{ path: key(root), real: root, rev: active.contentRevision }]
 }
 
 export function subscribeNoteRefresh(blueprintId: string, root: string): () => void {
@@ -39,7 +37,7 @@ export function subscribeNoteRefresh(blueprintId: string, root: string): () => v
           pending = false
           const state = useBlueprintStore.getState()
           if (state.currentBlueprint?.id !== blueprintId) break
-          const alreadyLoading = state.loadingBlueprintId === blueprintId
+          const alreadyLoading = state.loading
           if (state.selectedWorkspaceId) await state.loadWorkspace(state.selectedWorkspaceId)
           else await state.loadBlueprint(blueprintId)
           if (alreadyLoading) pending = true
@@ -52,12 +50,10 @@ export function subscribeNoteRefresh(blueprintId: string, root: string): () => v
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => { void refresh() }, 150)
     }
-    const off = onHarnessChanged((event) => {
+    const off = onBlueprintSourcesChanged((event) => {
       lastRevByRoot.set(key(event.root), event.rev)
-      const active = useBlueprintStore.getState().currentBlueprint
-      const dependency = active?.id === blueprintId && active.composition?.checkouts.some(row => key(row.path) === key(event.root))
-      if (key(event.root) !== key(root) && !dependency) return
-      if (event.error) { useBlueprintStore.setState({ error: event.error, loadState: 'error' }); return }
+      if (key(event.root) !== key(root)) return
+      if (event.error && !isBlueprintBusy(event.error)) { useBlueprintStore.setState({ error: event.error, loadState: 'error' }); return }
       // Note: same-rev heartbeats carry no file changes — skipping the reload
       // turns focus returns and unrelated writes into no-ops instead of full
       // projection rebuilds. Any listed kind, or a trigger outside the notes

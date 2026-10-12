@@ -5,6 +5,7 @@
   "description": "CLI 工作区管理器 - 统一管理多个 AI 编程助手",
   "main": "out/main/index.js",
   "bin": {
+    "janusx-note-mcp": "out/main/note-mcp.js",
     "janusx-office": "out/main/office-launcher.js",
     "janusx-office-mcp": "out/main/office-mcp.js"
   },
@@ -57,7 +58,8 @@
     "package:mac": "npm run prepackage && npm run build && npm run check:package-boundary && electron-builder --mac",
     "package:linux": "npm run prepackage && npm run build && npm run check:package-boundary && electron-builder --linux",
     "prepackage": "npm install --install-links",
-    "release:tag": "node scripts/release-tag.mjs"
+    "release:tag": "node scripts/release-tag.mjs",
+    "mcp:note": "node out/main/note-mcp.js"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
@@ -96,7 +98,8 @@
     "selfsigned": "^5.5.0",
     "smol-toml": "^1.9.0",
     "zod": "^3.25.76",
-    "zustand": "^5.0.0"
+    "zustand": "^5.0.0",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@electron/asar": "^3.4.1",

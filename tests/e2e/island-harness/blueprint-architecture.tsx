@@ -1,6 +1,9 @@
 import React from 'react'
+import { BlueprintAttention } from '../../../src/renderer/src/components/blueprint/BlueprintAttention'
+import { installAttentionFixture } from './blueprint-attention-fixture'
 import { createRoot } from 'react-dom/client'
 import { BlueprintCanvas } from '../../../src/renderer/src/components/blueprint/BlueprintCanvas'
+import { BlueprintView } from '../../../src/renderer/src/components/blueprint/BlueprintView'
 import { BlueprintWorkbench } from '../../../src/renderer/src/components/blueprint/BlueprintWorkbench'
 import { BlueprintMaintenancePanel } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
 import { JanusChatProvider } from '../../../src/renderer/src/components/janus/JanusChatProvider'
@@ -102,6 +105,7 @@ if (params.has('untagged')) for (const node of Object.values(graph.nodes)) { nod
 // Real repository corpus supplied by the host test; production projection and lazy reads.
 if (params.has('corpus')) Object.assign(graph, (window as any).noteCorpus)
 installWorkbenchBoundary(() => graph, workspace.path)
+if (params.has('attention')) installAttentionFixture(graph, workspace.path)
 if (params.has('corpus')) Object.assign(window.electron.harness, {
   noteRead: (cwd: string, uri: string) => {
     if (cwd !== workspace.path) throw new Error('Unexpected corpus checkout')
@@ -111,6 +115,10 @@ if (params.has('corpus')) Object.assign(window.electron.harness, {
 useWorkspaceStore.setState({ activeWorkspaceId: workspace.id, workspaces: [workspace as any] })
 useBlueprintMaintenanceStore.setState({ initialized: true })
 useBlueprintStore.setState({ currentBlueprint: graph, blueprintWorkspace: { [graph.id]: workspace.path }, loading: false })
+if (params.has('repair') && !params.has('workbench')) useBlueprintStore.setState({ selectedWorkspaceId: workspace.id,
+  workspaceStates: { [workspace.id]: { workspaceId: workspace.id, workspacePath: workspace.path, state: 'ok', projectId: graph.id } as any },
+  loadWorkspace: async () => {}, refreshWorkspaceStates: async () => {},
+})
 const streams: any[] = [], events = new Set<(event: any) => void>()
 if (params.has('focus')) {
   Object.assign(window.electron.workspace, { list: async () => [workspace] })
@@ -124,6 +132,7 @@ if (params.has('focus')) {
     getTerminalProviders: async () => [{ id: 'p', name: 'Fixture' }],
     getTerminalDefault: async () => ({ provider: { id: 'p', name: 'Fixture' }, modelId: 'model-a' }),
     listModels: async () => [{ id: 'model-a', name: 'Model A' }],
+    getChatModelBudget: async () => ({ contextWindow: 1048576, maxOutputTokens: 65536, source: 'registry', resolved: true }),
     onAgentEvent: (listener: (event: any) => void) => { events.add(listener); return () => events.delete(listener) },
     startChatStream: (request: any) => { streams.push(request); queueMicrotask(() => events.forEach(listener => listener({ type: 'text_delta', requestId: request.requestId, delta: 'Module navigation reply' }))) },
   })
@@ -152,6 +161,6 @@ if (params.has('focus')) {
     useNoteFocusStore.getState().receive({ id: crypto.randomUUID(), workspacePath: workspace.path, conversationId: 'fixture', mode: 'display', focus, notes: [{ uri: target.sourceUri!, role: 'target' }, ...(related ? [{ uri: related.sourceUri, role: 'reference' }] : [])], source: 'assistant', createdAt: new Date().toISOString() } as any)
   },
 }
-void initI18n().then(() => createRoot(document.getElementById('root')!).render(params.has('workbench') ? <JanusChatProvider><BlueprintWorkbench isOpen onClose={() => {}} /></JanusChatProvider> : params.has('focus')
+void initI18n().then(() => createRoot(document.getElementById('root')!).render(params.has('workbench') ? <JanusChatProvider><BlueprintWorkbench isOpen onClose={() => {}} /></JanusChatProvider> : params.has('repair') ? <JanusChatProvider><main style={{ height: '100vh', display: 'flex' }}><BlueprintView /></main></JanusChatProvider> : params.has('focus')
   ? <JanusChatProvider><div style={{ display: 'flex', height: '100vh' }}><main style={{ flex: 1, minWidth: 0, display: 'flex' }}><BlueprintCanvas blueprintId={graph.id} /></main><aside style={{ width: 380, display: 'flex' }}><BlueprintMaintenancePanel onClose={() => {}} /></aside></div></JanusChatProvider>
-  : <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}><BlueprintCanvas blueprintId={graph.id} /></main>))
+  : <main style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>{params.has('attention') && <BlueprintAttention blueprint={graph} workspacePath={workspace.path} />}<BlueprintCanvas blueprintId={graph.id} /></main>))

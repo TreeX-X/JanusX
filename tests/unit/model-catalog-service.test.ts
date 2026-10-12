@@ -17,12 +17,13 @@ describe('ModelCatalogService', () => {
     const cachePath = await createCachePath()
     const bundled = documentAt('2026-07-01T00:00:00.000Z', 'vendor/model')
     bundled.models[0].effectiveContextWindow = 16_384
+    bundled.models[0].maxOutputTokens = 4096
     let resolveFetch!: (value: unknown) => void
     const fetchModels = vi.fn(() => new Promise(resolve => { resolveFetch = resolve }))
     const service = new ModelCatalogService({ cachePath, bundledDocument: bundled, fetchModels, now: () => NOW })
     expect(await service.resolveModel('vendor/model')).toMatchObject({ effectiveContextWindow: 16_384 })
     await vi.waitFor(() => expect(fetchModels).toHaveBeenCalledOnce())
-    resolveFetch({ data: [{ id: 'vendor/model', name: 'Vendor Model', context_length: 1_048_576 }] })
+    resolveFetch({ data: [{ id: 'vendor/model', name: 'Vendor Model', context_length: 1_048_576, top_provider: { max_completion_tokens: 65_536 } }] })
     await service.refresh()
     expect(await service.resolveModel('vendor/model')).toMatchObject({ effectiveContextWindow: 1_048_576 })
     expect(fetchModels).toHaveBeenCalledOnce()
@@ -62,6 +63,17 @@ describe('ModelCatalogService', () => {
     time += 60_001
     expect(await service.resolveModel('gemini-3.8-flash')).toBeUndefined()
     expect(fetchModels).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes a known model whose cached output limit is missing before inference', async () => {
+    const cachePath = await createCachePath(), cached = documentAt('2026-07-10T07:30:00.000Z', 'vendor/model')
+    cached.models[0].effectiveContextWindow = 1_048_576
+    await writeFile(cachePath, JSON.stringify(cached))
+    const fetchModels = vi.fn(async () => ({ data: [{ ...openRouterRecord('vendor/model'), context_length: 1_048_576,
+      top_provider: { max_completion_tokens: 65_536 } }] }))
+    const service = new ModelCatalogService({ cachePath, bundledDocument: cached, fetchModels, now: () => NOW })
+    expect(await service.resolveModel('vendor/model')).toMatchObject({ effectiveContextWindow: 1_048_576, maxOutputTokens: 65_536 })
+    expect(fetchModels).toHaveBeenCalledOnce()
   })
 
   it('returns bundled data immediately while a stale refresh runs', async () => {

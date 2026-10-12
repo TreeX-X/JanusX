@@ -948,6 +948,9 @@ export function JanusChat({
       const activeChat = activeElement instanceof Element
         ? activeElement.closest('.janus-chat')
         : null
+      // Note reader controls keep native Tab navigation while the workbench chat is open.
+      // See .agents/notes/blueprint/navigation/note-updates-and-suggestion-navigation.md
+      if (event.key === 'Tab' && !activeChat && activeElement instanceof Element && activeElement.closest('.bp-note-wiki')) return
       // A DOM-focused Chat always owns its shortcuts. Otherwise the workspace
       // focus state chooses the owner, so switching tabs does not depend on a
       // browser focus update landing in exactly the same frame.

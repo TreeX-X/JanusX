@@ -41,6 +41,15 @@ function baseDeps(overrides: Partial<JanusChatTurnPortsDeps> = {}): JanusChatTur
 }
 
 describe('model port', () => {
+  it('requires both manual limits when automatic detection is unavailable, and blocks incomplete inference', async () => {
+    const model = vi.fn(async () => ({ fake: 'model' }))
+    const getProviderSettings = vi.fn(async () => ({ modelId: 'custom-model', extra: { chatModelLimits: { 'custom-model': { contextWindow: 1000000 } } } }))
+    const ports = buildJanusChatTurnPorts(baseDeps({ getLanguageModel: model, getProviderSettings, resolveModelMetadata: async () => undefined }))
+    await expect(ports.model.resolve('custom')).rejects.toThrow('MODEL_LIMITS_UNAVAILABLE')
+    expect(model).not.toHaveBeenCalled()
+    getProviderSettings.mockResolvedValue({ modelId: 'custom-model', extra: { chatModelLimits: { 'custom-model': { contextWindow: 1000000, maxOutputTokens: 65536 } } } } as never)
+    expect(await ports.model.resolve('custom')).toMatchObject({ contextWindow: 1000000, maxOutputTokens: 65536, source: 'configured' })
+  })
   it.each([undefined, 16_384])('uses live Gemini metadata before compaction over bundled capacity %s', async contextWindow => {
     const metadata = openRouterRecordToRegistryEntry({ id: 'google/gemini-3.8-flash', name: 'Google: Gemini 3.8 Flash',
       context_length: 1_048_576, top_provider: { max_completion_tokens: 65_536 } })!
@@ -64,16 +73,17 @@ describe('model port', () => {
     expect(messages).toHaveLength(31)
   })
 
-  it('skips automatic metadata only for an explicit user context limit', async () => {
-    const resolveModelMetadata = vi.fn()
+  it('keeps automatic Gemini context and 65k output despite a saved manual context', async () => {
+    const resolveModelMetadata = vi.fn(async () => openRouterRecordToRegistryEntry({ id: 'google/gemini-3.8-flash', name: 'Gemini',
+      context_length: 1_048_576, top_provider: { max_completion_tokens: 65_536 } })!)
     const configured = buildJanusChatTurnPorts(baseDeps({ resolveModelMetadata,
       getProviderSettings: async () => ({ modelId: 'gemini-3.8-flash', extra: { chatModelLimits: { 'gemini-3.8-flash': { contextWindow: 1_000_000 } } } }),
     }))
-    expect(await configured.model.resolve('vertex')).toMatchObject({ contextWindow: 1_000_000, source: 'configured' })
-    expect(resolveModelMetadata).not.toHaveBeenCalled()
+    expect(await configured.model.resolve('vertex')).toMatchObject({ contextWindow: 1_048_576, maxOutputTokens: 65_536, source: 'registry' })
+    expect(resolveModelMetadata).toHaveBeenCalledWith('gemini-3.8-flash')
     resolveModelMetadata.mockResolvedValue(undefined)
     const listed = buildJanusChatTurnPorts(baseDeps({ resolveModelMetadata,
-      listModels: async () => [{ id: 'm1', contextWindow: 128_000 }],
+      listModels: async () => [{ id: 'm1', contextWindow: 128_000, maxOutputTokens: 8192 }],
     }))
     expect(await listed.model.resolve('provider')).toMatchObject({ contextWindow: 128_000, source: 'catalog' })
     expect(resolveModelMetadata).toHaveBeenCalledWith('m1')
@@ -81,12 +91,11 @@ describe('model port', () => {
 
   it.each([undefined, 128_000])('falls back after a catalog failure with adapter capacity %s', async contextWindow => {
     const ports = buildJanusChatTurnPorts(baseDeps({
-      listModels: async () => [{ id: 'm1', contextWindow }],
+      listModels: async () => [{ id: 'm1', contextWindow, maxOutputTokens: 4096 }],
       resolveModelMetadata: async () => { throw new Error('offline') },
     }))
-    expect(await ports.model.resolve('provider')).toMatchObject({
-      contextWindow: contextWindow ?? 16_384, source: contextWindow ? 'catalog' : 'estimated',
-    })
+    if (contextWindow) expect(await ports.model.resolve('provider')).toMatchObject({ contextWindow, source: 'catalog' })
+    else await expect(ports.model.resolve('provider')).rejects.toThrow('MODEL_LIMITS_UNAVAILABLE')
   })
 
   it.each([undefined, 1_000_000])('uses the configured Gemini window in the actual compaction loop: %s', async contextWindow => {
@@ -94,7 +103,7 @@ describe('model port', () => {
     const summarize = vi.fn(async () => '## Goal\nPreserve the decision.\n## Progress\nDiscussed constraints.\n## Next Steps\nContinue.')
     const stream = vi.fn(async () => ({ textStream: (async function* () { yield 'Acknowledged' })() }))
     const ports = buildJanusChatTurnPorts(baseDeps({
-      getProviderSettings: async () => ({ modelId, extra: { chatModelLimits: { [modelId]: { contextWindow } } } }),
+      getProviderSettings: async () => ({ modelId, extra: { chatModelLimits: { [modelId]: { contextWindow, maxOutputTokens: 4096 } } } }),
       listModels: async () => [{ id: modelId, supportsFunctionCalling: true }],
       knowledgeSearch: undefined, captureObservation: undefined, streamTextFn: stream,
     }))

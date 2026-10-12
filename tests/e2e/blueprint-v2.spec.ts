@@ -18,7 +18,7 @@ for (const surface of ['', '&workbench']) {
         }, true)
       })
       await page.mouse.dblclick(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, { delay: 130 })
-      await expect(nav(page).locator('[aria-current="page"]')).toHaveText(title)
+      await expect(nav(page).locator('[aria-current="page"]'), JSON.stringify(await page.evaluate(() => (window as any).doubleClickTargets))).toHaveText(title)
       const targets = await page.evaluate(() => (window as any).doubleClickTargets as string[])
       expect(targets[0]).toBe(title)
       expect(targets[1]).not.toBe(title)

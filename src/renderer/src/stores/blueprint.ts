@@ -9,6 +9,8 @@
  */
 
 import { create } from 'zustand'
+import type { NoteSourceRead } from '../../../shared/notes'
+import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 import {
   loadBlueprint,
   focusNode as focusNodeIPC,
@@ -16,6 +18,9 @@ import {
   type BlueprintNode
 } from '@/services/blueprint'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useBlueprintReviewStore } from './blueprint-review'
+import { readBlueprintWhenReady } from '@/services/blueprint-loading'
+import { isBlueprintBusy } from '../../../shared/blueprint-loading'
 import type { HarnessInitPreview, HarnessWorkspaceStatus } from '../../../shared/ipc/harness'
 
 export type BlueprintWorkspaceState = HarnessWorkspaceStatus & { workspacePath: string }
@@ -51,7 +56,7 @@ interface BlueprintStore {
   loadingBlueprintId: string | null
   /** Increments on every completed blueprint load so views can replay entry motion. */
   loadEpoch: number
-  loadState: 'idle' | 'listing' | 'loading' | 'refreshing' | 'error'
+  loadState: 'idle' | 'listing' | 'loading' | 'refreshing' | 'waiting' | 'error'
   error: string | null
 
   /** 加载指定投影；非 project id 直接拒绝，不发 IPC */
@@ -66,6 +71,7 @@ interface BlueprintStore {
     workspaceName: string
     workspacePath: string
   }) => Promise<BlueprintNode | null>
+  applyNoteSource: (root: string, source: NoteSourceRead) => void
   mergeCanvasLayout: (blueprintId: string, canvasLayout: Blueprint['canvasLayout']) => void
   /** 分析完成后，重新拉取 currentBlueprint 以同步 analyzer 写入的字段 */
   refreshAfterAnalysis: () => Promise<void>
@@ -77,6 +83,8 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
   let statusRequestId = 0
   let loadRequestId = 0
   const blueprintRequests = new Map<string, Promise<void>>()
+  let workspaceRequest: { id: string; path: string; promise: Promise<void>; controller: AbortController } | undefined
+  let blueprintController: AbortController | undefined
 
   return {
   initializationReceipts: {},
@@ -88,17 +96,22 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
     const request = ++statusRequestId
     const initial = get().workspaceStates
     const workspaces = useWorkspaceStore.getState().workspaces
-    const entries = await Promise.all(workspaces.map(async (workspace): Promise<[string, BlueprintWorkspaceState]> => {
+    const entries = await Promise.all(workspaces.map(async (workspace): Promise<[string, BlueprintWorkspaceState | undefined]> => {
       try {
-        return [workspace.id, { ...await window.electron.harness.workspaceStatus(workspace.path), workspacePath: workspace.path }] as const
+        const status = await window.electron.harness.workspaceStatus(workspace.path)
+        if (status.state === 'error' && status.diagnostics.length && status.diagnostics.every(isBlueprintBusy)) return [workspace.id, undefined]
+        return [workspace.id, { ...status, workspacePath: workspace.path }] as const
       } catch (error) {
+        if (isBlueprintBusy(error)) return [workspace.id, undefined]
         return [workspace.id, { state: 'error' as const, root: workspace.path, workspacePath: workspace.path, noteCount: 0,
           diagnostics: [{ code: 'IO_ERROR', message: errorMessage(error) }] }] as const
       }
     }))
     if (request !== statusRequestId) return
-    set(state => ({ workspaceStates: Object.fromEntries(entries.map(([id, result]) =>
-      [id, state.workspaceStates[id] && state.workspaceStates[id] !== initial[id] ? state.workspaceStates[id] : result])) }))
+    set(state => ({ workspaceStates: Object.fromEntries(entries.flatMap(([id, result]) => {
+      const next = state.workspaceStates[id] && (state.workspaceStates[id] !== initial[id] || !result) ? state.workspaceStates[id] : result
+      return next ? [[id, next]] : []
+    })) }))
   },
   switchWorkspace: async (workspaceId) => {
     if (!useWorkspaceStore.getState().workspaces.some(workspace => workspace.id === workspaceId)) return
@@ -106,33 +119,49 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
     await get().loadWorkspace(workspaceId)
   },
   loadWorkspace: async (workspaceId) => {
+    const workspace = useWorkspaceStore.getState().workspaces.find(item => item.id === workspaceId)
+    if (workspace && workspaceRequest?.id === workspace.id && workspaceRequest.path === workspace.path) return workspaceRequest.promise
+    workspaceRequest?.controller.abort()
+    workspaceRequest = undefined
+    blueprintController?.abort()
     const request = ++workspaceRequestId
     ++loadRequestId
     blueprintRequests.clear()
-    const workspace = useWorkspaceStore.getState().workspaces.find(item => item.id === workspaceId)
     const switching = !workspace || get().selectedWorkspaceId !== workspace.id
       || get().workspaceStates[workspace.id]?.workspacePath !== workspace.path
     set({ selectedWorkspaceId: workspace?.id ?? null,
       ...(switching ? { currentBlueprint: null, activeSession: null, draftRequest: null } : {}),
       error: null, loading: !!workspace, loadingBlueprintId: null, loadState: workspace ? 'loading' : 'idle' })
     if (!workspace) return
-    try {
-      const status = await window.electron.harness.workspaceStatus(workspace.path)
+    // Prime counts and lists alongside the canvas, before the user opens the blueprint.
+    if (switching || !useBlueprintReviewStore.getState().views[workspace.path]) void useBlueprintReviewStore.getState().refresh(workspace.path)
+    const controller = new AbortController()
+    const promise = (async () => { try {
+      const status = await readBlueprintWhenReady(async () => {
+        const status = await window.electron.harness.workspaceStatus(workspace.path)
+        if (status.state === 'error' && status.diagnostics.length && status.diagnostics.every(isBlueprintBusy)) throw status.diagnostics[0]
+        return status
+      }, controller.signal, () => { if (request === workspaceRequestId) set({ loadState: 'waiting' }) })
       if (request !== workspaceRequestId) return
       set(state => ({ workspaceStates: { ...state.workspaceStates, [workspace.id]: { ...status, workspacePath: workspace.path } } }))
       if (status.projectId && ['ok', 'empty', 'invalid'].includes(status.state)) {
         set(state => ({ blueprintWorkspace: { ...state.blueprintWorkspace, [status.projectId!]: workspace.path } }))
         await get().loadBlueprint(status.projectId)
         if (request !== workspaceRequestId) return
-        if (get().error) set(state => ({ currentBlueprint: null, workspaceStates: { ...state.workspaceStates,
+        if (get().error) set(state => ({ workspaceStates: { ...state.workspaceStates,
           [workspace.id]: { ...status, workspacePath: workspace.path, state: 'error', diagnostics: [{ code: 'IO_ERROR', message: state.error! }] } } }))
-      } else set({ currentBlueprint: null, loading: false, loadState: status.state === 'error' ? 'error' : 'idle' })
+      } else set({ ...(status.state === 'error' ? { error: status.diagnostics.map(item => item.message).join('\n') } : { currentBlueprint: null }),
+        loading: false, loadState: status.state === 'error' ? 'error' : 'idle' })
     } catch (error) {
-      if (request !== workspaceRequestId) return
-      set(state => ({ currentBlueprint: null, loading: false, loadState: 'error', error: errorMessage(error), workspaceStates: { ...state.workspaceStates,
+      if (request !== workspaceRequestId || controller.signal.aborted) return
+      set(state => ({ loading: false, loadState: 'error', error: errorMessage(error), workspaceStates: { ...state.workspaceStates,
         [workspace.id]: { root: workspace.path, workspacePath: workspace.path, state: 'error', noteCount: 0,
           diagnostics: [{ code: 'IO_ERROR', message: errorMessage(error) }] } } }))
-    }
+    } finally {
+      if (request === workspaceRequestId) workspaceRequest = undefined
+    } })()
+    workspaceRequest = { id: workspace.id, path: workspace.path, promise, controller }
+    return promise
   },
   currentBlueprint: null,
   blueprintWorkspace: {},
@@ -160,10 +189,14 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
       return
     }
     const requestId = ++loadRequestId
+    blueprintController?.abort()
+    const controller = new AbortController()
+    blueprintController = controller
     set({ loading: true, loadingBlueprintId: id, loadState: get().currentBlueprint ? 'refreshing' : 'loading', error: null })
     const request = (async () => {
       try {
-        const bp = await loadBlueprint(cwd, id)
+        const bp = await readBlueprintWhenReady(() => loadBlueprint(cwd, id), controller.signal,
+          () => { if (requestId === loadRequestId) set({ loadState: 'waiting' }) })
         if (requestId !== loadRequestId) return
         set((s) => {
           const active = s.activeSession
@@ -179,10 +212,11 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
           }
         })
       } catch (err: unknown) {
-        if (requestId !== loadRequestId) return
+        if (requestId !== loadRequestId || controller.signal.aborted) return
         set({ error: err instanceof Error ? err.message : String(err), loading: false, loadingBlueprintId: null, loadState: 'error' })
       } finally {
         blueprintRequests.delete(requestKey)
+        if (blueprintController === controller) blueprintController = undefined
       }
     })()
     blueprintRequests.set(requestKey, request)
@@ -226,6 +260,17 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
     }
   },
 
+  applyNoteSource: (root, source) => {
+    const graph = get().currentBlueprint
+    if (!graph || !sameCheckoutPath(get().blueprintWorkspace[graph.id] ?? graph.noteSnapshot?.coverage.checkoutRoot ?? '', root)) return
+    const node = Object.values(graph.nodes).find(node => node.sourceUri === source.uri)
+    if (!node || node.sourceHash === source.sourceHash) return
+    // Structural projection remains owned by the watcher. Deliver this known Note version now.
+    set({ currentBlueprint: { ...graph, nodes: { ...graph.nodes, [node.id]: { ...node, sourceHash: source.sourceHash, title: source.doc.title,
+      note: { ...source.doc, body: undefined, sections: [] } } },
+      noteSnapshot: graph.noteSnapshot ? { ...graph.noteSnapshot, entries: graph.noteSnapshot.entries.map(entry => entry.uri === source.uri
+        ? { ...entry, sourceHash: source.sourceHash, doc: { ...source.doc, body: undefined, sections: [] } } : entry) } : undefined } })
+  },
   mergeCanvasLayout: (blueprintId, canvasLayout) => {
     set((s) => s.currentBlueprint?.id === blueprintId
       ? { currentBlueprint: { ...s.currentBlueprint, canvasLayout } }
@@ -233,13 +278,12 @@ export const useBlueprintStore = create<BlueprintStore>((set, get) => {
   },
 
   refreshAfterAnalysis: async () => {
-    if (get().selectedWorkspaceId) {
-      await get().loadWorkspace(get().selectedWorkspaceId)
-      return
-    }
-    const current = get().currentBlueprint
-    if (!current) return
-    await get().loadBlueprint(current.id)
+    // A post-write refresh must not reuse a read started before the write.
+    const workspaceId = get().selectedWorkspaceId, blueprintId = get().currentBlueprint?.id
+    await Promise.all([workspaceRequest?.promise, ...blueprintRequests.values()])
+    if (get().selectedWorkspaceId !== workspaceId) return
+    if (workspaceId) await get().loadWorkspace(workspaceId)
+    else if (blueprintId && get().currentBlueprint?.id === blueprintId) await get().loadBlueprint(blueprintId)
   }
   }
 })

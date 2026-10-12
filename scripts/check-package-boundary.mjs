@@ -25,6 +25,7 @@ const REQUIRED_TREE_EXCLUSIONS = [
 const REQUIRED_OUTPUTS = [
   'out/main/index.js',
   'out/main/knowledge-mcp.js',
+  'out/main/note-mcp.js',
   'out/main/office-mcp.js',
   'out/main/office-launcher.js',
   'out/preload/index.mjs',

@@ -61,7 +61,9 @@ export function buildBlueprintTopologyKey(
 }
 
 function cardDataEqual(left: BlueprintNodeData, right: BlueprintNodeData): boolean {
-  return Object.keys(left).every((key) => left[key as keyof BlueprintNodeData] === right[key as keyof BlueprintNodeData])
+  return Object.keys(left).every((key) => key === 'noteStatus'
+    ? JSON.stringify(left.noteStatus) === JSON.stringify(right.noteStatus)
+    : left[key as keyof BlueprintNodeData] === right[key as keyof BlueprintNodeData])
     && Object.keys(left).length === Object.keys(right).length
 }
 

@@ -14,6 +14,7 @@ export const LLM_CHANNELS = {
   removeTerminalProvider: 'llm:remove-terminal-provider', setTerminalDefault: 'llm:set-terminal-default',
   getTerminalDefault: 'llm:get-terminal-default', listModels: 'llm:list-models',
   getCatalog: 'llm:model-catalog:get', refreshCatalog: 'llm:model-catalog:refresh', getAdapters: 'llm:get-adapters',
+  getChatModelBudget: 'llm:chat-model-budget',
   chat: 'llm:chat', chatStream: 'llm:chat-stream', abort: 'llm:chat:abort',
   steer: 'llm:chat:steer', steerCancel: 'llm:chat:steer-cancel',
   delta: 'llm:chat:delta', done: 'llm:chat:done', error: 'llm:chat:error', recallTrace: 'llm:chat:recall-trace',
@@ -53,6 +54,7 @@ export interface ChatRequest {
   /** Renderer selection request only; the host resolves URIs and never trusts paths/grants from here. */
   noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
   noteWorkingSet?: string
+  noteRepairId?: string
   maintenanceTaskId?: string
   /**
    * 运行配置轮内文档：当前表单的真实 LaunchConfig + 落盘相对路径（脱敏只发生在进模型上下文的边界）。
@@ -110,6 +112,7 @@ export interface ChatAnswerQuestionPayload {
  */
 export type ChatAgentEvent =
   | { type: 'context_state'; requestId: string; state: import('../chat-context').ChatContextStatus }
+  | { type: 'note_repair'; requestId: string; update: import('../note-repair').NoteRepairUpdate }
   | { type: 'note_change'; requestId: string; change: import('../note-chat').NoteChatChange }
   | { type: 'config_change'; requestId: string; change: import('../launch-config-chat').LaunchConfigChange }
   | { type: 'note_focus'; requestId: string; focus: import('../note-chat').NoteFocusEvent }
@@ -196,6 +199,7 @@ export interface LlmAPI {
   getTerminalDefault(terminal: LlmTerminalConsumer): Promise<{ provider: ProviderSettings; modelId: string } | null>
   listModels(terminal: LlmTerminalConsumer, providerId: string): Promise<ModelInfo[]>
   getModelCatalog(): Promise<ModelCatalogSnapshot>
+  getChatModelBudget(providerId: string, modelId: string): Promise<import('../chat-model-limits').ChatModelBudget>
   refreshModelCatalog(): Promise<ModelCatalogRefreshResult>
   getAdapters(): Promise<Array<{ id: string; name: string; authType: string }>>
   chat(request: ChatRequest): Promise<string>

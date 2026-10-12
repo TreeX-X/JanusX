@@ -2,10 +2,11 @@ import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applyHarnessInit, previewHarnessInit, hasNoteMutationIntent } from '@janus-agent/harness-node'
+import { applyHarnessInit, previewHarnessInit, hasNoteMutationIntent, acquireLock, releaseLock } from '@janus-agent/harness-node'
 import { parseNote } from '@janus-agent/harness-core'
 import { HarnessNoteService } from '../../src/main/harness/service'
 import { WorkspaceBlueprintService } from '../../src/main/harness/workspace-blueprint'
+import { WorkspaceSuggestionSources } from '../../src/main/blueprint/suggestions/sources'
 import zh from '../../src/renderer/src/i18n/locales/zh-CN/blueprint.json'
 import en from '../../src/renderer/src/i18n/locales/en/blueprint.json'
 
@@ -20,6 +21,47 @@ beforeEach(async () => {
 afterEach(async () => { notes.unwatchAll(); await rm(root, { recursive: true, force: true }) })
 
 describe('workspace blueprint initialization', () => {
+  it('shares the cold index across startup warmup, status, projection and review sources', async () => {
+    await applyHarnessInit(await previewHarnessInit(root, 'Concurrent'))
+    const sources = new WorkspaceSuggestionSources(notes)
+    const context = await sources.context(root)
+    const scans = vi.spyOn(notes, 'rescan')
+    const [warm, status, projection, review] = await Promise.all([notes.warmup(root), service.status(root), notes.projectView(root), sources.capture(context, [])])
+    expect(status.state).toBe('ok')
+    expect(projection.blueprint.nodeIds).toHaveLength(1)
+    expect(scans).toHaveBeenCalledTimes(1)
+    expect(warm.rev).toBe(projection.rev)
+    expect(review.complete).toBe(true)
+    expect(review.notes.map(note => note.noteId)).toEqual(projection.blueprint.nodeIds)
+    const again = await notes.warmup(root)
+    expect(again.rev).toBe(warm.rev)
+    expect(scans).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves a busy lock diagnostic and retries successfully after release', async () => {
+    await applyHarnessInit(await previewHarnessInit(root, 'Busy'))
+    const lock = await acquireLock(root)
+    try {
+      const result = await service.status(root)
+      expect(result).toMatchObject({ state: 'error', diagnostics: [{ code: 'BUSY', message: 'notes busy: lock held' }] })
+    } finally { await releaseLock(root, lock) }
+    expect((await service.status(root)).state).toBe('ok')
+  })
+
+  it('loads the current workspace even when a bound foreign checkout is busy', async () => {
+    await applyHarnessInit(await previewHarnessInit(root, 'Main'))
+    const dependency = join(root, 'dependency')
+    await mkdir(dependency)
+    await applyHarnessInit(await previewHarnessInit(dependency, 'Dependency'))
+    const identity = JSON.parse(await readFile(join(dependency, '.agents/harness.json'), 'utf8'))
+    vi.spyOn(notes, 'getBindings').mockResolvedValue([{ repoId: identity.repoId, checkoutId: 'dependency', path: dependency, selected: true }])
+    const lock = await acquireLock(dependency)
+    try { expect((await notes.projectView(root)).blueprint.composition?.checkouts).toEqual([]) }
+    finally { await releaseLock(dependency, lock) }
+    const view = await notes.projectView(root)
+    expect(view.blueprint.composition?.checkouts).toEqual([])
+    expect(view.blueprint.nodeIds).toHaveLength(1)
+  })
   it('previews without writing, applies a draft and projects it, then undoes the exact files', async () => {
     expect((await service.status(root)).state).toBe('not-found')
     const preview = await service.preview(root, '示例项目', 1)

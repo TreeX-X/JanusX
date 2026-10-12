@@ -6,9 +6,12 @@
 import { createContext, memo, useContext } from 'react'
 import { Handle, Position, useStore, type Node, type NodeProps } from '@xyflow/react'
 import type { BlueprintNodeStatus, BlueprintNodeType } from '@/services/blueprint'
-import { NODE_TYPE_LABEL, NOTE_KIND_LABEL_KEY, noteKindOf, getBlueprintStatusVisual } from './blueprintStatus'
+import { NOTE_KIND_LABEL_KEY, noteKindOf, getBlueprintStatusVisual } from './blueprintStatus'
 import { useI18n } from '@/i18n/useI18n'
 import { Folder, FileText, ChevronRight } from 'lucide-react'
+import './blueprint-disclosure.css'
+import { useBlueprintReviewStore } from '@/stores/blueprint-review'
+import type { NoteStatusPart } from '../../../../shared/blueprint-note-status'
 
 /** 低于该缩放阈值时卡片进入极简渲染（只保留状态点 + 标题 + 折叠入口） */
 const SEMANTIC_ZOOM_THRESHOLD = 0.5
@@ -21,6 +24,7 @@ export const BlueprintCardActionsContext = createContext<{
   moduleDocuments?: Record<string, string[]>
   moduleChildren?: Record<string, { children: string[] }>
   openModule?: (id: string) => void
+  showSuggestions?: (id: string) => void
 } | null>(null)
 
 /** ?????????? */
@@ -31,6 +35,9 @@ export interface BlueprintNodeData extends Record<string, unknown> {
   /** note 原始 kind（harness 透传；缺省时 kindtag 按 type 回退） */
   kind?: string | null
   moduleState?: string
+  noteStatus?: NoteStatusPart[]
+  reviewRoot?: string
+  noteId?: string
   progress: number
   workspaceName: string | null
   boundTerminalId: string | null
@@ -62,6 +69,7 @@ function moduleFocusPath(width: number, height: number, minimal: boolean) {
     H 10 A 15 15 0 0 1 -5 ${height - 10} Z`
 }
 
+// Note: card labels and unread marker — see .agents/notes/blueprint/navigation/note-updates-and-suggestion-navigation.md
 function BlueprintNodeCardImpl({ id, data, selected, width, height }: NodeProps<BlueprintRFNodeType>) {
   const { t } = useI18n('blueprint')
   const d = data
@@ -73,6 +81,10 @@ function BlueprintNodeCardImpl({ id, data, selected, width, height }: NodeProps<
   const collapsed = d.collapsed ?? false
   const noteKind = noteKindOf({ kind: d.kind ?? undefined, type: d.nodeType })
   const architectureRole = actions?.architectureRoles?.[id]
+  const suggestionCount = useBlueprintReviewStore(state => d.reviewRoot && d.noteId
+    ? state.views[d.reviewRoot]?.items.find(item => item.noteId === d.noteId)?.report?.findings.length ?? 0 : 0)
+  const unread = useBlueprintReviewStore(state => d.reviewRoot && d.noteId ? state.views[d.reviewRoot]?.updates?.entries.find(entry => entry.noteId === d.noteId)?.unread : false)
+  const awaitingReview = useBlueprintReviewStore(state => d.reviewRoot && d.noteId ? Boolean(state.views[d.reviewRoot]?.items.find(item => item.noteId === d.noteId)?.awaitingReview) : false)
 
   return (
     <div
@@ -97,32 +109,37 @@ function BlueprintNodeCardImpl({ id, data, selected, width, height }: NodeProps<
       <Handle type="target" id="right" position={Position.Right} style={{ opacity: 0 }} />
 
       <div className="bp-node-card__header">
+          {childCount > 0 && actions && !actions.moduleBrowsing ? (
+            <button
+              type="button"
+              className="bp-node-card__collapse nodrag"
+              onClick={(e) => { e.stopPropagation(); actions.toggleCollapse(id) }}
+              onDoubleClick={(e) => e.stopPropagation()}
+              aria-expanded={!collapsed}
+              aria-label={collapsed
+                ? t('blueprint:nodeCard.expandSubtree', { count: childCount })
+                : t('blueprint:nodeCard.collapseSubtree', { count: childCount })}
+              title={collapsed
+                ? t('blueprint:nodeCard.expandSubtree', { count: childCount })
+                : t('blueprint:nodeCard.collapseSubtree', { count: childCount })}
+            >
+              <ChevronRight className="bp-disclosure-chevron" size={14} aria-hidden="true" />
+              <span>{childCount}</span>
+            </button>
+          ) : null}
+
         <span className="bp-node-card__symbol" aria-hidden="true">{architectureRole ? <Folder size={17} /> : <FileText size={14} />}</span>
-        <span className="bp-node-card__dot" style={{ background: architectureRole ? 'var(--shell-muted)' : visual.color, color: architectureRole ? 'var(--shell-muted)' : visual.color }} />
+        {d.noteId ? (suggestionCount > 0 || awaitingReview) && <button type="button" onClick={event => { event.stopPropagation(); actions?.showSuggestions?.(id) }} onDoubleClick={event => event.stopPropagation()} className="bp-node-card__dot nodrag" title={t(awaitingReview ? 'blueprint:review.awaitingReview' : 'blueprint:review.pendingCount', { count: suggestionCount })} aria-label={t(awaitingReview ? 'blueprint:review.awaitingReview' : 'blueprint:review.pendingCount', { count: suggestionCount })} style={{ background: awaitingReview ? 'transparent' : 'var(--shell-accent, #b98736)', border: awaitingReview ? '1px solid currentColor' : undefined, color: 'var(--shell-accent, #b98736)' }} />
+          : <span className="bp-node-card__dot" style={{ background: architectureRole ? 'var(--shell-muted)' : visual.color, color: architectureRole ? 'var(--shell-muted)' : visual.color }} />}
         <span className="bp-node-card__kindtag">{architectureRole ? t('blueprint:architecture.' + architectureRole) : NOTE_KIND_LABEL_KEY[noteKind] ? t(NOTE_KIND_LABEL_KEY[noteKind]) : noteKind}</span>
-        {minimal || architectureRole ? null : (
-          <span className="bp-node-card__type">{NODE_TYPE_LABEL[d.nodeType]?.toUpperCase() ?? d.nodeType}</span>
-        )}
-        {architectureRole && <button type="button" className="bp-node-card__enter nodrag" aria-label={t('blueprint:browse.enterModule', { name: d.title })} title={t('blueprint:browse.enterModule', { name: d.title })}
-          onClick={event => { event.stopPropagation(); actions?.openModule?.(id) }} onDoubleClick={event => event.stopPropagation()}><ChevronRight size={17} /></button>}
-        {childCount > 0 && actions && !actions.moduleBrowsing ? (
-          <button
-            type="button"
-            className="bp-node-card__collapse nodrag"
-            onClick={(e) => { e.stopPropagation(); actions.toggleCollapse(id) }}
-            onDoubleClick={(e) => e.stopPropagation()}
-            aria-expanded={!collapsed}
-            aria-label={collapsed
-              ? t('blueprint:nodeCard.expandSubtree', { count: childCount })
-              : t('blueprint:nodeCard.collapseSubtree', { count: childCount })}
-            title={collapsed
-              ? t('blueprint:nodeCard.expandSubtree', { count: childCount })
-              : t('blueprint:nodeCard.collapseSubtree', { count: childCount })}
-          >
-            <span aria-hidden="true">{collapsed ? '▸' : '▾'}</span>
-            {childCount}
-          </button>
-        ) : null}
+        <div className="bp-node-card__actions">
+          {architectureRole && <button type="button" className="bp-node-card__enter nodrag" aria-label={t('blueprint:browse.enterModule', { name: d.title })} title={t('blueprint:browse.enterModule', { name: d.title })}
+            onClick={event => { event.stopPropagation(); actions?.openModule?.(id) }} onDoubleClick={event => event.stopPropagation()}><ChevronRight size={17} /></button>}
+          {unread && <span className="bp-node-card__updated" role="img" aria-label={t('attention.updatedDescription')} title={t('attention.updatedDescription')}>
+            <span className="bp-node-card__updated-mark" aria-hidden="true" />
+            {!minimal && <span>{t('attention.updated')}</span>}
+          </span>}
+        </div>
       </div>
 
       <div className="bp-node-card__title">{d.title || <span className="bp-node-card__title--empty">{t('blueprint:nodeCard.untitled')}</span>}</div>
@@ -135,10 +152,7 @@ function BlueprintNodeCardImpl({ id, data, selected, width, height }: NodeProps<
           </div>}
 
           <div className="bp-node-card__footer">
-            <span>{d.moduleState ? t('blueprint:moduleState.' + d.moduleState) : t(visual.labelKey)}</span>
-            <span className={`bp-node-card__workspace${d.workspaceName ? '' : ' bp-node-card__workspace--empty'}`}>
-              {d.workspaceName ?? t('blueprint:nodeCard.noWorkspace')}
-            </span>
+            <span>{d.noteStatus?.length ? d.noteStatus.map(part => t('blueprint:noteStatus.' + part.key, part.values)).join(' · ') : d.moduleState ? t('blueprint:moduleState.' + d.moduleState) : t(visual.labelKey)}</span>
             {d.boundTerminalId ? (
               <span className="bp-node-card__terminal" title={t('blueprint:nodeCard.terminalAria', { id: d.boundTerminalId })}>
                 term

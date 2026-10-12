@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T03:43:42.442Z",
+  "updated": "2026-10-12T03:38:45.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -35,9 +35,13 @@ Model capacity changes independently of application releases. If chat budgeting 
 
 ## Decision
 
-OpenRouter supplies the bundled model registry and the runtime catalog cache. Janus chat and the blueprint conversation share the model port in `janus-agent-ports.ts`. Each model resolution without a valid manual context override consults `ModelCatalogService`, even when the adapter supplies a capacity. Context limits resolve in this order: manual per-model configuration, runtime catalog metadata, adapter metadata, bundled registry, then the visibly estimated 16,384-token fallback. Runtime output caps also precede adapter output caps; the generation budget remains bounded by 20% of the selected context window.
+OpenRouter supplies the bundled registry and runtime catalog cache. Janus chat, the blueprint conversation and Note repair share the model port in `janus-agent-ports.ts`. Each resolution queries model metadata and the adapter list, including when manual settings exist. Complete automatic context and maximum-output pairs take precedence in this order: runtime catalog, adapter list, then bundled exact or high-confidence match. A valid manual pair applies only when no complete automatic pair is available. Context-only settings cannot suppress output detection. The detected maximum output is passed to generation without the previous 20%-of-context cap; context budgeting reserves that output allowance.
 
-The service reads `userData/janusx/model-catalog.json` and uses the bundled document when the cache is unavailable or invalid. Catalogs older than 24 hours trigger a background refresh. A known model can use its cached capacity immediately; subsequent resolutions consume the completed refresh. A missing model waits for the shared refresh before inference. Automatic requests have a 60-second retry interval and a 20-second network timeout. Refresh failure preserves the last valid document, and a missing runtime entry can still resolve from the bundled registry. Only exact or high-confidence model matches supply context capacity.
+The service reads `userData/janusx/model-catalog.json` and uses the bundled document when the cache is unavailable or invalid. Catalogs older than 24 hours trigger a background refresh. A known complete model can use its cached capacities immediately; subsequent resolutions consume the completed refresh. Missing models and cached entries without an output limit wait for the shared refresh before inference. Automatic requests have a 60-second retry interval and a 20-second network timeout. Refresh failure preserves the last valid document, and a missing runtime entry can still resolve from the bundled registry. Only exact or high-confidence matches supply automatic capacities.
+
+Both conversation indicators query the same authoritative budget API before the first request and display context, maximum output and source. An unresolved model first offers catalog update. If the update attempt still leaves capacities unavailable, including a network failure, both manual inputs become available. An existing valid manual fallback remains editable for an unresolved model; automatic detection hides that form when complete metadata becomes available. Saving preserves other provider settings and per-model entries. Model or conversation changes invalidate pending display results. Inputs require integer context between 1,024 and 10,000,000 and maximum output of at least 256, smaller than context.
+
+Production model ports reject unresolved limits before constructing the language model, with instructions to update the catalog and then configure both limits if necessary. Estimated values remain only for injected legacy hosts without a metadata resolver; they are not successful automatic detection.
 
 ## Alternatives considered
 
@@ -48,10 +52,14 @@ The service reads `userData/janusx/model-catalog.json` and uses the bundled docu
 
 ## Consequences
 
-Chat budgeting consumes the same cached catalog exposed by settings, and explicit user context overrides remain authoritative. Cache reuse and shared refreshes avoid one network request per conversation turn.
+Chat budgeting consumes the same cached catalog exposed by settings. Manual settings remain stored but do not override complete automatic metadata. Cache reuse and shared refreshes avoid one network request per conversation turn.
 
-A missing model may delay the first turn by the network timeout. OpenRouter coverage and matching confidence bound automatic detection; unknown aliases and refresh failures can still require a manual context override. A known stale model keeps its previous capacity for the current resolution while refresh runs. Provider-specific restrictions require manual configuration because adapter metadata has no authoritative live-provider provenance. Revisit this priority if adapters acquire actual provider-reported limits.
+A missing or incomplete model may delay first detection by the network timeout. OpenRouter coverage and matching confidence bound automatic detection; unknown aliases and refresh failures can require a manual context/output pair. A known stale model keeps its previous capacities while refresh runs. Automatic metadata is a model capacity description, not proof of a provider account's restrictions. Revisit the source priority if adapters acquire authoritative provider-reported limits or catalog discrepancies become measurable. Larger output allowances reserve more context and can increase generation cost.
 
 ## Verification
 
-`npx vitest run tests/unit/model-catalog-service.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/managed-chat-session.test.ts tests/unit/llm/chat-turn-guard.test.ts` checks cache persistence, first-use refresh, stale known-model updates, offline fallback, manual overrides, and both conversation domains. The model-port regression uses a 1,048,576-token runtime entry against a 16,384-token adapter entry and verifies that 31 messages reach inference without premature compaction. Network responses are simulated.
+`npx vitest run tests/unit/managed-chat-session.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/model-catalog-service.test.ts --maxWorkers=1 --minWorkers=1` passed 49 cases: automatic priority, querying despite old manual context, both-limit validation, blocking unresolved production inference, missing-output refresh, offline/cache reuse and compaction. Network responses are simulated. The actual orchestrator regression in `chat-turn-guard.test.ts` also verifies `maxTokens: 65536` reaches inference despite a saved context-only setting. That file passed 19 of 22 cases; three engineering-memory capture/access assertions remain failing outside this capacity change.
+
+`npx playwright test tests/e2e/janus-context.spec.ts --project=island --workers=1` passed seven cases using React and IPC substitutes. These cover both conversation entries, catalog update before manual fallback, replacing a saved fallback after matching, failed update with visible reason, both-limit persistence and late results across model switches.
+
+The read-only dev-cache check `npx vitest run --config .cache/model-limit-current.config.ts` passed: current `gemini-3.8-flash` resolves automatically to context 1,048,576 and maximum output 65,536 even with the existing context-only setting. Configuration, cache and target Note hashes remained unchanged; no model or tool executed. Safe capacity evidence is in `artifacts/note-repair/model-limit-automatic.json`. Build and targeted source lint passed. Repository typechecking remains blocked by the pre-existing `note-mcp-server.ts:48` read-option error; this is not a claim that the historical target Note has been repaired.

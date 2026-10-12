@@ -73,6 +73,10 @@ useBlueprintStore.setState({ currentBlueprint: blueprint as never, blueprintWork
 const events = new Set<(event: ChatAgentEvent) => void>()
 const runtimeEvents = new Set<(event: any) => void>()
 const fixture = {
+  catalogMatch: false, catalogUpdateMatches: false, catalogUpdates: 0,
+  savedProvider: new URLSearchParams(location.search).has('model-limits-manual')
+    ? { terminal: 'janus', settings: { id: 'p', name: 'Fixture', extra: { chatModelLimits: { 'model-a': { contextWindow: 1000000, maxOutputTokens: 12000 } } } } } as any
+    : null as any,
   noteChanges: [] as import('../../../src/shared/note-chat').NoteChatChange[],
   undoConflict: false,
   runtimeSessions: [] as CreateAgentSessionInput[],
@@ -106,7 +110,15 @@ Object.assign(window.electron.agentRuntime, {
   },
 })
 Object.assign(window.electron.llm, {
-  getTerminalProviders: async () => [{ id: 'p', name: 'Fixture' }],
+  getTerminalProviders: async () => [fixture.savedProvider?.settings ?? { id: 'p', name: 'Fixture', extra: { unrelated: 'preserved' } }],
+  getChatModelBudget: async (_provider: string, model: string) => {
+    if (fixture.catalogMatch) return { contextWindow: 1048576, maxOutputTokens: 65536, source: 'registry', resolved: true }
+    const manual = fixture.savedProvider?.settings?.extra?.chatModelLimits?.[model]
+    return manual ? { ...manual, source: 'configured', resolved: true }
+      : { contextWindow: 16384, maxOutputTokens: 4096, source: 'estimated', resolved: false }
+  },
+  refreshModelCatalog: async () => { fixture.catalogUpdates++; fixture.catalogMatch = fixture.catalogUpdateMatches; return { success: true } },
+  saveTerminalProvider: async (terminal: string, settings: unknown) => { fixture.savedProvider = { terminal, settings }; return { success: true } },
   getTerminalDefault: async () => ({ provider: { id: 'p', name: 'Fixture' }, modelId: 'model-a' }),
   listModels: async () => [{ id: 'model-a', name: 'Model A' }, { id: 'model-b', name: 'Model B' }],
   onAgentEvent: (listener: (event: ChatAgentEvent) => void) => { events.add(listener); return () => events.delete(listener) },

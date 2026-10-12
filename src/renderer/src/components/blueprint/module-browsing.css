@@ -18,7 +18,7 @@
 .blueprint-canvas-wrapper .bp-node-card--module.bp-node-card--selected, .bp-node-card--module.bp-node-card--selected::before { border-color: var(--shell-accent, #5797c8); }
 .bp-node-card--module .bp-node-card__header { gap: 7px; }
 .bp-node-card__symbol { flex-shrink: 0; color: var(--shell-muted); }
-.bp-node-card__enter { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border: 1px solid var(--shell-border); border-radius: 4px; color: var(--shell-text); background: transparent; cursor: pointer; }
+.bp-node-card__enter { display: inline-flex; align-items: center; gap: 3px; padding: 2px 5px; border: 1px solid var(--shell-border); border-radius: 4px; color: var(--shell-text); background: transparent; cursor: pointer; }
 .bp-node-card__enter:hover { background: var(--shell-hover); }
 .bp-node-card__contents { margin-top: 7px; font-size: 11px; color: var(--shell-muted); }
 .blueprint-canvas-wrapper .bp-node-card.bp-node-card--document { border-radius: 3px; }

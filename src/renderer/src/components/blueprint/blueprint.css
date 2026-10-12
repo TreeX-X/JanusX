@@ -666,7 +666,7 @@
 
 .blueprint-canvas-wrapper--detail-open {
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
   gap: 16px;
   min-width: 0;
 }
@@ -699,7 +699,9 @@
 }
 
 .bp-flow-node--enter .bp-node-card {
-  animation: blueprint-node-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Release the composited text layer after entry so selection/zoom stays sharp.
+     Note: .agents/notes/blueprint/navigation/requirements/module-browsing.md */
+  animation: blueprint-node-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 /* A branch edge is revealed with its child node, never ahead of it. */
@@ -745,7 +747,7 @@
 
 @keyframes blueprint-node-enter {
   from { opacity: 0; transform: translateZ(-32px) scale(0.97); }
-  to { opacity: 1; transform: translateZ(0) scale(1); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes blueprint-edge-enter {
@@ -889,6 +891,14 @@
   height: 12px;
 }
 
+.bp-node-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .bp-node-card__header {
   display: flex;
   align-items: center;
@@ -902,14 +912,6 @@
   border-radius: 50%;
   flex-shrink: 0;
   box-shadow: 0 0 6px currentColor;
-}
-
-.bp-node-card__type {
-  font-size: 10px;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-left: auto;
 }
 
 .bp-node-card__title {
@@ -951,6 +953,7 @@
 }
 
 .bp-node-card__terminal {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -958,24 +961,6 @@
   background: rgba(0, 255, 136, 0.1);
   color: #00ff88;
   border-radius: 8px;
-}
-
-.bp-node-card__workspace {
-  min-width: 0;
-  max-width: 96px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-left: auto;
-  padding: 1px 6px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #a7a7a7;
-  border-radius: 8px;
-}
-
-.bp-node-card__workspace--empty {
-  color: #777;
-  background: rgba(255, 255, 255, 0.035);
 }
 
 /* —— 节点详情面板 —— */
@@ -990,7 +975,9 @@
   min-width: 0;
   min-height: 0;
   max-height: none;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: rgba(13, 13, 15, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 8px;
@@ -1024,8 +1011,8 @@
 }
 
 .bp-node-detail__header {
-  position: sticky;
-  top: 0;
+  position: relative;
+  flex: none;
   z-index: 2;
   display: flex;
   align-items: center;
@@ -1105,7 +1092,20 @@
 }
 
 .bp-node-detail__heading {
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding-right: 34px;
+}
+
+/* Note: only content scrolls; the close control stays on the panel edge — see .agents/notes/blueprint/documents/module.md */
+.bp-node-detail__scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .bp-node-detail__section {
@@ -1178,53 +1178,6 @@
   justify-content: space-between;
   gap: 8px;
   min-height: 26px;
-}
-
-/* 终端执行底部固定区（V2 左列：内容滚动，操作不跟随） */
-.bp-node-detail__terminal-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 16px 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(13, 13, 15, 0.98);
-}
-
-.bp-node-detail__terminal-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  color: #666;
-}
-
-.bp-node-detail__terminal-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-  background: #555;
-}
-
-.bp-node-detail__terminal-dot--busy {
-  background: #ff7830;
-  box-shadow: 0 0 6px rgba(255, 120, 48, 0.9);
-}
-
-.bp-node-detail__terminal-dot--bound {
-  background: #d7d7db;
-}
-
-.bp-node-detail__terminal-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.bp-node-detail__terminal-actions .blueprint-btn--primary {
-  flex: 1;
 }
 
 .bp-feature-list {
@@ -1761,12 +1714,13 @@
 
 .blueprint-workbench-topbar {
   min-height: 44px;
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   justify-content: space-between;
   container-type: inline-size;
   gap: 12px;
-  padding: 0 12px 0 14px;
+  padding: 7px 12px 7px 14px;
   overflow: hidden;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1857,34 +1811,42 @@
   outline-offset: 2px;
 }
 
-.blueprint-workbench-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 14px; min-width: 0; }
+.blueprint-workbench-actions { display: flex; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 7px 14px; min-width: 0; max-width: 100%; }
 
-.blueprint-janus-capsule {
+.blueprint-janus-capsule,
+.blueprint-review-activity {
+  box-sizing: border-box;
   height: 28px;
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 2px 10px 2px 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   background: rgba(10, 14, 20, 0.75);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.blueprint-janus-capsule {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 2px 6px;
   color: #e1e4e8;
   font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Mono', monospace;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
-.blueprint-janus-capsule:hover {
+.blueprint-janus-capsule:hover,
+.blueprint-review-activity:hover {
   border-color: rgba(0, 240, 255, 0.35);
   background: rgba(16, 22, 32, 0.9);
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.12);
 }
 
 .blueprint-janus-capsule:active { transform: translateY(1px); }
-.blueprint-janus-capsule:focus-visible { outline: 2px solid rgba(0, 240, 255, 0.55); outline-offset: 2px; }
+.blueprint-janus-capsule:focus-visible,
+.blueprint-review-activity:focus-visible { outline: 2px solid rgba(0, 240, 255, 0.55); outline-offset: 2px; }
 .blueprint-janus-capsule:disabled { opacity: 0.42; cursor: default; }
 
 .blueprint-janus-capsule .blueprint-janus-capsule__identity {
@@ -2105,8 +2067,8 @@
 .blueprint-workbench-body {
   position: relative;
   display: grid;
-  /* 高保真三列：左 260-300 · 中自适应 · 右 360-420 */
-  grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(360px, 420px);
+  /* Note: wider reading, equal side-track budget — see .agents/notes/blueprint/navigation/note-updates-and-suggestion-navigation.md */
+  grid-template-columns: minmax(0, 0px) minmax(0, 1fr) minmax(300px, 360px);
   column-gap: 0;
   min-width: 0;
   min-height: 0;
@@ -2123,11 +2085,11 @@
 }
 
 .blueprint-workbench-body[data-detail-open='true'][data-janus-open='false'] {
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(0, 0px);
+  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr) minmax(0, 0px);
 }
 
 .blueprint-workbench-body[data-detail-open='true'][data-janus-open='true'] {
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr) minmax(360px, 420px);
+  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr) minmax(300px, 360px);
 }
 
 .blueprint-workbench-detail-slot {
@@ -3525,10 +3487,6 @@
   border-color: rgba(28, 52, 59, 0.35);
 }
 
-[data-theme='planche'] .bp-node-card__type {
-  color: rgba(28, 52, 59, 0.62);
-}
-
 [data-theme='planche'] .bp-node-card__title {
   color: #1C343B;
 }
@@ -3738,19 +3696,9 @@
   color: var(--ink-soft, rgba(28, 52, 59, 0.62));
 }
 
-/* ── 节点卡补充：脚注 / 工作区 / 终端 / 信号（已有底座不动，只收文字色） ── */
+/* ── 节点卡补充：脚注 / 终端 / 信号（已有底座不动，只收文字色） ── */
 [data-theme='planche'] .bp-node-card__footer {
   color: var(--ink-faint, rgba(28, 52, 59, 0.38));
-}
-
-[data-theme='planche'] .bp-node-card__workspace {
-  background: var(--paper-deep, #DCCFA8);
-  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
-}
-
-[data-theme='planche'] .bp-node-card__workspace--empty {
-  color: var(--ink-faint, rgba(28, 52, 59, 0.38));
-  background: transparent;
 }
 
 [data-theme='planche'] .bp-node-card__terminal {
@@ -3838,8 +3786,7 @@
   box-shadow: none;
 }
 
-[data-theme='planche'] .bp-node-detail__header,
-[data-theme='planche'] .bp-node-detail__terminal-footer {
+[data-theme='planche'] .bp-node-detail__header {
   background: var(--paper, #EFE4C5);
   border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
 }
@@ -3939,22 +3886,9 @@
   color: var(--ink, #1C343B);
 }
 
-[data-theme='planche'] .bp-node-detail__terminal-meta {
-  color: var(--ink-soft, rgba(28, 52, 59, 0.62));
-}
 
-[data-theme='planche'] .bp-node-detail__terminal-dot {
-  background: var(--ink-faint, rgba(28, 52, 59, 0.38));
-}
 
-[data-theme='planche'] .bp-node-detail__terminal-dot--busy {
-  background: var(--planche-red, #D43D2A);
-  box-shadow: none;
-}
 
-[data-theme='planche'] .bp-node-detail__terminal-dot--bound {
-  background: var(--ink, #1C343B);
-}
 
 [data-theme='planche'] .bp-node-detail__warning {
   color: #A86F0B;
@@ -4153,7 +4087,8 @@
 }
 
 /* 工作台 Janus 胶囊：纸面 + 墨线，去霓虹 */
-[data-theme='planche'] .blueprint-janus-capsule {
+[data-theme='planche'] .blueprint-janus-capsule,
+[data-theme='planche'] .blueprint-review-activity {
   background: var(--paper, #EFE4C5);
   border: 1px solid var(--line, #1C343B);
   color: var(--ink, #1C343B);
@@ -4162,7 +4097,8 @@
   box-shadow: none;
 }
 
-[data-theme='planche'] .blueprint-janus-capsule:hover {
+[data-theme='planche'] .blueprint-janus-capsule:hover,
+[data-theme='planche'] .blueprint-review-activity:hover {
   border-color: var(--planche-red, #D43D2A);
   background: var(--paper-deep, #DCCFA8);
   box-shadow: none;

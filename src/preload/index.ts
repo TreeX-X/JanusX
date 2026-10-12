@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { BLUEPRINT_REVIEW_CHANNELS, type BlueprintReviewAPI } from '../shared/ipc/blueprint-review'
 import os from 'node:os'
 import { JANUS_PERSONA } from '../shared/janus/persona'
 import { OFFICE_EVENT_CHANNELS, OFFICE_INVOKE_CHANNELS, type OfficeAPI } from '../shared/office'
@@ -45,6 +46,33 @@ import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, 
 import { TEAM_CHANNELS, type TeamAPI } from '../shared/ipc/team'
 import { UPDATER_CHANNELS, UPDATER_EVENT_CHANNELS, type UpdaterAPI } from '../shared/ipc/updater'
 import { PEER_CHANNELS, REMOTE_CHANNELS, type PeerAPI, type RemoteAPI } from '../shared/ipc/remote'
+
+const blueprintReviewAPI: BlueprintReviewAPI = {
+  repairPrepare: input => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.repairPrepare, input),
+  repairDiff: id => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.repairDiff, id),
+  repairUndo: id => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.repairUndo, id),
+  repairRetryReview: id => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.repairRetryReview, id),
+  activityRead: root => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.activityRead, root),
+  onActivityChanged: callback => subscribeIpcEvent(BLUEPRINT_REVIEW_CHANNELS.activityChanged, callback),
+  onResultsChanged: callback => subscribeIpcEvent(BLUEPRINT_REVIEW_CHANNELS.resultsChanged, callback),
+  onReadChanged: callback => subscribeIpcEvent(BLUEPRINT_REVIEW_CHANNELS.readChanged, callback),
+  markRead: (context, versions, bulk) => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.markRead, context, versions, bulk),
+  undoRead: token => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.undoRead, token),
+  read: root => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.read, root),
+  readSaved: root => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.readSaved, root),
+  run: (root, noteId) => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.run, root, noteId),
+  close: (context, noteId, revision, ids) => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.close, context, noteId, revision, ids),
+  cancel: (root, noteId) => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.cancel, root, noteId),
+  settingsGet: () => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.settingsGet),
+  settingsUpdate: settings => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.settingsUpdate, settings),
+  configurationTest: () => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.configurationTest),
+  credentialStatus: () => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.credentialStatus),
+  credentialGet: () => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.credentialGet),
+  credentialSet: key => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.credentialSet, key),
+  mcpStatus: () => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.mcpStatus),
+  mcpChange: input => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.mcpChange, input),
+  mcpProbe: () => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.mcpProbe),
+}
 
 const workspaceAPI: WorkspaceAPI = {
   initialize: () => ipcRenderer.invoke(WORKSPACE_CHANNELS.initialize),
@@ -359,6 +387,7 @@ const llmAPI: LlmAPI = {
   getTerminalDefault: (terminal) => ipcRenderer.invoke(LLM_CHANNELS.getTerminalDefault, terminal),
   listModels: (terminal, providerId) => ipcRenderer.invoke(LLM_CHANNELS.listModels, terminal, providerId),
   getModelCatalog: () => ipcRenderer.invoke(LLM_CHANNELS.getCatalog),
+  getChatModelBudget: (providerId, modelId) => ipcRenderer.invoke(LLM_CHANNELS.getChatModelBudget, providerId, modelId),
   refreshModelCatalog: () => ipcRenderer.invoke(LLM_CHANNELS.refreshCatalog),
   getAdapters: () => ipcRenderer.invoke(LLM_CHANNELS.getAdapters),
   chat: (request) => ipcRenderer.invoke(LLM_CHANNELS.chat, request),
@@ -644,6 +673,7 @@ contextBridge.exposeInMainWorld('electron', {
   knowledge: knowledgeAPI,
   janus: janusAPI,
   harness: harnessAPI,
+  blueprintReview: blueprintReviewAPI,
   office: officeAPI,
   llm: llmAPI,
   externalCli: externalCliAPI,

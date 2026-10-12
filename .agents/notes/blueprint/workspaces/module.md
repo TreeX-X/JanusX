@@ -5,7 +5,7 @@
   "kind": "module",
   "lifecycle": "accepted",
   "created": "2026-10-08",
-  "updated": "2026-10-08T12:41:09Z",
+  "updated": "2026-10-11T10:00:00.270Z",
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
   "moduleState": "partial",
   "codeRefs": [
@@ -32,10 +32,14 @@
 
 ## Responsibility
 
-负责跨模块管理 Note 的工作区识别与蓝图组合，提供每工作区的接入状态、空态和初始化预览。支持同仓模块结构，跨仓时按明确 checkout 绑定组装；规划声明与开发证据各保留自己的身份。
+负责跨模块管理 Note 的工作区识别与蓝图投影，提供每工作区的接入状态、空态和初始化预览。蓝图只显示当前工作区的 Note，切换工作区后读取对应来源；规划声明与开发证据各保留自己的身份。
 
 ## Design
 
-composeBlueprint 在读取后装配接口及证据，缺失、冲突或未绑定来源保留诊断。WorkspaceBlueprintService 调用 agentX 的初始化和撤销能力，打开工作区不自动生成文件；只读接入检测不替代数据初始化。
+HarnessNoteService.projectView 只投影当前根目录，不按引用发现或读取其他已注册、已绑定工作区。composeBlueprint 的 localOnly 装配保留本工作区接口与证据；本地 Note 的可读状态不取决于它声明的外部开发仓库。跨工作区 URI 与绑定记录仍保存在共同来源中，但不并入当前画布、数据来源和审核订阅。外部引用、外部接口提供方及其接入诊断不触发来源报错，本工作区的缺失目标、无提供方接口、无效文档和扫描失败仍可检查。显示与验证由[模块浏览](../navigation/requirements/module-browsing.md)维护。
+
+WorkspaceBlueprintService 调用 agentX 的初始化和撤销能力，打开工作区不自动生成文件；只读接入检测不替代数据初始化。
+
+启动后后台准备当前工作区蓝图，其他工作区空闲时逐个预热索引。前台打开复用同一加载请求，临时忙碌自动等待并重试；切换工作区取消旧等待，同工作区刷新失败保留最后画布。读取状态与真实错误边界见[工作区加载与初始化](requirements/blueprint-empty-init.md)，索引复用见[性能专题](../requirements/blueprint-performance.md)。
 
 架构师功能以跨模块 Note 管理为核心。蓝图区分文档主要归属与跨模块关联，支持无代码的规划工作区，并在模块浏览和关注定位时保留共同需求、决策与协作关系的来源。解析复用标准模块和显式关系；验收引用与正文引用可从参与模块访问，同一目标的多种关系保留类型、方向与来源。实现与 Main 自检见[架构师工作区契约](architect-workspace-model.md)，最终独立验收由接入计划维护。

@@ -35,7 +35,7 @@ import {
 import { BlueprintNodeCard, BlueprintCardActionsContext, type BlueprintNodeData } from './BlueprintNodeCard'
 import { BlueprintAdaptiveEdge } from './BlueprintAdaptiveEdge'
 import { BlueprintHierarchyEdge } from './BlueprintHierarchyEdge'
-import { STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, noteKindOf, getBlueprintStatusVisual } from './blueprintStatus'
+import { blueprintStatusOptions, NOTE_KINDS, NOTE_KIND_LABEL_KEY, noteKindOf, getBlueprintStatusVisual } from './blueprintStatus'
 import { useThemeStore } from '@/stores/theme'
 import { useOptionalBlueprintToolbar, type ToolbarKindFilter, type ToolbarStatusFilter, useHideIsolatedState } from './BlueprintToolbar'
 import { PromptDialog } from './PromptDialog'
@@ -53,6 +53,12 @@ import { collectLocalHierarchyIds, computeInitialCollapsedIds, groupRootsByConne
 import { buildNodeSearchText, nodeMatchesFocus, normalizeSearchText } from '@/features/blueprint/blueprint-focus'
 import { useI18n } from '@/i18n/useI18n'
 import { NoteWikiPanel } from './NoteWikiPanel'
+import { useBlueprintNavigation } from '@/stores/blueprint-navigation'
+import { markNoteRead, useBlueprintReviewStore } from '@/stores/blueprint-review'
+import { useBlueprintActivityStore } from '@/stores/blueprint-review-activity'
+import { attentionNode } from '@/features/blueprint/attention-model'
+import { useNoteNavigationMotion, type NoteVisit } from '@/features/blueprint/useNoteNavigationMotion'
+import type { BlueprintNoteDestination, NoteVersion } from '../../../../shared/blueprint-attention'
 import { BlueprintCompositionPanel } from './BlueprintCompositionPanel'
 import { projectArchitecture } from '@/features/blueprint/architecture-view'
 import { projectModuleBrowse, moduleTrail } from '@/features/blueprint/module-browsing'
@@ -148,6 +154,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const firstNodeClick = useRef<{ id: string; x: number; y: number; time: number } | null>(null)
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null)
   const [wikiAnchor, setWikiAnchor] = useState<{ uri: string; value?: string } | null>(null)
+  const [noteVisit, setNoteVisit] = useState<NoteVisit | null>(null)
+  const visitCounter = useRef(0)
+  const [sourceReady, setSourceReady] = useState<number | null>(null)
+  const readyVersion = useRef<NoteVersion | null>(null)
+  const acknowledgedVisit = useRef(0)
+  const detailElement = useRef<HTMLDivElement | null>(null)
+  const detailScrollRestore = useRef<{ top: number; open: string[]; collapsed: string[]; reviewExpanded: boolean } | null>(null)
   const [toolbarExpanded, setToolbarExpanded] = useState(false)
   // 统一顶栏（workbench）存在时过滤走 provider 受控；embedded 无 provider 时走本地态。
   const toolbarState = useOptionalBlueprintToolbar()
@@ -197,13 +210,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const fitFrameRef = useRef<number | null>(null)
   const initialFitBlueprintRef = useRef<string | null>(null)
   const detailOpenRef = useRef<boolean | null>(null)
-  type BrowseLocation = { scopeId: string | null; selectedId: string | null; detailNodeId: string | null; wikiAnchor: typeof wikiAnchor; viewport: { x: number; y: number; zoom: number } | null }
+  type BrowseLocation = { scopeId: string | null; selectedId: string | null; detailNodeId: string | null; wikiAnchor: typeof wikiAnchor; viewport: { x: number; y: number; zoom: number } | null;
+    searchQuery: string; statusFilter: StatusFilter; kindFilter: KindFilter; hideIsolated: boolean; reading: { top: number; open: string[]; collapsed: string[]; reviewExpanded: boolean } }
   const history = useRef<BrowseLocation[]>([])
   const [historyLength, setHistoryLength] = useState(0)
   const pendingViewport = useRef<BrowseLocation['viewport']>(null)
   const pendingCenter = useRef<string | null>(null)
   const collapseInitRef = useRef<string | null>(null)
   const detailInitRef = useRef<string | null>(null)
+  const navigationMotion = useNoteNavigationMotion(noteVisit, viewKey, rfInstanceRef, canvasMainRef, sourceReady)
 
   const workspaceNameById = useMemo(
     () => Object.fromEntries(workspaces.map((w) => [w.id, w.name])),
@@ -386,40 +401,67 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const graphReady = !currentBlueprint || currentBlueprint.nodeIds.length === 0 || rfNodes.length > 0
   const ownerPath = useBlueprintStore(state => state.blueprintWorkspace[blueprintId] ?? null)
   // Note: local module navigation preserves source/layout — see .agents/notes/blueprint/navigation/requirements/module-browsing.md
+  const rememberLocation = useCallback(() => {
+    history.current.push({ scopeId, selectedId, detailNodeId, wikiAnchor, viewport: rfInstanceRef.current?.getViewport() ?? null,
+      searchQuery, statusFilter, kindFilter, hideIsolated, reading: { top: detailElement.current?.scrollTop ?? 0,
+        collapsed: [...(detailElement.current?.querySelectorAll<HTMLDetailsElement>('.bp-note-wiki__body .bp-note-chapter:not([open])') ?? [])].flatMap(element => element.querySelector<HTMLElement>('[data-note-anchor]')?.dataset.noteAnchor ?? []),
+        reviewExpanded: detailElement.current?.querySelector('.bp-note-review__toggle')?.getAttribute('aria-expanded') === 'true',
+        open: [...(detailElement.current?.querySelectorAll<HTMLDetailsElement>('details[data-finding-id][open]') ?? [])].map(element => element.dataset.findingId!) } })
+    setHistoryLength(history.current.length)
+  }, [scopeId, selectedId, detailNodeId, wikiAnchor, searchQuery, statusFilter, kindFilter, hideIsolated])
   const navigateScope = useCallback((nextScope: string | null, previewId: string | null = nextScope) => {
     pendingCenter.current = null
+    setNoteVisit(null); setSourceReady(null)
     const targetScope = nextScope ?? homeModuleId
     if (targetScope !== scopeId) {
-      history.current.push({ scopeId, selectedId, detailNodeId, wikiAnchor, viewport: rfInstanceRef.current?.getViewport() ?? null })
-      setHistoryLength(history.current.length)
+      rememberLocation()
       setScopeId(targetScope)
     }
     setSelectedId(previewId); setDetailNodeId(previewId); setWikiAnchor(null)
-  }, [scopeId, homeModuleId, selectedId, detailNodeId, wikiAnchor])
+  }, [scopeId, homeModuleId, rememberLocation])
+  const beginVisit = useCallback((id: string, destination?: BlueprintNoteDestination, move = true, userInitiated = true, scopeOverride?: string) => {
+    if (!sourceBlueprint?.nodes[id]) return
+    const node = sourceBlueprint.nodes[id], root = nodeNoteSnapshot(sourceBlueprint, id)?.coverage.checkoutRoot
+    if (!root || !node.sourceUri) return
+    setSourceReady(null); readyVersion.current = null
+    const targetScope = scopeOverride ?? (currentBlueprint?.nodes[id] ? scopeId : moduleBrowse?.owners[id] ?? homeModuleId)
+    const sequence = ++visitCounter.current
+    setNoteVisit({ root, context: useBlueprintReviewStore.getState().views[root]?.context, noteId: node.sourceUri.split('/').pop()!, intent: 'body', hash: node.sourceHash, ...destination,
+      nodeId: id, sequence, viewKey: blueprintId + ':' + (targetScope ?? 'overview'),
+      move: move && (!moduleBrowsing || Boolean(currentBlueprint?.nodes[id] || moduleBrowse?.owners[id] || architecture?.roles[id])), userInitiated })
+    if (move) {
+      pendingCenter.current = null
+      initialFitBlueprintRef.current = blueprintId + ':' + (targetScope ?? 'overview')
+      if (fitFrameRef.current !== null) cancelAnimationFrame(fitFrameRef.current)
+    }
+  }, [sourceBlueprint, currentBlueprint, scopeId, moduleBrowse, homeModuleId, blueprintId, moduleBrowsing, architecture])
   const openModule = useCallback((id: string) => {
-    if (architecture?.roles[id]) navigateScope(id)
-  }, [architecture, navigateScope])
+    if (architecture?.roles[id]) { navigateScope(id); beginVisit(id, undefined, true, true, id) }
+  }, [architecture, navigateScope, beginVisit])
   const goBack = useCallback(() => {
     const previous = history.current.pop()
     if (!previous) return
     pendingViewport.current = previous.viewport
+    setNoteVisit(null); setSourceReady(null)
+    setSearchQuery(previous.searchQuery); setStatusFilter(previous.statusFilter); setKindFilter(previous.kindFilter); setHideIsolated(previous.hideIsolated)
+    detailScrollRestore.current = previous.reading
     pendingCenter.current = null
     setScopeId(previous.scopeId); setSelectedId(previous.selectedId); setDetailNodeId(previous.detailNodeId); setWikiAnchor(previous.wikiAnchor)
     setHistoryLength(history.current.length)
-  }, [])
-  const revealNode = useCallback((id: string, anchor?: string): boolean => {
+  }, [setSearchQuery, setStatusFilter, setKindFilter, setHideIsolated])
+  const revealNode = useCallback((id: string, anchor?: string, userInitiated = true, destination?: BlueprintNoteDestination): boolean => {
     const node = sourceBlueprint?.nodes[id]
     if (!node) return false
     if (moduleBrowsing && !currentBlueprint?.nodes[id] && moduleBrowse?.owners[id]) navigateScope(moduleBrowse.owners[id], id)
     else if (moduleBrowsing && architecture?.roles[id] && !currentBlueprint?.nodes[id]) navigateScope(null, id)
-    else { setSelectedId(id); setDetailNodeId(id) }
+    else { if (id !== detailNodeId) rememberLocation(); setSelectedId(id); setDetailNodeId(id) }
     setWikiAnchor(anchor && node.sourceUri ? { uri: node.sourceUri, value: anchor } : null)
     setLocalFocusActive(false)
     setCollapsedNodeIds(new Set()); setHideIsolated(false)
-    pendingCenter.current = id
+    beginVisit(id, destination, true, userInitiated)
     onNodeOpen?.(id)
     return !moduleBrowsing || !!architecture?.roles[id] || !!moduleBrowse?.owners[id]
-  }, [sourceBlueprint, moduleBrowsing, currentBlueprint, moduleBrowse, architecture, navigateScope, setHideIsolated, onNodeOpen])
+  }, [sourceBlueprint, moduleBrowsing, currentBlueprint, moduleBrowse, architecture, navigateScope, setHideIsolated, onNodeOpen, beginVisit, detailNodeId, rememberLocation])
   const selectCompositionNode = useCallback((id: string): void => {
     setSearchQuery(''); setStatusFilter('all'); setKindFilter('all'); setLocalFocusActive(false)
     revealNode(id)
@@ -431,6 +473,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   }, [toolbarState, selectCompositionNode])
   useEffect(() => {
     history.current = []; setHistoryLength(0); setScopeId(null); setSelectedId(null); setDetailNodeId(null); setWikiAnchor(null)
+    setNoteVisit(null); setSourceReady(null)
     pendingViewport.current = null; pendingCenter.current = null
   }, [blueprintId, ownerPath])
   useEffect(() => {
@@ -447,7 +490,8 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       targetScope = id
       navigateScope(id)
     } else {
-      const onCanvas = revealNode(id)
+      const onCanvas = revealNode(id, undefined, false)
+      setNoteVisit(null)
       pendingCenter.current = null
       if (!onCanvas || action === 'preview' && visible) return null
       if (moduleBrowsing && !visible) targetScope = moduleBrowse?.owners[id] ?? homeModuleId
@@ -461,6 +505,45 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       nodeIds: action === 'enter' ? page?.graph.nodeIds ?? [id] : [...new Set([...(moduleBrowsing && targetScope ? [targetScope] : []), id])] }
   }, [sourceBlueprint, currentBlueprint, scopeId, architecture, navigateScope, revealNode, moduleBrowsing, moduleBrowse, homeModuleId, blueprintId])
   const assistantCanvas = useNoteCanvasFocus(sourceBlueprint, ownerPath, rfNodes, rfEdges, rfInstanceRef, viewKey, revealAssistantNode)
+  const navigationRequest = useBlueprintNavigation(state => state.request)
+  useEffect(() => {
+    if (!navigationRequest || navigationRequest.blueprintId !== blueprintId || !sourceBlueprint) return
+    const id = attentionNode(sourceBlueprint, navigationRequest.root, navigationRequest.noteId)
+    useBlueprintNavigation.getState().consume(navigationRequest.sequence)
+    const currentContext = useBlueprintReviewStore.getState().views[navigationRequest.root]?.context
+      ?? useBlueprintActivityStore.getState().statuses[navigationRequest.root]?.automatic?.context
+    if (!id || navigationRequest.context && (navigationRequest.context.branch !== currentContext?.branch || navigationRequest.context.repoId !== currentContext?.repoId)) { setActionError(t('attention.unavailable')); return }
+    revealNode(id, undefined, true, navigationRequest)
+    setSearchQuery(''); setStatusFilter('all'); setKindFilter('all')
+  }, [navigationRequest, blueprintId, sourceBlueprint, revealNode, setSearchQuery, setStatusFilter, setKindFilter, t])
+  useEffect(() => {
+    const version = readyVersion.current
+    if (!noteVisit || !version || navigationMotion.status.sequence !== noteVisit.sequence || navigationMotion.status.phase !== 'ready'
+      || !noteVisit.userInitiated || noteVisit.intent !== 'body' || acknowledgedVisit.current === noteVisit.sequence) return
+    acknowledgedVisit.current = noteVisit.sequence
+    if (noteVisit.hash && version.hash !== noteVisit.hash) return
+    void markNoteRead(noteVisit.root, [version], false, noteVisit.context).catch(error => setActionError(String(error)))
+  }, [noteVisit, navigationMotion.status])
+  const noteSourceReady = useCallback((version: NoteVersion | null, sequence?: number) => {
+    if (detailScrollRestore.current && version) {
+      const saved = detailScrollRestore.current; detailScrollRestore.current = null
+      requestAnimationFrame(() => {
+        if (!detailElement.current) return
+        const restore = () => {
+          if (!detailElement.current) return
+          for (const finding of detailElement.current.querySelectorAll<HTMLDetailsElement>('details[data-finding-id]')) finding.open = saved.open.includes(finding.dataset.findingId!)
+          for (const chapter of detailElement.current.querySelectorAll<HTMLDetailsElement>('.bp-note-wiki__body .bp-note-chapter')) chapter.open = !saved.collapsed.includes(chapter.querySelector<HTMLElement>('[data-note-anchor]')?.dataset.noteAnchor ?? '')
+          detailElement.current.scrollTop = saved.top
+        }
+        const toggle = detailElement.current.querySelector<HTMLButtonElement>('.bp-note-review__toggle')
+        if (toggle && (toggle.getAttribute('aria-expanded') === 'true') !== saved.reviewExpanded) { toggle.click(); requestAnimationFrame(restore) }
+        else restore()
+      })
+    }
+    if (!noteVisit || sequence !== noteVisit.sequence) return
+    readyVersion.current = version
+    setSourceReady(version ? noteVisit.sequence : -noteVisit.sequence)
+  }, [noteVisit])
   useEffect(() => {
     if (!ownerPath) return
     useNoteFocusStore.getState().setBrowser({ blueprintId, workspacePath: ownerPath, moduleBrowsing, moduleId: scopeId, selectedId,
@@ -480,6 +563,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       void rfInstanceRef.current.setViewport(viewport)
       return
     }
+    if (noteVisit?.move && noteVisit.viewKey === canvasLoadPlan.blueprintId) return
     if (initialFitBlueprintRef.current !== canvasLoadPlan.blueprintId && rfNodes.length) {
       initialFitBlueprintRef.current = canvasLoadPlan.blueprintId
       fitViewWhenReady(0)
@@ -491,7 +575,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       if (fitFrameRef.current !== null) cancelAnimationFrame(fitFrameRef.current)
       void rfInstanceRef.current.setCenter(node.position.x + NODE_W / 2, node.position.y + NODE_H / 2, { zoom: 1, duration: 0 })
     }
-  }, [canvasLoadPlan, fitViewWhenReady, rfNodes])
+  }, [canvasLoadPlan, fitViewWhenReady, rfNodes, noteVisit])
 
   useEffect(() => {
     const isDetailOpen = Boolean(activeDetailNode)
@@ -565,7 +649,11 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       setActionError(error instanceof Error ? error.message : String(error))
     })
   }, [effectiveCollapsedNodeIds, persistCollapsedNodeIds, moduleBrowsing])
-  const cardActions = useMemo(() => ({ toggleCollapse, moduleBrowsing, architectureRoles: architecture?.roles, moduleDocuments: moduleBrowse?.owned, moduleChildren: architecture?.graph.nodes, openModule }), [toggleCollapse, moduleBrowsing, architecture, moduleBrowse?.owned, openModule])
+  const showSuggestions = useCallback((id: string) => {
+    const node = sourceBlueprint?.nodes[id], root = sourceBlueprint && nodeNoteSnapshot(sourceBlueprint, id)?.coverage.checkoutRoot
+    if (node?.sourceUri && root) revealNode(id, undefined, true, { root, noteId: node.sourceUri.split('/').pop()!, intent: 'suggestions' })
+  }, [sourceBlueprint, revealNode])
+  const cardActions = useMemo(() => ({ toggleCollapse, moduleBrowsing, architectureRoles: architecture?.roles, moduleDocuments: moduleBrowse?.owned, moduleChildren: architecture?.graph.nodes, openModule, showSuggestions }), [toggleCollapse, moduleBrowsing, architecture, moduleBrowse?.owned, openModule, showSuggestions])
 
   const activateNode = useCallback(
     (id: string) => {
@@ -628,9 +716,9 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   const statusFilterOptions = useMemo(
     () => [
       { value: 'all', label: t('blueprint:search.statusAll') },
-      ...STATUS_ORDER.map((status) => ({ value: status, label: t(getBlueprintStatusVisual(status).labelKey) }))
+      ...blueprintStatusOptions(Object.values(sourceBlueprint?.nodes ?? {}), t)
     ],
-    [t]
+    [t, sourceBlueprint]
   )
   const kindFilterOptions = useMemo(
     () => [
@@ -641,7 +729,13 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
   )
   return (
     <div className={`blueprint-canvas-wrapper blueprint-canvas-wrapper--browsing${detailInCanvas ? ' blueprint-canvas-wrapper--detail-open' : ''}`}>
-      <div ref={canvasMainRef} className="blueprint-canvas-main" data-graph-ready={graphReady ? 'true' : 'false'} onPointerDownCapture={assistantCanvas.onPointerDown} onWheelCapture={assistantCanvas.onWheel}>
+      <div ref={canvasMainRef} className="blueprint-canvas-main" data-graph-ready={graphReady ? 'true' : 'false'}
+        data-navigation={navigationMotion.status.phase} aria-busy={navigationMotion.status.phase === 'loading'}
+        onPointerDownCapture={() => { navigationMotion.cancel(); assistantCanvas.onPointerDown() }} onWheelCapture={() => { navigationMotion.cancel(); assistantCanvas.onWheel() }}>
+      {noteVisit && navigationMotion.status.sequence === noteVisit.sequence && ['loading', 'failed'].includes(navigationMotion.status.phase) && <div className="bp-navigation-status" role="status" data-phase={navigationMotion.status.phase}>
+        <span className="bp-navigation-status__line" />{t(navigationMotion.status.phase === 'loading' ? 'attention.locating' : 'attention.locateFailed')}
+        {navigationMotion.status.phase === 'failed' && <button type="button" onClick={() => { setSelectedId(noteVisit.nodeId); setDetailNodeId(noteVisit.nodeId); beginVisit(noteVisit.nodeId, noteVisit) }}>{t('attention.retry')}</button>}
+      </div>}
       {/* 画布操作工具栏（embedded 保留；workbench 已收敛到顶栏统一栏，此处不再渲染） */}
       {toolbarState ? null : (
       <div className="blueprint-toolbar blueprint-toolbar--canvas">
@@ -831,7 +925,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
       {!graphReady ? <div className="blueprint-canvas-loading" aria-live="polite" aria-label={t('blueprint:toolbar.loading')} /> : null}
       <BlueprintCardActionsContext.Provider value={cardActions}>
       <ReactFlow<Node<BlueprintNodeData, 'blueprint'>, Edge>
-        nodes={assistantCanvas.nodes.map(node => ({ ...node, selected: node.id === selectedId }))}
+        nodes={assistantCanvas.nodes.map(node => ({ ...node, selected: node.id === selectedId, className: [node.className, node.id === navigationMotion.focused ? 'bp-navigation-focused' : ''].filter(Boolean).join(' ') }))}
         edges={assistantCanvas.edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -843,6 +937,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           if (event.detail === 2 && firstNodeClick.current) return
           firstNodeClick.current = { id: node.id, x: event.clientX, y: event.clientY, time: event.timeStamp }
           setSelectedId(node.id); setDetailNodeId(node.id); setWikiAnchor(null)
+          beginVisit(node.id, undefined, false)
         }}
         onMove={(event) => { if (event) firstNodeClick.current = null }}
         onNodeDragStart={() => { firstNodeClick.current = null }}
@@ -876,14 +971,15 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
             zoomable
             nodeColor={(n) => {
               const d = n.data as BlueprintNodeData | undefined
-              return d ? getBlueprintStatusVisual(d.status).color : plancheCanvas ? 'rgba(28,52,59,0.45)' : '#555'
+              return d && !d.noteId ? getBlueprintStatusVisual(d.status).color : plancheCanvas ? 'rgba(28,52,59,0.45)' : '#555'
             }}
             style={{ background: plancheCanvas ? '#DCCFA8' : 'rgba(12,12,12,0.9)' }}
           />
         ) : null}
       </ReactFlow>
       <div className="bp-canvas-legend" aria-hidden="true">
-        {(!moduleBrowsing ? ['planning', 'in-progress', 'done', 'archived'] as const : []).map((status) => (
+        <span><i className="ld" style={{ background: 'var(--shell-accent, #b98736)' }} />{t('blueprint:review.pendingLegend')}</span>
+        {(!moduleBrowsing && Object.values(sourceBlueprint?.nodes ?? {}).some(node => !node.note && !node.sourceUri) ? ['planning', 'in-progress', 'done', 'archived'] as const : []).map((status) => (
           <span key={status}>
             <i className="ld" style={{ background: getBlueprintStatusVisual(status).color }} />
             {t(getBlueprintStatusVisual(status).labelKey)}
@@ -914,7 +1010,7 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <button className="bp-context-menu__item" onClick={() => { setDetailNodeId(contextMenu.nodeId); setContextMenu(null) }}>
+          <button className="bp-context-menu__item" onClick={() => { setDetailNodeId(contextMenu.nodeId); beginVisit(contextMenu.nodeId, undefined, false); setContextMenu(null) }}>
             {t('blueprint:contextMenu.nodeDetail')}
           </button>
         </div>
@@ -939,16 +1035,24 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
                 {(detailNode.tags ?? []).map((tag) => <span key={tag}>#{tag}</span>)}
               </div>
             </div>
-            <button className="bp-panel-close" onClick={() => setDetailNodeId(null)} aria-label={t('blueprint:ariaLabel.closeNodeDetail')} title={t('common:action.close')}>
+            <button className="bp-panel-close" onClick={() => { setDetailNodeId(null); setNoteVisit(null); setSourceReady(null) }} aria-label={t('blueprint:ariaLabel.closeNodeDetail')} title={t('common:action.close')}>
               <X size={16} aria-hidden="true" />
             </button>
           </div>
 
+          <div className="bp-node-detail__scroll" ref={detailElement}>
           {sourceBlueprint && architecture?.roles[detailNode.id] && <details className="bp-browser-related"><summary>{t('blueprint:browse.related')}</summary><BlueprintArchitecturePanel source={sourceBlueprint} projection={architecture} nodeId={detailNode.id} onSelect={selectCompositionNode} /></details>}
           {sourceBlueprint && !architecture?.roles[detailNode.id] && <BlueprintCompositionPanel blueprint={sourceBlueprint} nodeId={detailNode.id} onSelect={selectCompositionNode} />}
           {sourceBlueprint && detailSnapshot ? (
             <NoteWikiPanel
               compact={moduleBrowsing || Boolean(toolbarState)}
+              visit={noteVisit?.nodeId === detailNode.id ? noteVisit : undefined}
+              onSourceReady={noteSourceReady}
+              onRetryNavigation={noteVisit ? () => beginVisit(detailNode.id, noteVisit, noteVisit.move, noteVisit.userInitiated) : undefined}
+              onReadBody={async version => {
+                await markNoteRead(detailSnapshot.coverage.checkoutRoot, [version], false)
+              }}
+              motionReady={navigationMotion.status.sequence === noteVisit?.sequence && navigationMotion.status.phase === 'ready'}
               snapshot={detailSnapshot}
               rootPath={detailSnapshot.coverage.checkoutRoot}
               uri={detailNode.sourceUri}
@@ -1262,19 +1366,6 @@ export function BlueprintCanvas({ blueprintId, onNodeOpen, onDetailOpenChange, o
           </div>
 
           </>)}
-          <div className="bp-node-detail__terminal-footer">
-            <div className="bp-node-detail__section-head">
-              <label className="bp-node-detail__label">{t('blueprint:detailPanel.terminal')}</label>
-            </div>
-            {/* 只读状态：终端由右侧对话派发，这里不再提供任何点击入口。 */}
-            <div className="bp-node-detail__terminal-meta">
-              <span className={`bp-node-detail__terminal-dot${detailNode.boundTerminalId ? ' bp-node-detail__terminal-dot--bound' : ''}`} />
-              <span>
-                {detailNode.boundTerminalId
-                  ? t('blueprint:detailPanel.terminalBound', { id: detailNode.boundTerminalId.slice(0, 8) })
-                  : t('blueprint:detailPanel.terminalDispatchHint')}
-              </span>
-            </div>
           </div>
         </aside>
         </BlueprintDetailMount>

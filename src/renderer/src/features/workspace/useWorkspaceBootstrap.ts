@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/stores/app'
 import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useBlueprintStore } from '@/stores/blueprint'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useGitStore } from '@/stores/git'
 import { warmupIndex } from '@/services/harness'
@@ -14,9 +15,11 @@ import { collectShellRestore, restoreShells } from '@/lib/shell-restore'
  * blueprint entry reads hot cache instead of paying a full 200-file parse.
  * Sequential and best-effort; failures stay silent by design.
  */
-function scheduleIndexWarmup(paths: string[]): void {
+function scheduleIndexWarmup(paths: string[]): () => void {
   const queue = [...new Set(paths.filter(Boolean))]
+  let disposed = false
   const pump = (): void => {
+    if (disposed) return
     const next = queue.shift()
     if (!next) return
     void warmupIndex(next).catch(() => {}).finally(() => {
@@ -29,6 +32,7 @@ function scheduleIndexWarmup(paths: string[]): void {
     else setTimeout(pump, 2500)
   }
   kick()
+  return () => { disposed = true }
 }
 
 export function useWorkspaceBootstrap(): void {
@@ -52,7 +56,10 @@ export function useWorkspaceBootstrap(): void {
   }, [])
 
   useEffect(() => {
+    let disposed = false
+    let stopWarmup: (() => void) | undefined
     void window.electron.workspace.initialize().then(async (state) => {
+      if (disposed) return
       useWorkspaceStore.setState({ workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId })
       if (state.workspaces.length === 0) {
         useAppStore.setState({ loadState: 'no-workspace' })
@@ -60,11 +67,15 @@ export function useWorkspaceBootstrap(): void {
       }
       useAppStore.setState({ loadState: 'no-terminal' })
       const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)
+      // Start the active projection before file-tree I/O; the view joins this request.
+      void useBlueprintStore.getState().loadWorkspace(activeWorkspace?.id ?? null)
+      stopWarmup = scheduleIndexWarmup(state.workspaces.filter(workspace => workspace.id !== activeWorkspace?.id).map(workspace => workspace.path))
       if (activeWorkspace) await loadWorkspaceFileTree(activeWorkspace.path).catch(() => {})
+      if (disposed) return
       // One-shot cold restore of pre-quit shells; agents never auto-run.
       void restoreShells().catch(() => undefined)
-      scheduleIndexWarmup(state.workspaces.map((workspace) => workspace.path))
-    }).catch(() => useAppStore.setState({ loadState: 'no-workspace' }))
+    }).catch(() => { if (!disposed) useAppStore.setState({ loadState: 'no-workspace' }) })
+    return () => { disposed = true; stopWarmup?.() }
   }, [])
 
   useEffect(() => window.electron.system.onPrepareQuit(async () => {

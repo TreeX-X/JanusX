@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('@/services/harness', () => ({ onHarnessChanged: (callback: typeof mocks.callback) => { mocks.callback = callback; return mocks.off } }))
 vi.mock('@/stores/blueprint', () => ({ useBlueprintStore: {
-  getState: () => ({ currentBlueprint: { id: mocks.current, composition: { checkouts: mocks.checkouts } }, loadBlueprint: mocks.load, loadingBlueprintId: mocks.loading,
+  getState: () => ({ currentBlueprint: { id: mocks.current, composition: { checkouts: mocks.checkouts } }, loadBlueprint: mocks.load, loadingBlueprintId: mocks.loading, loading: !!mocks.loading,
     selectedWorkspaceId: mocks.selectedWorkspaceId, loadWorkspace: mocks.loadWorkspace }),
   setState: mocks.set,
 } }))
@@ -17,7 +17,7 @@ let stop: (() => void) | undefined
 const send = (root = 'C:/work/notes', error?: string): void => { mocks.callback?.({ root, rev: 1, kinds: [], error }) }
 beforeEach(() => {
   vi.useFakeTimers()
-  vi.stubGlobal('window', new EventTarget())
+  vi.stubGlobal('window', Object.assign(new EventTarget(), { electron: { harness: { onChanged: () => () => {} } } }))
   vi.clearAllMocks()
   mocks.current = 'graph'; mocks.loading = null; mocks.load.mockResolvedValue(undefined)
   mocks.checkouts = []
@@ -25,19 +25,27 @@ beforeEach(() => {
 })
 afterEach(() => { stop?.(); stop = undefined; vi.useRealTimers(); vi.unstubAllGlobals() })
 describe('mounted Note view refresh', () => {
-  it('refreshes the selected workspace state when a composed checkout changes', async () => {
+  it('retries a busy watcher without presenting a read failure', async () => {
+    stop = subscribeNoteRefresh('graph', 'C:/work/notes')
+    send(undefined, 'notes busy: lock held')
+    await vi.advanceTimersByTimeAsync(160)
+    expect(mocks.set).not.toHaveBeenCalled()
+    expect(mocks.load).toHaveBeenCalledWith('graph')
+  })
+  it('refreshes the selected workspace when its own Notes change', async () => {
     mocks.selectedWorkspaceId = 'workspace'
     mocks.checkouts = [{ path: 'C:/work/dependency' }]
     stop = subscribeNoteRefresh('graph', 'C:/work/notes')
-    send('C:/work/dependency'); await vi.advanceTimersByTimeAsync(160)
+    send(); await vi.advanceTimersByTimeAsync(160)
     expect(mocks.loadWorkspace).toHaveBeenCalledWith('workspace')
     expect(mocks.load).not.toHaveBeenCalled()
   })
-  it('refreshes the architecture graph when an explicitly bound checkout changes', async () => {
+  it('ignores changes and errors in a bound foreign checkout', async () => {
     mocks.checkouts = [{ path: 'C:/work/dependency' }]
     stop = subscribeNoteRefresh('graph', 'C:/work/notes')
-    send('C:/work/dependency'); await vi.advanceTimersByTimeAsync(160)
-    expect(mocks.load).toHaveBeenCalledWith('graph')
+    send('C:/work/dependency', 'read failed'); await vi.advanceTimersByTimeAsync(160)
+    expect(mocks.load).not.toHaveBeenCalled()
+    expect(mocks.set).not.toHaveBeenCalled()
   })
   it('coalesces bursts, normalizes checkout spelling, and ignores other roots', async () => {
     stop = subscribeNoteRefresh('graph', 'c:/work/notes/')

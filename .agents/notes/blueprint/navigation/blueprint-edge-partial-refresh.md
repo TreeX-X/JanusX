@@ -8,7 +8,7 @@
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/77fa3727-6536-47d7-8bfd-613db717e4ac",
   "class": "architecture",
   "tags": ["blueprint","canvas","edge-routing","partial-refresh"],
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-10T08:35:33.327Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/17bbe20e-f05c-470c-aee1-3f92a86369ab"
 }
 ---
@@ -23,7 +23,7 @@ Parent links share the center-ray adaptive router with relation links, so hierar
 
 Parent edges use the `blueprintHierarchy` type with fixed Bottom to Top ports and a smoothstep path with 12px radius. Relation and interface edges keep the `blueprintAdaptive` type with center-ray bezier routing. Cards expose invisible Left and Right handles alongside Top and Bottom so side exits have anchors. Hierarchy edges carry `interactionWidth` 24, relation and interface edges carry 16. Edge kind class names (`bp-flow-edge--hierarchy`, `--relation`, `--interface`) survive the entry pass, and hierarchy paths use round caps with relation paths at reduced opacity.
 
-Topology identity covers structure plus visibility only: node ids with parent ids, layout key set, collapsed and hidden sets, and a compact relation plus interface signature. Coordinates never enter the key, so layout-save echoes reuse the pinned flow. Entry delay variables cap at 8 for nodes and edges. Search text builds once per blueprint object into a map and filters against a deferred query. The minimap mounts only at 250 nodes or fewer.
+Topology identity covers structure plus visibility only: node ids with parent ids, layout key set, collapsed and hidden sets, and a compact relation plus interface signature. Coordinates never enter the key, so layout-save echoes reuse the pinned flow. Card patches compare derived noteStatus parts by value; fresh arrays with unchanged status no longer replace otherwise unchanged nodes. Other card fields keep shallow equality. Entry delay variables cap at 8 for nodes and edges. Search text builds once per blueprint object into a map and filters against a deferred query. The minimap mounts only at 250 nodes or fewer.
 
 ## Alternatives considered
 

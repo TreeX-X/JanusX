@@ -6,6 +6,14 @@
 import type { BlueprintNodeStatus } from '@/services/blueprint'
 import { useThemeStore } from '@/stores/theme'
 import { getThemeBase } from '../../../../shared/theme/registry'
+import { blueprintStatusFilter } from '../../../../shared/blueprint-note-status'
+import type { BlueprintNode } from '@/services/blueprint'
+
+export type BlueprintStatusFilter = BlueprintNodeStatus | `note:${string}` | 'all'
+export function blueprintStatusOptions(nodes: BlueprintNode[], translate: (key: string) => string) {
+  const statuses = [...new Set(nodes.map(blueprintStatusFilter))]
+  return statuses.map(value => ({ value, label: translate(value.startsWith('note:') ? 'blueprint:noteStatus.' + value.slice(5) : getBlueprintStatusVisual(value as BlueprintNodeStatus).labelKey) }))
+}
 
 export interface StatusVisual {
   /** 圆点颜色 */

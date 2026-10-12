@@ -7,7 +7,7 @@
   "created": "2026-10-04",
   "class": "feature",
   "tags": ["blueprint","harness","empty-state","janus"],
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-10T08:55:34Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bc9c2ca8-e036-48ec-a35e-667d694460ca"
 }
 ---
@@ -21,6 +21,8 @@
 ## Expected behavior
 
 工作台和内嵌蓝图统一枚举 Janus 已添加的工作区，以工作区 ID 选择当前项，蓝图状态作为副标。选择同步活动工作区，随后加载该工作区的投影或空态；空态和失败均不回退到其他工作区。较早请求晚返回时不得覆盖当前选择。同一工作区刷新保留当前画布，切换工作区立即清除旧内容。
+
+启动后台准备当前工作区蓝图，用户立即打开时复用正在进行的请求。`BUSY/EBUSY/EAGAIN` 及 Electron 传输后的锁占用消息属于等待状态，按 250ms 起步、最多 3s 间隔自动重试，直到读取成功或切换工作区取消；界面显示“正在准备蓝图”，无需点击重新读取。后台状态扫描不把忙碌标为失败，绑定 checkout 忙碌也不误报未绑定。权限、配置和文件损坏等实际错误仍提供诊断；同工作区刷新出错保留上次画布，读到明确未初始化或空内容才更新为空态。长期锁占用会持续等待，不自动删除锁或修改源文件。
 
 未初始化的工作区提供“初始化蓝图”，先展示全部新增文件清单，正文按需展开，再由用户确认写入 `.agents/harness.json` 与一份 initiative 草稿。已有配置但没有 Note 的工作区提供“让 Janus 起草蓝图”：在该工作区的项目会话中读取源文件，展示逐条 Note 提案，用户确认后通过已有 Note 写入链路保存选中的 draft。生成入口本身发出只读请求，要求来源依据、未勾选验收项和完整正文。仅含无效 Note 或身份配置异常的工作区不提供初始化覆盖入口；读取失败保留重试。
 
@@ -52,6 +54,8 @@
 - [x] AC-8: 未初始化工作区的右侧对话不查询 Note 修改历史；初始化后自动加载。历史错误使用小字号的可恢复提示，具体诊断默认折叠，旧工作区请求不得污染当前对话。
 
 ## Verification
+
+2026-10-10 加载恢复验证：`npx vitest run tests/unit/blueprint-workspace-selection.test.ts tests/unit/note-refresh.test.ts tests/unit/blueprint-workspace-init.test.ts --maxWorkers=1 --minWorkers=1` 的 32 项通过，覆盖并发冷读仅一次扫描、真实锁占用及释放、绑定 checkout 忙碌、自动重试、切换取消与刷新失败保留画布。`npx playwright test tests/e2e/blueprint-workspace-init.spec.ts --project=island --workers=1` 的 13 项通过，新增等待后自动出现图谱及忙碌期间切换用例；本地运行设置 `NO_PROXY=127.0.0.1,localhost`、`JANUS_E2E_PORT=42879`。类型检查、改动代码 ESLint 和双语键校验通过；这是源码及浏览器测试，未重新打包桌面程序。
 
 2026-10-05：`tests/unit/blueprint-workspace-init.test.ts` 使用真实临时目录覆盖预览无写入、草稿投影、幂等、已有身份保护、诊断、外来内容确认、令牌作用域、冲突与撤销。`tests/unit/blueprint-workspace-selection.test.ts` 覆盖工作区完整列表、空态选择、状态与投影竞态、读取失败和后台状态更新。
 

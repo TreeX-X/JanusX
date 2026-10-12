@@ -12,7 +12,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Blueprint, BlueprintNodeStatus } from '@/services/blueprint'
+import type { Blueprint } from '@/services/blueprint'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
 import { groupRootsByConnectivity, ISOLATED_HIDE_THRESHOLD } from '@/features/blueprint/canvas-navigation'
 import { useBlueprintStore } from '@/stores/blueprint'
@@ -21,11 +21,11 @@ import { useI18n } from '@/i18n/useI18n'
 import { projectArchitecture } from '@/features/blueprint/architecture-view'
 import { BlueprintSourceInfo } from './BlueprintSourceInfo'
 import { Select } from '../ui/Select'
-import { STATUS_ORDER, NOTE_KINDS, NOTE_KIND_LABEL_KEY, type NoteKindFilter, getBlueprintStatusVisual } from './blueprintStatus'
+import { blueprintStatusOptions, type BlueprintStatusFilter, NOTE_KINDS, NOTE_KIND_LABEL_KEY, type NoteKindFilter } from './blueprintStatus'
 
 // Note: two chrome rows and recoverable local layout — see .agents/notes/blueprint/tasks/blueprint-note-workbench-repair.md
 
-export type ToolbarStatusFilter = BlueprintNodeStatus | 'all'
+export type ToolbarStatusFilter = BlueprintStatusFilter
 /** kind 下拉直接过滤 note 原始 kind（高保真同构），不再按映射后的 type 过滤 */
 export type ToolbarKindFilter = NoteKindFilter
 
@@ -166,9 +166,9 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
   const statusFilterOptions = useMemo(
     () => [
       { value: 'all', label: t('blueprint:search.statusAll') },
-      ...STATUS_ORDER.map((status) => ({ value: status, label: t(getBlueprintStatusVisual(status).labelKey) })),
+      ...blueprintStatusOptions(Object.values(currentBlueprint?.nodes ?? {}), t),
     ],
-    [t],
+    [t, currentBlueprint],
   )
   const kindFilterOptions = useMemo(
     () => [

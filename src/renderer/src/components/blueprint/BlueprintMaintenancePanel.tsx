@@ -15,6 +15,8 @@ import { useBlueprintStore } from '@/stores/blueprint'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { EMPTY_FOCUS, resolveBlueprintContextScope } from '@/features/blueprint/blueprint-focus'
 import { useOptionalBlueprintToolbar } from './BlueprintToolbar'
+import { useNoteRepairStore, noteRepairKey } from '@/stores/note-repair'
+import { NoteRepairCard } from './NoteRepairCard'
 import { NoteChatActivity } from './NoteChatActivity'
 import { NoteWorkingScope, NoteTurnActivity } from './NoteWorkingScope'
 import { useNoteFocusStore } from '@/stores/note-focus'
@@ -23,6 +25,7 @@ import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 /** Stable identity of the single blueprint-panel conversation. */
 export const BLUEPRINT_PANEL_VIEW_REF = { ownerRepoId: 'blueprint', viewId: 'workspace-dialog' } as const
 
+const REPAIR_VIEW_REF = { ownerRepoId: 'blueprint', viewId: 'workspace-note-repair' } as const
 const SWITCH_NOTICE_MS = 5000
 
 interface BlueprintMaintenancePanelProps { onClose: () => void }
@@ -57,7 +60,10 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
   const browser = useNoteFocusStore(state => state.browser)
   const currentBrowser = browser?.blueprintId === blueprint?.id && ownerPath && sameCheckoutPath(browser?.workspacePath ?? '', ownerPath) ? browser : null
   const draftRequest = useBlueprintStore(state => state.draftRequest)
+  const repair = useNoteRepairStore(state => activeWorkspace ? state.cards[noteRepairKey(activeWorkspace.path)] : undefined)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
+  const [repairConversationId, setRepairConversationId] = useState<string>()
+  const repairBinding = useRef('')
   const [switchNotice, setSwitchNotice] = useState<string | null>(null)
   const bindingKey = useRef('')
   const configuredKey = useRef('')
@@ -153,11 +159,48 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     chat.send(t('blueprint:workspace.draftPrompt'))
   }, [draftRequest, activeWorkspace?.id, bound, chat, t])
 
+  useEffect(() => {
+    if (!registry.persistenceReady || !repair?.plan || repair.phase !== 'queued' || repair.input.intent !== 'repair' || !activeWorkspace) return
+    if (repairBinding.current === repair.id) return
+    repairBinding.current = repair.id
+    setRepairConversationId(registry.bindPanelProject({ domain: 'project', intent: 'discuss', scope: 'selected',
+      viewRef: REPAIR_VIEW_REF, repoIds: [repair.plan.context.repoId], noteRefs: [{ uri: repair.plan.uri }] },
+      [activeWorkspace.id], repair.title))
+  }, [registry, repair, activeWorkspace])
+  const executionId = repair?.input.intent === 'repair' ? repair.conversationId ?? repairConversationId : undefined
+  const repairChat = executionId ? registry.getController(executionId) : null
+
+  useEffect(() => {
+    if (!repair?.plan || repair.phase !== 'queued' || !activeWorkspace) return
+    const execution = repair.input.intent === 'repair' ? repairChat : bound ? chat : null
+    if (!execution || execution.isStreaming || execution.conversationId !== (repair.input.intent === 'repair' ? repairConversationId : conversationId)) return
+    const root = activeWorkspace.path
+    const current = useNoteRepairStore.getState().cards[noteRepairKey(root)]
+    if (current !== repair || current.started) return
+    if (repair.input.intent === 'repair') {
+      if (execution.engineeringContext?.viewRef?.viewId !== REPAIR_VIEW_REF.viewId) return
+      execution.clear()
+      execution.setEngineeringContext({ domain: 'project', intent: 'discuss', scope: 'selected', viewRef: REPAIR_VIEW_REF,
+        repoIds: [repair.plan.context.repoId], noteRefs: [{ uri: repair.plan.uri }] })
+      execution.setApprovalMode('auto-run')
+      for (const resource of execution.resourceController.resources) if (resource.workspaceId !== activeWorkspace.id) execution.resourceController.detachWorkspace(resource.workspaceId)
+      execution.resourceController.attachWorkspace(activeWorkspace.id)
+      if (chat?.activeModel) execution.selectModel(chat.activeModel.providerId, chat.activeModel.modelId)
+    }
+    if (useNoteRepairStore.getState().start(root, repair.id, execution.conversationId)) {
+      const sent = execution.repairNote(repair.id, t(repair.input.intent === 'repair' ? 'repair.prompt' : 'repair.discussPrompt', { title: repair.title }) + '\n' + repair.summaries.map(text => '• ' + text).join('\n'))
+      if (!sent) useNoteRepairStore.getState().receive({ id: repair.id, phase: 'failed', error: t('repair.busy') })
+    }
+  }, [repair, bound, chat, repairChat, repairConversationId, conversationId, activeWorkspace, t])
+
   if (!activeWorkspace) {
     return <PanelFrame onClose={onClose}><p>{t('blueprint:view.emptySelectHint')}</p></PanelFrame>
   }
 
   return <PanelFrame onClose={onClose} onClear={bound && chat ? () => { setSwitchNotice(null); chat.clear() } : undefined}>
+    {repair && <NoteRepairCard key={repair.transferId} card={repair}
+      execution={repair.input.intent === 'repair' ? repairChat : chat}
+      onStop={() => registry.getController(repair.conversationId ?? conversationId).stop()} />}
     {switchNotice && <p className="bp-maintenance-switch-notice" role="status">{switchNotice}</p>}
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}

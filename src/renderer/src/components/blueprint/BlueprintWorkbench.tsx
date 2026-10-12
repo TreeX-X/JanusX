@@ -6,6 +6,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { JanusIdentityCore } from '@/components/janus/JanusIdentityCore'
 import { useOptionalJanusChatController } from '@/components/janus/JanusChatProvider'
 import { BlueprintView } from './BlueprintView'
+import { BlueprintAttention } from './BlueprintAttention'
 import { BlueprintToolbar, BlueprintToolbarProvider } from './BlueprintToolbar'
 import { BlueprintSelectPortalContext } from './blueprintSelectPortal'
 import { BlueprintWorkspaceSelect } from './BlueprintWorkspaceSelect'
@@ -40,6 +41,8 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const { t } = useI18n('blueprint')
   const currentBlueprint = useBlueprintStore((s) => s.currentBlueprint)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const workspaces = useWorkspaceStore(s => s.workspaces)
+  const selectedWorkspaceId = useBlueprintStore(s => s.selectedWorkspaceId)
   const draftRequest = useBlueprintStore((s) => s.draftRequest)
   const flushRef = useRef<(() => Promise<boolean>) | null>(null)
   const registerFlush = useCallback((flush: () => Promise<boolean>) => { flushRef.current = flush }, [])
@@ -194,6 +197,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
             />
           </div>
           <div className="blueprint-workbench-actions">
+            <BlueprintAttention blueprint={selectedWorkspaceId === activeWorkspaceId ? currentBlueprint : null} workspacePath={workspaces.find(workspace => workspace.id === activeWorkspaceId)?.path} />
             <button
               type="button"
               className="blueprint-janus-capsule"

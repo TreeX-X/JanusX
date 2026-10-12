@@ -204,6 +204,8 @@ export interface BlueprintNode {
   sourceHash?: string
   sourceRelPath?: string
   note?: import('../notes').NoteDoc
+  /** Derived only from the shared runtime's valid execution/coverage overlay. */
+  noteEvidence?: { taskDone?: boolean; coveredACs?: number; totalACs?: number }
   /** @deprecated Mirror of primaryWorkspaceId kept for legacy readers; write both via store APIs. */
   workspaceId: string | null
   primaryWorkspaceId: string | null

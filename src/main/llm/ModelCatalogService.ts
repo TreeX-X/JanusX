@@ -56,13 +56,13 @@ export class ModelCatalogService {
   // Note: chat budgets consume the same live registry as settings — see .agents/notes/agent/model-registry.md
   async resolveModel(modelId: string): Promise<AiModelRegistryDocument['models'][number] | undefined> {
     const catalog = await this.getCatalog()
-    const cached = modelWithContext(modelId, catalog.models)
+    const cached = modelWithLimits(modelId, catalog.models)
     if (cached) return cached
     // Wait for a missing model before the first inference; background refresh
     // alone would still compact that first request against the 16k fallback.
     const refreshed = await this.refreshAutomatically()
     const current = refreshed?.catalog ?? this.toSnapshot(await this.loadDocument())
-    return modelWithContext(modelId, current.models) ?? modelWithContext(modelId, this.bundledDocument.models)
+    return modelWithLimits(modelId, current.models) ?? modelWithLimits(modelId, this.bundledDocument.models)
   }
 
   private refreshAutomatically(): Promise<ModelCatalogRefreshResult> | undefined {
@@ -152,11 +152,12 @@ export class ModelCatalogService {
   }
 }
 
-function modelWithContext(modelId: string, models: AiModelRegistryDocument['models']) {
+function modelWithLimits(modelId: string, models: AiModelRegistryDocument['models']) {
   const result = matchAiModel(modelId, models.filter(model => !isOpenRouterLatestAlias(model)))
   const match = result.match
   return (result.confidence === 'exact' || result.confidence === 'high')
-    && match && Number.isSafeInteger(match.effectiveContextWindow) && match.effectiveContextWindow! > 0 ? match : undefined
+    && match && Number.isSafeInteger(match.effectiveContextWindow) && match.effectiveContextWindow! > 0
+    && Number.isSafeInteger(match.maxOutputTokens) && match.maxOutputTokens! >= 256 ? match : undefined
 }
 
 async function fetchOpenRouterModels(): Promise<unknown> {

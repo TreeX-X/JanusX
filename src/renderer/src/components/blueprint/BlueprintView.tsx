@@ -13,6 +13,7 @@ import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { onHarnessChanged } from '@/services/harness'
 import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 import { useNoteRefresh } from './useNoteRefresh'
+import { BlueprintAttention } from './BlueprintAttention'
 
 interface BlueprintViewProps {
   density?: 'embedded' | 'workbench'
@@ -34,6 +35,7 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
   const currentBlueprint = useBlueprintStore(s => s.currentBlueprint)
   const workspaceState = useBlueprintStore(s => activeWorkspaceId ? s.workspaceStates[activeWorkspaceId] : undefined)
   const loading = useBlueprintStore(s => s.loading)
+  const waiting = useBlueprintStore(s => s.loadState === 'waiting')
   const error = useBlueprintStore(s => s.error)
   const loadWorkspace = useBlueprintStore(s => s.loadWorkspace)
   const refreshWorkspaceStates = useBlueprintStore(s => s.refreshWorkspaceStates)
@@ -46,12 +48,9 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
 
   useEffect(() => { void refreshWorkspaceStates() }, [workspaceKey, refreshWorkspaceStates])
   useEffect(() => {
-    const store = useBlueprintStore.getState()
-    if (store.selectedWorkspaceId !== (workspace?.id ?? null)
-      || (workspace && store.workspaceStates[workspace.id]?.workspacePath !== workspace.path && !store.loading)) {
-      void loadWorkspace(workspace?.id ?? null)
-    }
-  }, [workspace, loadWorkspace])
+    // Join startup's pending load, or validate a completed preload on entry.
+    void loadWorkspace(workspace?.id ?? null)
+  }, [workspace?.id, workspace?.path, workspaceKey, loadWorkspace])
 
   useEffect(() => {
     if (!workspace || (selectedWorkspaceId === workspace.id && currentBlueprint)) return
@@ -70,11 +69,12 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
 
   useEffect(() => {
     if (!maintenanceOpenRequest) return
+    if (density === 'embedded') setEmbeddedChat(true)
     const states = useBlueprintStore.getState().workspaceStates
     const target = workspaces.find(w => states[w.id]?.projectId === maintenanceOpenRequest.blueprintId)
     if (target && target.id !== useWorkspaceStore.getState().activeWorkspaceId) void useBlueprintStore.getState().switchWorkspace(target.id)
     useBlueprintMaintenanceStore.getState().clearOpenRequest()
-  }, [maintenanceOpenRequest, workspaces])
+  }, [maintenanceOpenRequest, workspaces, density])
 
   useEffect(() => { if (draftRequest?.workspaceId === workspace?.id) setEmbeddedChat(true) }, [draftRequest, workspace?.id])
   const ownsProjection = selectedWorkspaceId === workspace?.id
@@ -86,13 +86,20 @@ export function BlueprintView({ density = 'embedded', onDetailOpenChange, onRegi
       <BlueprintWorkspaceSelect className="blueprint-select blueprint-select--toolbar"
         beforeSwitch={() => flushRef.current?.() ?? Promise.resolve(true)}
         getPortalContainer={selectPortal ? () => selectPortal : undefined} />
+      <BlueprintAttention blueprint={ownsProjection ? currentBlueprint : null} workspacePath={workspace?.path} />
     </div>}
-    <BlueprintWorkspaceSetup key={workspace?.id ?? 'none'} workspace={workspace} state={state} loading={loading || (!!workspace && !ownsProjection)} hasNodes={hasNodes} />
+    <BlueprintWorkspaceSetup key={workspace?.id ?? 'none'} workspace={workspace} state={state} loading={loading || (!!workspace && !ownsProjection)} waiting={waiting} hasNodes={hasNodes} />
+    {waiting && hasNodes && <div role="status">{t('workspace.description.waiting')}</div>}
     {error && hasNodes && <div className="blueprint-toolbar__error" role="alert">{error}</div>}
-    {hasNodes && currentBlueprint ? <BlueprintCanvas key={`${workspace?.id}:${currentBlueprint.id}`} blueprintId={currentBlueprint.id}
-      onDetailOpenChange={onDetailOpenChange} onRegisterFlush={registerFlush} /> : null}
+    {hasNodes && currentBlueprint ? <div className="blueprint-view__canvas-row">
+      <BlueprintCanvas key={`${workspace?.id}:${currentBlueprint.id}`} blueprintId={currentBlueprint.id}
+        onDetailOpenChange={onDetailOpenChange} onRegisterFlush={registerFlush} />
+      {density === 'embedded' && embeddedChat && workspace && <aside className="blueprint-view__repair-chat">
+        <BlueprintMaintenancePanel onClose={() => setEmbeddedChat(false)} />
+      </aside>}
+    </div> : null}
     {!workspace && <div className="blueprint-view__loading-state">{t('workspace.noWorkspace')}</div>}
-    {density === 'embedded' && embeddedChat && workspace && <div className="blueprint-bootstrap-chat">
+    {!hasNodes && density === 'embedded' && embeddedChat && workspace && <div className="blueprint-bootstrap-chat">
       <BlueprintMaintenancePanel onClose={() => setEmbeddedChat(false)} />
     </div>}
   </div>

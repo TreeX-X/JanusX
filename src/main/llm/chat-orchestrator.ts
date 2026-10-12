@@ -45,6 +45,8 @@ import { ManagedChatSession } from './managed-chat-session'
 import type { ChatContextCheckpoint, ChatContextStatus } from '../../shared/chat-context'
 import type { UserMemoryDelivery, ProjectMemoryDelivery } from '../../shared/memory-strength'
 import { containsMemoryDelivery, recordUserMemoryAccessBestEffort, recordProjectMemoryAccessBestEffort, trackMemoryStream } from '../knowledge/memory-access'
+import { runNoteRepairTurn } from '../blueprint/review/note-repair-turn'
+import type { NoteRepairService } from '../blueprint/review/note-repair'
 
 /** 对话消息类型 */
 export interface ChatMessage {
@@ -85,6 +87,7 @@ export interface ChatStreamRequest {
   /** Renderer selection request only; never trusted for paths or grants. */
   noteRefs?: Array<{ uri: string; expectedHash?: string; checkoutPath?: string }>
   noteWorkingSet?: string
+  noteRepairId?: string
   maintenanceTaskId?: string
 }
 
@@ -338,7 +341,7 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
     callerId,
     getProviderSettings: (providerId) => llmService.getProviderSettings('janus', providerId),
     getLanguageModel: (providerId, modelId) => llmService.getLanguageModel('janus', providerId, modelId),
-    resolveModelMetadata: modelId => llmService.resolveModelMetadata?.(modelId) ?? Promise.resolve(undefined),
+    resolveModelMetadata: llmService.resolveModelMetadata ? modelId => llmService.resolveModelMetadata(modelId) : undefined,
     listModels: (providerId) => {
       const catalog = llmService as typeof llmService & {
         listModels?: (terminal: string, provider: string) => Promise<Array<{ id: string; supportsFunctionCalling?: boolean; contextWindow?: number; maxOutputTokens?: number }>>
@@ -486,10 +489,15 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     if (!deltaTimer) deltaTimer = setTimeout(flushDelta, DELTA_FLUSH_MS)
   }
 
+  let repairIntent: 'repair' | 'discuss' | undefined
+  let repairService: NoteRepairService | undefined
+  let repairClaimed = false
+  let repairStreamError: string | undefined
   try {
     const callerId = `renderer:${event.sender?.id ?? 'unknown'}`
     const ports = defaultChatTurnPorts(callerId, requestId, domain, conversationId)
-    const turnToolGate = gateFromToolAllowlist(toolAllowlist, toolGate)
+    let turnAllowlist = toolAllowlist
+    let turnToolGate = gateFromToolAllowlist(toolAllowlist, toolGate)
     const modeCommand = parseWorkflowXCommand([...messages].reverse().find(message => message.role === 'user')?.content ?? '')
     if (modeCommand && !modeCommand.prompt && !request.maintenanceTaskId) {
       await runChatTurn({ requestId, messages, providerId, modelId, sourceTag: turnSourceTag, toolAllowlist, toolGate: turnToolGate }, ports, { onEvent: agentEvent => {
@@ -521,6 +529,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     }
 
     let projectContext: string | undefined
+    if (request.noteRepairId && (domain !== 'project' || sourceTag !== 'janus-chat' || !conversationId || request.maintenanceTaskId || request.compact || launchDraft)) throw new Error('修复需要当前工作区的 Janus 对话')
     if (domain === 'project') {
       if (conversationId && !request.maintenanceTaskId) {
         const { blueprintMaintenanceService } = await import('../janus/maintenance/service')
@@ -533,7 +542,9 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         return session.workspace.workspaceRoot
       })
       const { projectChatContext } = await import('../harness/chat-context')
-      projectContext = await projectChatContext(roots, request.noteRefs ?? [], !request.maintenanceTaskId)
+      projectContext = request.noteRepairId
+        ? 'This is a project Note repair. The host-validated handoff below supplies the target and edit authority; use its dedicated repair tools.'
+        : await projectChatContext(roots, request.noteRefs ?? [], !request.maintenanceTaskId)
       if (chatSession.noteEvidence.size) {
         const { harnessNoteService } = await import('../harness/service')
         for (const [key, evidence] of chatSession.noteEvidence) {
@@ -555,6 +566,20 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         })
       }
       if (!roots.length) ports.knowledgeCapture = undefined
+    }
+
+    if (request.noteRepairId && conversationId) {
+      const { blueprintReviewRuntime } = await import('../blueprint/review/runtime')
+      const { attachNoteRepairTools } = await import('../blueprint/review/note-repair-tools')
+      const service = blueprintReviewRuntime().repairs
+      repairService = service
+      const plan = await service.claim(request.noteRepairId, conversationId, (workspaceResources ?? []).map(resource => resource.workspacePath))
+      repairClaimed = true; repairIntent = plan.intent
+      projectContext = (projectContext ?? '') + '\n' + service.prompt(plan.id)
+      turnAllowlist = attachNoteRepairTools(ports, { service, plan, resources: workspaceResources ?? [], signal: controller.signal,
+        phase: (phase, changed, afterHash, changes) => sendAgentEvent({ type: 'note_repair', requestId, update: { id: plan.id, phase, ...(changed ? { changed, afterHash, changes } : {}) } }) })
+      turnToolGate = gateFromToolAllowlist(turnAllowlist, toolGate)
+      sendAgentEvent({ type: 'note_repair', requestId, update: { id: plan.id, phase: 'reading' } })
     }
 
     // 运行配置专属工具族（照 attachNoteChatTools 端口拦截样板，只挂助手轮次）：
@@ -598,7 +623,10 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       sendEvent(LLM_CHANNELS.done, { requestId })
       return
     }
-    const result = await runChatTurn(
+    const executeTurn: typeof runChatTurn = repairService && request.noteRepairId
+      ? (turn, turnPorts, callbacks, signal) => runNoteRepairTurn(repairService!, request.noteRepairId!, turn, turnPorts, callbacks ?? {}, signal ?? controller.signal)
+      : runChatTurn
+    const result = await executeTurn(
       {
         requestId,
         messages: turnMessages,
@@ -611,7 +639,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         workspacePath,
         workspaceResources,
         toolTraces,
-        toolAllowlist,
+        toolAllowlist: turnAllowlist,
         toolGate: turnToolGate,
         callerId,
         chatSession,
@@ -625,6 +653,8 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       {
         onEvent: (agentEvent) => {
           if (controller.signal.aborted) return
+          if (request.noteRepairId && agentEvent.type === 'stream_end') return
+          if (request.noteRepairId && agentEvent.type === 'stream_error') { repairStreamError = agentEvent.error; return }
           if (agentEvent.type === 'reasoning_delta') {
             if (reasoningChars >= REASONING_FORWARD_CAP_CHARS) return
             reasoningChars += agentEvent.delta.length
@@ -636,6 +666,23 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       controller.signal,
     )
     flushDelta()
+    if (repairStreamError) throw new Error(repairStreamError)
+    if (request.noteRepairId) {
+      const { blueprintReviewRuntime } = await import('../blueprint/review/runtime')
+      const service = blueprintReviewRuntime().repairs
+      if (controller.signal.aborted || result.cancelled) sendAgentEvent({ type: 'note_repair', requestId, update: await service.fail(request.noteRepairId, '', true) })
+      else {
+        const progress = () => sendAgentEvent({ type: 'note_repair', requestId, update: { id: request.noteRepairId!, phase: 'reviewing' } })
+        if (repairIntent === 'repair') progress()
+        const heartbeat = repairIntent === 'repair' ? setInterval(progress, 30_000) : undefined
+        try {
+          sendAgentEvent({ type: 'note_repair', requestId, update: await service.finish(request.noteRepairId, controller.signal) })
+        } catch (error) {
+          sendAgentEvent({ type: 'note_repair', requestId, update: await service.fail(request.noteRepairId, error, controller.signal.aborted) })
+        } finally { if (heartbeat) clearInterval(heartbeat) }
+      }
+      sendAgentEvent({ type: 'stream_end', requestId, cancelled: controller.signal.aborted || result.cancelled })
+    }
 
     // 用户中止：半截回复不写入知识库（facade 内已跳过 capture），直接收尾
     if (controller.signal.aborted || result.cancelled) {
@@ -680,6 +727,10 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     sendEvent(LLM_CHANNELS.done, { requestId })
   } catch (error: any) {
     flushDelta()
+    if (request.noteRepairId) {
+      const { blueprintReviewRuntime } = await import('../blueprint/review/runtime')
+      sendAgentEvent({ type: 'note_repair', requestId, update: repairClaimed ? await blueprintReviewRuntime().repairs.fail(request.noteRepairId, error, controller.signal.aborted) : { id: request.noteRepairId, phase: 'failed', error: error?.message || String(error) } })
+    }
     // 用户主动取消时不作为错误上报
     if (controller.signal.aborted || error?.name === 'AbortError') {
       sendAgentEvent({ type: 'stream_end', requestId, cancelled: true })

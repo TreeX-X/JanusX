@@ -79,6 +79,7 @@ export async function refreshLlmRuntimeStatus(): Promise<LlmRuntimeStatus> {
 export function registerLlmHandlers(): void {
   ipcMain.handle(LLM_CHANNELS.runtimeStatus, () => refreshLlmRuntimeStatus())
   ipcMain.handle(LLM_CHANNELS.getCatalog, () => getModelCatalogService().getCatalog())
+  ipcMain.handle(LLM_CHANNELS.getChatModelBudget, (_event, providerId: string, modelId: string) => llmService.getChatModelBudget(providerId, modelId))
   ipcMain.handle(LLM_CHANNELS.refreshCatalog, async () => {
     const catalogService = getModelCatalogService()
 

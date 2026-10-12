@@ -1,24 +1,34 @@
 import { matchAiModel, type AiModelRegistryEntry } from '@janusx/llm-core'
-import type { ChatContextStatus } from '../../shared/chat-context'
-
-export interface ChatModelBudget {
-  contextWindow: number
-  maxOutputTokens: number
-  source: ChatContextStatus['source']
-}
+import { validChatModelLimits, type ChatModelBudget } from '../../shared/chat-model-limits'
+export type { ChatModelBudget } from '../../shared/chat-model-limits'
 const positive = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 1024 && value <= 10_000_000
 
-/** Explicit per-model settings win. An unknown window stays visibly estimated. */
+// Note: automatic limits precede manual fallback — see .agents/notes/agent/model-registry.md
 export function resolveChatModelBudget(modelId: string, listed?: { contextWindow?: number; maxOutputTokens?: number }, extra?: Record<string, unknown>, metadata?: AiModelRegistryEntry): ChatModelBudget {
-  const overrides = extra?.chatModelLimits as Record<string, { contextWindow?: unknown }> | undefined
-  const configured = overrides?.[modelId]?.contextWindow
   const match = matchAiModel(modelId)
   const known = match.confidence === 'exact' || match.confidence === 'high' ? match.match : null
-  const source = positive(configured) ? 'configured' : positive(metadata?.effectiveContextWindow) ? 'registry' : positive(listed?.contextWindow) ? 'catalog'
-    : positive(known?.effectiveContextWindow) ? 'registry' : 'estimated'
-  const contextWindow = positive(configured) ? configured : positive(metadata?.effectiveContextWindow) ? metadata.effectiveContextWindow : positive(listed?.contextWindow) ? listed.contextWindow
-    : positive(known?.effectiveContextWindow) ? known.effectiveContextWindow : 16_384
-  // The same limit is applied to generation, so the reserved reply budget is real.
-  const maxOutputTokens = Math.max(256, Math.min(metadata?.maxOutputTokens || listed?.maxOutputTokens || known?.maxOutputTokens || 4096, Math.floor(contextWindow * .2)))
-  return { contextWindow, maxOutputTokens, source }
+  const candidates = [
+    { contextWindow: metadata?.effectiveContextWindow, maxOutputTokens: metadata?.maxOutputTokens, source: 'registry' as const },
+    { ...listed, source: 'catalog' as const },
+    { contextWindow: known?.effectiveContextWindow, maxOutputTokens: known?.maxOutputTokens, source: 'registry' as const },
+  ]
+  for (const candidate of candidates) if (validChatModelLimits(candidate)) return {
+    contextWindow: candidate.contextWindow, maxOutputTokens: candidate.maxOutputTokens, source: candidate.source, resolved: true,
+  }
+  const configured = (extra?.chatModelLimits as Record<string, unknown> | undefined)?.[modelId]
+  if (validChatModelLimits(configured)) return { contextWindow: configured.contextWindow, maxOutputTokens: configured.maxOutputTokens, source: 'configured', resolved: true }
+  // Estimates remain available for legacy hosts; production rejects unresolved limits before inference.
+  const contextWindow = candidates.find(candidate => positive(candidate.contextWindow))?.contextWindow ?? 16_384
+  return { contextWindow, maxOutputTokens: Math.min(4096, Math.floor(contextWindow * .2)), source: 'estimated', resolved: false }
+}
+
+export async function detectChatModelBudget(modelId: string, settings: { extra?: Record<string, unknown> }, deps: {
+  listModels(): Promise<Array<{ id: string; contextWindow?: number; maxOutputTokens?: number; supportsFunctionCalling?: boolean }>>
+  resolveModelMetadata?(id: string): Promise<AiModelRegistryEntry | undefined>
+}) {
+  const [models, metadata] = await Promise.all([
+    deps.listModels().catch(() => []), deps.resolveModelMetadata?.(modelId).catch(() => undefined),
+  ])
+  const info = models.find(candidate => candidate.id === modelId)
+  return { ...resolveChatModelBudget(modelId, info, settings.extra, metadata), supportsFunctionCalling: info?.supportsFunctionCalling }
 }

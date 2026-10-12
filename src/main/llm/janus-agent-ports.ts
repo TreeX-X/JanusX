@@ -14,7 +14,7 @@ import type {
 import type { ChatTurnPorts } from '@janus-agent/janus-agent'
 import type { KnowledgeSource, ObservationType, StructuredCloneValue } from '../../shared/knowledge'
 import { USER_MEMORY_WORKSPACE_ID, USER_MEMORY_WORKSPACE_PATH } from '../knowledge/constants'
-import { resolveChatModelBudget } from './chat-model-budget'
+import { detectChatModelBudget } from './chat-model-budget'
 import type { AiModelRegistryEntry } from '@janusx/llm-core'
 
 export interface JanusAgentSessionShape {
@@ -105,20 +105,15 @@ export function buildJanusChatTurnPorts(deps: JanusChatTurnPortsDeps): ChatTurnP
         }
         const actualModelId = modelId || settings.modelId || ''
         if (!actualModelId) throw new Error('No model ID configured')
+        const budget = await detectChatModelBudget(actualModelId, settings, {
+          listModels: () => deps.listModels?.(providerId) ?? Promise.resolve([]), resolveModelMetadata: deps.resolveModelMetadata,
+        })
+        if (!budget.resolved && deps.resolveModelMetadata) throw new Error(`MODEL_LIMITS_UNAVAILABLE: ${actualModelId}. Update the model catalog first; if capacity is still unavailable, configure both context and maximum output tokens.`)
         const model = await deps.getLanguageModel(providerId, actualModelId)
-        const infos = typeof deps.listModels === 'function'
-          ? await deps.listModels(providerId).catch(() => [])
-          : []
-        const info = infos.find((candidate) => candidate.id === actualModelId)
-        const initialBudget = resolveChatModelBudget(actualModelId, info, settings.extra)
-        // Adapter lists contain bundled metadata, not an explicit provider limit.
-        const metadata = initialBudget.source !== 'configured'
-          ? await deps.resolveModelMetadata?.(actualModelId).catch(() => undefined) : undefined
         return {
           model,
           modelId: actualModelId,
-          supportsFunctionCalling: info?.supportsFunctionCalling,
-          ...resolveChatModelBudget(actualModelId, info, settings.extra, metadata),
+          ...budget,
         }
       },
       getMaxTurns: () => deps.getMaxTurns(),

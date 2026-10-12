@@ -41,7 +41,9 @@ export class WorkspaceBlueprintService {
       if (snapshot.coverage.status !== 'complete') return { ...base, state: 'error', diagnostics }
       return { root, projectId, noteCount: valid.length, diagnostics,
         state: valid.length ? 'ok' : problems.length ? 'invalid' : 'empty' }
-    } catch (error) { return { ...base, state: 'error', diagnostics: [{ code: 'IO_ERROR', message: message(error) }] } }
+    } catch (error) { return { ...base, state: 'error', diagnostics: [{
+      code: error && typeof error === 'object' && 'code' in error ? String(error.code) : 'IO_ERROR', message: message(error),
+    }] } }
   }
 
   async preview(cwd: string, name: string, owner: number): Promise<HarnessInitPreview> {

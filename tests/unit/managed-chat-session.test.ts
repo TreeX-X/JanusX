@@ -12,8 +12,10 @@ const history = (): JanusAgentMessage[] => Array.from({ length: 35 }, (_, index)
 describe('managed conversation context', () => {
   it('uses declared model limits, exact registry matches and visible fallback', () => {
     expect(resolveChatModelBudget('unknown')).toMatchObject({ contextWindow: 16384, source: 'estimated' })
-    expect(resolveChatModelBudget('unknown', { contextWindow: 32000 })).toMatchObject({ contextWindow: 32000, source: 'catalog' })
-    expect(resolveChatModelBudget('unknown', { contextWindow: 32000 }, { chatModelLimits: { unknown: { contextWindow: 64000 } } })).toMatchObject({ contextWindow: 64000, source: 'configured' })
+    expect(resolveChatModelBudget('unknown', { contextWindow: 32000, maxOutputTokens: 4096 })).toMatchObject({ contextWindow: 32000, maxOutputTokens: 4096, source: 'catalog', resolved: true })
+    expect(resolveChatModelBudget('unknown', undefined, { chatModelLimits: { unknown: { contextWindow: 64000, maxOutputTokens: 8192 } } })).toMatchObject({ contextWindow: 64000, maxOutputTokens: 8192, source: 'configured' })
+    expect(resolveChatModelBudget('unknown', { contextWindow: 32000, maxOutputTokens: 4096 }, { chatModelLimits: { unknown: { contextWindow: 64000, maxOutputTokens: 8192 } } })).toMatchObject({ contextWindow: 32000, maxOutputTokens: 4096, source: 'catalog' })
+    expect(resolveChatModelBudget('unknown', undefined, { chatModelLimits: { unknown: { contextWindow: 1000000 } } })).toMatchObject({ source: 'estimated', resolved: false })
     expect(resolveChatModelBudget('claude-sonnet-4.6').contextWindow).toBeGreaterThan(16384)
     expect(resolveChatModelBudget('unknown', undefined, { chatModelLimits: { unknown: { contextWindow: -1 } } }).source).toBe('estimated')
   })
