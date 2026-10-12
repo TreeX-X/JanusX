@@ -44,8 +44,11 @@ export default defineConfig({
     // 未处理的 rejection 直接 fail 而不是静默吞掉尾部报告；Windows 下 worker 崩溃时
     // 至少保留可归因的用例级错误，而不是只有一句 `Channel closed`。
     dangerouslyIgnoreUnhandledErrors: false,
-    testTimeout: 15000,
-    hookTimeout: 15000,
+    // CI runner 比本地慢，15s 会让"对全仓语料做真实投影"这类用例轮流撞天花板
+    // （workflowx-v2 语料可达、note-repair 整套替换都曾在 CI 上以 15.0s 超时）。
+    // 放宽到 60s：通过中的用例不受影响，只有真正挂死的用例才等更久。
+    testTimeout: 60000,
+    hookTimeout: 60000,
     teardownTimeout: 5000,
   },
 })
