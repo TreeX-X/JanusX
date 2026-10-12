@@ -19,7 +19,7 @@ test('enabled review stays visible through native status IPC while the Note read
   await writeFile(join(workspace, '.agents/notes/module.md'), '---\n' + JSON.stringify({ schema: 'harness-note/2', id: randomUUID(), kind: 'module', role: 'project', lifecycle: 'accepted', moduleState: 'partial', created: '2026-10-10', updated: '2026-10-10T00:00:00Z' }) + '\n---\n# Status Workspace\n\n## Responsibility\n\nDesktop status acceptance.\n')
   await mkdir(join(userData, 'janusx/blueprint'), { recursive: true })
   await writeFile(join(userData, 'janusx/blueprint/review-settings.json'), JSON.stringify({ ...DEFAULT_BLUEPRINT_REVIEW_SETTINGS, automatic: { enabled: true, commits: 3 } }))
-  const buildRoot = resolve(process.env.JANUSX_E2E_BUILD_ROOT ?? 'artifacts/build-check')
+  const buildRoot = resolve('out')
   const application = await electron.launch({ args: [join(buildRoot, 'main/index.js'), `--user-data-dir=${userData}`], env: { ...createDesktopTestEnv(root), JANUSX_DEV_BUILD_ROOT: buildRoot, CODEX_HOME: join(root, 'codex'), APPDATA: join(root, 'appdata'), DSH_HOME: join(root, 'dsh'), XDG_CONFIG_HOME: join(root, 'config') } })
   try {
     const page = await application.firstWindow({ timeout: 30000 })
@@ -81,7 +81,7 @@ test('built desktop shares current suggestions, persists settings and starts ind
   const suggestions = new WorkspaceSuggestions(new SuggestionService(store), sources)
   const context = await sources.context(workspace), ticket = await suggestions.begin(context, noteId)
   await suggestions.publish(context, noteId, ticket.id, { findings: [{ id: findingId, category: 'insufficient', summary: 'Define recovery', explanation: 'Recovery has no boundary.', suggestion: 'Define recovery conditions.', verification: 'not-configured', citations: [{ path: '.agents/notes/child/module.md', quote: 'Recovery is pending.' }] }], coverage: 'complete', limitations: [], resolvedFindings: [] })
-  const buildRoot = resolve(process.env.JANUSX_E2E_BUILD_ROOT ?? 'artifacts/build-check')
+  const buildRoot = resolve('out')
   const launch = () => electron.launch({ args: [join(buildRoot, 'main/index.js'), `--user-data-dir=${userData}`], env: { ...createDesktopTestEnv(root), JANUSX_DEV_BUILD_ROOT: buildRoot, CODEX_HOME: join(root, 'codex'), APPDATA: join(root, 'appdata'), DSH_HOME: join(root, 'dsh'), XDG_CONFIG_HOME: join(root, 'config') } })
   let application: Awaited<ReturnType<typeof launch>> | undefined
   try {
