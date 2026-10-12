@@ -615,12 +615,8 @@ export class KnowledgeProcessingQueue {
   private async readProposalsByDerivation(): Promise<ProposalsByDerivation> {
     try {
       const { knowledgeExtractService } = await import('./extract-service')
-      const [facts, wikiPatches, graphEdges] = await Promise.all([
-        knowledgeExtractService.listFactCandidates(),
-        knowledgeExtractService.listWikiPatchCandidates(),
-        knowledgeExtractService.listGraphCandidates(),
-      ])
-      return countProposalsByDerivation(facts, wikiPatches, graphEdges)
+      const facts = await knowledgeExtractService.listFactCandidates()
+      return countProposalsByDerivation(facts, [], [])
     } catch (error) {
       console.error(`[knowledge] proposals-by-derivation snapshot failed: ${error instanceof Error ? error.message : String(error)}`)
       return { ...EMPTY_PROPOSALS_BY_DERIVATION }
@@ -628,15 +624,7 @@ export class KnowledgeProcessingQueue {
   }
 
   /** Phase 5 (§6): recall 索引新鲜度，best-effort，失败即 null。 */
-  private async readIndexUpdatedAt(): Promise<string | null> {
-    try {
-      const { knowledgeRecallService } = await import('./recall-service')
-      return knowledgeRecallService.getLastIndexBuildAt()
-    } catch (error) {
-      console.error(`[knowledge] index-updated-at snapshot failed: ${error instanceof Error ? error.message : String(error)}`)
-      return null
-    }
-  }
+  private async readIndexUpdatedAt(): Promise<string | null> { return null }
 
   private async buildStats(): Promise<ProcessingStats> {
     const refinement = this.refinementStats ? await this.refinementStats() : undefined

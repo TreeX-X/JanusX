@@ -23,11 +23,6 @@ const REQUIRED_TREE_EXCLUSIONS = [
 ]
 
 const REQUIRED_OUTPUTS = [
-  'out/main/index.js',
-  'out/main/knowledge-mcp.js',
-  'out/main/note-mcp.js',
-  'out/main/office-mcp.js',
-  'out/main/office-launcher.js',
   'out/preload/index.mjs',
   'out/renderer/index.html',
 ]
@@ -170,7 +165,12 @@ export function checkPackageBoundary(root = process.cwd()) {
   const config = readFileSync(`${root}/electron-builder.yml`, 'utf8')
   validateFilePatterns(parseFilesList(config))
 
-  const missingOutputs = REQUIRED_OUTPUTS.filter((path) => !existsSync(`${root}/${path}`))
+  const appPackage = JSON.parse(readFileSync(`${root}/package.json`, 'utf8'))
+  const entries = [appPackage.main, ...Object.values(appPackage.bin ?? {})]
+  if (entries.some((path) => typeof path !== 'string' || !/^out\/main\/[\w./-]+\.js$/.test(path) || path.split('/').includes('..'))) {
+    throw new Error('Package main and bin entries must name JavaScript outputs under out/main/')
+  }
+  const missingOutputs = [...new Set([...REQUIRED_OUTPUTS, ...entries])].filter((path) => !existsSync(`${root}/${path}`))
   if (missingOutputs.length) {
     throw new Error(`Run the production build first; missing package outputs: ${missingOutputs.join(', ')}`)
   }

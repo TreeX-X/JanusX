@@ -22,7 +22,7 @@ export async function syncLayaSettings(): Promise<void> {
   const settings = await configService.getKnowledgeSettings()
   const modelPath = settings.laya?.modelPath || join(app.getPath('userData'), 'laya-weights', LAYA_MODEL_REVISION)
   const allowed = settings.enabled && settings.laya?.enabled === true && !settings.automation
-    && (await configService.getExperimentalFeatures()).knowledge
+    && (await configService.getExperimentalFeatures()).persona
   try { calibration = allowed ? await loadLayaCalibration(modelPath, resourcePath()) : undefined }
   catch (error) { calibration = undefined; manager().stop('calibration-invalid'); throw error }
   manager().configure({ enabled: allowed,

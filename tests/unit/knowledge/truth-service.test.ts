@@ -44,7 +44,7 @@ describe('KnowledgeTruthService', () => {
       status,
       kind: 'fact',
       provenance: {
-        workspaceId: 'ws-1',
+        workspaceId: 'user',
         workspaceName: 'Workspace',
         workspacePath: 'C:/work',
         source: 'manual',
@@ -61,7 +61,7 @@ describe('KnowledgeTruthService', () => {
       type: 'depends_on',
       confidence: 0.9,
       sourceFactIds: ['fact-active'],
-      workspaceId: 'ws-1',
+      workspaceId: 'user',
       createdAt: '2026-07-12T00:00:00.000Z',
     }
 
@@ -77,8 +77,8 @@ describe('KnowledgeTruthService', () => {
       JSON.stringify({
         version: 1,
         pages: [
-          { slug: 'published', title: 'Published', relativePath: 'wiki/pages/published.md', tags: ['docs'], status: 'published', sourceFactIds: ['fact-active'], updatedAt: '2026-07-12T00:00:00.000Z', version: 1, workspaceId: 'ws-1' },
-          { slug: 'draft', title: 'Draft', relativePath: 'wiki/pages/draft.md', tags: [], status: 'draft', sourceFactIds: [], updatedAt: '2026-07-12T00:00:00.000Z', version: 1, workspaceId: 'ws-1' },
+          { slug: 'published', title: 'Published', relativePath: 'wiki/pages/published.md', tags: ['docs'], status: 'published', sourceFactIds: ['fact-active'], updatedAt: '2026-07-12T00:00:00.000Z', version: 1, workspaceId: 'user' },
+          { slug: 'draft', title: 'Draft', relativePath: 'wiki/pages/draft.md', tags: [], status: 'draft', sourceFactIds: [], updatedAt: '2026-07-12T00:00:00.000Z', version: 1, workspaceId: 'user' },
         ],
       }),
     )
@@ -86,10 +86,8 @@ describe('KnowledgeTruthService', () => {
     const result = await new KnowledgeTruthService().list()
 
     expect(result.facts.map((item) => item.id)).toEqual(['fact-active'])
-    expect(result.wikiPages).toEqual([
-      expect.objectContaining({ slug: 'published', markdown: '# Published\n' }),
-    ])
-    expect(result.graphEdges).toEqual([edge])
+    expect(result.wikiPages).toEqual([])
+    expect(result.graphEdges).toEqual([])
   })
 
   it('returns an honest empty snapshot when truth files are absent', async () => {
@@ -112,7 +110,7 @@ describe('KnowledgeTruthService', () => {
       status: 'active',
       kind: 'fact',
       provenance: {
-        workspaceId: 'ws-1',
+        workspaceId: 'user',
         workspaceName: 'Workspace',
         workspacePath: 'C:/work',
         source: 'manual',
@@ -129,7 +127,7 @@ describe('KnowledgeTruthService', () => {
       type: 'depends_on',
       confidence: 0.7,
       sourceFactIds: ['fact-valid'],
-      workspaceId: 'ws-1',
+      workspaceId: 'user',
       createdAt: '2026-07-12T00:00:00.000Z',
     }
 
@@ -147,17 +145,15 @@ describe('KnowledgeTruthService', () => {
         version: 1,
         pages: [
           { status: 'published', relativePath: 'wiki/pages/incomplete.md' },
-          { slug: 'missing', title: 'Missing', relativePath: 'wiki/pages/missing.md', tags: [], status: 'published', sourceFactIds: [], updatedAt: '2026-07-12T00:00:00.000Z', version: 1, workspaceId: 'ws-1' },
+          { slug: 'missing', title: 'Missing', relativePath: 'wiki/pages/missing.md', tags: [], status: 'published', sourceFactIds: [], updatedAt: '2026-07-12T00:00:00.000Z', version: 1, workspaceId: 'user' },
         ],
       }),
     )
 
-    await expect(new KnowledgeTruthService().list()).rejects.toMatchObject({ code: 'ENOENT' })
-    await write('wiki/pages-index.json', JSON.stringify({ version: 1, pages: [] }))
     await expect(new KnowledgeTruthService().list()).resolves.toEqual({
       facts: [validFact],
       wikiPages: [],
-      graphEdges: [validEdge],
+      graphEdges: [],
     })
 
     // Schema-violation audits are fire-and-forget; wait for settlement so the
@@ -181,7 +177,7 @@ describe('KnowledgeTruthService', () => {
       version: 1,
       status: 'active',
       provenance: {
-        workspaceId: 'ws-1',
+        workspaceId: 'user',
         workspaceName: 'Workspace',
         workspacePath: 'C:/work',
         source: 'manual',

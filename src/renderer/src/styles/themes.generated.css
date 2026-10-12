@@ -34,6 +34,9 @@
   --shell-dim: rgba(28, 52, 59, 0.42);
   --shell-diff-add: #2E6B5E;
   --shell-diff-del: #D43D2A;
+  --status-success: #2E6B5E;
+  --status-warning: #8A5A12;
+  --status-danger: #D43D2A;
   --shell-accent: #D43D2A;
   --shell-accent-strong: #D43D2A;
   --shell-accent-soft: rgba(212, 61, 42, 0.1);
@@ -83,6 +86,9 @@
   --shell-dim: #737373;
   --shell-diff-add: #4ec9b0;
   --shell-diff-del: #e06c75;
+  --status-success: #6bd89b;
+  --status-warning: #f0a35e;
+  --status-danger: #ff7474;
   --shell-accent: #f47d43;
   --shell-accent-strong: #ff9159;
   --shell-accent-soft: rgb(244 125 67 / 0.08);

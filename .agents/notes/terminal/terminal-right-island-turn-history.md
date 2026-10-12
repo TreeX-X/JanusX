@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-10T02:50:05.989Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -40,7 +40,7 @@ The tracker reads Git's tracked and nonignored untracked paths, with a directory
 
 The renderer shares one reference-counted IPC subscription. Turn identity and sequence reject duplicates and stale results. Only nonempty successful changes append to the twenty-record history; every quiet or unavailable turn clears latest independently. Identical file lists from different turns remain separate valid records. Terminal teardown clears both views. History stores immutable summaries in memory, and file clicks open the current embedded editor preview.
 
-The right-edge dock is 32 px wide when collapsed, with 2 px horizontal padding to keep the 99+ badge readable while covering less terminal content. It displays only the latest nonzero file count, caps its compact label at 99+, and keeps the exact count in the accessible label. A quiet dock hides the number and remains operable for latest and history. Single click opens latest; double click opens history; keyboard activation and explicit view buttons provide the same access. Expanded latest and history cards retain their 340 px and 370 px width limits. Cards emphasize filenames over directory paths, align line counts, use localized status and timestamps, and share dark/paper theme tokens with reduced-motion support.
+The right-edge dock is 32 px wide and 64 px tall when collapsed, with 2 px horizontal padding to keep the 99+ badge readable while covering less terminal content. It displays only the latest nonzero file count, caps its compact label at 99+, and keeps the exact count in the accessible label. A quiet dock hides the number and remains operable for latest and history. Single click opens latest; double click opens history; keyboard activation and explicit view buttons provide the same access. Expanded views are fixed-size and scroll inside: latest is 340 × 320 px and history is 370 × 420 px, each height capped at 78% and 84% of the pane, so switching views shrinks and grows the shell instead of hugging content. History renders one card per batch (1 px `--shell-border-soft` hairline, 6 px radius, `color-mix` of `--shell-chrome` toward `--shell-text`, the session turn-card material), while latest stays a flat current-turn list. Cards emphasize filenames over directory paths, align line counts, use localized status and timestamps, and share dark/paper theme tokens with reduced-motion support. The morph is owned by `TurnChangeIsland.css`: width and height animate on the elastic overshoot curve when expanding or switching views and on a snappy curve when collapsing, the body fades in behind the shell, and the superseded `turn-island-*` block in `globals.css` (dead class names plus a transition the component had overridden) is removed.
 
 ## Alternatives considered
 

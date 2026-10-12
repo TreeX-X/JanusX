@@ -15,7 +15,6 @@ import {
   workspaceProvenanceFor,
 } from '../../../src/main/knowledge/workspace-identity'
 import { knowledgeObservationService } from '../../../src/main/knowledge/observation-service'
-import { knowledgeDiagnosticsService } from '../../../src/main/knowledge/diagnostics-service'
 
 describe('workspace identity (Phase 0)', () => {
   let root: string
@@ -109,18 +108,6 @@ describe('workspace identity (Phase 0)', () => {
     const listed = await knowledgeObservationService.list({ scope: 'workspace', workspaceId: 'ws-real-id' })
     expect(listed.map((o) => o.id)).toEqual([good.id])
 
-    const diagnostics = await knowledgeDiagnosticsService.snapshot({ recentLimit: 10 })
-    expect(diagnostics.recentObservations.map((o) => o.id).sort()).toEqual([good.id, guessed.id].sort())
-    const byId = Object.fromEntries(
-      diagnostics.workspaces.map((w) => [w.workspaceId, [w.observations, w.fallbackWorkspaceIds]]),
-    )
-    expect(byId).toEqual({ stray: [1, 1], 'ws-real-id': [1, 0] })
-    expect(diagnostics.candidates).toEqual({ facts: 0, wikiPatches: 0, graphEdges: 0, byDerivation: { deterministic: 0, llm: 0, merged: 0 } })
-    expect(diagnostics.truth).toEqual({ facts: 0, wikiPages: 0, graphEdges: 0 })
-
-    const scoped = await knowledgeDiagnosticsService.snapshot({ workspaceId: 'ws-real-id' })
-    expect(scoped.workspaces).toHaveLength(1)
-    expect(scoped.workspaces[0].unprocessedEstimate).toBe(scoped.workspaces[0].evidence)
   })
 
   it('counts and logs capture failures instead of swallowing them', () => {

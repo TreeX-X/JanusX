@@ -1,3 +1,4 @@
+import { archiveFixtureFact } from './review-fixture'
 import { reviewFixture } from './review-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -7,7 +8,6 @@ import type { CandidateFact, MemoryFact } from '../../../src/shared/knowledge'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 import { importLegacyPersonalMemory } from '../../../src/main/knowledge/legacy-memory-migration'
 import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
-import { knowledgeOperationsService } from '../../../src/main/knowledge/operations-service'
 import { knowledgeAuditService } from '../../../src/main/knowledge/audit-service'
 import { userProfileService } from '../../../src/main/knowledge/user-profile-service'
 import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection'
@@ -100,7 +100,7 @@ describe('legacy personal memory migration', () => {
     await importLegacyPersonalMemory()
     const [candidate] = await candidates()
     await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
-    await knowledgeOperationsService.revoke({ kind: 'fact', id: candidate.fact.id, workspaceId: 'user' })
+    await archiveFixtureFact(candidate.fact.id)
     expect((await importLegacyPersonalMemory()).created).toBe(0)
     expect((await userProfileService.load()).confirmedFacts).toEqual([])
   })
@@ -110,7 +110,7 @@ describe('legacy personal memory migration', () => {
     const [candidate] = await candidates()
     await writeFile(join(root, 'facts/candidates.jsonl'), JSON.stringify({ ...candidate, fact: { ...candidate.fact, content: 'tampered' } }))
     await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('does not match')
-    await knowledgeOperationsService.revoke({ kind: 'fact', id: 'old-personal', workspaceId: 'user' })
+    await archiveFixtureFact('old-personal')
     await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))).rejects.toThrow('source changed')
   })
 

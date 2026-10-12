@@ -28,6 +28,15 @@ function conversation(id: string): PersistedJanusConversation {
 }
 
 describe('Janus Chat conversation domain', () => {
+  it('binds Note repair to a distinct reusable controller while keeping the dialog history', () => {
+    const context = { domain: 'project' as const, intent: 'discuss' as const, scope: 'selected' as const, noteRefs: [], repoIds: ['repo'], viewRef: { ownerRepoId: 'blueprint', viewId: 'workspace-dialog' } }
+    const dialog = bindProjectConversation([], context, ['ws'], 'Dialog')
+    dialog.conversations[0].messages.push(message('ordinary', 'user', 'Normal conversation'))
+    const repair = bindProjectConversation(dialog.conversations, { ...context, viewRef: { ...context.viewRef, viewId: 'workspace-note-repair' } }, ['ws'], 'Repair')
+    expect(repair.id).not.toBe(dialog.id)
+    expect(repair.conversations.find(item => item.id === dialog.id)?.messages).toEqual([message('ordinary', 'user', 'Normal conversation')])
+    expect(bindProjectConversation(repair.conversations, { ...context, viewRef: { ...context.viewRef, viewId: 'workspace-note-repair' } }, ['ws'], 'Next repair').id).toBe(repair.id)
+  })
   it('reuses the project conversation across entry points and persisted reloads', () => {
     const personal = conversation('personal')
     const context = { domain: 'project' as const, intent: 'maintain' as const, scope: 'selected' as const, noteRefs: [], repoIds: ['repo'], viewRef: { ownerRepoId: 'repo', viewId: 'view' } }

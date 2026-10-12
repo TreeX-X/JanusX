@@ -360,11 +360,11 @@ describe('knowledge processing queue (Phase 1-1 skeleton)', () => {
     const factsDir = join(root, 'knowledge', 'facts')
     await mkdir(factsDir, { recursive: true })
     await writeFile(join(factsDir, 'candidates.jsonl'), [
-      JSON.stringify({ id: 'c1', status: 'proposed', derivation: 'deterministic' }),
-      JSON.stringify({ id: 'c2', status: 'applied', derivation: 'deterministic' }),
-      JSON.stringify({ id: 'c3', status: 'proposed', derivation: 'llm' }),
-      JSON.stringify({ id: 'c4', status: 'proposed', derivation: 'merged' }),
-      JSON.stringify({ id: 'c5', status: 'rejected', derivation: 'llm' }),
+      JSON.stringify({ id: 'c1', type: 'fact', fact: { scope: 'user', provenance: { workspaceId: 'user' } }, status: 'proposed', derivation: 'deterministic' }),
+      JSON.stringify({ id: 'c2', type: 'fact', fact: { scope: 'user', provenance: { workspaceId: 'user' } }, status: 'applied', derivation: 'deterministic' }),
+      JSON.stringify({ id: 'c3', type: 'fact', fact: { scope: 'user', provenance: { workspaceId: 'user' } }, status: 'proposed', derivation: 'llm' }),
+      JSON.stringify({ id: 'c4', type: 'fact', fact: { scope: 'user', provenance: { workspaceId: 'user' } }, status: 'proposed', derivation: 'merged' }),
+      JSON.stringify({ id: 'c5', type: 'fact', fact: { scope: 'user', provenance: { workspaceId: 'user' } }, status: 'rejected', derivation: 'llm' }),
     ].join('\n') + '\n', 'utf8')
 
     const before = await queue.processingStats()

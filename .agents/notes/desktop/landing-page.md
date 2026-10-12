@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T03:43:42.554Z",
+  "updated": "2026-10-12T06:16:26Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -35,7 +35,9 @@ JanusX ships Windows installers through GitHub Releases, but the repository offe
 
 ## Decision
 
-The public site lives on the orphan `gh-pages` branch as three files: `index.html`, `.nojekyll`, `icon.png`. The page is dependency-free static HTML with inline CSS. Download buttons never host binaries; they point at `releases/latest` and a script resolves the current `-setup.exe` / `-portable.exe` asset URLs through the Releases API. Without any published release the page degrades to a "首个正式版筹备中" state instead of dead links. Pages serves `https://treex-x.github.io/JanusX/` from `gh-pages` root.
+The public site lives on the orphan `gh-pages` branch. The download landing page is at `index.html`, with `.nojekyll`, `icon.png` and its static assets. Download buttons never host binaries; they point at `releases/latest` and a script resolves the current `-setup.exe` / `-portable.exe` asset URLs through the Releases API. Without any published release the page degrades to a "首个正式版筹备中" state instead of dead links. Pages serves `https://treex-x.github.io/JanusX/` from `gh-pages` root.
+
+The [remote connection validation controller](../remote/connection-lab.md) is published separately at `remote-lab/index.html`, served as `https://treex-x.github.io/JanusX/remote-lab/`. Deployment commit `3cde2a40505998d1b3a6617d2967d98b1526a409` only adds this self-contained test page; it does not change the download landing page or publish the desktop development branch. The hosted controller has been checked with public signaling and real same-machine WebRTC; actual cellular-to-home acceptance remains separate.
 
 ## Alternatives considered
 

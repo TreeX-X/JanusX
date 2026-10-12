@@ -4,7 +4,7 @@ import { candidateDecisionHash } from '../../../src/main/knowledge/decision-scor
 import { runCandidateAction } from '../../../src/main/knowledge/candidate-actions'
 
 const mocks = vi.hoisted(() => ({ settings: vi.fn(), candidates: vi.fn(), observations: vi.fn(), run: vi.fn(), manual: vi.fn(), enqueue: vi.fn() }))
-vi.mock('../../../src/main/config/service', () => ({ configService: { getExperimentalFeatures: async () => ({ knowledge: true, persona: true }), getPersonalMemorySettings: async () => ({ captureConversations: true, useInChat: true }), getKnowledgeSettings: mocks.settings } }))
+vi.mock('../../../src/main/config/service', () => ({ configService: { getExperimentalFeatures: async () => ({ persona: (await mocks.settings()).enabled }), getPersonalMemorySettings: async () => ({ captureConversations: true, useInChat: true }), getKnowledgeSettings: mocks.settings } }))
 vi.mock('../../../src/main/knowledge/extract-service', () => ({ knowledgeExtractService: { listFactCandidates: mocks.candidates } }))
 vi.mock('../../../src/main/knowledge/observation-service', () => ({ knowledgeObservationService: { listAll: mocks.observations } }))
 vi.mock('../../../src/main/knowledge/decision-stage', () => ({ knowledgeDecisionStage: { run: mocks.run } }))
@@ -13,7 +13,7 @@ let candidate: CandidateFact
 beforeEach(() => {
   vi.resetAllMocks()
   candidate = { id: 'candidate', type: 'fact', status: 'proposed', derivation: 'deterministic', evidence: { observationIds: ['source'] },
-    fact: { content: 'Use TypeScript', provenance: { workspaceId: 'project' } } } as CandidateFact
+    fact: { content: 'Use TypeScript', provenance: { workspaceId: 'user' } } } as CandidateFact
   mocks.settings.mockResolvedValue({ enabled: true })
   mocks.candidates.mockImplementation(async () => [candidate])
   mocks.observations.mockResolvedValue([{ id: 'source' }, { id: 'other' }])
@@ -22,7 +22,7 @@ beforeEach(() => {
 it('takes evidence and ownership from the host for selected scoring', async () => {
   const input = { candidateId: candidate.id, candidateHash: candidateDecisionHash(candidate), action: 'score' }
   await runCandidateAction(input)
-  expect(mocks.run).toHaveBeenCalledExactlyOnceWith({ workspaceId: 'project', observations: [{ id: 'source' }] }, input)
+  expect(mocks.run).toHaveBeenCalledExactlyOnceWith({ workspaceId: 'user', observations: [{ id: 'source' }] }, input)
   expect(mocks.enqueue).toHaveBeenCalledOnce()
   expect(mocks.manual).not.toHaveBeenCalled()
 })

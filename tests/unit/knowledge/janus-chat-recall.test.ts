@@ -213,7 +213,7 @@ describe('Janus Chat knowledge recall', () => {
       requestId: 'stream-1',
       status: 'empty',
     }))
-    expect(capture).toHaveBeenCalledTimes(2)
+    expect(capture).not.toHaveBeenCalled()
     expect(capturePersonEpisode).toHaveBeenCalledTimes(1)
     expect(capturePersonEpisode).toHaveBeenCalledWith({ userText: 'latest workspace question', sessionId: 'stream-1', correlationId: 'stream-1' })
     expect(capturePersonTurn).not.toHaveBeenCalled()
@@ -337,7 +337,7 @@ describe('Janus Chat knowledge recall', () => {
       ]),
     }))
     expect((streamText.mock.calls[0][0] as any).tools.workspace_read.execute).toBeUndefined()
-    expect(capture).toHaveBeenCalledTimes(4)
+    expect(capture).not.toHaveBeenCalled()
     expect(capturePersonEpisode).toHaveBeenCalledTimes(1)
     expect(capturePersonTurn).not.toHaveBeenCalled()
   })

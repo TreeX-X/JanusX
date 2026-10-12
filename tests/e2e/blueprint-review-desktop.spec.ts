@@ -98,6 +98,10 @@ test('built desktop shares current suggestions, persists settings and starts ind
     await page.getByRole('button', { name: /Open Blueprint workbench/i }).click()
     await page.locator('.react-flow__node').first().click()
     await page.locator('.react-flow__node').filter({ hasText: 'Review Desktop Fixture' }).click()
+    // The reader card starts collapsed and only auto-expands on an attention-panel
+    // navigation, so open it before the finding summary is reachable. Anchor the name
+    // so the "Open content review" shortcut portal does not also match.
+    await page.getByRole('button', { name: /^Content review \d+ findings$/i }).click()
     await page.getByText('Define recovery', { exact: true }).click()
     await expect(page.getByRole('button', { name: 'Handled', exact: true })).toBeVisible()
     await page.screenshot({ path: 'artifacts/blueprint-review-desktop.png' })

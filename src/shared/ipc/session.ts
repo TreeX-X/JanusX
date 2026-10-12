@@ -72,8 +72,9 @@ export interface SessionFilter {
  * How a continuation re-enters the work:
  * - `resume` re-enters the provider's own session id in a fresh terminal, so the
  *   conversation continues inside the same provider session.
- * - `continue` opens a fresh sequential session for the same unfinished task and
- *   hands over context; the original stays intact.
+ * - `continue` resumes Claude, Codex and Opencode history in a new terminal
+ *   when the target engine is unchanged and a provider id is recorded. Other
+ *   cases open a fresh session with an explicitly described task handoff.
  *
  * Continue in New Session is not a privilege of live rows: an external row's
  * context lives in its own transcript file, so it can hand over too. Callers
@@ -130,6 +131,7 @@ export function buildProviderResumeArgs(
   providerSessionId?: string,
   transcriptPath?: string,
 ): string[] | null {
+  providerSessionId = providerSessionId?.trim()
   if (!providerSessionId) return null
   if (engine === 'claude') return ['--resume', providerSessionId]
   if (engine === 'codex') return ['resume', providerSessionId]
@@ -151,18 +153,28 @@ export function buildProviderResumeCommand(
 
 /**
  * Native-resume argv for Continue in New Session on internal rows.
- * Only opencode re-enters its provider session id today: the typed handoff is
- * lossy there (fixed-delay delivery into a slow TUI drops it), while
- * `opencode --session` restores full history. Engine switches and rows without
+ * Claude, Codex and Opencode re-enter their provider session ids: a typed handoff
+ * cannot restore conversation history and may be dropped by a slow TUI.
+ * Engine switches and rows without
  * a resumable id return null so the caller keeps the focused handoff.
  */
 export function buildContinueResumeArgs(
   source: { engine: string; providerSessionId?: string; transcriptPath?: string },
   targetEngine?: string,
 ): string[] | null {
-  if (source.engine !== 'opencode') return null
+  if (!isNativeResumeEngine(source.engine)) return null
   if (targetEngine !== undefined && targetEngine !== source.engine) return null
   return buildProviderResumeArgs(source.engine, source.providerSessionId, source.transcriptPath)
+}
+
+/** Engines whose internal and external rows share native recovery behavior. */
+export function isNativeResumeEngine(engine: string): boolean {
+  return engine === 'claude' || engine === 'codex' || engine === 'opencode'
+}
+
+/** Archive removes JanusX checkpoints, not the provider's conversation history. */
+export function canOfferSessionResume(source: { engine: string; external?: boolean; archived: boolean }): boolean {
+  return isNativeResumeEngine(source.engine) || (source.external === true && !source.archived)
 }
 
 export interface SessionAPI {

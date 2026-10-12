@@ -30,10 +30,9 @@ export function resolveOpencodeDbPath(home: string = homedir()): string {
 
 /**
  * Presence of one session id in the opencode sqlite store.
- * `unknown` covers missing, locked, and unreadable databases so callers fail
- * open and still attempt resume; `absent` means the store opened and the id is
- * gone, which deserves an explicit resume error instead of a silent fresh
- * session.
+ * `unknown` covers missing, locked, and unreadable databases. Recovery requires
+ * `present` so unreadable history cannot silently become a fresh conversation;
+ * `absent` means the store opened and the id is gone.
  */
 export function probeOpencodeSessionPresence(
   dbPath: string,

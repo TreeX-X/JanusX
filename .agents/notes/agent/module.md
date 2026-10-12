@@ -32,7 +32,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-12T03:38:45.000Z",
   "moduleState": "partial"
 }
 ---
@@ -50,6 +50,8 @@ WorkflowX v2 中，普通 xdo 直接使用工程工具，不要求建立 Task。
 ## Design
 
 通用工程工具、MCP、Note 编辑、压缩和 WorkflowX 模式由 agentX 提供，Janus 负责模型与会话端口、审批界面、子会话事件归属及产品扩展。项目会话从共享工具清单继承工程能力；受限维护讨论继续使用调用者的工具限制。具体分工见 [agentX 复用边界](../blueprint/agentx-harness-inheritance.md)。
+
+Janus 模型端口与两个对话入口共用上下文、最大输出额度检测；完整自动资料优先，缺少资料时先更新目录，再支持双额度手动回退。缓存、匹配、生成预算及验证边界由[模型目录决策](model-registry.md)维护。
 
 循环主干：[loop-refactor](./agent-loop-refactor.md)、[chat-alignment](./janus-agent-chat-alignment.md)、[roundtable-loop](./roundtable-chat-harness-loop.md)、[turn-guard](./chat-turn-guard-domain-s6.md)、[loop-sanitize](./chat-system-mid-conversation.md)、[feedback-parity](./janus-chat-feedback-parity.md)；切除对[removal-plan](./history/legacy-loop-removal-plan.md)与[removal-执行](./legacy-loop-removal.md)成对保留，前者为后者的 cut-list 依据。
 

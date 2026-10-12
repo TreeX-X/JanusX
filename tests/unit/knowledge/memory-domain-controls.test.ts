@@ -48,11 +48,11 @@ it('keeps personal capture and processing available with engineering disabled, a
   expect(Date.parse(records[0]!.expiresAt!) - Date.parse(records[0]!.createdAt)).toBe(30 * 86400000)
   expect((await knowledgeContextService.search({ query: 'SQLite', workspaceId: 'project' })).items).toEqual([])
 })
-it('disables personal collection and recall without disabling engineering, and retains pending data', async () => {
+it('disables personal collection and recall, keeps engineering retired, and retains pending data', async () => {
   await knowledgeObservationService.capture({ ...project, workspaceId: 'user', workspacePath: 'user' }, { speaker: 'user', memoryIntent: 'remember' })
   state.persona = false
   await capturePersonChatTurn({ userText: 'must not be collected' })
-  await expect(knowledgeObservationService.capture(project)).resolves.toMatchObject({ workspaceId: 'project' })
+  await expect(knowledgeObservationService.capture(project)).rejects.toThrow('memory-capture-disabled')
   await knowledgeProcessingQueue.processNow('user')
   expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
   expect((await searchUserMemoryDefault('SQLite')).compactContext).toBe('')
@@ -60,6 +60,14 @@ it('disables personal collection and recall without disabling engineering, and r
   state.persona = true
   await knowledgeProcessingQueue.processNow('user')
   expect((await knowledgeExtractService.listFactCandidates()).some(candidate => candidate.id.startsWith('remember-candidate:'))).toBe(true)
+})
+it('retains attributable engineering user turns for opted-in personal habits without generating project facts', async () => {
+  state.habits = true
+  await expect(knowledgeObservationService.capture(project)).rejects.toThrow('memory-capture-disabled')
+  await knowledgeObservationService.capture(project, { speaker: 'user' })
+  await knowledgeProcessingQueue.processNow('project')
+  expect((await knowledgeExtractService.listFactCandidates()).every(candidate => candidate.fact.scope === 'user')).toBe(true)
+  expect((await knowledgeContextService.search({ query: 'SQLite', workspaceId: 'project' })).items).toEqual([])
 })
 it('turns automatic personal capture off independently while preserving explicit remember', async () => {
   state.capture = false

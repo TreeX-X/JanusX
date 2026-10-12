@@ -56,7 +56,7 @@ export function WorktreeComposer({ workspace, onClose }: { workspace: Workspace;
   const [issuesBusy, setIssuesBusy] = useState(false)
   const [linkedIssue, setLinkedIssue] = useState<string | null>(null)
 
-  // Orca pattern: submit closes immediately; progress, cancel, and retry
+  // Provider pattern: submit closes immediately; progress, cancel, and retry
   // live on the sidebar row while creation runs in the background. The close
   // goes through the frame so it descends rather than cutting out.
   const submit = async (requestClose: () => void) => {

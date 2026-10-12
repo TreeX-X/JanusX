@@ -22,4 +22,35 @@ describe('side panel collapse UI', () => {
     expect(rightDockStyles).toContain(".panel[data-visible='false']")
     expect(rightDockStyles).not.toContain('.panel[hidden]')
   })
+
+  it('fades the right rail panel toggle in and out instead of popping it', async () => {
+    const [rail, railStyles] = await Promise.all([
+      readFile('src/renderer/src/components/right-tools/RightToolRail.tsx', 'utf8'),
+      readFile('src/renderer/src/components/right-tools/RightDock.module.css', 'utf8'),
+    ])
+
+    // 空栏仍然不渲染控件（见 right-tool-dock.test.ts），但开/关最后一个 tab 时
+    // 由 useAnimatedOpen 挂在退出动画播完后再卸载。
+    expect(rail).toContain('useAnimatedOpen(toggleVisible, RAIL_TOGGLE_MOTION_MS)')
+    expect(rail).toContain('data-visible={toggleAnim.visible')
+    expect(rail).not.toContain('{hasOpenTools && panelToggle && (')
+
+    // 高度也参与过渡，下方工具图标跟着滑动而不是跳位。
+    expect(railStyles).toContain(".railToggle[data-visible='true']")
+    expect(railStyles).toContain('height: 40px')
+    expect(railStyles).toContain('height: 0')
+
+    // 控件与展开窗口共用一组时长：.panel 的 opacity/transform 跟 .railToggle 对齐，
+    // 且 visibility 延时必须等于 JS 侧的卸载定时器，否则淡出会被提前剪断。
+    const panelTransition = railStyles.match(/\.panel \{[^}]*transition:\s*([^;]+);/s)
+    expect(panelTransition?.[1]).toContain('opacity 240ms')
+    expect(panelTransition?.[1]).toContain('transform 320ms')
+    expect(railStyles).toContain('visibility 0s linear 320ms')
+
+    // reduced-motion 必须排在 .railToggle 之后：同特异性下写在前面会被过渡覆盖。
+    const toggleIndex = railStyles.indexOf('.railToggle {')
+    const reducedMotionIndex = railStyles.indexOf('@media (prefers-reduced-motion: reduce)')
+    expect(toggleIndex).toBeGreaterThan(-1)
+    expect(reducedMotionIndex).toBeGreaterThan(toggleIndex)
+  })
 })

@@ -1,6 +1,6 @@
 // Note: migration-chain validation — see .agents/notes/blueprint/module-responsibilities.md
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -53,4 +53,36 @@ it('rejects cycles, case collisions and escaping paths in relocation evidence', 
     await writeFile(join(root, 'docs/migrations/note-responsibilities.json'), JSON.stringify({ sources }))
     expect(() => readNoteRelocations(root)).toThrow()
   }
+})
+
+it('follows a later archive without changing the original migration evidence', async () => {
+  const root = await fixture(), archived = '.agents/notes/area/history/topic.md'
+  await mkdir(dirname(join(root, archived)), { recursive: true })
+  await rename(join(root, target), join(root, archived))
+  await writeFile(join(root, 'docs/migrations/note-knowledge-reorientation.json'), JSON.stringify({ sources: [{ source: target, target: archived }] }))
+  expect(resolveNoteRelocation(intermediate, readNoteRelocations(root))).toBe(archived)
+  expect(checkNotes(root).errors).toEqual([])
+  await writeFile(join(root, archived), note(3, 'Wrong identity after archive.'))
+  expect(checkNotes(root).errors.join('\n')).toContain('broken relative link ./old.md')
+})
+
+it.each(['cycle', 'source-collision', 'target-collision'] as const)('rejects a cross-report %s', async mode => {
+  const root = await fixture()
+  const row = mode === 'cycle' ? { source: target, target: intermediate }
+    : mode === 'source-collision' ? { source: intermediate, target: '.agents/notes/another.md' }
+      : { source: '.agents/notes/another.md', target: target.replace('topic', 'TOPIC') }
+  await writeFile(join(root, 'docs/migrations/note-knowledge-reorientation.json'), JSON.stringify({ sources: [row] }))
+  expect(() => readNoteRelocations(root)).toThrow()
+})
+
+it('resolves a subsequent product reorganization and still verifies the final identity', async () => {
+  const root = await fixture(), archived = '.agents/notes/area/history/topic.md', reorganized = '.agents/notes/blueprint/topic.md'
+  await mkdir(dirname(join(root, reorganized)), { recursive: true })
+  await rename(join(root, target), join(root, reorganized))
+  await writeFile(join(root, 'docs/migrations/note-knowledge-reorientation.json'), JSON.stringify({ sources: [{ source: target, target: archived }] }))
+  await writeFile(join(root, 'docs/migrations/note-blueprint-planning.json'), JSON.stringify({ sources: [{ source: archived, target: reorganized }] }))
+  expect(resolveNoteRelocation(intermediate, readNoteRelocations(root))).toBe(reorganized)
+  expect(checkNotes(root).errors).toEqual([])
+  await writeFile(join(root, reorganized), note(3, 'Wrong final identity.'))
+  expect(checkNotes(root).errors.join('\n')).toContain('broken relative link ./old.md')
 })

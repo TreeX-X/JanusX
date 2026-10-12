@@ -7,11 +7,11 @@
 
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
-import type { UserMemoryDelivery, ProjectMemoryDelivery } from '../../shared/memory-strength'
-import { containsMemoryDelivery, recordUserMemoryAccessBestEffort, recordProjectMemoryAccessBestEffort } from '../knowledge/memory-access'
+import type { UserMemoryDelivery } from '../../shared/memory-strength'
+import { containsMemoryDelivery, recordUserMemoryAccessBestEffort } from '../knowledge/memory-access'
 import { llmService } from '../llm/LlmService'
 import type { ProviderSettings } from '@janusx/llm-core'
-import { knowledgeObservationService } from '../knowledge/observation-service'
+import { captureEngineeringUserMemory } from '../knowledge/engineering-user-memory'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { capturePersonChatTurn, capturePersonEpisodeFromTurn } from '../knowledge/user-turn-capture'
 import { getModelCatalogService } from '../llm/ModelCatalogService'
@@ -200,7 +200,6 @@ export function registerLlmHandlers(): void {
         }))
 
       let userMemoryDelivery: UserMemoryDelivery | undefined
-      let projectMemoryDelivery: ProjectMemoryDelivery | undefined
       const recallRequestId = randomUUID()
       if (sourceTag === 'janus-chat') {
         const recalled = await prepareJanusChatRecall(
@@ -211,7 +210,6 @@ export function registerLlmHandlers(): void {
         )
         formattedMessages = recalled.messages
         userMemoryDelivery = recalled.userMemoryDelivery
-        projectMemoryDelivery = recalled.projectMemoryDelivery
       }
 
       // 使用 AI SDK
@@ -227,9 +225,6 @@ export function registerLlmHandlers(): void {
 
       if (userMemoryDelivery && containsMemoryDelivery(formattedMessages, userMemoryDelivery)) {
         await recordUserMemoryAccessBestEffort(userMemoryDelivery, recallRequestId)
-      }
-      if (projectMemoryDelivery && containsMemoryDelivery(formattedMessages, projectMemoryDelivery)) {
-        await recordProjectMemoryAccessBestEffort(projectMemoryDelivery, recallRequestId)
       }
 
       if (sourceTag === 'janus-chat') {
@@ -253,7 +248,7 @@ export function registerLlmHandlers(): void {
         // agent session, falling back to the chat conversation.
         const sessionId = soleResource.agentSessionId || request.conversationId
         if (userMessage) {
-          await knowledgeObservationService.capture({
+          await captureEngineeringUserMemory({
             workspaceId: soleResource.workspaceId,
             workspacePath: soleResource.workspacePath,
             source: 'janus-chat',
@@ -263,27 +258,9 @@ export function registerLlmHandlers(): void {
             tags: ['janus-chat', 'user'],
             actor: 'user',
             sessionId,
-          })
+          }, { speaker: 'user' })
         }
-        const assistantObservation = await knowledgeObservationService.capture({
-          workspaceId: soleResource.workspaceId,
-          workspacePath: soleResource.workspacePath,
-          source: 'janus-chat',
-          type: 'conversation-turn',
-          content: result.text || '',
-          summary: 'Janus Chat assistant response',
-          tags: ['janus-chat', 'assistant'],
-          actor: 'assistant',
-          sessionId,
-          metadata: {
-            providerId,
-            modelId: actualModelId,
-          },
-        })
-        // Phase 5 (§6 gap close): non-stream chat also ends a session turn.
-        knowledgeProcessingQueue.scheduleImmediate(
-          assistantObservation?.workspaceId ?? soleResource.workspaceId,
-        )
+        knowledgeProcessingQueue.scheduleImmediate(soleResource.workspaceId)
         await capturePersonEpisodeFromTurn({ userText: userMessage?.content })
       }
 

@@ -318,6 +318,8 @@ async function bootstrapApp(): Promise<void> {
     resolveBundledOfficecliBinary({ resourcesPath: process.resourcesPath }),
   )
   await initializeOfficecliProvider()
+  const { retireEngineeringAssets } = await import('./knowledge/retire-engineering-assets')
+  await retireEngineeringAssets().catch(() => console.warn('[memory] Some legacy engineering assets could not be retired; personal storage was retained'))
   createWindow()
   void refreshLlmRuntimeStatus()
 

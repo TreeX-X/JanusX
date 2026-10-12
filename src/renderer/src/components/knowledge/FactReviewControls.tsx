@@ -23,6 +23,7 @@ export function FactReviewControls({ candidate, disabled, onApprove, onReject, a
       .catch(() => { if (current) setError(true) })
     return () => { current = false }
   }, [candidate, snapshot, retry, disabled])
+  useEffect(() => { if (approvalBlocked) setConfirmed(false) }, [approvalBlocked])
   const context = loaded?.snapshot === snapshot ? loaded.context : undefined
   const target = context?.targets[0]
   return <div className={styles.factReview}>
@@ -33,7 +34,7 @@ export function FactReviewControls({ candidate, disabled, onApprove, onReject, a
     {!!context?.competing.length && <div><strong>{t('knowledge:review.competingValues')}</strong>{context.competing.map(item => <p key={item.id}>{item.content}</p>)}</div>}
     {context?.targets.map(item => <blockquote key={item.id}><strong>{t('knowledge:review.currentValue', { version: item.version })}</strong><p>{item.content}</p></blockquote>)}
     {context?.blocked && <p role="alert">{t('knowledge:review.conflictBlocked')}</p>}
-    {target && !context?.blocked && <label><input type="checkbox" checked={confirmed} disabled={disabled} onChange={event => setConfirmed(event.target.checked)} />{t('knowledge:review.confirmReplacement')}</label>}
+    {target && !context?.blocked && <label><input type="checkbox" checked={confirmed} disabled={disabled || approvalBlocked} onChange={event => setConfirmed(event.target.checked)} />{t('knowledge:review.confirmReplacement')}</label>}
     </div>
     <div className={styles.actionButtons}>
     <button className={styles.primaryAction} type="button" disabled={disabled || approvalBlocked || !context || !!context.blocked || !!target && !confirmed}

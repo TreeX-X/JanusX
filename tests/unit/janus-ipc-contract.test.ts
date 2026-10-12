@@ -405,7 +405,7 @@ describe('Janus IPC contract', () => {
     )
   })
 
-  it('captures successful manual analysis and suppresses capture for null results', async () => {
+  it('returns manual analysis results without capturing engineering observations', async () => {
     const result = {
       id: 'analysis-1',
       applied: true,
@@ -428,26 +428,9 @@ describe('Janus IPC contract', () => {
       trigger: 'manual',
       commitLimit: 3,
     })
-    // capture 是 fire-and-forget，等待其落地再断言参数。
-    await vi.waitFor(() => expect(mocks.capture).toHaveBeenCalledWith({
-      workspacePath: 'C:\\repo',
-      source: 'git-analyzer',
-      type: 'analysis-result',
-      content: 'Completed work',
-      summary: 'Janus analyzer: manual',
-      tags: ['janus-analysis', 'manual'],
-      actor: 'janus-analyzer',
-      correlationId: 'analysis-1',
-      metadata: {
-        nodeId: 'node-1',
-        trigger: 'manual',
-        applied: true,
-        error: undefined,
-        confidence: 0.9,
-        progress: 80,
-        status: 'testing',
-      },
-    }))
+    // The analyzer is engineering activity: the memory reorientation retired its capture
+    // path, so a successful analysis records nothing and a null result records nothing.
+    expect(mocks.capture).not.toHaveBeenCalled()
 
     mocks.capture.mockClear()
     await expect(

@@ -6,14 +6,7 @@ import type {
   CandidateWikiPatch,
   CaptureObservationInput,
   GraphEdge,
-  KnowledgeConflict,
-  KnowledgeContextRequest,
-  KnowledgeContextResult,
   KnowledgeContractsSnapshot,
-  KnowledgeFeedbackInput,
-  KnowledgeFeedbackSummary,
-  KnowledgeSearchQuery,
-  KnowledgeSearchResult,
   KnowledgeSource,
   KnowledgeTruthSnapshot,
   MemoryFact,
@@ -54,26 +47,12 @@ export interface ObservationRevocationsPage {
 }
 
 export const KNOWLEDGE_CHANNELS = {
-  automationStatus: 'knowledge:automation:status',
-  automationRun: 'knowledge:automation:run',
-  automationRetry: 'knowledge:automation:retry',
-  testConfiguration: 'knowledge:configuration:test',
-  jevCredential: 'knowledge:jev:credential',
-  jevCredentialStatus: 'knowledge:jev:credential-status',
-  jevCredentialReveal: 'knowledge:jev:credential-reveal',
   localModelStop: 'knowledge:local-model:stop',
   localModelConfigure: 'knowledge:local-model:configure',
   localResourcesInstall: 'knowledge:local-model:install',
   localResourcesStatus: 'knowledge:local-model:resources-status',
-  wikiHistory: 'knowledge:wiki:history',
-  wikiRevision: 'knowledge:wiki:revision',
-  pinWikiRevision: 'knowledge:wiki:pin-revision',
   layaControl: 'knowledge:laya:control',
   candidateAction: 'knowledge:candidate:action',
-  noteWikiPages: 'knowledge:note-wiki:pages',
-  prepareNoteWiki: 'knowledge:note-wiki:prepare',
-  proposeNoteWiki: 'knowledge:note-wiki:propose',
-  noteWikiStatuses: 'knowledge:note-wiki:statuses',
   contracts: 'knowledge:contracts:get',
   bootstrap: 'knowledge:bootstrap',
   observe: 'knowledge:observe',
@@ -91,24 +70,12 @@ export const KNOWLEDGE_CHANNELS = {
   // Phase 5: `knowledge:extract` direct IPC removed — LLM enhancement runs only
   // via the processing queue (`runLlmStage` → `knowledgeExtractService.extract`).
   listCandidates: 'knowledge:candidates:list',
-  listGraphCandidates: 'knowledge:candidates:list-graph',
-  listWikiPatchCandidates: 'knowledge:candidates:list-wiki-patches',
   rejectCandidate: 'knowledge:candidates:reject',
   applyCandidate: 'knowledge:candidates:apply',
   factReviewContext: 'knowledge:candidates:fact-review-context',
-  search: 'knowledge:search',
   listTruth: 'knowledge:truth:list',
-  revokeTruth: 'knowledge:truth:revoke',
-  listConflicts: 'knowledge:conflicts:list',
-  recordFeedback: 'knowledge:feedback:record',
-  feedbackSummary: 'knowledge:feedback:summary',
-  context: 'knowledge:context',
-  diagnostics: 'knowledge:diagnostics',
   processNow: 'knowledge:process-now',
   processingStats: 'knowledge:processing-stats',
-  externalMcpStatus: 'knowledge:external-mcp:status',
-  registerExternalMcp: 'knowledge:external-mcp:register',
-  probeExternalMcp: 'knowledge:external-mcp:probe',
   userMemoryOverview: 'knowledge:user-memory:overview',
   personalProfileEditContext: 'knowledge:user-memory:profile-context',
   savePersonalProfile: 'knowledge:user-memory:profile-save',
@@ -344,24 +311,10 @@ export interface ExternalMcpRegisterResult {
 }
 
 export interface KnowledgeAPI {
-  automationStatus: () => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
-  automationRun: (input?: import('../knowledge-automation').AutomationRunInput) => Promise<import('../knowledge-automation').KnowledgeAutomationStatus>
-  automationRetry: (id: string | import('../knowledge-automation').AutomationRetryInput) => Promise<string | void>
-  testConfiguration: (input: import('../knowledge-automation').KnowledgeConfigurationTestRequest) => Promise<import('../knowledge-automation').KnowledgeConfigurationTestResult>
-  setJevCredential: (key: string) => Promise<void>
-  revealJevCredential: () => Promise<string | null>
-  jevCredentialStatus: () => Promise<{ configured: boolean }>
   stopLocalModel: () => Promise<void>
   installLocalResources: () => Promise<import('../knowledge-automation').KnowledgeLocalResources>
   localResourcesStatus: () => Promise<import('../knowledge-automation').KnowledgeLocalResources>
   configureLocalModel: (input: import('../knowledge-automation').KnowledgeLocalSettings) => Promise<{ settings: KnowledgeSettings; report: import('../knowledge-automation').KnowledgeLocalEnvironment }>
-  wikiHistory: (input: import('../wiki-history').WikiHistoryQuery) => Promise<import('../wiki-history').WikiHistoryPage>
-  wikiRevision: (input: import('../wiki-history').WikiRevisionQuery) => Promise<import('../wiki-history').WikiRevision>
-  pinWikiRevision: (input: import('../wiki-history').WikiRevisionPinInput) => Promise<void>
-  noteWikiPages: (input: { rootPath: string; uri: string }) => Promise<NoteWikiPage[]>
-  prepareNoteWiki: (input: PrepareNoteWikiInput) => Promise<NoteWikiDraft>
-  proposeNoteWiki: (input: { draftId: string; title: string; markdown: string; rationale: string }) => Promise<CandidateWikiPatch>
-  noteWikiStatuses: (input: { candidateId?: string; workspaceId?: string; slug?: string }) => Promise<WikiNoteStatus[]>
   contracts: () => Promise<KnowledgeContractsSnapshot>
   bootstrap: (workspacePath?: string) => Promise<KnowledgeBootstrapResult>
   observe: (input: CaptureObservationInput) => Promise<Observation>
@@ -377,24 +330,12 @@ export interface KnowledgeAPI {
   auditPage: (query?: AuditPageQuery) => Promise<AuditPage>
   auditStats: (query?: AuditQuery) => Promise<AuditStats>
   listCandidates: () => Promise<CandidateFact[]>
-  listGraphCandidates: () => Promise<CandidateGraphEdge[]>
-  listWikiPatchCandidates: () => Promise<CandidateWikiPatch[]>
   rejectCandidate: (input: ReviewCandidateInput) => Promise<ReviewResult>
   applyCandidate: (input: ReviewCandidateInput) => Promise<ReviewResult>
   factReviewContext: (input: ReviewCandidateInput) => Promise<FactReviewContext>
-  search: (query: KnowledgeSearchQuery) => Promise<KnowledgeSearchResult>
   listTruth: () => Promise<KnowledgeTruthSnapshot>
-  revokeTruth: (input: RevokeTruthInput) => Promise<void>
-  listConflicts: (workspaceId: string) => Promise<KnowledgeConflict[]>
-  recordFeedback: (input: KnowledgeFeedbackInput) => Promise<void>
-  feedbackSummary: (workspaceId?: string) => Promise<KnowledgeFeedbackSummary>
-  context: (request: KnowledgeContextRequest) => Promise<KnowledgeContextResult>
-  diagnostics: (query?: KnowledgeDiagnosticsQuery) => Promise<KnowledgeDiagnostics>
   processNow: (input?: KnowledgeProcessNowInput) => Promise<KnowledgeProcessNowResult>
   processingStats: () => Promise<KnowledgeProcessingStats>
-  externalMcpStatus: () => Promise<ExternalMcpStatus>
-  probeExternalMcp: () => Promise<ExternalMcpProbeResult>
-  registerExternalMcp: (client: ExternalMcpClientId) => Promise<ExternalMcpRegisterResult>
   userMemoryOverview: () => Promise<UserMemoryOverview>
   personalProfileEditContext: () => Promise<PersonalProfileEditContext>
   savePersonalProfile: (input: { expectedHash: string; overrides: PersonalProfileOverrides }) => Promise<void>

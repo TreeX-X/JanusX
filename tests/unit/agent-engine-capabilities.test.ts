@@ -55,6 +55,9 @@ describe('agent engine capabilities', () => {
     expect(resolveSessionStorePath('opencode', {}, home)).toBe(
       join(home, '.local', 'share', 'opencode', 'opencode.db'),
     )
+    expect(resolveSessionStorePath('opencode', { XDG_DATA_HOME: '/custom-data' }, home)).toBe(
+      join('/custom-data', 'opencode', 'opencode.db'),
+    )
     expect(resolveSessionStorePath('pi', {}, home)).toBe(join(home, '.pi', 'agent', 'sessions'))
   })
 

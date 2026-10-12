@@ -3,7 +3,7 @@ import type { CandidateFact, MemoryFact } from '../../shared/knowledge'
 import type { ObservationRevocationsPage } from '../../shared/ipc/knowledge'
 import { writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeObservationService } from './observation-service'
-import { withFactCandidatesLock, withWikiCandidatesLock, withGraphCandidatesLock } from './review-service'
+import { withFactCandidatesLock } from './review-service'
 import { readLegacyJsonl } from './legacy-memory-source'
 import { ObservationRevocationBarrier, observationRevocationHash, readObservationRevocationBarrier, revocationPath, sourceKey } from './observation-revocation-barrier'
 
@@ -47,7 +47,7 @@ export async function observationRevocationContext(input: unknown): Promise<{ so
 /** One atomic receipt is the withdrawal decision and audit; raw journals remain intact. */
 export async function revokeObservation(input: unknown): Promise<void> {
   const target = revokeSchema.parse(input)
-  await withFactCandidatesLock(() => withWikiCandidatesLock(() => withGraphCandidatesLock(() => knowledgeObservationService.withSourceMutation(async () => {
+  await withFactCandidatesLock(() => knowledgeObservationService.withSourceMutation(async () => {
     const existing = await readObservationRevocationBarrier()
     const source = sourceKey(target.workspaceId, target.id)
     if (existing.records.some(record => record.source === source && record.sourceHash === target.sourceHash)) return
@@ -71,5 +71,5 @@ export async function revokeObservation(input: unknown): Promise<void> {
       ...candidates.filter(candidate => barrier.blocksCandidate(candidate)).map(candidate => candidate.fact),
     ].map(fact => sourceKey(fact.provenance.workspaceId, fact.id)))]
     await writeFileAtomic(revocationPath(), JSON.stringify({ version: 1, records: [...existing.records, record] }))
-  }))))
+  }))
 }

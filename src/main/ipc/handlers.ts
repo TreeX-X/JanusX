@@ -17,6 +17,7 @@ import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/shell-runtime'
 import { resolveCLIPath } from '../janus-runner/cli-resolver'
 import { buildVSCodeLaunchArgs } from '../ide-launch'
+import { trackBlueprintReviewWorkspace } from '../blueprint/review/runtime'
 
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
@@ -317,6 +318,7 @@ function ensureWorkspaceWatcher(workspacePath: string): void {
 }
 
 function registerWorkspaceWatcher(mainWindow: BrowserWindow | null, workspacePath: string): void {
+  trackBlueprintReviewWorkspace(workspacePath, true)
   const windows = watcherWindows.get(workspacePath) ?? new Set<BrowserWindow>()
   if (mainWindow) windows.add(mainWindow)
   watcherWindows.set(workspacePath, windows)
@@ -341,6 +343,7 @@ export function subscribeWorkspaceWatcher(
 }
 
 export function disposeWorkspaceWatcher(workspacePath: string): void {
+  trackBlueprintReviewWorkspace(workspacePath, false)
   closeWorkspaceWatcher(workspacePath)
   watcherWindows.delete(workspacePath)
   watcherSubscribers.delete(workspacePath)

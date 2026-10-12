@@ -22,7 +22,6 @@ beforeAll(async () => {
       import commonEn from './src/renderer/src/i18n/locales/en/common.json'
       import commonZh from './src/renderer/src/i18n/locales/zh-CN/common.json'
       import {LayaSettingsPanel} from './src/renderer/src/components/LayaSettingsPanel'
-      import {KnowledgeSettingsPanel} from './src/renderer/src/components/KnowledgeSettingsPanel'
       import shell from './src/renderer/src/components/AppSettingsModal.module.css'
       window.calls=[]
       window.runtime=window.runtime??{phase:'stopped',reason:'',modelRevision:'e4e9ddf21a7b1903b7acffd8814ad4307bf63a67'}
@@ -53,7 +52,7 @@ beforeAll(async () => {
       }
       i18n.use(initReactI18next).init({lng:window.language??'en',resources:{en:{knowledge:en,settings:settingsEn,common:commonEn},'zh-CN':{knowledge:zh,settings:settingsZh,common:commonZh}},interpolation:{escapeValue:false}}).then(()=>{
         window.root=createRoot(document.getElementById('root'))
-        window.root.render(<div className={shell.panel} style={{display:'block',width:'100%',height:'auto',overflow:'visible'}}><div className={shell.body}>{window.fullPanel?<KnowledgeSettingsPanel/>:<Panel/>}</div></div>)
+        window.root.render(<div className={shell.panel} style={{display:'block',width:'100%',height:'auto',overflow:'visible'}}><div className={shell.body}><Panel/></div></div>)
       })
     ` },
     loader: { '.svg': 'dataurl' }, bundle: true, write: false, outfile: 'laya-settings-test.js', jsx: 'automatic', format: 'iife',

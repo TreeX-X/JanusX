@@ -1,9 +1,16 @@
 .root { position: relative; z-index: 100; grid-column: 1 / -1; min-width: 0; border-top: 1px solid var(--border-soft); }
 .summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 0 2px; border: 0; background: none; color: var(--text-secondary); font: inherit; font-size: 11px; cursor: pointer; }
 .summary:focus-visible, .actions button:focus-visible { outline: 1px solid var(--text-secondary); outline-offset: 3px; border-radius: 3px; }
-.state { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; white-space: nowrap; }
-.state i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .45; }
-.state[data-status='detected'] i { background: var(--status-success, #87ad97); opacity: .8; }
+
+/* 状态灯与状态色同源：--state-color 由 data-status 决定，Island 与设置共用。 */
+.state { --state-color: var(--status-warning); display: inline-flex; align-items: center; gap: 6px; font-weight: 400; white-space: nowrap; color: var(--state-color); }
+.state[data-status='detected'] { --state-color: var(--status-success); }
+.state[data-status='missing'] { --state-color: var(--status-danger); }
+.state i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--state-color); }
+.state[data-status='checking'] i { animation: statePulse 1.1s ease-in-out infinite; }
+@keyframes statePulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .state[data-status='checking'] i { animation: none; opacity: .7; } }
+
 .details { position: absolute; bottom: calc(100% + 6px); left: 0; right: 0; z-index: 2; max-height: 240px; overflow-y: auto; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-elevated); box-shadow: 0 4px 16px #0002; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
 .details p { margin: 5px 0; }
 .details ul { list-style: none; padding: 0; margin: 8px 0; max-height: 140px; overflow: auto; }
@@ -14,10 +21,50 @@
 .actions button:hover { color: var(--text); }
 .actions button:disabled { opacity: .5; cursor: default; }
 
-.settings { z-index: auto; width: 100%; border: 0; color: var(--shell-muted); font-size: 11px; }
-.settings .summary { padding: 0; cursor: default; font-size: 12px; align-items: flex-start; }
-.target { min-width: 0; overflow-wrap: anywhere; color: var(--shell-text); }
-.sourceSummary, .feedback { margin: 7px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
-.settings .actions { padding-top: 9px; gap: 6px 14px; }
-.settings .details { position: static; margin-top: 10px; padding: 8px 0 0; border: 0; border-top: 1px solid var(--shell-border-soft); border-radius: 0; background: none; box-shadow: none; }
+/* ── 设置面：四级层次 —— 目标(12px/600 墨色) → 状态徽标 → 来源键值 → 操作钮 ── */
+.settings { z-index: auto; width: 100%; border: 0; color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
+.settings .summary { padding: 0; cursor: default; font-size: 12px; align-items: center; gap: 10px; }
+.settings .target { min-width: 0; overflow-wrap: anywhere; color: var(--shell-text); font-size: 12px; font-weight: 600; }
+
+/* 状态徽标：透明底 + 1px 状态色描边，靠文字与描边区分，不做填充色块。 */
+.settings .state {
+  flex: none; gap: 6px; height: 20px; padding: 0 8px 0 7px;
+  border: 1px solid color-mix(in srgb, var(--state-color) 45%, transparent);
+  border-radius: 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: .01em;
+}
+.settings .state i { width: 5px; height: 5px; }
+
+/* 来源/说明行：键用弱化墨色，值用正文墨色加粗，键值与正文分开。 */
+.settings .sourceSummary, .settings .feedback { display: flex; flex-wrap: wrap; gap: 0 6px; align-items: baseline; margin: 8px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.settings .summaryKey { color: var(--shell-dim); }
+.settings .summaryValue { color: var(--shell-text); font-weight: 500; }
+.settings .feedback .summaryValue { color: var(--status-danger); font-weight: 400; }
+
+/* 操作钮：1px 发丝线框 + 透明底，与说明文字明确分开。 */
+.settings .actions { padding-top: 10px; gap: 6px 8px; }
+.settings .actions button {
+  gap: 5px; height: 24px; padding: 0 9px;
+  border: 1px solid var(--shell-border); border-radius: 5px;
+  background: transparent; color: var(--shell-text);
+  font-size: 11px; font-weight: 500;
+  transition: border-color .15s ease, background-color .15s ease, color .15s ease;
+}
+.settings .actions button svg { flex: none; opacity: .7; transition: transform .15s ease, opacity .15s ease; }
+.settings .actions button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--shell-text) 34%, transparent); background: var(--shell-hover); color: var(--shell-text); }
+.settings .actions button:hover:not(:disabled) svg { opacity: 1; }
+.settings .actions button:active:not(:disabled) { background: var(--shell-active); }
+.settings .actions button:disabled { opacity: .4; cursor: default; }
+.settings .actions button[aria-expanded='true'] svg:first-child { transform: rotate(180deg); }
+.settings .actions button:focus-visible { outline: 1px solid var(--shell-text); outline-offset: 2px; }
+
+/* 展开的来源明细：与上文用发丝线分隔，路径用等宽弱化。 */
+.settings .details { position: static; margin-top: 12px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--shell-border-soft); border-radius: 0; background: none; box-shadow: none; color: var(--shell-muted); font-size: 11px; line-height: 1.65; }
+.settings .details p { margin: 0 0 6px; }
+.settings .details p:last-child { margin-bottom: 0; }
+.settings .details ul { margin: 10px 0 0; max-height: none; }
+.settings .details li + li { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--shell-border-soft); }
+.settings .details li > span { display: block; color: var(--shell-text); font-weight: 500; }
+.settings .details code { margin-top: 3px; color: var(--shell-dim); font-family: var(--font-mono, monospace); font-size: 10px; line-height: 1.5; }
+
 @media (max-width: 600px) { .settings .summary { flex-wrap: wrap; gap: 6px; } }

@@ -7,6 +7,7 @@ import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import { knowledgeRootPath } from './constants'
 import { knowledgeObservationService, type ObservationCaptureContext } from './observation-service'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
+import { memoryDomainPolicy } from './memory-domain-policy'
 
 export interface CaptureEntry { input: CaptureObservationInput; context: ObservationCaptureContext }
 interface PendingCapture { id: string; entries: CaptureEntry[]; attempts: number; nextAttemptAt: number; error?: string }
@@ -14,8 +15,9 @@ interface PendingCapture { id: string; entries: CaptureEntry[]; attempts: number
 /** Single local outbox. Acknowledgement follows observation persistence; replay uses source event IDs. */
 export class CaptureInbox {
   private readonly queue = new SerialQueue()
-  constructor(private readonly capture: (input: CaptureObservationInput, context: ObservationCaptureContext) => Promise<Observation> =
-    (input, context) => knowledgeObservationService.capture(input, context)) {}
+  constructor(private readonly capture: (input: CaptureObservationInput, context: ObservationCaptureContext) => Promise<Observation | undefined> =
+    (input, context) => knowledgeObservationService.capture(input, context),
+    private readonly filter: (entries: CaptureEntry[]) => Promise<CaptureEntry[]> = async entries => entries) {}
   private path() { return join(knowledgeRootPath(), 'processing', 'capture-inbox.json') }
   private async read(): Promise<PendingCapture[]> {
     try {
@@ -28,6 +30,7 @@ export class CaptureInbox {
   }
   private write(rows: PendingCapture[]) { return writeFileAtomic(this.path(), JSON.stringify(rows) + '\n') }
   async submit(entries: CaptureEntry[]): Promise<Observation[]> {
+    entries = await this.filter(entries)
     if (!entries.length) return []
     if (entries.some(entry => !entry.context.sourceEventId)) throw new Error('capture-requires-event-id')
     // Scrub all nested fields before even the recovery file is written.
@@ -43,7 +46,10 @@ export class CaptureInbox {
   private async deliver(rows: PendingCapture[], row: PendingCapture): Promise<Observation[]> {
     try {
       const results: Observation[] = []
-      for (const entry of row.entries) results.push(await this.capture(entry.input, entry.context))
+      for (const entry of await this.filter(row.entries)) {
+        const observation = await this.capture(entry.input, entry.context)
+        if (observation) results.push(observation)
+      }
       await this.write(rows.filter(item => item.id !== row.id))
       return results
     } catch (error) {
@@ -67,4 +73,8 @@ export class CaptureInbox {
       lastError: [...rows].reverse().find(row => row.error)?.error }
   }
 }
-export const knowledgeCaptureInbox = new CaptureInbox()
+export const knowledgeCaptureInbox = new CaptureInbox((input, context) => knowledgeObservationService.capture(input, context), async entries => {
+  const policy = await memoryDomainPolicy()
+  return entries.filter(entry => entry.context.speaker === 'user'
+    && (entry.input.workspaceId === 'user' ? policy.personal : policy.inferEngineeringHabits))
+})

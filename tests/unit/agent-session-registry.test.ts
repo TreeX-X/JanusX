@@ -2,11 +2,17 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { writeFileAtomic } from '../../src/main/lib/atomic-file'
 import { AgentSessionRegistry } from '../../src/main/sessions/session-registry'
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/janusx-test-userdata' },
 }))
+
+vi.mock('../../src/main/lib/atomic-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/main/lib/atomic-file')>()
+  return { ...actual, writeFileAtomic: vi.fn(actual.writeFileAtomic) }
+})
 
 const roots: string[] = []
 const registries: AgentSessionRegistry[] = []
@@ -36,6 +42,32 @@ function createInput(terminalId: string, workspaceId = 'ws-1') {
 }
 
 describe('agent session registry', () => {
+  it('seeds native recovery history without sharing checkpoints or future turns', async () => {
+    const dir = await userDataDir()
+    const registry = track(new AgentSessionRegistry(dir))
+    const source = registry.createSession(createInput('original'))
+    registry.notePrompt('original', 'first question')
+    registry.noteCheckpoint('original', 'cp-original')
+    registry.recordTurnEnd('original', 'done', 'cp-original', 'first answer')
+    registry.notePrompt('original', 'second question')
+    registry.recordTurnEnd('original', 'done', undefined, 'second answer')
+    const restored = registry.createSession({
+      ...createInput('restored'), historyFrom: source.id, continuedFrom: source.id, providerSessionId: 'native-id',
+    })
+    expect(restored).toMatchObject({ firstPrompt: 'first question', lastPrompt: 'second question', turnCount: 2, checkpointCount: 0 })
+    expect(restored.turns.map((turn) => turn.checkpointId)).toEqual([undefined, undefined])
+    expect(restored.turns[0].id).not.toBe(source.turns[0].id)
+    expect(restored.turns[0]).not.toBe(source.turns[0])
+    registry.notePrompt('restored', 'follow-up')
+    registry.recordTurnEnd('restored', 'done', undefined, 'follow-up answer')
+    expect(source.turnCount).toBe(2)
+    expect(source.turns[0].checkpointId).toBe('cp-original')
+    expect(restored.turnCount).toBe(3)
+    await registry.flush()
+    const loaded = track(new AgentSessionRegistry(dir))
+    await loaded.load()
+    expect(loaded.getSession(restored.id)).toMatchObject({ providerSessionId: 'native-id', firstPrompt: 'first question', turnCount: 3 })
+  })
   it('creates sessions bound to terminals with stable ids', async () => {
     const registry = track(new AgentSessionRegistry(await userDataDir()))
     const record = registry.createSession(createInput('term-1'))
@@ -513,6 +545,53 @@ describe('agent session registry', () => {
     registry.endBatch()
     expect(seen).toHaveLength(1)
     expect(registry.listSessions({ includeArchived: true })).toHaveLength(3)
+  })
+
+  it('collapses bulk imports into a single store write', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    vi.mocked(writeFileAtomic).mockClear()
+    registry.beginBatch()
+    for (let i = 0; i < 5; i += 1) {
+      registry.importExternalSession({
+        engine: 'claude',
+        cwd: '/repo',
+        providerSessionId: `w-${i}`,
+        transcriptPath: `/tmp/w-${i}.jsonl`,
+        firstPrompt: `prompt ${i}`,
+        turnCount: 1,
+      })
+    }
+    // A per-row persist stringifies the whole store each time and stalls the
+    // main process through the scan; the batch defers to one write.
+    expect(vi.mocked(writeFileAtomic)).not.toHaveBeenCalled()
+    registry.endBatch()
+    await registry.flush()
+    expect(vi.mocked(writeFileAtomic)).toHaveBeenCalledTimes(1)
+    expect(registry.listSessions({ includeArchived: true })).toHaveLength(5)
+  })
+
+  it('flushes a mid-batch snapshot so shutdown drops no deferred write', async () => {
+    const dir = await userDataDir()
+    const registry = track(new AgentSessionRegistry(dir))
+    vi.mocked(writeFileAtomic).mockClear()
+    registry.beginBatch()
+    registry.importExternalSession({
+      engine: 'claude',
+      cwd: '/repo',
+      providerSessionId: 'w-0',
+      transcriptPath: '/tmp/w-0.jsonl',
+      firstPrompt: 'prompt 0',
+      turnCount: 1,
+    })
+    await registry.flush()
+    expect(vi.mocked(writeFileAtomic)).toHaveBeenCalledTimes(1)
+    registry.endBatch()
+    await registry.flush()
+    // The flushed snapshot already carried the batch row; close adds none.
+    expect(vi.mocked(writeFileAtomic)).toHaveBeenCalledTimes(1)
+    const reloaded = track(new AgentSessionRegistry(dir))
+    await reloaded.load()
+    expect(reloaded.listSessions({ includeArchived: true })).toHaveLength(1)
   })
 
   it('snapshots the prompt and excerpt onto the turn so content survives prune', async () => {

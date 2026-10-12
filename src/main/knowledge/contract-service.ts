@@ -21,9 +21,8 @@ function buildReadme(): string {
     '- `observations/active/` holds monthly sharded observation files (`YYYY-MM.jsonl`); new records are written here.',
     '- `observations/archive/` holds gzipped archived monthly shards; archived records remain queryable (the read path gunzips and aggregates them).',
     '- `blobs/` stores gzip-compressed blobs for long observations, content-addressed by sha256.',
-    '- `facts/`, `wiki/`, and `graph/` store derived knowledge layers.',
+    '- `facts/` stores personal memory candidates and confirmed facts.',
     '- `audit/` records every accepted or rejected mutation.',
-    '- `indexes/` stores rebuildable retrieval metadata.',
     '- `profile/` holds the durable user snapshot (identity, format/tool prefs, habit versions); private by default.',
     '- `episodes/` holds auto-written dated user events (`YYYY-MM.jsonl`) with 30–90 day TTL harvest.',
     '- Workspace provenance is stored inside each record, not in the physical storage path.',
@@ -59,28 +58,8 @@ function buildFileSpecs(snapshot: KnowledgeContractsSnapshot): ContractFileSpec[
       content: '',
     },
     {
-      relativePath: 'wiki/pages-index.json',
-      content: `${JSON.stringify({ version: 1, pages: [] }, null, 2)}\n`,
-    },
-    {
-      relativePath: 'graph/candidates.jsonl',
-      content: '',
-    },
-    {
-      relativePath: 'graph/edges.jsonl',
-      content: '',
-    },
-    {
       relativePath: 'audit/audit.jsonl',
       content: '',
-    },
-    {
-      relativePath: 'indexes/bm25.json',
-      content: `${JSON.stringify({ version: 1, documents: 0, terms: {} }, null, 2)}\n`,
-    },
-    {
-      relativePath: 'indexes/graph-snapshot.json',
-      content: `${JSON.stringify({ version: 1, nodes: [], edges: [] }, null, 2)}\n`,
     },
     {
       relativePath: 'profile/profile.json',
@@ -93,7 +72,8 @@ async function ensureFile(filePath: string, content: string): Promise<boolean> {
   try {
     await readFile(filePath, 'utf8')
     return false
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     await mkdir(dirname(filePath), { recursive: true })
     await writeFile(filePath, content, 'utf8')
     return true

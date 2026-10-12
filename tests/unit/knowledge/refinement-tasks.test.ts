@@ -1,3 +1,4 @@
+import { archiveFixtureFact } from './review-fixture'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -103,8 +104,7 @@ describe('durable refinement tasks', () => {
     deps.listTruth = async () => (await readFile(join(root, 'facts/facts.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line))
     const service = new RefinementTaskService(deps)
     await service.enqueueManual(candidates[0]!.id, candidateDecisionHash(candidates[0]!))
-    const { knowledgeOperationsService } = await import('../../../src/main/knowledge/operations-service')
-    await knowledgeOperationsService.revoke({ kind: 'fact', id: truth.id, workspaceId: truth.provenance.workspaceId })
+    await archiveFixtureFact(truth.id)
     expect(await service.stats()).toMatchObject({ pending: 0, cancelled: 1 })
     expect(await service.runDue()).toMatchObject({ cancelled: 1 })
     expect(extract).not.toHaveBeenCalled()

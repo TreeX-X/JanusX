@@ -46,6 +46,58 @@
   background: #E2D9BD;
   border: 1px solid var(--shell-border);
   border-radius: 6px;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.cardSurface:hover,
+.cardSurface:focus-within {
+  border-color: var(--shell-accent-border);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--shell-text) 9%, transparent);
+}
+
+.cardHeader {
+  border-radius: 4px;
+  outline: none;
+}
+
+.searchInput:focus-visible {
+  border-color: var(--shell-accent-border) !important;
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
+}
+
+.scopeTab {
+  transition: color 140ms ease, border-color 140ms ease;
+}
+
+.scopeTab:hover,
+.scopeTab:focus-visible {
+  color: var(--shell-accent) !important;
+}
+
+.scopeTab:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: 2px;
+}
+
+.cardAction {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.cardAction:hover:not(:disabled) {
+  background: var(--shell-accent-soft) !important;
+  border-color: var(--shell-accent-border) !important;
+  color: var(--shell-accent) !important;
+  transform: translateY(-1px);
+}
+
+.cardAction:focus-visible {
+  outline: 2px solid var(--shell-accent-border);
+  outline-offset: 2px;
+}
+
+.cardAction:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 :global([data-theme='dark']) .cardSurface {

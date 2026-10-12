@@ -31,7 +31,8 @@ vi.mock('../../../src/main/knowledge/processing-queue', () => ({
 vi.mock('../../../src/main/config/service', () => ({
   configService: {
     getKnowledgeSettings: mocks.getKnowledgeSettings,
-    getExperimentalFeatures: async () => ({ knowledge: true }),
+    getExperimentalFeatures: async () => ({ persona: true }),
+    getPersonalMemorySettings: async () => ({ inferEngineeringHabits: (await mocks.getKnowledgeSettings()).enabled }),
   },
 }))
 

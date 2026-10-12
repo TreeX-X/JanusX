@@ -139,8 +139,8 @@ export class BlueprintStore {
     await writeJson(indexFile(), idx)
   }
 
-  private async listWorkspaceRecords(): Promise<WorkspaceRecord[]> {
-    if (this.workspaceRecordsCache) return this.workspaceRecordsCache
+  private async listWorkspaceRecords(refresh = false): Promise<WorkspaceRecord[]> {
+    if (!refresh && this.workspaceRecordsCache) return this.workspaceRecordsCache
     try {
       const files = await fs.readdir(workspacesDir())
       const records: WorkspaceRecord[] = []

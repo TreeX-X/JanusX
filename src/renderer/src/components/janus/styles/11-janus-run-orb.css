@@ -245,11 +245,11 @@
   z-index: 50;
   width: 280px;
   padding: 10px 12px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--shell-border);
   border-radius: 12px;
-  background: #0c0c0e;
+  background: var(--shell-drawer);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.62), 0 0 18px rgba(0, 255, 136, 0.05);
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--shell-text);
   font-size: 12px;
   animation: orb-popover-in 0.18s ease-out both;
 }
@@ -262,12 +262,14 @@
 .janus-run-orb-popover-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
 }
 
+/* 标题可缩：min-width:0 才触发 ellipsis，长工作区名不会把关闭钮挤出 280px 面板 */
 .janus-run-orb-popover-header strong {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -275,33 +277,47 @@
 }
 
 .janus-run-orb-popover-close {
+  position: relative;
   display: grid;
   place-items: center;
   width: 22px;
   height: 22px;
-  flex: 0 0 22px;
+  flex: 0 0 auto;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--shell-border);
   border-radius: 6px;
   background: transparent;
-  color: #999;
+  color: var(--shell-muted);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
 }
 
+/* 命中区：22px 视觉 + ::before 外扩 8px ≈ 38px 热区（同 workbench-close-hit-slop） */
+.janus-run-orb-popover-close::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  background: transparent;
+}
+
+/* 按压反馈走 brightness 不走 transform：缩放会让边缘按下的 mouseup 落到框外而取消 */
+.janus-run-orb-popover-close:active {
+  filter: brightness(0.9);
+}
+
 /* 交互约定（与红灯关闭统一）：× 常显即关闭 affordance，悬浮不变色不变形，直接点即可。 */
 .janus-run-orb-popover-close:hover {
-  color: #999;
-  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--shell-muted);
+  border-color: var(--shell-border);
 }
 
 .janus-run-orb-popover-error {
   margin-bottom: 8px;
   padding: 6px 8px;
-  border-left: 2px solid rgba(255, 95, 87, 0.8);
-  background: rgba(255, 95, 87, 0.08);
-  color: #ffb3ad;
+  border-left: 2px solid var(--shell-diff-del);
+  background: color-mix(in srgb, var(--shell-diff-del) 10%, transparent);
+  color: var(--shell-diff-del);
   font-size: 11px;
   word-break: break-word;
 }
@@ -321,9 +337,9 @@
   align-items: flex-start;
   gap: 8px;
   padding: 7px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--shell-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  background: color-mix(in srgb, var(--shell-text) 3%, transparent);
 }
 
 .janus-run-orb-process:hover .janus-run-orb-stop-one {
@@ -345,7 +361,7 @@
 }
 
 .janus-run-orb-process-meta {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--shell-dim);
   font: 10px ui-monospace, monospace;
 }
 
@@ -353,7 +369,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--shell-muted);
   font: 10px ui-monospace, monospace;
 }
 
@@ -365,7 +381,7 @@
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: #b86b6b;
+  color: var(--shell-diff-del);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
@@ -375,8 +391,8 @@
 .janus-run-orb-stop-one:hover,
 .janus-run-orb-stop-one:focus-visible {
   opacity: 1;
-  border-color: rgba(255, 95, 87, 0.4);
-  background: rgba(255, 88, 88, 0.1);
+  border-color: color-mix(in srgb, var(--shell-diff-del) 45%, transparent);
+  background: color-mix(in srgb, var(--shell-diff-del) 12%, transparent);
 }
 
 .janus-run-orb-arm {
@@ -386,7 +402,7 @@
 }
 
 .janus-run-orb-arm small {
-  color: #ffb3ad;
+  color: var(--shell-diff-del);
   font-size: 10px;
   white-space: nowrap;
 }
@@ -400,16 +416,16 @@
   flex: 1;
   min-height: 28px;
   padding: 5px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--shell-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--shell-text) 5%, transparent);
+  color: var(--shell-text);
   font-size: 12px;
   cursor: pointer;
 }
 
 .janus-run-orb-btn:hover:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: color-mix(in srgb, var(--shell-text) 30%, transparent);
 }
 
 .janus-run-orb-btn:disabled {
@@ -418,13 +434,13 @@
 }
 
 .janus-run-orb-btn--danger {
-  border-color: rgba(255, 95, 87, 0.4);
-  color: #ffb3ad;
+  border-color: color-mix(in srgb, var(--shell-diff-del) 45%, transparent);
+  color: var(--shell-diff-del);
 }
 
 .janus-run-orb-btn--danger:hover:not(:disabled) {
-  border-color: rgba(255, 95, 87, 0.75);
-  background: rgba(255, 88, 88, 0.08);
+  border-color: var(--shell-diff-del);
+  background: color-mix(in srgb, var(--shell-diff-del) 12%, transparent);
 }
 
 .janus-run-orb-btn--ghost {
@@ -436,11 +452,11 @@
   gap: 2px;
   justify-items: center;
   padding: 14px 0 12px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--shell-text);
 }
 
 .janus-run-orb-popover-empty small {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--shell-dim);
   font-size: 11px;
 }
 
@@ -465,10 +481,10 @@
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--shell-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  color: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--shell-text) 3%, transparent);
+  color: var(--shell-text);
   text-align: left;
   cursor: pointer;
 }
@@ -485,7 +501,7 @@
 }
 
 .janus-run-orb-overflow-main small {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--shell-dim);
   font-size: 10px;
 }
 
@@ -498,12 +514,12 @@
 .janus-run-orb-overflow-row .janus-run-orb-btn.is-armed {
   flex-basis: auto;
   padding: 0 10px;
-  border-color: rgba(255, 95, 87, 0.8);
+  border-color: var(--shell-diff-del);
 }
 
 .janus-run-orb-overflow-error {
   grid-column: 1 / -1;
-  color: #ffb3ad;
+  color: var(--shell-diff-del);
   font-size: 10px;
 }
 

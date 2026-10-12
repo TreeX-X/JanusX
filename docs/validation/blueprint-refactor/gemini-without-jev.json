@@ -1,0 +1,754 @@
+{
+  "testedAt": "2026-10-10T03:57:13.308Z",
+  "providerId": "vertex-ai-1782113380280",
+  "modelId": "gemini-3.8-flash",
+  "jev": "not-configured",
+  "outcomes": [
+    {
+      "kind": "module",
+      "scenario": "consistent",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [],
+        "id": "2f38ed21-7721-4cc3-9ec1-0d0c771a25ef",
+        "source": {
+          "noteId": "0c016f50-e5c5-4565-b553-37bfac767416",
+          "path": ".agents/notes/module.md",
+          "hash": "0bd4726c98c9653cbcf56da6452869d0241a10997c72d3e485f34c29f3bde80e",
+          "kind": "module",
+          "lifecycle": "accepted"
+        },
+        "evidence": [
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:49:12.504Z"
+      }
+    },
+    {
+      "kind": "module",
+      "scenario": "contradiction",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [
+          {
+            "id": "7b8e1a3c-4d2f-4e9a-8b1c-9e2a3f4b5c6d",
+            "category": "contradiction",
+            "summary": "Note incorrectly claims enqueue writes to disk and persists across restarts",
+            "explanation": "The note states that the current implementation writes every item to disk before returning and that items survive process restarts. However, the referenced implementation in src/queue.ts stores items only in an in-memory array via queue.push(input), meaning items are volatile and lost on restart. This also contradicts the note's title ('# Volatile queue').",
+            "suggestion": "Update the documentation to accurately reflect that the current queue is an in-memory implementation without persistence, or implement disk persistence in src/queue.ts if persistence is required.",
+            "citations": [
+              {
+                "path": ".agents/notes/module.md",
+                "quote": "The current enqueue implementation writes every item to disk before returning. Items survive process restart today. No persistence work remains."
+              },
+              {
+                "path": "src/queue.ts",
+                "quote": "const queue: string[] = [];\nexport function enqueue(input: string) { queue.push(input) }"
+              }
+            ],
+            "verification": "not-configured",
+            "source": {
+              "noteId": "99c4812f-0221-4e61-9eef-1fd9f09a57ce",
+              "path": ".agents/notes/module.md",
+              "hash": "04e8b5682e8cd7c6e311366b10297c246253930e5944d5a3591ee755d65d9738",
+              "kind": "module",
+              "lifecycle": "accepted"
+            },
+            "evidence": [
+              {
+                "path": "src/queue.ts",
+                "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+              }
+            ],
+            "stale": false
+          }
+        ],
+        "id": "787093ad-4452-4745-937c-292a3fd5407b",
+        "source": {
+          "noteId": "99c4812f-0221-4e61-9eef-1fd9f09a57ce",
+          "path": ".agents/notes/module.md",
+          "hash": "04e8b5682e8cd7c6e311366b10297c246253930e5944d5a3591ee755d65d9738",
+          "kind": "module",
+          "lifecycle": "accepted"
+        },
+        "evidence": [
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:49:25.926Z"
+      }
+    },
+    {
+      "kind": "module",
+      "scenario": "omission",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [
+          {
+            "id": "e4a781b2-13df-4c3e-8fa5-7cf9a0e69812",
+            "category": "omission",
+            "summary": "Queue module note omits required reset behavior description",
+            "explanation": "The requirement specification in reset-policy.md mandates that every queue module description must describe that reset permanently removes all queued strings in the current process, explicitly disallowing merely stating that reset is not described. In module.md, the reset behavior is omitted and explicitly left undescribed.",
+            "suggestion": "Update module.md to describe that reset permanently removes all queued strings in the current process, replacing the statement that reset behavior is not described.",
+            "citations": [
+              {
+                "path": ".agents/notes/module.md",
+                "quote": "Reset behavior is not described here."
+              },
+              {
+                "path": ".agents/notes/reset-policy.md",
+                "quote": "Documentation requirement: every queue module description, queue decision and queue requirement must describe that reset permanently removes all queued strings in the current process. Merely saying reset is not described does not meet this requirement."
+              }
+            ],
+            "verification": "not-configured",
+            "source": {
+              "noteId": "b9bc7715-a049-46d3-af55-873b9b80a1e3",
+              "path": ".agents/notes/module.md",
+              "hash": "1c9c93be00fd979fd58bdd7b7bde53ca2ea3946715499841c27fcbaa0387fc7e",
+              "kind": "module",
+              "lifecycle": "accepted"
+            },
+            "evidence": [
+              {
+                "path": ".agents/notes/reset-policy.md",
+                "hash": "b7f5ac554c9e98bc2158f2da515ad1ecc50baf4a7e44e813f1e9da77fb175660"
+              },
+              {
+                "path": "src/queue.ts",
+                "hash": "98fd9a2774b554f6fc92cecc3b27b9eb0717604d97e6c0034399a9e45e055549"
+              }
+            ],
+            "stale": false
+          }
+        ],
+        "id": "7da82045-6c71-4b05-bcca-0439a6231fd1",
+        "source": {
+          "noteId": "b9bc7715-a049-46d3-af55-873b9b80a1e3",
+          "path": ".agents/notes/module.md",
+          "hash": "1c9c93be00fd979fd58bdd7b7bde53ca2ea3946715499841c27fcbaa0387fc7e",
+          "kind": "module",
+          "lifecycle": "accepted"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/reset-policy.md",
+            "hash": "b7f5ac554c9e98bc2158f2da515ad1ecc50baf4a7e44e813f1e9da77fb175660"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "98fd9a2774b554f6fc92cecc3b27b9eb0717604d97e6c0034399a9e45e055549"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:49:34.897Z"
+      }
+    },
+    {
+      "kind": "module",
+      "scenario": "insufficient",
+      "report": {
+        "coverage": "insufficient",
+        "limitations": [
+          "Source unavailable: src/queue.ts"
+        ],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [],
+        "id": "206dc5ca-6ba1-4491-91ab-6a3316c157da",
+        "source": {
+          "noteId": "e0fe4613-311e-4771-be59-389f62d64982",
+          "path": ".agents/notes/module.md",
+          "hash": "e9d02d891b7e8101e112bf93b73427ec41979ecab1de7bc8c2feeeab48bd5cbf",
+          "kind": "module",
+          "lifecycle": "accepted"
+        },
+        "evidence": [],
+        "stale": false,
+        "createdAt": "2026-10-10T03:49:44.904Z"
+      }
+    },
+    {
+      "kind": "module",
+      "scenario": "planned",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [],
+        "id": "a1cc1d44-b37e-426e-adeb-7412c3206327",
+        "source": {
+          "noteId": "29e4ae08-8b7b-4e83-942e-1656db55b955",
+          "path": ".agents/notes/module.md",
+          "hash": "1015428cbb7816a9ac53cc03b7159fd7167cca93327f385d2628eac748b48fdb",
+          "kind": "module",
+          "lifecycle": "accepted"
+        },
+        "evidence": [
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:49:53.331Z"
+      }
+    },
+    {
+      "kind": "decision",
+      "scenario": "consistent",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [],
+        "id": "28820761-8f3f-4a3e-928c-a91370ed1753",
+        "source": {
+          "noteId": "38f40ab0-7218-478c-8069-4490c5e6e5a9",
+          "path": ".agents/notes/decision.md",
+          "hash": "0bd509e81c9569b037ba788cd591019cf49912ee2c8d61e1eb4515c5c16fc632",
+          "kind": "decision",
+          "lifecycle": "accepted",
+          "module": "note://fdf43f9d-dc52-433e-9cde-79538bde3f34/e25a55e5-87b4-4f06-ba5e-857c1ddf78d1"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "66d531b7262f95f8a09fc1010a2a460bab02879ad14d42f5a3204b4892e2f4e0"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:49:59.393Z"
+      }
+    },
+    {
+      "kind": "decision",
+      "scenario": "contradiction",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [
+          {
+            "id": "e4a7d65b-1c58-48b0-a615-5380277df609",
+            "category": "contradiction",
+            "summary": "Decision note contradicts module specification regarding queue durability and restart behavior",
+            "explanation": "The decision note asserts that 'The current enqueue implementation writes every item to disk before returning. Items survive process restart today. No persistence work remains.' However, the module specification explicitly designates the component as a volatile queue where 'Durable persistence, cross-process use and concurrent writers are outside the scope.' and 'Items are lost on restart by design.'",
+            "suggestion": "Update the decision note to align with the module specification, documenting in-memory volatile queue semantics rather than disk persistence.",
+            "citations": [
+              {
+                "path": ".agents/notes/decision.md",
+                "quote": "The current enqueue implementation writes every item to disk before returning. Items survive process restart today. No persistence work remains."
+              },
+              {
+                "path": ".agents/notes/module.md",
+                "quote": "Durable persistence, cross-process use and concurrent writers are outside the scope."
+              },
+              {
+                "path": ".agents/notes/module.md",
+                "quote": "Items are lost on restart by design."
+              }
+            ],
+            "verification": "not-configured",
+            "source": {
+              "noteId": "9f2a949f-95d0-421f-b482-ca0718e8d461",
+              "path": ".agents/notes/decision.md",
+              "hash": "7d87362eb2b2fc37e4677f97b05e790d1b1b1374a5896c58a03141ce5ff071b8",
+              "kind": "decision",
+              "lifecycle": "accepted",
+              "module": "note://c8e89dbe-bafe-4dee-87d8-625793e2f7e1/cc2d0a1e-0978-4f59-b34f-9168a06538be"
+            },
+            "evidence": [
+              {
+                "path": ".agents/notes/module.md",
+                "hash": "be0775790631d6e5df59f20437261123382537721e9f7064071176403ec02c63"
+              },
+              {
+                "path": "src/queue.ts",
+                "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+              }
+            ],
+            "stale": false
+          }
+        ],
+        "id": "f7c044af-4269-479d-88fd-a3478782128f",
+        "source": {
+          "noteId": "9f2a949f-95d0-421f-b482-ca0718e8d461",
+          "path": ".agents/notes/decision.md",
+          "hash": "7d87362eb2b2fc37e4677f97b05e790d1b1b1374a5896c58a03141ce5ff071b8",
+          "kind": "decision",
+          "lifecycle": "accepted",
+          "module": "note://c8e89dbe-bafe-4dee-87d8-625793e2f7e1/cc2d0a1e-0978-4f59-b34f-9168a06538be"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "be0775790631d6e5df59f20437261123382537721e9f7064071176403ec02c63"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:50:14.353Z"
+      }
+    },
+    {
+      "kind": "decision",
+      "scenario": "omission",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [
+          {
+            "id": "e2f47c34-9d54-4a57-a3cf-7dbd4834e567",
+            "category": "omission",
+            "summary": "Reset behavior is omitted despite explicit documentation requirement",
+            "explanation": "The decision note states 'Reset behavior is not described here.' However, the reset policy documentation requirement explicitly requires every queue decision to state that reset permanently removes all queued strings in the current process, noting specifically that merely stating reset is not described does not meet the requirement.",
+            "suggestion": "Update the decision note to explicitly describe that reset permanently removes all queued strings in the current process.",
+            "citations": [
+              {
+                "path": ".agents/notes/decision.md",
+                "quote": "Reset behavior is not described here."
+              },
+              {
+                "path": ".agents/notes/reset-policy.md",
+                "quote": "Documentation requirement: every queue module description, queue decision and queue requirement must describe that reset permanently removes all queued strings in the current process. Merely saying reset is not described does not meet this requirement."
+              }
+            ],
+            "verification": "not-configured",
+            "source": {
+              "noteId": "719d68d8-0609-4ef3-b48e-eb0fc0077a2f",
+              "path": ".agents/notes/decision.md",
+              "hash": "8cabf83c3729fe8b441dbae8833bae3b98ca33a2ee766a6c0e4d50cd3ca85fa9",
+              "kind": "decision",
+              "lifecycle": "accepted",
+              "module": "note://671cf405-c98a-47a4-86d6-749bc9f15790/08d091e6-d98e-4ea6-9c2f-0f00df4a5986"
+            },
+            "evidence": [
+              {
+                "path": ".agents/notes/module.md",
+                "hash": "70c0c2d0ddf11ea81c357f04e51a75340ed66bef23aaeadec55571dd830e6a88"
+              },
+              {
+                "path": ".agents/notes/reset-policy.md",
+                "hash": "310d0c2d0cd2918c3d841e7d6ec8a7cb8deb1a3a8629ecc99113769d140dff74"
+              },
+              {
+                "path": "src/queue.ts",
+                "hash": "98fd9a2774b554f6fc92cecc3b27b9eb0717604d97e6c0034399a9e45e055549"
+              }
+            ],
+            "stale": false
+          }
+        ],
+        "id": "01008840-b5cb-47a2-b454-d7f8bc933ac9",
+        "source": {
+          "noteId": "719d68d8-0609-4ef3-b48e-eb0fc0077a2f",
+          "path": ".agents/notes/decision.md",
+          "hash": "8cabf83c3729fe8b441dbae8833bae3b98ca33a2ee766a6c0e4d50cd3ca85fa9",
+          "kind": "decision",
+          "lifecycle": "accepted",
+          "module": "note://671cf405-c98a-47a4-86d6-749bc9f15790/08d091e6-d98e-4ea6-9c2f-0f00df4a5986"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "70c0c2d0ddf11ea81c357f04e51a75340ed66bef23aaeadec55571dd830e6a88"
+          },
+          {
+            "path": ".agents/notes/reset-policy.md",
+            "hash": "310d0c2d0cd2918c3d841e7d6ec8a7cb8deb1a3a8629ecc99113769d140dff74"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "98fd9a2774b554f6fc92cecc3b27b9eb0717604d97e6c0034399a9e45e055549"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:50:23.049Z"
+      }
+    },
+    {
+      "kind": "decision",
+      "scenario": "insufficient",
+      "report": {
+        "coverage": "insufficient",
+        "limitations": [
+          "Source unavailable: src/queue.ts"
+        ],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [
+          {
+            "id": "7b8e5c1d-4f3a-4e2b-9a1c-8d7e6f5a4b3c",
+            "category": "insufficient",
+            "summary": "The decision does not specify the chosen queue semantics or rationale.",
+            "explanation": "The Decision section asserts that durability behavior cannot be established without reading the source code, omitting what queue semantics were actually decided upon, under what conditions they apply, and the rationale for the choice.",
+            "suggestion": "Explicitly state the chosen durability semantics (e.g., in-memory volatile queue where items are lost on process exit) and document the rationale and operating boundaries directly in the decision record.",
+            "citations": [
+              {
+                "path": ".agents/notes/decision.md",
+                "quote": "The durability implementation is owned by the referenced queue source. Its behavior cannot be established without reading that source."
+              }
+            ],
+            "verification": "not-configured",
+            "source": {
+              "noteId": "a4dce87c-8d65-45f8-9f73-0c2b1a0412d1",
+              "path": ".agents/notes/decision.md",
+              "hash": "be9385111d1b52831c11d636e3f92da1983ca8da43c032f3b267fd2b4df05781",
+              "kind": "decision",
+              "lifecycle": "accepted",
+              "module": "note://1f64af08-d1ae-44b4-a9dc-2ae5aa5eb26e/b39038c0-0d7d-4887-96d2-9ca7ca388dac"
+            },
+            "evidence": [
+              {
+                "path": ".agents/notes/module.md",
+                "hash": "c725de58cbb44b499020fa4cf68a5e7b1bca81d41f444c4b5aaf75814554082c"
+              }
+            ],
+            "stale": false
+          }
+        ],
+        "id": "a870cd83-30da-45a5-82ab-0fb9335d4108",
+        "source": {
+          "noteId": "a4dce87c-8d65-45f8-9f73-0c2b1a0412d1",
+          "path": ".agents/notes/decision.md",
+          "hash": "be9385111d1b52831c11d636e3f92da1983ca8da43c032f3b267fd2b4df05781",
+          "kind": "decision",
+          "lifecycle": "accepted",
+          "module": "note://1f64af08-d1ae-44b4-a9dc-2ae5aa5eb26e/b39038c0-0d7d-4887-96d2-9ca7ca388dac"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "c725de58cbb44b499020fa4cf68a5e7b1bca81d41f444c4b5aaf75814554082c"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:50:39.583Z"
+      }
+    },
+    {
+      "kind": "decision",
+      "scenario": "planned",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [],
+        "id": "f7186215-8236-4172-b821-fe55ed0d7e4e",
+        "source": {
+          "noteId": "e655007c-45e4-4681-9919-244d5136b178",
+          "path": ".agents/notes/decision.md",
+          "hash": "f3601cb52171014b0d1349414a40ed1cec40a1811413fb80a0edd8631e622444",
+          "kind": "decision",
+          "lifecycle": "accepted",
+          "module": "note://f5d8b990-a740-4342-b35e-2ad38ca560ab/6e2ff613-5a2d-4d5e-a3b2-46be03b3a045"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "a194c2927c72427499b261afc621db0c654223816a1dd0f103f30f19f0833fc4"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:51:01.751Z"
+      }
+    },
+    {
+      "kind": "requirement",
+      "scenario": "consistent",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [],
+        "id": "bcd5d481-310d-4f39-b4ed-2b87fb564d00",
+        "source": {
+          "noteId": "3eb6a359-73a8-4520-a07a-59465fe3fb88",
+          "path": ".agents/notes/requirement.md",
+          "hash": "c8d640df5752b9d7c88926c04e7d21f1ed36f053524fdc3c5dd861d8d1c57693",
+          "kind": "requirement",
+          "lifecycle": "accepted",
+          "module": "note://ceb0b265-8a5b-467f-8cb7-91f2a29b6594/98a5e925-c81a-4361-bc1e-65ff392958b5"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "e5fb6fe8ecea2833f8bce64b12788ea24c07aaebdb417356154836e0ee370917"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:51:29.605Z"
+      }
+    },
+    {
+      "kind": "requirement",
+      "scenario": "contradiction",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [
+          {
+            "id": "c6204b86-905c-444a-a92c-62b16ee009c9",
+            "category": "contradiction",
+            "summary": "Requirement states enqueue writes to disk and survives restart, contradicting the module specification",
+            "explanation": "The requirement asserts that the queue writes every item to disk and survives process restart. However, the parent module explicitly defines the queue as a volatile, process-local in-memory queue where durable persistence is outside the scope and items are lost on restart by design.",
+            "suggestion": "Update the requirement note to reflect the volatile in-memory behavior specified by the parent module, or revise the module's scope and design if persistence is actually intended.",
+            "citations": [
+              {
+                "path": ".agents/notes/requirement.md",
+                "quote": "The current enqueue implementation writes every item to disk before returning. Items survive process restart today. No persistence work remains."
+              },
+              {
+                "path": ".agents/notes/module.md",
+                "quote": "Durable persistence, cross-process use and concurrent writers are outside the scope."
+              },
+              {
+                "path": ".agents/notes/module.md",
+                "quote": "Items are lost on restart by design."
+              }
+            ],
+            "verification": "not-configured",
+            "source": {
+              "noteId": "037699b3-e005-4af0-b780-19d3595381f0",
+              "path": ".agents/notes/requirement.md",
+              "hash": "be2bd6098e10a5d47b2d3d96f0fc1365d17df7a60f6c4794bd08705c8fc99b28",
+              "kind": "requirement",
+              "lifecycle": "accepted",
+              "module": "note://b2b224e2-a883-4d62-b7d5-c6c2e764af67/097171a1-29c0-4cc7-bcba-a012a5972c0a"
+            },
+            "evidence": [
+              {
+                "path": ".agents/notes/module.md",
+                "hash": "c0d7ac5041cd2690389ab37cb363425bc3aa0f1f58d900e38ddc6f9a1642c212"
+              },
+              {
+                "path": "src/queue.ts",
+                "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+              }
+            ],
+            "stale": false
+          }
+        ],
+        "id": "d96b6a21-e877-4a0a-b73c-7526c570d1de",
+        "source": {
+          "noteId": "037699b3-e005-4af0-b780-19d3595381f0",
+          "path": ".agents/notes/requirement.md",
+          "hash": "be2bd6098e10a5d47b2d3d96f0fc1365d17df7a60f6c4794bd08705c8fc99b28",
+          "kind": "requirement",
+          "lifecycle": "accepted",
+          "module": "note://b2b224e2-a883-4d62-b7d5-c6c2e764af67/097171a1-29c0-4cc7-bcba-a012a5972c0a"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "c0d7ac5041cd2690389ab37cb363425bc3aa0f1f58d900e38ddc6f9a1642c212"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:52:58.717Z"
+      }
+    },
+    {
+      "kind": "requirement",
+      "scenario": "omission",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [
+          {
+            "id": "e2a1e7b2-3837-4d76-b51c-43f11d1cfc7c",
+            "category": "omission",
+            "summary": "Reset behavior specification is omitted from queue requirement",
+            "explanation": "The documentation requirement in reset-policy.md mandates that every queue requirement must specify that reset permanently removes all queued strings in the current process, explicitly stating that declaring reset is not described does not satisfy the requirement. The requirement note fails to include this specification and instead states that reset behavior is not described.",
+            "suggestion": "Update the requirement note to specify that reset permanently removes all queued strings in the current process.",
+            "citations": [
+              {
+                "path": ".agents/notes/requirement.md",
+                "quote": "Reset behavior is not described here."
+              },
+              {
+                "path": ".agents/notes/reset-policy.md",
+                "quote": "every queue module description, queue decision and queue requirement must describe that reset permanently removes all queued strings in the current process. Merely saying reset is not described does not meet this requirement."
+              }
+            ],
+            "verification": "not-configured",
+            "source": {
+              "noteId": "1fd39ba3-5cef-4153-97ef-31c63e7b6bd5",
+              "path": ".agents/notes/requirement.md",
+              "hash": "d419a85f24c6551c68f1503d9224a6bf6ed159ba374526f67cfcee5ae9a42873",
+              "kind": "requirement",
+              "lifecycle": "accepted",
+              "module": "note://7e0ed971-3a92-4df3-9109-63ae189a7253/9700bdee-680f-49b2-93d5-6188e8aa1502"
+            },
+            "evidence": [
+              {
+                "path": ".agents/notes/module.md",
+                "hash": "3f0a2f4af80f518079ff62a813eb98305fe2e043f633ab32fae623e10ec4d4c2"
+              },
+              {
+                "path": ".agents/notes/reset-policy.md",
+                "hash": "1786bfb044c188f0ac701bf369e80c323484b5149e68cb6dca1d25fa9e72e29a"
+              },
+              {
+                "path": "src/queue.ts",
+                "hash": "98fd9a2774b554f6fc92cecc3b27b9eb0717604d97e6c0034399a9e45e055549"
+              }
+            ],
+            "stale": false
+          }
+        ],
+        "id": "e802b055-1048-4056-9f9f-3d9591ca08b7",
+        "source": {
+          "noteId": "1fd39ba3-5cef-4153-97ef-31c63e7b6bd5",
+          "path": ".agents/notes/requirement.md",
+          "hash": "d419a85f24c6551c68f1503d9224a6bf6ed159ba374526f67cfcee5ae9a42873",
+          "kind": "requirement",
+          "lifecycle": "accepted",
+          "module": "note://7e0ed971-3a92-4df3-9109-63ae189a7253/9700bdee-680f-49b2-93d5-6188e8aa1502"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "3f0a2f4af80f518079ff62a813eb98305fe2e043f633ab32fae623e10ec4d4c2"
+          },
+          {
+            "path": ".agents/notes/reset-policy.md",
+            "hash": "1786bfb044c188f0ac701bf369e80c323484b5149e68cb6dca1d25fa9e72e29a"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "98fd9a2774b554f6fc92cecc3b27b9eb0717604d97e6c0034399a9e45e055549"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:54:18.068Z"
+      }
+    },
+    {
+      "kind": "requirement",
+      "scenario": "insufficient",
+      "error": "Error",
+      "message": "Review model response was incomplete"
+    },
+    {
+      "kind": "requirement",
+      "scenario": "planned",
+      "report": {
+        "coverage": "complete",
+        "limitations": [],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [],
+        "id": "7fd16bb3-8df7-42bb-bfc3-afb505c3f626",
+        "source": {
+          "noteId": "34afffdf-d34b-48b0-8ebe-34331da132e7",
+          "path": ".agents/notes/requirement.md",
+          "hash": "c77b99729a7244b906266f624f616b2df59f7261d76041e99396969e9092b814",
+          "kind": "requirement",
+          "lifecycle": "accepted",
+          "module": "note://997a166b-db09-4b6e-90cd-24b787b07dc2/f04e74f4-6ec4-42fe-99e8-242c5cb394a9"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "4a466c56dd22a3e00f0438f85493eddc7a925497287f9279e6db044313921b2c"
+          },
+          {
+            "path": "src/queue.ts",
+            "hash": "dc47f39fb399882e056359d63be8448cbf84f0227c9806bf8c45f6155dd1aa01"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:57:13.123Z"
+      }
+    }
+  ]
+}

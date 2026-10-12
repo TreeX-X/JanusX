@@ -11,14 +11,11 @@ beforeAll(async () => {
     import React from 'react'; import {createRoot} from 'react-dom/client'; import i18n from 'i18next'; import {initReactI18next} from 'react-i18next'
     import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'; import settings from './src/renderer/src/i18n/locales/en/settings.json'; import common from './src/renderer/src/i18n/locales/en/common.json'
     import {AssistantTool} from './src/renderer/src/components/knowledge/AssistantTool'
-    import {KnowledgeWorkbench} from './src/renderer/src/components/knowledge/KnowledgeWorkbench'
-    import {ExternalMcpPanel} from './src/renderer/src/components/ExternalMcpPanel'
+    import {PersonalMemoryWorkbench} from './src/renderer/src/components/knowledge/PersonalMemoryWorkbench'
     import {useExperimentalStore} from './src/renderer/src/stores/experimental'
     import {useAssistantStore} from './src/renderer/src/stores/assistant'
     import {useRightToolStore} from './src/renderer/src/stores/right-tools'
-    import {refreshKnowledgeAutomation} from './src/renderer/src/services/knowledge-automation'
     window.calls=[];window.features=useExperimentalStore;window.assistant=useAssistantStore;window.dock=useRightToolStore
-    window.refreshAutomation=refreshKnowledgeAutomation
     window.settingsRequested=0;window.addEventListener('janusx:open-knowledge-settings',()=>window.settingsRequested++)
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true,load:async()=>{}})
     const candidate=(id,scope)=>({id,type:'fact',status:'proposed',derivation:'deterministic',evidence:{observationIds:[]},fact:{id,content:id,kind:'preference',scope,confidence:0.9,tags:[],concepts:[],provenance:{workspaceId:scope==='user'?'user':'project',sourceObservationIds:[],fileRefs:[],createdAt:'2026-10-04'}}})
@@ -40,7 +37,7 @@ beforeAll(async () => {
     window.seedReview=()=>window.reviewItems=[candidate('Engineering review item','project'),candidate('Personal review one','user'),candidate('Personal review two','user')]
     i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge,settings,common}},interpolation:{escapeValue:false}}).then(()=>{
       const root=createRoot(document.getElementById('root'))
-      window.show=mode=>{if(mode==='board'){useAssistantStore.setState({workbenchDomain:'personal'});root.render(<KnowledgeWorkbench isOpen onClose={()=>root.render(null)}/>)}else if(mode==='mcp')root.render(<ExternalMcpPanel/>);else root.render(<AssistantTool active workspaceId={null} workspacePath={null}/>)}
+      window.show=mode=>{if(mode==='board'){useAssistantStore.setState({workbenchDomain:'personal'});root.render(<PersonalMemoryWorkbench isOpen onClose={()=>root.render(null)}/>)}else root.render(<AssistantTool active workspaceId={null} workspacePath={null}/>)}
       window.show(window.mode)
     })
   ` }, loader: { '.svg': 'dataurl' }, bundle: true, write: false, outfile: 'assistant-ui.js', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'i18n-fixture', setup(builder) {
@@ -56,11 +53,11 @@ it.each(['dark', 'planche'])('uses session-style underline tabs with keyboard na
     await mount(page, 'assistant')
     await page.evaluate(theme => { document.documentElement.dataset.theme = theme }, theme)
     const tabs = page.getByRole('tablist')
-    const first = tabs.getByRole('tab', { name: 'Knowledge', exact: true })
+    const first = tabs.getByRole('tab', { name: 'Profile', exact: true })
     await first.focus()
     await page.keyboard.press('ArrowRight')
-    expect(await tabs.getByRole('tab', { name: 'Profile', exact: true }).getAttribute('aria-selected')).toBe('true')
-    await page.getByRole('tabpanel', { name: 'Profile', exact: true }).waitFor()
+    expect(await tabs.getByRole('tab', { name: 'Review', exact: true }).getAttribute('aria-selected')).toBe('true')
+    await page.getByRole('tabpanel', { name: 'Review', exact: true }).waitFor()
     await page.keyboard.press('End')
     expect(await tabs.getByRole('tab', { name: 'Review', exact: true }).getAttribute('aria-selected')).toBe('true')
     await page.keyboard.press('Home')
@@ -83,6 +80,7 @@ async function mount(page: Page, mode: string) {
   await page.addStyleTag({ content: css + '\n*{box-sizing:border-box}body{margin:0}#root{height:100vh}:root{--shell-accent:#ff7830;--text:#ddd;--text-secondary:#bbb;--text-dim:#888;--border:#333}' })
   await page.evaluate(value => { (window as any).mode = value }, mode)
   await page.addScriptTag({ content: script })
+  await page.waitForFunction(() => typeof window.show === 'function')
 }
 it('combines three sections and follows independent switches and legacy review jumps', async () => {
   const page = await browser.newPage({ viewport: { width: 320, height: 800 } })
@@ -99,7 +97,7 @@ it('combines three sections and follows independent switches and legacy review j
     await page.evaluate(() => (window as any).features.setState({persona:false}))
     expect(await page.getByRole('region',{name:'Assistant',exact:true}).count()).toBe(0)
     await page.evaluate(() => (window as any).features.setState({knowledge:true}))
-    await page.getByRole('tab', { name: 'Knowledge',exact:true}).waitFor()
+    expect(await page.getByRole('tab', { name: 'Knowledge',exact:true}).count()).toBe(0)
     expect(await page.getByRole('tab', { name: 'Profile',exact:true}).count()).toBe(0)
   } finally { await page.close() }
 })
@@ -112,7 +110,7 @@ it('uses the full workbench for searchable memory cards, readable details and na
     await page.evaluate(() => document.documentElement.dataset.theme='dark')
     await page.waitForTimeout(350)
     await page.screenshot({path:'artifacts/memory-domain-acceptance/personal-board-overview.png'})
-    const shell = page.getByRole('region',{name:'Knowledge & memory'})
+    const shell = page.getByRole('region',{name:'Personal profile'})
     expect((await shell.boundingBox())!.width).toBeGreaterThan(1300)
     await page.getByRole('searchbox').fill('explicit')
     await page.getByRole('button').filter({hasText:'Prefer explicit error handling'}).click()
@@ -137,29 +135,12 @@ it('shares the workbench shell across domains, isolates review queues and shows 
     await mount(page, 'board')
     await page.getByRole('searchbox').waitFor()
     await page.evaluate(() => { (window as any).seedReview(); document.documentElement.dataset.theme = 'dark' })
-    const shell = page.getByRole('region', { name: 'Knowledge & memory', exact: true })
-    const before = (await shell.boundingBox())!
-    const domains = page.getByRole('navigation', { name: 'Knowledge & memory', exact: true })
-    await page.evaluate(() => (window as any).delayCandidates = true)
-    await domains.getByRole('button', { name: 'Project knowledge', exact: true }).click()
-    await page.getByRole('status', { name: 'Loading knowledge records' }).waitFor()
-    expect(await page.getByRole('group', { name: 'Memory scope' }).count()).toBe(0)
-    await page.evaluate(() => { (window as any).delayCandidates = false; (window as any).finishCandidates() })
-    await page.getByRole('button').filter({ hasText: 'Engineering review item' }).waitFor()
-    await page.getByRole('button').filter({ hasText: 'Engineering review item' }).click()
-    await page.getByRole('article').waitFor()
-    expect(await page.getByText('Personal review one', { exact: true }).count()).toBe(0)
-    const after = (await shell.boundingBox())!
-    expect(after).toEqual(before)
-    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/unified-engineering.png', animations: 'disabled' })
-    await domains.getByRole('button', { name: 'Project knowledge', exact: true }).focus()
-    await page.keyboard.press('Escape')
-    await expect.poll(() => page.getByRole('article').count()).toBe(0)
-    expect(await shell.isVisible()).toBe(true)
-    await domains.getByRole('button', { name: 'Personal profile', exact: true }).click()
-    await page.getByRole('searchbox').waitFor()
+    const shell = page.getByRole('region', { name: 'Personal profile', exact: true })
+    await page.evaluate(() => (window).delayCandidates = true)
     await page.getByRole('navigation', { name: 'Personal profile', exact: true }).getByRole('button', { name: 'Personal memory review', exact: true }).click()
-    await page.getByText('Personal review one', { exact: true }).waitFor()
+    await page.getByRole('status').waitFor({ state: 'attached' })
+    await page.evaluate(() => { window.delayCandidates = false; window.finishCandidates() })
+    await page.getByRole('heading', { name: 'Personal review one', exact: true }).waitFor()
     const cards = page.getByRole('article')
     expect(await cards.count()).toBe(2)
     const first = (await cards.nth(0).boundingBox())!
@@ -173,9 +154,6 @@ it('shares the workbench shell across domains, isolates review queues and shows 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/unified-review-narrow.png', animations: 'disabled' })
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await domains.getByRole('button', { name: 'Project knowledge', exact: true }).click()
-    await page.getByRole('button').filter({ hasText: 'Engineering review item' }).waitFor()
-    expect(await page.locator('main[data-domain="engineering"]').evaluate(element => element.getAnimations({ subtree: true }).some(animation => animation.playState === 'running' && ['memory-content-in', 'knowledge-workbench-in'].some(name => (animation as CSSAnimation).animationName?.includes(name))))).toBe(false)
   } finally { await page.close() }
 })
 
@@ -198,58 +176,8 @@ it('keeps sidebar profile editing and compact review usable at 320 pixels', asyn
     expect(await page.evaluate(() => (window as any).calls.at(-1))).toMatchObject({ expectedHash: 'profile-hash', overrides: { identity: 'Updated identity' } })
     await page.evaluate(() => { (window as any).seedReview(); document.documentElement.dataset.theme = 'planche' })
     await page.getByRole('tab', { name: 'Review', exact: true }).click()
-    await page.getByText('Personal review one', { exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Personal review one', exact: true }).waitFor()
     await page.screenshot({ path: 'artifacts/memory-domain-acceptance/assistant-review-compact.png', animations: 'disabled' })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  } finally { await page.close() }
-})
-
-it('keeps automation compact above review cards and routes actions to records and settings', async () => {
-  const page = await browser.newPage({ viewport: { width: 320, height: 850 } })
-  try {
-    await mount(page, 'assist')
-    await page.evaluate(async () => { (window as any).seedReview(); (window as any).autoEnabled = true; document.documentElement.dataset.theme = 'dark'; await (window as any).refreshAutomation() })
-    await page.getByRole('tab', { name: 'Review', exact: true }).click()
-    const automation = page.getByRole('region', { name: 'Automation progress', exact: true })
-    await automation.getByText('Automation enabled · waiting for new material', { exact: true }).waitFor()
-    expect(await automation.getByRole('button', { name: 'Run once now', exact: true }).count()).toBe(0)
-    expect(await automation.locator('details').count()).toBe(0)
-    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
-    await page.getByRole('article').first().waitFor()
-    const controlBounds = (await automation.boundingBox())!
-    const cardBounds = (await page.getByRole('article').first().boundingBox())!
-    expect(controlBounds.height).toBeLessThanOrEqual(64)
-    expect(cardBounds.y - controlBounds.y - controlBounds.height).toBeGreaterThanOrEqual(13)
-    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/automation-background-sidebar.png', animations: 'disabled' })
-    await automation.getByRole('button', { name: 'View records', exact: true }).click()
-    expect(await page.evaluate(() => (window as any).assistant.getState().automationView)).toBe('processing')
-    await page.getByRole('tab', { name: 'Profile', exact: true }).click()
-    await page.evaluate(async () => { (window as any).autoEnabled = false; document.documentElement.dataset.theme = 'planche'; await (window as any).refreshAutomation() })
-    await page.getByRole('tab', { name: 'Review', exact: true }).click()
-    await automation.getByText('Automatic processing is off', { exact: true }).waitFor()
-    await automation.getByRole('button', { name: 'Automation settings', exact: true }).click()
-    expect(await page.evaluate(() => (window as any).assistant.getState().automationView)).toBe('settings')
-    expect(await page.evaluate(() => (window as any).calls)).toEqual([])
-    await page.screenshot({ path: 'artifacts/memory-domain-acceptance/automation-paused-sidebar.png', animations: 'disabled' })
-  } finally { await page.close() }
-})
-
-it('allows stale client repair and distinguishes service checks from client verification', async () => {
-  const page = await browser.newPage()
-  try {
-    await mount(page,'mcp')
-    await page.getByRole('button',{name:'Update configuration',exact:true}).click()
-    expect(await page.evaluate(() => (window as any).calls)).toEqual(['codex'])
-    await page.getByRole('button',{name:'Test service connection',exact:true}).click()
-    await page.getByText('Service handshake, five tools and query passed. External client connection is not verified.',{exact:true}).waitFor()
-    expect(await page.getByText('Client MCP integration is not verified. No configuration will be written.',{exact:true}).count()).toBe(3)
-    expect(await page.locator('img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0))).toBe(true)
-    await page.setViewportSize({width:800,height:1000})
-    await page.evaluate(() => document.documentElement.dataset.theme='dark')
-    await page.screenshot({path:'artifacts/memory-domain-acceptance/mcp-settings-cards-dark.png',fullPage:true})
-    await page.setViewportSize({width:420,height:800})
-    await page.evaluate(() => document.documentElement.dataset.theme='planche')
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await page.screenshot({path:'artifacts/memory-domain-acceptance/mcp-settings-cards-planche.png',fullPage:true})
   } finally { await page.close() }
 })

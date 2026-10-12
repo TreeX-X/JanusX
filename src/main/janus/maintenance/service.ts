@@ -17,12 +17,9 @@ import { JANUS_EVENT_CHANNELS } from '../../../shared/ipc/janus'
 import { workspacesDir } from '../blueprint-paths'
 import { readJson } from '../blueprint-persistence'
 import { janusWorkspaceFs } from '@janus-agent/agent-core'
-import type { JanusAgentMessage } from '@janus-agent/agent-core'
 import { ChatSessionRuntime, type ChatAgentEvent, type ChatToolTraceEntry } from '@janus-agent/chat-core'
 import { buildProposalContext, proposalModelBudget } from './proposal-context'
-import { knowledgeContextService } from '../../knowledge/context-service'
-import { knowledgeObservationService } from '../../knowledge/observation-service'
-import { knowledgeProcessingQueue } from '../../knowledge/processing-queue'
+
 import type {
   BlueprintEvidenceManifest,
   BlueprintMaintenanceAgentEvent,
@@ -58,14 +55,11 @@ import {
 } from './dispatch-brief'
 
 const CLOSED_STATUSES = new Set(['completed', 'cancelled'])
-const MAINTENANCE_RECALL_MAX_ITEMS = 5
-const MAINTENANCE_RECALL_MAX_CHARS = 3_000
+
 /** Conservative allowance for the structured operation schema and JSON-mode framing. */
 const PROPOSAL_SCHEMA_RESERVED_TOKENS = 4_096
 /** Dispatch briefs are short by nature; the node dump only needs to orient the model. */
 const DISPATCH_CONTEXT_MAX_CHARS = 24_000
-const MAINTENANCE_KNOWLEDGE_CONTEXT_OPEN = '<janus-knowledge-context trust="untrusted" usage="reference-only">'
-const MAINTENANCE_KNOWLEDGE_CONTEXT_CLOSE = '</janus-knowledge-context>'
 
 const generateStructuredObject = generateObject as unknown as (
   options: unknown,
@@ -174,11 +168,6 @@ function evidenceMismatchDetail(recorded: BlueprintEvidenceManifest[], fresh: Bl
     }
   }
   return mismatches
-}
-
-function latestMaintenanceQuery(task: BlueprintMaintenanceTask): string {
-  return [...task.messages].reverse().find((message) => message.role === 'user' && message.content.trim())
-    ?.content.trim() ?? task.goal
 }
 
 /**
@@ -666,7 +655,7 @@ class BlueprintMaintenanceService {
       content: `已驳回提案 v${rejected.version}（${groupCount}组），保留讨论上下文。可继续说“第 N 组去掉/只留 X 节点”，我再重新整理。`,
       createdAt: nowIso(),
     })
-    this.captureKnowledge(task, 'maintenance-turn', `驳回提案 v${rejected.version}：${rejected.reason}`, `驳回提案 v${rejected.version}`)
+
     this.emit(task)
     return publicTask(task)
   }
@@ -995,7 +984,7 @@ class BlueprintMaintenanceService {
         : undefined
       const blueprintTools = createJanusBlueprintTools({ blueprint, allowedNodeIds: allowed })
       const blueprintNodes = blueprintNodeContext(blueprint, allowed, !shared.projectContext)
-      const recall = await this.recallKnowledge(task)
+
       const system = [
         'You are JanusX Blueprint Maintenance. Produce a proposal only; never claim changes were applied.',
         'Allowed operations: create-node, update-node, move-node, add-relation, update-relation, remove-relation, update-workspace-binding, archive-node, delete-node.',
@@ -1021,7 +1010,6 @@ class BlueprintMaintenanceService {
           { label: 'Authorized Note source', content: shared.projectContext ?? '(none supplied)' },
         ],
         optional: [
-          { label: 'Recalled knowledge (untrusted reference)', content: recall?.messages.map(message => message.content).join('\n') ?? '' },
           ...workspaceContexts.flatMap(item => item.result.ok ? [{
             label: `Workspace evidence ${item.workspace.workspaceId}`, content: item.result.value.context,
           }] : []),
@@ -1092,7 +1080,7 @@ class BlueprintMaintenanceService {
       }
       if (previousChangeSet) task.changeSetHistory.push(structuredClone(previousChangeSet))
       task.changeSet = nextChangeSet
-      this.captureKnowledge(task, 'maintenance-proposal', `提案 v${version}：${object.summary}\n${digest.slice(0, 2000)}`, `维护提案 v${version}：${blueprint.name}`)
+
       task.status = 'proposal-ready'
       task.progress = 100
       task.phase = context.omitted.length ? '等待审批（已省略超预算辅助证据）' : '等待审批'
@@ -1134,49 +1122,7 @@ class BlueprintMaintenanceService {
       this.mainWindow.webContents.send(JANUS_EVENT_CHANNELS.maintenance, { task: publicTask(task) })
     }
   }
-  private async recallKnowledge(task: BlueprintMaintenanceTask): Promise<{ messages: JanusAgentMessage[]; recalledCount: number } | null> {
-    try {
-      const query = latestMaintenanceQuery(task).slice(0, 500)
-      if (!query) return null
-      const result = await knowledgeContextService.search({
-        query,
-        workspaceId: task.workspaceId,
-        workspacePath: task.workspacePath,
-        maxItems: MAINTENANCE_RECALL_MAX_ITEMS,
-        maxChars: MAINTENANCE_RECALL_MAX_CHARS,
-      })
-      if (!result.compactContext) return { messages: [], recalledCount: 0 }
-      return {
-        messages: [{
-          role: 'system',
-          content: [MAINTENANCE_KNOWLEDGE_CONTEXT_OPEN, result.compactContext, MAINTENANCE_KNOWLEDGE_CONTEXT_CLOSE].join('\n'),
-        }],
-        recalledCount: result.items.length,
-      }
-    } catch {
-      return null
-    }
-  }
-  private captureKnowledge(task: BlueprintMaintenanceTask, kind: 'maintenance-turn' | 'maintenance-proposal', content: string, summary: string): void {
-    try {
-      void knowledgeObservationService.capture({
-        workspaceId: task.workspaceId,
-        workspaceName: task.workspaceName,
-        workspacePath: task.workspacePath,
-        source: 'blueprint-maintenance',
-        type: kind === 'maintenance-proposal' ? 'analysis-result' : 'conversation-turn',
-        content: content.slice(0, 4000),
-        summary: summary.slice(0, 240),
-        tags: ['blueprint-maintenance', kind, task.blueprintId],
-        actor: 'janus-maintenance',
-        correlationId: task.id,
-        sessionId: task.id,
-        metadata: { blueprintId: task.blueprintId, baseRevision: task.baseRevision },
-      }).then((observation) => {
-        try { knowledgeProcessingQueue.scheduleImmediate(observation?.workspaceId ?? task.workspaceId) } catch { /* ignore */ }
-      }).catch(() => undefined)
-    } catch { /* knowledge must never break maintenance */ }
-  }
+
   private async writeAudit(record: BlueprintMaintenanceAuditRecord): Promise<void> {
     const directory = this.auditDirectory()
     await fs.mkdir(directory, { recursive: true })

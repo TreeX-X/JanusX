@@ -7,12 +7,14 @@
   "created": "2026-10-06",
   "class": "bug-fix",
   "tags": ["memory","persona","automation","review","audit","graph","ui"],
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-10T06:17:38.649Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-528027d0e5cf"
 }
 ---
 
 # 知识库噪声过滤、审核详情、图谱与运行状态优化
+
+当前适用性：工程生成 Wiki、图谱、检索和自动化已随蓝图重构退出；下文相关设计及验收保留为当时记录，源码链接固定到退出前 Git 版本。个人及共享能力的当前边界见[模块入口](../module.md)。原验收编号、执行与评审记录不被此次退出改写为新版本通过。
 
 ## Problem
 
@@ -30,9 +32,9 @@
 
 初次排查时，[习惯聚合](../../../../src/main/knowledge/habit-aggregator.ts)仅按 Jaccard 相似度至少 0.6、不同来源事件至少 3 次形成候选，缺少偏好语义准入。通知模板因此构成伪习惯；来源集合变化还会生成不同候选 ID。[确定性提取](../../../../src/main/knowledge/deterministic-extractor.ts)跨批次读取历史用户证据，工程来源在 inferEngineeringHabits 允许时进入个人候选，是该样例的直接通路。[个人会话采集](../../../../src/main/knowledge/user-turn-capture.ts)也需排除运行通知，但本机该样例没有证实来自个人近期记忆。
 
-S3 之前的基线中，[自动化状态组件](../../../../src/renderer/src/components/knowledge/AutomationStatus.tsx)通过共享订阅每 5 秒读取状态，已有启用、运行、队列及阶段提示。[右侧助手](../../../../src/renderer/src/components/knowledge/AssistantTool.tsx)只在审核子页通过 MemoryReviewTool 挂载此组件，工程检索和个人画像子页没有持续可见的工程运行摘要。知识库工程页已有状态卡，但同时展示旧处理队列与新自动化状态。配置启用、实际忙碌、等待审核的层级不够清楚，正在处理的对象没有在摘要中出现。[服务状态](../../../../src/main/knowledge/automation-service.ts)的 subject 多数为 observation/candidate ID，直接展示该字段也不能解决可读性问题。
+S3 之前的基线中，[自动化状态组件](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/AutomationStatus.tsx)通过共享订阅每 5 秒读取状态，已有启用、运行、队列及阶段提示。[右侧助手](../../../../src/renderer/src/components/knowledge/AssistantTool.tsx)只在审核子页通过 MemoryReviewTool 挂载此组件，工程检索和个人画像子页没有持续可见的工程运行摘要。知识库工程页已有状态卡，但同时展示旧处理队列与新自动化状态。配置启用、实际忙碌、等待审核的层级不够清楚，正在处理的对象没有在摘要中出现。[服务状态](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/main/knowledge/automation-service.ts)的 subject 多数为 observation/candidate ID，直接展示该字段也不能解决可读性问题。
 
-S3 基线的 AuditList（位于 [KnowledgeWorkbench.tsx](../../../../src/renderer/src/components/knowledge/KnowledgeWorkbench.tsx)）直接显示英文 action、targetType 和完整 targetId，点击只构造通用 InspectorRecord，丢弃 before、after、actor、workspace 和 source 等信息。通用详情保留审批/拒绝/归档布局，却没有审计专用变更呈现。列表不接收 selectedId，因此没有选中态；[样式](../../../../src/renderer/src/components/knowledge/KnowledgeWorkbench.module.css)包含硬编码深色颜色及长 ID 省略，动作、对象与时间缺少清楚的信息层级。本次为源码与数据检查，尚未对当前运行窗口进行视觉截图验收。
+S3 基线的 AuditList（位于 [KnowledgeWorkbench.tsx](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/KnowledgeWorkbench.tsx)）直接显示英文 action、targetType 和完整 targetId，点击只构造通用 InspectorRecord，丢弃 before、after、actor、workspace 和 source 等信息。通用详情保留审批/拒绝/归档布局，却没有审计专用变更呈现。列表不接收 selectedId，因此没有选中态；[样式](../../../../src/renderer/src/components/knowledge/KnowledgeWorkbench.module.css)包含硬编码深色颜色及长 ID 省略，动作、对象与时间缺少清楚的信息层级。本次为源码与数据检查，尚未对当前运行窗口进行视觉截图验收。
 
 S3 基线的审计查询问题：[工作台快照](../../../../src/renderer/src/services/knowledge.ts)先请求全域最近 30 条，再在前端过滤 user 域。[审计服务](../../../../src/main/knowledge/audit-service.ts)没有 workspace/domain 查询条件与分页游标；个人审计较多时，工程事件会在过滤前被截掉。本机现有 21 条审计中 19 条为个人习惯提议，仅 2 条为工程事件；所有 21 条都有 before 或 after，但习惯提议的 after 只存数量，targetId 为批次摘要，不能假设每条事件都具有完整对象快照。
 
@@ -45,7 +47,7 @@ S3 基线的审计查询问题：[工作台快照](../../../../src/renderer/src/
 | 旧评分被当作主要详情 | [MemoryReviewCard](../../../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx)存在 candidate.decision 就显示 scorer.provider、status、reason、题目答案和概率。它不整合当前自动任务的阶段、结论与依据，也不提示注解是否对应当前候选快照。旧注解可出现 laya，但不能据此断言当前正在运行 Laya。 |
 | 旧操作与新执行链脱节 | 中英文 knowledge.json 仍将 rescore 命名为“Laya 重新评分”，refine 为“提交 LLM 精炼”。[候选动作](../../../../src/main/knowledge/candidate-actions.ts)仍调用旧 decision/refinement 通路；[Laya 配置](../../../../src/main/knowledge/laya-runtime.ts)在存在 automation 配置时禁用旧模型，[队列注册](../../../../src/main/ipc/register.ts)同时跳过旧精炼执行。因此新流程下仍可能接收入旧队列，却没有对应执行。这里只确认路径，未实际提交精炼。 |
 | 两个入口适配不一致 | 审核侧栏按 [splitReviewCandidates](../../../../src/renderer/src/components/knowledge/inboxScope.ts)分离自动处理与人工候选，并向卡片传 automaticStatus。工作台 Inspector 仅检查 proposed，并未传 automaticStatus 或 onDecision；因此右侧能显示旧评分，却没有侧栏的评分按钮，也缺少相同的自动处理操作约束。不能把两个入口描述成完全相同。 |
-| 通用详情留下无关控件 | [Inspector](../../../../src/renderer/src/components/knowledge/KnowledgeWorkbench.tsx)的非待审分支固定渲染批准、拒绝和归档，不适用时仅禁用。AuditList 丢失事件快照后也进入该分支。已有领域校验、候选 hash 和 [FactReviewControls](../../../../src/renderer/src/components/knowledge/FactReviewControls.tsx)的冲突替代确认仍有效；问题不是完全没有审核保护。 |
+| 通用详情留下无关控件 | [Inspector](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/KnowledgeWorkbench.tsx)的非待审分支固定渲染批准、拒绝和归档，不适用时仅禁用。AuditList 丢失事件快照后也进入该分支。已有领域校验、候选 hash 和 [FactReviewControls](../../../../src/renderer/src/components/knowledge/FactReviewControls.tsx)的冲突替代确认仍有效；问题不是完全没有审核保护。 |
 | 详情布局缺少层次 | 340px 右侧面板内再嵌套完整卡片；[factReview 样式](../../../../src/renderer/src/components/knowledge/MemoryReviewTool.module.css)占满一行，使批准和刷新冲突检查一组、拒绝另排。控件没有主要、次要与破坏性操作的视觉区分；内容、评分、证据与操作共用长滚动区。Wiki 候选正文用普通 p 呈现，没有阅读与变更层次。 |
 | 卡片百分比含义不清 | KnowledgeCardTile 用 formatConfidence 展示 card.score，候选映射来自 fact.confidence 等旧字段。这些字段可能是规则给定值或检索排名，不能显示成自动审核通过率；新审核模型契约明确返回结论而不是百分比。 |
 
@@ -59,13 +61,13 @@ S3 基线的审计查询问题：[工作台快照](../../../../src/renderer/src/
 
 审核侧栏和工作台把 graph-edge 与事实、Wiki 一起收集；[splitReviewCandidates](../../../../src/renderer/src/components/knowledge/inboxScope.ts)只将条目审核和 Wiki 审核映射到自动任务，宿主自动批准也明确拒绝 graph-edge。因此已有正式事实之间的共同文件关系仍要求人工处理。人工 applyGraphEdge 直接按边 ID 写入，没有在该方法内解析端点或验证关系语义；已有领域、候选快照和来源撤回保护仍存在，不能概括成“完全没有校验”。
 
-缺线包含独立的渲染故障与数据投影缺口。[KgDotNode](../../../../src/renderer/src/components/knowledge/KnowledgeGraphCanvas.tsx)只有圆点和文字，没有 React Flow 连接锚点；即使适配器输出关系，画布也无法生成路径。[buildKnowledgeGraphView](../../../../src/renderer/src/components/knowledge/knowledgeGraph.ts)在实体节点创建前解析存储边，导致实体端点关系被跳过；supersedes 只在旧节点已遍历时生成，结果依赖输入顺序。Wiki 页面节点没有从 sourceFactIds 生成事实来源关系。观察来源展开依赖工作台已加载的最近 40 条 observation，较旧证据可能展开为空。这些情况不能统一解释为“尚未审核”。
+缺线包含独立的渲染故障与数据投影缺口。[KgDotNode](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/KnowledgeGraphCanvas.tsx)只有圆点和文字，没有 React Flow 连接锚点；即使适配器输出关系，画布也无法生成路径。[buildKnowledgeGraphView](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/knowledgeGraph.ts)在实体节点创建前解析存储边，导致实体端点关系被跳过；supersedes 只在旧节点已遍历时生成，结果依赖输入顺序。Wiki 页面节点没有从 sourceFactIds 生成事实来源关系。观察来源展开依赖工作台已加载的最近 40 条 observation，较旧证据可能展开为空。这些情况不能统一解释为“尚未审核”。
 
 图谱的可读性也有具体缺口：节点直径为 10～22px、标签为 10px 且仅保留 24 字符，普通关系没有文字或方向箭头；筛选暴露内部英文类型。布局把连通分量横向串联，孤立节点都落在同一水平线上，fitView 会继续缩小宽图。单击节点同时打开详情并隐藏一跳以外内容，查看与聚焦动作混在一起。页签数字取 graphCandidates.length，画布却排除候选，计数与所见内容不一致。实体只按名字聚合，缺少工作区命名空间，也需防止同名项目文件被合并。
 
 ### 工程知识流程与 Wiki 主图的差距（2026-10-06）
 
-[四环节定义](../../../../src/shared/knowledge-automation.ts)已经包含知识提取、条目审核、Wiki 生成、Wiki 审核。[自动化服务](../../../../src/main/knowledge/automation-service.ts)从有效正式条目生成 Wiki 草稿，复核后发布；原四类主题已由 W1 细分为类别与明确概念，并复用已有页面身份。生成输出包含正文、来源条目及绑定目标版本的页间关系，关系随 Wiki 复核及发布；具体契约如下。[WikiPage](../../../../src/shared/knowledge.ts)有 sourceFactIds/sourceFactRefs 和可选 sourceNoteRefs；这些来源引用不能直接当作 Wiki 页面之间的引用。
+[四环节定义](../../../../src/shared/knowledge-automation.ts)已经包含知识提取、条目审核、Wiki 生成、Wiki 审核。[自动化服务](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/main/knowledge/automation-service.ts)从有效正式条目生成 Wiki 草稿，复核后发布；原四类主题已由 W1 细分为类别与明确概念，并复用已有页面身份。生成输出包含正文、来源条目及绑定目标版本的页间关系，关系随 Wiki 复核及发布；具体契约如下。[WikiPage](../../../../src/shared/knowledge.ts)有 sourceFactIds/sourceFactRefs 和可选 sourceNoteRefs；这些来源引用不能直接当作 Wiki 页面之间的引用。
 
 主图已由 G1 改为已发布 Wiki 及其已核验关系，事实、文件/概念和原始证据通过独立来源追溯读取。独立 graph-edge 提议由 S1 关闭，关系表达、审核和发布由 W1 接入 Wiki 生命周期。以下契约约束当前投影与图谱阅读；历史证据图诊断保留为回归依据。
 
@@ -325,7 +327,7 @@ Jev 使用可配置的统一通过阈值，默认 0.90，允许 0.50～1.00；�
 
 [工程内容准入](../../../../src/main/knowledge/knowledge-content.ts)识别完整或截断的执行结果包装、带行号的源码和 Note 头部。[确定性提取](../../../../src/main/knowledge/deterministic-extractor.ts)保留原始观察及派生索引，工具调用/结果和未经用户归因的会话不参与直接提议及重复次数统计；结构化 analysis/git/checkpoint 和有效用户陈述仍可产生候选。英文偏好词增加单词边界，避免 CSS prefers-reduced-motion 的子串命中。匹配结果再次检查正文，防止混合输入抽出包装行。
 
-[候选写入](../../../../src/main/knowledge/review-service.ts)在落盘前拒绝含原始包装的整批提议，[审批校验](../../../../src/main/knowledge/fact-evidence-review.ts)在旧数据兼容分支前复查正文。旧候选仍可正常拒绝。[模型提取与整理](../../../../src/main/knowledge/extraction-context.ts)明确要求完整知识陈述，保留原始转义与引用，版本为 task-evidence-2；升级后符合调度范围的来源可按新版本重新提取，不修改原始数据或游标。未对真实模型质量作保证。
+[候选写入](../../../../src/main/knowledge/review-service.ts)在落盘前拒绝含原始包装的整批提议，[审批校验](../../../../src/main/knowledge/fact-evidence-review.ts)在旧数据兼容分支前复查正文。旧候选仍可正常拒绝。[模型提取与整理](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/main/knowledge/extraction-context.ts)明确要求完整知识陈述，保留原始转义与引用，版本为 task-evidence-2；升级后符合调度范围的来源可按新版本重新提取，不修改原始数据或游标。未对真实模型质量作保证。
 
 真实存储预览为 15 条候选、1 条正式工程事实，无 Wiki 页面及确认个人事实。通过正在运行的便携版 renderer bridge 调用既有 IPC，按预览快照 hash 拒绝 14 条候选：个人 3 条（两条纯通知习惯、一条“xdo 实施吧”临时指令），工程 11 条（8 条工具 JSON 包装、1 条源码注释、2 条被机械截断的助手报告）。另逐条核对并通过 revokeTruth 归档正式事实 `deterministic-fact:0b0ba715d01eb6dcea2d3f7ac99f73b3dc965e52a120dd7355475c310e5e040d`，其正文为带行号的 CSS prefers-reduced-motion 规则。没有重写在线 JSONL、撤回来源或更改个人偏好设置。
 
@@ -373,13 +375,13 @@ Jev 使用可配置的统一通过阈值，默认 0.90，允许 0.50～1.00；�
 
 ### 测试入口与交付证据
 
-优先扩展已有测试而非另建整套测试框架：通知适配使用 [knowledge-transcript.test.ts](../../../../tests/unit/knowledge-transcript.test.ts) 和 [external-session-scanner.test.ts](../../../../tests/unit/external-session-scanner.test.ts)；身份与习惯使用 [memory-evidence.test.ts](../../../../tests/unit/knowledge/memory-evidence.test.ts)、[user-memory-m1.test.ts](../../../../tests/unit/knowledge/user-memory-m1.test.ts)、[deterministic-extractor.test.ts](../../../../tests/unit/knowledge/deterministic-extractor.test.ts) 和 [user-turn-capture.test.ts](../../../../tests/unit/knowledge/user-turn-capture.test.ts)。自动化使用 [automation-service.test.ts](../../../../tests/unit/knowledge/automation-service.test.ts) 和 [knowledge-automation-ui.test.ts](../../../../tests/unit/knowledge-automation-ui.test.ts)；审计使用 [audit-service.test.ts](../../../../tests/unit/knowledge/audit-service.test.ts) 与 [knowledge-ipc-contract.test.ts](../../../../tests/unit/knowledge-ipc-contract.test.ts)。浏览器审计交互可在现有 UI 测试基础上补独立用例。
+优先扩展已有测试而非另建整套测试框架：通知适配使用 [knowledge-transcript.test.ts](../../../../tests/unit/knowledge-transcript.test.ts) 和 [external-session-scanner.test.ts](../../../../tests/unit/external-session-scanner.test.ts)；身份与习惯使用 [memory-evidence.test.ts](../../../../tests/unit/knowledge/memory-evidence.test.ts)、[user-memory-m1.test.ts](../../../../tests/unit/knowledge/user-memory-m1.test.ts)、[deterministic-extractor.test.ts](../../../../tests/unit/knowledge/deterministic-extractor.test.ts) 和 [user-turn-capture.test.ts](../../../../tests/unit/knowledge/user-turn-capture.test.ts)。自动化使用 [automation-service.test.ts](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/tests/unit/knowledge/automation-service.test.ts)；审计使用 [audit-service.test.ts](../../../../tests/unit/knowledge/audit-service.test.ts) 与 [knowledge-ipc-contract.test.ts](../../../../tests/unit/knowledge-ipc-contract.test.ts)。浏览器审计交互可在现有 UI 测试基础上补独立用例。
 
 下列命令保留为完整需求后续实施的验证入口；个人噪声已执行的命令与结果以上节为准：
 
 ```text
 npm run test:unit -- --run tests/unit/knowledge-transcript.test.ts tests/unit/external-session-scanner.test.ts tests/unit/knowledge/memory-evidence.test.ts tests/unit/knowledge/user-memory-m1.test.ts tests/unit/knowledge/deterministic-extractor.test.ts tests/unit/knowledge/user-turn-capture.test.ts
-npm run test:unit -- --run tests/unit/knowledge/automation-service.test.ts tests/unit/knowledge-automation-ui.test.ts tests/unit/knowledge/audit-service.test.ts tests/unit/knowledge-ipc-contract.test.ts
+npm run test:unit -- --run tests/unit/knowledge/automation-service.test.ts tests/unit/knowledge/audit-service.test.ts tests/unit/knowledge-ipc-contract.test.ts
 npm run typecheck
 npm run i18n:types
 npm run i18n:check

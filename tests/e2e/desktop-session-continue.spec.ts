@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import type { ExperimentalAPI } from '../../src/shared/ipc/experimental'
 import type { SessionAPI, AgentSessionSummary } from '../../src/shared/ipc/session'
 import type { TerminalAPI } from '../../src/shared/ipc/terminal'
@@ -68,12 +69,15 @@ function fixtureEnv(fixtureRoot: string, binDir: string): NodeJS.ProcessEnv {
     .split(';')
     .filter(Boolean)
     .filter((entry) => {
-      for (const shim of ['claude.cmd', 'claude.exe', 'pi.cmd', 'pi.exe']) {
+      for (const shim of ['claude.cmd', 'claude.exe', 'codex.cmd', 'codex.exe', 'opencode.cmd', 'opencode.exe', 'pi.cmd', 'pi.exe']) {
         if (existsSync(join(entry, shim))) return false
       }
       return true
     })
   env[pathKey] = [binDir, ...cleaned].join(';')
+  env.CLAUDE_CONFIG_DIR = join(fixtureRoot, '.claude')
+  env.CODEX_HOME = join(fixtureRoot, '.codex')
+  env.XDG_DATA_HOME = join(fixtureRoot, '.local', 'share')
   return env
 }
 
@@ -277,11 +281,13 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     // Live rows in scope: source, the API-continued card, and the imported
     // external row — each non-archived card offers 在新会话中继续 behind its
     // fold (single-card expansion), so expand the first card right before its click.
-    await page.getByRole('button', { name: '展开', exact: true }).first().click()
+    const internalCard = page.locator('div[class*="cardSurface"]')
+      .filter({ hasText: HANDOFF_MARKER }).first()
+    await internalCard.getByRole('button', { name: '展开', exact: true }).click()
     const continueButtons = page.getByRole('button', { name: '在新会话中继续', exact: true })
     await expect(continueButtons).toHaveCount(3, { timeout: 10_000 })
     const xtermsBeforeUiContinue = await page.locator('.xterm-rows').count()
-    await continueButtons.first().click()
+    await internalCard.getByRole('button', { name: '在新会话中继续', exact: true }).click()
     await expect(page.getByRole('button', { name: '开始新会话', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '开始新会话', exact: true }).click()
     await expect(continueButtons).toHaveCount(4, { timeout: 15_000 })
@@ -315,16 +321,15 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
       })
       .toBe(1)
 
-    // Regression: 在新会话中继续 on an external row must launch the row's own
-    // engine and land in the active workspace. A bare-shell spawn writes no
-    // fake-agent argv file, and an empty workspaceId hides the terminal from
-    // the workspace the user is viewing.
+    // Regression: Continue on an external Claude row resumes its provider
+    // history in the active workspace without submitting the first prompt.
     const argvBefore = (await readFakeAgentState(binDir)).argvs.length
     const xtermsBeforeExtContinue = await page.locator('.xterm-rows').count()
     const rowsBeforeContinue = await listLive(page)
     await externalCard.getByRole('button', { name: '在新会话中继续', exact: true }).click()
-    await expect(page.getByRole('button', { name: '开始新会话', exact: true })).toBeVisible()
-    await page.getByRole('button', { name: '开始新会话', exact: true }).click()
+    await expect(page.getByRole('button', { name: '恢复对话', exact: true })).toBeVisible()
+    await expect(page.locator('div.fixed.inset-0').last()).not.toContainText('fix the login retry')
+    await page.getByRole('button', { name: '恢复对话', exact: true }).click()
     await expect
       .poll(async () => (await readFakeAgentState(binDir)).argvs.length, { timeout: 20_000 })
       .toBe(argvBefore + 1)
@@ -332,8 +337,8 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
       .poll(async () => page.locator('.xterm-rows').count(), { timeout: 15_000 })
       .toBeGreaterThan(xtermsBeforeExtContinue)
     await expect
-      .poll(async () => (await readFakeAgentState(binDir)).inputs, { timeout: 20_000 })
-      .toContain('完整原始转录')
+      .poll(async () => (await readFakeAgentState(binDir)).argvs, { timeout: 20_000 })
+      .toContainEqual(['--resume', PROVIDER_SESSION_ID])
     const extContinued = (await listLive(page)).find(
       (row) => !rowsBeforeContinue.some((before) => before.id === row.id),
     )
@@ -374,7 +379,8 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
           const api = (window as DesktopWindow).electron
           const rows = await api.session.list({ includeArchived: true }).catch(() => [])
           for (const row of rows) {
-            for (const terminalId of (row as unknown as { terminalIds?: string[] }).terminalIds ?? []) {
+            const detail = await api.session.get(row.id).catch(() => null)
+            for (const terminalId of detail?.terminalIds ?? []) {
               await api.terminal.kill(terminalId).catch(() => undefined)
             }
           }
@@ -391,3 +397,151 @@ async function accessFixture(entry: string): Promise<void> {
     throw new Error(`Built desktop entry missing at ${entry}; run npm run build before the desktop project`)
   }
 }
+
+async function seedRecoveryFixture(fixtureRoot: string, cwd: string) {
+  const binDir = join(fixtureRoot, 'bin')
+  await mkdir(binDir)
+  await mkdir(cwd)
+  const manifest = {
+    claude: { id: 'claude-native', transcriptPath: join(fixtureRoot, 'original-claude', 'projects', 'repo', 'claude-native.jsonl') },
+    codex: { id: 'codex-native', transcriptPath: join(fixtureRoot, 'original-codex', 'sessions', '2026', 'rollout-date-codex-native.jsonl') },
+    opencode: { id: 'ses_native', transcriptPath: join(fixtureRoot, '.local', 'share', 'opencode', 'opencode.db') },
+  }
+  for (const [engine, source] of Object.entries(manifest)) {
+    await mkdir(resolve(source.transcriptPath, '..'), { recursive: true })
+    await writeFile(join(binDir, engine + '.cmd'), `@echo off\r\nnode "%~dp0recovery-agent.cjs" ${engine} %*\r\n`)
+  }
+  await writeFile(join(binDir, 'recovery-agent.cjs'), await readFile(resolve('tests/fixtures/session-recovery-agent.cjs')))
+  await writeFile(join(binDir, 'recovery-manifest.json'), JSON.stringify(manifest))
+  await writeFile(manifest.claude.transcriptPath, [
+    claudeUser('seed Claude history', manifest.claude.id, cwd, '2026-10-10T10:00:00Z'),
+    claudeAssistant('seed Claude answer', manifest.claude.id, cwd, '2026-10-10T10:01:00Z'),
+  ].map((row) => JSON.stringify(row)).join('\n') + '\n')
+  await writeFile(manifest.codex.transcriptPath, [
+    { type: 'session_meta', payload: { id: manifest.codex.id, cwd } },
+    { type: 'response_item', payload: { role: 'user', content: [{ type: 'input_text', text: 'seed Codex history' }] } },
+    { type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text', text: 'seed Codex answer' }] } },
+  ].map((row) => JSON.stringify(row)).join('\n') + '\n')
+  const db = new DatabaseSync(manifest.opencode.transcriptPath)
+  db.exec(`PRAGMA journal_mode = WAL;
+    CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
+    CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+    CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);`)
+  db.prepare('INSERT INTO session VALUES (?, ?, ?, ?, ?)').run(manifest.opencode.id, cwd, 'Seed Opencode', 1000, 2000)
+  db.prepare('INSERT INTO message VALUES (?, ?, ?, ?)').run('seed', manifest.opencode.id, 1000, JSON.stringify({ role: 'user' }))
+  db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?)').run('seed', 'seed', manifest.opencode.id, 1000, JSON.stringify({ type: 'text', text: 'seed Opencode history' }))
+  db.close()
+  return { binDir, manifest }
+}
+
+async function submitFixturePrompt(page: Page, id: string, prompt: string) {
+  await page.evaluate(({ id, prompt }) => {
+    const api = (window as DesktopWindow).electron.terminal
+    api.submitLine(id, prompt)
+    api.input(id, prompt + '\r')
+  }, { id, prompt })
+}
+
+test('Claude, Codex and Opencode restore native history and track follow-up turns', async () => {
+  test.setTimeout(150_000)
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-native-recovery-'))
+  let application: ElectronApplication | undefined
+  let page: Page | undefined
+  const terminalIds: string[] = []
+  try {
+    const cwd = join(fixtureRoot, 'workspace')
+    const { binDir, manifest } = await seedRecoveryFixture(fixtureRoot, cwd)
+    application = await electron.launch({ args: [resolve('out/main/index.js'), `--user-data-dir=${join(fixtureRoot, 'user-data')}`], env: fixtureEnv(fixtureRoot, binDir) })
+    page = await application.firstWindow()
+    await page.waitForLoadState('domcontentloaded')
+    const workspace = await page.evaluate((path) => (window as DesktopWindow).electron.workspace.create({ name: 'Recovery drill', path }), cwd)
+    await page.evaluate(() => (window as DesktopWindow).electron.experimental.update({ sessions: true }))
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('zh-CN'))
+    await page.locator('.ws').filter({ hasText: 'Recovery drill' }).first().click()
+    await page.getByRole('button', { name: /打开会话工具/ }).click()
+    for (const engine of ['claude', 'codex', 'opencode'] as const) {
+      const sourceTerminal = 'source-' + engine
+      terminalIds.push(sourceTerminal)
+      await page.evaluate(({ id, cwd, workspaceId, preset }) => (window as DesktopWindow).electron.terminal.create({ id, cwd, workspaceId, preset, shell: 'powershell.exe' }),
+        { id: sourceTerminal, cwd, workspaceId: workspace.id, preset: engine })
+      await expect.poll(async () => existsSync(join(binDir, 'launch-' + sourceTerminal + '.json'))).toBe(true)
+      const source = (await listLive(page)).find((row) => row.engine === engine && !row.external && !row.continuedFrom)!
+      expect(source).toBeTruthy()
+      const beforeMissingId = (await listLive(page)).length
+      await expect(page.evaluate((sessionId) => (window as DesktopWindow).electron.session.continue({ sessionId, mode: 'resume' }), source.id)).rejects.toThrow('identity')
+      expect((await listLive(page)).length).toBe(beforeMissingId)
+      await submitFixturePrompt(page, sourceTerminal, 'initial ' + engine + ' prompt')
+      await expect.poll(async () => ({
+        engine,
+        count: (await page!.evaluate((id) => (window as DesktopWindow).electron.session.get(id), source.id))?.turnCount,
+        input: await readFile(join(binDir, 'input-' + sourceTerminal + '.txt'), 'utf8').catch(() => ''),
+        error: await readFile(join(binDir, 'error-' + sourceTerminal + '.txt'), 'utf8').catch(() => ''),
+      })).toEqual({ engine, count: 1, input: expect.stringContaining('initial ' + engine + ' prompt'), error: '' })
+      const bound = await page.evaluate((id) => (window as DesktopWindow).electron.session.get(id), source.id)
+      expect(bound?.providerSessionId).toBe(manifest[engine].id)
+      expect(bound?.transcriptPath).toBe(manifest[engine].transcriptPath)
+      const argv = engine === 'claude' ? ['--resume', manifest[engine].id] : engine === 'codex' ? ['resume', manifest[engine].id] : ['--session', manifest[engine].id]
+      for (const mode of ['continue', 'resume'] as const) {
+        const beforeRows = await listLive(page)
+        const sourceCard = page.locator(`[data-session-id="${source.id}"]`)
+        await expect(sourceCard).toBeVisible()
+        const fold = sourceCard.getByRole('button', { name: '展开', exact: true })
+        if (await fold.count()) await fold.click()
+        if (mode === 'continue') {
+          await sourceCard.getByRole('button', { name: '在新会话中继续', exact: true }).click()
+          await expect(page.getByRole('button', { name: '恢复对话', exact: true })).toBeVisible()
+          await expect(page.locator('div.fixed.inset-0').last()).not.toContainText('initial ' + engine + ' prompt')
+          await page.getByRole('button', { name: '恢复对话', exact: true }).click()
+        } else {
+          await expect(sourceCard.getByRole('button', { name: '回到原会话', exact: true })).toBeEnabled()
+          await sourceCard.getByRole('button', { name: '查看详情', exact: true }).click()
+          await page.locator('div.fixed.inset-0').last().getByRole('button', { name: '回到原会话', exact: true }).click()
+        }
+        await expect.poll(async () => (await listLive(page!)).length).toBe(beforeRows.length + 1)
+        const newRow = (await listLive(page)).find((row) => !beforeRows.some((before) => before.id === row.id))!
+        const newDetail = await page.evaluate((id) => (window as DesktopWindow).electron.session.get(id), newRow.id)
+        const result = { sessionId: newRow.id, terminalId: newDetail!.terminalIds[0] }
+        terminalIds.push(result.terminalId)
+        await expect.poll(async () => existsSync(join(binDir, 'launch-' + result.terminalId + '.json'))).toBe(true)
+        const launch = JSON.parse(await readFile(join(binDir, 'launch-' + result.terminalId + '.json'), 'utf8'))
+        expect(launch).toMatchObject({ args: argv, cwd, transcriptPath: manifest[engine].transcriptPath, hooksInstalled: true })
+        expect(launch.history).toContain('seed ' + (engine === 'claude' ? 'Claude' : engine === 'codex' ? 'Codex' : 'Opencode') + ' history')
+        expect(existsSync(join(binDir, 'input-' + result.terminalId + '.txt')), 'native restore must not inject a prompt').toBe(false)
+        expect((await listLive(page)).length).toBe(beforeRows.length + 1)
+        const restored = await page.evaluate((id) => (window as DesktopWindow).electron.session.get(id), result.sessionId)
+        expect(restored).toMatchObject({ continuedFrom: source.id, providerSessionId: manifest[engine].id,
+          transcriptPath: manifest[engine].transcriptPath, firstPrompt: 'initial ' + engine + ' prompt', turnCount: 1, checkpointCount: 0 })
+        expect(restored?.pendingHandoff).toBeUndefined()
+        await submitFixturePrompt(page, result.terminalId, 'follow-up ' + engine + ' ' + mode)
+        await expect.poll(async () => (await page!.evaluate((id) => (window as DesktopWindow).electron.session.get(id), result.sessionId))?.turnCount).toBe(2)
+        const transcript = await page.evaluate((id) => (window as DesktopWindow).electron.session.getTranscript(id), result.sessionId)
+        expect(JSON.stringify(transcript)).toContain('answer to follow-up ' + engine + ' ' + mode)
+        expect((await page.evaluate((id) => (window as DesktopWindow).electron.session.get(id), source.id))?.turnCount).toBe(1)
+      }
+      const beforeFailure = (await listLive(page)).length
+      await expect(page.evaluate((sessionId) => (window as DesktopWindow).electron.session.continue({ sessionId, mode: 'resume', engine: 'pi' }), source.id)).rejects.toThrow('change')
+      if (engine === 'claude') {
+        const settingsPath = join(fixtureRoot, 'original-claude', 'settings.json')
+        const settings = await readFile(settingsPath)
+        await rm(settingsPath)
+        await mkdir(settingsPath)
+        await expect(page.evaluate((sessionId) => (window as DesktopWindow).electron.session.continue({ sessionId, mode: 'resume' }), source.id))
+          .rejects.toThrow('hook setup failed')
+        expect((await listLive(page)).length).toBe(beforeFailure)
+        await rm(settingsPath, { recursive: true })
+        await writeFile(settingsPath, settings)
+      }
+      await rm(manifest[engine].transcriptPath)
+      await expect(page.evaluate((sessionId) => (window as DesktopWindow).electron.session.continue({ sessionId, mode: 'continue' }), source.id)).rejects.toThrow('history')
+      expect((await listLive(page)).length).toBe(beforeFailure)
+    }
+  } finally {
+    if (page && !page.isClosed()) {
+      for (const id of terminalIds) await page.evaluate((id) => (window as DesktopWindow).electron.terminal.kill(id), id).catch(() => undefined)
+    }
+    await closeApplication(application)
+    await rm(fixtureRoot, { recursive: true, force: true }).catch(() => undefined)
+  }
+})

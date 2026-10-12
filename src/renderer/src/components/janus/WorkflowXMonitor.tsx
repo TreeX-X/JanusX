@@ -23,6 +23,12 @@ export function WorkflowXStatus({ surface = 'island' }: { surface?: 'island' | '
   const isSettings = surface === 'settings'
   const sourceSummary = [...new Set(current?.sources.filter(source => source.status === 'detected')
     .map(source => `${t(`workflowx.${source.scope}`)} · ${source.format === 'claude' ? 'Claude' : 'Codex'}`) ?? [])].join(' / ')
+  // 设置面始终给一行可读解释：检测到就列来源，未检测到/待确认就给下一步提示，
+  // 不留一片没有信息的灰字。检测中是瞬时态，不占位。
+  const hint = sourceSummary ? null
+    : current?.unavailable ? t('workflowx.unavailable')
+      : status === 'missing' ? t('workflowx.missingHint')
+        : null
   const statusLabel = <span className={styles.state} data-status={status}>
     <i aria-hidden="true" />{t(`workflowx.status.${status}`)}
   </span>
@@ -45,9 +51,13 @@ export function WorkflowXStatus({ surface = 'island' }: { surface?: 'island' | '
           <span className={styles.target}>{workspaceId ? t('workflowx.currentWorkspace', { name: workspaceName ?? t('workflowx.workspace') }) : t('workflowx.globalEnvironment')}</span>
           {statusLabel}
         </div>
-        {sourceSummary && <p className={styles.sourceSummary}>{t('workflowx.detectedSources', { sources: sourceSummary })}</p>}
+        {sourceSummary && <p className={styles.sourceSummary}>
+          <span className={styles.summaryKey}>{t('workflowx.sourcesLabel')}</span>
+          <span className={styles.summaryValue} data-testid="workflowx-sources">{sourceSummary}</span>
+        </p>}
+        {hint && <p className={styles.sourceSummary}><span className={styles.summaryValue}>{hint}</span></p>}
         {actions}
-        {linkFailed && <p className={styles.feedback}>{t('workflowx.linkFailed')}</p>}
+        {linkFailed && <p className={styles.feedback}><span className={styles.summaryValue}>{t('workflowx.linkFailed')}</span></p>}
       </> : <button type="button" className={styles.summary} aria-expanded={open} aria-controls={detailsId}
         aria-label={t('workflowx.sources')} onClick={() => setOpen(value => !value)}>
         <span>WorkflowX</span>

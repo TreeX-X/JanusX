@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { USER_RECALL_MAX_CHARS, applyHabitSuccession, fuseKnowledgeResults, searchUserMemory } from '../../../src/main/knowledge/user-recall-service'
 import { KnowledgeContextService } from '../../../src/main/knowledge/context-service'
-import { recallFilterKey } from '../../../src/main/knowledge/recall-service'
 import type { KnowledgeTruthSnapshot, MemoryFact, UserEpisode, UserProfile } from '../../../src/shared/knowledge'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
@@ -115,14 +114,12 @@ describe('User recall M2', () => {
       graphEdges: [],
     }
     const context = new KnowledgeContextService(
-      { list: async () => snapshot },
-      undefined,
       depsOf([snapshot.facts[1]!]),
     )
     const scoped = await context.search({ query: 'pnpm', workspaceId: 'ws-a' })
-    expect(scoped.items.map((item) => item.id)).toEqual(['fact-p1'])
+    expect(scoped.items).toEqual([])
     const global = await context.search({ query: 'pnpm', allowGlobal: true })
-    expect(global.items.map((item) => item.id)).toEqual(['fact-p1'])
+    expect(global.items).toEqual([])
   })
 
   it('fuses both budgets and serves user-only recall with no workspace', async () => {
@@ -132,9 +129,9 @@ describe('User recall M2', () => {
       wikiPages: [],
       graphEdges: [],
     }
-    const context = new KnowledgeContextService({ list: async () => snapshot }, undefined, depsOf([user]))
+    const context = new KnowledgeContextService(depsOf([user]))
     const fused = await context.searchWithUser({ query: 'pnpm', workspaceId: 'ws-a' })
-    expect(fused.compactContext).toContain('项目构建使用 pnpm')
+    expect(fused.compactContext).not.toContain('项目构建使用 pnpm')
     expect(fused.compactContext).toContain('janus-user-memory')
     expect(fused.maxChars).toBe(4000 + USER_RECALL_MAX_CHARS)
     expect(fused.items.some((item) => item.workspaceId === 'user')).toBe(true)
@@ -160,8 +157,4 @@ describe('User recall M2', () => {
     expect(fused.maxChars).toBe(4000 + result.maxChars)
   })
 
-  it('separates recall filter keys by scope', () => {
-    const base = { query: 'pnpm', layer: 'truth' as const }
-    expect(recallFilterKey(base)).not.toBe(recallFilterKey({ ...base, scope: 'user' }))
-  })
 })

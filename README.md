@@ -25,7 +25,7 @@
 
 [下载安装](https://treex-x.github.io/JanusX/) · [版本发布](https://github.com/TreeX-X/JanusX/releases) · [使用与架构文档](./wiki/README.md) · [反馈问题](https://github.com/TreeX-X/JanusX/issues)
 
-> Second test Oct 10 (not v1.0 stable) · 10.10 二测（非正式版）
+> Second test Oct 12 (not v1.0 stable) · 10.12 二测（非正式版）
 
 </div>
 
@@ -285,6 +285,10 @@ npm run package:linux
 
 打包产物位于 `release/<version>/`。平台打包需具备对应系统及构建环境。
 
+Windows 迭代验证可运行 `npm run package:win:portable`，只生成 portable，在该打包子进程中使用压缩级别 1，仍执行包边界、依赖排除、体积预算和运行时检查。需要独立输出时可追加 `-- --release-dir artifacts/portable-check`。正式发行使用 `npm run package:win:publish`：先按默认压缩配置生成双目标产物并验证运行时及更新清单，再通过已认证的 GitHub CLI 上传到草稿，全部上传成功后公开。`npm run publish:win` 可以验证并发布已有的当前版本产物，无需重新打包；版本 tag 必须已推送，已有 Release 不会被覆盖。
+
+打包前须先在同级 `janus-agentX` 仓构建 `dist`。`prepackage` 使用 npm 的发布文件清单核对六个本地包，刷新变动文件和依赖声明，并拦截缺失的 sibling 或构建入口；它不代替 sibling 的源码编译。
+
 架构与模块导航见 [Wiki](./wiki/README.md)，优化状态与路线图见 [架构优化计划](./wiki/06-architecture-optimization-plan.md)。贡献约定见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ---
@@ -349,8 +353,6 @@ JanusX 是一个真实投入社区使用的开源实验项目，目标是让 AI 
 ## 支持
 
 JanusX 免费开源（MIT），由独立开发者长期维护。
-
-欢迎在[爱发电支持持续迭代](https://afdian.com/a/treexx)。
 
 ---
 

@@ -2,32 +2,13 @@ import { readLegacyJsonl } from './legacy-memory-source'
 import { canMergeFactText } from '../../shared/fact-slot'
 import { readPersonalForgettingBarrier } from './personal-forgetting-barrier'
 import { readObservationRevocationBarrier } from './observation-revocation-barrier'
-/**
- * @file KnowledgeExtractService —— Phase 6 候选知识提炼，Phase 2 LLM 增强
- * @description
- *  - 输入：retentionClass='evidence' 的 Observation 批次（队列按 workspace 交付，每批 ≤ 50）。
- *  - 调用 LLM（对齐 analyzer.ts:409-433 的 callLLM 模式）以 `generateObject` + zod schema
- *    结构化抽取 CandidateFact / CandidateWikiPatch，兼容读取旧图关系。
- *  - Phase 2：输出 schema 带 `kind` + `supersedes`；单次调用 60s 超时、失败重试 ≤ 2 次
- *    带退避；单批字符预算；与同批确定性候选按内容 Jaccard ≥ 0.7 合并为
- *    `derivation='merged'`；LLM 候选同样做候选阶段冲突标记。
- *  - 新候选只 append 到 `facts/candidates.jsonl` / `wiki/patches.jsonl`，
- *    绝不直接写入 `facts/facts.jsonl` / `graph/edges.jsonl` / 正式 wiki 页面。
- *    唯一的例外是合并改写：命中的确定性候选在 review 锁下原位升级为 merged，
- *    不产生第二条 Inbox 条目。
- *  - 每批抽取写一条 `candidate_proposed` AuditEvent（after 含本批候选 id 列表与 sourceObservationIds）。
- *  - 无默认 LLM 时安全降级（返回空候选数组 + 原因，不抛错），对齐 analyzer.ts:552-562。
- *    模型失败/超时/非法输出同样降级返回，由 llm-stage 转为队列 `llm` 阶段失败账本。
- */
+/** Personal memory refinement; engineering knowledge is maintained in original Notes. */
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import type {
   CandidateFact,
-  CandidateGraphEdge,
-  CandidateWikiPatch,
-  GraphRelationType,
   KnowledgeProvenance,
   MemoryFact,
   Observation,
@@ -39,7 +20,7 @@ import { knowledgeRootPath } from './constants'
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeAuditService } from './audit-service'
 import { knowledgeTruthService } from './truth-service'
-import { proposeDerivedCandidates, proposeFactCandidates, withFactCandidatesLock } from './review-service'
+import { proposeFactCandidates, withFactCandidatesLock } from './review-service'
 import { factScope, isActiveObservation, isUserStatement, observationScope, sourceEvidence } from './memory-evidence'
 import { isRuntimeNotification, personalStatementText } from './personal-memory-content'
 import { candidateDecisionHash } from './decision-scorer'
@@ -50,8 +31,6 @@ import { generateObject } from '../llm/ai-runtime'
 import { writeFileAtomic } from '../lib/atomic-file'
 
 const FACT_CANDIDATES_FILE = join('facts', 'candidates.jsonl')
-const GRAPH_CANDIDATES_FILE = join('graph', 'candidates.jsonl')
-const WIKI_PATCHES_FILE = join('wiki', 'patches.jsonl')
 
 const DEFAULT_BATCH_LIMIT = 20
 const MAX_BATCH_LIMIT = 50
@@ -67,16 +46,6 @@ const MERGE_JACCARD_THRESHOLD = 0.7
 const TRUTH_CONTEXT_MAX_FACTS = 30
 const TRUTH_CONTEXT_MAX_CHARS = 400
 
-const GRAPH_RELATION_TYPES = [
-  'mentions',
-  'derived_from',
-  'supersedes',
-  'depends_on',
-  'conflicts_with',
-  'implemented_in',
-  'owned_by',
-  'used_by_agent',
-] as const satisfies GraphRelationType[]
 
 const FACT_KINDS = ['fact', 'preference', 'decision', 'procedure'] as const
 
@@ -96,29 +65,7 @@ const extractSchema = z.object({
       }),
     )
     .default([]),
-  wikiPatches: z
-    .array(
-      z.object({
-        pageSlug: z.string(),
-        title: z.string(),
-        patchMarkdown: z.string(),
-        rationale: z.string(),
-        confidence: z.number().min(0).max(1),
-        // 模型给出的相关已有知识 id；映射阶段按 knownTruthIds 过滤，未知 id 丢弃。
-        sourceFactIds: z.array(z.string()).catch([]),
-      }),
-    )
-    .default([]),
-  graphEdges: z
-    .array(
-      z.object({
-        from: z.string(),
-        to: z.string(),
-        type: z.enum(GRAPH_RELATION_TYPES),
-        confidence: z.number().min(0).max(1),
-      }),
-    )
-    .default([]),
+
 })
 type ExtractResult = z.infer<typeof extractSchema>
 
@@ -157,14 +104,11 @@ function buildSystemPrompt(): string {
     '【知识引擎候选提炼】',
     '你的职责是从给定的观察记录中只产出"候选"知识，绝不直接断言真相。',
     '规则：',
-    '- 仅产出你能在观察中找到直接证据的事实和 wiki 补丁。graphEdges 保持空数组，不独立提议图关系。',
     '- 置信度保守取值；信息不足时 confidence 取低值。',
     '- 不要编造证据；不要引用未给出的观察 ID。',
     '- 输出严格遵循 schema；无依据的项留空数组，不要硬凑。',
-    '- wikiPatches 的 pageSlug 须为小写短横线标识；patchMarkdown 是增量补充段落而非完整页面。',
     '- 每个 fact 必须判定 kind：fact（客观事实）/ preference（偏好习惯）/ decision（已做出的决策）/ procedure（可重复的步骤、命令或排障过程）。',
     '- 仅当新事实明确替代【已有知识】中的某一条时，才在该 fact 的 supersedes 中填入那条的方括号 id；不确定时省略。内容不同但各说各话的并存知识不要填 supersedes（冲突由系统自动标记）。',
-    '- wiki 补丁若总结或引用了【已有知识】中的条目，在 sourceFactIds 中填入那些条目的方括号 id（只填给出的 id）；无关时留空数组。',
   ].join('\n')
 }
 
@@ -244,31 +188,6 @@ function mapFactCandidate(
     derivation: 'llm',
     evidence: { observationIds: provenance.sourceObservationIds, sources: provenance.sourceEvidence },
     ...(conflicts.length > 0 ? { conflicts } : {}),
-  }
-}
-
-function mapWikiPatchCandidate(
-  raw: ExtractResult['wikiPatches'][number],
-  provenance: KnowledgeProvenance,
-  knownTruthIds: ReadonlySet<string>,
-): CandidateWikiPatch {
-  // 模型幻觉出的 sourceFactIds（指向不存在的 truth）直接丢弃，不进索引。
-  const sourceFactIds = [...new Set(
-    raw.sourceFactIds.map((id) => id.trim()).filter((id) => id.length > 0 && knownTruthIds.has(id)),
-  )]
-  return {
-    id: randomUUID(),
-    type: 'wiki-patch',
-    status: 'proposed',
-    pageSlug: raw.pageSlug,
-    title: raw.title,
-    patchMarkdown: raw.patchMarkdown,
-    rationale: raw.rationale,
-    confidence: raw.confidence,
-    provenance,
-    derivation: 'llm',
-    evidence: { observationIds: provenance.sourceObservationIds },
-    sourceFactIds,
   }
 }
 
@@ -501,10 +420,12 @@ export class KnowledgeExtractService {
       rawObservations = await knowledgeObservationService.list(query)
     }
 
+    if (input.observations) deriveWorkspace(rawObservations, input)
+
     // An assistant's guess is not evidence of a personal preference.
     const evidence = filterEvidence(rawObservations).filter((observation) =>
       isActiveObservation(observation) && observation.memoryIntent !== 'remember'
-      && (observationScope(observation) !== 'user' || isUserStatement(observation)))
+      && observationScope(observation) === 'user' && isUserStatement(observation))
     const empty: ExtractOutput = {
       facts: [],
       wikiPatches: [],
@@ -614,7 +535,6 @@ export class KnowledgeExtractService {
     const llmFacts = result.facts.map((raw) =>
       mapFactCandidate(raw, provenance, knownTruthIds, truthTargets, observationScope(budgeted.observations[0]!)),
     )
-    const wikiPatchCandidates = refinementCandidates ? [] : result.wikiPatches.map((raw) => mapWikiPatchCandidate(raw, provenance, knownTruthIds))
 
     const batchIds = new Set(budgeted.observations.map((observation) => observation.id))
     const mergeable = (await this.listFactCandidates()).filter((candidate) =>
@@ -670,12 +590,10 @@ export class KnowledgeExtractService {
 
     // 10. 落盘候选
     await proposeFactCandidates(appendedFacts)
-    await proposeDerivedCandidates(wikiPatchCandidates)
 
     // 11. 写一条批次级 candidate_proposed audit
     let auditEventId: string | undefined
-    const totalCandidates =
-      appendedFacts.length + wikiPatchCandidates.length
+    const totalCandidates = appendedFacts.length
     if (totalCandidates > 0 || mergedIds.length > 0) {
       const audit = await knowledgeAuditService.record({
         action: 'candidate_proposed',
@@ -684,7 +602,6 @@ export class KnowledgeExtractService {
         before: null,
         after: {
           factCandidateIds: appendedFacts.map((candidate) => candidate.id),
-          wikiPatchCandidateIds: wikiPatchCandidates.map((patch) => patch.id),
           graphEdgeCandidateIds: [],
           mergedFactCandidateIds: mergedIds,
           sourceObservationIds,
@@ -696,7 +613,7 @@ export class KnowledgeExtractService {
 
     return {
       facts: appendedFacts,
-      wikiPatches: wikiPatchCandidates,
+      wikiPatches: [],
       graphEdges: [],
       auditEventId,
       mergedFactCandidateIds: mergedIds,
@@ -711,19 +628,7 @@ export class KnowledgeExtractService {
     const records = await this.readJsonl<CandidateFact>(FACT_CANDIDATES_FILE)
     const barrier = await readPersonalForgettingBarrier()
     const revocations = await readObservationRevocationBarrier()
-    return records.map(candidate => revocations.candidate(barrier.candidate(candidate)))
-  }
-
-  /** 读取历史 graph/candidates.jsonl。 */
-  async listGraphCandidates(): Promise<CandidateGraphEdge[]> {
-    const revocations = await readObservationRevocationBarrier()
-    return (await this.readJsonl<CandidateGraphEdge>(GRAPH_CANDIDATES_FILE)).map(candidate => revocations.candidate(candidate))
-  }
-
-  /** 读取 wiki/patches.jsonl（追加写）。 */
-  async listWikiPatchCandidates(): Promise<CandidateWikiPatch[]> {
-    const revocations = await readObservationRevocationBarrier()
-    return (await this.readJsonl<CandidateWikiPatch>(WIKI_PATCHES_FILE)).map(candidate => revocations.candidate(candidate))
+    return records.filter(candidate => factScope(candidate.fact) === 'user').map(candidate => revocations.candidate(barrier.candidate(candidate)))
   }
 
   private async readJsonl<T>(relativePath: string): Promise<T[]> {

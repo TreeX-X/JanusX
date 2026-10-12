@@ -475,6 +475,37 @@ body.is-running[data-theme='planche'] {
   background: transparent;
 }
 
+/* 运行球状态补完：角标 / 按住确认 / 停止中 / 幽灵锚，全部纸墨化（去暗色荧光） */
+[data-theme='planche'] .janus-run-orb-badge {
+  background: #EFE4C5;
+  border-color: #1C343B;
+  color: #1C343B;
+}
+
+[data-theme='planche'] .janus-run-orb.is-holding {
+  border-color: #D43D2A;
+  color: #D43D2A;
+}
+
+[data-theme='planche'] .janus-run-orb.is-holding::before {
+  background: rgba(212, 61, 42, 0.22);
+}
+
+[data-theme='planche'] .janus-run-orb[data-state='stopping'] {
+  border-color: rgba(28, 52, 59, 0.38);
+  color: rgba(28, 52, 59, 0.38);
+}
+
+[data-theme='planche'] .janus-run-orb--ghost {
+  border-color: rgba(28, 52, 59, 0.38);
+  color: rgba(28, 52, 59, 0.38);
+}
+
+/* +N 溢出列表行 hover：暗底是绿色身份光，纸面改朱红 */
+[data-theme='planche'] .janus-run-orb-overflow-main:hover {
+  border-color: #D43D2A;
+}
+
 /* 遗留展开面板（.janus-expanded，变量驱动） */
 [data-theme='planche'] .janus-expanded {
   border: 1px solid #1C343B;

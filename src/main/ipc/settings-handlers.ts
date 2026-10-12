@@ -1,5 +1,4 @@
 import { syncLayaSettings } from '../knowledge/laya-runtime'
-import { knowledgeAutomationService } from '../knowledge/automation-service'
 import { cancelKnowledgeLocalSetup, updateKnowledgeSettingsFromRenderer } from '../knowledge/knowledge-local-settings'
 import { BrowserWindow, ipcMain } from 'electron'
 import { configService } from '../config/service'
@@ -96,9 +95,7 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(
     KNOWLEDGE_CHANNELS.updateSettings,
     async (_event, settings: Partial<KnowledgeSettings>) => {
-      const current = await configService.getKnowledgeSettings()
       const next = await updateKnowledgeSettingsFromRenderer(settings ?? {})
-      if (JSON.stringify(current) !== JSON.stringify(next)) knowledgeAutomationService.stop()
       await syncLayaSettings()
       return next
     },
@@ -112,7 +109,7 @@ export function registerSettingsHandlers(): void {
     EXPERIMENTAL_CHANNELS.update,
     async (_event, settings: Partial<ExperimentalFeatures>) => {
       const next = await configService.updateExperimentalFeatures(settings ?? {})
-      if (!next.knowledge) { knowledgeAutomationService.stop(); await cancelKnowledgeLocalSetup() }
+      if (!next.knowledge) await cancelKnowledgeLocalSetup()
       const { settleMemoryMutations } = await import('../knowledge/memory-domain-controls')
       await settleMemoryMutations()
       await syncLayaSettings()

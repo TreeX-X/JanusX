@@ -16,7 +16,7 @@
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/index.ts","role":"entry"},
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/ipc/register.ts","role":"implementation"}
   ],
-  "updated": "2026-10-08T03:43:45.316Z",
+  "updated": "2026-10-11T16:23:33.137Z",
   "moduleState": "partial"
 }
 ---
@@ -38,6 +38,8 @@
 流程治理：[development-branch](./development-branch.md)、[reproducible-verification](./reproducible-verification.md)（两篇已补 `--uuid` 后缀正名）、[github-maintenance](./github-maintenance.md)归属产品面而不属本域。
 
 早期基石（均保留，无孤儿）：[toast](./desktop-toast.md)、[model-registry](../agent/model-registry.md)、[llm-runtime](../agent/llm-tool-runtime.md)、[browser-surface](./browser-surface.md)、[auto-update](./app-auto-update-win.md)、[cli-scope](./cli-manager-scope.md)、[i18n](./i18n-pipeline.md)、[statusbar](./runtime-statusbar.md)。
+
+Windows 分发先刷新已构建的 sibling 发布文件，再构建、检查边界和同步排除清单。双目标打包与单目标 portable 迭代均禁用自动发布；迭代子进程使用压缩级别 1 并保留体积预算，正式发行保持默认压缩配置。独立发布脚本先检查运行时和更新清单，上传同一批产物到草稿后再公开。llm-core 的增量信息保存在 dist 内，清理 dist 同时清理缓存；verify 先构建 core 供测试使用，后续 build:app 仅构建 Electron 应用。
 
 ## Acceptance criteria
 

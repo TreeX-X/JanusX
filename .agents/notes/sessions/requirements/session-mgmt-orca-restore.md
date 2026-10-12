@@ -68,7 +68,7 @@
       }
     }
   },
-  "updated": "2026-10-10T14:00:37.171Z",
+  "updated": "2026-10-12T08:18:39.265Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/dc1aca7c-408f-406d-add4-ba78d556b662"
 }
 ---
@@ -83,13 +83,13 @@ Scope split: the L1/L2/L3 layering below owns presentation and windowed reading;
 
 ## Proposal
 
-Land presentation and restore as one requirement in three progressive layers. L1 collapsed cards stay concise orca-style: engine icon with type name, truncated first prompt as title, status badge, and one mono line carrying turn count, checkpoint count, and recency. List rows keep only a short preview for search; the first prompt loads on expand behind a display cap. L2 inline preview expands inside the right dock and shows the first prompt with Copy behind the same display cap plus an explicit expand-to-full affordance, session metadata (working directory, branch, model, message count), and the two most recent turns as question-plus-excerpt pairs with kind badges and timestamps. L2 never renders checkpoint file lists, review boxes, or diffs. A single 查看详情 action leaves the dock and opens the L3 reading window.
+Land presentation and restore as one requirement in three progressive layers. L1 collapsed cards stay concise orca-style with three summary rows: engine icon with type name, truncated first prompt as title, external marker where applicable, and status badge in the header; a muted single-line preview of first prompt for quick scanning; and one mono meta line carrying turn count, checkpoint count, and recency. L2 inline preview expands inside the right dock and shows the capped first prompt with Copy behind the display cap plus an explicit expand-to-full affordance, session metadata (working directory, branch, model, message count), and the two most recent turns as question-plus-excerpt pairs with kind badges and timestamps (without duplicating L1 status or count meta lines). L2 never renders checkpoint file lists, review boxes, or diffs. A single 查看详情 action leaves the dock and opens the L3 reading window.
 
 The L3 window owns full reading. It centers over the workbench under the shared traffic-bar title, carries session metadata plus transcript reference in its header, and scrolls the full turn list with per-turn prompts, excerpts, kind badges, and timestamps. Transcript prose resolves orca-style at open time: the renderer requests a bounded server read of the persisted transcript path, parses first prompt plus turn pairs with head-plus-tail fallback above 512KB, tolerates unknown shapes and corrupt lines per file, and never blocks turn recording or card listing on parse failure. Registry turns stay authoritative for ordering and status; transcript text supplies only display prose, and cached excerpts render instantly while the full parse streams in.
 
 Restore points exist only for software-internal sessions. Every mutating internal turn binds exactly one checkpoint through the existing session plus turn linkage; pure question turns without file changes bind an empty checkpoint record so the timeline stays aligned and renders a dashed no-change strip. External sessions carry no checkpoint binding, show an explicit 外部会话 · 无还原点 marker in L1 through L3, and expose transcript actions only (Copy prompt, Copy log path, Open log, Open cwd). Internal turns render a one-line checkpoint summary (index, file count, aggregated additions plus deletions, kind badge, timestamp) with 查看 diff and 恢复 actions; diff expands inline inside the L3 window as a file list plus code pane with binary and oversized rows labelled and unexpanded, and restore keeps the existing two-step review with prune warning, confirm, success, and conflict disclosure scoped to the owning session. Restoring one session must never prune checkpoints of another session.
 
-Continue behavior splits by origin. Internal sessions continue through the existing Continue in New Session focused handoff in the original working directory with original shell and preset. External sessions resume through the provider resume command in a fresh terminal at the recorded working directory (for example `claude --resume <id>` or `codex resume <id>`), re-exporting recorded environment such as `CODEX_HOME` where present; rows whose resume prerequisites are missing disable Resume with the reason stated and keep Copy resume command available.
+2026-10-11 用户明确将 Claude、Codex、Opencode 的会话管理和恢复优先统一，其他终端后续处理。三引擎内部与外部记录不再按来源区分 Continue：同引擎且有提供方 ID 时在新终端恢复原生历史，不注入首条 prompt；无 ID 或切换引擎才交接。显式 Resume 拒绝身份缺失、历史失效及引擎切换。原 cwd、配置来源、历史及 Hook 先校验；归档的原生历史仍存在时可以恢复，旧检查点不继承。当前事实与验证归 [转录详情与原生恢复](../records/session-resume-detail.md)。
 
 ## Alternatives considered
 
@@ -102,18 +102,18 @@ Continue behavior splits by origin. Internal sessions continue through the exist
 
 ## Acceptance criteria
 
-- [ ] AC-1: L1 cards show engine icon, truncated first prompt, external marker where applicable, and expand affordance only.
-- [ ] AC-2: L2 preview shows engine, status, counts, recency, the full first prompt with Copy, working directory, branch, model, message count, and the two most recent turns with kind badges.
+- [ ] AC-1: L1 cards show engine icon with type name, truncated first prompt as title, short preview line, status badge, mono line carrying turn count, checkpoint count, and recency, external marker where applicable, and expand affordance.
+- [ ] AC-2: L2 preview shows capped first prompt with expand-to-full affordance and Copy, session metadata (working directory, branch, model, message count), and the two most recent turns with kind badges, without duplicating L1 status or count meta lines.
 - [ ] AC-3: L3 window opens from 查看详情, centers under the traffic bar, and scrolls full turns with prompts, excerpts, badges, and transcript reference.
 - [ ] AC-4: L3 prose resolves from a bounded transcript read with head-plus-tail fallback, corrupt-line tolerance, and excerpt-first instant render.
 - [ ] AC-5: Internal mutating turns bind one checkpoint each; pure question turns render a dashed no-change strip preserving alignment.
 - [ ] AC-6: External sessions show no checkpoint chrome in any layer and expose transcript actions only.
 - [ ] AC-7: Internal L3 turns expose inline diff with file list plus code pane, binary and oversized rows labelled unexpanded, and session-scoped two-step restore with prune warning and conflict disclosure.
-- [x] AC-8: Internal Continue uses focused handoff; external Resume runs the provider resume command with missing-prerequisite disable plus Copy command fallback.
+- [x] AC-8: Claude/Codex/Opencode same-engine Continue and Resume restore native history for internal/external rows without prompt injection. Missing ID disables Resume; unavailable history or engine changes on explicit Resume reject. Continue without ID retains an explained handoff, and Copy command remains available with a native identity.
 - [x] AC-9: The card fold control renders borderless: no hairline frame on the chevron button, with hover/focus affordance and the 240ms rotation motion preserved.
 - [ ] AC-10: The L2 first-prompt block caps its display (line or character budget with surrogate-safe truncation) and offers an explicit expand-to-full affordance; unbounded first prompts never push the card open.
 
-AC-9 由 `planche-theme` 的 `.foldBtn` 无边框钉选覆盖。AC-8 执行侧由桌面演练 `tests/e2e/desktop-session-continue.spec.ts` 覆盖（内部 Continue 交付 focused handoff，外部 Resume 跑 `claude --resume <id>`，外部行 Resume 与在新会话中继续并排）；缺失前置的禁用与 Copy 兜底分支由 `session-continue-resume` 对 `buildProviderResumeArgs`/`buildProviderResumeCommand` 的空前置单测钉选——扫描产出的外部行今天总带 resume 真值，禁用分支无自然可达数据形态。AC-10 的四行 clamp 与 160 字符预算加展开/收起入口已实现（复用 `checkpoint.expand/collapse` 文案），Copy 始终复制全文、显示不截断文本（行预算 clamp 无截断面），活界面显示断言待补（AC-4 已由同一演练勾选）。
+AC-8 保留编号并按用户确认的三引擎范围修订；原“内部均交接”验收属于此前行为。执行侧由 `tests/e2e/desktop-session-continue.spec.ts` 的真实 IPC/PTY、模拟 CLI 演练覆盖（该演练对应 `workspace-session-checkpoint-continue.md` 的 AC-4 演练，不覆盖本需求 AC-4 的 L3 转录读取）；缺少 ID、Copy 参数及归档入口判断由 session-continue-resume 单测覆盖，历史与配置来源由 session-recovery 单测覆盖。具体运行结果归恢复 Note，不代表真实账户模型调用已验证。AC-9 仍由 planche-theme 的无边框钉选覆盖。AC-1 与 AC-2 按 [Session card L1 carries the v6 summary rows](../../workbench/session-card-l1-summary.md) 架构决策明确层级边界：L1 拥有引擎、状态、计数与新鲜度；L2 承载目录分支、受截断首 prompt 与最近轮次，与 AC-10 截断预算（四行 clamp、160 字符预算及展开入口已实现，Copy 始终复制全文）保持一致；本需求 AC-4（L3 prose 解析与容错）仍待独立验证，本文件 AC-4 保持未勾选，其余验收状态本轮不变。
 
 ## Risks
 

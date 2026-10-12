@@ -12,7 +12,7 @@ beforeAll(async () => {
     import i18n from 'i18next';import {initReactI18next} from 'react-i18next'
     import knowledge from './src/renderer/src/i18n/locales/en/knowledge.json'
     import zhKnowledge from './src/renderer/src/i18n/locales/zh-CN/knowledge.json'
-    import {KnowledgeWorkbench} from './src/renderer/src/components/knowledge/KnowledgeWorkbench'
+    import {AuditRecords} from './src/renderer/src/components/knowledge/AuditRecords'
     import {AuditDetail} from './src/renderer/src/components/knowledge/AuditDetail'
     import {useExperimentalStore} from './src/renderer/src/stores/experimental'
     import {useAssistantStore} from './src/renderer/src/stores/assistant'
@@ -42,7 +42,7 @@ beforeAll(async () => {
     useExperimentalStore.setState({loaded:true,knowledge:true,persona:true})
     useAssistantStore.setState({workbenchDomain:'engineering'})
     const root=createRoot(document.getElementById('root'))
-    window.show=()=>root.render(<KnowledgeWorkbench isOpen onClose={()=>root.render(null)}/>)
+    function Audit(){const [event,setEvent]=React.useState(null);return <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) minmax(0,1fr)',height:'100vh'}}><AuditRecords selectedId={event?.id} onSelect={setEvent}/>{event&&<AuditDetail event={event} onClose={()=>setEvent(null)}/>}</div>};window.show=()=>root.render(<Audit/>)
     window.detail=()=>root.render(<div style={{height:'100vh'}}><AuditDetail event={window.events[4]} onClose={()=>root.render(null)}/></div>)
     window.unmount=()=>root.render(null);window.language=lng=>i18n.changeLanguage(lng)
     i18n.use(initReactI18next).init({lng:'en',resources:{en:{knowledge},'zh-CN':{knowledge:zhKnowledge}},initImmediate:false})
@@ -62,8 +62,6 @@ async function mount(page: Page) {
   await page.addStyleTag({ content: css + '\nbody{margin:0}*{box-sizing:border-box}' })
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark' })
   await page.addScriptTag({ content: script })
-  await page.getByRole('button', { name: 'View records', exact: true }).click()
-  await page.getByRole('tab', { name: 'Operation audit', exact: true }).click()
   await page.getByText('Loaded 30 of 35 events', { exact: true }).waitFor()
 }
 

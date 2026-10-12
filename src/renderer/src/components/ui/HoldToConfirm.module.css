@@ -7,25 +7,36 @@
   user-select: none;
 }
 
+/* 按住进度：左→右线性填充，时间语义；控件任意宽高都成立 */
 .control::before {
   position: absolute;
   z-index: 0;
   inset: 0;
   content: '';
-  background: rgba(210, 72, 72, 0.28);
+  background: color-mix(in srgb, var(--shell-diff-del, #e06c75) 28%, transparent);
   transform: scaleX(0);
   transform-origin: left;
   pointer-events: none;
 }
 
+/* 按住指示：正圆环。
+   高度由上下 3px 内缩给定，aspect-ratio 锁 1:1 得到宽度，再用 margin:auto 双轴居中——
+   宽按钮（运行面板「停止全部」）不会被 inset 拉成旋转长胶囊。
+   定位不用 transform，旋转动画才能只负责 spin。 */
 .control::after {
   position: absolute;
   z-index: 2;
-  inset: 3px;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  right: 0;
+  max-height: 14px;
+  aspect-ratio: 1;
+  margin: auto;
   content: '';
   border: 1px solid transparent;
   border-top-color: currentColor;
-  border-radius: 999px;
+  border-radius: 50%;
   opacity: 0;
   pointer-events: none;
 }
@@ -40,7 +51,7 @@
 }
 
 .holding > * {
-  opacity: 0.3;
+  opacity: 0.45;
 }
 
 .control > * {
@@ -57,5 +68,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .holding::after { animation: none; }
+  .holding::after {
+    animation: none;
+    border-color: currentColor;
+  }
 }

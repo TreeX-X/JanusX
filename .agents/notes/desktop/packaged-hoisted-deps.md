@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-11T16:23:33.137Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -43,7 +43,7 @@ Local verification never saw this. `scripts/check-packaged-runtime.mjs` launched
 
 `files` excludes only what provably cannot reach a packaged runtime: repository sources, caches and build outputs, and `packages` plus `node_modules/monaco-editor`, both of which are bundled into `out` (`electron.vite.config.ts` lists `@janusx/llm-core` under `externalizeDepsPlugin({ exclude })`, and Monaco ships as per-language renderer assets).
 
-Detection replaced false-pass checking. `scripts/check-packaged-runtime.mjs` copies `win-unpacked` into a temp directory outside the repository before launching, so no path above the archive can stand in for a missing package, asserts that every declared runtime dependency is present at the archive root, and runs two smoke modes: `llm-runtime` for the AI runtime and the new `--smoke-test=module-graph`, which imports exactly what `bootstrapApp` imports plus the three lazy `createWindow` imports and then exits. `src/main/index.ts` exposes that graph through a shared `importBootstrapModules` so the smoke cannot drift from real startup. `release-win.yml` gained the packaged-runtime step after publishing.
+Detection replaced false-pass checking. `scripts/check-packaged-runtime.mjs` copies `win-unpacked` into a temp directory outside the repository before launching, so no path above the archive can stand in for a missing package, asserts that every declared runtime dependency is present at the archive root, and runs two smoke modes: `llm-runtime` for the AI runtime and the new `--smoke-test=module-graph`, which imports exactly what `bootstrapApp` imports plus the three lazy `createWindow` imports and then exits. `src/main/index.ts` exposes that graph through a shared `importBootstrapModules` so the smoke cannot drift from real startup. `release-win.yml` packs with `--publish never`. `scripts/publish-win.mjs` verifies the neutral-directory unpacked and portable runtime plus the setup hash and size recorded by the update manifest before creating a GitHub draft. It uploads the existing setup, blockmap, portable and channel manifest with GitHub CLI, then makes the draft public only after every upload succeeds. Local `package:win:publish` uses the same gate; no second build substitutes different bytes after validation.
 
 ## Alternatives considered
 

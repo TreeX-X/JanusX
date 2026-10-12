@@ -1,0 +1,75 @@
+{
+  "testedAt": "2026-10-10T03:58:55.587Z",
+  "providerId": "vertex-ai-1782113380280",
+  "modelId": "gemini-3.8-flash",
+  "jev": "not-configured",
+  "outcomes": [
+    {
+      "kind": "requirement",
+      "scenario": "insufficient",
+      "report": {
+        "coverage": "insufficient",
+        "limitations": [
+          "Source unavailable: src/queue.ts"
+        ],
+        "provenance": {
+          "providerId": "vertex-ai-1782113380280",
+          "modelId": "gemini-3.8-flash",
+          "ruleVersion": "note-review/1"
+        },
+        "findings": [
+          {
+            "id": "7b5ef0c8-6617-48f8-b112-9c98e21727c9",
+            "category": "insufficient",
+            "summary": "Requirement defers behavior and durability definition to implementation source code",
+            "explanation": "The requirement fails to specify expected behavior and acceptance criteria, stating instead that behavior cannot be established without reading the implementation source code. Acceptance criteria AC-1 circularly references this non-specification. Requirements must define expected functional behavior independently of the implementation rather than treating source code as the authority.",
+            "suggestion": "Define concrete expected behaviors and acceptance criteria for the volatile queue (such as in-memory enqueuing of strings, reset behavior, and state loss on restart as designed in the module) directly within the requirement note.",
+            "citations": [
+              {
+                "path": ".agents/notes/requirement.md",
+                "quote": "The durability implementation is owned by the referenced queue source. Its behavior cannot be established without reading that source."
+              },
+              {
+                "path": ".agents/notes/requirement.md",
+                "quote": "- [ ] AC-1: The queue exhibits the behavior stated above."
+              }
+            ],
+            "verification": "not-configured",
+            "source": {
+              "noteId": "f1c72968-156e-4a82-a9e6-007571475ae2",
+              "path": ".agents/notes/requirement.md",
+              "hash": "034543fbb8f0b3f6466c60f440295f267e65424b996e118c4fdc86ed1a45ba86",
+              "kind": "requirement",
+              "lifecycle": "accepted",
+              "module": "note://acbdb4d6-8417-4719-b03c-70c806b228dc/0428b9fe-b287-42ba-b7ca-b619085474db"
+            },
+            "evidence": [
+              {
+                "path": ".agents/notes/module.md",
+                "hash": "624d3bdb5481194c6e561297e8dcf3e7fed1a6ea3237ebec1fcf552f752d334c"
+              }
+            ],
+            "stale": false
+          }
+        ],
+        "id": "af48b2ca-0e91-4743-9cdd-370f5eefccb1",
+        "source": {
+          "noteId": "f1c72968-156e-4a82-a9e6-007571475ae2",
+          "path": ".agents/notes/requirement.md",
+          "hash": "034543fbb8f0b3f6466c60f440295f267e65424b996e118c4fdc86ed1a45ba86",
+          "kind": "requirement",
+          "lifecycle": "accepted",
+          "module": "note://acbdb4d6-8417-4719-b03c-70c806b228dc/0428b9fe-b287-42ba-b7ca-b619085474db"
+        },
+        "evidence": [
+          {
+            "path": ".agents/notes/module.md",
+            "hash": "624d3bdb5481194c6e561297e8dcf3e7fed1a6ea3237ebec1fcf552f752d334c"
+          }
+        ],
+        "stale": false,
+        "createdAt": "2026-10-10T03:58:55.405Z"
+      }
+    }
+  ]
+}

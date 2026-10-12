@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join as joinTranscriptPath } from 'node:path'
 import type { AgentEngine } from '../janus-runner/types'
-import { configService } from '../config/service'
+import { memoryDomainPolicy } from './memory-domain-policy'
 import {
   JANUSX_SYNTHETIC_HOOK_EVENTS,
   type AgentHookPayload,
@@ -158,8 +158,7 @@ class AgentTurnRecorder {
   }
 
   private async isEnabled(): Promise<boolean> {
-    const [settings, flags] = await Promise.all([configService.getKnowledgeSettings(), configService.getExperimentalFeatures()])
-    return settings.enabled && flags.knowledge
+    return (await memoryDomainPolicy()).inferEngineeringHabits
   }
 
   private eventId(payload: AgentHookPayload): string {
@@ -321,6 +320,7 @@ class AgentTurnRecorder {
         startedAt,
       },
     }, context: { speaker: userPrompt ? 'user' : 'unknown', sourceEventId, createdAt: startedAt } }])
+    if (!observation) return
     turn.observationId = observation.id
     this.emitCaptured(payload, terminal, observation.id)
   }
@@ -349,7 +349,7 @@ class AgentTurnRecorder {
         sessionId: payload.sessionId,
       },
     }, context: { speaker: 'system', sourceEventId: this.eventId(payload) } }])
-    this.emitCaptured(payload, terminal, observation.id)
+    if (observation) this.emitCaptured(payload, terminal, observation.id)
   }
 
   private async recordEnd(
@@ -388,12 +388,8 @@ class AgentTurnRecorder {
       workspaceId: terminal.workspaceId,
       workspacePath: terminal.cwd,
       source: 'agent-stream',
-      type: hasText(payload.message) && !failed ? 'conversation-turn' : 'system-event',
-      content: hasText(payload.message)
-        ? payload.message
-        : failed
-          ? `${terminal.engine} terminal task failed`
-          : `${terminal.engine} terminal task completed`,
+      type: 'system-event',
+      content: failed ? 'Terminal turn failed' : 'Terminal turn completed',
       summary: failed
         ? `${terminal.engine} terminal task failed`
         : `${terminal.engine} terminal task completed`,

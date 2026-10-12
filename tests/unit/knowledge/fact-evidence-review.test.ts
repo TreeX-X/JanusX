@@ -39,9 +39,9 @@ describe('fact evidence approval and persona lifecycle', () => {
 
   async function projectCandidate(event: string) {
     const observation = await knowledgeObservationService.capture({
-      workspaceId: 'audit-project', workspacePath: 'C:/audit-project', source: 'tool',
-      type: 'analysis-result', content: '决定：采用软删除方案', actor: 'engineering-host',
-    }, { speaker: 'tool', sourceEventId: event })
+      workspaceId: 'user', workspacePath: 'user', source: 'manual',
+      type: 'user-note', content: 'I prefer soft deletion.', actor: 'user',
+    }, { speaker: 'user', sourceEventId: event })
     await runDeterministicStage({ workspaceId: observation.workspaceId, observations: [observation] })
     const candidate = (await knowledgeExtractService.listFactCandidates()).find(item => item.evidence.observationIds.includes(observation.id))!
     expect(candidate).toBeDefined()
@@ -92,17 +92,6 @@ describe('fact evidence approval and persona lifecycle', () => {
     const facts = (await knowledgeTruthService.list()).facts
     expect(facts).toHaveLength(1)
     expect(new Set(facts[0].provenance.sourceObservationIds)).toEqual(new Set([first.observation.id, second.observation.id]))
-  })
-
-  it('keeps identical facts in independent project domains', async () => {
-    const first = await projectCandidate('turn-1')
-    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: first.candidate.id }))
-    const other = await knowledgeObservationService.capture({ workspaceId: 'other-project', workspacePath: 'C:/other-project', source: 'tool',
-      type: 'analysis-result', content: first.observation.content }, { speaker: 'tool', sourceEventId: 'turn-2' })
-    await runDeterministicStage({ workspaceId: other.workspaceId, observations: [other] })
-    const candidate = (await knowledgeExtractService.listFactCandidates()).find(row => row.evidence.observationIds.includes(other.id))!
-    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
-    expect((await knowledgeTruthService.list()).facts).toHaveLength(2)
   })
 
   it('refuses ordinary approval after the referenced source content changes', async () => {

@@ -31,6 +31,8 @@ interface HookCommandSpec {
 interface AgentHookConfigManagerOptions {
   platform?: NodeJS.Platform
   homeDir?: string
+  claudeConfigDir?: string
+  codexHome?: string
   userDataDir?: string
   executablePath?: string
   appEntryArg?: string
@@ -698,6 +700,8 @@ exit 0
 export class AgentHookConfigManager {
   private readonly platform: NodeJS.Platform
   private readonly homeDir: string
+  private readonly claudeConfigDir: string
+  private readonly codexHome: string
   private readonly userDataDir: string
   private readonly executablePath: string
   private readonly appEntryArg?: string
@@ -708,6 +712,12 @@ export class AgentHookConfigManager {
   constructor(options: AgentHookConfigManagerOptions = {}) {
     this.platform = options.platform ?? process.platform
     this.homeDir = options.homeDir ?? homedir()
+    this.claudeConfigDir = (options.claudeConfigDir
+      ?? (options.homeDir === undefined ? process.env.CLAUDE_CONFIG_DIR?.trim() : undefined))
+      || join(this.homeDir, '.claude')
+    this.codexHome = (options.codexHome
+      ?? (options.homeDir === undefined ? process.env.CODEX_HOME?.trim() : undefined))
+      || join(this.homeDir, '.codex')
     this.userDataDir = options.userDataDir ?? join(app.getPath('userData'), 'janusx')
     this.executablePath = options.executablePath ?? process.execPath
     this.appEntryArg = resolveAppEntryArg(options.appEntryArg)
@@ -885,11 +895,11 @@ export class AgentHookConfigManager {
   }
 
   getClaudeSettingsPath(): string {
-    return join(this.homeDir, '.claude', 'settings.json')
+    return join(this.claudeConfigDir, 'settings.json')
   }
 
   getCodexHooksPath(): string {
-    return join(this.homeDir, '.codex', 'hooks.json')
+    return join(this.codexHome, 'hooks.json')
   }
 
   getOpencodeConfigDir(): string {

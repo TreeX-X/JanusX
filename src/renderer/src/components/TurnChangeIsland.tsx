@@ -128,13 +128,18 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               <ChevronLeft size={14} aria-hidden="true" />
             </button>
           </div>
-          <div className="turn-change-body" role="region"
+          <div className="turn-change-body" role="region" key={view}
             aria-label={view === 'latest' ? t('terminal:turnChanges.latest') : t('terminal:turnChanges.historyLabel')}>
             {view === 'latest' ? change ? (
               <>
                 <div className="turn-change-summary">
-                  <div><span className="turn-change-eyebrow">{t('terminal:turnChanges.latestHeading')}</span><strong>{summary}</strong></div>
-                  <Counts additions={change.additions} deletions={change.deletions} />
+                  <div className="turn-change-card-heading">
+                    <span>{t('terminal:turnChanges.latestHeading')}</span>
+                  </div>
+                  <div className="turn-change-card-summary">
+                    <span>{summary}</span>
+                    <Counts additions={change.additions} deletions={change.deletions} />
+                  </div>
                 </div>
                 <div className="turn-change-files">{renderFiles(change)}</div>
                 {change.fileCount > change.files.length && <div className="turn-change-more">
@@ -145,11 +150,11 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
               <div className="turn-change-empty"><Files size={22} strokeWidth={1.25} aria-hidden="true" /><span>{emptyText}</span></div>
             ) : history.length > 0 ? [...history].reverse().map(turn => (
               <article className="turn-change-history" key={turn.turnId ?? turn.endedAt}>
-                <div className="turn-change-history-heading">
+                <div className="turn-change-card-heading">
                   <time dateTime={turn.endedAt}>{formatTime(turn.endedAt)}</time>
                   <span className="turn-change-kind">{t(`terminal:turnChanges.kind.${turn.kind}`)}</span>
                 </div>
-                <div className="turn-change-history-summary">
+                <div className="turn-change-card-summary">
                   <span>{t('terminal:turnChanges.files', { count: turn.fileCount })}</span>
                   <Counts additions={turn.additions} deletions={turn.deletions} />
                 </div>

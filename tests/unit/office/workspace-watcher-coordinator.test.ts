@@ -27,7 +27,9 @@ const mocks = vi.hoisted(() => {
   return { handlers, watchers, watch }
 })
 
-vi.mock('fs', () => ({ watch: mocks.watch }))
+// The watcher registration path also constructs a ReviewStore, whose constructor
+// calls mkdirSync; keep the real fs and override only watch.
+vi.mock('fs', async (importOriginal) => ({ ...(await importOriginal()), watch: mocks.watch }))
 
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },

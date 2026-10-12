@@ -1,8 +1,7 @@
 import { knowledgeObservationService } from './observation-service'
 import { knowledgeProcessingQueue } from './processing-queue'
-import { knowledgeContextService } from './context-service'
 import { configurePersonalRecallPolicy } from './user-recall-service'
-import { configureCandidateDomainPolicy, withFactCandidatesLock, withWikiCandidatesLock } from './review-service'
+import { configureCandidateDomainPolicy, withFactCandidatesLock } from './review-service'
 import { knowledgeRefinementTasks } from './refinement-tasks'
 import { memoryDomainPolicy } from './memory-domain-policy'
 import { factScope } from './memory-evidence'
@@ -16,13 +15,12 @@ export function installMemoryDomainControls(): void {
     if (workspaceId === 'user') {
       return context?.memoryIntent === 'remember' ? policy.personal : policy.capturePersonal
     }
-    return policy.project
+    return policy.inferEngineeringHabits && context?.speaker === 'user'
   })
   knowledgeProcessingQueue.configureDomainPolicy(async workspaceId => {
     const policy = await memoryDomainPolicy()
-    return workspaceId === 'user' ? policy.personal : policy.project
+    return workspaceId === 'user' ? policy.personal : policy.inferEngineeringHabits
   })
-  knowledgeContextService.configureProjectPolicy(async () => (await memoryDomainPolicy()).project)
   configurePersonalRecallPolicy(async () => (await memoryDomainPolicy()).recallPersonal)
   configureCandidateDomainPolicy(async (candidate, operation) => {
     const policy = await memoryDomainPolicy()
@@ -41,5 +39,4 @@ export function installMemoryDomainControls(): void {
 export async function settleMemoryMutations(): Promise<void> {
   await knowledgeObservationService.withSourceMutation(async () => {})
   await withFactCandidatesLock(async () => {})
-  await withWikiCandidatesLock(async () => {})
 }

@@ -13,8 +13,9 @@ for (const row of inventory.sources) {
   const entry = index.entries.find(e => e.relPath === currentPath(row.target))
   if (entry?.note?.meta.id !== row.id || entry?.note?.meta.created !== row.created) errors.push('Identity/date changed: ' + row.target)
 }
-if (existsSync('docs/migrations/note-responsibilities.json')) {
-  const report = JSON.parse(readFileSync('docs/migrations/note-responsibilities.json', 'utf8'))
+for (const path of ['docs/migrations/note-responsibilities.json', 'docs/migrations/note-knowledge-reorientation.json', 'docs/migrations/note-blueprint-planning.json']) {
+  if (!existsSync(path)) continue
+  const report = JSON.parse(readFileSync(path, 'utf8'))
   for (const row of report.sources) {
     const entry = index.entries.find(e => e.relPath === currentPath(row.target))
     if (row.source !== row.target && existsSync(row.source)) errors.push('Relocated source remains: ' + row.source)
@@ -41,5 +42,5 @@ for (const diagnostic of index.readDiagnostics) {
   errors.push(`${diagnostic.path ?? ''}: ${diagnostic.message}`)
 }
 for (const error of errors) console.error(error)
-console.log(`${index.entries.length - inventory.deferred.length} maintained v2 documents; ${inventory.sources.length} migrated sources; ${inventory.deferred.length} protected legacy files; ${errors.length} errors; ${index.readDiagnostics.length} read-side diagnostics.`)
+console.log(`${index.entries.filter(entry => entry.note?.meta.schema === 'harness-note/2').length} maintained v2 documents; ${inventory.sources.length} originally migrated sources; ${protectedUris.size} remaining protected files; ${errors.length} errors; ${index.readDiagnostics.length} read-side diagnostics.`)
 process.exitCode = errors.length ? 1 : 0

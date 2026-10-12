@@ -4,20 +4,22 @@ import { join, posix } from 'node:path'
 
 /** Read historical move evidence for validation only; runtime ownership comes from Notes. */
 export function readNoteRelocations(root) {
-  const path = join(root, 'docs/migrations/note-responsibilities.json')
-  if (!existsSync(path)) return new Map()
-  const report = JSON.parse(readFileSync(path, 'utf8'))
   const moves = new Map(), targets = new Set()
-  for (const row of report.sources) {
-    for (const value of [row.source, row.target]) {
-      if (typeof value !== 'string' || !value.startsWith('.agents/notes/') || value.includes('\\') || posix.normalize(value) !== value) {
-        throw new Error('Invalid Note relocation path: ' + value)
+  for (const name of ['note-responsibilities.json', 'note-knowledge-reorientation.json', 'note-blueprint-planning.json']) {
+    const path = join(root, 'docs/migrations', name)
+    if (!existsSync(path)) continue
+    const report = JSON.parse(readFileSync(path, 'utf8'))
+    for (const row of report.sources) {
+      for (const value of [row.source, row.target]) {
+        if (typeof value !== 'string' || !value.startsWith('.agents/notes/') || value.includes('\\') || posix.normalize(value) !== value) {
+          throw new Error('Invalid Note relocation path: ' + value)
+        }
       }
+      if (row.source === row.target) continue
+      if (moves.has(row.source) || targets.has(row.target.toLowerCase())) throw new Error('Duplicate Note relocation: ' + row.source)
+      moves.set(row.source, row.target)
+      targets.add(row.target.toLowerCase())
     }
-    if (row.source === row.target) continue
-    if (moves.has(row.source) || targets.has(row.target.toLowerCase())) throw new Error('Duplicate Note relocation: ' + row.source)
-    moves.set(row.source, row.target)
-    targets.add(row.target.toLowerCase())
   }
   for (const path of moves.keys()) resolveNoteRelocation(path, moves)
   return moves

@@ -70,11 +70,16 @@ export class AgentSessionRegistry {
   private loadTask: Promise<void> | null = null
   private loadOk = false
   // Bulk-import suppression: scans import hundreds of rows; each row must
-  // not emit its own session:event or the panel refetches per row.
-  // beginBatch/endBatch collapse one bulk pass into a single notify.
+  // not emit its own session:event or the panel refetches per row, and must
+  // not persist on its own either — a per-row persist stringifies the whole
+  // store and stalls the main process for the length of the scan.
+  // beginBatch/endBatch collapse one bulk pass into a single notify and a
+  // single store write.
   // See .agents/notes/sessions/records/session-flicker-storm.md
+  // See .agents/notes/sessions/records/session-open-stall.md
   private batchDepth = 0
   private batchDirty = false
+  private batchPersistDirty = false
 
   constructor(private readonly userDataDir?: string) {}
 
@@ -90,10 +95,13 @@ export class AgentSessionRegistry {
   endBatch(): void {
     if (this.batchDepth <= 0) return
     this.batchDepth -= 1
-    if (this.batchDepth === 0 && this.batchDirty) {
-      this.batchDirty = false
-      this.notify()
-    }
+    if (this.batchDepth > 0) return
+    const persistNow = this.batchPersistDirty
+    const notifyNow = this.batchDirty
+    this.batchPersistDirty = false
+    this.batchDirty = false
+    if (persistNow) this.persist()
+    if (notifyNow) this.notify()
   }
 
   private notify(sessionId?: string): void {
@@ -162,6 +170,20 @@ export class AgentSessionRegistry {
   }
 
   private persist(): void {
+    // One bulk pass writes once at endBatch instead of per row: every write
+    // stringifies the full store on the main thread, and a scan's hundreds of
+    // per-row writes stalled all IPC (including the panel's first list) behind
+    // them. Imports inside a batch are re-derivable from transcripts, so the
+    // deferred snapshot costs nothing extra on a crash.
+    // See .agents/notes/sessions/records/session-open-stall.md
+    if (this.batchDepth > 0) {
+      this.batchPersistDirty = true
+      return
+    }
+    this.persistNow()
+  }
+
+  private persistNow(): void {
     // Mutations gate on load so a fresh process never clobbers disk state
     // it has not read yet; a failed load pauses writes instead of
     // overwriting possibly valid data with a partial view.
@@ -187,6 +209,12 @@ export class AgentSessionRegistry {
 
   /** Drain pending persists (tests and shutdown paths). */
   flush(): Promise<void> {
+    // Shutdown can land mid-batch; the deferred snapshot must still reach
+    // disk before the process exits.
+    if (this.batchPersistDirty) {
+      this.batchPersistDirty = false
+      this.persistNow()
+    }
     return this.ensureLoaded().then(() => this.writeQueue.run(() => Promise.resolve()))
   }
 
@@ -258,12 +286,15 @@ export class AgentSessionRegistry {
     providerSessionId?: string
     transcriptPath?: string
     continuedFrom?: string
+    /** Native recovery copies display history without borrowing source checkpoints. */
+    historyFrom?: string
   }): AgentSessionRecord {
     const boundId = this.terminalToSession.get(input.terminalId)
     const bound = boundId ? this.sessions.get(boundId) : undefined
     if (bound) return this.mergeSessionOrigin(bound, input)
 
     const now = new Date().toISOString()
+    const history = input.historyFrom ? this.sessions.get(input.historyFrom) : undefined
     const record: AgentSessionRecord = {
       id: randomUUID(),
       workspaceId: input.workspaceId,
@@ -274,16 +305,16 @@ export class AgentSessionRegistry {
       preset: input.preset,
       command: input.command,
       args: input.args,
-      firstPrompt: '',
-      lastPrompt: '',
-      turnCount: 0,
+      firstPrompt: history?.firstPrompt ?? '',
+      lastPrompt: history?.lastPrompt ?? '',
+      turnCount: history?.turnCount ?? 0,
       checkpointCount: 0,
       status: 'active',
       providerSessionId: input.providerSessionId,
       transcriptPath: input.transcriptPath,
       continuedFrom: input.continuedFrom,
       terminalIds: [input.terminalId],
-      turns: [],
+      turns: (history?.turns ?? []).map((turn) => ({ ...turn, id: randomUUID(), checkpointId: undefined })),
       checkpointIds: [],
       createdAt: now,
       updatedAt: now,

@@ -1,3 +1,5 @@
+import { forgetPersonalMemoryQuery } from '../../../src/main/knowledge/personal-memory-forgetting'
+import { readPersonalForgettingBarrier } from '../../../src/main/knowledge/personal-forgetting-barrier'
 import { reviewFixture } from './review-fixture'
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,7 +14,6 @@ import {
 import { getUserMemoryOverview } from '../../../src/main/knowledge/user-overview-service'
 import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
 import { userEpisodeService } from '../../../src/main/knowledge/user-episode-service'
-import { knowledgeOperationsService } from '../../../src/main/knowledge/operations-service'
 import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
 import type { AuditEvent, CandidateFact, MemoryFact } from '../../../src/shared/knowledge'
 import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection'
@@ -155,15 +156,13 @@ describe('user memory MVP contract', () => {
     await userEpisodeService.capture({ content: '昨天用 pnpm 发布了新版本', ttlDays: 90 })
     expect((await searchUserMemoryDefault('pnpm')).items).not.toHaveLength(0)
 
-    await knowledgeOperationsService.revoke({ kind: 'fact', id: 'fact-u1', workspaceId: 'user' })
-    const { expiredIds } = await userEpisodeService.expireMatching('pnpm', Date.now())
-    expect(expiredIds).toHaveLength(1)
+    const result = await forgetPersonalMemoryQuery({ query: 'pnpm', confirm: true })
+    expect(result.archivedFactIds).toEqual(['fact-u1'])
+    expect(result.expiredEpisodeIds).toHaveLength(1)
 
     const silent = await searchUserMemoryDefault('pnpm')
     expect(silent.items).toEqual([])
-    const audits = await readAudits()
-    expect(audits.some((event) => event.action === 'truth_revoked' && event.targetId === 'fact-u1')).toBe(true)
-    expect(audits.some((event) => event.action === 'user_episode_harvested')).toBe(true)
+    expect((await readPersonalForgettingBarrier()).records).toHaveLength(1)
   })
 
   it('serves the glance overview with pending count, habits, and recent', async () => {

@@ -211,8 +211,9 @@ describe('planche theme contract', () => {
     expect(sessionMod).toContain(":global([data-theme='dark']) .cardSurface")
     expect(sessionMod).toContain(":global([data-theme='dark']) .sheet")
     expect(sessionMod).toContain('color-mix(in srgb, var(--shell-chrome) 88%, white)')
-    // 折叠控件走发丝线框 chevron 按钮（token 化，不吃填充）
+    // 折叠控件为无边框 chevron 按钮（token 化，不吃填充；hover/聚焦走强调色）
     expect(sessionMod).toContain('.foldBtn')
+    expect(sessionMod).toMatch(/\.foldBtn \{[^}]*border: none/s)
     expect(sessionMod).toContain('var(--shell-accent-border)')
     expect(session.match(/background: SURFACE_DEEP/g) ?? []).toHaveLength(2)
     expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(2)
@@ -391,13 +392,6 @@ describe('planche theme contract', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
     const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
     // 图谱 JS 颜色：仿 getBlueprintStatusVisual，dark 快照 + 纸面映射 + 令牌边线
-    const canvas = read('components/knowledge/KnowledgeGraphCanvas.tsx')
-    expect(canvas).toContain('PLANCHE_KIND_DOT_COLORS')
-    expect(canvas).toContain('getKnowledgeKindColor')
-    expect(canvas).toContain('getThemeBase')
-    expect(canvas).toContain("stroke: 'var(--shell-muted)'")
-    expect(canvas).toContain("colorMode={plancheCanvas ? 'light' : 'dark'}")
-    expect(canvas).not.toContain("stroke: '#8b8b93'")
     // 工作台 CSS：壳/头/图谱/列表/审查器纸面化（:global 加法层，吃令牌）
     const wb = read('components/knowledge/KnowledgeWorkbench.module.css')
     for (const selector of [
@@ -508,7 +502,7 @@ describe('planche theme contract', () => {
   it('puts the knowledge workbench close light at the top-left, like blueprint', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
     const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
-    const tsx = read('components/knowledge/KnowledgeWorkbench.tsx')
+    const tsx = read('components/knowledge/PersonalMemoryWorkbench.tsx')
     const css = read('components/knowledge/KnowledgeWorkbench.module.css')
     // 红灯必须是 .header 的第一个子节点（标题之前），不是右侧动作组的末位
     const header = tsx.slice(tsx.indexOf('<header className={styles.header}'), tsx.indexOf('</header>', tsx.indexOf('<header className={styles.header}')))

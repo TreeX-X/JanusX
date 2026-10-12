@@ -3,6 +3,7 @@ import {
   buildContinueResumeArgs,
   buildProviderResumeArgs,
   buildProviderResumeCommand,
+  canOfferSessionResume,
 } from '../../src/shared/ipc/session'
 
 describe('buildProviderResumeArgs', () => {
@@ -38,6 +39,27 @@ describe('buildContinueResumeArgs', () => {
     ).toEqual(['--session', 'ses_abc'])
   })
 
+  it('resumes Claude history when its provider session id is available', () => {
+    expect(buildContinueResumeArgs({ engine: 'claude', providerSessionId: 'claude-id' }))
+      .toEqual(['--resume', 'claude-id'])
+  })
+
+  it('resumes Codex instead of injecting its first prompt', () => {
+    expect(buildContinueResumeArgs({ engine: 'codex', providerSessionId: ' codex-id ' }))
+      .toEqual(['resume', 'codex-id'])
+    expect(buildContinueResumeArgs({ engine: 'codex', providerSessionId: '  ' })).toBeNull()
+  })
+
+  it('offers native recovery on internal and archived records for the three engines', () => {
+    for (const engine of ['claude', 'codex', 'opencode']) {
+      expect(canOfferSessionResume({ engine, archived: false })).toBe(true)
+      expect(canOfferSessionResume({ engine, archived: true })).toBe(true)
+    }
+    expect(canOfferSessionResume({ engine: 'pi', archived: false })).toBe(false)
+    expect(canOfferSessionResume({ engine: 'pi', external: true, archived: false })).toBe(true)
+    expect(canOfferSessionResume({ engine: 'pi', external: true, archived: true })).toBe(false)
+  })
+
   it('keeps native resume when the target engine is unchanged', () => {
     expect(
       buildContinueResumeArgs({ engine: 'opencode', providerSessionId: 'ses_abc' }, 'opencode'),
@@ -55,12 +77,6 @@ describe('buildContinueResumeArgs', () => {
   })
 
   it('keeps the handoff for engines without native internal resume', () => {
-    expect(
-      buildContinueResumeArgs({ engine: 'claude', providerSessionId: 'claude-id' }),
-    ).toBeNull()
-    expect(
-      buildContinueResumeArgs({ engine: 'codex', providerSessionId: 'codex-id' }),
-    ).toBeNull()
     expect(
       buildContinueResumeArgs({ engine: 'pi', providerSessionId: 'pi-id', transcriptPath: '/tmp/s.json' }),
     ).toBeNull()

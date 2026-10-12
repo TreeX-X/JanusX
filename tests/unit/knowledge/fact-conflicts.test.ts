@@ -11,7 +11,7 @@ import { factReviewContext, replacementHash } from '../../../src/main/knowledge/
 
 let root: string
 const oldRoot = process.env.JANUSX_KNOWLEDGE_ROOT
-const fact = (id: string, content: string, scope: 'user' | 'project' = 'project'): MemoryFact => ({
+const fact = (id: string, content: string, scope: 'user' | 'project' = 'user'): MemoryFact => ({
   id, content, scope, kind: 'preference', status: 'active', version: 1, concepts: [], files: [], tags: [], confidence: 0.7,
   provenance: { workspaceId: scope === 'user' ? 'user' : 'project-a', workspaceName: 'test', workspacePath: '', source: 'manual',
     actor: 'test', createdAt: '2026-09-29T00:00:00Z', sourceObservationIds: [], fileRefs: [] },
@@ -53,7 +53,7 @@ describe('explicit fact slots', () => {
 describe('fact review conflicts', () => {
   it.each(['different', 'identical', 'archived', 'foreign'] as const)('preserves a truth ID collision (%s)', async variant => {
     const next = candidate('next', 'New content')
-    const original = fact(next.fact.id, variant === 'identical' ? next.fact.content : 'Original content', variant === 'foreign' ? 'user' : 'project')
+    const original = fact(next.fact.id, variant === 'identical' ? next.fact.content : 'Original content', variant === 'foreign' ? 'project' : 'user')
     if (variant === 'archived') original.status = 'archived'
     await seed([original], [next])
     const input = await reviewCandidateInput(next)
@@ -64,7 +64,7 @@ describe('fact review conflicts', () => {
   it('groups competing values by slot and domain without leaking other owners', async () => {
     const next = candidate('next', '默认输出语言: 英文')
     const peer = candidate('peer', '默认输出语言: 中文')
-    const foreign = fact('private', '默认输出语言: 中文', 'user')
+    const foreign = fact('private', '默认输出语言: 中文', 'project')
     const otherOwner = { ...fact('other-owner', '默认输出语言: 中文'), ownerUserId: 'someone-else' }
     await seed([foreign, otherOwner], [next, peer, { ...peer, id: 'private-peer', fact: foreign }])
     const context = await service.factReviewContext(await reviewCandidateInput(next))
@@ -105,7 +105,7 @@ describe('fact review conflicts', () => {
     const next = candidate('next', '默认输出语言: 英文'), unrelated = fact('other', 'Unrelated fact')
     await seed([unrelated], [next])
     await expect(service.applyCandidate({ ...await reviewCandidateInput(next), replacement: { id: unrelated.id, hash: replacementHash(unrelated) } })).rejects.toThrow('not a current conflict')
-    const foreign = fact('private', '默认输出语言: 中文', 'user')
+    const foreign = fact('private', '默认输出语言: 中文', 'project')
     expect(factReviewContext({ ...next, fact: { ...next.fact, supersedes: foreign.id } }, [foreign], []).blocked).toBe('invalid-target')
     const old = fact('old', '默认输出语言: 中文')
     await seed([old, { ...old, id: 'second-old' }], [next])

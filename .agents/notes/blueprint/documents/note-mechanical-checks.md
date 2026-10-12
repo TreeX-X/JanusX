@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:26:04.978Z",
+  "updated": "2026-10-09T08:32:56.860Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bd612cd8-0676-4c46-98ba-81d1dc008505"
 }
 ---
@@ -37,6 +37,8 @@ noteX section 5 runs by hand: path depth, lifecycle and class closed sets, heade
 
 `scripts/check-agent-notes.mjs` validates formal Notes through the shared harness parser, detects duplicate identities and checks Markdown source, image and reference destinations. The legacy shape validator remains available for older files. `scripts/verify-note-corpus.mjs` additionally validates module structure, migration identity/creation dates and protected source hashes. Historical move evidence resolves later path changes without rewriting the original migration report; the exact protected-link exception and current corpus results are documented in [responsibility reorganization](../module-responsibilities.md).
 
+Later moves also resolve through [knowledge reorientation evidence](../../../../docs/migrations/note-knowledge-reorientation.json). The subsequent [Blueprint planning reorganization](../../../../docs/migrations/note-blueprint-planning.json) moves the continuing product direction into Blueprint and separates the current roadmap, personal workspace proposal and historical reading entry. All three reports preserve their original source paths; the checker follows the combined chain and rejects cycles, duplicate sources and target case collisions across reports. Corpus counts describe the actual current schema and remaining protected paths, rather than subtracting the historical deferred count. This supports archiving the three formerly protected knowledge drafts while retaining their IDs, creation dates and working-tree content. It does not relax the exact-hash exception for any source that remains protected.
+
 `scripts/check-skills-sync.mjs` compares shared `.claude` and `.codex` skill files with host paths normalized, including the shared WorkflowX v2 dispatch adapter. `check:notes` runs in `verify`; `check:skills-sync` is included by `verify:local`. The mechanical gate and relocation tests cover the real repository and invalid fixtures; corpus navigation tests independently check reachability.
 
 ## Alternatives considered
@@ -50,3 +52,7 @@ noteX section 5 runs by hand: path depth, lifecycle and class closed sets, heade
 
 - **Original verification**: `check:notes` passed 106 old-shape notes with 0 errors; `check:skills-sync` passed 47 shared files; 3 notes received link-depth repairs. The five-test gate run and these counts describe the original delivery, not the current corpus.
 - **Costs and limits**: cross-checkout links resolving outside the repo root are skipped, not verified; the shared dispatch adapter is compared byte-for-byte after host-path normalization; two grandfathered version pins stay allowlisted until the cutover rewrites live constraints. Revisit when the new-shape gate (`verify-harness-standard`, managed-block sync) lands in WorkFlowX.
+
+## Verification
+
+2026-10-09: After the Blueprint planning reorganization, Main ran `npx vitest run tests/unit/note-relocations.test.ts tests/unit/agent-notes-check.test.ts tests/unit/note-corpus-navigation.test.ts --maxWorkers=2 --reporter=dot`; 3 files and 20 tests passed. These cover successive archive/product moves, final target identity, cross-report conflicts and real-corpus navigation. `node scripts/verify-note-corpus.mjs` rebuilt the shared index and verified 276 current documents using the pinned format, with no remaining protected files and 0 errors. Its 24 unbound-repository read diagnostics remain explicit; they do not prove foreign checkout contents. `npm run check:notes` reported 0 errors and 17 existing external-link diagnostics. The three archived reconstruction bodies were compared with pre-edit working-tree snapshots and match apart from the repaired current-entry link; their UUIDs and creation dates remain unchanged. `git diff --check` passed. Runtime functionality and model quality were not exercised by this documentation maintenance.

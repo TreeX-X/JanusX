@@ -10,7 +10,6 @@ import { runDeterministicStage } from '../../../src/main/knowledge/deterministic
 import { knowledgeExtractService } from '../../../src/main/knowledge/extract-service'
 import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
 import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service'
-import { knowledgeRecallService } from '../../../src/main/knowledge/recall-service'
 import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
 import { isUserStatement, sourceEvidence } from '../../../src/main/knowledge/memory-evidence'
 import { isRuntimeNotification, personalPreferenceText } from '../../../src/main/knowledge/personal-memory-content'
@@ -138,30 +137,23 @@ describe('host memory evidence boundary', () => {
     expect(await deriveHabitPromotions([manual, manual, manual])).toEqual([])
   })
 
-  it.each(['agent-stream', 'checkpoint', 'git-analyzer', 'tool', 'blueprint-maintenance'] as const)('preserves %s engineering evidence through review and truth reading', async source => {
+  it.each(['agent-stream', 'checkpoint', 'git-analyzer', 'tool', 'blueprint-maintenance'] as const)('retains existing %s evidence without admitting engineering facts', async source => {
     const observation = await knowledgeObservationService.capture({ workspaceId: 'project-a', workspacePath: 'C:/project-a', source,
       type: 'analysis-result', content: '决定：采用软删除方案', actor: 'engineering-host', fileRefs: ['src/item.ts'] }, { speaker: 'tool', sourceEventId: 'engineering-event' })
     expect((await knowledgeObservationService.listAll(true)).some(row => row.id === observation.id)).toBe(true)
     await runDeterministicStage({ workspaceId: 'project-a', observations: [observation] })
-    const candidate = (await knowledgeExtractService.listFactCandidates()).find(item => item.fact.content.includes('软删除'))!
-    expect(candidate).toBeDefined()
-    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
-    const fact = (await knowledgeTruthService.list()).facts.find(item => item.id === candidate.fact.id)!
-    expect(fact.provenance.sourceObservationIds).toContain(observation.id)
-    expect(fact.provenance.sourceEvidence?.[0]).toMatchObject({ source, authority: 'tool-observed', workspaceId: 'project-a' })
+    expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
+    expect((await knowledgeTruthService.list()).facts).toEqual([])
     expect(await deriveHabitPromotions([observation, observation, observation])).toEqual([])
   })
 
-  it('reserves global assignment for host context and carries it into truth', async () => {
+  it('reserves global assignment for host context without admitting engineering truth', async () => {
     const globalInput = { ...input, workspaceId: 'global', workspacePath: 'global', content: 'we decided to share a convention' }
     expect((await knowledgeObservationService.capture(globalInput)).scope).toBe('project')
     const observation = await knowledgeObservationService.capture(globalInput, { scope: 'global', speaker: 'user', sourceEventId: 'global-note' })
     await runDeterministicStage({ workspaceId: 'global', observations: [observation] })
-    const [candidate] = await knowledgeExtractService.listFactCandidates()
-    expect(candidate.fact.scope).toBe('global')
-    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
-    expect(result.applied?.fact?.scope).toBe('global')
-    expect(result.applied?.fact?.provenance.sourceEvidence).toEqual(candidate.evidence.sources)
+    expect(observation.scope).toBe('global')
+    expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
   })
 
   it('deduplicates concurrent retries while keeping separate speakers and real turns', async () => {
@@ -217,12 +209,9 @@ describe('host memory evidence boundary', () => {
     expect(new Set(habits[0].evidence.sources?.map((evidence) => evidence.workspaceId))).toEqual(new Set(['project-a', 'project-b']))
     expect(habits[0].evidence.sources?.every((evidence) => evidence.scope === 'project' && evidence.speaker === 'user')).toBe(true)
     const engineering = candidates.filter((candidate) => !candidate.fact.tags.includes('habit'))
-    expect(engineering).toHaveLength(3)
+    expect(engineering).toHaveLength(0)
     expect(engineering.every((candidate) => candidate.fact.scope === 'project')).toBe(true)
-    const approvedProject = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: engineering[0].id }))
     await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: habits[0].id }))
-    const shared = await knowledgeRecallService.recall({ query: 'pnpm', layer: 'truth', allowGlobal: true })
-    expect(shared.documents.map((document) => document.hit.id)).toEqual([approvedProject.applied!.fact!.id])
   })
 
   it('counts one user turn attached to multiple projects as one occurrence', async () => {
@@ -260,13 +249,11 @@ describe('host memory evidence boundary', () => {
     expect(replay.proposals).toBe(0)
     expect(await knowledgeExtractService.listFactCandidates()).toHaveLength(before.length)
     expect((await searchUserMemoryDefault('pnpm')).items.map((item) => item.id)).toContain(habits[0].fact.id)
-    const shared = await knowledgeRecallService.recall({ query: 'pnpm', layer: 'truth', allowGlobal: true })
-    expect(shared.documents).toEqual([])
   })
 
   it('does not recreate a rejected deterministic candidate on replay', async () => {
-    const observation = await knowledgeObservationService.capture({ ...input, workspaceId: 'project-a', workspacePath: 'C:/project-a' }, { speaker: 'user', sourceEventId: 'project-preference' })
-    const batch = { workspaceId: 'project-a', observations: [observation] }
+    const observation = await knowledgeObservationService.capture(input, { speaker: 'user', sourceEventId: 'personal-preference' })
+    const batch = { workspaceId: 'user', observations: [observation] }
     await runDeterministicStage(batch)
     const [candidate] = await knowledgeExtractService.listFactCandidates()
     await knowledgeReviewService.rejectCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
@@ -312,10 +299,8 @@ describe('host memory evidence boundary', () => {
     })
     await mkdir(join(root, 'facts'), { recursive: true })
     await writeFile(join(root, 'facts', 'facts.jsonl'), [fact('user'), fact('project-a')].map((value) => JSON.stringify(value)).join('\n') + '\n')
-    expect((await knowledgeTruthService.list()).facts).toHaveLength(2)
+    expect((await knowledgeTruthService.list()).facts).toHaveLength(1)
     expect((await searchUserMemoryDefault('pnpm')).items.map((item) => item.id)).not.toContain('legacy-user')
-    const shared = await knowledgeRecallService.recall({ query: 'pnpm', layer: 'truth', allowGlobal: true })
-    expect(shared.documents.map((document) => document.hit.id)).toEqual(['legacy-project-a'])
     expect(await readFile(shard, 'utf8')).not.toContain('sourceEvidence')
   })
 })

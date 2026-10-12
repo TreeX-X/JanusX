@@ -2,11 +2,11 @@ import { configService } from '../config/service'
 
 // Note: switches govern behavior as well as entry visibility — see .agents/notes/knowledge/memory-domain-controls.md
 export async function memoryDomainPolicy() {
-  const [features, knowledge, personal] = await Promise.all([
-    configService.getExperimentalFeatures(), configService.getKnowledgeSettings(), configService.getPersonalMemorySettings(),
+  const [features, personal] = await Promise.all([
+    configService.getExperimentalFeatures(), configService.getPersonalMemorySettings(),
   ])
   return {
-    project: features.knowledge && knowledge.enabled,
+    project: false,
     personal: features.persona,
     capturePersonal: features.persona && personal.captureConversations,
     inferEngineeringHabits: features.persona && personal.inferEngineeringHabits,

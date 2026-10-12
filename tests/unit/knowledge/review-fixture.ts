@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { knowledgeRootPath } from '../../../src/main/knowledge/constants'
 import { reviewCandidateInput, type ReviewCandidate } from '../../../src/shared/review-candidate-snapshot'
@@ -23,4 +23,12 @@ export async function reviewFixture(input: Omit<ReviewCandidateInput, 'candidate
     } catch { /* Production validation owns the failure. */ }
   }
   return { ...input, ...(replacement ? { replacement } : {}), candidateHash: candidate ? (await reviewCandidateInput(candidate)).candidateHash : '0'.repeat(64) }
+}
+
+/** Simulate an externally archived source to exercise stale-review detection. */
+export async function archiveFixtureFact(id: string): Promise<void> {
+  const path = join(knowledgeRootPath(), 'facts/facts.jsonl')
+  const records = (await readFile(path, 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line))
+  if (!records.some(record => record.id === id)) throw new Error('Missing fixture fact')
+  await writeFile(path, records.map(record => JSON.stringify(record.id === id ? { ...record, status: 'archived' } : record)).join('\n') + '\n')
 }

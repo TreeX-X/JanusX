@@ -23,7 +23,11 @@ export function AuditDetail({ event, onClose }: { event: AuditRecord; onClose: (
   const root = useRef<HTMLElement>(null)
   const [current, setCurrent] = useState<{ state: 'idle' | 'loading' | 'ready' | 'unavailable'; value?: unknown }>({ state: 'idle' })
   const active = useRef(true)
-  useEffect(() => { active.current = true; root.current?.focus(); return () => { active.current = false } }, [])
+  useEffect(() => {
+    const trigger = document.activeElement
+    active.current = true; root.current?.focus()
+    return () => { active.current = false; if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus() }
+  }, [])
   const openCurrent = async () => {
     if (current.state === 'loading') return
     setCurrent({ state: 'loading' })

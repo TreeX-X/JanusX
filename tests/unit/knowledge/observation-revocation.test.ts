@@ -12,7 +12,6 @@ import { knowledgeExtractService } from '../../../src/main/knowledge/extract-ser
 import { knowledgeReviewService, proposeFactCandidates } from '../../../src/main/knowledge/review-service'
 import { userProfileService } from '../../../src/main/knowledge/user-profile-service'
 import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection'
-import { KnowledgeRecallService } from '../../../src/main/knowledge/recall-service'
 import { isActiveObservation } from '../../../src/main/knowledge/memory-evidence'
 import { reviewFixture } from './review-fixture'
 import * as atomic from '../../../src/main/lib/atomic-file'
@@ -33,7 +32,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'janusx-revoke-source-'))
   process.env.JANUSX_KNOWLEDGE_ROOT = root
   await Promise.all(['facts', 'graph', 'wiki', 'observations/active'].map(path => mkdir(join(root, path), { recursive: true })))
-  source = { id: 'source', workspaceId: 'ws', workspaceName: 'ws', workspacePath: root, scope: 'project', source: 'manual', type: 'user-note',
+  source = { id: 'source', workspaceId: 'ws', workspaceName: 'ws', workspacePath: root, scope: 'user', source: 'manual', type: 'user-note',
     content: 'Prefer pnpm', fileRefs: [], tags: [], visibility: 'workspace', actor: 'user', createdAt: new Date().toISOString(), retentionClass: 'evidence',
     contentHash: 'a'.repeat(64), dedupeKey: 'b'.repeat(64), contentLength: 11, compactionStatus: 'active' }
   fact = { id: 'fact', content: 'Prefer pnpm', scope: 'user', kind: 'preference', status: 'active', version: 1, confidence: 0.8, concepts: [], files: [], tags: [],
@@ -95,7 +94,9 @@ describe('durable observation revocation', () => {
   })
 
   it('cancels refinement and rejects provider output when its source is withdrawn in flight', async () => {
-    candidate.fact.scope = 'project'
+  source.sourceEvidence = { observationId: source.id, workspaceId: source.workspaceId, scope: 'user', source: 'manual', createdAt: source.createdAt, speaker: 'user', authority: 'user-stated', excerpt: source.content }
+    await records('observations/active/2026-09.jsonl', [source])
+    candidate.fact.scope = 'user'
     await records('facts/candidates.jsonl', [candidate])
     const service = new RefinementTaskService({
       listCandidates: () => knowledgeExtractService.listFactCandidates(),
@@ -137,10 +138,10 @@ describe('durable observation revocation', () => {
     expect((await userProfileService.load()).confirmedFacts).toHaveLength(1)
     // Engineering Wiki cannot recall a private or cross-workspace source even before withdrawal.
     expect((await knowledgeTruthService.list()).wikiPages).toHaveLength(0)
-    expect((await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages).toHaveLength(1)
+    expect((await knowledgeTruthService.list({ includeStaleWiki: true })).wikiPages).toHaveLength(0)
     await revokeObservation(await input())
     const truth = await knowledgeTruthService.list()
-    expect(truth.facts.map(item => item.id)).toEqual(['independent'])
+    expect(truth.facts.map(item => item.id)).toEqual([])
     expect(truth.wikiPages).toEqual([])
     expect(truth.graphEdges).toEqual([])
     expect((await userProfileService.load()).confirmedFacts).toEqual([])
@@ -152,16 +153,11 @@ describe('durable observation revocation', () => {
   })
 
   it('survives replay and invalidates a warm governance index', async () => {
-    const recall = new KnowledgeRecallService()
-    const query = { query: 'pnpm', layer: 'governance' as const, allowGlobal: true }
-    expect((await recall.recall(query)).documents.some(doc => doc.hit.id === source.id)).toBe(true)
     const target = await input()
     await Promise.all([revokeObservation(target), revokeObservation(target)])
     expect((await readObservationRevocationBarrier()).records).toHaveLength(1)
     await records('observations/active/2026-09.jsonl', [source])
     expect(isActiveObservation((await knowledgeObservationService.listAll(true))[0])).toBe(false)
-    expect((await recall.recall(query)).documents.some(doc => doc.hit.id === source.id)).toBe(false)
-    expect((await new KnowledgeRecallService().recall(query)).documents.some(doc => doc.hit.id === source.id)).toBe(false)
   })
 
   it('follows related observations while preserving the same id in another workspace', async () => {

@@ -63,7 +63,7 @@ describe('deterministic extractor (Phase 1-2)', () => {
     for (let index = 0; index < 2; index++) {
       const result = await runDeterministicStage({ workspaceId: 'ws-1', observations: [obs({id:'plain',content:'A temporary progress update.'})] }, { listTruthFacts: async () => facts })
       expect(result.proposals).toBe(0)
-      expect(await knowledgeExtractService.listGraphCandidates()).toEqual([])
+      expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
     }
   })
 
@@ -90,8 +90,8 @@ describe('deterministic extractor (Phase 1-2)', () => {
       obs({ id: 'structured', type: 'analysis-result', content: '决定采用事务保证原子性' }),
     ]
     const result = await runDeterministicStage({ workspaceId: 'ws-1', observations })
-    expect(result.proposals).toBe(1)
-    expect((await knowledgeExtractService.listFactCandidates()).map(row => row.fact.content)).toEqual(['决定采用事务保证原子性'])
+    expect(result.proposals).toBe(0)
+    expect((await knowledgeExtractService.listFactCandidates()).map(row => row.fact.content)).toEqual([])
     for (const row of observations) expect(await readDerivedObservation(row.id)).not.toBeNull()
     expect(observations[0].content).toBe(raw)
     expect(classifyDeterministic('user-note', raw, 3)).toBeNull()
@@ -178,61 +178,5 @@ describe('deterministic extractor (Phase 1-2)', () => {
     expect(findConflicts(base, truth)).toEqual(['t1'])
     expect(findConflicts({ ...base, content: 'old' }, truth)).toEqual(['t2'])
     expect(findConflicts({ ...base, files: [] }, truth)).toEqual([])
-  })
-
-  it('writes derived artifacts and deterministic proposals with evidence', async () => {
-    const observations = [
-      obs({ id: 'g1', type: 'git-event', content: 'commit abc: add user index', fileRefs: ['src/db.ts'] }),
-      obs({ id: 'g1-dupe', type: 'git-event', content: 'commit abc: add user index', fileRefs: ['src/db.ts'] }),
-      obs({ id: 'plain', content: '今天天气不错' }),
-    ]
-    const result = await runDeterministicStage(
-      { workspaceId: 'ws-1', observations },
-    )
-    // Exact dupe shares the derived write: 2 derived artifacts, 1 proposal.
-    expect(result).toEqual({ derived: 2, proposals: 1, autoAccepted: 0 })
-
-    const derived = await readDerivedObservation('g1')
-    expect(derived?.summary).toBe('commit abc: add user index')
-    expect(derived?.fileRefs).toContain('src/db.ts')
-    expect(derived?.derivation).toBe('deterministic')
-    expect(await readDerivedObservation('plain')).not.toBeNull()
-    expect(await readDerivedObservation('missing')).toBeNull()
-
-    const candidates = await knowledgeExtractService.listFactCandidates()
-    expect(candidates).toHaveLength(1)
-    const candidate = candidates[0]!
-    expect(candidate.derivation).toBe('deterministic')
-    expect(candidate.fact.kind).toBe('fact')
-    expect(candidate.fact.confidence).toBe(0.9)
-    expect(candidate.evidence.observationIds.sort()).toEqual(['g1', 'g1-dupe'])
-    expect(candidate.conflicts).toBeUndefined()
-  })
-
-  it('keeps high-confidence tool facts pending explicit review', async () => {
-    const result = await runDeterministicStage({ workspaceId: 'ws-1', observations: [
-      obs({ id: 'g', type: 'git-event', content: 'commit abc: ship it', fileRefs: ['src/a.ts'] }),
-      obs({ id: 'd', type: 'user-note', content: 'we decided to keep review explicit' }),
-    ] })
-    expect(result.proposals).toBe(2)
-    expect(result.autoAccepted).toBe(0)
-    const candidates = await knowledgeExtractService.listFactCandidates()
-    expect(candidates.every((candidate) => candidate.status === 'proposed')).toBe(true)
-  })
-
-  it('keeps repeated engineering preferences in project scope', async () => {
-    const observations = [
-      obs({ id: 'h1', type: 'user-note', content: '我习惯用 pnpm 而不用 npm' }),
-      obs({ id: 'h2', type: 'user-note', content: '我习惯用 pnpm 而不用 npm' }),
-      obs({ id: 'h3', type: 'user-note', content: '我习惯用 pnpm 而不用 npm' }),
-    ]
-    const result = await runDeterministicStage(
-      { workspaceId: 'ws-1', observations },
-    )
-    expect(result.proposals).toBe(1)
-    const candidates = await knowledgeExtractService.listFactCandidates()
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0]!.fact.scope).toBe('project')
-    expect(candidates[0]!.evidence.observationIds.sort()).toEqual(['h1', 'h2', 'h3'])
   })
 })

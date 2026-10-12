@@ -7,12 +7,11 @@ export function snapshotCount(event: AuditRecord): number | undefined {
   return typeof event.after?.count === 'number' ? event.after.count : undefined
 }
 export function auditCanResolve(event: AuditRecord) {
+  if (event.targetType !== 'fact' && event.targetType !== 'observation') return false
   const workspace = event.provenance?.workspaceId
   if (!workspace || workspace === 'global' || event.targetId === workspace || snapshotCount(event) !== undefined || /^habits:/.test(event.targetId)) return false
   if (['candidate_approved', 'candidate_rejected', 'candidate_applied'].includes(event.action)) return ['fact', 'wiki', 'graph'].includes(event.targetType)
   return event.targetType === 'fact' && ['fact_superseded', 'truth_revoked'].includes(event.action)
-    || event.targetType === 'wiki' && ['wiki_updated', 'truth_revoked'].includes(event.action)
-    || event.targetType === 'graph' && event.action === 'truth_revoked'
     || event.targetType === 'observation' && ['capture', 'user_episode_captured'].includes(event.action)
 }
 
@@ -29,12 +28,6 @@ export async function resolveAuditObject(event: AuditRecord): Promise<unknown | 
     if (event.targetType === 'fact') {
       const candidate = (await api.listCandidates()).find(item => item.id === event.targetId && item.fact.provenance.workspaceId === workspaceId)
       if (candidate) return { status: candidate.status, content: candidate.fact.content }
-    } else if (event.targetType === 'wiki') {
-      const candidate = (await api.listWikiPatchCandidates()).find(item => item.id === event.targetId && item.provenance.workspaceId === workspaceId)
-      if (candidate) return { status: candidate.status, title: candidate.title, markdown: candidate.patchMarkdown }
-    } else {
-      const candidate = (await api.listGraphCandidates()).find(item => item.id === event.targetId && item.edge.workspaceId === workspaceId)
-      if (candidate) return candidate.edge
     }
     // Only an explicit applied identity may resolve a missing candidate to truth.
     if (typeof event.after?.appliedId !== 'string') return null

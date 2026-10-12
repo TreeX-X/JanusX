@@ -13,7 +13,6 @@ import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service
 import { userEpisodeService } from '../../../src/main/knowledge/user-episode-service'
 import { migrateLegacyEpisodes } from '../../../src/main/knowledge/legacy-episode-migration'
 import { capturePersonChatTurn } from '../../../src/main/knowledge/user-turn-capture'
-import { KnowledgeRecallService } from '../../../src/main/knowledge/recall-service'
 import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
 import { DEFAULT_KNOWLEDGE_SETTINGS, normalizeKnowledgeSettings } from '../../../src/shared/knowledge-settings'
 import type { CaptureObservationInput, UserEpisode } from '../../../src/shared/knowledge'
@@ -198,12 +197,8 @@ describe('unified personal memory writes', () => {
     } else {
       await userEpisodeService.capture({ content: 'Today I repaired Bluebird.', ttlDays: 30 }, { speaker: 'user' })
     }
-    const recall = new KnowledgeRecallService(undefined, () => Date.now())
-    const request = { query: 'Bluebird', layer: 'governance' as const, scope: 'user' as const, workspaceId: 'user' }
-    expect((await recall.recall(request)).documents).toHaveLength(1)
     expect((await searchUserMemoryDefault('Bluebird')).items).toHaveLength(1)
     vi.setSystemTime(new Date('2026-10-02T00:00:00Z'))
-    expect((await recall.recall(request)).documents).toEqual([])
     expect(await userEpisodeService.listActive()).toEqual([])
     expect((await searchUserMemoryDefault('Bluebird')).items).toEqual([])
     expect((await queue().processNow()).processed).toBe(0)

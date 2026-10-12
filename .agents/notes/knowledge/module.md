@@ -6,7 +6,10 @@
   "lifecycle": "accepted",
   "created": "2026-10-03",
   "class": "architecture",
-  "tags": ["memory","knowledge"],
+  "tags": [
+    "memory",
+    "knowledge"
+  ],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a",
   "codeRefs": [
     {
@@ -23,18 +26,6 @@
     },
     {
       "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
-      "path": "src/main/knowledge/search-service.ts",
-      "symbol": "KnowledgeSearchService",
-      "role": "implementation"
-    },
-    {
-      "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
-      "path": "src/main/knowledge/automation-service.ts",
-      "symbol": "KnowledgeAutomationService",
-      "role": "entry"
-    },
-    {
-      "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
       "path": "src/main/knowledge/knowledge-local-settings.ts",
       "symbol": "configureKnowledgeLocalModel",
       "role": "entry"
@@ -44,53 +35,57 @@
       "path": "src/main/knowledge/knowledge-local-resources.ts",
       "symbol": "KnowledgeLocalResourceInstaller",
       "role": "entry"
+    },
+    {
+      "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+      "path": "src/main/knowledge/retire-engineering-assets.ts",
+      "role": "implementation"
     }
   ],
   "relations": [
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/8688b5ab-1f7f-5ff9-ba1b-ef75b7fd5917"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/844bc2f1-3be4-4b47-83ca-0ef792bc5c1d"}
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/8688b5ab-1f7f-5ff9-ba1b-ef75b7fd5917"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/844bc2f1-3be4-4b47-83ca-0ef792bc5c1d"
+    }
   ],
-  "updated": "2026-10-08T03:43:45.317Z",
+  "updated": "2026-10-11T16:34:07Z",
   "moduleState": "partial"
 }
 ---
 
-# 记忆与知识
+# 个人记忆与共享来源
 
 ## Responsibility
 
-组织个人记忆与工程知识的处理队列、检索、审核与召回。当前入口包括 KnowledgeProcessingQueue、KnowledgeAutomationService 和 KnowledgeSearchService。自动处理服务维护提取、条目审核、主题 Wiki 生成和复核任务；审核服务维护人工及自动提交，发布恢复日志与历史服务共同保存 Wiki 版本。具体模型选择和未完成质量验收由各需求、决策及任务说明。
+维护个人记忆的采集、可靠写入、候选确认、纠正、遗忘、来源审计、画像和对话召回。工程知识以[原始 Note 与蓝图](../blueprint/module.md)为准；旧工程知识提取、Wiki 生成/历史、图谱、检索和独立知识 MCP 已退出。
 
 ## Design
 
-终端 Hook 通过 CaptureInbox 持久化待写证据，TranscriptRecovery 在读取有限原始会话前保存补读任务，由 AgentTurnRecorder 恢复调度；自动处理按任务上下文提取，提纯与独立覆盖检查通过后才提交审核。`knowledge:diagnostics` 的 captureRecovery 字段提供待恢复批次、事件和错误，transcriptRecovery 提供待补读数量及最近错误；[Hook 证据与提纯决策](./hook-evidence-extraction.md)说明来源身份、检查点、审核上下文及语义去重限制。
+PersonalMemoryWorkbench 保留个人卡片、资料编辑、搜索、来源和审核；右侧助手只消费个人候选。persona 与个人子设置控制采集、处理和召回，关闭功能保留已有个人数据。人工确认不受蓝图模型或工程开关控制；具体策略见[分域控制](memory-domain-controls.md)。工作台扩展和全终端自动 Hook 接入仍按[个人方向](personal-memory-workspace.md)后置。
 
-工程知识与个人画像分别控制采集、处理、召回和界面入口，共用“知识与记忆”工作台。`settings:personal-memory:get/update` 独立读写个人设置，不覆盖工程模型配置。[分域控制决策](./memory-domain-controls.md)说明装配门禁、审核筛选及个人保留期语义。
+KnowledgeProcessingQueue、观察存储、候选事实锁、审计、撤销与恢复服务继续服务个人记忆。确定性处理不再从项目事件生成工程事实，工程 recall 端口返回空结果，Chat 已移除旧项目记忆访问计数；个人 BM25 召回仍在内存使用。显式个人保存、替代、纠正和遗忘沿用现有来源与版本检查。
 
-本模块声明稳定的职责和入口，不将计划中的模型部署描述成当前实现。工程 Note 原文读取与蓝图属于 Note 与蓝图模块；知识内容的生成、检索与审核在本模块内维护。
+共享终端 Hook 的状态处理继续运行。只有个人画像开启且既有 inferEngineeringHabits 选项允许时，工程对话的可归因用户消息进入习惯证据；CaptureInbox 在持久化与重放前筛选，助手正文、工具结果和状态摘要不再作为新工程知识积累。个人会话的已有近期记录策略保持，其扩展讨论不混入本次退出。
 
-右侧助手承载工程检索、画像与统一审核，个人完整工作台维护卡片分类、搜索和详情；[助手布局决策](./assistant-persona-layout.md)说明入口兼容与双尺寸呈现。外部知识 MCP 由独立进程读取持久配置约束；knowledge:external-mcp:probe 验证宿主生成的启动配置，客户端适配与未验证范围见[终端覆盖决策](../terminal/mcp-terminal-coverage.md)。
+retireEngineeringAssets 在创建窗口前清理明确由旧工程业务生成的 Wiki、graph、旧索引、automation-tasks 和提取中间文件；混合事实按 scope/provenance 保留 user 与不明记录。路径限制在知识存储根内，不跟随链接；原始观察、审计、个人 profile、blobs、模型下载和配置保留。该迁移幂等，失败保留来源并在以后启动重试，不删除整个 knowledge 根。
 
-`knowledge:automation:status` 返回配置环节模式和当前有效队列投影，携带版本标识、独立工程审核开关及候选 hash/工作区/任务身份，并提供当前计划的可选脱敏标题和真实最近成功时间。助手各子页、工作台与角标共享状态读取，历史任务和计数仅包含工程域并独立保留；重试复核当前计划和依赖。投影不触发处理或授予发布权限，个人记忆不进入工程自动审核。新 automation 配置拒绝旧评分/精炼请求，派生候选入口拒绝独立图关系提议；历史仍可读取和维护。Wiki 页间关系保存在页面及草稿的 relations 中，目标身份/版本与来源在同一发布锁内复核，历史保存同版本正文和关系；relationIssues 只反映当前目标状态，不写回审核依据。主题分组复用已发布身份及显式概念。默认图谱只投影已发布 Wiki 与宿主核验过的页间关系；单页来源追溯按工作区隔离事实、实体与旧边，原始证据通过既有只读上下文接口按需加载，不受最近来源列表限制。当前约束及边界见[审核实施任务](./tasks/knowledge-review-status-audit-plan.md)。
+模型/JEV 请求与凭据基础迁至 llm/model-json 和 llm/jev-credentials，保留原加密文件名。个人及 Hook 仍需的本地实现继续存在，部署入口隐藏；蓝图审核与 MCP 配置由蓝图设置负责，不沿用工程自动生成服务。
 
-`knowledge:automation:run` 接收可选 taskId，仅执行指定任务；reevaluate 明确重跑当前评分未达标项，普通设置保存不触发该动作。`knowledge:automation:retry` 接收任务 ID 或候选 ID、工作区与候选 hash，后者仅准入所选历史版本。状态与任务保留真实 Jev 评分、当时阈值及最多 20 次此前尝试，界面按失败原因提供重试、恢复或人工审核。OpenCode 完成事件通过既有会话数据库读取器补齐正文，恢复以会话、工作区和结束时间绑定原回合。阈值、恢复及记录阅读的约束见[审核实施任务](./tasks/knowledge-review-status-audit-plan.md)。
-`knowledge:automation:status` 为当前队列与最近任务追加可选 subjectState，只读关联候选类型、工作区、ID 及当前状态，或明确无候选/不可用/多产物提取。持久化执行结果和历史计数保持原意；候选现状不覆盖历史失败，也不伪造最近成功时间。工程审核关闭时不读取关联快照，旧宿主缺少该字段时界面不推断可审核对象。
+## Validation
 
-`knowledge:audit:page` 按领域、工程及操作过滤，在同一日志快照内返回分页事件与计数；游标绑定过滤条件和日志前缀，追加事件在刷新后可见。旧列表接口保留数组返回，统计兼容过滤参数。个人事件以 workspaceId=user 识别，工程页排除个人及无明确工程归属的系统事件；全域历史仍可读取。审计列表保留完整事件用于只读前后变更，当前对象通过已有查询独立读取；具体边界见[审核实施任务](./tasks/knowledge-review-status-audit-plan.md)。
+个人记忆、来源撤销、旧资产迁移、Hook、Chat ports 与蓝图建议的组合回归通过。实际数量、命令范围、真实模型结果及未验收项统一见[实施基线](../blueprint/implementation-baseline.md)。迁移测试使用隔离数据，未手工清理真实用户存储。
 
-`knowledge:configuration:test` 接收单环节模型配置和可选 Jev 临时凭据，使用固定样本返回配置缺项或可用性结果。宿主检查工程知识功能门禁，本地测试只复用已检测启用的配置；测试不读取用户资料、不保存设置、不提交候选或 Wiki。设置页按四环节串行调用；超时、密钥与失效边界由[工程自动处理需求](./requirements/knowledge-accumulate-review-wiki-rereview.md)约束。
+## Related documents
 
-本地模型启停由本模块宿主负责：`knowledge:local-model:configure` 经环境检测授权本地选择，`knowledge:local-model:stop` 持久关闭并释放托管进程。普通设置保存不得反向启用；环境检测、上下文预算与进程生命周期分别维护，外部管理服务的进程不归应用所有。
+[个人工作台](personal-memory-workspace.md)维护后续产品边界；[个人与工程分离](personal-engineering-separation.md)保留隔离依据；[记忆演进研究](requirements/memory-knowledge.md)、[统一内核研究](requirements/unified-memory-laya-primary.md)与[旧方案资料](history/reconstruction-index.md)保留历史要求和实验，不再描述当前工程生成管线。
 
-本模块维护本地模型资源准备：`knowledge:local-model:install` 在显式操作后下载固定版本、校验并缓存程序与权重，`knowledge:local-model:resources-status` 提供进度。资源不进入发布包，启用与冷启动由 GPU 环境预算约束；取消、创新开关关闭和应用退出中断准备工作，已校验资源留在 userData 中供升级复用。
-
-[记忆与知识演进专题](./requirements/memory-knowledge.md)承载模型选择、个人记忆与工程知识隔离的阶段计划；专题 parent 指向本模块，其历史决策链和验收语义各自保留。
-
-[个人与工程知识分离决策](./personal-engineering-separation.md)记录隔离依据；[统一记忆内核需求](./requirements/unified-memory-laya-primary.md)仍是待交付的改造方向，关联它不表示真实数据质量已经验收。[工程自动处理与 Wiki 手册](./requirements/knowledge-accumulate-review-wiki-rereview.md)约束当前自动提交、提供方配置及发布历史；历史不参与默认 BM25 与 MCP 召回。
-
-Jev 凭证由本模块加密保存。`knowledge:jev:credential-status` 只返回是否已配置；设置页的显式显示操作调用 `knowledge:jev:credential-reveal`，宿主检查 knowledge 开关后返回已解密凭证。普通配置和状态投影不携带明文，显隐和保存反馈由[工程自动处理需求](./requirements/knowledge-accumulate-review-wiki-rereview.md)约束。
+[Chat 联动备忘录与线性里程碑](user-todo-janus.md)记录对话自动整理、人工编辑、右侧悬浮备忘录和工作区映射的产品想法；备忘录文件存于 Janus、经映射关联工作区，janus-chat 靠备忘录状态开关读写，打开哪份就维护哪份，整理由自然语言触发；一份文件一条里程碑线，节点内含多个自然语言的点、不设完成状态，文件经列表 tab 增删选中与折叠。该想法尚未实施，独立交付还是并入后续个人建设仍待评估。
 
 ## Acceptance criteria
 
-- [x] AC-1: 队列与检索职责可定位到当前代码，具体实现决策保留独立文档。
-- [x] AC-2: 模块声明与计划中的模型部署、Task 完成状态分开表达。
+- [x] AC-1: 队列与个人召回职责可定位到当前代码，工程专用生成和检索入口已退出。
+- [x] AC-2: 当前能力、后置个人建设与未验收项分别说明，不以旧模型实验替代新审核验收。

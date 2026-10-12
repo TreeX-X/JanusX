@@ -83,7 +83,7 @@ export class MemoryDecisionStage {
         const observation = byId.get(id)
         const sameOwner = observation && observationScope(observation) === scope && observation.workspaceId === owner
         if (!observation || !isActiveObservation(observation)
-          || (scope === 'user' ? !sameOwner && !isUserStatement(observation) : !sameOwner)) {
+          || (scope === 'user' ? !isUserStatement(observation) : !sameOwner)) {
           input.truncated = true
           continue
         }

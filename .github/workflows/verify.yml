@@ -117,7 +117,7 @@ jobs:
 
       - name: Build
         working-directory: JanusX
-        run: npm run build
+        run: npm run build:app
 
       - name: Boundary check
         working-directory: JanusX

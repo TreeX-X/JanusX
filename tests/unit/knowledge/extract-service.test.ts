@@ -7,7 +7,6 @@ import { candidateDecisionHash } from '../../../src/main/knowledge/decision-scor
 import { personalObservation, taskNotification } from './memory-observation.fixture'
 import type {
   CandidateFact,
-  CandidateWikiPatch,
   Observation,
 } from '../../../src/shared/knowledge'
 
@@ -36,9 +35,11 @@ async function loadService() {
 }
 
 function makeObservation(overrides: Partial<Observation> = {}): Observation {
-  return {
+  const observation: Observation = {
     id: 'obs-' + Math.random().toString(36).slice(2, 8),
-    workspaceId: 'ws-id',
+    workspaceId: 'user',
+    scope: 'user',
+    sourceEvidence: { observationId: 'obs', workspaceId: 'user', scope: 'user', source: 'manual', speaker: 'user', authority: 'user-stated', createdAt: '2026-07-07T00:00:00.000Z' },
     workspaceName: 'ws-name',
     workspacePath: 'C:/work',
     source: 'manual',
@@ -52,6 +53,8 @@ function makeObservation(overrides: Partial<Observation> = {}): Observation {
     retentionClass: 'evidence',
     ...overrides,
   }
+  observation.sourceEvidence = { ...observation.sourceEvidence!, observationId: observation.id, workspaceId: observation.workspaceId, source: observation.source, sessionId: observation.sessionId, excerpt: observation.content.slice(0,280) }
+  return observation
 }
 
 function setupLlm(object: unknown): void {
@@ -85,8 +88,6 @@ describe('KnowledgeExtractService', () => {
   })
 
   it.each([
-    ['wiki/patches.jsonl', 'listWikiPatchCandidates'],
-    ['graph/candidates.jsonl', 'listGraphCandidates'],
     ['facts/candidates.jsonl', 'listFactCandidates'],
   ] as const)('reports damaged %s instead of returning a partial list', async (path, method) => {
     const file = join(knowledgeRoot, path)
@@ -206,8 +207,8 @@ describe('KnowledgeExtractService', () => {
     expect(fact.type).toBe('fact')
     expect(fact.status).toBe('proposed')
     expect(fact.fact.content).toBe('Project persistence layer uses Postgres.')
-    expect(fact.fact.scope).toBe('project')
-    expect(fact.evidence.sources?.map((source) => source.authority)).toEqual(['unverified', 'unverified'])
+    expect(fact.fact.scope).toBe('user')
+    expect(fact.evidence.sources?.map((source) => source.authority)).toEqual(['user-stated', 'user-stated'])
     expect(fact.fact.provenance.sourceEvidence).toEqual(fact.evidence.sources)
     expect(fact.fact.confidence).toBeCloseTo(0.9)
     expect(fact.fact.version).toBe(1)
@@ -216,19 +217,12 @@ describe('KnowledgeExtractService', () => {
       'obs-evidence-1',
       'obs-evidence-2',
     ])
-    expect(fact.fact.provenance.workspaceId).toBe('ws-id')
+    expect(fact.fact.provenance.workspaceId).toBe('user')
     expect(fact.fact.provenance.source).toBe('system')
     expect(fact.fact.provenance.actor).toBe('knowledge-extract')
     expect(fact.fact.provenance.fileRefs).toEqual(['src/db.ts'])
 
-    expect(result.wikiPatches).toHaveLength(1)
-    const patch = result.wikiPatches[0] as CandidateWikiPatch
-    expect(patch.type).toBe('wiki-patch')
-    expect(patch.pageSlug).toBe('persistence-design')
-    expect(patch.provenance.sourceObservationIds).toEqual([
-      'obs-evidence-1',
-      'obs-evidence-2',
-    ])
+    expect(result.wikiPatches).toEqual([])
 
     expect(result.graphEdges).toEqual([])
 
@@ -236,8 +230,7 @@ describe('KnowledgeExtractService', () => {
     const factFile = await readFile(join(knowledgeRoot, 'facts/candidates.jsonl'), 'utf8')
     expect(factFile).toContain(fact.id)
     expect(factFile).not.toContain('"supersedes"') // sanity: not a fact.jsonl record
-    const patchFile = await readFile(join(knowledgeRoot, 'wiki/patches.jsonl'), 'utf8')
-    expect(patchFile).toContain(patch.id)
+    await expect(readFile(join(knowledgeRoot, 'wiki/patches.jsonl'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(readFile(join(knowledgeRoot, 'graph/candidates.jsonl'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
 
     // audit trail
@@ -245,55 +238,6 @@ describe('KnowledgeExtractService', () => {
     expect(auditFile).toContain('"action":"candidate_proposed"')
     expect(auditFile).toContain(fact.id)
     expect(result.auditEventId).toBeTruthy()
-  })
-
-  it('keeps only known truth ids on wiki patch sourceFactIds', async () => {
-    setupLlm({
-      facts: [],
-      wikiPatches: [
-        {
-          pageSlug: 'persistence-design',
-          title: 'Persistence Design',
-          patchMarkdown: '## Postgres chosen',
-          rationale: 'Summarizes the settled persistence decision.',
-          confidence: 0.8,
-          sourceFactIds: ['truth-1', ' ghost ', 'truth-1'],
-        },
-      ],
-      graphEdges: [],
-    })
-    const { knowledgeExtractService } = await loadService()
-
-    const result = await knowledgeExtractService.extract(
-      { observations: [makeObservation()] },
-      {
-        listWorkspaceFacts: async () => [{
-          id: 'truth-1',
-          content: 'Project persistence layer uses Postgres.',
-          concepts: [],
-          files: [],
-          tags: [],
-          confidence: 0.9,
-          version: 1,
-          status: 'active',
-          kind: 'fact',
-          provenance: {
-            workspaceId: 'ws-id',
-            workspaceName: 'ws-name',
-            workspacePath: 'C:/work',
-            source: 'manual',
-            sourceObservationIds: [],
-            fileRefs: [],
-            actor: 'tester',
-            createdAt: '2026-07-07T00:00:00.000Z',
-          },
-        }],
-      },
-    )
-
-    expect(result.wikiPatches).toHaveLength(1)
-    const patch = result.wikiPatches[0] as CandidateWikiPatch
-    expect(patch.sourceFactIds).toEqual(['truth-1'])
   })
 
   it('does not write instruments to accepted-only collections', async () => {    setupLlm({
@@ -346,7 +290,7 @@ describe('KnowledgeExtractService', () => {
     expect(result.auditEventId).toBeUndefined()
   })
 
-  it('listFactCandidates / listGraphCandidates / listWikiPatchCandidates read back appended rows', async () => {
+  it('listFactCandidates reads back personal candidates only', async () => {
     setupLlm({
       facts: [
         {
@@ -369,10 +313,7 @@ describe('KnowledgeExtractService', () => {
     const factCandidates = await knowledgeExtractService.listFactCandidates()
     expect(factCandidates).toHaveLength(1)
     expect(factCandidates[0]?.type).toBe('fact')
-    const graphCandidates = await knowledgeExtractService.listGraphCandidates()
-    expect(graphCandidates).toHaveLength(0)
-    const patchCandidates = await knowledgeExtractService.listWikiPatchCandidates()
-    expect(patchCandidates).toHaveLength(0)
+
   })
 
   describe('Phase 2: kind / supersedes / timeout / retry / merge', () => {
@@ -385,7 +326,7 @@ describe('KnowledgeExtractService', () => {
 
     function truthProvenance() {
       return {
-        workspaceId: 'ws-id',
+        workspaceId: 'user',
         workspaceName: 'ws-name',
         workspacePath: 'C:/work',
         source: 'manual',

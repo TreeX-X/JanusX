@@ -10,7 +10,7 @@ import { knowledgeObservationService, resetObservationServiceEphemeralState } fr
 import { knowledgeExtractService } from '../../../src/main/knowledge/extract-service'
 import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
 import { knowledgeTruthService } from '../../../src/main/knowledge/truth-service'
-import { knowledgeRecallService } from '../../../src/main/knowledge/recall-service'
+import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
 import { KnowledgeProcessingQueue } from '../../../src/main/knowledge/processing-queue'
 import { runDeterministicStage } from '../../../src/main/knowledge/deterministic-extractor'
 import type { CaptureObservationInput } from '../../../src/shared/knowledge'
@@ -42,92 +42,34 @@ describe('deterministic pipeline (Phase 1-2, no LLM)', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('observation → derived + proposal → apply → recall, with candidate-stage conflicts', async () => {
-    await capture({ workspacePath: 'C:\\pipe', source: 'git-analyzer', type: 'git-event', content: 'commit abc: add user index', fileRefs: ['src/db.ts'], actor: 'user' })
-    await capture({ workspacePath: 'C:\\pipe', source: 'git-analyzer', type: 'git-event', content: 'commit def: drop user index', fileRefs: ['src/db.ts'], actor: 'user' })
-    await capture({ workspacePath: 'C:\\pipe', source: 'manual', type: 'user-note', content: '今天天气不错', actor: 'user' })
-    await capture({ workspacePath: 'C:\\pipe', source: 'manual', type: 'user-note', content: '决定：采用软删除方案', actor: 'user' })
-    const errorContent = '$ npm run build\nerror TS2304: Cannot find name \'foo\''
-    // Repeated commands/errors remain source evidence; frequency does not make a procedure.
-    await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'tool-call', content: errorContent, actor: 'engine' })
-    await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'tool-result', content: errorContent, actor: 'engine' })
-    await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'tool-result', content: `${errorContent} (retry 2)`, actor: 'engine' })
-
+  it('does not regenerate engineering candidates from a legacy observation backlog', async () => {
+    await capture({ source: 'git-analyzer', type: 'git-event', content: 'commit abc: add user index', fileRefs: ['src/db.ts'], actor: 'user' })
+    await capture({ source: 'manual', type: 'user-note', content: 'Decision: adopt soft deletion', actor: 'user' })
     const queue = new KnowledgeProcessingQueue()
-    queue.configureDeterministicHandler((batch) => runDeterministicStage(batch).then(() => undefined))
+    queue.configureDeterministicHandler(async batch => { await runDeterministicStage(batch) })
     try {
-      const first = await queue.processNow()
-      expect(first.handlerMissing).toBe(false)
-      // Seven rows remain processed, but only the two git events and decision become candidates.
-      expect(first.processed).toBe(7)
-      expect(first.failed).toBe(0)
-
-      const candidates = await knowledgeExtractService.listFactCandidates()
-      const deterministic = candidates.filter((c) => c.derivation === 'deterministic')
-      expect(deterministic).toHaveLength(3)
-      expect(deterministic.map((c) => c.fact.kind).sort()).toEqual(['decision', 'fact', 'fact'])
-      for (const candidate of deterministic) {
-        expect(candidate.evidence.observationIds.length).toBeGreaterThan(0)
-        expect(candidate.fact.status).toBe('proposed')
-      }
-      expect((await knowledgeObservationService.listAll(true)).filter(row => row.type === 'tool-result')).toHaveLength(2)
-
-      // Apply the first git proposal → truth carries the deterministic kind.
-      const gitCandidate = deterministic.find((c) => c.fact.content.includes('add user index'))!
-      const applied = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: gitCandidate.id }))
-      expect(applied.applied?.fact?.kind).toBe('fact')
-      const truthId = applied.applied!.fact!.id
-
-      // A later same-file commit with different content conflicts with that truth.
-      await capture({ workspacePath: 'C:\\pipe', source: 'git-analyzer', type: 'git-event', content: 'commit ghi: rename user index', fileRefs: ['src/db.ts'], actor: 'user' })
-      const second = await queue.processNow()
-      expect(second.processed).toBe(1)
-      const after = await knowledgeExtractService.listFactCandidates()
-      const rename = after.find((c) => c.fact.content.includes('rename user index'))!
-      expect(rename.conflicts).toEqual([truthId])
-
-      // Truth recall finds the applied fact; restart restores an empty backlog.
-      const recall = await knowledgeRecallService.recall({ query: 'user index', layer: 'truth', workspaceId: WS })
-      expect(recall.documents.map((d) => d.hit.id)).toContain(truthId)
-
-      const restarted = new KnowledgeProcessingQueue()
-      try {
-        expect((await restarted.startupRestore()).pendingTotal).toBe(0)
-      } finally {
-        restarted.dispose()
-      }
-    } finally {
-      queue.dispose()
-    }
-
-    const truth = await knowledgeTruthService.list()
-    expect(truth.facts.map((f) => f.kind)).toEqual(['fact'])
+      expect((await queue.processNow()).failed).toBe(0)
+      expect(await knowledgeExtractService.listFactCandidates()).toEqual([])
+      expect((await knowledgeTruthService.list()).facts).toEqual([])
+      expect(await knowledgeObservationService.listAll(true)).toHaveLength(2)
+    } finally { queue.dispose() }
   })
 
-  it('keeps queued tool facts pending until explicit review', async () => {
-    await capture({ workspacePath: 'C:\\pipe', source: 'tool', type: 'git-event', content: 'commit auto: enable auto accept', fileRefs: ['src/auto.ts'], actor: 'user' })
-    await capture({ workspacePath: 'C:\\pipe', source: 'manual', type: 'user-note', content: '今天天气不错', actor: 'user' })
-
+  it('keeps personal saves pending until explicit review and restores an empty processed backlog', async () => {
+    await knowledgeObservationService.capture({ workspaceId: 'user', workspaceName: 'user', workspacePath: 'user',
+      source: 'manual', type: 'user-note', content: 'My bicycle is named Bluebird.', actor: 'user' }, { speaker: 'user', memoryIntent: 'remember' })
     const queue = new KnowledgeProcessingQueue()
-    queue.configureDeterministicHandler((batch) => runDeterministicStage(batch).then(() => undefined))
+    queue.configureDeterministicHandler(async batch => { await runDeterministicStage(batch) })
     try {
-      const result = await queue.processNow()
-      expect(result.handlerMissing).toBe(false)
-      expect(result.failed).toBe(0)
-
-      const candidates = await knowledgeExtractService.listFactCandidates()
-      expect(candidates).toHaveLength(1)
-      expect(candidates[0]?.derivation).toBe('deterministic')
-      expect(candidates[0]?.status).toBe('proposed')
-
-      const truth = await knowledgeTruthService.list()
-      expect(truth.facts).toHaveLength(0)
-
-      const { knowledgeAuditService } = await import('../../../src/main/knowledge/audit-service')
-      const approvals = (await knowledgeAuditService.list({ limit: 200 })).filter((event) => event.action === 'candidate_approved')
-      expect(approvals).toHaveLength(0)
-    } finally {
-      queue.dispose()
-    }
+      expect((await queue.processNow()).failed).toBe(0)
+      const [candidate] = await knowledgeExtractService.listFactCandidates()
+      expect(candidate).toMatchObject({ status: 'proposed', fact: { scope: 'user' } })
+      expect((await knowledgeTruthService.list()).facts).toEqual([])
+      await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: candidate.id }))
+      expect((await searchUserMemoryDefault('Bluebird')).items.map(item => item.id)).toContain(candidate.fact.id)
+      const restarted = new KnowledgeProcessingQueue()
+      try { expect((await restarted.startupRestore()).pendingTotal).toBe(0) }
+      finally { restarted.dispose() }
+    } finally { queue.dispose() }
   })
 })

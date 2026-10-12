@@ -1,0 +1,43 @@
+{
+  "recordedAt": "2026-10-10T06:33:03.377Z",
+  "suite": "blueprint refactor phase checkpoint",
+  "regression": {
+    "passed": 702,
+    "failed": 0,
+    "skipped": 3
+  },
+  "followup": {
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0
+  },
+  "checks": {
+    "typecheck": "passed",
+    "buildCheck": "passed",
+    "targetedEslint": "passed",
+    "i18n": "passed",
+    "packageBoundary": "passed",
+    "packagingExclusions": "passed",
+    "noteCorpus": {
+      "documents": 281,
+      "errors": 0,
+      "readDiagnostics": 24,
+      "externalLinks": 17
+    }
+  },
+  "remaining": [
+    "Complete desktop end-to-end acceptance",
+    "Real JEV comparison",
+    "Pi MCP extension",
+    "Codex host-approved write acceptance",
+    "Installer upgrade acceptance"
+  ],
+  "productionSettingsModified": false,
+  "committed": false,
+  "desktop": {
+    "status": "failed",
+    "command": "npx playwright test --config playwright.desktop.config.ts tests/e2e/blueprint-review-desktop.spec.ts",
+    "reason": "Fixture canvas node selection timed out; desktop IPC read of shared suggestions observed, complete UI handling/settings/reopen acceptance not established"
+  },
+  "status": "Paused by user at code/regression/documentation checkpoint; not full MVP acceptance"
+}

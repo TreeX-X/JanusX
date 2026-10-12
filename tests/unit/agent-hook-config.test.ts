@@ -44,6 +44,19 @@ function makeManager(homeDir: string, overrides: ManagerOverrides = {}) {
 }
 
 describe('AgentHookConfigManager', () => {
+  it('installs recovery hooks in the provider homes selected by the source history', async () => {
+    const homeDir = await createTempDir()
+    const claudeConfigDir = join(homeDir, 'original-claude')
+    const codexHome = join(homeDir, 'original-codex')
+    const manager = new AgentHookConfigManager({ homeDir, claudeConfigDir, codexHome,
+      userDataDir: join(homeDir, 'userData'), platform: 'linux', compileHookRunner: false })
+    await manager.ensureInstalled('claude')
+    await manager.ensureInstalled('codex')
+    expect(manager.getClaudeSettingsPath()).toBe(join(claudeConfigDir, 'settings.json'))
+    expect(manager.getCodexHooksPath()).toBe(join(codexHome, 'hooks.json'))
+    expect(await readFile(manager.getClaudeSettingsPath(), 'utf8')).toContain(JANUSX_HOOK_COMMAND_MARKER)
+    expect(await readFile(manager.getCodexHooksPath(), 'utf8')).toContain(JANUSX_HOOK_COMMAND_MARKER)
+  })
   it('installs marker-owned Claude hooks without removing user hooks', async () => {
     const homeDir = await createTempDir()
     const settingsPath = join(homeDir, '.claude', 'settings.json')

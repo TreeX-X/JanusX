@@ -16,7 +16,6 @@ import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection
 import { userProfileService } from '../../../src/main/knowledge/user-profile-service'
 import { userEpisodeService } from '../../../src/main/knowledge/user-episode-service'
 import { searchUserMemoryDefault } from '../../../src/main/knowledge/user-recall-service'
-import { knowledgeRecallService } from '../../../src/main/knowledge/recall-service'
 import * as atomic from '../../../src/main/lib/atomic-file'
 
 const oldRoot = process.env.JANUSX_KNOWLEDGE_ROOT
@@ -54,7 +53,7 @@ describe('durable selected personal memory forgetting', () => {
     expect((await userProfileService.load()).confirmedFacts).toHaveLength(1)
     const raw = await readFile(join(root, 'facts/facts.jsonl'), 'utf8')
     await forgetPersonalMemory(input())
-    expect((await knowledgeTruthService.list()).facts.map(fact => fact.id)).toEqual(['engineering'])
+    expect((await knowledgeTruthService.list()).facts).toEqual([])
     expect((await userProfileService.load()).confirmedFacts).toEqual([])
     expect(await userEpisodeService.listActive()).toEqual([])
     expect((await searchUserMemoryDefault('pnpm')).compactContext).toBe('')
@@ -74,7 +73,7 @@ describe('durable selected personal memory forgetting', () => {
     const candidate: CandidateFact = { id: 'replay', type: 'fact', status: 'proposed', derivation: 'deterministic',
       fact: { ...target, id: 'different-id', content: 'Paraphrased preference', status: 'proposed' }, evidence: { observationIds: ['source-event'], snippets: [] } }
     expect(await proposeFactCandidates([candidate])).toEqual([])
-    expect(await proposeFactCandidates([{ ...candidate, fact: { ...candidate.fact, scope: 'project' } }])).toHaveLength(1)
+    await expect(proposeFactCandidates([{ ...candidate, fact: { ...candidate.fact, scope: 'project' } }])).rejects.toThrow('retired')
     await writeFile(join(root, 'profile/profile.json'), JSON.stringify({ formatPrefs: ['Prefer pnpm'] }))
     expect(await importLegacyPersonalMemory()).toEqual({ created: 0, remaining: 0 })
   })
@@ -130,10 +129,9 @@ describe('durable selected personal memory forgetting', () => {
     expect((await knowledgeTruthService.list()).facts).toEqual([])
   })
 
-  it('invalidates a warm governance index and discards recall assembled across forgetting', async () => {
+  it('invalidates personal candidates and discards recall assembled across forgetting', async () => {
     const correction = await proposePersonalMemoryCorrection({ ...input(), content: 'Prefer pnpm nightly' })
-    const request = { query: 'pnpm', scope: 'user' as const, layer: 'governance' as const, workspaceId: 'project-a' }
-    expect((await knowledgeRecallService.recall(request)).documents.some(doc => doc.hit.id === correction.candidateId)).toBe(true)
+    expect((await listProposedUserFactCandidates()).some(candidate => candidate.id === correction.candidateId)).toBe(true)
     const profile = await userProfileService.load()
     let release!: () => void
     const load = vi.spyOn(userProfileService, 'load').mockImplementationOnce(() => new Promise(resolve => { release = () => resolve(profile) }))
@@ -142,7 +140,7 @@ describe('durable selected personal memory forgetting', () => {
     await forgetPersonalMemory(input())
     release()
     expect((await recall).compactContext).toBe('')
-    expect((await knowledgeRecallService.recall(request)).documents).toEqual([])
+    expect(await listProposedUserFactCandidates()).toEqual([])
   })
 
   it('recovers an acknowledged-late atomic commit without another lifecycle record', async () => {

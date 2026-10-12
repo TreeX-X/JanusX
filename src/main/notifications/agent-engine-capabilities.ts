@@ -123,7 +123,7 @@ export function resolveSessionStorePath(
     return join(codeHome && codeHome.length > 0 ? codeHome : join(home, '.codex'), 'sessions')
   }
   if (kind === 'opencode-sqlite') {
-    return join(home, '.local', 'share', 'opencode', 'opencode.db')
+    return join(env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), 'opencode', 'opencode.db')
   }
   if (kind === 'pi-sessions') {
     return join(home, '.pi', 'agent', 'sessions')

@@ -8,7 +8,7 @@ import { useThemeStore } from '@/stores/theme'
 import { EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
-import { buildProviderResumeCommand, type TranscriptDetail } from '../../../shared/ipc/session'
+import { buildContinueResumeArgs, buildProviderResumeCommand, canOfferSessionResume, isNativeResumeEngine, type TranscriptDetail } from '../../../shared/ipc/session'
 import { TerminalPresetIcon } from './ui/TerminalPresetIcon'
 import type { TerminalPreset } from '@/types'
 import { mergeTranscriptTurns } from '@/lib/session-turn-merge'
@@ -27,6 +27,12 @@ type Scope = 'workspace' | 'project' | 'all' | 'archived'
 const PROMPT_CLAMP_LINES = 4
 /** Prompts above this budget get the expand-to-full affordance. */
 const PROMPT_CLAMP_CHARS = 160
+/** Progressive card mount: one commit of every card froze the dock until the
+ * whole batch painted (stall, then everything at once). Cards land in chunks
+ * so each commit stays small and the list streams in.
+ * See .agents/notes/sessions/records/session-open-stall.md */
+const CARD_CHUNK = 20
+const CARD_CHUNK_DELAY_MS = 40
 
 const SCOPE_KEYS = {
   workspace: 'terminal:agentSession.scopeWorkspace',
@@ -82,7 +88,7 @@ const CARD_BORDER_SOFT = '1px solid var(--shell-border-soft)'
 // transcript-only — see
 // .agents/notes/sessions/records/session-windowed-reading.md
 
-/** Provider resume command for external rows (provider-native resume); null when the engine has no known resume shape. */
+/** Provider resume command; null when the record has no native identity. */
 function buildResumeCommand(session: AgentSessionSummary): string | null {
   return buildProviderResumeCommand(session.engine, session.providerSessionId, session.transcriptPath)
 }
@@ -104,7 +110,7 @@ function CopyButton({ text, label, grow }: { text: string; label?: string; grow?
           timer.id = setTimeout(() => setCopied(false), 1200)
         })
       }}
-      className="rounded cursor-pointer"
+      className={`rounded cursor-pointer ${styles.cardAction}`}
       style={{ height: grow ? 24 : 20, padding: '0 8px', fontSize: grow ? 10.5 : 10, border: '1px solid var(--shell-border)', background: 'transparent', color: 'var(--shell-muted)', fontFamily: "'SF Mono', monospace", flexShrink: 0, flex: grow ? 1 : undefined }}
     >
       {copied ? t('terminal:agentSession.copied') : (label ?? t('terminal:agentSession.copy'))}
@@ -112,11 +118,12 @@ function CopyButton({ text, label, grow }: { text: string; label?: string; grow?
   )
 }
 
-export function SessionPanel() {
+export function SessionPanel({ active = true }: { active?: boolean }) {
   const { t } = useI18n('terminal')
   const sessions = useSessionStore((s) => s.sessions)
   const loading = useSessionStore((s) => s.loading)
   const error = useSessionStore((s) => s.error)
+  const scopeKey = useSessionStore((s) => s.scopeKey)
   const fetchSessions = useSessionStore((s) => s.fetchSessions)
   const continueSession = useSessionStore((s) => s.continueSession)
   const subscribeToEvents = useSessionStore((s) => s.subscribeToEvents)
@@ -136,6 +143,11 @@ export function SessionPanel() {
   )
   const [scope, setScope] = useState<Scope>('workspace')
   const [continueTarget, setContinueTarget] = useState<AgentSessionSummary | null>(null)
+  const [continuing, setContinuing] = useState(false)
+  // Hooks can bind identity after the dialog opens. Explain the live record,
+  // rather than keeping a stale no-id snapshot while main will resume it.
+  const continueSource = continueTarget
+    ? sessions.find((session) => session.id === continueTarget.id) ?? continueTarget : null
   const [detailTarget, setDetailTarget] = useState<AgentSessionSummary | null>(null)
   const [query, setQuery] = useState('')
   const [allCounts, setAllCounts] = useState<{ all: number; archived: number } | null>(null)
@@ -145,27 +157,33 @@ export function SessionPanel() {
   const [timelineTick, setTimelineTick] = useState(0)
 
   useEffect(() => {
+    if (!active) return
     setContinueTarget(null)
     // Pull-mode backfill: provider transcripts written outside JanusX have no
     // hook traffic, so each panel open triggers one bounded rescan; the
     // registry notifies on import and the event subscription refreshes cards.
     // Concurrent scans share one in-flight pass main-side.
-    void window.electron.session.scanExternal().catch(() => undefined)
+    // Let the dock and its cached cards paint before a provider-store scan
+    // competes with the first list IPC on the main process.
+    const scanTimer = setTimeout(() => {
+      void window.electron.session.scanExternal().catch(() => undefined)
+    }, 120)
     if (scope === 'all') {
       void fetchSessions({})
-      return
+      return () => clearTimeout(scanTimer)
     }
     if (scope === 'archived') {
       void fetchSessions({ includeArchived: true })
-      return
+      return () => clearTimeout(scanTimer)
     }
     if (!activeWorkspaceId && !scopePath) {
       clearWorkspaceScope()
-      return
+      return () => clearTimeout(scanTimer)
     }
     // Project scope follows the workspace until the project model lands (P2).
     void fetchSessions(scopePath ? { cwd: scopePath } : { workspaceId: activeWorkspaceId ?? undefined })
-  }, [fetchSessions, clearWorkspaceScope, activeWorkspaceId, scopePath, scope])
+    return () => clearTimeout(scanTimer)
+  }, [active, fetchSessions, clearWorkspaceScope, activeWorkspaceId, scopePath, scope])
 
   const handleToggle = useCallback((sessionId: string) => {
     if (!scopePath) return
@@ -173,9 +191,10 @@ export function SessionPanel() {
     setUiForPath(scopePath, { expandedSessionId: current === sessionId ? null : sessionId })
   }, [scopePath, setUiForPath])
 
-  useEffect(() => subscribeToEvents(), [subscribeToEvents])
+  useEffect(() => active ? subscribeToEvents() : undefined, [active, subscribeToEvents])
 
   useEffect(() => {
+    if (!active) return
     let timer: ReturnType<typeof setTimeout> | null = null
     const unsubscribe = window.electron.session.onEvent(() => {
       if (timer) clearTimeout(timer)
@@ -185,7 +204,7 @@ export function SessionPanel() {
       if (timer) clearTimeout(timer)
       unsubscribe()
     }
-  }, [])
+  }, [active])
 
   const visible = useMemo(() => {
     const scoped = scope === 'archived' ? sessions.filter((s) => s.archived) : sessions.filter((s) => !s.archived)
@@ -199,11 +218,28 @@ export function SessionPanel() {
     )
   }, [sessions, scope, query])
 
+  // Progressive mount: chunked commits keep panel open off the stall-then-
+  // pop-in path. Re-stream on list identity change (scope key) or search;
+  // silent same-scope refreshes keep the streamed length as-is.
+  // See .agents/notes/sessions/records/session-open-stall.md
+  const [shownCount, setShownCount] = useState(CARD_CHUNK)
+  useEffect(() => {
+    setShownCount(CARD_CHUNK)
+  }, [scopeKey, query])
+  useEffect(() => {
+    if (shownCount >= visible.length) return
+    const timer = setTimeout(() => {
+      setShownCount((count) => Math.min(count + CARD_CHUNK, visible.length))
+    }, CARD_CHUNK_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [shownCount, visible.length])
+  const shown = useMemo(() => visible.slice(0, shownCount), [visible, shownCount])
+
   // An empty scope tab is ambiguous with no data at all: one unfiltered fetch
   // reports the totals so the empty state names the other scopes. Runs only
   // while the visible list stays empty.
   useEffect(() => {
-    if (loading || visible.length > 0) return
+    if (!active || loading || visible.length > 0) return
     let alive = true
     window.electron.session
       .list({ includeArchived: true })
@@ -218,7 +254,7 @@ export function SessionPanel() {
     return () => {
       alive = false
     }
-  }, [loading, visible.length])
+  }, [active, loading, visible.length])
 
   return (
     <div className={`flex flex-col h-full overflow-hidden ${styles.panelGround}`}>
@@ -231,6 +267,7 @@ export function SessionPanel() {
         </div>
         <div style={{ marginTop: 8 }}>
           <input
+            className={styles.searchInput}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('terminal:agentSession.searchPlaceholder')}
@@ -246,6 +283,8 @@ export function SessionPanel() {
           {(Object.keys(SCOPE_KEYS) as Scope[]).map((key) => (
             <button
               key={key}
+              className={styles.scopeTab}
+              aria-current={scope === key ? 'page' : undefined}
               onClick={() => setScope(key)}
               style={{
                 fontSize: 11.5,
@@ -301,7 +340,7 @@ export function SessionPanel() {
             )}
           </div>
         )}
-        {visible.map((session) => (
+        {shown.map((session) => (
           <SessionCard
             key={session.id}
             session={session}
@@ -316,7 +355,7 @@ export function SessionPanel() {
 
       {detailTarget && createPortal(
         <SessionDetailWindow
-          session={detailTarget}
+          session={sessions.find((session) => session.id === detailTarget.id) ?? detailTarget}
           timelineTick={timelineTick}
           onClose={() => setDetailTarget(null)}
           onResume={() => {
@@ -334,7 +373,7 @@ export function SessionPanel() {
         document.body,
       )}
 
-      {continueTarget && createPortal(
+      {continueSource && createPortal(
         <div
           className="fixed inset-0 flex items-center justify-center"
           style={{ background: 'rgba(0,0,0,0.64)', zIndex: 1000 }}
@@ -354,8 +393,12 @@ export function SessionPanel() {
                 onClose={() => setContinueTarget(null)}
               />
             <div style={{ padding: 16, fontSize: 12, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
-              {t('terminal:agentSession.continueBody')}
-              <div
+              {isNativeResumeEngine(continueSource.engine)
+                ? t(buildContinueResumeArgs(continueSource)
+                  ? 'terminal:agentSession.continueResumeBody'
+                  : 'terminal:agentSession.continueHandoffBody')
+                : t('terminal:agentSession.continueBody')}
+              {!buildContinueResumeArgs(continueSource) && <div
                 style={{
                   marginTop: 10,
                   padding: '8px 10px',
@@ -366,8 +409,8 @@ export function SessionPanel() {
                   whiteSpace: 'pre-wrap',
                 }}
               >
-                &ldquo;{continueTarget.firstPrompt || continueTarget.engine}&rdquo;
-              </div>
+                &ldquo;{continueSource.firstPrompt || continueSource.engine}&rdquo;
+              </div>}
             </div>
             <div
               className="flex justify-end"
@@ -382,15 +425,22 @@ export function SessionPanel() {
               </button>
               <button
                 onClick={async () => {
-                  // Explicit fresh session: an external row would otherwise
-                  // default to re-entering the provider's own session id.
-                  await continueSession(continueTarget.id, undefined, 'continue')
-                  setContinueTarget(null)
+                  if (continuing) return
+                  setContinuing(true)
+                  try {
+                    const result = await continueSession(continueSource.id, undefined, 'continue')
+                    if (result) setContinueTarget(null)
+                  } finally {
+                    setContinuing(false)
+                  }
                 }}
-                className="rounded cursor-pointer"
+                disabled={continuing}
+                className={`rounded cursor-pointer ${styles.cardAction}`}
                 style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
               >
-                {t('terminal:agentSession.continueStart')}
+                {t(buildContinueResumeArgs(continueSource)
+                  ? 'terminal:agentSession.continueResumeStart'
+                  : 'terminal:agentSession.continueStart')}
               </button>
             </div>
           </div>
@@ -898,14 +948,15 @@ function SessionCard({
 
   return (
     <div
-      className={`transition-colors ${styles.cardSurface}`}
+      className={styles.cardSurface}
+      data-session-id={session.id}
       style={{
         padding: 10,
         opacity: session.archived ? 0.62 : 1,
       }}
     >
       <div
-        className="flex items-center"
+        className={`flex items-center ${styles.cardHeader}`}
         style={{ gap: 7, cursor: 'pointer' }}
         onClick={onToggle}
       >
@@ -1006,6 +1057,7 @@ function SessionCard({
                   <button
                     type="button"
                     onClick={() => setPromptFull((open) => !open)}
+                    className={styles.cardAction}
                     style={{
                       marginTop: 4,
                       padding: 0,
@@ -1059,14 +1111,14 @@ function SessionCard({
             <div className="flex" style={{ gap: 6, marginTop: 9, flexWrap: 'wrap' }}>
               <button
                 onClick={onDetail}
-                className="flex-1 rounded cursor-pointer"
+                className={`flex-1 rounded cursor-pointer ${styles.cardAction}`}
                 style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', whiteSpace: 'nowrap' }}
               >
                 {t('terminal:agentSession.viewDetail')}
               </button>
-              {session.archived ? null : (
+              {session.archived && !canOfferSessionResume(session) ? null : (
                 <>
-                  {session.external === true && (
+                  {canOfferSessionResume(session) && (
                     resumeCommand ? (
                       <button
                         onClick={() => {
@@ -1075,7 +1127,7 @@ function SessionCard({
                           void runContinue(session.id, undefined, 'resume').finally(() => setResuming(false))
                         }}
                         disabled={resuming}
-                        className="flex-1 rounded cursor-pointer"
+                        className={`flex-1 rounded cursor-pointer ${styles.cardAction}`}
                         style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1, whiteSpace: 'nowrap' }}
                       >
                         {t('terminal:agentSession.resume')}
@@ -1092,13 +1144,13 @@ function SessionCard({
                       </ThemedTooltip>
                     )
                   )}
-                  <button
+                  {!session.archived && <button
                     onClick={onContinue}
-                    className="flex-1 rounded cursor-pointer"
+                    className={`flex-1 rounded cursor-pointer ${styles.cardAction}`}
                     style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', whiteSpace: 'nowrap' }}
                   >
                     {t('terminal:agentSession.continue')}
-                  </button>
+                  </button>}
                 </>
               )}
             </div>
@@ -1169,7 +1221,7 @@ function SessionDetailWindow({
   session: AgentSessionSummary
   timelineTick: number
   onClose: () => void
-  /** External rows only: re-enter the provider's own session id. */
+  /** Re-enter the provider's own session in a new terminal. */
   onResume: () => void
   onContinue: () => void
 }) {
@@ -1484,7 +1536,7 @@ function SessionDetailWindow({
             {(detail?.providerSessionId ?? session.providerSessionId) && (
               <CopyButton text={(detail?.providerSessionId ?? session.providerSessionId) as string} label={t('terminal:agentSession.copySessionId')} />
             )}
-            {session.external === true && resumeCommand && (
+            {canOfferSessionResume(session) && resumeCommand && (
               <CopyButton text={resumeCommand} label={t('terminal:agentSession.resumeCopy')} />
             )}
           </div>
@@ -1678,9 +1730,9 @@ function SessionDetailWindow({
           >
             {t('common:action.close')}
           </button>
-          {session.archived ? null : (
+          {session.archived && !canOfferSessionResume(session) ? null : (
             <>
-              {session.external === true && (
+              {canOfferSessionResume(session) && (
                 resumeCommand ? (
                   <button
                     onClick={onResume}
@@ -1701,13 +1753,13 @@ function SessionDetailWindow({
                   </ThemedTooltip>
                 )
               )}
-              <button
+              {!session.archived && <button
                 onClick={onContinue}
                 className="rounded cursor-pointer"
                 style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0, whiteSpace: 'nowrap' }}
               >
                 {t('terminal:agentSession.continue')}
-              </button>
+              </button>}
             </>
           )}
         </div>

@@ -20,7 +20,7 @@
   overflow: hidden;
   opacity: 1;
   transform: translateX(0);
-  transition: width 240ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 150ms ease, transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: width 240ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 240ms ease, transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .panel[data-resizing='true'] {
@@ -254,8 +254,51 @@
   background: var(--shell-chrome-raised);
 }
 
+/* 折叠/展开控件：随第一个 tab 淡入并撑开高度，随最后一个 tab 淡出并收回高度，
+   让下方工具图标平滑滑动而不是跳位。高度 40px = 控件 36px + 与图标间距 4px。
+   data-visible 由 useAnimatedOpen 驱动（见 components/shared/CardFrame.tsx），
+   时长与 RightToolRail.tsx 的 RAIL_TOGGLE_MOTION_MS = 320ms 一致，
+   visibility 延时 = 卸载定时器，改一个就要改另一个；.panel 的展开用同一组时长。
+   必须写在 reduced-motion 媒体查询之前，否则同特异性后者会被这里覆盖。 */
+.railToggle {
+  flex: 0 0 auto;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+}
+
+.railToggle[data-visible='true'] {
+  height: 40px;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    height 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 240ms ease,
+    transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+
+.railToggle[data-visible='false'] {
+  height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition:
+    height 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 200ms ease,
+    transform 260ms cubic-bezier(0.5, 0, 0.75, 0),
+    visibility 0s linear 320ms;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .panel { transition: none; }
+  .panel,
+  .railToggle,
+  .railToggle[data-visible='true'],
+  .railToggle[data-visible='false'] { transition: none; }
 }
 
 .dock[data-collapsed='true'] .rail { border-left-color: transparent; }

@@ -67,7 +67,7 @@ function ToolContent({
 }) {
   if (toolId === 'files') return <FileExplorerTool active={active} />
   if (toolId === 'git') return <GitPanel active={active} />
-  if (toolId === 'sessions') return <SessionPanel />
+  if (toolId === 'sessions') return <SessionPanel active={active} />
   return <AssistantTool active={active} workspaceId={workspaceId} workspacePath={workspacePath} />
 }
 

@@ -31,6 +31,15 @@ vi.mock('../../../src/main/knowledge/memory-access', async importOriginal => ({
 vi.mock('../../../src/main/knowledge/observation-service', () => ({
   knowledgeObservationService: { capture },
 }))
+// Engineering capture now passes through captureEngineeringUserMemory, which gates on
+// memoryDomainPolicy().inferEngineeringHabits (default false). Opt in so the gate is not
+// what the assertions are actually about.
+vi.mock('../../../src/main/knowledge/memory-domain-policy', () => ({
+  memoryDomainPolicy: async () => ({
+    project: false, personal: true, capturePersonal: true,
+    inferEngineeringHabits: true, recallPersonal: true, episodeTtlDays: 30,
+  }),
+}))
 vi.mock('../../../src/main/knowledge/processing-queue', () => ({
   knowledgeProcessingQueue: { scheduleImmediate },
 }))
@@ -276,9 +285,11 @@ describe('chat turn guard (S6-a)', () => {
       expect.objectContaining({ actor: 'user', sessionId: 'evidence-conversation' }),
       { speaker: 'user', sourceEventId: 'evidence-turn' },
     )
-    expect(capture).toHaveBeenCalledWith(
-      expect.objectContaining({ actor: 'assistant', sessionId: 'evidence-conversation' }),
-      { speaker: 'assistant', sourceEventId: 'evidence-turn' },
+    // Engineering activity contributes only opted-in personal habits, never assistant
+    // turns and never project facts — see knowledge/engineering-user-memory.ts.
+    expect(capture).not.toHaveBeenCalledWith(
+      expect.objectContaining({ actor: 'assistant' }),
+      expect.objectContaining({ speaker: 'assistant' }),
     )
     await handleChatStream({ reply: vi.fn() } as never, {
       requestId: 'personal-evidence-turn', conversationId: 'personal-evidence-conversation',
@@ -292,12 +303,12 @@ describe('chat turn guard (S6-a)', () => {
   it.each(['personal', 'project', 'failure'] as const)('records delivered context at the production stream boundary: %s', async mode => {
     const section = '[janus-user-memory]\nPrefer pnpm\n[/janus-user-memory]'
     const delivery = { capturedAt: Date.now(), section, facts: [{ id: 'personal', hash: 'snapshot' }] }
-    const projectDelivery = { scope: 'project', capturedAt: Date.now(), section: 'Engineering memory', facts: [{ id: 'engineering', workspaceId: 'workspace', hash: 'snapshot' }] }
-    search.mockResolvedValue({ ...emptyResult, compactContext: projectDelivery.section, projectMemoryDelivery: projectDelivery })
-    searchWithUser.mockResolvedValue({ ...emptyResult, compactContext: projectDelivery.section + '\n\n' + section, userMemoryDelivery: delivery, projectMemoryDelivery: projectDelivery })
+    // Project memory delivery was retired with the memory reorientation, so only the
+    // personal receipt is left to record at the stream boundary.
+    search.mockResolvedValue({ ...emptyResult, compactContext: 'Engineering memory' })
+    searchWithUser.mockResolvedValue({ ...emptyResult, compactContext: 'Engineering memory\n\n' + section, userMemoryDelivery: delivery })
     streamText.mockImplementation(async () => {
       expect(recordAccess).not.toHaveBeenCalled()
-      expect(recordProjectAccess).not.toHaveBeenCalled()
       return { textStream: (async function* () {
         expect(recordAccess).not.toHaveBeenCalled()
         if (mode === 'failure') throw new Error('provider unavailable')
@@ -312,8 +323,6 @@ describe('chat turn guard (S6-a)', () => {
     if (mode === 'personal') {
       expect(recordAccess).toHaveBeenCalledExactlyOnceWith(delivery, `delivery-${mode}`, expect.any(AbortSignal))
     } else expect(recordAccess).not.toHaveBeenCalled()
-    if (mode === 'failure') expect(recordProjectAccess).not.toHaveBeenCalled()
-    else expect(recordProjectAccess).toHaveBeenCalledExactlyOnceWith(projectDelivery, `delivery-${mode}`, expect.any(AbortSignal))
   })
 
   it('skips personal recall injection for project domain when a user search exists', async () => {

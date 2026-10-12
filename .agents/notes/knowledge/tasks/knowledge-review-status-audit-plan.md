@@ -142,7 +142,7 @@
     ],
     "review": "self"
   },
-  "updated": "2026-10-08T04:35:16.607Z",
+  "updated": "2026-10-10T06:17:39.934Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-528027d0e5cf",
   "disposition": {
     "reason": "Historical v1 execution is preserved at the original Git revision/path in migration accounting. Reassess the v2 contract explicitly before a new run."
@@ -151,6 +151,8 @@
 ---
 
 # 知识库审核、图谱、状态与审计优化实施计划
+
+当前适用性：工程生成 Wiki、图谱、检索和自动化已随蓝图重构退出；下文相关设计及验收保留为当时记录，源码链接固定到退出前 Git 版本。个人及共享能力的当前边界见[模块入口](../module.md)。原验收编号、执行与评审记录不被此次退出改写为新版本通过。
 
 ## Scope
 
@@ -195,17 +197,17 @@ S1/W1/G1/S2/S3/S4/G2/S5 的行为、契约和验证已记录；其余事项在�
 
 ### 修改位置与实施要点
 
-**W1**：[主题分组](../../../../src/main/knowledge/wiki-topics.ts)及[页间关系校验](../../../../src/main/knowledge/wiki-relations.ts)落实父需求的“W1 页面与关系契约”。生成器只读取同工作区可用的已发布目标，优先复核已有草稿再生成下一主题。引用从真实 Markdown 链接解析，依赖与冲突由生成器提交来源条目并经过 Wiki 模型审核；宿主在事实/Wiki 锁内复核端点、版本和来源。relations 保存在候选与页面本身，正文、索引、关系、历史和候选状态复用现有可恢复发布事务。旧 graph-edge 不迁移为页面关系。
+**W1**：[主题分组](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/main/knowledge/wiki-topics.ts)及[页间关系校验](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/main/knowledge/wiki-relations.ts)落实父需求的“W1 页面与关系契约”。生成器只读取同工作区可用的已发布目标，优先复核已有草稿再生成下一主题。引用从真实 Markdown 链接解析，依赖与冲突由生成器提交来源条目并经过 Wiki 模型审核；宿主在事实/Wiki 锁内复核端点、版本和来源。relations 保存在候选与页面本身，正文、索引、关系、历史和候选状态复用现有可恢复发布事务。旧 graph-edge 不迁移为页面关系。
 
-**G1/G2**：[KnowledgeGraphCanvas.tsx](../../../../src/renderer/src/components/knowledge/KnowledgeGraphCanvas.tsx) 为自定义节点提供不可编辑的 source/target Handle，[knowledgeGraph.ts](../../../../src/renderer/src/components/knowledge/knowledgeGraph.ts) 默认只投影已发布 Wiki 及宿主核验过的关系。主图和单页来源追溯分开；追溯先建立事实、文件/概念节点再解析替代和旧存储边，身份包含工作区。原始证据使用既有 observationRevocationContext 按工作区与 ID 读取，每批并发最多 4 项，刷新、离开或折叠时丢弃迟到结果。G2 的局部阅读以中心页面和两侧邻居布局，概览对连通分量作二维装箱；两行标题、关系标签和方向端点同时提供阅读信息，单击只打开详情。固定尺寸卡片声明端点几何，视图更新保留测量，避免 ResizeObserver 未重发时连线消失。
+**G1/G2**：[KnowledgeGraphCanvas.tsx](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/KnowledgeGraphCanvas.tsx) 为自定义节点提供不可编辑的 source/target Handle，[knowledgeGraph.ts](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/knowledgeGraph.ts) 默认只投影已发布 Wiki 及宿主核验过的关系。主图和单页来源追溯分开；追溯先建立事实、文件/概念节点再解析替代和旧存储边，身份包含工作区。原始证据使用既有 observationRevocationContext 按工作区与 ID 读取，每批并发最多 4 项，刷新、离开或折叠时丢弃迟到结果。G2 的局部阅读以中心页面和两侧邻居布局，概览对连通分量作二维装箱；两行标题、关系标签和方向端点同时提供阅读信息，单击只打开详情。固定尺寸卡片声明端点几何，视图更新保留测量，避免 ResizeObserver 未重发时连线消失。
 
-**S1**：[automation-service.ts](../../../../src/main/knowledge/automation-service.ts) 从当前 plans 投影任务、工作区和候选 hash，返回 `reviewStateVersion: 1` 及独立的工程审核开关。只有当前失败或待人工处理的任务可以重试；宿主复核任务、依赖和模型配置，拒绝过期任务。[共享状态源](../../../../src/renderer/src/services/knowledge-automation.ts)供侧栏、工作台与角标订阅，[候选状态判定](../../../../src/renderer/src/components/knowledge/candidateReviewState.ts)匹配当前快照，操作前再次读取宿主状态。未知或正在自动处理时不授权人工审核，个人候选保持人工确认，旧评分折叠为历史。新 automation 配置存在时，[candidate-actions.ts](../../../../src/main/knowledge/candidate-actions.ts)拒绝 score/refine，即使 automation 暂停也不进入旧队列；完全没有 automation 配置的旧宿主路径保持兼容。共享类型只扩展状态返回值，IPC 方法、preload 与 fallback 方法集合未变，合同回归通过。
+**S1**：[automation-service.ts](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/main/knowledge/automation-service.ts) 从当前 plans 投影任务、工作区和候选 hash，返回 `reviewStateVersion: 1` 及独立的工程审核开关。只有当前失败或待人工处理的任务可以重试；宿主复核任务、依赖和模型配置，拒绝过期任务。[共享状态源](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/services/knowledge-automation.ts)供侧栏、工作台与角标订阅，[候选状态判定](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/candidateReviewState.ts)匹配当前快照，操作前再次读取宿主状态。未知或正在自动处理时不授权人工审核，个人候选保持人工确认，旧评分折叠为历史。新 automation 配置存在时，[candidate-actions.ts](../../../../src/main/knowledge/candidate-actions.ts)拒绝 score/refine，即使 automation 暂停也不进入旧队列；完全没有 automation 配置的旧宿主路径保持兼容。共享类型只扩展状态返回值，IPC 方法、preload 与 fallback 方法集合未变，合同回归通过。
 
 S1 的确定性提取不生成共同文件关系；模型旧输出中的 graphEdges 不写入候选，派生候选入口也拒绝独立 graph-edge。旧存储可读、可通过既有维护 API 拒绝，界面显示只读记录；不自动接受或转为 Wiki 关系。2026-10-06 用户明确授权清理当前错误积累（含图谱审核），该批次按预览及快照核验处置，详见 Results；这项授权不构成产品自动删除历史的规则。W1 负责新语义关系的 Wiki 草稿及审核，S2 负责关系端点与依据的阅读布局。
 
 **S2**：[MemoryReviewTool.tsx](../../../../src/renderer/src/components/knowledge/MemoryReviewTool.tsx) 与工作台 Inspector 复用审核内容、当前状态及动作。阅读区、来源、替代影响与底部操作分别组织；[CandidateEvidence.tsx](../../../../src/renderer/src/components/knowledge/CandidateEvidence.tsx) 按候选快照和来源工作区读取完整证据，失败、读取中或已撤回时阻止批准。[FactReviewControls.tsx](../../../../src/renderer/src/components/knowledge/FactReviewControls.tsx) 保留候选/目标 hash，来源变化、重新读取、忙碌或候选失效清除旧确认。Wiki 使用共享安全 Markdown，展开比较时读取同工作区的已发布版本及关系；来源 Note 缺失、hash 不匹配或非 fresh 状态不能通过界面批准。宿主仍在写入前校验版本及来源。旧评分折叠为历史，列表按条目、Wiki 草稿、已发布页面等分型，检索相关性与提取置信度分别命名。审计和旧图记录只读。
 
-**S3**：调整 [AutomationStatus.tsx](../../../../src/renderer/src/components/knowledge/AutomationStatus.tsx)、[AssistantTool.tsx](../../../../src/renderer/src/components/knowledge/AssistantTool.tsx)、工作台及 S1 的共享订阅。首版采用全部工程范围并明确标识；个人功能单独开启时不读取或展示关闭的工程域。摘要复用宿主已加载对象生成可读标题，展示失败不回退为“空闲”。single-flight、最后一个订阅者离开停轮询、页面恢复刷新，按父需求给定的运行/空闲节奏测试；同一当前任务不在新旧队列摘要中重复计数。缺少真实开始时间时不显示虚构耗时。
+**S3**：调整 [AutomationStatus.tsx](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/src/renderer/src/components/knowledge/AutomationStatus.tsx)、[AssistantTool.tsx](../../../../src/renderer/src/components/knowledge/AssistantTool.tsx)、工作台及 S1 的共享订阅。首版采用全部工程范围并明确标识；个人功能单独开启时不读取或展示关闭的工程域。摘要复用宿主已加载对象生成可读标题，展示失败不回退为“空闲”。single-flight、最后一个订阅者离开停轮询、页面恢复刷新，按父需求给定的运行/空闲节奏测试；同一当前任务不在新旧队列摘要中重复计数。缺少真实开始时间时不显示虚构耗时。
 
 S3 纳入用户确认的顶部布局：摘要不展开配置与记录，四环节说明移入设置，原“审计”入口承载“记录 → 处理记录 / 操作审计”。顶部普通入口打开处理记录，异常入口按当前有效任务筛选；200 条上限只在历史列表内说明。原 KnowledgeStatusBar 的采集/提取信息和手动动作移入记录内按需查看，不与新自动化的队列数量相加。宿主复用当前计划快照返回脱敏对象名及真实最近成功时间；客户端复用 single-flight 订阅，运行 2 秒、空闲及失败 10 秒，隐藏停止并在恢复时刷新。验证覆盖父需求 P1～P4，完成 AC-4/5；AC-8 的状态栏部分随 S3 验证，完整审计布局仍归 S4。
 
@@ -216,7 +218,7 @@ S4 采用新增 `knowledge:audit:page`，旧 `listAudit` 保持数组返回，�
 操作审计使用独立分页列表和完整选中事件，工作台自动状态刷新不重置已加载的审计页。变更前后按事件字段比较，未变字段、长值和原始结构按需展开；批次或缺失快照明确说明。当前对象仅按明确类型、工作区及目标身份调用既有只读接口，已应用候选只有明确 appliedId 才能关联正式对象。读取当前值与历史快照分别呈现，失败或撤回不影响事件阅读。来源撤回历史保留在折叠入口，避免再次挤压列表。
 
 记录区“处理记录 / 操作审计”参考 ProjectSettings 横向页签的透明底、文字选中态与强调色下划线，复用 ui/TabStrip.module.css，页签条高 34px，正文从下方独立起行。tablist、tab 和 tabpanel 使用组件实例 ID 关联，选中页签进入 Tab 顺序；左右方向键循环切换，Home/End 定位首尾。切换清除旧详情并挂载对应视图，任务筛选、审计分页和来源撤回入口沿用原有行为。
-**S5**：用同一组合夹具贯通 W1、G1/G2 及 S1～S4；在已存在的 [knowledge-pipeline.spec.ts](../../../../tests/e2e/knowledge-pipeline.spec.ts) 基础上运行隔离 Electron，核验真实 preload/IPC 与宿主动作，以及从条目入库到 Wiki/图谱同版本更新的闭环。构建写入 artifacts/build-check，不覆盖正在运行的开发输出；将便携包写入独立交付目录，并验证包内构建身份、仓库外运行和便携启动器。若需要实际切换运行版本，先检查并保存会话状态；不能把“重启旧便携版”描述为装入新代码。
+**S5**：用同一组合夹具贯通 W1、G1/G2 及 S1～S4；在已存在的 [knowledge-pipeline.spec.ts](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/tests/e2e/knowledge-pipeline.spec.ts) 基础上运行隔离 Electron，核验真实 preload/IPC 与宿主动作，以及从条目入库到 Wiki/图谱同版本更新的闭环。构建写入 artifacts/build-check，不覆盖正在运行的开发输出；将便携包写入独立交付目录，并验证包内构建身份、仓库外运行和便携启动器。若需要实际切换运行版本，先检查并保存会话状态；不能把“重启旧便携版”描述为装入新代码。
 
 **S5 运行验收与交付**：使用独立 `playwright.desktop.config.ts` 执行真实 Electron、preload、IPC、自动任务和存储链路，不启动岛屿网页服务器。现有采集/人工审核/领域隔离用例保留，完整沉淀用例用回环 HTTP 模型夹具覆盖提取、两轮审核门禁、Wiki 同版本关系发布、后续来源更新、历史版本、撤回后的检索与主图隔离；可信来源归因在隔离存储夹具中预置，公共 observe IPC 不允许凭 actor 自行提升归因。测试结果必须区分流程验证和真实模型质量。构建输出和便携包保存在独立 artifacts 目录，运行检查接受明确的 `--release-dir`，在仓库外启动副本并隔离知识根目录；当前用户会话与便携目录不自动替换。工作台全局 Escape 优先关闭已打开的详情，即使焦点仍在图谱或领域导航；没有详情时才关闭工作台。Inspector 内的已处理按键不重复执行全局动作。
 
@@ -268,7 +270,7 @@ G2 继续使用原圆点和横向分量排列的维护成本最低，但局部�
 
 ## Verification
 
-图谱扩展既有 [knowledge-graph.test.ts](../../../../tests/unit/knowledge/knowledge-graph.test.ts)，并增加真实画布浏览器回归，覆盖父需求 G1～G5；断言 SVG 路径生成和可见线段，同时监听 React Flow error 008。水平路径可能具有零高度包围盒，不能只依赖 Playwright 的元素 visible 判定，应结合路径、样式与截图。W1 扩展 automation-service 与 Wiki 审核/历史/恢复相关测试，覆盖正文和关系同版本发布、失败草稿隔离、拒绝后重放及目标页面失效。写入使用隔离存储，不操作在线库。
+图谱扩展既有 [knowledge-graph.test.ts](https://github.com/TreeX-X/JanusX/blob/c8332f1949dba249d1cec81a72c57746c31bb951/tests/unit/knowledge/knowledge-graph.test.ts)，并增加真实画布浏览器回归，覆盖父需求 G1～G5；断言 SVG 路径生成和可见线段，同时监听 React Flow error 008。水平路径可能具有零高度包围盒，不能只依赖 Playwright 的元素 visible 判定，应结合路径、样式与截图。W1 扩展 automation-service 与 Wiki 审核/历史/恢复相关测试，覆盖正文和关系同版本发布、失败草稿隔离、拒绝后重放及目标页面失效。写入使用隔离存储，不操作在线库。
 
 阶段验证优先扩展现有用例：S1 使用 candidate-actions、automation-service、memory-domain-controls 与 knowledge-ipc-contract；S2 使用 memory-review-tool、memory-review-ui、workbench-selection 与 knowledge-note-ui，补工作台右侧真实组件的状态矩阵，不能只验证侧栏；S3 使用 knowledge-automation-ui、knowledge-automation-summary-ui 和 assistant-ui，覆盖共享订阅计时、迟到响应和跨入口导航；S4 使用 audit-service、workbench-service、knowledge-ipc-contract 和 knowledge-audit-ui 的浏览器审计夹具。父需求 R/P/A 用例规定输入和断言。新增独立测试文件仅用于现有入口无法覆盖的行为，不为样式细节逐条造实现镜像测试。
 

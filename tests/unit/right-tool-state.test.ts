@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RIGHT_TOOL_IDS, RIGHT_TOOL_REGISTRY } from '../../src/renderer/src/right-tools/registry'
+import { isRightToolEnabled, RIGHT_TOOL_IDS, RIGHT_TOOL_REGISTRY } from '../../src/renderer/src/right-tools/registry'
 import {
   activateRightTool,
   clampRightToolPanelWidth,
@@ -35,6 +35,14 @@ describe('right tool registry', () => {
     expect(RIGHT_TOOL_REGISTRY.every(({ instancePolicy }) => instancePolicy === 'single')).toBe(true)
     expect(RIGHT_TOOL_REGISTRY.every(({ mountPolicy }) => mountPolicy === 'while-open')).toBe(true)
     expect(RIGHT_TOOL_REGISTRY.some(({ id }) => (id as string) === 'office')).toBe(false)
+  })
+
+  it('gates the sessions tool on the experimental preview flag only', () => {
+    expect(isRightToolEnabled('sessions', { knowledge: true, persona: true, sessions: true })).toBe(true)
+    expect(isRightToolEnabled('sessions', { knowledge: true, persona: true, sessions: false })).toBe(false)
+    expect(isRightToolEnabled('files', { knowledge: false, persona: false, sessions: false })).toBe(true)
+    expect(isRightToolEnabled('git', { knowledge: false, persona: false, sessions: false })).toBe(true)
+    expect(isRightToolEnabled('assist', { knowledge: true, persona: true, sessions: false })).toBe(true)
   })
 })
 

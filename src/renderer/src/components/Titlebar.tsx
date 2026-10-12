@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland } from '@/components/janus'
 import { AppSettingsModal, type SettingsTab } from '@/components/AppSettingsModal'
-import { KnowledgeWorkbench } from '@/components/knowledge'
+import { PersonalMemoryWorkbench } from '@/components/knowledge'
 import { UpdaterBadge } from '@/components/UpdaterBadge'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
 import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
@@ -49,7 +49,7 @@ export function Titlebar() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab>('general')
   useEffect(() => {
     const openKnowledgeSettings = () => {
-      if (!useExperimentalStore.getState().knowledge) return
+      if (!useExperimentalStore.getState().blueprint) return
       setSettingsInitialTab('knowledge')
       setSettingsModalOpen(true)
     }
@@ -93,7 +93,7 @@ export function Titlebar() {
 
   const activeWorkbench = useAppStore((s) => s.activeWorkbench)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
-  const knowledgeEnabled = useExperimentalStore((s) => s.knowledge || s.persona)
+  const knowledgeEnabled = useExperimentalStore((s) => s.persona)
   const blueprintEnabled = useExperimentalStore((s) => s.blueprint)
   const loadExperimental = useExperimentalStore((s) => s.load)
 
@@ -350,7 +350,7 @@ export function Titlebar() {
           onClose={() => setActiveWorkbench(null)}
         />
       </Suspense>
-      <KnowledgeWorkbench
+      <PersonalMemoryWorkbench
         isOpen={knowledgeEnabled && activeWorkbench === 'knowledge'}
         onClose={() => setActiveWorkbench(null)}
       />

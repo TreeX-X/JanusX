@@ -4,7 +4,7 @@ import { access } from 'node:fs/promises'
 import { checkpointManager } from '@janus-agent/agent-core'
 import type { CheckpointEngine, RestoreScope } from '@janus-agent/agent-core'
 import { agentSessionRegistry } from '../sessions/session-registry'
-import { captureForCwd, logKnowledgeCaptureFailure } from '../knowledge/workspace-identity'
+
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
 import type { CheckpointCreateInput, CheckpointFilter } from '../../shared/ipc/checkpoint'
 
@@ -27,22 +27,7 @@ export function registerCheckpointHandlers(): void {
       await checkpointManager.initialize(cwd)
 
       const cp = await checkpointManager.createCheckpoint({ ...options, cwd })
-      void captureForCwd(cwd, {
-        source: 'checkpoint',
-        type: 'checkpoint-event',
-        content: options.prompt,
-        summary: `Checkpoint created: ${cp.id}`,
-        tags: ['checkpoint-create'],
-        actor: options.engine,
-        correlationId: cp.id,
-        metadata: {
-          checkpointId: cp.id,
-          terminalId: cp.terminalId,
-          branch: cp.branch,
-          conversationIndex: cp.conversationIndex,
-          sessionId: cp.sessionId,
-        },
-      }).catch(logKnowledgeCaptureFailure)
+
       return {
         id: cp.id,
         terminalId: cp.terminalId,
@@ -63,15 +48,7 @@ export function registerCheckpointHandlers(): void {
     CHECKPOINT_CHANNELS.finalize,
     async (_event, { checkpointId, cwd }: { checkpointId: string; cwd: string }) => {
       await checkpointManager.finalizeCheckpoint(checkpointId, cwd)
-      void captureForCwd(cwd, {
-        source: 'checkpoint',
-        type: 'checkpoint-event',
-        content: `Checkpoint finalized: ${checkpointId}`,
-        summary: `Checkpoint finalized: ${checkpointId}`,
-        tags: ['checkpoint-finalize'],
-        actor: 'system',
-        correlationId: checkpointId,
-      }).catch(logKnowledgeCaptureFailure)
+
       return { success: true }
     }
   )
@@ -80,15 +57,7 @@ export function registerCheckpointHandlers(): void {
     CHECKPOINT_CHANNELS.restore,
     async (_event, { checkpointId, cwd, scope }: { checkpointId: string; cwd: string; scope?: RestoreScope }) => {
       const result = await checkpointManager.restoreCheckpoint(checkpointId, cwd, scope)
-      void captureForCwd(cwd, {
-        source: 'checkpoint',
-        type: 'checkpoint-event',
-        content: `Checkpoint restored: ${checkpointId}`,
-        summary: `Checkpoint restored: ${checkpointId}`,
-        tags: ['checkpoint-restore'],
-        actor: 'system',
-        correlationId: checkpointId,
-      }).catch(logKnowledgeCaptureFailure)
+
       return result
     }
   )

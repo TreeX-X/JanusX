@@ -77,13 +77,13 @@ describe('unified memory review', () => {
       listGraphCandidates: vi.fn().mockResolvedValue([]),
     } } })
     const result = await loadReviewCandidates()
-    expect(result.map(candidate => candidate.id)).toEqual(['personal', 'engineering'])
-    expect(countInboxScopes(result)).toEqual({ user: 1, engineering: 1 })
+    expect(result.map(candidate => candidate.id)).toEqual(['personal'])
+    expect(countInboxScopes(result)).toEqual({ user: 1, engineering: 0 })
   })
 
   it('rejects partial reads instead of showing a misleading empty or incomplete queue', async () => {
     vi.stubGlobal('window', { electron: { knowledge: {
-      listCandidates: vi.fn().mockResolvedValue([fact('personal', 'user')]),
+      listCandidates: vi.fn().mockRejectedValue(new Error('unavailable')),
       listWikiPatchCandidates: vi.fn().mockRejectedValue(new Error('unavailable')),
       listGraphCandidates: vi.fn().mockResolvedValue([]),
     } } })

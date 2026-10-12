@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-10T14:00:15.185Z",
+  "updated": "2026-10-11T14:38:02Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/dc1aca7c-408f-406d-add4-ba78d556b662"
 }
 ---
@@ -43,7 +43,7 @@ The session registry persists one record per agent session under the owning work
 
 The checkpoint rebuild replaces weak terminal binding with session binding. New checkpoints carry session id, turn id, completion kind, and parent id alongside the content-addressed blob store. Pruning scopes to the owning session plus a per-workspace cap, ending cross-terminal prune damage. Snapshots keep the git candidate set and add a size guard for oversized untracked files, binary marking without content diffing, and per-file change records replacing the concatenated diff string. Writes stay atomic with fsync and rolling backups, hydration failure blocks the session writer and surfaces loudly, and legacy checkpoints import best-effort with terminal id mapped to sessions and the global index mapped to turn order.
 
-Continue in New Session opens a new terminal in the original cwd with the original engine by default and an explicit agent switch option. The handoff prompt delivers after the TUI reports ready and carries the task summary, latest progress, original transcript path when present, and checkpoint reference, framed as untrusted reference with current repository state authoritative. The original session stays resumable and untouched. Full-transcript delivery, cross-agent matrices, and compaction linkage wait for P1.
+Continue in New Session opens a new terminal in the original cwd with the original engine by default. 按 2026-10-11 用户确认的修订，Claude、Codex、Opencode 同引擎且已有提供方 ID 时直接恢复原生历史，不注入首条 prompt。缺少 ID 或切换引擎才发送任务交接；交接包含摘要、进展、转录和检查点参考，标明为不可信参考，以当前仓库为准。显式 Resume 缺少身份或历史时拒绝，源 ledger 保留，恢复记录不共享旧检查点。实现、边界与验证归 [转录详情与原生恢复](../records/session-resume-detail.md)。其他终端、原生 Fork、完整转录交接及跨引擎矩阵后续处理。
 
 P2 introduces the worktree as the task isolation unit while Workspace keeps its existing registration role without migration. Worktree identity uses repo id plus path, creation runs `git worktree add` with a new branch from the base ref or a local branch in the background with progress, cancel, and retry, and each worktree locks its own directory, branch, terminals, and checkpoint scope. A branch and a worktree are different things: the branch is a commit pointer and appears only as an attribute on the worktree card, while the worktree is the operable row because only it owns a directory, terminals, checkpoints, and sessions. Branches without a worktree never occupy sidebar rows and surface only in the start-from picker and branch lists. Large rebuildable directories arrive via symlink-style sharing and local secrets via literal-path copy. Merge timing stays explicit Ship after review with commit, push, review creation, and check waiting; agent completion never merges. Deletion removes disk and branch by default, keeps git-refused branches in a review list, and bulk paths behave identically. Closing the software persists live resumable sessions with a quit origin marker plus one checkpoint and layout per worktree, restores shells with Restart, Resume, and Continue entries on relaunch, and never auto-runs agents or merges.
 
@@ -65,7 +65,7 @@ Repository avatars ship without any login. Import resolves the git remote into h
 - [ ] AC-1: One workspace lists its agent sessions as cards with engine, cwd, branch, first prompt, message count, and turn state.
 - [ ] AC-2: Each card embeds its session's checkpoints with per-file change counts, lazy diffs, and explicit-confirm restore that never prunes other sessions.
 - [ ] AC-3: Oversized and binary files report size and kind without content diffing, and blob storage enforces a cap with eviction.
-- [x] AC-4: Continue in New Session opens a new terminal in the original cwd, delivers a focused handoff once the composer is ready, and leaves the original session resumable. One Continue produces exactly one new card, and a failed create leaves none.
+- [x] AC-4: Continue opens a new terminal in the original cwd and leaves the source ledger intact. Same-engine Claude/Codex/Opencode with provider identity restore native history without prompt injection; missing identity or engine switches use an explained handoff. One successful Continue creates exactly one live card, and a failed recovery/create leaves none.
 - [ ] AC-5: Checkpoint writes are atomic with rolling backups, and hydration failure blocks writes and surfaces instead of overwriting state.
 - [ ] AC-6: Session, turn, and checkpoint records carry reserved worktree identity without requiring worktrees.
 - [ ] AC-7: Worktree creation, explicit Ship merge timing, delete-with-preserved-branches, and quit-flush plus cold-restore shells follow the Proposal semantics.
@@ -75,7 +75,7 @@ Repository avatars ship without any login. Import resolves the git remote into h
 - [ ] AC-11: Shipped worktrees end through Archive or Delete with sessions centrally archived read-only, checkpoints following the disk, restore refusing without its path, and dirty delete gated on explicit confirmation.
 - [ ] AC-12: GitHub repositories show the cached owner avatar on project rows with letter fallback and no login; team login and hosted credentials stay separate.
 
-AC-4 由桌面演练 `tests/e2e/desktop-session-continue.spec.ts` 覆盖（构建产物 + 真 pty + 假 `claude`/`pi` shim）：一次 Continue 经确认弹窗后卡片恰增一张，交接文本到达新会话进程并清除 `pendingHandoff`，原会话行保持可续，创建失败不留卡。其余 AC 本次不动。
+AC-4 保留编号并按用户确认的三引擎优先范围修订，原“一律交接”属于此前行为。桌面演练 `tests/e2e/desktop-session-continue.spec.ts` 使用构建产物、真实 IPC/PTY 和模拟 Claude/Codex/Opencode/Pi，覆盖原生恢复与无身份交接、单次创建一张卡、源记录保留及失败无活动卡片。运行结果与真实提供方验证边界归恢复 Note；其余 AC 本轮不动。
 
 ## Risks
 

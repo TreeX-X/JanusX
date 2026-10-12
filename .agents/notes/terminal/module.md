@@ -31,7 +31,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e29da5b4-dc65-40a9-883d-9026e3b280b1"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a976752-d637-40c7-9fa3-bce52ac5dc15"}
   ],
-  "updated": "2026-10-08T03:43:45.318Z",
+  "updated": "2026-10-11T05:46:37.000Z",
   "moduleState": "partial"
 }
 ---
@@ -55,6 +55,8 @@
 cc-switch 机制以总纲为父：[port 总纲](./requirements/cc-switch-port.md)为本域直接子，其下 detect-install、cli-matrix、multi-terminal、pi-janus 四篇以总纲为父；profile-switch 与 llm-sync 两篇 archived 历史保持冻结不动。
 
 Shell 语义与外围：[adhoc-parity](./adhoc-shell-parity.md)、[self-heal-parity](./command-error-self-heal-parity.md)、[cold-restore](./shell-cold-restore.md)、[orca-parsing](./orca-terminal-acquisition-parsing.md)、[ime-drift](./ime-candidate-drift.md)、[pane-tree](./pane-tree-subagent.md)、[monaco-diff](./monaco-diff-single-line-number.md)、[turn-history](./terminal-right-island-turn-history.md)。
+
+Shell 入口探索：[可选择的普通终端 Shell](./shell-profiles.md)记录 Git Bash、默认项与自定义可执行文件的讨论方向，尚未实现。
 
 island 一词两义（pane 姿态层与 turn 历史浮层）为术语债，改名消歧前两篇并存，不合并。
 

@@ -47,7 +47,7 @@ describe('queue-owned memory decision gate', () => {
     else process.env.JANUSX_KNOWLEDGE_ROOT = previousRoot
   })
 
-  async function capture(workspaceId = 'project', content = 'Decided to use Postgres for durable storage.'): Promise<Observation> {
+  async function capture(workspaceId = 'user', content = 'I prefer Postgres for durable storage.'): Promise<Observation> {
     return knowledgeObservationService.capture({ workspaceId, workspaceName: workspaceId, workspacePath: `C:/work/${workspaceId}`,
       source: 'manual', type: 'user-note', actor: 'user', content }, { speaker: 'user' })
   }
@@ -144,9 +144,14 @@ describe('queue-owned memory decision gate', () => {
   })
 
   it('keeps truncated evidence on the manual path without calling the scorer', async () => {
-    const observation = await capture('project', 'Decided to use Postgres. ' + 'long evidence '.repeat(1000))
+    const observation = await capture('user', 'I prefer Postgres. ' + 'long evidence '.repeat(1000))
     const batch = { workspaceId: observation.workspaceId, observations: [observation] }
-    await runDeterministicStage(batch)
+    const { candidate } = await seed()
+    candidate.evidence.observationIds = [observation.id]
+    candidate.evidence.sources = [observation.sourceEvidence]
+    candidate.fact.provenance.sourceObservationIds = [observation.id]
+    candidate.fact.provenance.sourceEvidence = [observation.sourceEvidence]
+    await writeFile(join(root, 'facts', 'candidates.jsonl'), JSON.stringify(candidate) + '\n')
     const score = vi.fn(async (input: MemoryDecisionInput) => output(input))
     const stage = new MemoryDecisionStage()
     stage.configureScorer(model(score))
@@ -198,7 +203,7 @@ describe('queue-owned memory decision gate', () => {
 
   it('keeps overflow evidence in the plan for durable scheduling', async () => {
     const { observation, candidate } = await seed()
-    const observations = Array.from({ length: 15 }, (_, i) => ({ ...observation, id: `observation-${i}`, content: 'x'.repeat(5000) }))
+    const observations = Array.from({ length: 15 }, (_, i) => ({ ...observation, id: `observation-${i}`, content: 'x'.repeat(5000), sourceEvidence: { ...observation.sourceEvidence!, observationId: `observation-${i}` } }))
     const candidates: CandidateFact[] = observations.map((record, i) => ({ ...candidate, id: `candidate-${i}`,
       evidence: { observationIds: [record.id] }, fact: { ...candidate.fact, id: `fact-${i}` } }))
     const stage = new MemoryDecisionStage({ listCandidates: async () => candidates, listObservations: async () => observations,

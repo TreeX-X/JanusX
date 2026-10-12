@@ -58,7 +58,6 @@ jobs:
       # publisher 用 package.json 的 version 生成 tag 名与 latest.yml；
       # tag 与包版本错位会产出名字错乱的 Release 或静默无更新，先拦。
       - name: Version guard
-        id: version
         working-directory: JanusX
         shell: pwsh
         run: |
@@ -67,8 +66,6 @@ jobs:
             Write-Error "tag ${{ github.ref_name }} != package.json v$pkg"
             exit 1
           }
-          $releaseType = if ($pkg.Contains('-')) { 'prerelease' } else { 'release' }
-          "release-type=$releaseType" >> $env:GITHUB_OUTPUT
 
       - name: Install
         working-directory: JanusX
@@ -102,18 +99,14 @@ jobs:
         working-directory: JanusX
         run: npm run exclusions:sync
 
-      # 注意：必须用双横线 --c. 传内联配置。单横线 -c.publish... 会被
-      # Windows PowerShell 拆成两个参数（-c 和 .publish...），yargs 就会
-      # 把它当成配置文件路径，报 ENOENT ...\.publish.releaseType=...。
-      - name: Publish to GitHub Releases
+      - name: Package Windows artifacts
         working-directory: JanusX
-        run: npx electron-builder --win --x64 --publish always --c.publish.releaseType=${{ steps.version.outputs.release-type }}
+        run: npx electron-builder --win --x64 --publish never
+
+      # Runtime verification and update-manifest hashes must pass before a
+      # release is created. Upload into a draft, then expose the same artifacts.
+      - name: Verify and publish Windows artifacts
+        working-directory: JanusX
+        run: npm run publish:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 发布后再验一次：从仓库外的临时目录启动 unpacked 与 portable，
-      # 两种 smoke 模式都必须退出 0。打包期漏进 archive 的解析断裂
-      # （ERR_MODULE_NOT_FOUND）只在真实启动时才暴露。
-      - name: Verify packaged runtime
-        working-directory: JanusX
-        run: npm run check:portable-runtime

@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-11T16:23:33.137Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -35,7 +35,7 @@ janus-agentX 落地报错自愈与 todo 续跑（见其仓 `2026-09-14-command-e
 
 ## Decision
 
-副本行为对齐核心仓：env 拒绝文案同样枚举白名单键并给出参数式替代（`git -c http.proxy=... clone ...`）；`runner.ts` 的 `spawnHint` 导出，`command-tools.ts` 同步路径的 `error` 事件包装为「原始信息 + hint」，与后台 runner 共享同一指引；注册描述统一为 `project_process_output` 并补 60s 后台阈值规则。打包链新增 `prepackage`（`npm install --install-links`）并前置到 `package:win/mac/linux`，每次打包强制重新物化 file: 依赖，杜绝静默过期。壳侧不重复实现 todo 续跑——注入与 nudge 随 `@janus-agent/chat-core`/`janus-agent` 的 dist 重建自动生效；壳侧会话 LRU 本就未持久化 todos，无可回填资产，留待壳侧持久化落地再对齐。
+副本行为对齐核心仓：env 拒绝文案同样枚举白名单键并给出参数式替代（`git -c http.proxy=... clone ...`）；`runner.ts` 的 `spawnHint` 导出，`command-tools.ts` 同步路径的 `error` 事件包装为「原始信息 + hint」，与后台 runner 共享同一指引；注册描述统一为 `project_process_output` 并补 60s 后台阈值规则。打包链前置 `prepackage`（`scripts/prepare-package.mjs`）。脚本用 `npm pack --dry-run --json --ignore-scripts` 一次读取六个 sibling 包的发布文件清单，比对源包与已安装副本的文件集合和 SHA256。变化包先备份安装目录并使其 root lockfile 条目失效，再由 `npm install --install-links` 重装并重新解析依赖声明，安装后逐文件复核。普通 install 对相同路径和版本返回 up to date，不能保证刷新本地包。壳侧不重复实现 todo 续跑——注入与 nudge 随 `@janus-agent/chat-core`/`janus-agent` 的 dist 重建自动生效；壳侧会话 LRU 本就未持久化 todos，无可回填资产，留待壳侧持久化落地再对齐。
 
 ## Alternatives considered
 
@@ -46,6 +46,8 @@ janus-agentX 落地报错自愈与 todo 续跑（见其仓 `2026-09-14-command-e
 
 ## Consequences
 
-- **Gains**: 壳内同步与后台启动失败共享同一 hint，env 拒绝当轮自纠，轮询工具名一致；`npm run package:*` 自动重新物化依赖，打包产物永远对应当前源码状态。
-- **Costs and limits**: 白名单键与 shim 名单仍两仓各存一份，增补需同步；`prepackage` 每次打包多一次 npm install（实测约 3.5s）；todo 续跑在壳侧生效依赖先在 janus-agentX 仓构建 dist 再安装链接，两步顺序不可颠倒。
+- **Gains**: 壳内同步与后台启动失败共享同一 hint，env 拒绝当轮自纠，轮询工具名一致；`npm run package:*` 自动核对并刷新当前 sibling 发布文件，避免消费旧的已安装副本。
+- **Costs and limits**: 白名单键与 shim 名单仍两仓各存一份，增补需同步；`prepackage` 每次执行一次发布文件扫描和一次 npm install，未变包保留安装目录；缺失 sibling 或 main 构建入口时在安装前失败。安装失败恢复备份的本地包与两份 lockfile，npm 新装的其他依赖不做全树回滚。脚本核对的是已构建产物，不编译 sibling 源码；必须先在 janus-agentX 仓构建 dist。
 - **Verification**: `npm run typecheck` 通过；`npx vitest run tests/unit/agent/command-tools.test.ts` 13 通过（含 spawn hint 与 `git -c` 指引新用例）。
+
+依赖刷新验证使用 `tests/unit/prepare-package.test.ts` 的真实离线 npm 安装：内容变动、文件新增和删除、发布 files 白名单、新增本地依赖、未变包与 lockfile 保持、缺失 sibling/build 的前置失败，以及安装异常后恢复旧包和 lockfile。它不把入口文件存在视为 sibling 源码已完成编译的证明。

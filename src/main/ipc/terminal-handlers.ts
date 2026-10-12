@@ -7,7 +7,7 @@ import type { CheckpointEngine } from '@janus-agent/agent-core'
 import { agentSessionRegistry, type AgentSessionRecord } from '../sessions/session-registry'
 import { buildContinueHandoff } from '../sessions/continue-handoff'
 import { deliverHandoff, type HandoffTransport } from '../sessions/handoff-delivery'
-import { probeOpencodeSessionPresence } from '../sessions/opencode-sessions'
+import { prepareSessionRecovery, type SessionRecoveryEnvironment } from '../sessions/session-recovery'
 import { analyzer } from '../janus/analyzer'
 import { isTerminalPreset, resolveTerminalLaunchProgram } from '../../shared/terminalLaunch'
 import { resolveCLIPath } from '../janus-runner/cli-resolver'
@@ -16,7 +16,7 @@ import type { SubAgentRunEngine } from '../../shared/subAgentRun'
 import { AgentHookBridge } from '../notifications/agent-hook-bridge'
 import { AgentHookConfigManager } from '../notifications/agent-hook-config'
 import { AgentHookCoordinator, getHookMatcher, getRawString } from '../notifications/agent-hook-coordinator'
-import { AGENT_ENGINE_CAPABILITIES, matchesEngineEvents, resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
+import { AGENT_ENGINE_CAPABILITIES, matchesEngineEvents } from '../notifications/agent-engine-capabilities'
 import { AgentTurnSentinel } from '../notifications/agent-turn-sentinel'
 import {
   JANUSX_SYNTHETIC_HOOK_EVENTS,
@@ -49,7 +49,7 @@ import {
 } from '../../shared/ipc/terminal'
 import { AGENT_CHANNELS } from '../../shared/ipc/janus-runner'
 import { CHECKPOINT_CHANNELS } from '../../shared/ipc/checkpoint'
-import { buildContinueResumeArgs, buildProviderResumeArgs } from '../../shared/ipc/session'
+import { buildContinueResumeArgs, buildProviderResumeArgs, isNativeResumeEngine } from '../../shared/ipc/session'
 import { companionSessionState } from '../companion/session-state'
 import { rollbackTerminalCreation } from '../companion/terminal-creation-rollback'
 import { terminalContextCoordinator } from '../runtime-telemetry/coordinator'
@@ -117,7 +117,7 @@ let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid:
 
 export type ContinueSessionOptions = {
   engine?: string
-  /** `resume` re-enters the provider session; `continue` opens a fresh session. */
+  /** Native engines keep the original conversation; otherwise Continue sends a handoff. */
   mode?: 'resume' | 'continue'
   /** Target workspace for the new terminal when the source row carries none (external rows). */
   workspaceId?: string
@@ -216,24 +216,6 @@ export async function resendSessionHandoff(
     console.error(`[sessions] handoff resend ${result.verdict}${result.reason ? `: ${result.reason}` : ''}`)
   }
   return { delivered: result.verdict === 'delivered', verdict: result.verdict }
-}
-
-/**
- * Preflight for opencode native resume: the sqlite store opens but the id is
- * gone, so spawning `--session` would land in a silent fresh session instead
- * of reporting the miss. Unresolvable stores and locked/unreadable databases
- * fail open so resume is never blocked on a probe.
- */
-function assertOpencodeResumeAvailable(source: AgentSessionRecord): void {
-  if (source.engine !== 'opencode' || !source.providerSessionId) return
-  const store = resolveSessionStorePath('opencode')
-  if (!store) return
-  const presence = probeOpencodeSessionPresence(store, source.providerSessionId)
-  if (presence === 'absent') {
-    throw new Error(
-      `Opencode session ${source.providerSessionId} is no longer in the session store; copy the resume command to retry manually`,
-    )
-  }
 }
 
 /**
@@ -634,12 +616,17 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   })
   const hookConfigManager = new AgentHookConfigManager()
   /** Per-session gate so second+ Claude/Codex/OpenCode creates skip hook file IO. */
-  const hooksInstalledThisSession = new Set<Exclude<CheckpointEngine, 'shell' | 'manual'>>()
+  const hooksInstalledThisSession = new Set<string>()
 
-  async function ensureHooksInstalled(engine: Exclude<CheckpointEngine, 'shell' | 'manual'>): Promise<void> {
-    if (hooksInstalledThisSession.has(engine) && await hookConfigManager.isInstalled(engine)) return
-    await hookConfigManager.ensureInstalled(engine)
-    hooksInstalledThisSession.add(engine)
+  async function ensureHooksInstalled(
+    engine: Exclude<CheckpointEngine, 'shell' | 'manual'>,
+    manager = hookConfigManager,
+  ): Promise<void> {
+    const key = engine === 'claude' ? manager.getClaudeSettingsPath()
+      : engine === 'codex' ? manager.getCodexHooksPath() : engine
+    if (hooksInstalledThisSession.has(key) && await manager.isInstalled(engine)) return
+    await manager.ensureInstalled(engine)
+    hooksInstalledThisSession.add(key)
   }
 
   // Fire-and-forget: first create should not wait on listen() or cold where.exe.
@@ -725,12 +712,14 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     return { ok: true as const }
   })
 
-  const createTerminalLifecycle = async (config: TerminalCreateRequest) => {
+  const createTerminalLifecycle = async (config: TerminalCreateRequest, recoveryEnv?: SessionRecoveryEnvironment) => {
     const { id, cwd, shell, preset, command, args, cols, rows, extraArgs } = config
 
     const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
     const engine: CheckpointEngine =
       isTerminalPreset(preset) && preset !== 'shell' ? preset : 'shell'
+    const launchHookManager = recoveryEnv?.claudeConfigDir || recoveryEnv?.codexHome
+      ? new AgentHookConfigManager(recoveryEnv) : hookConfigManager
 
     // AC6: per-id creation lock. Concurrent terminal:create with the same id
     // (e.g. double-click preset, retry during launch) is rejected so the
@@ -818,13 +807,14 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       return launchProgram
     })()
 
+    let recoveryHookError: Error | undefined
     const hookEnvPromise = (async (): Promise<Record<string, string> | undefined> => {
       // shell spawns no agent and needs no hook env.
       if (engine === 'shell') return undefined
       try {
         await hookBridge.start()
-        await ensureHooksInstalled(engine)
-        return hookConfigManager.buildTerminalEnv(
+        await ensureHooksInstalled(engine, launchHookManager)
+        return launchHookManager.buildTerminalEnv(
           {
             terminalId: id,
             workspaceId,
@@ -834,6 +824,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         )
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
+        if (recoveryEnv) recoveryHookError = new Error(`Session recovery hook setup failed: ${message}`)
         console.error('Agent hook setup failed:', err)
         const event = {
           type: 'ignored',
@@ -897,6 +888,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
 
     let instance
     try {
+      if (recoveryHookError) throw recoveryHookError
       if (engine !== 'shell') await turnChangeTracker.register(id, cwd)
       const officeMcpEntry = resolve(__dirname, '..', 'office-mcp.js')
       const officeSession = buildOfficeAgentSession(engine, cwd, office.binaryPath, officeMcpEntry)
@@ -913,7 +905,11 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         programArgs,
         cols: typeof cols === 'number' ? cols : undefined,
         rows: typeof rows === 'number' ? rows : undefined,
-        env: hookEnv,
+        env: {
+          ...hookEnv,
+          ...(recoveryEnv?.claudeConfigDir ? { CLAUDE_CONFIG_DIR: recoveryEnv.claudeConfigDir } : {}),
+          ...(recoveryEnv?.codexHome ? { CODEX_HOME: recoveryEnv.codexHome } : {}),
+        },
       }, office.pathDir)
       if (engine === 'codex') {
         serviceErrorDetectors.set(id, createTerminalServiceErrorDetector())
@@ -1197,10 +1193,11 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       throw error
     }
   }
-  // Provider-native resume spawn shared by external rows and internal opencode
+  // Provider-native resume shared by internal and external Claude/Codex/Opencode.
+  // See .agents/notes/sessions/records/session-resume-detail.md
   // rows with a resumable id: the recorded engine preset starts in the recorded
   // cwd with the resume argv appended, so hook wiring follows the engine and
-  // turns track live from the resume point. A failed spawn archives the empty
+  // turns track live from the resume point. A failed spawn archives the new
   // row instead of leaving a ghost card.
   const spawnResumeTerminal = async (
     source: AgentSessionRecord,
@@ -1208,6 +1205,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     shell: string,
     workspaceIdFallback?: string,
   ): Promise<{ sessionId: string; terminalId: string }> => {
+    const prepared = isNativeResumeEngine(source.engine) ? await prepareSessionRecovery(source) : undefined
     const preset = isTerminalPreset(source.engine) ? source.engine : undefined
     // External rows carry no workspace of their own; without a fallback the
     // created terminal lands in an empty workspace snapshot and never shows.
@@ -1222,8 +1220,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       preset,
       branch: source.branch,
       providerSessionId: source.providerSessionId,
-      transcriptPath: source.transcriptPath,
+      transcriptPath: prepared?.transcriptPath ?? source.transcriptPath,
       continuedFrom: source.id,
+      historyFrom: prepared ? source.id : undefined,
     })
     try {
       await createTerminalLifecycle({
@@ -1233,9 +1232,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         shell,
         preset,
         extraArgs: resumeArgs,
-      })
+      }, prepared?.environment)
     } catch (err) {
-      agentSessionRegistry.archiveSession(record.id)
+      agentSessionRegistry.discardTerminal(terminalId)
       throw err
     }
     return { sessionId: record.id, terminalId }
@@ -1244,34 +1243,18 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   continueSessionImpl = async (sessionId, opts) => {
     const source = agentSessionRegistry.getSession(sessionId)
     if (!source) throw new Error(`Session not found: ${sessionId}`)
-    // Resume re-enters the provider's own session id in a fresh terminal, so the
-    // conversation continues inside the same provider session. It is the default
-    // for external rows, whose only entity is the provider transcript.
-    //
-    // Continue in New Session is not a privilege of live rows: an external row's
-    // context lives in its transcript file, so an explicit `mode: 'continue'`
-    // hands that over to a fresh session exactly like an internal row does.
-    const wantsContinue = opts?.mode === 'continue'
-    if (!wantsContinue && source.external === true) {
-      // Hook env follows the engine preset, so turns track live from here; the
-      // pty inherits the app environment (including CODEX_HOME when set).
+    const explicitResume = opts?.mode === 'resume' || (source.external === true && opts?.mode !== 'continue')
+    if (explicitResume) {
+      if (opts?.engine && opts.engine !== source.engine) throw new Error('Resume cannot change the session engine')
       const resumeArgs = buildProviderResumeArgs(source.engine, source.providerSessionId, source.transcriptPath)
       if (!resumeArgs) {
-        throw new Error(`Resume is not supported for engine: ${source.engine}`)
+        throw new Error(`Native resume is unavailable for this ${source.engine} session; its original history identity is missing`)
       }
-      assertOpencodeResumeAvailable(source)
-      return spawnResumeTerminal(source, resumeArgs, getDefaultShell(), opts?.workspaceId)
+      return spawnResumeTerminal(source, resumeArgs, source.shell ?? getDefaultShell(), opts?.workspaceId)
     }
-    // Internal opencode rows keep their provider session id from hook turn
-    // starts, so native resume re-enters full history where the typed handoff
-    // drops in a slow TUI. Engine switches, rows without a resumable id, and an
-    // explicit request for a fresh session keep the focused handoff below.
-    if (!wantsContinue) {
-      const nativeResumeArgs = buildContinueResumeArgs(source, opts?.engine)
-      if (nativeResumeArgs) {
-        assertOpencodeResumeAvailable(source)
-        return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShell(), opts?.workspaceId)
-      }
+    const nativeResumeArgs = buildContinueResumeArgs(source, opts?.engine)
+    if (nativeResumeArgs) {
+      return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShell(), opts?.workspaceId)
     }
     const engine = (opts?.engine ?? source.engine) as CheckpointEngine
     // External rows carry no shell capture: their terminals were never ours.
@@ -1281,7 +1264,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     }
     // Imported rows carry no preset; without the engine fallback the spawn
     // resolves to a bare shell and the new session gets no claude/codex CLI.
-    const preset = source.preset ?? (isTerminalPreset(engine) ? engine : undefined)
+    const preset = isTerminalPreset(engine) ? engine : source.preset
     const workspaceId = source.workspaceId || opts?.workspaceId || ''
     const terminalId = randomUUID()
     const record = agentSessionRegistry.createSession({
@@ -1295,8 +1278,8 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       args: source.args,
       branch: source.branch,
       continuedFrom: source.id,
-      providerSessionId: source.external === true ? source.providerSessionId : undefined,
-      transcriptPath: source.external === true ? source.transcriptPath : undefined,
+      // A handoff is a new provider conversation; borrowing the old identity
+      // would make transcript reads and scanner dedup target the wrong one.
     })
     try {
       await createTerminalLifecycle({

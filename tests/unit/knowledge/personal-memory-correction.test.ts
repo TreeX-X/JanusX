@@ -7,7 +7,6 @@ import type { CandidateFact, MemoryFact } from '../../../src/shared/knowledge'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused' } }))
 import { proposePersonalMemoryCorrection } from '../../../src/main/knowledge/personal-memory-correction'
 import { knowledgeReviewService } from '../../../src/main/knowledge/review-service'
-import { knowledgeOperationsService } from '../../../src/main/knowledge/operations-service'
 import { knowledgeAuditService } from '../../../src/main/knowledge/audit-service'
 import { reviewedFactHash } from '../../../src/main/knowledge/profile-projection'
 import { userProfileService } from '../../../src/main/knowledge/user-profile-service'
@@ -88,7 +87,7 @@ describe('explicit personal memory corrections', () => {
     await expect(proposePersonalMemoryCorrection({ ...input(), scope: 'global' })).rejects.toThrow()
     target.scope = 'project'; target.provenance.workspaceId = 'project-a'
     await writeTarget()
-    await expect(proposePersonalMemoryCorrection(input())).rejects.toThrow('not an active personal memory')
+    await expect(proposePersonalMemoryCorrection(input())).rejects.toThrow('missing or ambiguous')
   })
 
   it('prevents approval after revocation or same-version source edits', async () => {
@@ -96,7 +95,8 @@ describe('explicit personal memory corrections', () => {
     target.content = 'Changed original'
     await writeTarget()
     await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))).rejects.toThrow('Personal correction target changed')
-    await knowledgeOperationsService.revoke({ kind: 'fact', id: target.id, workspaceId: 'user' })
+    target.status = 'archived'
+    await writeTarget()
     await expect(knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'fact', id: proposed.candidateId }))).rejects.toThrow('Personal correction target changed')
   })
 

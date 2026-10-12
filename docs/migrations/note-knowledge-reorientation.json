@@ -1,0 +1,98 @@
+{
+  "schema": "note-reorientation/1",
+  "createdAt": "2026-10-09T06:46:42.433Z",
+  "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+  "source": "Current working-tree bytes, including the three previously deferred user-edited Notes; not reconstructed from HEAD.",
+  "reason": "User requested Note maintenance after reconsidering the independent knowledge product and proposing an independent Note MCP.",
+  "sources": [
+    {
+      "source": ".agents/notes/2026-10-07-knowledge-pipeline-reconstruction--c459c727.md",
+      "target": ".agents/notes/knowledge/history/knowledge-pipeline-reconstruction.md",
+      "id": "c459c727-7311-4ba9-b35e-2ec6ef0f1779",
+      "created": "2026-10-07",
+      "sourceHash": "8085b8d25e6b7b86e6c391d11cb0bf0a965075d1e23001ef378530e88e618ea4",
+      "targetHash": "94d4a338939f7ef1bc0cce69cc6c3d6fc81ff2ea39a6f72a49c8ab64c1c2908b",
+      "reason": "Archive original pipeline proposal, migrate to the pinned v2 format, retain identity/date and all prose except rebased Markdown destinations.",
+      "previousLifecycle": "proposed",
+      "originalBodyHash": "96b32b5a4576444d940601023bc9ffba339af1a386c9ad00d749a797b1d3383b",
+      "rebasedBodyHash": "2a27d11873a89c909eeef3e686c1b5b11d462195a6b9b3052a3c36a65b47c61d",
+      "bodyPreservedApartFromLinksAndArchiveNotice": true
+    },
+    {
+      "source": ".agents/notes/2026-10-07-knowledge-p0-spec--7f8e2f5d.md",
+      "target": ".agents/notes/knowledge/history/knowledge-p0-spec.md",
+      "id": "7f8e2f5d-791e-4e5d-bb18-b3e7ad6c4912",
+      "created": "2026-10-07",
+      "sourceHash": "f1adc8fab86bae103b6328d3f0b52e3dc50634b172626d1bac7195dd58fc9d50",
+      "targetHash": "c6b7e62ae9b5cd3a96298914c34c61ed339c37e3846f64cd5a44ec6b73d3be83",
+      "reason": "Archive original pipeline proposal, migrate to the pinned v2 format, retain identity/date and all prose except rebased Markdown destinations.",
+      "previousLifecycle": "proposed",
+      "originalBodyHash": "e3748eada607b6e60ce0038cbf2953e11eb4df581f100667cd141156f2a41339",
+      "rebasedBodyHash": "e1b11b8b144697dbe0d65c3d4cb3b59485e66a6dd92a2753e5a1a8a64f870399",
+      "bodyPreservedApartFromLinksAndArchiveNotice": true
+    },
+    {
+      "source": ".agents/notes/2026-10-07-knowledge-p0-validation--13f8c056.md",
+      "target": ".agents/notes/knowledge/history/knowledge-p0-validation.md",
+      "id": "13f8c056-8234-4aca-bd8f-921c7475ea62",
+      "created": "2026-10-07",
+      "sourceHash": "c9996aab7e7700e76e3db142b6c18fb25893da2878ef077a69ddfdaac2321980",
+      "targetHash": "d7a6140cabc6e9bdd22ba0df71d6046e11dd87dc93e7ddcb8eef172108992450",
+      "reason": "Archive original pipeline proposal, migrate to the pinned v2 format, retain identity/date and all prose except rebased Markdown destinations.",
+      "previousLifecycle": "proposed",
+      "originalBodyHash": "4030cfdef8c598605f170fa2ac542a05b3984601557ade2af46556f6e4cfff23",
+      "rebasedBodyHash": "e4a8044e1bab505ab50e9c1105a4d3e1d7be279e061799ed25a2a43974e781b4",
+      "bodyPreservedApartFromLinksAndArchiveNotice": true
+    },
+    {
+      "source": ".agents/notes/knowledge/module.md",
+      "target": ".agents/notes/knowledge/module.md",
+      "id": "c1c04881-a2fb-430f-bc26-528027d0e5cf",
+      "created": "2026-10-03",
+      "sourceHash": "b93b89fbad57c74e8aa44c4c0b352e192fb142b643601150e9bb24059a7a0b51",
+      "targetHash": "717357852aa080ebed5944f5b1bd015a4e870e98986726124ae2b738e420f7b6",
+      "reason": "Link current product discussion while preserving the actual runtime design."
+    },
+    {
+      "source": ".agents/notes/blueprint/module.md",
+      "target": ".agents/notes/blueprint/module.md",
+      "id": "f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
+      "created": "2026-10-03",
+      "sourceHash": "19e3429baf50aa08a6f5ad37fd478e07b98b85e5a913e589d5dd209860225d7a",
+      "targetHash": "14c7318367ee9777cc1d357e6cd81c2234280b3d76892cc6edeae2dc61dbe2db",
+      "reason": "Add navigation to proposed quality review and independent Note MCP without changing implemented responsibilities."
+    },
+    {
+      "source": ".agents/notes/knowledge/memory-domain-controls.md",
+      "target": ".agents/notes/knowledge/memory-domain-controls.md",
+      "id": "908d675a-aec9-4791-8c8b-05f1e4c923ca",
+      "created": "2026-10-04",
+      "sourceHash": "37ef5ffbcdf16292dacea3fcaa3bd504c484a1a08cfaba319d7ab39398e077fa",
+      "targetHash": "947c447c8ea9b837e8c84aa4fda11e4a375f9c2b365f74a0fbdc7783ab3dabc9",
+      "reason": "Replace stale personal-memory dependency with current discussion and repair the moved reference."
+    },
+    {
+      "source": ".agents/notes/knowledge/requirements/memory-knowledge.md",
+      "target": ".agents/notes/knowledge/requirements/memory-knowledge.md",
+      "id": "c0a75c6a-5d06-4088-b7ed-9ecdd835b3d3",
+      "created": "2026-09-26",
+      "sourceHash": "379507b2bb5720c2a9290f4a3291f7a907c5c2a2ae308808c8ce34e386ef3648",
+      "targetHash": "545c78442c40f785f2e2674179df70a28cbf22a80e7f8d00c7fb78c2ec869922",
+      "reason": "Clarify that historical stage chains and queue ownership do not require continuing the old product plan."
+    },
+    {
+      "source": ".agents/notes/knowledge/requirements/unified-memory-laya-primary.md",
+      "target": ".agents/notes/knowledge/requirements/unified-memory-laya-primary.md",
+      "id": "736081fc-db55-40cd-b2ab-43c63f1729e9",
+      "created": "2026-09-28",
+      "sourceHash": "40ddbca0e6c6dafc118cfc3ea7b2a42bfd56b9ba4a943253388e3fa47cf0f2f3",
+      "targetHash": "3ee5bd349a6301209ef7ca9d8610e1b360c5366942a1727b994f7b2995c39c4c",
+      "reason": "Bound the long-lived mixed-domain requirement without losing implementation and experiment evidence."
+    }
+  ],
+  "limitations": [
+    "Historical migration inventories remain immutable; this report records later moves.",
+    "No runtime implementation, live knowledge data, user settings, or foreign checkout was changed."
+  ],
+  "completedAt": "2026-10-09T06:51:04.921Z"
+}

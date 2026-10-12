@@ -1,0 +1,169 @@
+{
+  "schema": "note-reorientation/1",
+  "createdAt": "2026-10-09T08:23:28.326Z",
+  "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+  "reason": "User requested separate current Blueprint/Note planning from the old knowledge reconstruction and explicitly mark unresolved details.",
+  "source": "Current working-tree UTF-8 bytes, preserving unrelated edits and all original migration evidence.",
+  "sources": [
+    {
+      "source": ".agents/notes/blueprint/maintenance/note-content-review.md",
+      "target": ".agents/notes/blueprint/maintenance/note-content-review.md",
+      "id": "03af9456-cef5-4730-80ff-e7e1d239d2a7",
+      "created": "2026-10-09",
+      "sourceHash": "0bee3968c8d566c8b59d94641c64115aaed04961a261eba511c508e8ffed3695",
+      "targetHash": "f8f3f74746aa41ea31aa6667b769360d5d03f336826a5098c11201ddfe1384e3",
+      "reason": "Mark unrefined review details and separate first delivery from later automation."
+    },
+    {
+      "source": ".agents/notes/blueprint/module.md",
+      "target": ".agents/notes/blueprint/module.md",
+      "id": "f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
+      "created": "2026-10-03",
+      "sourceHash": "0c584e8897ebea098461bfbf5aa845e3e4306e17ed890e5b2549fadc71e1b358",
+      "targetHash": "11bbb4f94497e00c7d50404e7384756259377f9de94f6f713b71779805958eb7",
+      "reason": "Distinguish the actual legacy runtime from planned Note review ownership."
+    },
+    {
+      "source": ".agents/notes/blueprint/note-mcp.md",
+      "target": ".agents/notes/blueprint/note-mcp.md",
+      "id": "974eb491-a926-4553-8a1d-500da5a25325",
+      "created": "2026-10-09",
+      "sourceHash": "c7af76410af5eedd067b8268b50b562ca678503d3e50dfad8b0dcb3e5cf53f9a",
+      "targetHash": "0120c662330d4c33ce4a4cace487ab5e99cd3696729efbc39a49954569af68dd",
+      "reason": "Make the one-click import requirement traceable while keeping its exact meaning unresolved."
+    },
+    {
+      "source": ".agents/notes/knowledge/history/knowledge-p0-spec.md",
+      "target": ".agents/notes/knowledge/history/knowledge-p0-spec.md",
+      "id": "7f8e2f5d-791e-4e5d-bb18-b3e7ad6c4912",
+      "created": "2026-10-07",
+      "sourceHash": "c6b7e62ae9b5cd3a96298914c34c61ed339c37e3846f64cd5a44ec6b73d3be83",
+      "targetHash": "8ae926f93b30bd809f7abe5a91704e8c244c001e621620f810bfb158b8f2405b",
+      "reason": "Repair the current-direction link after moving its continuing identity to Blueprint."
+    },
+    {
+      "source": ".agents/notes/knowledge/history/knowledge-p0-validation.md",
+      "target": ".agents/notes/knowledge/history/knowledge-p0-validation.md",
+      "id": "13f8c056-8234-4aca-bd8f-921c7475ea62",
+      "created": "2026-10-07",
+      "sourceHash": "d7a6140cabc6e9bdd22ba0df71d6046e11dd87dc93e7ddcb8eef172108992450",
+      "targetHash": "dc02e63e6978260ba7c1f73ab5a72b5a9e5354061900c593258ca38cf4311811",
+      "reason": "Repair the current-direction link after moving its continuing identity to Blueprint."
+    },
+    {
+      "source": ".agents/notes/knowledge/history/knowledge-pipeline-reconstruction.md",
+      "target": ".agents/notes/knowledge/history/knowledge-pipeline-reconstruction.md",
+      "id": "c459c727-7311-4ba9-b35e-2ec6ef0f1779",
+      "created": "2026-10-07",
+      "sourceHash": "94d4a338939f7ef1bc0cce69cc6c3d6fc81ff2ea39a6f72a49c8ab64c1c2908b",
+      "targetHash": "3a0627b6686e970ad7b6ad069d19d30fb5426c9d9158a7f24893c78679547664",
+      "reason": "Repair the current-direction link after moving its continuing identity to Blueprint."
+    },
+    {
+      "source": ".agents/notes/knowledge/memory-domain-controls.md",
+      "target": ".agents/notes/knowledge/memory-domain-controls.md",
+      "id": "908d675a-aec9-4791-8c8b-05f1e4c923ca",
+      "created": "2026-10-04",
+      "sourceHash": "947c447c8ea9b837e8c84aa4fda11e4a375f9c2b365f74a0fbdc7783ab3dabc9",
+      "targetHash": "33bc24515bc7335548e83c2d2a682c520bbca2ed70d879fd3e8a366604adf87b",
+      "reason": "Link the new personal scope and schedule without changing implemented behavior."
+    },
+    {
+      "source": ".agents/notes/knowledge/module.md",
+      "target": ".agents/notes/knowledge/module.md",
+      "id": "c1c04881-a2fb-430f-bc26-528027d0e5cf",
+      "created": "2026-10-03",
+      "sourceHash": "5eedbdb38fecd87ad554ee057674cd4f6bbb324f0c56b7049064711af0a92268",
+      "targetHash": "dc992cb9776d4f312fd4a1bd2a07a2e29b6accdbbb8d05487f5d33d38cfd0e3b",
+      "reason": "Separate current navigation and historical reconstruction navigation."
+    },
+    {
+      "source": ".agents/notes/knowledge/requirements/memory-knowledge.md",
+      "target": ".agents/notes/knowledge/requirements/memory-knowledge.md",
+      "id": "c0a75c6a-5d06-4088-b7ed-9ecdd835b3d3",
+      "created": "2026-09-26",
+      "sourceHash": "545c78442c40f785f2e2674179df70a28cbf22a80e7f8d00c7fb78c2ec869922",
+      "targetHash": "8ceca78dc2006a94840fc585d211cfb00ed3dacd9835224b51bd7c820323ec1b",
+      "reason": "Clarify that historical open acceptance and stage order do not define the current work queue."
+    },
+    {
+      "source": ".agents/notes/knowledge/requirements/unified-memory-laya-primary.md",
+      "target": ".agents/notes/knowledge/requirements/unified-memory-laya-primary.md",
+      "id": "736081fc-db55-40cd-b2ab-43c63f1729e9",
+      "created": "2026-09-28",
+      "sourceHash": "3ee5bd349a6301209ef7ca9d8610e1b360c5366942a1727b994f7b2995c39c4c",
+      "targetHash": "2bfbff5535e381cec33b50514db70fcec1ff3676600b9d264c162d0164cf6bd6",
+      "reason": "Preserve mixed implementation and model evidence while bounding obsolete reconstruction requirements."
+    },
+    {
+      "source": ".agents/notes/knowledge/engineering-knowledge-direction.md",
+      "target": ".agents/notes/blueprint/product-direction.md",
+      "id": "51526e9f-b473-4f21-aa81-c70dd8654531",
+      "created": "2026-10-09",
+      "sourceHash": "757cc9d5b40a2dadda5af284168fc1e1ed4599584318ec132df641158142da28",
+      "targetHash": "7c39d6b2288048edc5221b6d95ce624be9a8a669d2ceba797faf76cf7b90820e",
+      "reason": "Move the continuing product direction under Blueprint; separate the current proposal from historical reconstruction and split personal scope and delivery planning into dedicated topics."
+    },
+    {
+      "source": ".agents/notes/blueprint/maintenance/module.md",
+      "target": ".agents/notes/blueprint/maintenance/module.md",
+      "id": "a09981f4-1a94-42ce-9255-2e1127cfa37b",
+      "created": "2026-10-08",
+      "sourceHash": "7b2ef10bff1bbe82034de2d66de09d880174277f212af98ea85e76610f3307a2",
+      "targetHash": "78c7d4ab38c8b6bb3267a4a0a932812e31908b20dd54ab25dccff21fee9323bf",
+      "reason": "Provide reverse navigation from the owning maintenance module to its proposed delivery stages."
+    },
+    {
+      "source": ".agents/notes/module.md",
+      "target": ".agents/notes/module.md",
+      "id": "b2e7f160-2d77-4cc4-8828-b9cf3e5d931a",
+      "created": "2026-10-03",
+      "sourceHash": "ed21be9d401e71e5de917a02dd61c938cde34481e84f58fee6cd8c27e272a57e",
+      "targetHash": "48b16b834051f883d6f27f86415c5fb6769c02c40c79581803747170aff13783",
+      "reason": "Add a clear project-level entry to the current discussion."
+    }
+  ],
+  "created": [
+    {
+      "path": ".agents/notes/blueprint/evolution-roadmap.md",
+      "id": "b0a0d944-7714-49c3-b748-e6183a31b1d8",
+      "sha256": "d541973c68052323e23e4d0b45284e6655b60cb635a8c84160b35dd007b5382c"
+    },
+    {
+      "path": ".agents/notes/knowledge/personal-memory-workspace.md",
+      "id": "ec7c6199-3c36-49b4-9b41-d06c3e11e724",
+      "sha256": "a26ec0bf81a4dd8d6f0de05df977a9267bc8db894c93a12e5ab8da9e42d9f4b1"
+    },
+    {
+      "path": ".agents/notes/knowledge/history/reconstruction-index.md",
+      "id": "02a1e22f-5e82-4a47-917d-17e52a6eefc2",
+      "sha256": "2efecb3b21fe7142d0f6a4754ea5e8ab959b5b7601e085240581ce3424d3e068"
+    }
+  ],
+  "limitations": [
+    "Historical source/target hashes remain snapshots of their original migration, not current-version requirements.",
+    "No runtime implementation, live data, user settings or foreign checkout changed.",
+    "Stage order and estimates are proposals; no task execution or semantic model evaluation was performed."
+  ],
+  "historyConservation": [
+    {
+      "path": ".agents/notes/knowledge/history/knowledge-p0-spec.md",
+      "originalBodyHash": "ca55a1799bb4f9532695da180cf0f99ef676a4286a5de58fd6c02938446a8ea8",
+      "currentBodyHash": "19a7f4824085f26955d27732a50147d27ffe5485443e11162d45fd54c02a16e2",
+      "bodyPreservedApartFromCurrentEntryLink": true
+    },
+    {
+      "path": ".agents/notes/knowledge/history/knowledge-p0-validation.md",
+      "originalBodyHash": "4e81a63d30acee07a67992b11b780a839d4ffe28071557491cde95abda80a327",
+      "currentBodyHash": "d6df7c9b60cfbd191329025564c449137c5f3cc3a10887903568c4e1ff1d394e",
+      "bodyPreservedApartFromCurrentEntryLink": true
+    },
+    {
+      "path": ".agents/notes/knowledge/history/knowledge-pipeline-reconstruction.md",
+      "originalBodyHash": "9dcec7fa557e8e990ce323b183c53a7f5cbcc9795b8b2cb3ed4936f3ef5c39f4",
+      "currentBodyHash": "4b204f303c31faab0e07fffde143b9be352d84067f33f7b7ba8223e3e4222389",
+      "bodyPreservedApartFromCurrentEntryLink": true
+    }
+  ],
+  "completedAt": "2026-10-09T08:31:07.044Z"
+}

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseFilesList, validateFilePatterns } from '../../scripts/check-package-boundary.mjs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { checkPackageBoundary, parseFilesList, validateFilePatterns } from '../../scripts/check-package-boundary.mjs'
 
 const inclusions = ['**/*', 'package.json']
 
@@ -96,5 +99,24 @@ describe('package boundary parser', () => {
     const yaml = filesYaml(['  - path: out/main/**'])
 
     expect(() => parseFilesList(yaml)).toThrow(/Unsupported files sequence content/)
+  })
+})
+
+describe('package output contract', () => {
+  it('checks the declared main and bin entries, including a renamed MCP entry', () => {
+    const root = mkdtempSync(join(tmpdir(), 'janusx-boundary-'))
+    const write = (path: string, content: string) => {
+      mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), content)
+    }
+    try {
+      write('electron-builder.yml', filesYaml(['  - **/*', '  - package.json', ...treeExclusions]))
+      write('package.json', JSON.stringify({ main: 'out/main/index.js', bin: { mcp: 'out/main/note-mcp.js' }, dependencies: { ai: '3.4.33', '@janusx/llm-core': 'file:packages/llm-core' } }))
+      write('packages/llm-core/package.json', JSON.stringify({ peerDependencies: { ai: '3.4.33' }, devDependencies: { ai: '3.4.33' } }))
+      write('tsconfig.json', '{}')
+      for (const path of ['out/main/index.js', 'out/main/note-mcp.js', 'out/preload/index.mjs', 'out/renderer/index.html']) write(path, '')
+      expect(() => checkPackageBoundary(root)).not.toThrow()
+      rmSync(join(root, 'out/main/note-mcp.js'))
+      expect(() => checkPackageBoundary(root)).toThrow('out/main/note-mcp.js')
+    } finally { rmSync(root, { recursive: true, force: true }) }
   })
 })

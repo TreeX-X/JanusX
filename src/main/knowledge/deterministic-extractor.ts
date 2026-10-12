@@ -456,6 +456,8 @@ export async function runDeterministicStage(
   let candidates: CandidateFact[] = []
   for (const group of groups) {
     const primary = group.primary
+    // Engineering turns remain evidence for personal habits; no project facts are generated.
+    if (observationScope(primary.observation) !== 'user') continue
     const signal = firstLine(primary.text)
     const preference = observationScope(primary.observation) === 'user' ? personalPreferenceText(primary.text) : undefined
     const match = preference ? { kind: 'preference' as const, confidence: 0.7 } : classifyDeterministic(

@@ -3,7 +3,7 @@
 import { open, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
-import { AGENT_ENGINE_CAPABILITIES } from '../notifications/agent-engine-capabilities'
+import { AGENT_ENGINE_CAPABILITIES, resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
 import type { AgentHookSource } from '../notifications/agent-hook-types'
 
 // Bounded read: backward chunk reads with a hard cap; full history never loads.
@@ -173,14 +173,14 @@ async function* walkJsonlFiles(root: string): AsyncGenerator<string> {
  * without one, the freshest rollout whose session_meta cwd matches wins.
  */
 async function resolveCodexRollout(
-  baseDir: string,
+  storePath: string,
   threadId?: string,
   cwd?: string,
 ): Promise<string | undefined> {
   const wantedThread = threadId?.trim().toLowerCase()
   const wantedCwd = normalizePath(cwd)
   let fallback: { path: string; mtimeMs: number } | null = null
-  for await (const path of walkJsonlFiles(join(baseDir, '.codex', 'sessions'))) {
+  for await (const path of walkJsonlFiles(storePath)) {
     if (wantedThread && basename(path).toLowerCase().endsWith(`-${wantedThread}.jsonl`)) {
       return path
     }
@@ -207,11 +207,11 @@ async function resolveCodexRollout(
 }
 
 async function codexExcerpt(
-  baseDir: string,
-  threadId?: string,
-  cwd?: string,
+  context: ExcerptContext,
 ): Promise<string | undefined> {
-  const path = await resolveCodexRollout(baseDir, threadId, cwd)
+  const store = resolveSessionStorePath('codex', context.baseDir ? {} : process.env, context.baseDir ?? homedir())!
+  const path = context.transcriptPath?.trim()
+    || await resolveCodexRollout(store, context.threadId ?? context.sessionId, context.cwd)
   if (!path) return undefined
   const tail = await readTail(path, TRANSCRIPT_TAIL_BYTES)
   if (!tail) return undefined
@@ -288,7 +288,7 @@ export async function readAssistantExcerpt(context: ExcerptContext): Promise<str
       return claudeExcerpt(path)
     }
     if (capability.transcript === 'codex-rollout') {
-      return codexExcerpt(baseDir, context.threadId, context.cwd)
+      return codexExcerpt(context)
     }
     const sessionId = context.sessionId?.trim()
     if (!sessionId) return undefined

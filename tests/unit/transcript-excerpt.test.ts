@@ -143,4 +143,20 @@ describe('readAssistantExcerpt', () => {
     ).resolves.toBeUndefined()
     await expect(readAssistantExcerpt({ engine: 'janus', baseDir })).resolves.toBeUndefined()
   })
+
+  it('uses a restored Codex transcript path or provider id without borrowing cwd history', async () => {
+    const baseDir = await home()
+    const assistant = JSON.stringify({ type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text', text: 'correct restored answer' }] } })
+    const path = await writeHomeFile(baseDir, 'custom/sessions/rollout-date-restored-id.jsonl', `{}\n${assistant}\n`)
+    await writeHomeFile(baseDir, '.codex/sessions/rollout-date-wrong-id.jsonl', [
+      JSON.stringify({ type: 'session_meta', payload: { id: 'wrong-id', cwd: '/repo' } }),
+      assistant.replace('correct restored answer', 'wrong answer'),
+    ].join('\n'))
+    await expect(readAssistantExcerpt({ engine: 'codex', baseDir, transcriptPath: path, sessionId: 'restored-id', cwd: '/repo' }))
+      .resolves.toBe('correct restored answer')
+    await expect(readAssistantExcerpt({ engine: 'codex', baseDir, sessionId: 'missing-id', cwd: '/repo' }))
+      .resolves.toBeUndefined()
+    await expect(readAssistantExcerpt({ engine: 'codex', baseDir, sessionId: 'wrong-id', cwd: '/other' }))
+      .resolves.toBe('wrong answer')
+  })
 })

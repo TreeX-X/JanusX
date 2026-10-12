@@ -420,7 +420,7 @@ export function JanusIsland({
    * product path owns its own dismiss/consume flow in Titlebar. */
   const runNotificationAction = useCallback((notificationId: string, actionId: IslandNotificationActionId) => {
     if (actionId === 'open-knowledge') {
-      if (useExperimentalStore.getState().knowledge) setActiveWorkbench('knowledge')
+      if (useExperimentalStore.getState().persona) setActiveWorkbench('knowledge')
       onDismiss()
     } else if (actionId === 'open-memory') {
       if (useExperimentalStore.getState().persona) useRightToolStore.getState().openTool('persona')

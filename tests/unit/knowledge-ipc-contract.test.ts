@@ -108,7 +108,7 @@ describe('Knowledge IPC contract', () => {
     // Post-Phase 5: +2 external-MCP registration channels (status/register).
     // User memory M4: +1 workspace-free glance channel (user-memory:overview).
     // R3 note wiki: +4 note-wiki channels (pages/prepare/propose/statuses).
-    expect(channels).toHaveLength(64)
+    expect(channels).toHaveLength(38)
     expect(new Set(channels).size).toBe(channels.length)
     expect(mocks.handle.mock.calls.map(([channel]) => channel)).toEqual(expect.arrayContaining(channels))
     expect(channels).not.toEqual(expect.arrayContaining([
@@ -116,28 +116,6 @@ describe('Knowledge IPC contract', () => {
       'knowledge:observations:archive',
       'knowledge:observations:compact',
     ]))
-  })
-
-  it('reveals credentials through an explicit gated call while status returns only configuration', async () => {
-    await knowledgeApi.revealJevCredential()
-    expect(mocks.invoke).toHaveBeenCalledWith(KNOWLEDGE_CHANNELS.jevCredentialReveal)
-    const handler = (channel: string) => mocks.handle.mock.calls.find(([name]) => name === channel)![1]
-    vi.mocked(getJevKey).mockReset().mockResolvedValue('test-secret')
-    expect(await handler(KNOWLEDGE_CHANNELS.jevCredentialStatus)()).toEqual({ configured: true })
-    expect(await handler(KNOWLEDGE_CHANNELS.jevCredentialReveal)()).toBe('test-secret')
-    vi.mocked(getJevKey).mockClear()
-    mocks.knowledgeEnabled = false
-    await expect(handler(KNOWLEDGE_CHANNELS.jevCredentialReveal)()).rejects.toThrow('knowledge-disabled')
-    expect(getJevKey).not.toHaveBeenCalled()
-  })
-
-  it('forwards configuration tests and blocks them when the knowledge feature is disabled', async () => {
-    const input = { stage: 'entryReview' as const, model: { provider: 'jev' as const, model: 'jev-1.13.0', providerId: '', thinking: false }, jevEndpoint: 'https://example.com/review' }
-    await knowledgeApi.testConfiguration(input)
-    expect(mocks.invoke).toHaveBeenCalledWith(KNOWLEDGE_CHANNELS.testConfiguration, input)
-    const handler = mocks.handle.mock.calls.find(([channel]) => channel === KNOWLEDGE_CHANNELS.testConfiguration)![1]
-    mocks.knowledgeEnabled = false
-    expect(await handler({}, input)).toEqual({ status: 'incomplete', reason: 'knowledge-disabled' })
   })
 
   it('routes all typed operations with their existing argument order', async () => {
@@ -156,10 +134,6 @@ describe('Knowledge IPC contract', () => {
       outcome: 'success' as const,
     }
 
-    await knowledgeApi.noteWikiPages({ rootPath: 'C:\\work', uri: 'note://repo/a' })
-    await knowledgeApi.prepareNoteWiki({ rootPath: 'C:\\work', uris: ['note://repo/a'], pageSlug: 'a', reviewMode: 'incremental', expectedVersion: 1 })
-    await knowledgeApi.proposeNoteWiki({ draftId: 'draft-1', title: 't', markdown: 'm', rationale: 'r' })
-    await knowledgeApi.noteWikiStatuses({ workspaceId: 'workspace-1' })
     await knowledgeApi.contracts()
     await knowledgeApi.bootstrap('C:\\work')
     await knowledgeApi.observe(captureInput)
@@ -173,24 +147,12 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.auditStats()
     await knowledgeApi.auditStats({ domain: 'engineering', workspaceId: 'workspace-1' })
     await knowledgeApi.listCandidates()
-    await knowledgeApi.listGraphCandidates()
-    await knowledgeApi.listWikiPatchCandidates()
     await knowledgeApi.rejectCandidate(reviewInput)
     await knowledgeApi.applyCandidate(reviewInput)
     await knowledgeApi.factReviewContext(reviewInput)
-    await knowledgeApi.search({ query: 'typed boundary' })
     await knowledgeApi.listTruth()
-    await knowledgeApi.revokeTruth({ kind: 'fact', id: 'fact-1', workspaceId: 'workspace-1' })
-    await knowledgeApi.listConflicts('workspace-1')
-    await knowledgeApi.recordFeedback(feedbackInput)
-    await knowledgeApi.feedbackSummary('workspace-1')
-    await knowledgeApi.context({ query: 'context', workspaceId: 'workspace-1' })
-    await knowledgeApi.diagnostics({ workspaceId: 'workspace-1', recentLimit: 5 })
     await knowledgeApi.processNow({ workspaceId: 'workspace-1' })
     await knowledgeApi.processingStats()
-    await knowledgeApi.probeExternalMcp()
-    await knowledgeApi.externalMcpStatus()
-    await knowledgeApi.registerExternalMcp('claude-code')
     await knowledgeApi.userMemoryOverview()
     await knowledgeApi.personalProfileEditContext()
     await knowledgeApi.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: { identity: 'Tree' } })
@@ -204,10 +166,6 @@ describe('Knowledge IPC contract', () => {
     await knowledgeApi.updateSettings({ enabled: false })
 
     expect(mocks.invoke.mock.calls).toEqual([
-      [KNOWLEDGE_CHANNELS.noteWikiPages, { rootPath: 'C:\\work', uri: 'note://repo/a' }],
-      [KNOWLEDGE_CHANNELS.prepareNoteWiki, { rootPath: 'C:\\work', uris: ['note://repo/a'], pageSlug: 'a', reviewMode: 'incremental', expectedVersion: 1 }],
-      [KNOWLEDGE_CHANNELS.proposeNoteWiki, { draftId: 'draft-1', title: 't', markdown: 'm', rationale: 'r' }],
-      [KNOWLEDGE_CHANNELS.noteWikiStatuses, { workspaceId: 'workspace-1' }],
       [KNOWLEDGE_CHANNELS.contracts],
       [KNOWLEDGE_CHANNELS.bootstrap, 'C:\\work'],
       [KNOWLEDGE_CHANNELS.observe, captureInput],
@@ -221,24 +179,12 @@ describe('Knowledge IPC contract', () => {
       [KNOWLEDGE_CHANNELS.auditStats],
       [KNOWLEDGE_CHANNELS.auditStats, { domain: 'engineering', workspaceId: 'workspace-1' }],
       [KNOWLEDGE_CHANNELS.listCandidates],
-      [KNOWLEDGE_CHANNELS.listGraphCandidates],
-      [KNOWLEDGE_CHANNELS.listWikiPatchCandidates],
       [KNOWLEDGE_CHANNELS.rejectCandidate, reviewInput],
       [KNOWLEDGE_CHANNELS.applyCandidate, reviewInput],
       [KNOWLEDGE_CHANNELS.factReviewContext, reviewInput],
-      [KNOWLEDGE_CHANNELS.search, { query: 'typed boundary' }],
       [KNOWLEDGE_CHANNELS.listTruth],
-      [KNOWLEDGE_CHANNELS.revokeTruth, { kind: 'fact', id: 'fact-1', workspaceId: 'workspace-1' }],
-      [KNOWLEDGE_CHANNELS.listConflicts, 'workspace-1'],
-      [KNOWLEDGE_CHANNELS.recordFeedback, feedbackInput],
-      [KNOWLEDGE_CHANNELS.feedbackSummary, 'workspace-1'],
-      [KNOWLEDGE_CHANNELS.context, { query: 'context', workspaceId: 'workspace-1' }],
-      [KNOWLEDGE_CHANNELS.diagnostics, { workspaceId: 'workspace-1', recentLimit: 5 }],
       [KNOWLEDGE_CHANNELS.processNow, { workspaceId: 'workspace-1' }],
       [KNOWLEDGE_CHANNELS.processingStats],
-      [KNOWLEDGE_CHANNELS.probeExternalMcp],
-      [KNOWLEDGE_CHANNELS.externalMcpStatus],
-      [KNOWLEDGE_CHANNELS.registerExternalMcp, 'claude-code'],
       [KNOWLEDGE_CHANNELS.userMemoryOverview],
       [KNOWLEDGE_CHANNELS.personalProfileEditContext],
       [KNOWLEDGE_CHANNELS.savePersonalProfile, { expectedHash: 'a'.repeat(64), overrides: { identity: 'Tree' } }],
@@ -424,74 +370,9 @@ describe('Knowledge IPC contract', () => {
       compactionStatus: 'active',
     }
     const api = window.electron.knowledge
-    const calls: Array<() => Promise<unknown>> = [
-      () => api.automationStatus(),
-      () => api.automationRun({ backfill: false }),
-      () => api.testConfiguration({ stage: 'entryReview', model: defaultKnowledgeAutomation().stages.entryReview, jevEndpoint: '' }),
-      () => api.automationRetry('task'),
-      () => api.setJevCredential(''),
-      () => api.jevCredentialStatus(),
-      () => api.revealJevCredential(),
-      () => api.stopLocalModel(),
-      () => api.installLocalResources(),
-      () => api.localResourcesStatus(),
-      () => api.configureLocalModel({ enabled: true, endpoint: '', modelPath: '', serverPath: '', contextTokens: 0 }),
-      () => api.wikiHistory({ workspaceId: 'w', slug: 'a' }),
-      () => api.wikiRevision({ workspaceId: 'w', slug: 'a', version: 1 }),
-      () => api.pinWikiRevision({ workspaceId: 'w', slug: 'a', version: 1, contentHash: 'a'.repeat(64), pinned: true }),
-      () => api.noteWikiPages({ rootPath: 'C:\\work', uri: 'note://repo/a' }),
-      () => api.prepareNoteWiki({ rootPath: 'C:\\work', uris: ['note://repo/a'], pageSlug: 'a', reviewMode: 'incremental', expectedVersion: 1 }),
-      () => api.proposeNoteWiki({ draftId: 'draft-1', title: 't', markdown: 'm', rationale: 'r' }),
-      () => api.noteWikiStatuses({ workspaceId: 'workspace' }),
-      () => api.contracts(),
-      () => api.bootstrap('C:\\work'),
-      () => api.observe({ workspacePath: 'C:\\work', source: 'manual', type: 'user-note', content: 'content' }),
-      () => api.listObservations({ scope: 'global' }),
-      () => api.pruneObservations({ scope: 'workspace', confirm: true }),
-      () => api.autoPruneObservations(),
-      () => api.resolveObservationContent(observation),
-      () => api.retentionStats(),
-      () => api.listAudit({ limit: 1 }),
-      () => api.auditPage({ domain: 'engineering' }),
-      () => api.auditStats(),
-      () => api.listCandidates(),
-      () => api.listGraphCandidates(),
-      () => api.listWikiPatchCandidates(),
-      () => api.rejectCandidate({ type: 'fact', id: 'candidate', candidateHash: 'a'.repeat(64) }),
-      () => api.applyCandidate({ type: 'fact', id: 'candidate', candidateHash: 'a'.repeat(64) }),
-      () => api.factReviewContext({ type: 'fact', id: 'candidate', candidateHash: 'a'.repeat(64) }),
-      () => api.search({ query: 'fallback' }),
-      () => api.listTruth(),
-      () => api.revokeTruth({ kind: 'fact', id: 'fact', workspaceId: 'workspace' }),
-      () => api.listConflicts('workspace'),
-      () => api.recordFeedback({ action: 'open', resultKind: 'fact', workspaceId: 'workspace', outcome: 'error' }),
-      () => api.feedbackSummary('workspace'),
-      () => api.context({ query: 'fallback', workspaceId: 'workspace' }),
-      () => api.diagnostics(),
-      () => api.processNow({ workspaceId: 'workspace' }),
-      () => api.processingStats(),
-      () => api.probeExternalMcp(),
-      () => api.externalMcpStatus(),
-      () => api.registerExternalMcp('claude-code'),
-      () => api.userMemoryOverview(),
-      () => api.importLegacyPersonalMemory(),
-      () => api.layaControl('status'),
-      () => api.candidateAction({candidateId: 'c', candidateHash: 'a'.repeat(64), action: 'score'}),
-      () => api.forgetPersonalMemory({ targetId: 'old', targetHash: 'hash', kind: 'episode' }),
-      () => api.proposePersonalMemoryCorrection({ targetId: 'old', targetHash: 'hash', content: 'new' }),
-      () => api.getSettings(),
-      () => api.updateSettings({ enabled: false }),
-    ]
-
-    calls.push(() => api.observationRevocationContext({ id: 'source', workspaceId: 'ws' }))
-    calls.push(() => api.revokeObservation({ id: 'source', workspaceId: 'ws', sourceHash: 'a'.repeat(64) }))
-    calls.push(() => api.observationRevocations({}))
-    calls.push(() => api.personalProfileEditContext())
-    calls.push(() => api.savePersonalProfile({ expectedHash: 'a'.repeat(64), overrides: {} }))
-    calls.push(() => api.migrateLegacyEpisodes())
-    calls.push(() => api.getPersonalSettings(), () => api.updatePersonalSettings({ useInChat: false }))
-    expect(Object.keys(api)).toHaveLength(64)
-    expect(calls).toHaveLength(64)
+    const calls = Object.values(api).map(method => () => (method as () => Promise<unknown>)())
+    expect(Object.keys(api)).toHaveLength(38)
+    expect(calls).toHaveLength(38)
     for (const call of calls) {
       await expect(call()).rejects.toThrow('Electron knowledge API is unavailable')
     }

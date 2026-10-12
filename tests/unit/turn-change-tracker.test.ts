@@ -54,6 +54,18 @@ describe('adjacent completed turn snapshots', () => {
     await tracker.finish('a', 'interrupted', null)
     expect(published[1].files[0]).toMatchObject({ status: 'deleted', deletions: 2 })
   })
+  it('reports an open turn so duplicate end hooks can be ignored', async () => {
+    const tracker = new TerminalTurnChangeTracker(event => published.push(event))
+    await tracker.register('a', cwd)
+    expect(tracker.hasActiveTurn('a')).toBe(false)
+    tracker.start('a')
+    expect(tracker.hasActiveTurn('a')).toBe(true)
+    await tracker.finish('a', 'done', null)
+    expect(tracker.hasActiveTurn('a')).toBe(false)
+    // A second end with no open turn stays ignored at the call site.
+    await tracker.finish('a', 'interrupted', null)
+    expect(published).toHaveLength(1)
+  })
   it('isolates baselines for two terminals sharing a folder', async () => {
     const tracker = new TerminalTurnChangeTracker(event => published.push(event))
     await tracker.register('a', cwd); await tracker.register('b', cwd)

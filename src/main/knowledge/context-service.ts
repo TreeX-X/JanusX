@@ -1,11 +1,7 @@
 import type {
-  KnowledgeContextItem,
   KnowledgeContextRequest,
   KnowledgeContextResult,
 } from '../../shared/knowledge'
-import { knowledgeRecallService, KnowledgeRecallService } from './recall-service'
-import { excerptAroundQuery } from './recall-service'
-import { knowledgeTruthService } from './truth-service'
 import {
   fuseKnowledgeResults,
   searchUserMemory,
@@ -20,15 +16,6 @@ const DEFAULT_MAX_CHARS = 4_000
 function boundedInteger(value: number | undefined, fallback: number): number {
   if (value === undefined || !Number.isFinite(value)) return fallback
   return Math.max(0, Math.floor(value))
-}
-
-function formatItem(item: KnowledgeContextItem): string {
-  const refs = [
-    ...item.provenance.observationIds.map((id) => `observation:${id}`),
-    ...item.provenance.factIds.map((id) => `fact:${id}`),
-    ...item.provenance.fileRefs.map((file) => `file:${file}`),
-  ]
-  return `[${item.kind}] ${item.title}\n${item.content}\nworkspace=${item.workspaceId}; refs=${refs.join(',') || 'none'}`
 }
 
 function emptyResult(
@@ -48,79 +35,13 @@ function emptyResult(
 }
 
 export class KnowledgeContextService {
-  private readonly recallService: Pick<KnowledgeRecallService, 'recall'>
-  private projectAllowed?: () => Promise<boolean>
-  configureProjectPolicy(policy: () => Promise<boolean>): void { this.projectAllowed = policy }
   private readonly searchUser: (query: string) => Promise<UserRecallResult>
-
-  constructor(
-    truthService: Pick<typeof knowledgeTruthService, 'list'> = knowledgeTruthService,
-    recallService?: Pick<KnowledgeRecallService, 'recall'>,
-    userDeps?: UserRecallDeps,
-  ) {
-    this.recallService = recallService ?? (truthService === knowledgeTruthService
-      ? knowledgeRecallService
-      : new KnowledgeRecallService({
-          listTruth: () => truthService.list(),
-          listObservations: async () => [],
-          resolveObservationContent: async (observation) => observation.content,
-          readCandidates: async () => [],
-        }))
-    this.searchUser = userDeps
-      ? (query: string) => searchUserMemory(query, userDeps)
-      : searchUserMemoryDefault
+  constructor(userDeps?: UserRecallDeps) {
+    this.searchUser = userDeps ? query => searchUserMemory(query, userDeps) : searchUserMemoryDefault
   }
-
-  /**
-   * Project-only recall. Workspace gating stays untouched so shared surfaces
-   * (MCP, maintenance) never observe user memory through this path.
-   */
+  /** Original Notes replace project memory; callers retain their personal recall budget. */
   async search(request: KnowledgeContextRequest): Promise<KnowledgeContextResult> {
-    const maxItems = boundedInteger(request.maxItems, DEFAULT_MAX_ITEMS)
-    const maxChars = boundedInteger(request.maxChars, DEFAULT_MAX_CHARS)
-    if (this.projectAllowed && !await this.projectAllowed()) return emptyResult(maxItems, maxChars)
-    const recalled = await this.recallService.recall({
-      query: request.query,
-      layer: 'truth',
-      workspaceId: request.workspaceId?.trim() || undefined,
-      workspacePath: request.workspaceId ? undefined : request.workspacePath?.trim() || undefined,
-      allowGlobal: request.allowGlobal,
-      requireWorkspace: true,
-      agentId: request.agentId?.trim() || undefined,
-      sessionId: request.sessionId?.trim() || undefined,
-      since: request.since?.trim() || undefined,
-      until: request.until?.trim() || undefined,
-    })
-    if (recalled.degraded) return emptyResult(maxItems, maxChars, recalled.degraded.reason)
-
-    const items: KnowledgeContextItem[] = []
-    const sections: string[] = []
-    const deliveredFacts: Array<{ id: string; workspaceId: string; hash: string }> = []
-    for (const document of recalled.documents) {
-      if (items.length >= maxItems) break
-      if (!document.contextItem) continue
-      // Long wiki pages ride as query-centered excerpts so one page cannot
-      // eat the whole shared budget; full text stays one wiki_get away.
-      const content = document.contextItem.kind === 'wiki'
-        ? excerptAroundQuery(document.contextItem.content, request.query)
-        : document.contextItem.content
-      const item = { ...document.contextItem, content, score: document.score }
-      const section = formatItem(item)
-      if ([...sections, section].join('\n\n').length > maxChars) break
-      items.push(item)
-      sections.push(section)
-      if (item.kind === 'fact' && document.factHash) deliveredFacts.push({ id: item.id, workspaceId: item.workspaceId, hash: document.factHash })
-    }
-    if (this.projectAllowed && !await this.projectAllowed()) return emptyResult(maxItems, maxChars)
-    return {
-      items,
-      projectMemoryDelivery: { scope: 'project', capturedAt: Date.now(), section: sections.join('\n\n'), facts: deliveredFacts },
-      compactContext: sections.join('\n\n'),
-      truncated: items.length < recalled.documents.length,
-      eligibleCount: recalled.documents.length,
-      maxItems,
-      maxChars,
-    }
+    return emptyResult(boundedInteger(request.maxItems, DEFAULT_MAX_ITEMS), boundedInteger(request.maxChars, DEFAULT_MAX_CHARS))
   }
 
   /** User-only recall under its independent budget; needs no workspace. */

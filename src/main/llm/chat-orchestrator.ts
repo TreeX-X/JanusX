@@ -17,7 +17,7 @@
 // Note: policy-neutral loop core with shell-side duties only — see .agents/notes/agent/agent-loop-refactor.md
 import { llmService } from './LlmService'
 import { configService, DEFAULT_AGENT_MAX_STEPS } from '../config/service'
-import { knowledgeObservationService } from '../knowledge/observation-service'
+import { captureEngineeringUserMemory } from '../knowledge/engineering-user-memory'
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
@@ -43,8 +43,8 @@ import { capturePersonChatTurn, capturePersonEpisodeFromTurn } from '../knowledg
 import { sanitizeLoopMessages } from './loop-message-sanitize'
 import { ManagedChatSession } from './managed-chat-session'
 import type { ChatContextCheckpoint, ChatContextStatus } from '../../shared/chat-context'
-import type { UserMemoryDelivery, ProjectMemoryDelivery } from '../../shared/memory-strength'
-import { containsMemoryDelivery, recordUserMemoryAccessBestEffort, recordProjectMemoryAccessBestEffort, trackMemoryStream } from '../knowledge/memory-access'
+import type { UserMemoryDelivery } from '../../shared/memory-strength'
+import { containsMemoryDelivery, recordUserMemoryAccessBestEffort, trackMemoryStream } from '../knowledge/memory-access'
 import { runNoteRepairTurn } from '../blueprint/review/note-repair-turn'
 import type { NoteRepairService } from '../blueprint/review/note-repair'
 
@@ -127,14 +127,8 @@ export async function prepareJanusChatRecall(
   search: ContextSearch = knowledgeContextService.search.bind(knowledgeContextService),
   searchUser?: UserSearch,
   domain?: 'personal' | 'project',
-): Promise<{ messages: ChatMessage[]; trace: import('@janus-agent/chat-core').KnowledgeRecallTrace; userMemoryDelivery?: UserMemoryDelivery; projectMemoryDelivery?: ProjectMemoryDelivery }> {
-  let projectMemoryDelivery: ProjectMemoryDelivery | undefined
-  const recalled = await prepareCoreRecall({ requestId, messages, workspaceId, workspacePath, search: async input => {
-    const result = await search(input)
-    projectMemoryDelivery = result.projectMemoryDelivery
-    return result
-  } })
-  const project = { ...recalled, ...(projectMemoryDelivery ? { projectMemoryDelivery } : {}) }
+): Promise<{ messages: ChatMessage[]; trace: import('@janus-agent/chat-core').KnowledgeRecallTrace; userMemoryDelivery?: UserMemoryDelivery }> {
+  const project = await prepareCoreRecall({ requestId, messages, workspaceId, workspacePath, search })
   // S6 domain isolation: project sessions never auto-inject personal history.
   // Only an explicit user-provided snippet (not the whole timeline) may cross.
   if (domain === 'project') return project
@@ -336,7 +330,6 @@ function createShellQuestionPort(requestId: string): NonNullable<ChatTurnPorts['
 /** 壳默认 ports：生产单例装配（可注入版本见 janus-agent-ports）。 */
 function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'personal' | 'project', conversationId?: string): ChatTurnPorts {
   const deliveries = new Map<string, UserMemoryDelivery>()
-  const projectDeliveries = new Map<string, ProjectMemoryDelivery>()
   return buildJanusChatTurnPorts({
     callerId,
     getProviderSettings: (providerId) => llmService.getProviderSettings('janus', providerId),
@@ -360,10 +353,6 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
     listRegistryTools: () => workspaceAgentRuntime.registry.list(),
     listRegistryManifests: () => workspaceAgentRuntime.registry.listManifests?.(),
     knowledgeSearch: async (input) => {
-      const rememberProject = (result: import('../../shared/knowledge').KnowledgeContextResult) => {
-        if (result.projectMemoryDelivery) projectDeliveries.set(result.projectMemoryDelivery.section, result.projectMemoryDelivery)
-        return result
-      }
       const base = {
         query: input.query,
         workspaceId: input.workspaceId,
@@ -373,24 +362,24 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
       }
       // S6 domain isolation: project turns use project recall only; personal
       // history never fuses automatically into the engineering context.
-      if (domain === 'project') return rememberProject(await knowledgeContextService.search(base))
+      if (domain === 'project') return knowledgeContextService.search(base)
       // Fused chat recall stays transparent to the loop: the port input keeps
       // its generic shape (no persona types cross into janus-agentX) while the
       // shell appends the user section under its own budget. The guard keeps
       // older hermetic mocks (search-only) on the legacy path.
       const service = knowledgeContextService as Partial<Pick<typeof knowledgeContextService, 'searchWithUser'>>
       if (typeof service.searchWithUser !== 'function') {
-        return rememberProject(await knowledgeContextService.search(base))
+        return knowledgeContextService.search(base)
       }
       try {
         const result = await knowledgeContextService.searchWithUser(base)
         if (result.userMemoryDelivery) deliveries.set(result.userMemoryDelivery.section, result.userMemoryDelivery)
-        return rememberProject(result)
+        return result
       } catch {
-        return rememberProject(await knowledgeContextService.search(base))
+        return knowledgeContextService.search(base)
       }
     },
-    captureObservation: (input: JanusCaptureInput) => knowledgeObservationService.capture({
+    captureObservation: (input: JanusCaptureInput) => captureEngineeringUserMemory({
       workspaceId: input.workspaceId,
       workspacePath: input.workspacePath,
       source: input.source,
@@ -415,9 +404,6 @@ function defaultChatTurnPorts(callerId: string, requestId: string, domain?: 'per
       const receipts = [...deliveries.values()].filter(receipt => containsMemoryDelivery(sanitized, receipt))
       return trackMemoryStream(result, async () => {
         for (const receipt of receipts) await recordUserMemoryAccessBestEffort(receipt, requestId, options.abortSignal as AbortSignal | undefined)
-        for (const receipt of projectDeliveries.values()) {
-          if (containsMemoryDelivery(sanitized, receipt)) await recordProjectMemoryAccessBestEffort(receipt, requestId, options.abortSignal as AbortSignal | undefined)
-        }
       })
     }) as unknown as ChatTurnPorts['streamTextFn'],
     question: createShellQuestionPort(requestId),

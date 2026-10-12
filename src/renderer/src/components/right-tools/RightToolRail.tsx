@@ -1,4 +1,5 @@
 import { useAssistantPendingCount } from '@/components/knowledge/useAssistantPendingCount'
+import { useAnimatedOpen } from '@/components/shared/CardFrame'
 // Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/workbench/right-dock-empty-collapse.md
 import { ListChecks, Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
 import { isRightToolEnabled, RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
@@ -18,6 +19,14 @@ interface RightToolRailProps {
   onTogglePanel?: () => void
 }
 
+/**
+ * 折叠/展开控件的进出场时长（ms）。刻意慢于侧栏默认的 SIDE_PANEL_EXIT_MS（220ms），
+ * 让"加载出来/退出"读得成一个过程而不是一次闪现。
+ * RightDock.module.css 的 .railToggle 与 .panel 过渡必须与此一致，
+ * 尤其 visibility 延时 = 这里的卸载定时器，改一个就要改另一个。
+ */
+const RAIL_TOGGLE_MOTION_MS = 320
+
 export function RightToolRail({
   openToolIds,
   activeToolId,
@@ -35,13 +44,21 @@ export function RightToolRail({
   const panelToggle = onTogglePanel ?? onExpandPanel
   const visibleTools = RIGHT_TOOL_REGISTRY.filter((tool) => isRightToolEnabled(tool.id, { persona: personaEnabled, knowledge: knowledgeEnabled, sessions: sessionsEnabled }))
   const hasOpenTools = openToolIds.length > 0
+  // 首次开 tab 时淡入展开、关掉最后一个 tab 时淡出收起，避免控件突然闪现/消失。
+  // useAnimatedOpen 在退出动画播完后再卸载，空栏仍然不渲染该控件。
+  const toggleVisible = hasOpenTools && Boolean(panelToggle)
+  const toggleAnim = useAnimatedOpen(toggleVisible, RAIL_TOGGLE_MOTION_MS)
   const panelToggleLabel = collapsed
     ? t('common:rightDock.expandAria')
     : t('common:rightDock.collapseAria')
   return (
     <div className={styles.rail} role="toolbar" aria-label={t('common:rightTool.railAria')}>
-      <div className={styles.railTools}>
-        {hasOpenTools && panelToggle && (
+      {toggleAnim.rendered && panelToggle && (
+        <div
+          className={styles.railToggle}
+          data-visible={toggleAnim.visible ? 'true' : 'false'}
+          aria-hidden={toggleAnim.visible ? undefined : 'true'}
+        >
           <ThemedTooltip label={panelToggleLabel}>
           <button
             type="button"
@@ -57,7 +74,9 @@ export function RightToolRail({
               : <PanelRightClose size={16} strokeWidth={1.6} aria-hidden="true" />}
           </button>
           </ThemedTooltip>
-        )}
+        </div>
+      )}
+      <div className={styles.railTools}>
         {visibleTools.map((tool) => {
           const state = activeToolId === tool.id ? 'active' : openToolIds.includes(tool.id) ? 'open' : 'closed'
           const stateLabel = state === 'active'

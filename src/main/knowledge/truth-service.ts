@@ -4,40 +4,16 @@ import { readObservationRevocationBarrier } from './observation-revocation-barri
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type {
-  GraphEdge,
-  KnowledgeTruthSnapshot,
-  MemoryFact,
-  WikiPage,
-  WikiPageStatus,
-} from '../../shared/knowledge'
+import type { KnowledgeTruthSnapshot, MemoryFact } from '../../shared/knowledge'
 import { knowledgeRootPath } from './constants'
 import { knowledgeAuditService } from './audit-service'
-import { wikiFreshness } from './wiki-freshness'
-import { wikiRelationIssues, wikiRelationsSchema } from './wiki-relations'
-import { assertWikiReviewReady } from './wiki-review-recovery'
-import { isMemoryScope, isSourceEvidence } from './memory-evidence'
+import { factScope, isMemoryScope, isSourceEvidence } from './memory-evidence'
 
-interface WikiPageIndexEntry {
-  slug: string
-  title: string
-  relativePath: string
-  tags: string[]
-  status: WikiPageStatus
-  sourceFactIds: string[]
-  updatedAt: string
-  version: number
-  workspaceId: string
-}
 
 type JsonRecord = Record<string, unknown>
 
 const KNOWLEDGE_SOURCES = new Set([
   'agent-stream', 'blueprint-maintenance', 'checkpoint', 'git-analyzer', 'janus-chat', 'manual', 'tool', 'system',
-])
-const GRAPH_RELATIONS = new Set([
-  'mentions', 'derived_from', 'supersedes', 'depends_on', 'conflicts_with',
-  'implemented_in', 'owned_by', 'used_by_agent',
 ])
 // Phase 1 convergence: MemoryFact.kind is required; records without it are schema errors.
 const FACT_KINDS = new Set(['fact', 'preference', 'decision', 'procedure'])
@@ -137,32 +113,6 @@ function isMemoryFact(value: unknown): value is MemoryFact {
     && hasString(provenance, 'createdAt')
 }
 
-function isGraphEdge(value: unknown): value is GraphEdge {
-  return isRecord(value)
-    && hasString(value, 'id')
-    && hasString(value, 'from')
-    && hasString(value, 'to')
-    && typeof value.type === 'string'
-    && GRAPH_RELATIONS.has(value.type)
-    && hasFiniteNumber(value, 'confidence')
-    && isStringArray(value.sourceFactIds)
-    && hasString(value, 'workspaceId')
-    && hasString(value, 'createdAt')
-}
-
-function isPublishedWikiEntry(value: unknown): value is WikiPageIndexEntry {
-  return isRecord(value)
-    && hasString(value, 'slug')
-    && hasString(value, 'title')
-    && hasString(value, 'relativePath')
-    && isStringArray(value.tags)
-    && value.status === 'published'
-    && isStringArray(value.sourceFactIds)
-    && hasString(value, 'updatedAt')
-    && hasFiniteNumber(value, 'version')
-    && hasString(value, 'workspaceId')
-}
-
 async function readJsonl<T>(
   relativePath: string,
   isValid: (value: unknown) => value is T,
@@ -197,63 +147,17 @@ async function readJsonl<T>(
   }
 }
 
-async function readPublishedWikiPages(): Promise<WikiPage[]> {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(
-      await readFile(join(knowledgeRootPath(), 'wiki', 'pages-index.json'), 'utf8'),
-    )
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-    throw error
-  }
-
-  if (!isRecord(parsed) || !Array.isArray(parsed.pages)) throw new Error('Invalid wiki index')
-
-  const pages = await Promise.all(
-    parsed.pages
-      .filter(isPublishedWikiEntry)
-      .map(async (page): Promise<WikiPage | null> => {
-        if ('relations' in page && page.relations !== undefined) wikiRelationsSchema.parse(page.relations)
-        const markdown = await readFile(join(knowledgeRootPath(), page.relativePath), 'utf8')
-        return { ...page, markdown }
-      }),
-  )
-  return pages.filter((page): page is WikiPage => page !== null)
-}
-
 export class KnowledgeTruthService {
-  async list(options: { includeStaleWiki?: boolean } = {}): Promise<KnowledgeTruthSnapshot> {
-    const reviewRevision = await assertFactReviewReady()
-    const wikiRevision = await assertWikiReviewReady()
-    const [facts, wikiPages, graphEdges] = await Promise.all([
-      readJsonl(join('facts', 'facts.jsonl'), isMemoryFact, 'fact'),
-      readPublishedWikiPages(),
-      readJsonl(join('graph', 'edges.jsonl'), isGraphEdge, 'graph'),
-    ])
-
+  async list(_options: { includeStaleWiki?: boolean } = {}): Promise<KnowledgeTruthSnapshot> {
+    const revision = await assertFactReviewReady()
+    const facts = await readJsonl(join('facts', 'facts.jsonl'), isMemoryFact, 'fact')
     const barrier = await readPersonalForgettingBarrier()
     const revocations = await readObservationRevocationBarrier()
-    await assertFactReviewReady(reviewRevision)
-    await assertWikiReviewReady(wikiRevision)
-    const visibleFacts = facts.filter(fact => !barrier.blocksFact(fact) && !revocations.blocksFact(fact))
-    const pages = await Promise.all(wikiPages.map(async page => {
-      let freshness = wikiFreshness(page, visibleFacts)
-      if (revocations.blocksFactIds(page.workspaceId, page.sourceFactIds)) freshness = 'stale'
-      if (page.sourceNoteRefs?.length) {
-        const { wikiSourceStatuses } = await import('./note-sources')
-        const sources = await wikiSourceStatuses(page.workspacePath ?? '', page.sourceNoteRefs)
-        if (sources.some(source => source.status !== 'fresh')) freshness = 'stale'
-        else if (!page.sourceFactIds.length) freshness = 'current'
-      }
-      return { ...page, freshness }
-    }))
-    await assertWikiReviewReady(wikiRevision)
+    await assertFactReviewReady(revision)
     return {
-      facts: visibleFacts,
-      wikiPages: (options.includeStaleWiki ? pages : pages.filter(page => page.freshness !== 'stale'))
-        .map(page => ({ ...page, relationIssues: wikiRelationIssues(page, pages) })),
-      graphEdges: graphEdges.filter(edge => !revocations.blocksFactIds(edge.workspaceId, edge.sourceFactIds)),
+      facts: facts.filter(fact => factScope(fact) === 'user' && !barrier.blocksFact(fact) && !revocations.blocksFact(fact)),
+      wikiPages: [],
+      graphEdges: [],
     }
   }
 }

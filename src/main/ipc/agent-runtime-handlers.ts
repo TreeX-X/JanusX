@@ -9,6 +9,8 @@ import { registerGitTools } from '../agent/runtime/tools/git-tools'
 import { registerCommandTools } from '../agent/runtime/tools/command-tools'
 import { registerUserMemoryTools } from '../agent/runtime/tools/user-memory-tools'
 import { harnessNoteService } from '../harness/service'
+import { registerSuggestionTools } from '../blueprint/suggestions/tools'
+import { blueprintReviewRuntime } from '../blueprint/review/runtime'
 import type { ResolveWorkspaceRoot } from '../office/office-workspace-guard'
 
 let registered = false
@@ -24,6 +26,7 @@ export function registerAgentRuntimeHandlers(windowGetter: () => BrowserWindow |
   if (registered) return
   registerWorkspaceTools(workspaceAgentRuntime.registry)
   registerNoteTools(workspaceAgentRuntime.registry, harnessNoteService)
+  registerSuggestionTools(workspaceAgentRuntime.registry, blueprintReviewRuntime)
   registerProjectTools(workspaceAgentRuntime.registry)
   registerGitTools(workspaceAgentRuntime.registry)
   registerCommandTools(workspaceAgentRuntime.registry)

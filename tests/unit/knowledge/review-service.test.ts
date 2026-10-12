@@ -20,7 +20,7 @@ async function loadService() {
 
 function provenance(overrides: Partial<KnowledgeProvenance> = {}): KnowledgeProvenance {
   return {
-    workspaceId: 'ws-id',
+    workspaceId: 'user',
     workspaceName: 'ws-name',
     workspacePath: 'C:/work',
     source: 'manual',
@@ -214,103 +214,6 @@ describe('KnowledgeReviewService', () => {
     }
   })
 
-  it('applies a graph-edge candidate into edges.jsonl', async () => {
-    const candidate = makeGraphCandidate()
-    await seedJsonl('graph/candidates.jsonl', [candidate])
-    const { knowledgeReviewService } = await loadService()
-
-    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({
-      type: 'graph-edge',
-      id: candidate.id,
-    }))
-
-    expect(result.candidate.status).toBe('applied')
-    expect(result.applied?.edge?.from).toBe('persistence')
-    expect(result.applied?.edge?.to).toBe('postgres')
-
-    const edges = await readJsonl<{ id: string; from: string; to: string }>('graph/edges.jsonl')
-    expect(edges).toHaveLength(1)
-    expect(edges[0]?.id).toBe(candidate.edge.id)
-  })
-
-  it('applies a wiki-patch candidate into pages markdown and pages-index', async () => {
-    const candidate = makeWikiCandidate({
-      pageSlug: 'knowledge-engine/persistence',
-    })
-    await seedJsonl('wiki/patches.jsonl', [candidate])
-    const { knowledgeReviewService } = await loadService()
-
-    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({
-      type: 'wiki-patch',
-      id: candidate.id,
-      reviewNotes: 'lgtm',
-    }))
-
-    expect(result.candidate.status).toBe('applied')
-    expect(result.applied?.page?.slug).toBe('knowledge-engine/persistence')
-    expect(result.applied?.page?.markdown).toContain('Postgres')
-    expect(result.auditEvents.map((event) => event.action)).toEqual([
-      'candidate_approved',
-      'wiki_updated',
-      'candidate_applied',
-    ])
-
-    const pagePath = join(
-      knowledgeRoot,
-      'wiki',
-      'pages',
-      createHash('sha256').update(candidate.provenance.workspaceId).digest('hex'),
-      'knowledge-engine',
-      'persistence.md',
-    )
-    const markdown = await readFile(pagePath, 'utf8')
-    expect(markdown).toContain('# Persistence Design')
-    expect(markdown).toContain('chosen for durability')
-
-    const indexRaw = await readFile(join(knowledgeRoot, 'wiki', 'pages-index.json'), 'utf8')
-    const index = JSON.parse(indexRaw) as {
-      version: number
-      pages: Array<{ slug: string; relativePath: string; version: number }>
-    }
-    expect(index.version).toBe(1)
-    expect(index.pages).toHaveLength(1)
-    expect(index.pages[0]?.slug).toBe('knowledge-engine/persistence')
-    expect(index.pages[0]?.relativePath.replace(/\\/g, '/')).toBe(
-      'wiki/pages/' + createHash('sha256').update(candidate.provenance.workspaceId).digest('hex') + '/knowledge-engine/persistence.md',
-    )
-    expect(index.pages[0]?.version).toBe(1)
-  })
-
-  it('unions candidate sourceFactIds into the published wiki index entry', async () => {
-    const candidate = makeWikiCandidate({ sourceFactIds: ['fact-new', 'fact-new'] })
-    await seedJsonl('wiki/patches.jsonl', [candidate])
-    await mkdir(join(knowledgeRoot, 'wiki', 'pages'), { recursive: true })
-    await writeFile(join(knowledgeRoot, 'wiki', 'pages', 'persistence-design.md'), '# Existing page')
-    await writeFile(
-      join(knowledgeRoot, 'wiki', 'pages-index.json'),
-      JSON.stringify({
-        version: 1,
-        pages: [{
-          slug: candidate.pageSlug,
-          title: candidate.title,
-          relativePath: 'wiki/pages/persistence-design.md',
-          tags: [],
-          status: 'published',
-          sourceFactIds: ['fact-old'],
-          updatedAt: '2026-07-12T00:00:00.000Z',
-          version: 1,
-          workspaceId: 'ws-id',
-        }],
-      }),
-      'utf8',
-    )
-    const { knowledgeReviewService } = await loadService()
-
-    const result = await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'wiki-patch', id: candidate.id }))
-
-    expect(result.applied?.page?.sourceFactIds).toEqual(['fact-old', 'fact-new'])
-  })
-
   it('refuses non-proposed candidates and missing ids', async () => {
     const proposed = makeFactCandidate({ id: 'cand-a' })
     const already = makeFactCandidate({
@@ -356,19 +259,6 @@ describe('KnowledgeReviewService', () => {
     const facts = await readJsonl<MemoryFact>('facts/facts.jsonl')
     expect(facts.filter((fact) => fact.id === candidate.fact.id)).toHaveLength(1)
     expect(results.map((result) => result.auditEvents.length).sort()).toEqual([0, 2])
-  })
-
-  it('does not duplicate an already materialized wiki patch on retry', async () => {    const candidate = makeWikiCandidate()
-    await seedJsonl('wiki/patches.jsonl', [candidate])
-    const pagePath = join(knowledgeRoot, 'wiki', 'pages', `${candidate.pageSlug}.md`)
-    await mkdir(join(pagePath, '..'), { recursive: true })
-    await writeFile(pagePath, `# ${candidate.title}\n\n${candidate.patchMarkdown}\n`, 'utf8')
-    const { knowledgeReviewService } = await loadService()
-
-    await knowledgeReviewService.applyCandidate(await reviewFixture({ type: 'wiki-patch', id: candidate.id }))
-
-    const markdown = await readFile(pagePath, 'utf8')
-    expect(markdown.split(candidate.patchMarkdown)).toHaveLength(2)
   })
 
   it('restores candidate and truth when required audit persistence fails', async () => {
@@ -478,17 +368,6 @@ describe('KnowledgeReviewService', () => {
     expect(candidates.map((candidate) => candidate.status)).toEqual(['proposed', 'proposed'])
     expect(await readJsonl<MemoryFact>('facts/facts.jsonl')).toHaveLength(1)
   })
-  it.each(['wiki-patch', 'graph-edge'] as const)('refuses damaged %s candidates without dropping records', async type => {
-    const candidate = type === 'wiki-patch' ? makeWikiCandidate() : makeGraphCandidate()
-    const path = type === 'wiki-patch' ? 'wiki/patches.jsonl' : 'graph/candidates.jsonl'
-    await seedJsonl(path, [candidate])
-    const original = (await readFile(join(knowledgeRoot, path), 'utf8')) + '{damaged\n'
-    await writeFile(join(knowledgeRoot, path), original)
-    const { knowledgeReviewService, proposeDerivedCandidates } = await loadService()
-    await expect(proposeDerivedCandidates([{ ...candidate, id: 'new' }])).rejects.toThrow()
-    await expect(knowledgeReviewService.rejectCandidate(await reviewCandidateInput(candidate))).rejects.toThrow()
-    expect(await readFile(join(knowledgeRoot, path), 'utf8')).toBe(original)
-  })
 
   it.each(['applyCandidate', 'rejectCandidate'] as const)('rejects stale content for %s and requires a fresh snapshot', async action => {
     const candidate = makeFactCandidate()
@@ -506,15 +385,6 @@ describe('KnowledgeReviewService', () => {
     await seedJsonl('facts/candidates.jsonl', [candidate])
     const { knowledgeReviewService } = await loadService()
     await expect(knowledgeReviewService[action]({ type: 'fact', id: candidate.id, candidateHash: '' })).rejects.toThrow('snapshot missing')
-  })
-
-  it.each(['wiki-patch', 'graph-edge'] as const)('binds %s content and evidence', async type => {
-    const candidate = type === 'wiki-patch' ? makeWikiCandidate() : makeGraphCandidate()
-    const input = await reviewCandidateInput(candidate)
-    const changed = { ...candidate, evidence: { observationIds: ['new-source'] } }
-    await seedJsonl(type === 'wiki-patch' ? 'wiki/patches.jsonl' : 'graph/candidates.jsonl', [changed])
-    const { knowledgeReviewService } = await loadService()
-    await expect(knowledgeReviewService.applyCandidate(input)).rejects.toThrow('Candidate changed')
   })
 
   it('keeps retries idempotent with the original displayed snapshot', async () => {
@@ -545,31 +415,6 @@ describe('KnowledgeReviewService', () => {
     const { knowledgeReviewService } = await loadService()
     await expect(knowledgeReviewService.applyCandidate(await reviewCandidateInput(candidate))).rejects.toThrow()
     expect((await readJsonl<CandidateFact>('facts/candidates.jsonl'))[0].status).toBe('proposed')
-  })
-
-  it.each(['wiki-patch', 'graph-edge'] as const)('preserves %s admissions across an audit rollback', async type => {
-    const candidate = type === 'wiki-patch' ? makeWikiCandidate() : makeGraphCandidate()
-    const next = { ...candidate, id: 'arrived-during-review' }
-    const path = type === 'wiki-patch' ? 'wiki/patches.jsonl' : 'graph/candidates.jsonl'
-    await seedJsonl(path, [candidate])
-    const { knowledgeReviewService, proposeDerivedCandidates } = await loadService()
-    const { knowledgeAuditService } = await import('../../../src/main/knowledge/audit-service')
-    let entered!: () => void
-    let release!: () => void
-    const waiting = new Promise<void>(resolve => { entered = resolve })
-    const gate = new Promise<void>(resolve => { release = resolve })
-    const spy = vi.spyOn(knowledgeAuditService, 'recordBatch').mockImplementationOnce(async () => {
-      entered(); await gate; throw new Error('audit unavailable')
-    })
-    const applied = knowledgeReviewService.applyCandidate(await reviewCandidateInput(candidate))
-    const rejected = expect(applied).rejects.toThrow('audit unavailable')
-    await waiting
-    const admission = type === 'graph-edge'
-      ? expect(proposeDerivedCandidates([next])).rejects.toThrow('standalone-graph-proposals-disabled')
-      : proposeDerivedCandidates([next])
-    release()
-    try { await Promise.all([rejected, admission]) } finally { spy.mockRestore() }
-    expect((await readJsonl<CandidateFact>(path)).map(item => [item.id, item.status])).toEqual(type === 'graph-edge' ? [[candidate.id, 'proposed']] : [[candidate.id, 'proposed'], [next.id, 'proposed']])
   })
 
 })

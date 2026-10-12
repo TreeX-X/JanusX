@@ -1,0 +1,72 @@
+{
+  "recordedAt": "2026-10-10T06:13:02.987Z",
+  "clients": [
+    {
+      "client": "claude",
+      "exit": 0,
+      "toolsCalled": [
+        "note.list",
+        "note.read",
+        "note.write",
+        "note.suggestions",
+        "note.context"
+      ],
+      "writeVerified": true,
+      "provider": "local deterministic fixture; transport acceptance only"
+    },
+    {
+      "client": "codex",
+      "exit": 0,
+      "toolsCalled": [
+        "note.list",
+        "note.read",
+        "note.suggestions",
+        "note.context"
+      ],
+      "writeVerified": false,
+      "provider": "local deterministic fixture; transport acceptance only",
+      "limitation": "Host never approval policy blocked note.write before reaching the server"
+    },
+    {
+      "client": "opencode",
+      "exit": 0,
+      "toolsCalled": [
+        "note.list",
+        "note.read",
+        "note.write",
+        "note.suggestions",
+        "note.context"
+      ],
+      "writeVerified": true,
+      "provider": "local deterministic fixture; transport acceptance only"
+    },
+    {
+      "client": "janus",
+      "exit": 0,
+      "toolsCalled": [
+        "note.list",
+        "note.read",
+        "note.write",
+        "note.suggestions",
+        "note.context"
+      ],
+      "writeVerified": true,
+      "provider": "local deterministic fixture; transport acceptance only",
+      "limitation": "Fresh adjacent CLI build; older globally installed CLI does not load MCP"
+    },
+    {
+      "client": "dsh",
+      "exit": 0,
+      "toolsCalled": [
+        "note.list",
+        "note.read",
+        "note.write",
+        "note.suggestions",
+        "note.context"
+      ],
+      "writeVerified": true,
+      "provider": "local deterministic fixture; transport acceptance only"
+    }
+  ],
+  "pi": "Installed README specifies no native MCP; extension not implemented"
+}
