@@ -158,7 +158,9 @@ it('keeps every document in the maintained JanusX corpus reachable through its o
   }
   expect([...accessible].sort()).toEqual([...source.nodeIds].sort())
   expect(JSON.stringify(source)).toBe(before)
-}, 15000)
+  // 该用例对全仓语料做一次投影，再对每个节点各跑一次 browse；耗时随语料增长，
+  // 15s 在 296 篇的语料上已经贴边（本地 13.3s，CI runner 更慢会超）。
+}, 60000)
 
 it('routes Chat v2 filters and writes through shared tools and refreshes the same wiki/blueprint source', async () => {
   const { root, service } = await fixture()
