@@ -6,7 +6,7 @@ import {
 } from '../../src/shared/ipc/experimental'
 
 describe('experimental feature flags', () => {
-  it('defaults all six entries to off (hidden by default)', () => {
+  it('defaults all seven entries to off (hidden by default)', () => {
     expect(DEFAULT_EXPERIMENTAL_FEATURES).toEqual({
       blueprint: false,
       knowledge: false,
@@ -14,6 +14,7 @@ describe('experimental feature flags', () => {
       persona: false,
       remoteControl: false,
       teamCollab: false,
+      sessions: false,
     })
   })
 
@@ -37,6 +38,7 @@ describe('experimental feature flags', () => {
       persona: false,
       remoteControl: false,
       teamCollab: false,
+      sessions: false,
     })
     expect(normalizeExperimentalFeatures({ knowledge: true })).toEqual({
       blueprint: false,
@@ -45,6 +47,7 @@ describe('experimental feature flags', () => {
       persona: false,
       remoteControl: false,
       teamCollab: false,
+      sessions: false,
     })
     expect(normalizeExperimentalFeatures({ roundtable: 1, persona: 'true' })).toEqual({
       blueprint: false,
@@ -53,6 +56,7 @@ describe('experimental feature flags', () => {
       persona: false,
       remoteControl: false,
       teamCollab: false,
+      sessions: false,
     })
     expect(normalizeExperimentalFeatures({ remoteControl: true })).toEqual({
       blueprint: false,
@@ -61,6 +65,7 @@ describe('experimental feature flags', () => {
       persona: false,
       remoteControl: true,
       teamCollab: false,
+      sessions: false,
     })
     expect(normalizeExperimentalFeatures({ remoteControl: 1 })).toEqual({
       blueprint: false,
@@ -69,6 +74,7 @@ describe('experimental feature flags', () => {
       persona: false,
       remoteControl: false,
       teamCollab: false,
+      sessions: false,
     })
     expect(normalizeExperimentalFeatures({ teamCollab: true })).toEqual({
       blueprint: false,
@@ -77,6 +83,7 @@ describe('experimental feature flags', () => {
       persona: false,
       remoteControl: false,
       teamCollab: true,
+      sessions: false,
     })
     expect(normalizeExperimentalFeatures({ teamCollab: 1 })).toEqual({
       blueprint: false,
@@ -85,6 +92,28 @@ describe('experimental feature flags', () => {
       persona: false,
       remoteControl: false,
       teamCollab: false,
+      sessions: false,
+    })
+  })
+
+  it('treats the sessions preview gate like every other flag', () => {
+    expect(normalizeExperimentalFeatures({ sessions: true })).toEqual({
+      blueprint: false,
+      knowledge: false,
+      roundtable: false,
+      persona: false,
+      remoteControl: false,
+      teamCollab: false,
+      sessions: true,
+    })
+    expect(normalizeExperimentalFeatures({ sessions: 1 })).toEqual({
+      blueprint: false,
+      knowledge: false,
+      roundtable: false,
+      persona: false,
+      remoteControl: false,
+      teamCollab: false,
+      sessions: false,
     })
   })
 })

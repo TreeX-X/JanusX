@@ -45,7 +45,9 @@ export function createNoteMcpServer(stateRoot = defaultNoteStateRoot()) {
       for (const uri of selected) {
         const expected = first.entries.find(entry => entry.uri === uri && entry.classification === 'valid')
         if (!expected?.sourceHash) { unavailable.push({ uri, reason: 'Source is absent or invalid' }); continue }
-        const page = await editor.readPage(context.workspaceRoot, uri, { maxChars: Math.min(12000, Math.floor(80000 / selected.size)), expectedHash: expected.sourceHash })
+        // readPage 不接受 expectedHash 入参；它经 ...read 透出当前 sha256，
+        // 下面用返回值比对快照 hash 做失效检测。
+        const page = await editor.readPage(context.workspaceRoot, uri, { maxChars: Math.min(12000, Math.floor(80000 / selected.size)) })
         if (page.expectedHash !== expected.sourceHash) throw new Error('Note sources changed; read context again')
         notes.push(page)
       }

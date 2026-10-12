@@ -79,10 +79,10 @@ describe('transcript reader', () => {
     expect(detail?.turns[1]).toEqual({ prompt: 'still open' })
   })
 
-  it('caps turns to the most recent window and truncates long text', async () => {
+  it('caps turns to the most recent window', async () => {
     const lines: Array<Record<string, unknown>> = []
     for (let i = 0; i < TRANSCRIPT_TURN_CAP + 5; i += 1) {
-      lines.push(claudeUser(`q${i}`), claudeAssistant('x'.repeat(TRANSCRIPT_TEXT_CAP + 10)))
+      lines.push(claudeUser(`q${i}`), claudeAssistant(`a${i}`))
     }
     const path = await writeLines(await tempFile('long.jsonl'), lines)
     const detail = await readTranscriptDetail(path, 'claude')
@@ -90,7 +90,17 @@ describe('transcript reader', () => {
     expect(detail?.truncated).toBe(true)
     expect(detail?.turns).toHaveLength(TRANSCRIPT_TURN_CAP)
     expect(detail?.turns[0]?.prompt).toBe('q5')
-    expect(detail?.turns[0]?.excerpt?.length).toBeLessThanOrEqual(TRANSCRIPT_TEXT_CAP + 1)
+    expect(detail?.turns[0]?.excerpt).toBe('a5')
+  })
+
+  it('keeps full answer prose and marks only pathological rows', async () => {
+    const long = 'x'.repeat(TRANSCRIPT_TEXT_CAP + 10)
+    const path = await writeLines(await tempFile('full-text.jsonl'), [
+      claudeUser('q'),
+      claudeAssistant(long),
+    ])
+    const detail = await readTranscriptDetail(path, 'claude')
+    expect(detail?.turns[0]?.excerpt).toBe(`${'x'.repeat(TRANSCRIPT_TEXT_CAP)}…`)
   })
 
   it('resolves null for missing files and unsupported engines', async () => {
