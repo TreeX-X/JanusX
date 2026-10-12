@@ -237,11 +237,12 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await expect(page.locator('.blueprint-workbench-shell')).toHaveCount(0)
 
     await page.setViewportSize({ width: 1920, height: 1080 })
-    // 知识库工作台入口受 knowledge 实验开关门控（默认关闭）；用例显式开启后再打开。
-    await page.evaluate(() => (window as TestWindow).electron.experimental.update({ knowledge: true }))
+    // 知识库与蓝图合并为一个工作台切换器；个人记忆工作台受 persona 开关门控（默认关闭）。
+    await page.evaluate(() => (window as TestWindow).electron.experimental.update({ persona: true }))
     await page.reload({ waitUntil: 'domcontentloaded' })
-    await page.getByRole('button', { name: /打开知识与记忆工作台|Open Knowledge & memory workbench/ }).click()
-    const knowledgeShell = page.getByRole('region', { name: /知识与记忆|Knowledge & memory/ })
+    await page.getByRole('button', { name: /个人记忆工作台|Personal Memory workbench/ }).click()
+    // 外壳与内部的画像面板共用同一个 aria-label；外壳在 DOM 中位于外层。
+    const knowledgeShell = page.getByRole('region', { name: /个人画像|Personal profile/ }).first()
     await expect(knowledgeShell).toBeVisible()
     const knowledgeShellBox = await knowledgeShell.boundingBox()
     expect(knowledgeShellBox).not.toBeNull()
