@@ -455,12 +455,13 @@ test('Claude, Codex and Opencode restore native history and track follow-up turn
     page = await application.firstWindow()
     await page.waitForLoadState('domcontentloaded')
     const workspace = await page.evaluate((path) => (window as DesktopWindow).electron.workspace.create({ name: 'Recovery drill', path }), cwd)
+    // 中文必须在 reload 之前设好：reload 之后整套界面才是中文，后面一连串中文
+    // locator（继续/恢复对话等）才不会因为语言切换的传播时序而间歇性失配。
+    await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('zh-CN'))
     await page.evaluate(() => (window as DesktopWindow).electron.experimental.update({ sessions: true }))
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
-    await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('zh-CN'))
     await page.locator('.ws').filter({ hasText: 'Recovery drill' }).first().click()
-    // 这个用例只在 reload 之后才切中文，按钮名可能还停在英文；两种语言都匹配。
     await page.getByRole('button', { name: /打开会话工具|Open Sessions tool/ }).click()
     for (const engine of ['claude', 'codex', 'opencode'] as const) {
       const sourceTerminal = 'source-' + engine
