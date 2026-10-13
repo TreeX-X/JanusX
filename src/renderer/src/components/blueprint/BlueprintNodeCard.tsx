@@ -55,18 +55,18 @@ export interface BlueprintNodeData extends Record<string, unknown> {
 /** Blueprint ????? React Flow Node ?? */
 export type BlueprintRFNodeType = Node<BlueprintNodeData, 'blueprint'>
 
-// Note: separate focus ring with a 4px gap — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
-function moduleFocusPath(width: number, height: number, minimal: boolean) {
-  // Match the tab in module-browsing.css; expand its silhouette by 5px to
-  // place the 2px stroke outside the card without changing layout or hit areas.
+// Note: one continuous folder contour avoids tab/body seams; the same geometry
+// provides the offset focus ring — see .agents/notes/blueprint/navigation/requirements/module-browsing.md
+function moduleFolderPath(width: number, height: number, minimal: boolean, offset: number) {
   const tabWidth = minimal ? 50 : 76
   const tabRise = minimal ? 6 : 9
-  const tabJoin = tabWidth - 10 + Math.sqrt(15 ** 2 - (15 - tabRise) ** 2)
-  return `M -5 ${6 - tabRise} A 11 11 0 0 1 6 ${-tabRise - 5}
-    H ${tabWidth - 10} A 15 15 0 0 1 ${tabJoin} -5
-    H ${width - 10} A 15 15 0 0 1 ${width + 5} 10
-    V ${height - 10} A 15 15 0 0 1 ${width - 10} ${height + 5}
-    H 10 A 15 15 0 0 1 -5 ${height - 10} Z`
+  return `M ${-offset} ${6 - tabRise}
+    Q ${-offset} ${-tabRise - offset} 6 ${-tabRise - offset}
+    H ${tabWidth - 20}
+    C ${tabWidth - 10} ${-tabRise - offset} ${tabWidth - 10} ${-offset} ${tabWidth} ${-offset}
+    H ${width - 10} Q ${width + offset} ${-offset} ${width + offset} 10
+    V ${height - 10} Q ${width + offset} ${height + offset} ${width - 10} ${height + offset}
+    H 10 Q ${-offset} ${height + offset} ${-offset} ${height - 10} Z`
 }
 
 // Note: card labels and unread marker — see .agents/notes/blueprint/navigation/note-updates-and-suggestion-navigation.md
@@ -98,10 +98,15 @@ function BlueprintNodeCardImpl({ id, data, selected, width, height }: NodeProps<
         d.searchDimmed ? 'bp-node-card--dimmed' : ''
       ].filter(Boolean).join(' ')}
     >
-      {architectureRole && width && height ? (
-        <svg className="bp-node-card__module-focus" width={width} height={height} aria-hidden="true" focusable="false">
-          <path d={moduleFocusPath(width, height, minimal)} />
-        </svg>
+      {architectureRole ? (
+        <>
+          <svg className="bp-node-card__module-shape" width={width ?? 240} height={height ?? 110} aria-hidden="true" focusable="false">
+            <path d={moduleFolderPath(width ?? 240, height ?? 110, minimal, -1)} />
+          </svg>
+          <svg className="bp-node-card__module-focus" width={width ?? 240} height={height ?? 110} aria-hidden="true" focusable="false">
+            <path d={moduleFolderPath(width ?? 240, height ?? 110, minimal, 5)} />
+          </svg>
+        </>
       ) : null}
       {/* Note: hierarchy edges use Top/Bottom, relation edges may exit Left/Right — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md */}
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
