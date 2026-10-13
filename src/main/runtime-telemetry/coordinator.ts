@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
 import { getRuntimeTelemetrySnapshot } from './history'
+import { UsageLedger } from './usage-ledger'
+import type { UsageLedgerPage, UsageLedgerQuery } from '../../shared/usage'
 
 type TelemetryEngine = Exclude<NonNullable<RuntimeTelemetryRequest['preset']>, 'shell'>
 
@@ -35,6 +37,50 @@ export class TerminalContextCoordinator {
   private readonly entries = new Map<string, TerminalLedgerEntry>()
   private readonly sessionOwners = new Map<string, string>()
   private loaded = false
+  private readonly requests = new Map<string, RuntimeTelemetryRequest>()
+  private readonly listeners = new Map<string, (snapshot: RuntimeTelemetrySnapshot) => void>()
+  private readonly pending = new Map<string, Promise<RuntimeTelemetrySnapshot | null>>()
+  private pollTimer?: ReturnType<typeof setInterval>
+  private readonly usageLedger = new UsageLedger(() => join(app.getPath('userData'), 'janusx', 'usage-ledger.sqlite'))
+  private usageError?: string
+  private readonly failedSessions = new Map<string, string>()
+
+  trackTerminal(terminalId: string, preset: RuntimeTelemetryRequest['preset'], cwd: string, notify?: (snapshot: RuntimeTelemetrySnapshot) => void): void {
+    if (!preset || preset === 'shell') return
+    this.requests.set(terminalId, { terminalId, preset, cwd })
+    if (notify) this.listeners.set(terminalId, notify)
+    if (!this.pollTimer) {
+      this.pollTimer = setInterval(() => {
+        for (const request of this.requests.values()) {
+          if (this.pending.has(request.terminalId!)) continue
+          void this.getSnapshot(request).then(snapshot => {
+            if (snapshot && this.requests.get(request.terminalId!) === request) this.listeners.get(request.terminalId!)?.(snapshot)
+          }).catch(error => this.reportUsageError(error))
+        }
+      }, 10_000)
+      this.pollTimer.unref()
+    }
+  }
+
+  async releaseTerminal(terminalId: string): Promise<void> {
+    const request = this.requests.get(terminalId)
+    this.requests.delete(terminalId)
+    this.listeners.delete(terminalId)
+    const bound = this.entries.get(terminalId)
+    try { if (request) await this.getSnapshot(request) }
+    catch (error) { this.reportUsageError(error) }
+    finally { if (this.entries.get(terminalId) === bound) this.unbindTerminal(terminalId) }
+  }
+
+  listUsage(query: UsageLedgerQuery): UsageLedgerPage {
+    try { return { ...this.usageLedger.list(query), warning: this.usageError ?? this.failedSessions.values().next().value } }
+    catch (error) { this.reportUsageError(error); return { records: [], sessions: [], error: this.usageError } }
+  }
+
+  private reportUsageError(error: unknown): void {
+    this.usageError = error instanceof Error ? error.message : String(error)
+    console.error('Usage ledger:', this.usageError)
+  }
 
   bindSession(terminalId: string, engine: TelemetryEngine, sessionId?: string): boolean {
     const normalizedSessionId = sessionId?.trim()
@@ -62,6 +108,9 @@ export class TerminalContextCoordinator {
   unbindTerminal(terminalId: string): void {
     if (!terminalId) return
     this.load()
+    this.requests.delete(terminalId)
+    this.listeners.delete(terminalId)
+    if (this.requests.size === 0 && this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = undefined }
     const entry = this.entries.get(terminalId)
     if (!entry) return
     this.entries.delete(terminalId)
@@ -69,7 +118,15 @@ export class TerminalContextCoordinator {
     this.persist()
   }
 
-  async getSnapshot(request: RuntimeTelemetryRequest): Promise<RuntimeTelemetrySnapshot | null> {
+  getSnapshot(request: RuntimeTelemetryRequest): Promise<RuntimeTelemetrySnapshot | null> {
+    const key = request.terminalId ?? ''
+    const pending = (this.pending.get(key) ?? Promise.resolve(null)).catch(() => null).then(() => this.readSnapshot(request))
+    this.pending.set(key, pending)
+    void pending.finally(() => { if (this.pending.get(key) === pending) this.pending.delete(key) }).catch(() => {})
+    return pending
+  }
+
+  private async readSnapshot(request: RuntimeTelemetryRequest): Promise<RuntimeTelemetrySnapshot | null> {
     this.load()
     const bound = request.terminalId ? this.entries.get(request.terminalId) : undefined
     const preset = request.preset
@@ -78,12 +135,39 @@ export class TerminalContextCoordinator {
     // A renderer-supplied id is accepted only when it matches the main-process
     // binding. This also makes restored windows safe after renderer reloads.
     const sessionId = bound?.sessionId
-    const snapshot = await getRuntimeTelemetrySnapshot({ ...request, sessionId })
-    if (!snapshot) return null
+    // Restoring the same native session must not redefine its accounting or context range.
+    const snapshot = await getRuntimeTelemetrySnapshot({ ...request, sessionId, startedAt: bound ? undefined : request.startedAt }, (engine, namespace, nativeId) => {
+      try { return this.usageLedger.sourceCheckpoint(engine, namespace, nativeId) }
+      catch (error) {
+        this.failedSessions.set(this.sessionKey(engine, nativeId), error instanceof Error ? error.message : String(error))
+        return undefined
+      }
+    })
+    if (request.terminalId && this.entries.get(request.terminalId) !== bound) return null
+    if (!snapshot) {
+      if (bound) {
+        try { this.usageLedger.markMissing(bound.engine, bound.sessionId) }
+        catch (error) { this.reportUsageError(error) }
+      }
+      return null
+    }
 
-    if (!bound) return snapshot
+    const { usageObservation, ...telemetry } = snapshot
+
+    if (!bound) return telemetry
+    if (snapshot.sessionId && snapshot.sessionId !== bound.sessionId) return null
+    if (usageObservation && usageObservation.sessionId === bound.sessionId) {
+      const key = this.sessionKey(bound.engine, bound.sessionId)
+      try { this.usageLedger.record(usageObservation); this.failedSessions.delete(key); this.usageError = undefined }
+      catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        this.failedSessions.set(key, message)
+        console.error('Usage ledger:', message)
+      }
+    }
     const exact: RuntimeTelemetrySnapshot = {
-      ...snapshot,
+      ...telemetry,
+      observedAt: Date.now(),
       sessionId: bound.sessionId,
       sessionBinding: 'exact',
     }
@@ -154,7 +238,7 @@ export class TerminalContextCoordinator {
   }
 
   private sessionKey(engine: TelemetryEngine, sessionId: string): string {
-    return `${engine}:${sessionId.toLowerCase()}`
+    return `${engine}:${sessionId}`
   }
 }
 

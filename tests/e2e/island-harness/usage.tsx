@@ -1,11 +1,10 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { UsageStatsPanel } from '../../../src/renderer/src/components/UsageStatsPanel'
-import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { useThemeStore } from '../../../src/renderer/src/stores/theme'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { initI18n, changeLanguage } from '../../../src/renderer/src/i18n'
-import type { Terminal } from '../../../src/renderer/src/types'
+import type { UsageRecord } from '../../../src/shared/usage'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/styles/themes.generated.css'
 
@@ -15,12 +14,13 @@ await changeLanguage('zh-CN')
 useThemeStore.getState().applyExternal(new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'planche')
 document.body.style.background = 'var(--shell-canvas)'
 const now = new Date()
-const terminal = (id: string, preset: Terminal['preset'], overrides: Partial<Terminal>): Terminal => ({
-  id, preset, workspaceId: 'fixture', name: id, cwd: '', shell: '', pid: 1, status: 'running',
-  telemetryUpdatedAt: now.getTime(), ...overrides,
-})
-useWorkspaceStore.setState({ terminals: [
-  terminal('codex', 'codex', { totalTokens: 12000, inputTokens: 2000, outputTokens: 1000, cacheReadTokens: 8000, cacheWriteTokens: 1000, detectedModel: 'gpt-5.4' }),
-  terminal('claude', 'claude', { totalTokens: 4000, inputTokens: 1000, outputTokens: 1000, cacheReadTokens: 2000, detectedModel: 'claude-sonnet-4-6', telemetryUpdatedAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8).getTime() }),
-] })
+const records: UsageRecord[] = [
+  { id: '1', engine: 'codex', sessionId: 'codex', at: now.getTime(), timeBasis: 'sample', totalTokens: 12000, inputTokens: 2000, outputTokens: 1000, cacheReadTokens: 8000, cacheWriteTokens: 1000, model: 'gpt-5.4' },
+  { id: '2', engine: 'claude', sessionId: 'claude', at: Math.min(now.getTime(), new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8).getTime()), timeBasis: 'event', totalTokens: 4000, inputTokens: 1000, outputTokens: 1000, cacheReadTokens: 2000, model: 'claude-sonnet-4-6' },
+]
+if (new URLSearchParams(location.search).get('mix') === 'all') records.push(
+  { id: '3', engine: 'opencode', sessionId: 'opencode', at: now.getTime(), timeBasis: 'sample', totalTokens: 6000, inputTokens: 2000, outputTokens: 1000, cacheReadTokens: 3000, model: 'glm-5.2' },
+  { id: '4', engine: 'pi', sessionId: 'pi', at: now.getTime(), timeBasis: 'event', totalTokens: 3000, inputTokens: 1000, outputTokens: 500, cacheReadTokens: 1500, model: 'gemini-3.1-pro' },
+)
+window.electron.system.listUsageLedger = async () => ({ records, sessions: [], throughId: 2 })
 createRoot(document.getElementById('root')!).render(<main style={{ maxWidth: 800, padding: 24, margin: 'auto' }}><UsageStatsPanel /></main>)

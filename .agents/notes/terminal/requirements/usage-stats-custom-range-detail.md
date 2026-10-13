@@ -8,7 +8,7 @@
   "class": "feature",
   "tags": ["telemetry","usage-stats","terminal"],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/61b5d05c-e1ad-4f7a-a3e9-57982fb78c4e",
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-13T03:02:00.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -41,6 +41,16 @@ In scope：`usage-stats.ts` 的自定义区间类型、起止边界、分桶策�
 
 Out of scope：`session.v4.jsonl.zstd` 解码、pid 到会话挂载匹配、无 hook 自动绑定、dsh 成功结束与审批与数值解析在无样本时落地、历史增量账本的持久化采样。后者为自定义区间的长期解法，本需求仅以前端过滤口径交付，并在文案中明示快照口径。
 
+当前统计源已由[会话源单源化](./usage-telemetry-single-source.md)切换为持久账本，保留本文的日期、输入输出和交互要求；事件时间与采样时间的口径说明仅保留在开发文档。累计差分跨日区间仍不能宣称为精确逐日消耗；下文快照算法及 AC-1 至 AC-4 属于原阶段交付记录，新账本契约与验证以单源化 Note 为准。
+
+### 当前展示布局（2026-10-13）
+
+总计、输入输出和缓存命中率合并为一个紧凑汇总容器，输入输出各展示一次，减少重复数字与卡片留白。输入使用蓝色、输出使用橙色，数值、比例条和明细列保持对应；输出趋势曲线也沿用输出色。
+
+终端类型使用统计页专属色板，总计环形、图例与明细表保持同色对应，环形分段留小间隙。色板按主题的浅深色基底切换，不改动应用中的终端品牌色。明细行压缩间距，模型名作为次级信息保留。
+
+汇总容器宽于 680px 时为三列；不超过 680px 时总计占首行、输入输出与缓存占第二行；不超过 360px 时纵向排列。布局调整仅改变展示，不改变账本、聚合和缓存命中率口径。
+
 ## Proposal
 
 自定义区间以前端过滤口径先行，不改遥测合并语义。`UsageRange` 新增 `custom` 分支并附带 `rangeStart/rangeEnd` 入参，`bucketKeysFor` 按跨度动态分桶（短跨度按小时，长跨度按日或周），`aggregateUsageStats` 在现有 `observedAt < rangeStart` 之外增加 `observedAt > rangeEnd` 拒绝。日期输入采用原生 date 输入加本地时区换算，保持无图表依赖。
@@ -62,9 +72,14 @@ Out of scope：`session.v4.jsonl.zstd` 解码、pid 到会话挂载匹配、无 
 - [x] AC-2: 汇总区与底部分组展示输入与输出拆分，数值与 `aggregateUsageStats` 的 `inputTokens/outputTokens` 一致，缓存命中率口径不变。
 - [x] AC-3: 切换终端类型与时间范围时环形与曲线具备过渡效果，`prefers-reduced-motion` 下为即时切换，键盘聚焦读数与悬停行为不变。
 - [x] AC-4: DSH 在自定义区间与明细列中无真实用量时显示未知，不显示 0 或 0%，不参与输出合计的虚假拉低。
+- [x] AC-5: 汇总区减少重复展示，输入输出并排且配色与比例条一致；浅深色主题下终端类型可区分，480px 与 1000px 窗口下布局紧凑且无横向溢出。
 
 ## Risks
 
-当前聚合为按终端最近更新时间归入的累计快照，不代表逐时新增消耗，自定义区间选得越久远，空结果越多，必须在图表旁保留 `snapshotHint` 口径说明，否则用户会误读为空闲。过渡动效需避免与键盘聚焦冲突，大时间范围仍走按需计算。
+当前聚合读取持久账本，时间精度边界以单源化 Note 为准；按用户要求不在界面展示时间口径说明。覆盖范围、采集异常及未知值仍需可见。过渡动效需避免与键盘聚焦冲突，大时间范围仍走按需计算；颜色之外保留名称和数值，避免只靠颜色识别。
 
-DSH 真实用量缺失为硬限制，来源见 [DSH 接入决策](../dsh-terminal-integration.md) 与 [DSH 信号与日志补全需求](./dsh-telemetry-completion.md)：`session.v4.jsonl.zstd` 无解码器，不能据此报告真实用量，带 `startedAt` 的零值只是启动基线；conpty 中间层 pid 与 `session-mounts.json` 内层 pid 不一致，不能据 pid 自动绑定；无 hook 且无外部 `sessionId` 时扫描不生效。任何展示细化均不得将上述缺失数值或启动零值当作真实用量，DSH 在本需求的自定义区间与明细列中保持未知态。
+DSH 真实用量缺失为硬限制，来源见 [DSH 接入决策](../dsh-terminal-integration.md) 与 [DSH 信号与日志补全需求](./dsh-telemetry-completion.md)：`session.v4.jsonl.zstd` 无解码器，不能据此报告真实用量；conpty 中间层 pid 与 `session-mounts.json` 内层 pid 不一致，不能据 pid 自动绑定；无 hook 且无外部 `sessionId` 时扫描不生效。任何展示细化均不得将缺失数值或启动零值当作真实用量，DSH 在自定义区间与明细列中保持未知态。
+
+## Validation evidence
+
+2026-10-13：`tests/e2e/usage-stats.spec.ts` 三项通过，覆盖日期与类型筛选、键盘读数、未知态、480px 窄窗口无溢出，以及浅深色主题下四种已支持引擎的颜色区分和输入输出比例条配色。汇总区在 480px 窗口下高度小于 240px，在 1000px 窗口下小于 150px；输入输出数值保持同一行。已检查对应宽窄窗口及浅深色截图，严格类型检查和组件 ESLint 通过。

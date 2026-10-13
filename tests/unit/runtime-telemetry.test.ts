@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createRuntimeTelemetryStreamParser,
-  detectModelFromText,
   extractDshTurnStatus,
-  extractRuntimeTelemetry,
   getEstimatedContextWindow,
   getRegistryContextWindow,
   mergeRuntimeTelemetrySnapshot,
@@ -11,6 +8,9 @@ import {
 } from '../../src/renderer/src/lib/runtime-telemetry'
 
 describe('runtime telemetry model context lookup', () => {
+  it('clears restored numeric telemetry when only configuration is available', () => {
+    expect(mergeRuntimeTelemetrySnapshot({ preset: 'janus', telemetryConfidence: 'authoritative', contextTokens: 100, totalTokens: 1000, telemetrySessionId: 'old', telemetrySessionBinding: 'exact' }, { source: 'configuration', confidence: 'declared', detectedModel: 'm', observedAt: 2000 })).toMatchObject({ contextTokens: undefined, totalTokens: undefined, telemetrySessionId: undefined, telemetryConfidence: 'declared' })
+  })
   it('uses the model registry before heuristic estimates', () => {
     expect(getRegistryContextWindow('gpt-5.5')).toBe(1_050_000)
     expect(getEstimatedContextWindow('codex', 'GPT-5.5')).toBe(1_050_000)
@@ -132,46 +132,6 @@ describe('runtime telemetry model context lookup', () => {
     })
   })
 
-  it('parses a structured telemetry line split across PTY chunks', () => {
-    let now = 2_000
-    const parser = createRuntimeTelemetryStreamParser(() => now++)
-    expect(parser.push('{"payload":{"type":"token_')).toEqual([])
-    const [snapshot] = parser.push('count","info":{"last_token_usage":{"total_tokens":8000},"total_token_usage":{"total_tokens":12000,"input_tokens":10000,"cached_input_tokens":2000,"output_tokens":2000},"model_context_window":200000}}}\r\n')
-
-    expect(snapshot).toMatchObject({
-      contextTokens: 8_000,
-      contextWindowTokens: 200_000,
-      inputTokens: 8_000,
-      cacheReadTokens: 2_000,
-      outputTokens: 2_000,
-      totalTokens: 12_000,
-      source: 'provider-event',
-      confidence: 'authoritative',
-      observedAt: 2_000,
-    })
-  })
-
-  it('updates the window immediately from a structured startup event', () => {
-    const parser = createRuntimeTelemetryStreamParser(() => 2_000)
-    const [snapshot] = parser.push('{"timestamp":"2026-08-02T10:00:00Z","type":"event_msg","payload":{"type":"task_started","model_context_window":258400}}\n')
-
-    expect(snapshot).toMatchObject({
-      contextWindowTokens: 258_400,
-      source: 'provider-event',
-      confidence: 'authoritative',
-    })
-  })
-
-  it('marks a structured model switch with its event time', () => {
-    const parser = createRuntimeTelemetryStreamParser()
-    const [snapshot] = parser.push('{"timestamp":"2026-08-02T10:00:00Z","type":"turn_context","payload":{"model":"gpt-5.6-sol"}}\n')
-
-    expect(snapshot).toMatchObject({
-      detectedModel: 'GPT-5.6-sol',
-      modelChangedAt: Date.parse('2026-08-02T10:00:00Z'),
-    })
-  })
-
   it('clears an old runtime window while a switched model awaits its capacity event', () => {
     expect(mergeRuntimeTelemetrySnapshot(
       {
@@ -193,31 +153,6 @@ describe('runtime telemetry model context lookup', () => {
     })
   })
 
-  it('detects the model from the janus TUI banner without matching prose', () => {
-    expect(detectModelFromText('janus · workspace C:/repo · model deepseek-chat · effort medium · /help')).toBe('DeepSeek-chat')
-    expect(detectModelFromText('janus model the behavior of this panel')).toBeUndefined()
-    expect(detectModelFromText('model the behavior of this panel')).toBeUndefined()
-  })
-
-  it('reads janus footer session totals as cumulative input/output', () => {
-    const snapshot = extractRuntimeTelemetry('/help · ctrl+p · 12.3k in / 1.2M out')
-
-    expect(snapshot).toMatchObject({
-      inputTokens: 12_300,
-      outputTokens: 1_200_000,
-      totalTokens: 1_212_300,
-      source: 'terminal-text',
-      confidence: 'estimated',
-    })
-    expect(snapshot.contextTokens).toBeUndefined()
-  })
-
-  it('detects the model from the dsh-TUI status bar without matching prose', () => {
-    expect(detectModelFromText('deepseek-flash · Max effort')).toBe('DeepSeek-flash')
-    expect(detectModelFromText('deepseek-flash · max · JanusX-dsh')).toBe('DeepSeek-flash')
-    expect(detectModelFromText('the flash · maximum effort today')).toBeUndefined()
-  })
-
   it('reads dsh-TUI turn lifecycle markers as running or degraded, never idle', () => {
     expect(extractDshTurnStatus('🌑 模型醒了… · 12s · 3.2k tokens · esc 中断')).toBe('running')
     expect(extractDshTurnStatus('❯ hi turn error · llm-deepseek: no API key for provider route')).toBe('degraded')
@@ -231,62 +166,6 @@ describe('runtime telemetry model context lookup', () => {
       effectiveWindow: 128_000,
       effectiveSource: 'estimated',
     })
-  })
-
-  it('emits a model snapshot from a dsh-TUI status line through the stream parser', () => {
-    const parser = createRuntimeTelemetryStreamParser(() => 3_000)
-    const [snapshot] = parser.push('deepseek-flash · Max effort C:/repo\n')
-
-    expect(snapshot).toMatchObject({
-      detectedModel: 'DeepSeek-flash',
-      source: 'terminal-text',
-    })
-  })
-
-  it('parses pi short-key usage JSON as a structured runtime event', () => {
-    const parser = createRuntimeTelemetryStreamParser(() => 2_000)
-    const [snapshot] = parser.push('{"type":"message_update","usage":{"input":1200,"output":300,"cacheRead":400,"cacheWrite":50,"totalTokens":1950},"assistantMessageEvent":{"type":"text_delta","delta":"hi"}}\n')
-
-    expect(snapshot).toMatchObject({
-      inputTokens: 1_200,
-      outputTokens: 300,
-      cacheReadTokens: 400,
-      cacheWriteTokens: 50,
-      totalTokens: 1_950,
-      contextTokens: 1_650,
-      source: 'provider-event',
-      confidence: 'authoritative',
-    })
-  })
-
-  it('rejects prose in the explicit model flag without dropping real ids', () => {
-    expect(detectModelFromText('--model the behavior panel')).toBeUndefined()
-    expect(detectModelFromText('--model gpt-5-codex')).toBe('GPT-5-Codex')
-    expect(detectModelFromText('model: the behavior')).toBeUndefined()
-  })
-
-  it('rejects bare loose model words in prose', () => {
-    expect(detectModelFromText('the opus of the team')).toBeUndefined()
-    expect(detectModelFromText('codex review notes')).toBeUndefined()
-  })
-
-  it('drops prose-like context fractions and inverted windows', () => {
-    expect(extractRuntimeTelemetry('tokens 5/10').contextTokens).toBeUndefined()
-    expect(extractRuntimeTelemetry('ctx 15k / 10k').contextTokens).toBeUndefined()
-    expect(extractRuntimeTelemetry('ctx 15k / 10k').contextWindowTokens).toBeUndefined()
-  })
-
-  it('keeps a well-formed explicit context fraction', () => {
-    expect(extractRuntimeTelemetry('ctx 8k / 128k')).toMatchObject({
-      contextTokens: 8_000,
-      contextWindowTokens: 128_000,
-    })
-  })
-
-  it('ignores the unanchored single-turn token count in a dsh turn header', () => {
-    const snapshot = extractRuntimeTelemetry('🌑 模型醒了… · 12s · 3.2k tokens · esc 中断')
-    expect(snapshot.contextTokens).toBeUndefined()
-    expect(snapshot.contextWindowTokens).toBeUndefined()
   })
 
   it('drops a regressed cumulative total without a session change', () => {
@@ -326,7 +205,7 @@ describe('runtime telemetry model context lookup', () => {
         source: 'history',
         confidence: 'authoritative',
       },
-    )).toEqual({})
+    )).toMatchObject({ telemetrySessionId: 'new-session', totalTokens: undefined, inputTokens: undefined, outputTokens: undefined })
     expect(mergeRuntimeTelemetrySnapshot(
       {
         preset: 'codex',

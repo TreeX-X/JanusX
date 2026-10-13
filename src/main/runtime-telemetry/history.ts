@@ -2,11 +2,19 @@ import { readdir, open, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
+import { createHash } from 'node:crypto'
+import { statSync, type Stats } from 'node:fs'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
+import type { UsageEngine, UsageObservation, UsageSourceCheckpoint } from '../../shared/usage'
+import { collectUsageEvents, cumulativeUsage, usageTokens } from './history-usage'
+
+export type HistoryTelemetrySnapshot = RuntimeTelemetrySnapshot & { usageObservation?: UsageObservation }
+type CheckpointLookup = (engine: UsageEngine, namespace: string, sessionId: string) => UsageSourceCheckpoint | undefined
 
 interface SessionFileRef {
   path: string
   updatedAt: number
+  namespace?: string
 }
 
 interface JsonRecord {
@@ -16,12 +24,14 @@ interface JsonRecord {
 const MAX_CODEX_CANDIDATES = 80
 const STARTED_AT_TOLERANCE_MS = 1_000
 const TELEMETRY_HEAD_BYTES = 16 * 1024
-/*-- telemetry jsonl 尾读窗口：只读文件末尾 256KB，避免长会话全量读入内存；文件小于窗口时结果与全量读等价 --*/
+// Only model discovery may use head/tail sampling. Bound usage requires complete records.
 const TELEMETRY_TAIL_BYTES = 256 * 1024
+const MAX_SESSION_BYTES = 64 * 1024 * 1024
 
 export async function getRuntimeTelemetrySnapshot(
   request: RuntimeTelemetryRequest,
-): Promise<RuntimeTelemetrySnapshot | null> {
+  checkpointLookup?: CheckpointLookup,
+): Promise<HistoryTelemetrySnapshot | null> {
   const preset = request.preset
   const cwd = normalizePath(request.cwd)
   const startedAt = readStartedAt(request.startedAt)
@@ -38,16 +48,16 @@ export async function getRuntimeTelemetrySnapshot(
   }
   if (preset === 'codex') {
     return sessionId
-      ? scanCodexHistory(cwd, startedAt, sessionId)
+      ? scanCodexHistory(cwd, startedAt, sessionId, checkpointLookup)
       : readCodexBootstrapTelemetry()
   }
   if (preset === 'opencode') {
     return sessionId
-      ? readOpenCodeSessionTelemetry(cwd, sessionId)
+      ? readOpenCodeSessionTelemetry(cwd, sessionId, checkpointLookup)
       : readOpenCodeBootstrapTelemetry(cwd)
   }
-  // Note: janus/pi have no hook pipeline, so history + declared config are the
-  // only terminal-safe context sources — see .agents/notes/terminal/janus-pi-context-recognition.md
+  // Note: janus/pi use native history + declared config for numeric telemetry —
+  // see .agents/notes/terminal/janus-pi-context-recognition.md
   if (preset === 'janus') {
     return sessionId
       ? scanJanusHistory(cwd, startedAt, sessionId)
@@ -58,8 +68,7 @@ export async function getRuntimeTelemetrySnapshot(
       ? scanPiHistory(cwd, startedAt, sessionId)
       : readPiBootstrapTelemetry(cwd)
   }
-  // Note: dsh has no hook pipeline, so (like janus/pi) only the declared
-  // model is terminal-safe without an exact session id — see
+  // Note: dsh supplies only the declared model without an exact session id — see
   // .agents/notes/terminal/dsh-terminal-integration.md (history binding). Session logs are
   // zstd-compressed, so the scan binds id/path/recency without usage numbers.
   if (preset === 'dsh') {
@@ -70,7 +79,7 @@ export async function getRuntimeTelemetrySnapshot(
   return null
 }
 
-async function scanClaudeHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<RuntimeTelemetrySnapshot | null> {
+async function scanClaudeHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<HistoryTelemetrySnapshot | null> {
   const projectDir = join(os.homedir(), '.claude', 'projects', toClaudeProjectKey(cwd))
   const files = (await listJsonlFiles(projectDir, (name) => name.endsWith('.jsonl')))
     .filter((file) => !sessionId || file.path.toLowerCase().includes(sessionId.toLowerCase()))
@@ -100,7 +109,7 @@ async function scanClaudeHistory(cwd: string, startedAt?: number, sessionId?: st
   return current
 }
 
-async function scanCodexHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<RuntimeTelemetrySnapshot | null> {
+async function scanCodexHistory(cwd: string, startedAt?: number, sessionId?: string, checkpointLookup?: CheckpointLookup): Promise<HistoryTelemetrySnapshot | null> {
   const root = join(os.homedir(), '.codex', 'sessions')
   const files = (await listJsonlFilesRecursive(root, (name) => name.startsWith('rollout-') && name.endsWith('.jsonl')))
     .filter((file) => isFileAfterStartedAt(file, startedAt))
@@ -109,18 +118,20 @@ async function scanCodexHistory(cwd: string, startedAt?: number, sessionId?: str
     .slice(0, MAX_CODEX_CANDIDATES)
 
   for (const file of files) {
-    const snapshot = await parseCodexSession(file, cwd, startedAt, true)
+    const snapshot = await parseCodexSession(file, cwd, startedAt, true, checkpointLookup)
     if (!snapshot) continue
     if (sessionId && snapshot.sessionId !== sessionId) continue
-    if (snapshotMatchesCwd(snapshot, cwd)) return snapshot
+    if (snapshotMatchesCwd(snapshot, cwd)) {
+      return snapshot
+    }
   }
 
   return null
 }
 
-async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Promise<RuntimeTelemetrySnapshot | null> {
-  const lines = await readJsonlLines(file.path)
-  const snapshot: RuntimeTelemetrySnapshot = {
+async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Promise<HistoryTelemetrySnapshot | null> {
+  const lines = await readJsonlLines(file.path, true)
+  const snapshot: HistoryTelemetrySnapshot = {
     filePath: file.path,
     observedAt: file.updatedAt,
     source: 'history',
@@ -144,10 +155,10 @@ async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Pro
 
     if (model) snapshot.detectedModel = model
     if (sessionId) snapshot.sessionId = sessionId
-    if (!usage) continue
+    if (!usage || (message?.role !== undefined && message.role !== 'assistant') || message?.stop_reason === null) continue
 
-    const inputTokens = readPositiveNumber(usage.input_tokens ?? usage.inputTokens)
-    const outputTokens = readPositiveNumber(usage.output_tokens ?? usage.outputTokens)
+    const inputTokens = readNonNegativeNumber(usage.input_tokens ?? usage.inputTokens)
+    const outputTokens = readNonNegativeNumber(usage.output_tokens ?? usage.outputTokens)
     const cacheReadTokens =
       readPositiveNumber(usage.cache_read_input_tokens ?? usage.cache_read_tokens ?? usage.cacheReadTokens) ?? 0
     const cacheCreationTokens =
@@ -159,7 +170,7 @@ async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Pro
     totalCacheRead += cacheReadTokens
     totalCacheWrite += cacheCreationTokens
     hasUsage = true
-    if (contextTokens > 0) snapshot.contextTokens = contextTokens
+    if (inputTokens !== undefined) snapshot.contextTokens = contextTokens
   }
 
   if (hasUsage) {
@@ -168,6 +179,17 @@ async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Pro
     snapshot.cacheReadTokens = totalCacheRead
     snapshot.cacheWriteTokens = totalCacheWrite
     snapshot.totalTokens = totalInput + totalOutput + totalCacheRead + totalCacheWrite
+  }
+
+  if (snapshot.sessionId) {
+    const values = lines.map(parseJsonObject).filter((value): value is JsonRecord => value !== null)
+    const observation = collectUsageEvents('claude', join(os.homedir(), '.claude'), snapshot.sessionId, values, Date.now())
+    snapshot.usageObservation = observation
+    // Complete native response identities replace the per-line sum when available.
+    if (!observation.issue && observation.events?.length) {
+      const totals = observation.events.reduce((sum, event) => ({ inputTokens: sum.inputTokens + event.inputTokens, outputTokens: sum.outputTokens + event.outputTokens, cacheReadTokens: sum.cacheReadTokens + (event.cacheReadTokens ?? 0), cacheWriteTokens: sum.cacheWriteTokens + (event.cacheWriteTokens ?? 0), totalTokens: sum.totalTokens + event.totalTokens }), { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: 0 })
+      Object.assign(snapshot, totals)
+    }
   }
 
   return hasTelemetry(snapshot) ? snapshot : null
@@ -216,12 +238,14 @@ async function parseCodexSession(
   cwd: string,
   startedAt?: number,
   includeCompactions = false,
-): Promise<RuntimeTelemetrySnapshot | null> {
+  checkpointLookup?: CheckpointLookup,
+): Promise<HistoryTelemetrySnapshot | null> {
   // Compression is an auditable count, not a best-effort tail sample. A bound
   // session is read completely so older compactions cannot disappear from a
   // long rollout file.
-  const lines = await readJsonlLines(file.path, includeCompactions)
-  const snapshot: RuntimeTelemetrySnapshot & { cwd?: string } = {
+  let source: { buffer: Buffer; info: Stats } | undefined
+  const lines = await readJsonlLines(file.path, includeCompactions, (buffer, info) => { source = { buffer, info } })
+  const snapshot: HistoryTelemetrySnapshot & { cwd?: string } = {
     filePath: file.path,
     observedAt: file.updatedAt,
     source: 'history',
@@ -256,12 +280,14 @@ async function parseCodexSession(
       if (runtimeWindow !== undefined) snapshot.contextWindowTokens = runtimeWindow
     }
 
-    if (rootType === 'turn_context') {
-      const model = readString(payload?.model)
+    if (rootType === 'turn_context' || payloadType === 'thread_settings_applied') {
+      const model = readString(payload?.model) ?? readString(asRecord(payload?.thread_settings)?.model)
       const turnCwd = readString(payload?.cwd)
-      if (model) snapshot.detectedModel = model
+      if (model && model !== snapshot.detectedModel) {
+        snapshot.detectedModel = model
+        snapshot.modelChangedAt = readRecordTimestampMs(value) ?? Date.now()
+      }
       if (turnCwd) snapshot.cwd = normalizePath(turnCwd)
-      snapshot.modelChangedAt = readRecordTimestampMs(value)
     }
 
     if (payloadType !== 'token_count' || !info) continue
@@ -270,20 +296,32 @@ async function parseCodexSession(
 
     const contextTokens = readPositiveNumber(lastUsage?.total_tokens ?? lastUsage?.totalTokens)
     const contextWindowTokens = readPositiveNumber(info.model_context_window ?? info.modelContextWindow)
-    const inputTokens = readPositiveNumber(totalUsage?.input_tokens ?? totalUsage?.inputTokens)
-    const cachedInputTokens = readPositiveNumber(totalUsage?.cached_input_tokens ?? totalUsage?.cachedInputTokens) ?? 0
-    const outputTokens = readPositiveNumber(totalUsage?.output_tokens ?? totalUsage?.outputTokens)
+    const inputTokens = readNonNegativeNumber(totalUsage?.input_tokens ?? totalUsage?.inputTokens)
+    const cachedInputTokens = readNonNegativeNumber(totalUsage?.cached_input_tokens ?? totalUsage?.cachedInputTokens)
+    const outputTokens = readNonNegativeNumber(totalUsage?.output_tokens ?? totalUsage?.outputTokens)
 
     if (contextTokens !== undefined) snapshot.contextTokens = contextTokens
     if (contextWindowTokens !== undefined) snapshot.contextWindowTokens = contextWindowTokens
-    if (inputTokens !== undefined) snapshot.inputTokens = Math.max(0, inputTokens - cachedInputTokens)
-    if (cachedInputTokens > 0) snapshot.cacheReadTokens = cachedInputTokens
+    if (inputTokens !== undefined) snapshot.inputTokens = inputTokens - (cachedInputTokens ?? 0)
+    snapshot.cacheReadTokens = cachedInputTokens
     if (outputTokens !== undefined) snapshot.outputTokens = outputTokens
-    snapshot.totalTokens = readPositiveNumber(totalUsage?.total_tokens ?? totalUsage?.totalTokens)
+    snapshot.totalTokens = readNonNegativeNumber(totalUsage?.total_tokens ?? totalUsage?.totalTokens)
   }
 
   if (snapshot.cwd && !pathsEqual(snapshot.cwd, cwd)) {
     return null
+  }
+  if (snapshot.sessionId && snapshot.totalTokens !== undefined) {
+    const namespace = join(os.homedir(), '.codex')
+    snapshot.usageObservation = cumulativeUsage('codex', namespace, snapshot.sessionId, usageTokens(snapshot.inputTokens, snapshot.outputTokens, snapshot.cacheReadTokens, undefined, snapshot.totalTokens), snapshot.detectedModel)
+    if (source) {
+      const checkpoint = checkpointLookup?.('codex', namespace, snapshot.sessionId)
+      snapshot.usageObservation.sourceIdentity = JSON.stringify([source.info.dev, source.info.ino, source.info.birthtimeMs])
+      snapshot.usageObservation.sourceSize = source.buffer.length
+      snapshot.usageObservation.sourceHash = createHash('sha256').update(source.buffer).digest('hex')
+      if (checkpoint?.sourceSize !== undefined) snapshot.usageObservation.sourcePrefixHash = createHash('sha256').update(source.buffer.subarray(0, checkpoint.sourceSize)).digest('hex')
+      snapshot.usageObservation.modelChangedAt = snapshot.modelChangedAt
+    }
   }
   return hasTelemetry(snapshot) ? snapshot : null
 }
@@ -326,15 +364,28 @@ async function listJsonlFilesRecursive(
   }
 }
 
-async function readJsonlLines(filePath: string, full = false): Promise<string[]> {
+async function readJsonlLines(filePath: string, full = false, capture?: (buffer: Buffer, info: Stats) => void): Promise<string[]> {
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
     handle = await open(filePath, 'r')
-    const { size } = await handle.stat()
+    const info = await handle.stat()
+    const { size } = info
     if (full || size <= TELEMETRY_TAIL_BYTES + TELEMETRY_HEAD_BYTES) {
-      const fullBuffer = Buffer.allocUnsafe(size)
-      await handle.read(fullBuffer, 0, fullBuffer.length, 0)
-      return fullBuffer.toString('utf-8').split(/\r?\n/).filter(Boolean)
+      if (size > MAX_SESSION_BYTES) return []
+      const fullBuffer = Buffer.alloc(size)
+      let consumed = 0
+      while (consumed < size) {
+        const { bytesRead } = await handle.read(fullBuffer, consumed, size - consumed, consumed)
+        if (bytesRead === 0) return [] // Truncation during the read is not a complete usage snapshot.
+        consumed += bytesRead
+      }
+      const raw = fullBuffer.toString('utf-8')
+      const lines = raw.split(/\r?\n/)
+      if (!raw.endsWith('\n') && lines.at(-1)?.trim() && !parseJsonObject(lines.at(-1)!)) lines.pop()
+      const complete = lines.filter(line => line.trim())
+      if (complete.some(line => !parseJsonObject(line))) return []
+      capture?.(fullBuffer, info)
+      return complete
     }
 
     const headLength = Math.min(size, TELEMETRY_HEAD_BYTES)
@@ -451,7 +502,6 @@ async function readCodexBootstrapTelemetry(): Promise<RuntimeTelemetrySnapshot |
     if (!model && window === undefined) return null
     return {
       detectedModel: model,
-      contextTokens: 0,
       contextWindowTokens: window,
       observedAt: Date.now(),
       source: 'configuration',
@@ -495,11 +545,12 @@ async function readOpenCodeBootstrapTelemetry(cwd: string): Promise<RuntimeTelem
   return null
 }
 
-function readOpenCodeSessionTelemetry(cwd: string, sessionId: string): RuntimeTelemetrySnapshot | null {
+function readOpenCodeSessionTelemetry(cwd: string, sessionId: string, checkpointLookup?: CheckpointLookup): HistoryTelemetrySnapshot | null {
   const databasePath = join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db')
   let database: DatabaseSync | undefined
   try {
     database = new DatabaseSync(databasePath, { readOnly: true })
+    database.exec('BEGIN')
     const session = database.prepare(`
       SELECT directory, model, tokens_input, tokens_output, tokens_cache_read, tokens_cache_write, time_updated
       FROM session WHERE id = ?
@@ -524,9 +575,18 @@ function readOpenCodeSessionTelemetry(cwd: string, sessionId: string): RuntimeTe
     const currentCacheRead = readNonNegativeNumber(cache?.read) ?? 0
     const currentCacheWrite = readNonNegativeNumber(cache?.write) ?? 0
 
+    const observation = cumulativeUsage('opencode', databasePath, sessionId, usageTokens(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens), model)
+    const info = statSync(databasePath)
+    observation.sourceIdentity = JSON.stringify([info.dev, info.ino, info.birthtimeMs])
+    const checkpoint = checkpointLookup?.('opencode', databasePath, sessionId)
+    if (checkpoint) {
+      const models = database.prepare("SELECT DISTINCT json_extract(data,'$.modelID') AS model FROM message WHERE session_id=? AND time_updated>? AND json_extract(data,'$.role')='assistant'").all(sessionId, checkpoint.updatedAt) as Array<{ model: string | null }>
+      if (models.some(row => !row.model || row.model !== model)) observation.model = undefined
+    }
+
     return {
       detectedModel: model,
-      contextTokens: currentInput === undefined ? 0 : currentInput + currentCacheRead + currentCacheWrite,
+      contextTokens: currentInput === undefined ? undefined : currentInput + currentCacheRead + currentCacheWrite,
       inputTokens,
       outputTokens,
       cacheReadTokens,
@@ -536,6 +596,7 @@ function readOpenCodeSessionTelemetry(cwd: string, sessionId: string): RuntimeTe
       observedAt: readTimestampMs(session.time_updated) ?? Date.now(),
       source: 'history',
       confidence: 'authoritative',
+      usageObservation: observation,
     }
   } catch {
     return null
@@ -547,7 +608,6 @@ function readOpenCodeSessionTelemetry(cwd: string, sessionId: string): RuntimeTe
 function createBootstrapSnapshot(model: string, contextWindowTokens?: number): RuntimeTelemetrySnapshot {
   return {
     detectedModel: model,
-    contextTokens: 0,
     contextWindowTokens,
     observedAt: Date.now(),
     source: 'configuration',
@@ -646,14 +706,14 @@ function resolvePiSessionRoots(cwd: string, globalSettings: JsonRecord | undefin
   return [join(os.homedir(), '.pi', 'agent', 'sessions')]
 }
 
-async function scanPiHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<RuntimeTelemetrySnapshot | null> {
+async function scanPiHistory(cwd: string, startedAt?: number, sessionId?: string): Promise<HistoryTelemetrySnapshot | null> {
   if (!sessionId) return readPiBootstrapTelemetry(cwd)
   const globalSettings = await readJsonConfig(join(os.homedir(), '.pi', 'agent', 'settings.json'))
   const projectSettings = await readJsonConfig(join(cwd, '.pi', 'settings.json'))
   const roots = resolvePiSessionRoots(cwd, globalSettings, projectSettings)
   const candidates: SessionFileRef[] = []
   for (const root of roots) {
-    candidates.push(...(await listJsonlFilesRecursive(root, (name) => name.endsWith('.jsonl'))))
+    candidates.push(...(await listJsonlFilesRecursive(root, (name) => name.endsWith('.jsonl'))).map(file => ({ ...file, namespace: root })))
   }
   const matching = candidates
     .filter((file) => file.path.toLowerCase().includes(sessionId.toLowerCase()))
@@ -671,7 +731,7 @@ async function parsePiSession(
   cwd: string,
   startedAt?: number,
   sessionId?: string,
-): Promise<RuntimeTelemetrySnapshot | null> {
+): Promise<HistoryTelemetrySnapshot | null> {
   const lines = await readJsonlLines(file.path, true)
   if (lines.length === 0) return null
   const header = parseJsonObject(lines[0])
@@ -719,6 +779,7 @@ async function parsePiSession(
   let cacheReadTokens = 0
   let cacheWriteTokens = 0
   let totalTokens = 0
+  let latestContext: number | undefined
   let hasUsage = false
   for (const entry of activePath) {
     const { record } = entry
@@ -756,17 +817,19 @@ async function parsePiSession(
     if (input === undefined && output === undefined && total === undefined) continue
     hasUsage = true
     inputTokens += input ?? 0
+    latestContext = input === undefined ? undefined : input + cacheRead + cacheWrite
     outputTokens += output ?? 0
     cacheReadTokens += cacheRead
     cacheWriteTokens += cacheWrite
     totalTokens += total ?? (input ?? 0) + (output ?? 0) + cacheRead + cacheWrite
   }
 
-  const snapshot: RuntimeTelemetrySnapshot = {
+  const snapshot: HistoryTelemetrySnapshot = {
     filePath: file.path,
     observedAt: file.updatedAt,
     source: 'history',
     confidence: 'authoritative',
+    usageObservation: collectUsageEvents('pi', file.namespace ?? join(os.homedir(), '.pi', 'agent', 'sessions'), headerId ?? sessionId ?? '', entries.map(entry => entry.record), Date.now()),
   }
   if (headerId) snapshot.sessionId = headerId
   if (detectedModel) snapshot.detectedModel = detectedModel
@@ -781,7 +844,9 @@ async function parsePiSession(
     snapshot.cacheReadTokens = cacheReadTokens
     snapshot.cacheWriteTokens = cacheWriteTokens
     snapshot.totalTokens = totalTokens
-    snapshot.contextTokens = inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens
+    // Estimate the latest request input; repeated inputs along the path are consumption, not context.
+    snapshot.contextTokens = latestContext
+    snapshot.confidence = 'estimated'
   }
   return hasTelemetry(snapshot) ? snapshot : null
 }

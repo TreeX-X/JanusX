@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-13T02:25:17.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -35,7 +35,7 @@ Claude and Opencode terminals show no model or context data in the bottom runtim
 
 ## Decision
 
-The shared `normalizePath` unifies backslashes to forward slashes before stripping trailing separators, so the exact-session directory gate in Opencode, Codex, and Pi history reads compares canonical spellings on Windows while POSIX behavior stays identical. The Claude bootstrap falls back through `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, and `ANTHROPIC_DEFAULT_HAIKU_MODEL` after the existing `model` and `ANTHROPIC_MODEL` lookups, and the declared 200k Claude window still applies, so proxy installs render a model and a zero baseline before any conversation. Secrets handling is unchanged: the bootstrap still serializes only the model name and never the auth token.
+The shared `normalizePath` unifies backslashes to forward slashes before stripping trailing separators, so the exact-session directory gate in Opencode, Codex, and Pi history reads compares canonical spellings on Windows while POSIX behavior stays identical. The Claude bootstrap falls back through `ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`, and `ANTHROPIC_DEFAULT_HAIKU_MODEL` after the existing `model` and `ANTHROPIC_MODEL` lookups, and the declared 200k Claude window still applies. Proxy installs show a declared model and capacity before any conversation; bootstrap does not declare zero occupancy or usage. Secrets handling is unchanged: the bootstrap still serializes only the model name and never the auth token. Current context and persistent consumption follow [native-session single source](./requirements/usage-telemetry-single-source.md); absent OpenCode request tokens remain unknown.
 
 ## Alternatives considered
 

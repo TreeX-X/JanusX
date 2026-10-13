@@ -166,7 +166,6 @@ describe('runtime telemetry history', () => {
 
     expect(snapshot).toMatchObject({
       detectedModel: 'gpt-5.6-sol',
-      contextTokens: 0,
       contextWindowTokens: 258_400,
       source: 'configuration',
       confidence: 'declared',
@@ -186,7 +185,6 @@ describe('runtime telemetry history', () => {
 
     expect(snapshot).toEqual(expect.objectContaining({
       detectedModel: 'opus[1m]',
-      contextTokens: 0,
       contextWindowTokens: 1_000_000,
       source: 'configuration',
       confidence: 'declared',
@@ -209,7 +207,6 @@ describe('runtime telemetry history', () => {
 
     expect(snapshot).toEqual(expect.objectContaining({
       detectedModel: 'claude-sonnet-5',
-      contextTokens: 0,
       contextWindowTokens: 200_000,
       source: 'configuration',
       confidence: 'declared',
@@ -228,7 +225,6 @@ describe('runtime telemetry history', () => {
 
     expect(snapshot).toEqual(expect.objectContaining({
       detectedModel: 'custom/glm-5.2',
-      contextTokens: 0,
       source: 'configuration',
       confidence: 'declared',
     }))
@@ -325,7 +321,6 @@ describe('runtime telemetry history', () => {
 
     expect(snapshot).toMatchObject({
       detectedModel: 'deepseek-chat',
-      contextTokens: 0,
       source: 'configuration',
       confidence: 'declared',
     })
@@ -406,11 +401,11 @@ describe('runtime telemetry history', () => {
       cacheReadTokens: 60,
       cacheWriteTokens: 7,
       totalTokens: 1_867,
-      contextTokens: 1_867,
+      contextTokens: 567,
       compactionCount: 1,
       compactionCountConfidence: 'exact',
       source: 'history',
-      confidence: 'authoritative',
+      confidence: 'estimated',
     })
   })
 
@@ -435,7 +430,6 @@ describe('runtime telemetry history', () => {
 
     expect(snapshot).toMatchObject({
       detectedModel: 'deepseek-v4',
-      contextTokens: 0,
       contextWindowTokens: 128_000,
       source: 'configuration',
       confidence: 'declared',
@@ -448,7 +442,6 @@ describe('runtime telemetry history', () => {
 
     expect(snapshot).toMatchObject({
       detectedModel: 'deepseek-flash',
-      contextTokens: 0,
       contextWindowTokens: 128_000,
       source: 'configuration',
       confidence: 'declared',

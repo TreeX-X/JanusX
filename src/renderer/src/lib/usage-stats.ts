@@ -1,6 +1,6 @@
-// Note: shared usage filters and cumulative snapshot curves — see .agents/notes/terminal/requirements/usage-telemetry-fix-and-stats.md
-// Note: custom date range with snapshot-bucket aggregation — see .agents/notes/terminal/requirements/usage-stats-custom-range-detail.md
-import type { Terminal, TerminalPreset } from '@/types'
+// Note: persistent usage records and date filters — see .agents/notes/terminal/requirements/usage-telemetry-single-source.md
+import type { TerminalPreset } from '@/types'
+import type { UsageRecord } from '../../../shared/usage'
 
 export type UsageRange = 'today' | 'week' | 'month' | 'custom'
 
@@ -18,9 +18,9 @@ export interface UsagePresetRow {
   totalTokens: number
   inputTokens: number
   outputTokens: number
-  contextTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  cacheKnown: boolean
   models: string[]
 }
 
@@ -37,6 +37,7 @@ export interface UsageStatsSummary {
   cacheWriteTokens: number
   terminals: number
   terminalsWithoutData: number
+  cacheKnown: boolean
 }
 
 /** 缓存命中口径：命中为读缓存命中数，未命中为新鲜输入加缓存写入数。 */
@@ -47,11 +48,11 @@ export interface CacheSplit {
   hasData: boolean
 }
 
-export function cacheSplitFor(cacheReadTokens: number, inputTokens: number, cacheWriteTokens: number): CacheSplit {
+export function cacheSplitFor(cacheReadTokens: number, inputTokens: number, cacheWriteTokens: number, known = true): CacheSplit {
   const hits = cacheReadTokens
   const misses = inputTokens + cacheWriteTokens
-  // PTY 文本不报告缓存字段，全零代表无数据而非 0% 命中。
-  const hasData = cacheReadTokens + cacheWriteTokens > 0
+  // Presence determines coverage: a reported zero is a valid zero-hit rate.
+  const hasData = known
   return { hits, misses, rate: hasData && hits + misses > 0 ? hits / (hits + misses) : undefined, hasData }
 }
 
@@ -132,20 +133,6 @@ export function rangeStartFor(range: UsageRange, now: number, custom?: CustomDat
 export function rangeEndFor(range: UsageRange, now: number, custom?: CustomDateRange): number {
   if (range === 'custom' && custom) return Math.min(endOfDay(custom.end), now)
   return now
-}
-
-/** 终端是否有可用的缓存计数（PTY 文本不报告缓存字段，全零代表无数据）。 */
-export function hasCacheData(terminal: Pick<Terminal, 'cacheReadTokens' | 'cacheWriteTokens'>): boolean {
-  return (terminal.cacheReadTokens ?? 0) + (terminal.cacheWriteTokens ?? 0) > 0
-}
-
-function hasUsageData(terminal: Terminal): boolean {
-  return (
-    terminal.totalTokens !== undefined ||
-    terminal.inputTokens !== undefined ||
-    terminal.outputTokens !== undefined ||
-    terminal.contextTokens !== undefined
-  )
 }
 
 /** 时间分桶：today 按小时，week/month 按日，custom 按跨度自适应（≤48h 按小时，否则按日，>62 天按周）。 */
@@ -254,7 +241,7 @@ function bucketKeysFor(range: UsageRange, now: number, custom?: CustomDateRange)
 }
 
 export function aggregateUsageStats(
-  terminals: readonly Terminal[],
+  records: readonly UsageRecord[],
   range: UsageRange,
   now: number = Date.now(),
   preset?: TerminalPreset,
@@ -263,75 +250,49 @@ export function aggregateUsageStats(
   const rangeStart = rangeStartFor(range, now, custom)
   const rangeEnd = rangeEndFor(range, now, custom)
   const byPreset = new Map<TerminalPreset, UsagePresetRow>()
+  const sessions = new Map<TerminalPreset, Set<string>>()
+  const seen = new Set<string>()
   const seriesMap = new Map<string, TimeBucket>(
     bucketKeysFor(range, now, custom).map(({ key, label }) => [key, { key, label, totalTokens: 0, hits: 0, misses: 0, unknown: 0, output: 0 }]),
   )
-  let terminalsWithoutData = 0
-
-  for (const terminal of terminals) {
-    if (preset !== undefined && terminal.preset !== preset) continue
-    const observedAt = terminal.telemetryUpdatedAt ?? terminal.updatedAt ?? 0
-    if (observedAt < rangeStart || observedAt > rangeEnd) continue
-    if (!hasUsageData(terminal)) {
-      terminalsWithoutData += 1
-      continue
-    }
-    let row = byPreset.get(terminal.preset)
+  for (const record of records) {
+    if (record.totalTokens === 0 || seen.has(record.id) || (preset !== undefined && record.engine !== preset) || record.at < rangeStart || record.at > rangeEnd) continue
+    seen.add(record.id)
+    let row = byPreset.get(record.engine)
     if (!row) {
-      row = {
-        preset: terminal.preset,
-        terminals: 0,
-        totalTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        contextTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        models: [],
-      }
-      byPreset.set(terminal.preset, row)
+      row = { preset: record.engine, terminals: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, cacheKnown: true, models: [] }
+      byPreset.set(record.engine, row)
+      sessions.set(record.engine, new Set())
     }
-    row.terminals += 1
-    row.totalTokens += terminal.totalTokens ?? 0
-    row.inputTokens += terminal.inputTokens ?? 0
-    row.outputTokens += terminal.outputTokens ?? 0
-    row.contextTokens += terminal.contextTokens ?? 0
-    row.cacheReadTokens += terminal.cacheReadTokens ?? 0
-    row.cacheWriteTokens += terminal.cacheWriteTokens ?? 0
-    if (terminal.detectedModel && !row.models.includes(terminal.detectedModel)) {
-      row.models.push(terminal.detectedModel)
-    }
-    const bucket = seriesMap.get(bucketKeyFor(range, observedAt, custom, now).key)
+    sessions.get(record.engine)!.add(record.sessionId)
+    row.terminals = sessions.get(record.engine)!.size
+    row.totalTokens += record.totalTokens
+    row.inputTokens += record.inputTokens
+    row.outputTokens += record.outputTokens
+    row.cacheReadTokens += record.cacheReadTokens ?? 0
+    row.cacheWriteTokens += record.cacheWriteTokens ?? 0
+    const cacheKnown = record.cacheReadTokens !== undefined
+    row.cacheKnown &&= cacheKnown
+    if (record.model && !row.models.includes(record.model)) row.models.push(record.model)
+    const bucket = seriesMap.get(bucketKeyFor(range, record.at, custom, now).key)
     if (bucket) {
-      const input = terminal.inputTokens ?? 0
-      const write = terminal.cacheWriteTokens ?? 0
-      const read = terminal.cacheReadTokens ?? 0
-      const output = terminal.outputTokens ?? 0
-      bucket.totalTokens += terminal.totalTokens ?? 0
-      bucket.output += output
-      if (hasCacheData(terminal)) {
-        bucket.hits += read
-        bucket.misses += input + write
-      } else {
-        bucket.unknown += input + write
-      }
+      bucket.totalTokens += record.totalTokens
+      bucket.output += record.outputTokens
+      if (cacheKnown) { bucket.hits += record.cacheReadTokens ?? 0; bucket.misses += record.inputTokens + (record.cacheWriteTokens ?? 0) }
+      else bucket.unknown += record.inputTokens + (record.cacheWriteTokens ?? 0)
     }
   }
-
   const rows = [...byPreset.values()].sort((a, b) => b.totalTokens - a.totalTokens)
   for (const row of rows) row.models.sort()
   return {
-    range,
-    rangeStart,
-    rangeEnd,
-    rows,
-    series: [...seriesMap.values()],
+    range, rangeStart, rangeEnd, rows, series: [...seriesMap.values()],
     totalTokens: rows.reduce((sum, row) => sum + row.totalTokens, 0),
     inputTokens: rows.reduce((sum, row) => sum + row.inputTokens, 0),
     outputTokens: rows.reduce((sum, row) => sum + row.outputTokens, 0),
     cacheReadTokens: rows.reduce((sum, row) => sum + row.cacheReadTokens, 0),
     cacheWriteTokens: rows.reduce((sum, row) => sum + row.cacheWriteTokens, 0),
+    cacheKnown: rows.length > 0 && rows.every(row => row.cacheKnown),
     terminals: rows.reduce((sum, row) => sum + row.terminals, 0),
-    terminalsWithoutData,
+    terminalsWithoutData: 0,
   }
 }

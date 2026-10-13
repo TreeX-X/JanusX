@@ -450,7 +450,10 @@
   "usageStats": {
     "timeRange": "时间范围",
     "terminalType": "终端类型",
-    "snapshotHint": "按终端最近更新时间分组的累计用量快照",
+    "ledgerCoverage": "已记录的覆盖起点：",
+    "ledgerUnavailable": "Janus / DSH 暂无可读取的会话用量；已有累计会话首次接入仅建立基线。",
+    "ledgerPaused": "部分会话的来源缺失或计数异常，用量尚不完整。已确认的历史记录保留。",
+    "ledgerError": "用量账本读取或保存失败，请检查应用数据目录与可用磁盘空间。",
     "breakdown": "终端与模型用量",
     "unknownModel": "未报告模型",
     "title": "用量统计",
@@ -469,7 +472,7 @@
     "customWeekly": "按周",
     "ioTitle": "输入与输出",
     "ioShare": "输出占比",
-      "empty": "该范围内暂无带用量遥测的终端。",
+      "empty": "该范围内暂无已记录的会话用量。",
       "typeAll": "全部",
       "overall": "整体",
       "trend": "时间趋势",
@@ -482,7 +485,7 @@
     "input": "输入",
     "output": "输出",
     "context": "上下文",
-    "terminals": "个终端"
+    "terminals": "个会话"
   },
   "languageService": {
     "title": "语言服务",

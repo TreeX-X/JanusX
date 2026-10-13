@@ -8,7 +8,7 @@
   "class": "feature",
   "tags": ["telemetry","usage-stats","terminal"],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b28d07a3-bc27-4be1-9868-87849e9efb16",
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-13T02:25:17.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -18,6 +18,8 @@
 ## Problem
 
 全终端用量统计存在两处系统性缺陷，dsh 接入时仅做了最小锚定规避，未根治。来源见 [DSH 接入决策](../dsh-terminal-integration.md)，即提取出做全局任务的母篇。
+
+本文保留当时交付的检测门、合并规则和快照统计验收；下文的 PTY 检测与终端 store 聚合属于该阶段记录。当前实现已由[会话源单源化](./usage-telemetry-single-source.md)替换数字采集与统计源：运行数字来自原生历史，统计读取持久账本，上下文和消耗分别投影。本篇历史验收不扩写为新账本验收，当前契约与证据以单源化 Note 为准。
 
 - 模型误判：PTY 文本解析把散文当作模型声明，例如显式 `model: the behavior` 取到 `the`，宽松裸词在散文中误命中。
 - 上下文误解析与不累积：`used/window` 分数无量级校验，帮助文本分数进入遥测；用量没有正确累加，窗口显示长期为零或初始值；各终端无统一聚合视图。

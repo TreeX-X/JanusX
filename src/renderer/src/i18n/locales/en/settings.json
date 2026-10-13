@@ -450,7 +450,10 @@
   "usageStats": {
     "timeRange": "Time range",
     "terminalType": "Terminal type",
-    "snapshotHint": "Cumulative terminal snapshots grouped by last update time.",
+    "ledgerCoverage": "Recorded coverage starts at:",
+    "ledgerUnavailable": "Janus / DSH session usage is unavailable. Existing cumulative sessions establish a baseline on first collection.",
+    "ledgerPaused": "Some session sources are missing or their counters are inconsistent. Usage is incomplete; confirmed history is retained.",
+    "ledgerError": "Usage history could not be read or saved. Check the application data directory and available disk space.",
     "breakdown": "Terminal & model usage",
     "unknownModel": "Model not reported",
     "title": "Usage statistics",
@@ -469,7 +472,7 @@
     "customWeekly": "weekly",
     "ioTitle": "Input & output",
     "ioShare": "Output share",
-      "empty": "No terminal with usage telemetry in this range yet.",
+      "empty": "No recorded session usage in this range yet.",
       "typeAll": "All",
       "overall": "Overall",
       "trend": "Trend over time",
@@ -482,7 +485,7 @@
     "input": "in",
     "output": "out",
     "context": "ctx",
-    "terminals": "terminals"
+    "terminals": "sessions"
   },
   "languageService": {
     "title": "Language Services",

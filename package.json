@@ -21,6 +21,7 @@
   "scripts": {
     "showcase": "node scripts/showcase/run.mjs",
     "test:showcase": "node --test tests/showcase/motion.test.mjs",
+    "predev": "node scripts/check-dev-environment.mjs",
     "dev": "npm run build:llm-core && electron-vite dev --outDir .cache --entry scripts/dev-entry.mjs",
     "build": "npm run build:llm-core && electron-vite build",
     "build:app": "electron-vite build",

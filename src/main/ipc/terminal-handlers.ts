@@ -441,6 +441,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   ) => {
     const instance = terminalManager.getInstance(terminalId)
     if (!instance) return
+    terminalContextCoordinator.trackTerminal(terminalId, engine, cwd)
     if (sessionId) terminalContextCoordinator.bindSession(terminalId, engine, sessionId)
     const telemetry = await terminalContextCoordinator.getSnapshot({
       terminalId,
@@ -1140,7 +1141,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         hookCoordinator.unregisterTerminal(id)
         agentTurnRecorder.unregisterTerminal(id)
         agentSessionRegistry.detachTerminal(id)
-        terminalContextCoordinator.unbindTerminal(id)
+        void terminalContextCoordinator.releaseTerminal(id)
       } catch (err) {
         console.error(`[terminal ${id}] onExit error:`, err)
         // Best-effort cleanup so a partial failure does not leak state.
@@ -1152,7 +1153,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         try { hookCoordinator.unregisterTerminal(id) } catch {}
         try { agentTurnRecorder.unregisterTerminal(id) } catch {}
         try { agentSessionRegistry.detachTerminal(id) } catch {}
-        try { terminalContextCoordinator.unbindTerminal(id) } catch {}
+        void terminalContextCoordinator.releaseTerminal(id)
       }
     })
 
@@ -1168,6 +1169,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       sendToRenderer(getMainWindow(), CHECKPOINT_CHANNELS.ready, { terminalId: id, success: false, error: String(err) })
     })
 
+    terminalContextCoordinator.trackTerminal(id, engine, cwd, telemetry => {
+      sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.telemetry, { id, telemetry })
+    })
     sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.created, {
       id, workspaceId, cwd, preset: engine, shell, pid: instance.pty.pid,
     })

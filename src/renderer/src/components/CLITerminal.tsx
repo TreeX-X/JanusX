@@ -16,7 +16,6 @@ import { handleCodexMultilineInput, isCodexMultilineShortcut } from '@/lib/codex
 import { createTerminalScrollIntentController } from '@/lib/terminal-scroll-intent'
 import { attachTerminalTuiWheelHandler } from '@/lib/terminal-tui-wheel'
 import {
-  createRuntimeTelemetryStreamParser,
   extractDshTurnStatus,
   mergeRuntimeTelemetrySnapshot,
   type RuntimeTelemetrySnapshot,
@@ -50,7 +49,6 @@ interface CLITerminalProps {
   workspaceVisible?: boolean
 }
 
-const HISTORY_TELEMETRY_POLL_MS = 10_000
 
 export function CLITerminal({
   terminalId,
@@ -67,7 +65,6 @@ export function CLITerminal({
   const visibilityRecoveryTimerRef = useRef<number | null>(null)
   const [fileDragOver, setFileDragOver] = useState(false)
   const [rendererGeneration, setRendererGeneration] = useState(0)
-  const telemetryParserRef = useRef(createRuntimeTelemetryStreamParser())
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
   const appTheme = useThemeStore((s) => s.theme)
@@ -115,26 +112,19 @@ export function CLITerminal({
           sessionId: terminal.telemetrySessionId,
         })
         if (cancelled || !result || typeof result !== 'object') return
-        applyTelemetryPatch({
-          ...(result as RuntimeTelemetrySnapshot),
-          ...(terminal.telemetrySessionBinding === 'exact' ? { sessionBinding: 'exact' as const } : {}),
-        })
+        applyTelemetryPatch(result as RuntimeTelemetrySnapshot)
       } catch {
         // History telemetry is opportunistic; terminal rendering must not depend on it.
       }
     }
 
     void pollHistoryTelemetry()
-    const timer = window.setInterval(() => {
-      void pollHistoryTelemetry()
-    }, HISTORY_TELEMETRY_POLL_MS)
     const unsubscribeTelemetry = window.electron.terminal.onTelemetry(({ id, telemetry }) => {
       if (id === terminalId) applyTelemetryPatch(telemetry)
     })
 
     return () => {
       cancelled = true
-      window.clearInterval(timer)
       unsubscribeTelemetry()
     }
   }, [terminalId, applyTelemetryPatch])
@@ -457,9 +447,6 @@ export function CLITerminal({
 
     const writeLiveOutput = (data: string) => {
       outputScheduler.enqueue(data)
-      for (const telemetry of telemetryParserRef.current.push(data)) {
-        applyTelemetryPatch(telemetry)
-      }
       applyDshTurnStatus(data)
     }
 
@@ -548,12 +535,11 @@ export function CLITerminal({
         visibilityRecoveryTimerRef.current = null
       }
       unsubscribe()
-      telemetryParserRef.current.reset()
       term.dispose()
       termRef.current = null
       if (fitRef.current) fitRef.current = null
     }
-  }, [terminalId, applyTelemetryPatch, rendererGeneration])
+  }, [terminalId, rendererGeneration, applyDshTurnStatus])
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     if (!hasWorkspaceFileDrag(event.dataTransfer)) return

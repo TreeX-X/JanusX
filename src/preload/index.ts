@@ -557,6 +557,7 @@ const systemAPI: SystemAPI = {
   getPlatform: () => ipcRenderer.invoke(SYSTEM_CHANNELS.platform),
   openVSCode: (workspacePath) => ipcRenderer.invoke(SYSTEM_CHANNELS.openVSCode, workspacePath),
   getRuntimeTelemetry: (request) => ipcRenderer.invoke(SYSTEM_CHANNELS.runtimeTelemetry, request),
+  listUsageLedger: (query) => ipcRenderer.invoke(SYSTEM_CHANNELS.usageLedger, query),
   getLanguage: () => ipcRenderer.invoke(SYSTEM_CHANNELS.getLanguage),
   setLanguage: (lang) => ipcRenderer.invoke(SYSTEM_CHANNELS.setLanguage, lang),
   onPrepareQuit: (callback) => {

@@ -59,69 +59,11 @@ export interface RuntimeTelemetryUpdate {
   modelChangedAt?: number
 }
 
-const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]/g
-const MODEL_FIELD_PATTERN =
-  /(?:^|[\s{,])(?:model|model_id|modelId|model_name|modelName|selected model|using model)\s*[:=]\s*["'`]?([a-z0-9][a-z0-9_.:/+-]{1,80})/i
-const MODEL_FLAG_PATTERN = /(?:^|\s)(?:--model|-m|\/model)\s+["'`]?([a-z0-9][a-z0-9_.:/+-]{1,80})/i
-/** Janus TUI banner: `janus · workspace <root> · model <id> · effort …`. The
- * `janus` anchor keeps the loose space-separated form from matching prose. */
-const JANUS_STATUS_MODEL_PATTERN = /\bjanus\b[^\r\n]{0,160}\bmodel\s+([a-z0-9][a-z0-9_.:/+-]{1,80})/i
-/** dsh-TUI (ccch1mneyyy) status bar: `<model> · Max effort · <cwd>`. The `· effort`
- * anchor keeps it from matching prose; the id still goes through plausibility. */
-const DSH_STATUS_MODEL_PATTERN = /\b([a-z0-9][a-z0-9_.:/+-]{1,80})\s*·\s*(?:max|high|low|off|auto)\s*(?:effort)?/i
-/** dsh-TUI live turn header (`🌑 模型醒了… · 12s · 3.2k tokens · esc 中断`) and
- * turn failure (`turn error · <reason>`). Success-end has no observed marker yet
- * (needs a keyed session), so the parser only asserts working/failed, never idle. */
-const DSH_WORKING_PATTERN = /模型醒了/
-const DSH_TURN_ERROR_PATTERN = /turn error/i
-/** Janus TUI footer totals: `12 in / 8 out` (compact `12.3k`/`1.2M` above 1k). */
-const JANUS_FOOTER_USAGE_PATTERN = /(\d+(?:\.\d+)?\s*[kKmM]?)\s*in\s*\/\s*(\d+(?:\.\d+)?\s*[kKmM]?)\s*out/i
-const STREAM_BUFFER_LIMIT = 64 * 1024
-
-const MODEL_PATTERNS: RegExp[] = [
-  /\bclaude-(?:opus|sonnet|haiku|3(?:\.\d)?)[a-z0-9_.-]*\b/i,
-  /\b(?:opus|sonnet|haiku)\s*(?:3(?:\.\d)?|4(?:\.\d)?)?(?:[-\s][a-z0-9_.-]+)?\b/i,
-  /\b(?:gpt|chatgpt)-(?:5|4(?:o|\.\d)?|oss)[a-z0-9_.-]*\b/i,
-  /\bo[134](?:-[a-z0-9_.]+)*\b/i,
-  /\bgemini-[a-z0-9_.-]+\b/i,
-  /\b(?:deepseek|qwen|kimi|llama|mistral|mixtral|grok|glm|yi)[a-z0-9_.-]*\b/i,
-  /\b(?:codex|gpt-5-codex)[a-z0-9_.-]*\b/i,
-]
-
-export function detectModelFromText(text: string): string | undefined {
-  const normalized = stripAnsi(text)
-  const explicit = normalized.match(MODEL_FIELD_PATTERN) ?? normalized.match(MODEL_FLAG_PATTERN)
-  // Prose false-positive guard: `model: the behavior` captures "the" without
-  // this check — see .agents/notes/terminal/dsh-terminal-integration.md (telemetry boundaries). Real ids
-  // are single tokens with a version/separator hint (isPlausibleModelId).
-  if (explicit?.[1] && isPlausibleModelId(explicit[1])) return normalizeModelName(explicit[1])
-  // Note: janus/pi emit no hook events, so PTY text is the live model source —
-  // see .agents/notes/terminal/janus-pi-context-recognition.md
-  const janusStatus = normalized.match(JANUS_STATUS_MODEL_PATTERN)
-  if (janusStatus?.[1] && isPlausibleModelId(janusStatus[1])) return normalizeModelName(janusStatus[1])
-  // dsh-TUI status bar carries the live model id next to the effort segment.
-  const dshStatus = normalized.match(DSH_STATUS_MODEL_PATTERN)
-  if (dshStatus?.[1] && isPlausibleModelId(dshStatus[1])) return normalizeModelName(dshStatus[1])
-
-  for (const pattern of MODEL_PATTERNS) {
-    const match = normalized.match(pattern)
-    // Loose vendor patterns (bare "opus"/"codex"/"o1" in prose) must pass the
-    // same plausibility gate, otherwise chat prose becomes a model declaration.
-    if (match?.[0] && isPlausibleModelId(match[0])) return normalizeModelName(match[0])
-  }
-  return undefined
-}
-
-/**
- * dsh-TUI turn lifecycle from PTY text. Emits only positive assertions:
- * 'running' while the live turn header paints, 'degraded' on a turn error.
- * Idle is never inferred (a successful turn end has no observed marker yet),
- * so callers must not treat undefined as a transition back to wait.
- */
+/** PTY text is used only for DSH turn status, never for numeric telemetry. */
 export function extractDshTurnStatus(text: string): 'running' | 'degraded' | undefined {
-  const normalized = stripAnsi(text)
-  if (DSH_TURN_ERROR_PATTERN.test(normalized)) return 'degraded'
-  if (DSH_WORKING_PATTERN.test(normalized)) return 'running'
+  const normalized = text.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+  if (/turn error/i.test(normalized)) return 'degraded'
+  if (/模型醒了/.test(normalized)) return 'running'
   return undefined
 }
 
@@ -206,6 +148,21 @@ export function mergeRuntimeTelemetrySnapshot(
   current: RuntimeTelemetryState,
   telemetry: RuntimeTelemetrySnapshot
 ): RuntimeTelemetryUpdate {
+  if (telemetry.source === 'configuration') {
+    // A new unbound terminal must not retain runtime numbers restored from an older process.
+    const patch: RuntimeTelemetryUpdate = {}
+    for (const field of ['contextTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'totalTokens', 'compactionCount', 'compactionCountConfidence', 'telemetrySessionId', 'telemetrySessionBinding', 'modelChangedAt'] as const) {
+      if (current[field] !== undefined) patch[field] = undefined
+    }
+    if (current.detectedModel !== telemetry.detectedModel) patch.detectedModel = telemetry.detectedModel
+    if (current.contextWindowTokens !== telemetry.contextWindowTokens) patch.contextWindowTokens = telemetry.contextWindowTokens
+    if (Object.keys(patch).length) {
+      patch.telemetrySource = 'configuration'
+      patch.telemetryConfidence = 'declared'
+      patch.telemetryUpdatedAt = telemetry.observedAt ?? Date.now()
+    }
+    return patch
+  }
   if (
     telemetry.source === 'history' &&
     telemetry.sessionId &&
@@ -233,7 +190,7 @@ export function mergeRuntimeTelemetrySnapshot(
   if (
     current.telemetrySessionBinding === 'exact' &&
     telemetry.source === 'history' &&
-    telemetry.sessionId !== current.telemetrySessionId
+    telemetry.sessionId !== current.telemetrySessionId && !sessionChanged
   ) {
     return {}
   }
@@ -300,195 +257,6 @@ export function mergeRuntimeTelemetrySnapshot(
   return patch
 }
 
-export function extractRuntimeTelemetry(text: string, observedAt = Date.now()): RuntimeTelemetrySnapshot {
-  const normalized = stripAnsi(text)
-  const fromJson = extractStructuredTelemetry(normalized)
-  const detectedModel = fromJson.detectedModel ?? detectModelFromText(normalized)
-  const explicitContext = extractExplicitContext(normalized)
-  const janusFooter = extractJanusFooterUsage(normalized)
-  const hasStructuredRuntimeEvent = hasUsage(fromJson) || fromJson.modelChangedAt !== undefined
-  const hasExplicitContext = explicitContext.contextTokens !== undefined || explicitContext.contextWindowTokens !== undefined
-  const isAuthoritativeTokenCount = /["']type["']\s*:\s*["']token_count["']/i.test(normalized)
-
-  return {
-    detectedModel,
-    inputTokens: fromJson.inputTokens ?? janusFooter.inputTokens,
-    outputTokens: fromJson.outputTokens ?? janusFooter.outputTokens,
-    cacheReadTokens: fromJson.cacheReadTokens,
-    cacheWriteTokens: fromJson.cacheWriteTokens,
-    totalTokens: fromJson.totalTokens ?? janusFooter.totalTokens,
-    contextTokens: fromJson.contextTokens ?? explicitContext.contextTokens,
-    contextWindowTokens: fromJson.contextWindowTokens ?? explicitContext.contextWindowTokens,
-    modelChangedAt: fromJson.modelChangedAt,
-    observedAt,
-    source: hasStructuredRuntimeEvent ? 'provider-event' : 'terminal-text',
-    confidence: isAuthoritativeTokenCount || hasStructuredRuntimeEvent ? 'authoritative' : hasExplicitContext ? 'estimated' : 'estimated',
-  }
-}
-
-export function createRuntimeTelemetryStreamParser(now: () => number = Date.now): {
-  push(data: string): RuntimeTelemetrySnapshot[]
-  reset(): void
-} {
-  let pending = ''
-
-  return {
-    push(data) {
-      if (!data) return []
-      pending += data
-      if (pending.length > STREAM_BUFFER_LIMIT) pending = pending.slice(-STREAM_BUFFER_LIMIT)
-
-      const lines = pending.split(/\r?\n/)
-      pending = lines.pop() ?? ''
-      return lines
-        .map((line) => extractRuntimeTelemetry(line, now()))
-        .filter(hasTelemetry)
-    },
-    reset() {
-      pending = ''
-    },
-  }
-}
-
-function extractStructuredTelemetry(text: string): RuntimeTelemetryPatch {
-  const patch: RuntimeTelemetryPatch = {}
-
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line.startsWith('{') || !line.endsWith('}')) continue
-
-    try {
-      mergeTelemetryPatch(patch, extractTelemetryFromJson(JSON.parse(line) as Record<string, unknown>))
-    } catch {
-      // Ignore ordinary terminal output that only looks like partial JSON.
-    }
-  }
-
-  return patch
-}
-
-function extractTelemetryFromJson(value: Record<string, unknown>): RuntimeTelemetryPatch {
-  const patch: RuntimeTelemetryPatch = {}
-  const payload = asRecord(value.payload)
-  const payloadType = readString(payload?.type)
-  const info = asRecord(payload?.info)
-  const message = asRecord(value.message)
-  const usage = asRecord(value.usage) ?? asRecord(message?.usage) ?? asRecord(payload?.usage)
-
-  const model =
-    readString(value.model) ??
-    readString(message?.model) ??
-    readString(payload?.model) ??
-    readString(info?.model)
-  if (model) patch.detectedModel = normalizeModelName(model)
-
-  if (value.type === 'turn_context' || payloadType === 'task_started') {
-    patch.modelChangedAt = readTimestamp(value.timestamp) ?? Date.now()
-  }
-
-  if (payloadType === 'task_started') {
-    patch.contextWindowTokens = readPositiveNumber(payload?.model_context_window ?? payload?.modelContextWindow)
-  }
-
-  if (payloadType === 'token_count' && info) {
-    const lastUsage = asRecord(info.last_token_usage) ?? asRecord(info.lastTokenUsage)
-    const totalUsage = asRecord(info.total_token_usage) ?? asRecord(info.totalTokenUsage)
-    patch.contextTokens = readPositiveNumber(lastUsage?.total_tokens ?? lastUsage?.totalTokens)
-    patch.contextWindowTokens = readPositiveNumber(info.model_context_window ?? info.modelContextWindow)
-    const inputTokens = readPositiveNumber(totalUsage?.input_tokens ?? totalUsage?.inputTokens)
-    const cachedInputTokens = readPositiveNumber(totalUsage?.cached_input_tokens ?? totalUsage?.cachedInputTokens) ?? 0
-    if (inputTokens !== undefined) patch.inputTokens = Math.max(0, inputTokens - cachedInputTokens)
-    if (cachedInputTokens > 0) patch.cacheReadTokens = cachedInputTokens
-    patch.outputTokens = readPositiveNumber(totalUsage?.output_tokens ?? totalUsage?.outputTokens)
-    patch.totalTokens = readPositiveNumber(totalUsage?.total_tokens ?? totalUsage?.totalTokens)
-  }
-
-  if (usage) {
-    // Pi JSON mode reports cumulative usage under short keys
-    // (`{input, output, cacheRead, cacheWrite, totalTokens}`); the Claude /
-    // Codex / OpenCode long keys below stay first so a mixed payload keeps
-    // the explicit provider spelling.
-    const inputTokens = readPositiveNumber(usage.input_tokens ?? usage.inputTokens ?? usage.prompt_tokens ?? usage.promptTokens ?? usage.input)
-    const cacheReadTokens =
-      readPositiveNumber(usage.cache_read_input_tokens ?? usage.cache_read_tokens ?? usage.cacheReadTokens ?? usage.cacheRead) ?? 0
-    const cacheCreationTokens =
-      readPositiveNumber(usage.cache_creation_input_tokens ?? usage.cache_creation_tokens ?? usage.cacheCreationTokens ?? usage.cacheWrite) ?? 0
-    const outputTokens =
-      readPositiveNumber(usage.output_tokens ?? usage.outputTokens ?? usage.completion_tokens ?? usage.completionTokens ?? usage.output)
-    const contextTokens = (inputTokens ?? 0) + cacheReadTokens + cacheCreationTokens
-
-    if (inputTokens !== undefined) patch.inputTokens = inputTokens
-    if (outputTokens !== undefined) patch.outputTokens = outputTokens
-    if (cacheReadTokens > 0) patch.cacheReadTokens = cacheReadTokens
-    if (cacheCreationTokens > 0) patch.cacheWriteTokens = cacheCreationTokens
-    if (contextTokens > 0) patch.contextTokens = contextTokens
-    const totalTokens = readPositiveNumber(usage.total_tokens ?? usage.totalTokens) ?? (contextTokens + (outputTokens ?? 0))
-    if (totalTokens > 0) patch.totalTokens = totalTokens
-  }
-
-  return patch
-}
-
-function extractJanusFooterUsage(text: string): Pick<RuntimeTelemetryPatch, 'inputTokens' | 'outputTokens' | 'totalTokens'> {
-  const match = text.replace(/,/g, '').match(JANUS_FOOTER_USAGE_PATTERN)
-  if (!match?.[1] || !match[2]) return {}
-  const inputTokens = parseTokenAmount(match[1])
-  const outputTokens = parseTokenAmount(match[2])
-  if (inputTokens === undefined || outputTokens === undefined) return {}
-  return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens }
-}
-
-function isPlausibleModelId(value: string): boolean {
-  const candidate = value.trim()
-  if (candidate.length < 2 || candidate.length > 80) return false
-  // Prose after `model` ("model the behavior") carries spaces or sentence
-  // case; real ids are single lowercase tokens with a version/separator hint.
-  if (/\s/.test(candidate)) return false
-  if (!/[0-9./:_-]/.test(candidate)) return false
-  return /^[a-z0-9][a-z0-9_.:/+-]*$/i.test(candidate)
-}
-
-function extractExplicitContext(text: string): Pick<RuntimeTelemetryPatch, 'contextTokens' | 'contextWindowTokens'> {
-  const normalized = text.replace(/,/g, '')
-  const fraction = normalized.match(
-    /\b(?:ctx|context|tokens?)\b[^\d]{0,24}(\d+(?:\.\d+)?\s*[kKmM]?)[^\d]{1,12}(?:\/|of)[^\d]{0,8}(\d+(?:\.\d+)?\s*[kKmM]?)/i
-  )
-
-  if (fraction?.[1] && fraction[2]) {
-    const used = parseTokenAmount(fraction[1])
-    const window = parseTokenAmount(fraction[2])
-    // Prose guard (see .agents/notes/terminal/dsh-terminal-integration.md): help text like
-    // "tokens 5/10" must not become telemetry. Real windows are k-scale and
-    // bound the used count.
-    if (used !== undefined && isPlausibleContextWindow(window) && used <= window) {
-      return { contextTokens: used, contextWindowTokens: window }
-    }
-    return {}
-  }
-
-  const usedOnly = normalized.match(/\b(?:ctx|context)\b[^\d]{0,24}(\d+(?:\.\d+)?\s*[kKmM]?)\s*(?:tokens?)?\b/i)
-  return {
-    contextTokens: usedOnly?.[1] ? parseTokenAmount(usedOnly[1]) : undefined,
-  }
-}
-
-/** Real context windows are k-scale (4k..10M); prose fractions like 5/10 are not. */
-function isPlausibleContextWindow(value: number | undefined): value is number {
-  return value !== undefined && value >= 4_000 && value <= 10_000_000
-}
-
-function mergeTelemetryPatch(target: RuntimeTelemetryPatch, source: RuntimeTelemetryPatch): void {
-  if (source.detectedModel) target.detectedModel = source.detectedModel
-  if (source.contextTokens !== undefined) target.contextTokens = source.contextTokens
-  if (source.contextWindowTokens !== undefined) target.contextWindowTokens = source.contextWindowTokens
-  if (source.inputTokens !== undefined) target.inputTokens = source.inputTokens
-  if (source.outputTokens !== undefined) target.outputTokens = source.outputTokens
-  if (source.cacheReadTokens !== undefined) target.cacheReadTokens = source.cacheReadTokens
-  if (source.cacheWriteTokens !== undefined) target.cacheWriteTokens = source.cacheWriteTokens
-  if (source.totalTokens !== undefined) target.totalTokens = source.totalTokens
-  if (source.modelChangedAt !== undefined) target.modelChangedAt = source.modelChangedAt
-}
-
 function defaultConfidence(source: RuntimeTelemetrySource): RuntimeTelemetryConfidence {
   if (source === 'provider-event') return 'authoritative'
   if (source === 'history') return 'derived'
@@ -501,73 +269,4 @@ function confidenceRank(confidence?: RuntimeTelemetryConfidence): number {
   if (confidence === 'declared') return 1.5
   if (confidence === 'estimated') return 1
   return 0
-}
-
-function hasUsage(telemetry: RuntimeTelemetryPatch): boolean {
-  return telemetry.contextTokens !== undefined ||
-    telemetry.contextWindowTokens !== undefined ||
-    telemetry.inputTokens !== undefined ||
-    telemetry.outputTokens !== undefined ||
-    telemetry.cacheReadTokens !== undefined ||
-    telemetry.cacheWriteTokens !== undefined ||
-    telemetry.totalTokens !== undefined
-}
-
-function hasTelemetry(telemetry: RuntimeTelemetrySnapshot): boolean {
-  return Boolean(telemetry.detectedModel || hasUsage(telemetry))
-}
-
-function parseTokenAmount(raw: string): number | undefined {
-  const match = raw.trim().match(/^(\d+(?:\.\d+)?)\s*([kKmM])?$/)
-  if (!match) return undefined
-  const value = Number(match[1])
-  if (!Number.isFinite(value) || value <= 0) return undefined
-  const suffix = match[2]?.toLowerCase()
-  if (suffix === 'm') return Math.round(value * 1_000_000)
-  if (suffix === 'k') return Math.round(value * 1_000)
-  return Math.round(value)
-}
-
-function readPositiveNumber(value: unknown): number | undefined {
-  const numeric = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
-  if (!Number.isFinite(numeric) || numeric <= 0) return undefined
-  return Math.round(numeric)
-}
-
-function readTimestamp(value: unknown): number | undefined {
-  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-    return value < 1_000_000_000_000 ? Math.round(value * 1000) : Math.round(value)
-  }
-  if (typeof value !== 'string' || !value.trim()) return undefined
-  const parsed = Date.parse(value)
-  return Number.isFinite(parsed) ? parsed : undefined
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
-}
-
-function stripAnsi(text: string): string {
-  return text.replace(ANSI_PATTERN, ' ')
-}
-
-function normalizeModelName(value: string): string {
-  return value
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/\bsonnet\b/i, 'Sonnet')
-    .replace(/\bopus\b/i, 'Opus')
-    .replace(/\bhaiku\b/i, 'Haiku')
-    .replace(/\bclaude\b/i, 'Claude')
-    .replace(/\bgpt\b/i, 'GPT')
-    .replace(/\bcodex\b/i, 'Codex')
-    .replace(/\bgemini\b/i, 'Gemini')
-    .replace(/\bdeepseek\b/i, 'DeepSeek')
-    .replace(/\bqwen\b/i, 'Qwen')
-    .replace(/\bkimi\b/i, 'Kimi')
-    .replace(/\bllama\b/i, 'Llama')
 }

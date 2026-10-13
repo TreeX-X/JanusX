@@ -11,26 +11,24 @@ import {
   startOfDay,
   toDateInputValue,
 } from '../../src/renderer/src/lib/usage-stats'
-import type { Terminal } from '../../src/renderer/src/types'
-
-function terminal(overrides: Partial<Terminal>): Terminal {
-  return {
-    id: 't1',
-    workspaceId: 'w1',
-    name: 't1',
-    preset: 'codex',
-    cwd: 'C:/repo',
-    shell: 'pwsh',
-    pid: 1,
-    status: 'running',
-    ...overrides,
-  }
+import type { UsageRecord, UsageEngine } from '../../src/shared/usage'
+type Fixture = Partial<UsageRecord> & { preset?: UsageEngine; telemetryUpdatedAt?: number; detectedModel?: string; contextTokens?: number }
+function terminal(overrides: Fixture): UsageRecord {
+  return { id: overrides.id ?? 't1', engine: overrides.preset ?? 'codex', sessionId: overrides.sessionId ?? overrides.id ?? 't1', at: overrides.telemetryUpdatedAt ?? 0, timeBasis: 'event', inputTokens: 0, outputTokens: 0, totalTokens: 0, ...overrides, model: overrides.detectedModel }
 }
 
 // Fixed clock: Friday 2026-10-02 12:00 local time.
 const NOW = new Date(2026, 9, 2, 12, 0, 0).getTime()
 
 describe('usage stats aggregation', () => {
+  it('deduplicates record ids, counts sessions instead of observations and preserves unknown cache coverage', () => {
+    const records = [terminal({ id: '1', sessionId: 's', totalTokens: 10, inputTokens: 10, cacheReadTokens: 0, telemetryUpdatedAt: NOW }), terminal({ id: '2', sessionId: 's', totalTokens: 20, inputTokens: 20, telemetryUpdatedAt: NOW })]
+    const summary = aggregateUsageStats([...records, records[0]], 'today', NOW)
+    expect(summary.totalTokens).toBe(30)
+    expect(summary.terminals).toBe(1)
+    expect(summary.cacheKnown).toBe(false)
+    expect(summary.series[12]).toMatchObject({ misses: 10, unknown: 20 })
+  })
   it('computes local range boundaries', () => {
     expect(rangeStartFor('today', NOW)).toBe(new Date(2026, 9, 2, 0, 0, 0).getTime())
     expect(rangeStartFor('week', NOW)).toBe(new Date(2026, 8, 28, 0, 0, 0).getTime())
@@ -73,7 +71,7 @@ describe('usage stats aggregation', () => {
     )
     expect(summary.terminals).toBe(1)
     expect(summary.totalTokens).toBe(1_000)
-    expect(summary.terminalsWithoutData).toBe(1)
+    expect(summary.terminalsWithoutData).toBe(0)
     expect(summary.rows.map((row) => row.preset)).toEqual(['codex'])
   })
 
@@ -100,9 +98,9 @@ describe('usage stats aggregation', () => {
 
   it('splits cache hits and misses without mistaking absence for zero', () => {
     expect(cacheSplitFor(300, 600, 100)).toEqual({ hits: 300, misses: 700, rate: 0.3, hasData: true })
-    expect(cacheSplitFor(0, 500, 0).hasData).toBe(false)
-    expect(cacheSplitFor(0, 500, 0).rate).toBeUndefined()
-    expect(cacheSplitFor(0, 0, 0)).toEqual({ hits: 0, misses: 0, rate: undefined, hasData: false })
+    expect(cacheSplitFor(0, 500, 0).hasData).toBe(true)
+    expect(cacheSplitFor(0, 500, 0).rate).toBe(0)
+    expect(cacheSplitFor(0, 0, 0, false)).toEqual({ hits: 0, misses: 0, rate: undefined, hasData: false })
   })
 
   it('buckets terminals into hourly slots for today', () => {

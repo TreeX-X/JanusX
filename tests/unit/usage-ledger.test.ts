@@ -1,0 +1,163 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { DatabaseSync } from 'node:sqlite'
+import { UsageLedger } from '../../src/main/runtime-telemetry/usage-ledger'
+import type { UsageObservation, UsageTokens } from '../../src/shared/usage'
+
+let directory: string
+let file: string
+let ledger: UsageLedger
+const counts = (input: number, output = 0): UsageTokens => ({ inputTokens: input, outputTokens: output, cacheReadTokens: 0, totalTokens: input + output })
+const sample = (at: number, input: number, sessionId = 's1'): UsageObservation => ({ engine: 'codex', namespace: '/native', sessionId, collectedAt: at, mode: 'cumulative', counters: counts(input), model: 'm1' })
+const events = (at: number, sessionId = 's1'): UsageObservation => ({ engine: 'claude', namespace: '/native', sessionId, collectedAt: at, mode: 'events', events: [{ ...counts(10, 5), id: 'response-1', at: 1000, model: 'm1' }] })
+const all = () => ledger.list({ start: 0, end: 20_000 })
+
+beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'janusx-usage-ledger-')); file = join(directory, 'usage.sqlite'); ledger = new UsageLedger(() => file) })
+afterEach(async () => { await rm(directory, { recursive: true, force: true }) })
+
+describe('persistent native usage accounting', () => {
+  it('seeds first cumulative observation, deduplicates polls and resumes after restart', () => {
+    ledger.record(sample(1000, 100))
+    expect(all().records).toEqual([])
+    ledger.record(sample(2000, 120))
+    ledger.record(sample(2000, 120))
+    ledger = new UsageLedger(() => file)
+    ledger.record(sample(3000, 125))
+    expect(all().records.map(row => row.totalTokens)).toEqual([20, 5])
+    expect(all().records[0]).toMatchObject({ timeBasis: 'sample', intervalStart: 1000, at: 2000 })
+  })
+  it('keeps independent baselines when switching and returning to sessions', () => {
+    ledger.record(sample(1000, 100, 'a'))
+    ledger.record(sample(2000, 400, 'b'))
+    ledger.record(sample(3000, 110, 'a'))
+    ledger.record(sample(4000, 420, 'b'))
+    expect(all().records.map(row => row.totalTokens)).toEqual([10, 20])
+  })
+  it('ignores out-of-order results and pauses regressed counters without counting recovery', () => {
+    ledger.record(sample(2000, 100))
+    ledger.record(sample(1000, 80))
+    ledger.record(sample(3000, 80))
+    ledger.record(sample(4000, 110))
+    expect(all().records).toEqual([])
+    expect(all().sessions[0].issue).toBe('counter-regressed')
+  })
+  it('does not attribute an interval spanning different models to the latest model', () => {
+    ledger.record(sample(1000, 100))
+    ledger.record({ ...sample(2000, 120), model: 'm2' })
+    expect(all().records[0].model).toBeUndefined()
+  })
+  it('deduplicates copied response identities across forked sessions and restarts', () => {
+    ledger.record(events(2000))
+    ledger = new UsageLedger(() => file)
+    ledger.record(events(3000, 'fork'))
+    expect(all().records).toHaveLength(1)
+    expect(all().records[0]).toMatchObject({ totalTokens: 15, timeBasis: 'event', at: 1000, cacheReadTokens: 0 })
+  })
+  it('keeps consumed events when a branch disappears and records new branches', () => {
+    ledger.record(events(2000))
+    ledger.record({ ...events(3000), events: [{ ...counts(20), id: 'new-branch', at: 2500 }] })
+    expect(all().records.reduce((sum, record) => sum + record.totalTokens, 0)).toBe(35)
+  })
+  it('quarantines changed usage for an existing response rather than importing it twice', () => {
+    ledger.record(events(2000))
+    ledger.record({ ...events(3000), events: [{ ...counts(20), id: 'response-1' }] })
+    expect(all().records).toHaveLength(1)
+    expect(all().sessions[0].issue).toBe('event-changed')
+  })
+  it('uses sample time for missing timestamps without inventing an event time', () => {
+    ledger.record({ ...events(2000), events: [{ ...counts(10), id: 'untimed' }] })
+    expect(all().records[0]).toMatchObject({ at: 2000, timeBasis: 'sample' })
+  })
+  it('rolls back identities and deltas together when an insert fails', () => {
+    all()
+    let database = new DatabaseSync(file)
+    database.exec("CREATE TRIGGER fail_insert BEFORE INSERT ON records BEGIN SELECT RAISE(ABORT,'test failure'); END")
+    database.close()
+    expect(() => ledger.record(events(2000))).toThrow('test failure')
+    database = new DatabaseSync(file)
+    expect(database.prepare('SELECT COUNT(*) AS n FROM identities').get()).toMatchObject({ n: 0 })
+    database.exec('DROP TRIGGER fail_insert')
+    database.close()
+    ledger.record(events(3000))
+    expect(all().records).toHaveLength(1)
+  })
+  it('keeps the old cumulative baseline when writing a delta fails', () => {
+    ledger.record(sample(1000, 100))
+    const database = new DatabaseSync(file)
+    database.exec("CREATE TRIGGER fail_insert BEFORE INSERT ON records BEGIN SELECT RAISE(ABORT,'test failure'); END")
+    expect(() => ledger.record(sample(2000, 120))).toThrow('test failure')
+    database.exec('DROP TRIGGER fail_insert')
+    database.close()
+    ledger = new UsageLedger(() => file)
+    ledger.record(sample(3000, 125))
+    expect(all().records).toHaveLength(1)
+    expect(all().records[0]).toMatchObject({ totalTokens: 25, intervalStart: 1000, at: 3000 })
+  })
+  it('retains event dates and sample intervals when collection crosses midnight or resumes offline', () => {
+    const midnight = Date.parse('2026-10-13T00:00:00Z')
+    ledger.record({ ...events(midnight + 1000), events: [{ ...counts(10), id: 'before-midnight', at: midnight - 1000 }] })
+    ledger.record(sample(midnight - 2000, 100))
+    ledger = new UsageLedger(() => file)
+    ledger.record(sample(midnight + 86_400_000, 150))
+    const rows = ledger.list({ start: midnight - 4000, end: midnight + 86_400_000 }).records
+    expect(rows[0]).toMatchObject({ at: midnight - 1000, timeBasis: 'event' })
+    expect(rows[1]).toMatchObject({ totalTokens: 50, at: midnight + 86_400_000, intervalStart: midnight - 2000, timeBasis: 'sample' })
+  })
+  it('keeps pagination fixed while earlier historical events are concurrently imported', () => {
+    ledger.record(events(2000))
+    ledger.record({ ...events(3000), events: [{ ...counts(20), id: 'second', at: 1500 }] })
+    const first = ledger.list({ start: 0, end: 4000, limit: 1 })
+    ledger.record({ ...events(3500), events: [{ ...counts(100), id: 'late-import', at: 500 }] })
+    const next = ledger.list({ start: 0, end: 4000, limit: 1, offset: first.nextOffset, throughId: first.throughId })
+    expect([...first.records, ...next.records].map(row => row.totalTokens)).toEqual([15, 20])
+  })
+  it('rejects invalid counts and does not turn missing cache fields into zero', () => {
+    ledger.record({ ...events(2000), events: [{ ...counts(10), id: 'invalid', totalTokens: -1 }] })
+    expect(all().records).toEqual([])
+    ledger.record({ ...events(3000), events: [{ inputTokens: 10, outputTokens: 0, totalTokens: 10, id: 'no-cache' }] })
+    expect(all().records[0].cacheReadTokens).toBeUndefined()
+  })
+  it('does not treat unknown source counts as a baseline and validates query bounds', () => {
+    ledger.record({ ...sample(1000, 10), counters: undefined, issue: 'unsupported-source' })
+    expect(all().sessions[0].issue).toBe('unsupported-source')
+    ledger.record(sample(2000, 100))
+    expect(all().records).toEqual([])
+    expect(() => ledger.list({ start: NaN, end: 1 })).toThrow('Invalid usage date range')
+    expect(() => ledger.list({ start: 0, end: 400 * 86_400_000 })).toThrow('Invalid usage date range')
+  })
+  it('preserves corrupt and future-version databases and reports them', () => {
+    writeFileSync(file, 'corrupted ledger')
+    expect(() => all()).toThrow()
+  })
+  it('refuses future schema versions without overwriting them', () => {
+    const database = new DatabaseSync(file)
+    database.exec('PRAGMA user_version=99')
+    database.close()
+    expect(() => all()).toThrow('Unsupported usage ledger version')
+    const preserved = new DatabaseSync(file, { readOnly: true })
+    expect(preserved.prepare('PRAGMA user_version').get()).toMatchObject({ user_version: 99 })
+    preserved.close()
+  })
+  it('pauses when a native counter source is replaced or truncated', () => {
+    ledger.record({ ...sample(1000, 100), sourceIdentity: 'file-1', sourceSize: 1000 })
+    ledger.record({ ...sample(2000, 120), sourceIdentity: 'file-2', sourceSize: 2000 })
+    expect(all().records).toEqual([])
+    expect(all().sessions[0].issue).toBe('counter-source-changed')
+  })
+  it('preserves same-model intervals as unknown if the model changed away and back', () => {
+    ledger.record(sample(1000, 100))
+    ledger.record({ ...sample(2000, 120), modelChangedAt: 1500 })
+    expect(all().records[0].model).toBeUndefined()
+  })
+  it('reports missing sources and clears the issue on a verified retry', () => {
+    ledger.record(sample(1000, 100))
+    ledger.markMissing('codex', 's1')
+    expect(all().hasIssues).toBe(true)
+    ledger.record(sample(2000, 110))
+    expect(all().hasIssues).toBe(false)
+    expect(all().records[0].totalTokens).toBe(10)
+  })
+})

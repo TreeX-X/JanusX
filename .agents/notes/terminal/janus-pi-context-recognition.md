@@ -26,7 +26,7 @@
       }
     }
   },
-  "updated": "2026-10-08T03:43:42.578Z",
+  "updated": "2026-10-13T02:25:17.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -39,18 +39,18 @@ JanusX 可以启动 `janus` 与 `pi` 终端，但上下文识别只覆盖 `claud
 
 ## Decision
 
-上下文识别对 `janus` 与 `pi` 与三引擎走同一条三层管线，只是数据源换成两者各自实际落盘与输出的东西。
+`janus` 与 `pi` 的运行数值统一由主进程读取原生会话源；配置声明用于启动模型，模型目录用于窗口容量。当前契约由[会话源单源化](./requirements/usage-telemetry-single-source.md)维护，取代原先历史加 PTY 的数值融合。
 
-主进程历史扫描（`src/main/runtime-telemetry/history.ts`）为两个 preset 接入与三引擎相同的“绑定会话读历史、无绑定读声明”语义。`janus` 的声明模型来自 `~/.janus/config.json` 的 provider 目录解析，会话存在性来自 `~/.janus/history/<conversationId>.jsonl` 的精确 id 匹配；该历史文件只存消息与工具轨迹而不存用量，因此会话扫描只提供模型与会话归属，实时用量由 PTY 层补齐。`pi` 的声明模型来自全局 `~/.pi/agent/settings.json` 与项目 `.pi/settings.json` 的合并，会话扫描递归读取会话目录下 JSONL，按 `id`/`parentId` 只沿活跃叶路径累加各 assistant 消息的 `usage`，同时统计路径上的 `model_change` 与 `compaction` 条目；跨目录、跨工作区的会话头一律拒绝，放弃的分支永不计入用量。
+主进程历史扫描（`src/main/runtime-telemetry/history.ts`）保留“绑定会话读历史、无绑定读声明”语义。`janus` 的声明模型来自 `~/.janus/config.json` 的 provider 目录解析，会话存在性来自 `~/.janus/history/<conversationId>.jsonl` 的精确 id 匹配；该历史文件只存消息与工具轨迹而不存 usage，因此当前上下文与消耗保持未知，PTY footer 不再补齐数字。`pi` 的声明模型来自全局 `~/.pi/agent/settings.json` 与项目 `.pi/settings.json` 的合并。绑定后按 `id`/`parentId` 解析活跃叶路径的模型与压缩条目，当前上下文取该路径最新 assistant 请求的 input、cacheRead、cacheWrite 之和并标 estimated，不累加历次请求输入。跨工作区会话头继续拒绝。
 
-渲染侧 PTY 解析（`src/renderer/src/lib/runtime-telemetry.ts`）补三处识别。`janus` 启动横幅中的 `model <id>` 进入模型检测，但必须以行内出现 `janus` 为锚点，且候选必须通过单 token 模型形状校验，散文中的 `model the behavior` 不会被误收。`janus` 底部栏的 `12 in / 8 out` 解析为累计输入输出用量，只填累计字段而不碰当前上下文。`usage` 短键（`input`、`output`、`cacheRead`、`cacheWrite`、`totalTokens`）进入结构化用量分支，与长键并列，使 Pi JSON 事件流的累计用量可直接合流。
+Pi 消耗由 `history-usage.ts` 导入所有分支的有效消息 usage，身份为 entry.id 加 timestamp；在同一原生存储命名空间内去重后写入独立持久账本。放弃分支只改变当前上下文投影，已发生的消耗保留。渲染侧数值流解析已移除；状态 hook 仍由[Janus/Pi hook 管理](./janus-pi-hook-management.md)负责。
 
 ## Alternatives considered
 
 - 维持现状：`janus`/`pi` 继续使用 preset 估算窗口。该选项零成本，但模型行与用量行永久失真，用户无法判断真实上下文压力，否决。
-- 为 `janus`/`pi` 建设 hook 事件管线。该选项在当时无注入面（`janus tui` 与 `pi` 交互态不输出机器事件），成本远超历史加 PTY 的组合精度，否决。注入面此后补齐，状态显示走 hook 管线，见 [2026-09-13-janus-pi-hook-management](./janus-pi-hook-management.md)，上下文识别仍走本 Note 的历史加 PTY 管线。
+- 保留历史加 PTY 数值融合：能显示 Janus footer 数字，但继续承担文本误命中和双源合并成本；当前选择原生源，接受 Janus 缺数边界。状态 hook 的注入面已经补齐，仍走独立状态管线。
 - 启动时传入稳定的 `--conversation`/`--session` 使会话 id 与终端 id 对齐。该选项能让 `janus` 也获得精确绑定，但改变启动命令会影响 CLI 自身的会话恢复语义，需要单独验证，延期到后续任务，不在本次范围。
 
 ## Consequences
 
-`janus` 终端在有配置时启动即显示声明模型，运行中底部栏用量进入累计输入输出，上下文窗口经模型注册表或 preset 估算解析。`pi` 终端在绑定会话后显示权威的历史用量、最新模型与精确压缩计数，未绑定时显示声明模型。`janus` 历史文件不存用量是硬限制：其当前上下文 token 仍不可知，累计用量完全依赖 PTY 底部栏文本；`janus` 未配置模型且无历史文件时仍返回空。`pi` 的当前上下文取活跃路径用量之和，是对真实上下文的近似而非服务端口径，压缩后旧分支不计入。新增单测覆盖横幅模型、底部栏用量、短键用量 JSON、`janus` 配置与会话文件、`pi` 全局加项目声明合并、活跃路径累加与分支排除、跨工作区拒绝。
+`janus` 有配置时显示声明模型，窗口容量经模型目录或 preset 估算；当前占用与用量不能从历史还原，保持未知。`pi` 显示活跃路径最新模型、压缩计数及估算上下文，消费统计独立保留全部已导入请求。分支切换后上下文可以下降，消耗不会回吐。历史与账本测试覆盖配置合并、精确会话读取、跨工作区拒绝、活跃分支投影、放弃分支消耗与重放去重；仍需更多真实 CLI 版本样本验证格式兼容性。

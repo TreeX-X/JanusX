@@ -1,8 +1,8 @@
-// Note: shared usage filters and cumulative snapshot curves — see .agents/notes/terminal/requirements/usage-telemetry-fix-and-stats.md
-// Note: custom date range with snapshot-bucket aggregation — see .agents/notes/terminal/requirements/usage-stats-custom-range-detail.md
+// Note: persistent native-session usage — see .agents/notes/terminal/requirements/usage-telemetry-single-source.md
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n } from '@/i18n/useI18n'
-import { useWorkspaceStore } from '@/stores/workspace'
+import { loadUsageLedger } from '@/services/usage'
+import type { UsageLedgerPage } from '../../../shared/usage'
 import { useThemeStore } from '@/stores/theme'
 import {
   aggregateUsageStats,
@@ -10,6 +10,8 @@ import {
   customBucketModeFor,
   normalizeCustomRange,
   parseDateInput,
+  rangeStartFor,
+  rangeEndFor,
   toDateInputValue,
   type TimeBucket,
   type UsageRange,
@@ -24,7 +26,6 @@ import styles from './UsageStatsPanel.module.css'
 
 const RANGES: UsageRange[] = ['today', 'week', 'month', 'custom']
 const RANGE_KEYS = { today: 'rangeToday', week: 'rangeWeek', month: 'rangeMonth', custom: 'rangeCustom' } as const
-const SHELL_COLOR = '#8a8a93'
 const DAY_MS = 86_400_000
 
 type TypeFilter = 'all' | ExternalCliToolId
@@ -41,7 +42,7 @@ function formatRate(rate: number | undefined): string {
 }
 
 function presetColor(preset: TerminalPreset): string {
-  return EXTERNAL_CLI_TOOL_META[preset as ExternalCliToolId]?.color ?? SHELL_COLOR
+  return `var(--usage-${preset}, var(--shell-dim))`
 }
 
 function presetName(preset: TerminalPreset): string {
@@ -164,20 +165,19 @@ function OverallDonut({ rows, total, trackColor, label }: {
             fill="none"
             stroke={presetColor(row.preset)}
             strokeWidth="10"
-            strokeDasharray={`${length} ${circumference}`}
+            strokeDasharray={`${length - (rows.length > 1 ? Math.min(3, length * 0.12) : 0)} ${circumference}`}
             strokeDashoffset={offset}
             transform="rotate(-90 48 48)"
-          />
+          ><title>{presetName(row.preset)}: {formatCount(row.totalTokens)} tokens · {Math.round(fraction * 100)}%</title></circle>
         )
       })}
     </svg>
   )
 }
 
-function CacheDonut({ hits, misses, rate, hasData, hitColor, missColor, trackColor, label }: {
+function CacheDonut({ hits, misses, hasData, hitColor, missColor, trackColor, label }: {
   hits: number
   misses: number
-  rate: number | undefined
   hasData: boolean
   hitColor: string
   missColor: string
@@ -208,7 +208,6 @@ function CacheDonut({ hits, misses, rate, hasData, hitColor, missColor, trackCol
           />
         </>
       )}
-      <text x="48" y="52" textAnchor="middle" fontSize="15" fill="currentColor">{formatRate(hasData ? rate : undefined)}</text>
     </svg>
   )
 }
@@ -284,9 +283,16 @@ function TrendLines({ series, range, metrics, label, emptyLabel }: {
 
 export function UsageStatsPanel() {
   const { t } = useI18n('settings')
-  const terminals = useWorkspaceStore((s) => s.terminals)
+  const [ledger, setLedger] = useState<UsageLedgerPage>({ records: [], sessions: [] })
+  const [loadError, setLoadError] = useState(false)
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 10_000)
+    return () => window.clearInterval(timer)
+  }, [])
   const theme = useThemeStore((s) => s.theme)
-  const scale = getThemeDefinition(theme).ctxScale
+  const definition = getThemeDefinition(theme)
+  const scale = definition.ctxScale
   const hitColor = scale.stops[0]
   const missColor = scale.stops[2]
   const trackColor = scale.empty
@@ -296,16 +302,30 @@ export function UsageStatsPanel() {
   const [iconFailed, setIconFailed] = useState<Partial<Record<ExternalCliToolId, boolean>>>({})
   const [startInput, setStartInput] = useState(() => toDateInputValue(Date.now() - 6 * DAY_MS))
   const [endInput, setEndInput] = useState(() => toDateInputValue(Date.now()))
-  const now = Date.now()
   const normalized = useMemo(
     () => normalizeCustomRange(parseDateInput(startInput), parseDateInput(endInput), now),
-    // now 仅用于截断未来结束日期，避免每次渲染新建对象导致聚合抖动由调用方控制。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [startInput, endInput],
+    [startInput, endInput, now],
   )
   const customRange = range === 'custom' ? { start: normalized.start, end: normalized.end } : undefined
-  const view = aggregateUsageStats(terminals, range, now, activeType === 'all' ? undefined : activeType, customRange)
-  const cache = cacheSplitFor(view.cacheReadTokens, view.inputTokens, view.cacheWriteTokens)
+  const start = rangeStartFor(range, now, customRange)
+  const end = rangeEndFor(range, now, customRange)
+  const invalidRange = range === 'custom' && normalized.error !== undefined
+  const queryKey = useRef('')
+  useEffect(() => {
+    let cancelled = false
+    const key = JSON.stringify([start, range === 'custom' ? end : range, activeType, invalidRange])
+    if (queryKey.current !== key) {
+      queryKey.current = key
+      setLedger({ records: [], sessions: [] })
+    }
+    setLoadError(false)
+    if (!invalidRange) void loadUsageLedger({ start, end, engine: activeType === 'all' ? undefined : activeType }).then(result => {
+      if (!cancelled) { setLedger(result); setLoadError(Boolean(result.warning)) }
+    }).catch(() => { if (!cancelled) setLoadError(true) })
+    return () => { cancelled = true }
+  }, [start, end, activeType, invalidRange, now, range])
+  const view = aggregateUsageStats(ledger.records, range, now, activeType === 'all' ? undefined : activeType, customRange)
+  const cache = cacheSplitFor(view.cacheReadTokens, view.inputTokens, view.cacheWriteTokens, view.cacheKnown)
   const animatedTotal = useAnimatedNumber(view.totalTokens, reducedMotion)
   const animatedInput = useAnimatedNumber(view.inputTokens, reducedMotion)
   const animatedOutput = useAnimatedNumber(view.outputTokens, reducedMotion)
@@ -315,10 +335,11 @@ export function UsageStatsPanel() {
   const customErrorKey = range !== 'custom' ? undefined
     : normalized.error === 'invalid' ? 'customInvalid' : normalized.error === 'future' ? 'customFuture' : normalized.error === 'span' ? 'customSpan' : undefined
   const isEmpty = view.terminals === 0
+  const unavailableEngine = isEmpty && (activeType === 'janus' || activeType === 'dsh')
   // 趋势图只保留命中与输出两条曲线；未命中与未区分留在缓存环形与聚合口径中，不上趋势图。
   const metrics: TrendMetric[] = [
     { key: 'hits', label: t('settings:usageStats.hit'), color: hitColor },
-    { key: 'output', label: t('settings:usageStats.output'), color: 'var(--shell-text)' },
+    { key: 'output', label: t('settings:usageStats.output'), color: 'var(--usage-output)' },
   ]
   const trendBucketHint = useMemo(() => {
     if (range !== 'custom' || normalized.end < normalized.start) return undefined
@@ -326,7 +347,7 @@ export function UsageStatsPanel() {
     return mode === 'hour' ? t('settings:usageStats.customHourly') : mode === 'week' ? t('settings:usageStats.customWeekly') : t('settings:usageStats.customDaily')
   }, [range, normalized, t])
   return (
-    <section className={styles.panel} aria-label={t('settings:usageStats.title')}>
+    <section className={styles.panel} data-theme-base={definition.base} aria-label={t('settings:usageStats.title')}>
       <div className={styles.head}>
         <div className={styles.headInfo}>
           <h3 className={styles.title}>{t('settings:usageStats.title')}</h3>
@@ -363,45 +384,45 @@ export function UsageStatsPanel() {
           </button>
         })}
       </div>
-      <div className={`${styles.summary} ${isEmpty ? styles.summaryEmpty : ''}`}>
-        <div className={styles.summaryCell}>
+      <div className={`${styles.summary} ${isEmpty ? styles.summaryEmpty : ''}`} data-testid="usage-summary">
+        <div className={`${styles.summaryCell} ${styles.totalCell}`}>
           <OverallDonut rows={view.rows} total={view.totalTokens} trackColor={trackColor} label={t('settings:usageStats.overall')} />
           <div className={styles.summaryInfo}>
             <span className={styles.label}>{t('settings:usageStats.total')}</span>
-            <div className={styles.value} data-testid="usage-total">{formatCount(animatedTotal)}<small>tokens</small></div>
-            <div className={styles.ioSplit} data-testid="usage-io">
-              <span><i className={styles.ioDotIn} />{t('settings:usageStats.input')} <strong>{formatCount(animatedInput)}</strong></span>
-              <span><i className={styles.ioDotOut} />{t('settings:usageStats.output')} <strong data-testid="usage-output">{formatCount(animatedOutput)}</strong></span>
-            </div>
+            <div className={styles.value} data-testid="usage-total">{unavailableEngine ? '–' : formatCount(animatedTotal)}<small>tokens</small></div>
             <div className={styles.legend}>{view.rows.map((row) => <span key={row.preset}><i style={{ background: presetColor(row.preset) }} />{presetName(row.preset)} <strong>{view.totalTokens > 0 ? Math.round(row.totalTokens / view.totalTokens * 100) : 0}%</strong></span>)}</div>
           </div>
         </div>
-        <div className={styles.summaryCell}>
-          <CacheDonut hits={cache.hits} misses={cache.misses} rate={cache.rate} hasData={cache.hasData} hitColor={hitColor} missColor={missColor} trackColor={trackColor} label={t('settings:usageStats.hitRate')} />
-          <div className={styles.summaryInfo}>
-            <span className={styles.label}>{t('settings:usageStats.hitRate')}</span>
-            <div className={styles.value} data-testid="usage-cache-rate">{formatRate(cache.hasData ? cache.rate : undefined)}</div>
-            <div className={styles.legend}>{cache.hasData ? <><span><i style={{ background: hitColor }} />{t('settings:usageStats.hit')} <strong>{formatCount(cache.hits)}</strong></span><span><i style={{ background: missColor }} />{t('settings:usageStats.miss')} <strong>{formatCount(cache.misses)}</strong></span></> : t('settings:usageStats.noCacheData')}</div>
+        <div className={`${styles.summaryCell} ${styles.ioCell}`} data-testid="usage-io">
+          <div className={styles.ioNumbers}>
+            <div className={styles.inputMetric}><span className={styles.label}>{t('settings:usageStats.input')}</span><strong data-testid="usage-input">{unavailableEngine ? '–' : formatCount(animatedInput)}</strong></div>
+            <div className={styles.outputMetric}><span className={styles.label}>{t('settings:usageStats.output')}</span><strong data-testid="usage-output">{unavailableEngine ? '–' : formatCount(animatedOutput)}</strong></div>
           </div>
-        </div>
-        <div className={styles.summaryCell}>
-          <div className={styles.ioBar} role="img" aria-label={t('settings:usageStats.ioTitle')}>
+          <div className={styles.ioBar} role="img" aria-label={`${t('settings:usageStats.ioShare')}: ${formatRate(outputShare)}`}>
             <div className={styles.ioTrack}>
               <div className={styles.ioFillIn} style={{ width: `${ioTotal > 0 ? (view.inputTokens / ioTotal) * 100 : 0}%` }} />
               <div className={styles.ioFillOut} style={{ width: `${ioTotal > 0 ? (view.outputTokens / ioTotal) * 100 : 0}%` }} />
             </div>
-            <span className={styles.ioShare}>{formatRate(outputShare)}</span>
           </div>
-          <div className={styles.summaryInfo}>
-            <span className={styles.label}>{t('settings:usageStats.ioTitle')}</span>
-            <div className={styles.value} data-testid="usage-input">{formatCount(animatedInput)}<small>→ {formatCount(animatedOutput)}</small></div>
-            <div className={styles.legend}><span>{t('settings:usageStats.ioShare')} <strong>{formatRate(outputShare)}</strong></span><span>{view.terminals} {t('settings:usageStats.terminals')}</span></div>
+          <div className={styles.legend}><span>{t('settings:usageStats.ioShare')} <strong>{formatRate(outputShare)}</strong></span><span>{view.terminals} {t('settings:usageStats.terminals')}</span></div>
+        </div>
+        <div className={`${styles.summaryCell} ${styles.cacheCell}`}>
+          <div className={styles.cacheHeading}>
+            <CacheDonut hits={cache.hits} misses={cache.misses} hasData={cache.hasData} hitColor={hitColor} missColor={missColor} trackColor={trackColor} label={t('settings:usageStats.hitRate')} />
+            <div className={styles.summaryInfo}>
+              <span className={styles.label}>{t('settings:usageStats.hitRate')}</span>
+              <div className={styles.value} data-testid="usage-cache-rate">{formatRate(cache.hasData ? cache.rate : undefined)}</div>
+            </div>
           </div>
+          <div className={styles.legend}>{cache.hasData ? <><span><i style={{ background: hitColor }} />{t('settings:usageStats.hit')} <strong>{formatCount(cache.hits)}</strong></span><span><i style={{ background: missColor }} />{t('settings:usageStats.miss')} <strong>{formatCount(cache.misses)}</strong></span></> : t('settings:usageStats.noCacheData')}</div>
         </div>
       </div>
       <div className={styles.trendSection}>
         <div className={styles.toolbar}><h4 className={styles.title}>{t('settings:usageStats.trend')}</h4><span className={styles.label}>tokens{trendBucketHint ? ` · ${trendBucketHint}` : ''}</span></div>
-        <p className={styles.hint}>{t('settings:usageStats.snapshotHint')}</p>
+        <p className={styles.hint}>{t('settings:usageStats.ledgerUnavailable')}</p>
+        {ledger.coverageStart !== undefined && <p className={styles.hint}>{t('settings:usageStats.ledgerCoverage')} {new Date(ledger.coverageStart).toLocaleString()}</p>}
+        {ledger.hasIssues && <p className={styles.error} role="status">{t('settings:usageStats.ledgerPaused')}</p>}
+        {loadError && <p className={styles.error} role="alert">{t('settings:usageStats.ledgerError')}</p>}
         <TrendLines
           series={view.series}
           range={range}
@@ -413,15 +434,15 @@ export function UsageStatsPanel() {
       {view.rows.length > 0 && <div className={styles.breakdown}>
         <h4 className={styles.title}>{t('settings:usageStats.breakdown')}</h4>
         {view.rows.map((row) => {
-          const split = cacheSplitFor(row.cacheReadTokens, row.inputTokens, row.cacheWriteTokens)
+          const split = cacheSplitFor(row.cacheReadTokens, row.inputTokens, row.cacheWriteTokens, row.cacheKnown)
           return <article className={styles.modelRow} key={row.preset}>
             <div className={styles.modelInfo}>
               <div className={styles.modelName}><i style={{ background: presetColor(row.preset) }} />{presetName(row.preset)}<span>{row.terminals} {t('settings:usageStats.terminals')}</span></div>
               <div className={styles.models}>{row.models.length ? row.models.map((model) => <span key={model} title={model}>{model}</span>) : <span>{t('settings:usageStats.unknownModel')}</span>}</div>
             </div>
             <div className={styles.modelTotal}><span className={styles.label}>{t('settings:usageStats.total')}</span><strong>{formatCount(row.totalTokens)}</strong><small>tokens</small></div>
-            <div className={styles.modelIo}><span className={styles.label}>{t('settings:usageStats.input')}</span><strong>{formatCount(row.inputTokens)}</strong></div>
-            <div className={styles.modelIo}><span className={styles.label}>{t('settings:usageStats.output')}</span><strong>{formatCount(row.outputTokens)}</strong></div>
+            <div className={`${styles.modelIo} ${styles.inputMetric}`}><span className={styles.label}>{t('settings:usageStats.input')}</span><strong>{formatCount(row.inputTokens)}</strong></div>
+            <div className={`${styles.modelIo} ${styles.outputMetric}`}><span className={styles.label}>{t('settings:usageStats.output')}</span><strong>{formatCount(row.outputTokens)}</strong></div>
             <div className={styles.modelRate}><span className={styles.label}>{t('settings:usageStats.hitRate')}</span><strong>{formatRate(split.hasData ? split.rate : undefined)}</strong></div>
           </article>
         })}

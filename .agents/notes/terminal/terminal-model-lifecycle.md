@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-13T02:25:17.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -35,15 +35,16 @@ Terminal model state arrives late, stale, or never. Detection debounces stream t
 
 ## Decision
 
-Detection fuses stream text with structured payloads through normalization and confidence-gated merges into per-terminal state. The main side coordinates snapshots per request while the renderer merges patches without clobbering higher-confidence values. Status surfaces read the focused terminal value with a detecting fallback instead of a global singleton. Model naming normalizes at the boundary so engine-specific labels collapse to canonical names.
+Runtime model and numeric telemetry come from native session history through the main-process coordinator. Configuration supplies declared startup models; the model registry supplies context capacity with its confidence. Each terminal has a main-owned exact session binding. Reads are serialized per terminal and recheck the binding after asynchronous work, so a stale read cannot restore a previous session. Hooks request refreshes and a 10-second main-process poll fills gaps; the renderer subscribes and projects snapshots into per-terminal state. Configuration bootstrap clears stale runtime counts instead of declaring zero usage. Status surfaces read the focused terminal model with an explicit fallback. The current numeric and accounting contract is owned by [native-session single source](./requirements/usage-telemetry-single-source.md).
 
 ## Alternatives considered
 
-- Keep debounce plus history polling — strongest case needs no new infrastructure. The driver that rules it out is latency plus staleness: first-packet detection lags and switches strand old values.
-- Per-engine native model APIs — strongest case reports exact values. The driver that rules it out is surface instability: three engines with shifting, uneven introspection.
-- Do nothing / reuse best-effort labels — staying put keeps the telemetry layer thin. The cost is permanently blind model attribution.
+- Keep PTY text and history fusion: preserves quick display and footer-only coverage, but text patterns and source arbitration add failure modes. Native history now owns runtime values, with explicit unknown values for unsupported sources.
+- Add separate live model APIs for every engine: could reduce latency, but introduces another adapter surface with uneven native support. Configuration, native history and registry metadata cover the current scope.
+- Keep labels after terminal restart: avoids empty display, but can attribute the previous process's model and counters to the new one. Configuration bootstrap and exact rebinding reset that projection.
 
 ## Consequences
 
-- **Gains**: Each terminal carries its own detected model with normalized naming; the display degrades to an explicit detecting state instead of a wrong name.
-- **Costs and limits**: Text-pattern detection stays heuristic and leans on confidence gating; prefill defaults and switch-reset semantics remain open follow-ups.
+- Each terminal carries its own native or declared model and confidence. Numeric PTY parsing is removed; DSH turn status remains a separate text signal. Exact history rebinding can replace the prior session projection.
+- Context display depends on native persistence and collection latency. Unknown native counts stay unknown. Pi context remains an estimate of the latest active request; Janus/DSH have no imported native usage.
+- Consumption is persisted separately from terminal projection and binding metadata. Closing a terminal preserves records and baselines; counter regression or source mutation pauses accounting rather than guessing a reset. Full JSONL scans currently cap each file at 64MB, so larger sources need an incremental adapter.

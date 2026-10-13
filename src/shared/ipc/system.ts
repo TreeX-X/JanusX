@@ -1,11 +1,12 @@
 import type { OperationResult } from './workspace'
+import type { UsageLedgerPage, UsageLedgerQuery } from '../usage'
 
 export const SYSTEM_CHANNELS = {
   defaultShell: 'system:getDefaultShell', platform: 'system:getPlatform',
   openDirectory: 'dialog:openDirectory', saveFile: 'dialog:saveFile', showMessageBox: 'dialog:showMessageBox',
   minimize: 'window:minimize', maximize: 'window:maximize', close: 'window:close',
   openEditor: 'editor-window:open', refreshEditor: 'editor-window:refresh', editorReady: 'editor-window:ready', embedEditor: 'editor-window:embed', editorEmbedded: 'editor-window:embedded',
-  setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get',
+  setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get', usageLedger: 'usage-ledger:list',
   toastReady: 'desktop-toast:ready', toastAction: 'desktop-toast:action', toastShow: 'desktop-toast:show', toastHide: 'desktop-toast:hide',
   getLanguage: 'app:getLanguage', setLanguage: 'app:setLanguage',
   openVSCode: 'system:openVSCode',
@@ -59,6 +60,7 @@ export interface SystemAPI {
   getDefaultShell(): Promise<string>; getPlatform(): Promise<NodeJS.Platform>
   openVSCode(workspacePath: string): Promise<OperationResult>
   getRuntimeTelemetry(request: RuntimeTelemetryRequest): Promise<RuntimeTelemetrySnapshot | null>
+  listUsageLedger(query: UsageLedgerQuery): Promise<UsageLedgerPage>
   getLanguage(): Promise<string | null>
   setLanguage(lang: string): Promise<void>
   onPrepareQuit(callback: () => Promise<void> | void): () => void
