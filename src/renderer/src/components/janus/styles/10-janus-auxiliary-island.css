@@ -1,18 +1,8 @@
 /* A shared auxiliary work surface. The outer chrome deliberately mirrors the
    expanded Janus Island; modules only own the content canvas inside it. */
-.janus-island-shell {
-  --janus-auxiliary-gap: 10px;
-  --janus-auxiliary-width: clamp(420px, 32vw, 560px);
-  --janus-auxiliary-shift: calc((var(--janus-auxiliary-width) + var(--janus-auxiliary-gap)) / 2);
-}
-
 .janus-auxiliary-island {
-  position: absolute;
-  left: calc(100% + var(--janus-auxiliary-gap));
-  top: 0;
-  z-index: 4;
-  width: var(--janus-auxiliary-width);
-  height: 100%;
+  position: fixed;
+  z-index: 10052;
   padding: 16px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, .07);
@@ -24,16 +14,9 @@
     0 0 18px rgba(255, 120, 48, .05);
   color: rgba(255, 255, 255, .78);
   pointer-events: auto;
-  animation: janus-auxiliary-enter .28s cubic-bezier(.16, 1, .3, 1) both;
 }
 .janus-island-shell[data-auxiliary-open="true"] { overflow: visible !important; }
 .janus-expanded:has(.janus-island-shell[data-auxiliary-open="true"]) { overflow: visible !important; }
-.janus-auxiliary-island { z-index: 100 !important; }
-
-.janus-auxiliary-island--closing {
-  pointer-events: none;
-  animation: janus-auxiliary-exit .24s cubic-bezier(.4, 0, .8, .2) both;
-}
 
 .janus-auxiliary-shell {
   position: relative;
@@ -261,48 +244,23 @@
   box-shadow: none;
 }
 
-.janus-island-shell[data-stage="expanded"][data-auxiliary-open="true"] {
-  /* Keep the combined main + auxiliary surface inside the viewport. */
-  /* The auxiliary panel is positioned immediately to the right of the main
-     panel. Shift the main panel by half of the auxiliary width plus gap so
-     the combined two-panel surface stays centered as its width changes. */
-  transform: translateX(calc(-50% - var(--janus-auxiliary-shift))) !important;
-  transition: transform .48s cubic-bezier(.22, .8, .25, 1);
+.janus-island-cluster[data-auxiliary-layout] {
+  left: var(--auxiliary-main-left);
+  top: var(--auxiliary-main-top);
+  transform: none;
+  gap: 0;
 }
-
-@media (max-width: 1100px) {
-  .janus-island-shell {
-    --janus-auxiliary-width: min(420px, calc(100vw - 24px));
-  }
+.janus-island-shell[data-stage="expanded"][data-auxiliary-layout] {
+  left: var(--auxiliary-main-left);
+  top: var(--auxiliary-main-top);
+  width: var(--auxiliary-main-width);
+  height: var(--auxiliary-main-height);
+  margin-left: 0;
+  transform: none !important;
+  transition: none;
 }
-
-@keyframes janus-auxiliary-enter {
-  from {
-    opacity: 0;
-    clip-path: inset(0 100% 0 0 round 26px);
-    transform: translateX(-20px) scale(.985);
-  }
-  to {
-    opacity: 1;
-    clip-path: inset(0 0 0 0 round 26px);
-    transform: translateX(0) scale(1);
-  }
-}
-
-@keyframes janus-auxiliary-exit {
-  from { opacity: 1; clip-path: inset(0 0 0 0 round 26px); transform: translateX(0) scale(1); }
-  to { opacity: 0; clip-path: inset(0 100% 0 0 round 26px); transform: translateX(-14px) scale(.985); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .janus-auxiliary-island {
-    animation: none;
-  }
-  .janus-auxiliary-island--closing {
-    animation: none;
-    opacity: 0;
-  }
-}
+.janus-island-cluster[data-auxiliary-layout] .janus-island-shell[data-auxiliary-layout] { left: auto; top: auto; }
+.janus-island-shell[data-auxiliary-layout="focus"] { visibility: hidden; pointer-events: none; }
 
 /* Parchment export actions: icon button + inline status, same 26px chrome as
    the collapse control. Sits left of the close button in the minimal header. */

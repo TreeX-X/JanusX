@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useReducer, useRef, lazy, Suspense } from 'react'
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
@@ -12,7 +12,8 @@ import { useJanusChatController } from '@/components/janus/JanusChatProvider'
 import { useGlobalRunning } from '@/components/janus/useGlobalRunning'
 import { JanusRunOrbs } from '@/components/janus/JanusRunOrbs'
 import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
-import { INITIAL_ISLAND_CONTROLLER_STATE, reduceIslandController, shouldPresentProductNotice } from '@/components/janus/islandController'
+import { shouldPresentProductNotice, type IslandControllerAction } from '@/components/janus/islandController'
+import { useIslandStore } from '@/stores/island'
 import { getSingleActivationIntent } from '@/components/janus/islandInteraction'
 import { officeService } from '@/services/office'
 import { startProductDiscovery } from '@/components/product-workspace/productDiscovery'
@@ -38,8 +39,11 @@ export function Titlebar() {
   const { t } = useI18n('common')
   useGlobalRunning()
   useWorkflowXDetection()
-  const [island, dispatchIsland] = useReducer(reduceIslandController, INITIAL_ISLAND_CONTROLLER_STATE)
-  const { stage: islandStage, knowledge: knowledgePeek } = island
+  const islandStage = useIslandStore((state) => state.stage)
+  const knowledgePeek = useIslandStore((state) => state.knowledge)
+  // Stable wrapper: the store dispatch is created once, and a useCallback keeps
+  // the effect/callback dependency arrays honest.
+  const dispatchIsland = useCallback((action: IslandControllerAction) => useIslandStore.getState().dispatch(action), [])
   // Pinned island window (owned by JanusIsland): while pinned, a terminal
   // switch must not collapse the conversation back to the capsule.
   const [islandPinned, setIslandPinned] = useState(false)
@@ -113,7 +117,7 @@ export function Titlebar() {
 
   useEffect(() => {
     dispatchIsland({ type: 'trace', trace: latestRecallTrace })
-  }, [latestRecallTrace])
+  }, [dispatchIsland, latestRecallTrace])
 
   useEffect(() => {
     if (previousActiveWorkspaceId.current === activeWorkspaceId) return
@@ -124,7 +128,7 @@ export function Titlebar() {
       useProductWorkspaceStore.getState().clearWorkspaceUi(previousWorkspaceId)
       void useProductWorkspaceStore.getState().releaseWorkspace(previousWorkspaceId)
     }
-  }, [activeWorkspaceId])
+  }, [dispatchIsland, activeWorkspaceId])
 
   useEffect(() => {
     const generation = ++productDiscoveryGeneration.current
@@ -135,7 +139,7 @@ export function Titlebar() {
       isCurrent: () => generation === productDiscoveryGeneration.current
         && useWorkspaceStore.getState().activeWorkspaceId === activeWorkspaceId,
     })
-  }, [activeWorkspaceId])
+  }, [dispatchIsland, activeWorkspaceId])
 
   // Product presentation dedupe (Note: 2026-09-13-island-notification-capsule.md):
   // a sticky notice re-presents only once per id. After the capsule expires the
@@ -156,7 +160,7 @@ export function Titlebar() {
     if (!shouldPresentProductNotice(islandStage, productNotice.workspaceId, activeWorkspaceId)) return
     presentedProductNoticeIdRef.current = noticeId
     dispatchIsland({ type: 'product-notice' })
-  }, [activeWorkspaceId, productNotice, islandStage])
+  }, [dispatchIsland, activeWorkspaceId, productNotice, islandStage])
 
   useEffect(() => {
     if (islandStage !== 'peek' || knowledgePeek.presentation === 'hidden') return
@@ -165,7 +169,7 @@ export function Titlebar() {
       dispatchIsland({ type: 'timeout', version })
     }, KNOWLEDGE_PEEK_TIMEOUT_MS)
     return () => window.clearTimeout(timer)
-  }, [islandStage, knowledgePeek.presentation, knowledgePeek.version])
+  }, [dispatchIsland, islandStage, knowledgePeek.presentation, knowledgePeek.version])
 
   useEffect(() => {
     if (islandStage !== 'peek' || productNotice?.workspaceId !== activeWorkspaceId) return
@@ -175,7 +179,7 @@ export function Titlebar() {
       dispatchIsland({ type: 'product-expire' })
     }, KNOWLEDGE_PEEK_TIMEOUT_MS)
     return () => window.clearTimeout(timer)
-  }, [activeWorkspaceId, productNotice, islandStage])
+  }, [dispatchIsland, activeWorkspaceId, productNotice, islandStage])
 
   const openProductFile = useCallback((relPath: string) => {
     if (!activeWorkspaceId) return
@@ -188,7 +192,7 @@ export function Titlebar() {
     // mounts in the same commit — no deferred open (Note: product-workspace).
     product.showProductWorkspace(activeWorkspaceId)
     void product.openPreview(activeWorkspaceId, relPath)
-  }, [activeWorkspaceId])
+  }, [activeWorkspaceId, dispatchIsland])
 
   const handleIslandSingleActivate = useCallback(() => {
     const productNoticeAlive = productNotice?.workspaceId === activeWorkspaceId
@@ -202,20 +206,20 @@ export function Titlebar() {
       return
     }
     dispatchIsland({ type: 'single-activate' })
-  }, [activeWorkspaceId, productNotice, islandStage, knowledgePeek.presentation, openProductFile])
+  }, [dispatchIsland, activeWorkspaceId, productNotice, islandStage, knowledgePeek.presentation, openProductFile])
   const handleIslandDoubleActivate = useCallback(() => {
     useProductWorkspaceStore.getState().consumeProductNotice()
     dispatchIsland({ type: 'double-activate' })
-  }, [])
+  }, [dispatchIsland])
   const handleIslandDismiss = useCallback(() => {
     useProductWorkspaceStore.getState().consumeProductNotice()
     dispatchIsland({ type: 'dismiss' })
-  }, [])
+  }, [dispatchIsland])
 
   const handleChatClearAndInvalidatePeek = useCallback(() => {
     handleChatClear()
     dispatchIsland({ type: 'invalidate' })
-  }, [handleChatClear])
+  }, [dispatchIsland, handleChatClear])
 
   const previousActiveTerminalId = useRef(activeTerminalId)
   useEffect(() => {
@@ -224,7 +228,7 @@ export function Titlebar() {
       if (islandPinnedRef.current) return
       dispatchIsland({ type: 'terminal-changed' })
     }
-  }, [activeTerminalId])
+  }, [dispatchIsland, activeTerminalId])
 
 
   const handleSettingsTriggerClick = useCallback(() => {

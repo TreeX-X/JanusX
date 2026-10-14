@@ -111,7 +111,7 @@
   transition: background 0.12s;
 }
 
-.option:hover {
+.option:hover, .option[data-active='true'] {
   background: rgba(255, 255, 255, 0.05);
 }
 

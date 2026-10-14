@@ -119,31 +119,9 @@
   }
 }
 
-/* Island window persistence + drag + capsule loading indicator.
+/* Island window persistence + capsule loading indicator.
  * Rules here are additive only: no layout property may key on
  * data-loading, so streaming visuals can never shift the capsule morph. */
-
-.janus-expanded-topbar--draggable {
-  cursor: grab;
-  user-select: none;
-  touch-action: none;
-}
-
-.janus-expanded-topbar--draggable[data-dragging="true"] {
-  cursor: grabbing;
-}
-
-.janus-expanded-topbar--draggable button,
-.janus-expanded-topbar--draggable input,
-.janus-expanded-topbar--draggable textarea,
-.janus-expanded-topbar--draggable select,
-.janus-expanded-topbar--draggable a {
-  cursor: pointer;
-}
-
-.janus-expanded-topbar--draggable .janus-chat-tool-button {
-  cursor: pointer;
-}
 
 /* Top-left cluster: pin control ahead of the brand mark. */
 .janus-expanded-left {
@@ -172,7 +150,7 @@
   color: #ffd1b5;
 }
 
-.janus-island-shell[data-pinned="true"] .janus-expanded-topbar--draggable {
+.janus-island-shell[data-pinned="true"] .janus-expanded-topbar {
   border-bottom: 1px dashed rgba(255, 120, 48, 0.22);
   border-radius: 6px 6px 0 0;
 }

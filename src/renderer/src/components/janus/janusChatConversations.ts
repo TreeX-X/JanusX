@@ -30,8 +30,29 @@ export function createJanusConversation(id = crypto.randomUUID()): PersistedJanu
   }
 }
 
-export function titleFromMessages(messages: PersistedJanusConversation['messages']): string {
-  const first = messages.find((message) => message.role === 'user')?.content.trim()
+/** Ending a memo session (leaving or switching the memo) starts a fresh
+ * transcript while carrying the work context over, so re-attaching workspaces
+ * or re-entering the project domain is not needed to keep going. */
+export function continueConversation(
+  previous: PersistedJanusConversation,
+  memoId?: string,
+  id = crypto.randomUUID(),
+): PersistedJanusConversation {
+  const now = Date.now()
+  return {
+    id,
+    title: NEW_CONVERSATION_TITLE,
+    createdAt: now,
+    updatedAt: now,
+    messages: [],
+    attachedWorkspaceIds: previous.attachedWorkspaceIds,
+    toolTraces: [],
+    ...(previous.engineeringContext ? { engineeringContext: previous.engineeringContext } : {}),
+    ...(memoId ? { memoId } : {}),
+  }
+}
+
+export function titleFromMessages(messages: PersistedJanusConversation['messages']): string {  const first = messages.find((message) => message.role === 'user')?.content.trim()
   if (!first) return NEW_CONVERSATION_TITLE
   const compact = first.replace(/\s+/g, ' ')
   return compact.length > 36 ? `${compact.slice(0, 36)}...` : compact

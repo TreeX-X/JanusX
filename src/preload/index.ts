@@ -37,6 +37,7 @@ import { LLM_CHANNELS, type LlmAPI } from '../shared/ipc/llm'
 import { EXTERNAL_CLI_CHANNELS, type ExternalCliAPI } from '../shared/ipc/external-cli'
 import { WORKFLOWX_CHANNELS, type WorkflowXAPI } from '../shared/ipc/workflowx'
 import { JANUS_CHAT_CHANNELS, type JanusChatAPI } from '../shared/ipc/janus-chat'
+import { MEMO_CHANNELS, type MemoAPI } from '../shared/ipc/memo'
 import { HARNESS_COMMAND_CHANNELS, HARNESS_EVENT_CHANNELS, type HarnessAPI } from '../shared/ipc/harness'
 import { ROUNDTABLE_CHANNELS, type RoundtableAPI } from '../shared/ipc/roundtable'
 import { AGENT_SETTINGS_CHANNELS, NOTIFICATION_SETTINGS_CHANNELS, type AgentSettingsAPI, type NotificationSettingsAPI } from '../shared/ipc/settings'
@@ -445,6 +446,14 @@ const gitAPI: GitAPI = {
   fileBaseline: (cwd, relativePath) => ipcRenderer.invoke(GIT_CHANNELS.fileBaseline, cwd, relativePath),
 }
 
+const memoAPI: MemoAPI = {
+  list: () => ipcRenderer.invoke(MEMO_CHANNELS.list),
+  create: title => ipcRenderer.invoke(MEMO_CHANNELS.create, title),
+  edit: (id, edit) => ipcRenderer.invoke(MEMO_CHANNELS.edit, id, edit),
+  remove: (id, revision) => ipcRenderer.invoke(MEMO_CHANNELS.remove, id, revision),
+  onChanged: callback => subscribeIpcEvent(MEMO_CHANNELS.changed, callback),
+}
+
 const janusChatAPI: JanusChatAPI = {
   load: () => ipcRenderer.invoke(JANUS_CHAT_CHANNELS.load),
   save: (snapshot) => ipcRenderer.invoke(JANUS_CHAT_CHANNELS.save, snapshot).then(() => undefined),
@@ -653,6 +662,7 @@ contextBridge.exposeInMainWorld('electron', {
   externalCli: externalCliAPI,
   workflowx: workflowxAPI,
   janusChat: janusChatAPI,
+  memo: memoAPI,
   roundtable: roundtableAPI,
   agent: agentAPI,
   agentRuntime: agentRuntimeAPI,

@@ -1,6 +1,6 @@
 ﻿# Module Map
 
-Last analyzed: 2026-09-06
+Last analyzed: 2026-10-14
 
 ## Main Process Modules
 
@@ -27,6 +27,7 @@ Last analyzed: 2026-09-06
 | Janus Blueprint | `src/main/janus/*`, `src/main/ipc/janus-handlers.ts` | Blueprint CRUD, node focus/bind, commit-diff analysis, candidate requirements, factory, migration, persistence |
 | Blueprint maintenance | `src/main/janus/maintenance/*`, `src/main/janus/maintenance/service.ts` | change-set operations, reverse operations, blueprint tools, `BlueprintMaintenanceService` |
 | Janus chat | `src/main/janus/chat-store.ts`, `src/main/ipc/janus-chat-handlers.ts` | Janus chat conversation persistence, load/save |
+| Memo | `src/main/memo/store.ts`, `service.ts`, `chat-tools.ts`, `src/main/ipc/memo-handlers.ts` | persistent memo v3, atomic legacy upgrade discarding retired unassigned records, node-owned points, no workspace mappings, atomic optimistic edits, shared Chat local `memo_read`/`memo_edit` tools, message-scoped selected-star context with missing-target handling, and change events |
 | Companion gateway | `src/main/companion/*` | Feishu remote control: gateway, binding, session state, action tokens, audit, dedupe, terminal control |
 | Remote notifications | `src/main/remote-notifications/*`, `src/main/remote-notifications/feishu-inbound/*` | Feishu provider, inbound router/runtime, dispatcher, delivery store, secret redaction |
 | Knowledge | `src/main/knowledge/*`, `src/main/ipc/knowledge-handlers.ts` | observations, search (BM25/tokenizer/embeddings), context, recall, review, truth, extraction, retention, operations, MCP, agent turn recorder, queue-owned pipeline, external MCP |
@@ -56,6 +57,8 @@ Last analyzed: 2026-09-06
 | LLM config/chat | `components/LlmConfigModal.tsx`, `services/llm.ts` | provider CRUD, test, chat, streaming chat subscription |
 | Blueprint UI | `components/blueprint/*`, `features/blueprint/*`, `stores/blueprint.ts`, `stores/blueprint-maintenance.ts`, `services/blueprint.ts` | React Flow views/store, layout derivation, adaptive edge geometry, canvas navigation, graph controller, analysis actions, maintenance panel, audit details, workbench |
 | Janus island/chat | `components/janus/*` | titlebar island, eye, identity core, expanded UI, chat pane/provider, conversations, reasoning region (`janusReasoning.ts` + `ThinkingRegion.tsx`), tool call card, project candidate, resources, runtime state, streaming printer, island gesture, knowledge peek, roundtable pane/stage/parchment |
+| Shared island presentation | `components/island/islandMotion.ts`, `islandMotion.css`, `islandLayout.ts`, `components/janus/useAuxiliaryIslandLayout.ts` | cancelable presence, visible-content reveal, one motion duration, final-geometry presentation and bounded left/right companion layouts |
+| Memo panel | `components/memo/MemoPanel.tsx`, `MemoConstellation.tsx`, `MemoEditor.tsx`, `constellationLayout.ts`, `useConstellationMotion.ts`, `constellationGeometry.ts`, `memoLayout.ts`, `memoIsland.css`, `stores/memo.ts` | fixed outer geometry during file folding, stars with aligned leader text and screen-space connection clearance, wheel zoom/middle pan, blank-space creation with inline previews, adjacent-edge insertion, stable local layout and animated star entry, node-owned records and empty-star state, atomic star-and-record deletion, document rows with inline creation, save feedback and action menus, counts without repeated memo filename, identity-based draft recovery, and shared per-file selection snapshots for Chat sends and steering |
 | Quick notes | `components/note/*`, `stores/draft-card.ts` | quick note editor, behavior, export |
 | Checkpoint UI | `components/CheckpointPanel.tsx`, `stores/checkpoint.ts` | checkpoint list, diff, restore |
 | Git UI | `components/GitPanel.tsx`, `stores/git.ts` | git status/action panel |
@@ -82,6 +85,8 @@ Last analyzed: 2026-09-06
 | `src/shared/ipc/agent.ts` | Agent CLI + SubAgentRun channels, DTOs, and preload API contracts |
 | `src/shared/ipc/roundtable.ts`, `src/shared/roundtable/` | Roundtable channels (`start/advance/end/state/restore/export/event`) plus `events/state/export/parchment/workflow-template/host-synthesis` models |
 | `src/shared/ipc/checkpoint.ts`, `git.ts`, `llm.ts`, `settings.ts`, `system.ts` | Remaining fixed domain contracts and preload APIs |
+| `src/shared/memo.ts` | Memo/MemoNode/MemoPoint schemas, send-time MemoBinding selection, and the pure `applyMemoOperations` edit engine |
+| `src/shared/ipc/memo.ts` | Memo channel constants (`list/create/edit/remove/changed`) and preload API contract |
 | `src/shared/janus/types.ts` | canonical Blueprint/Janus models |
 | `src/shared/janus/relations.ts` | Blueprint relation types, cycle detection, invariant assertions, sanitize |
 | `src/shared/janus/maintenance-types.ts` | Blueprint maintenance operations, change-sets, audit records, tasks, workspace bindings |

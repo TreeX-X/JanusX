@@ -10,7 +10,7 @@ import type {
   ModelCatalogSnapshot,
 } from '@janusx/llm-core'
 import type { KnowledgeRecallTrace } from '../../../shared/knowledge'
-import type { ChatAgentEvent, ChatAnswerQuestionPayload, ChatToolTraceEntry, ChatToolTraceEvent, ChatWorkspaceResource, LlmRuntimeStatus, LlmTerminalConsumer } from '../../../shared/ipc/llm'
+import type { ChatAgentEvent, ChatAnswerQuestionPayload, ChatSteerInput, ChatToolTraceEntry, ChatToolTraceEvent, ChatWorkspaceResource, LlmRuntimeStatus, LlmTerminalConsumer } from '../../../shared/ipc/llm'
 
 export type { ChatToolTraceEntry } from '../../../shared/ipc/llm'
 export type { LlmTerminalConsumer } from '../../../shared/ipc/llm'
@@ -136,6 +136,8 @@ export function chatStream(
   onDone: () => void,
   onError: (error: string) => void,
   options?: {
+    memoBinding?: import('../../../shared/memo').MemoBinding
+    memoMessageId?: string
     providerId?: string
     modelId?: string
     sourceTag?: 'janus-chat' | 'launch-assistant'
@@ -273,6 +275,8 @@ export function chatStream(
         modelId: def.modelId,
         sourceTag: options?.sourceTag,
         conversationId: options?.conversationId,
+        memoBinding: options?.memoBinding,
+        memoMessageId: options?.memoMessageId,
         workspaceId: options?.workspaceId,
         workspacePath: options?.workspacePath,
         workspaceResources: options?.workspaceResources,
@@ -307,7 +311,7 @@ export function chatStream(
  * R6-full：向进行中的流投递 steering（主侧排队 + 抢占），附幂等 entryId。
  * 主侧 accept 即已入 durable 语义的队列（渲染历史同时乐观追加，随会话落盘）。
  */
-export async function steerChat(input: { conversationId?: string; entryId: string; text: string }): Promise<{ accepted: boolean; error?: string }> {
+export async function steerChat(input: ChatSteerInput): Promise<{ accepted: boolean; error?: string }> {
   return window.electron.llm.steerChat(input)
 }
 
