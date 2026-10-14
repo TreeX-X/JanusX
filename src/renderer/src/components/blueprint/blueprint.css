@@ -3264,7 +3264,10 @@
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.55);
-  z-index: 2000;
+  /* Modal tier: the dialog is portaled to body and must beat every surface,
+   * including the titlebar stacking context (9999) and the island companion
+   * memo panel (10052). */
+  z-index: 13500;
   animation: prompt-overlay-in 0.16s ease-out;
 }
 

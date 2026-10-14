@@ -27,6 +27,29 @@ async function fixture() {
 }
 
 describe('direct Note conversation', () => {
+  it.each([
+    '帮我建立一个关于工程排期的里程碑备忘录\n092节点为备忘录/shell功能扩展/工具界面提升/界面小改/用量统计 093节点为远程基座/docker（基础）/http（基础）',
+    'Update the memo using this Note as reference',
+    '更新备忘录，并修改项目 Note',
+  ])('does not authorize repository writes for memo instructions: %s', async userText => {
+    const { root, editor, signal, input } = await fixture()
+    const created = (await editor.write(root, 'chat', 'seed', input, true, signal))!
+    const before = await editor.read(root, created.files[0].uri)
+    const ports = {
+      sessions: { getSession: () => ({ sessionId: 'session', workspaceId: 'ws', workspaceRoot: root, status: 'running' }) },
+      tools: { registry: { list: () => [] }, executeFunctionCall: async () => { throw new Error('Unexpected fallback') } },
+    } as unknown as ChatTurnPorts
+    attachNoteChatTools(ports, { conversationId: 'chat', userText, signal, resources: [{ agentSessionId: 'session', workspaceId: 'ws', workspacePath: root }], onChange: () => { throw new Error('Unexpected write') } })
+    expect(ports.tools.registry.list().map(tool => tool.name)).not.toContain('note.write')
+    const invoke = (toolName: string, args: object) => ports.tools.executeFunctionCall({ sessionId: 'session', call: { toolName, input: args } } as never, 'test')
+    // A stale or hallucinated call must also fail, even after a valid read.
+    expect((await invoke('note.read', { uri: before.uri })).status).toBe('completed')
+    const result = await invoke('note.write', { reason: 'Wrong destination', operations: [{ type: 'update', uri: before.uri, expectedHash: before.expectedHash, title: '工程排期' }] })
+    expect(result.status).toBe('failed')
+    expect(await readFile(join(root, before.path), 'utf8')).toBe(before.markdown)
+    expect(await listNoteChatChanges(root, 'chat')).toHaveLength(1)
+  })
+
   it.each([false, true])('recognizes generic Note reads and preserves source hash when changed=%s', async changed => {
     const { root, editor, signal, input } = await fixture()
     const created = (await editor.write(root, 'chat', 'create', input, true, signal))!

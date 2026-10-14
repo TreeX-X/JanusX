@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pin, PinOff, X } from 'lucide-react'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'
 import type { SubAgentRun } from '../../../../shared/subAgentRun'
@@ -76,9 +76,6 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   /** Island window persistence: a pinned window survives outside click / Esc. */
   islandPinned?: boolean
   onToggleIslandPin?: () => void
-  /** Drag handle: pointerdown on the topbar chrome moves the panel. */
-  onTopbarPointerDown?: (event: ReactPointerEvent) => void
-  isDraggingIsland?: boolean
 }
 
 export function JanusIslandExpandedShell({
@@ -98,7 +95,6 @@ export function JanusIslandExpandedShell({
   onChatClear, conversationController,
   resourceController, toolTraces = [],
   islandPinned = false, onToggleIslandPin,
-  onTopbarPointerDown, isDraggingIsland = false,
 }: JanusIslandExpandedShellProps) {
   const { t } = useI18n('janus')
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -211,12 +207,7 @@ export function JanusIslandExpandedShell({
 
   return (
             <div className="janus-expanded-shell">
-              <div
-                className="janus-expanded-topbar janus-expanded-topbar--draggable"
-                data-dragging={isDraggingIsland ? 'true' : 'false'}
-                onPointerDown={onTopbarPointerDown}
-                title={t('janus:island.expanded.dragHint')}
-              >
+              <div className="janus-expanded-topbar">
                 <div className="janus-expanded-left">
                   {onToggleIslandPin ? (
                     <button

@@ -89,7 +89,7 @@ export function JanusRoundtablePane({
   // dialog; the FINAL draft stays until the user starts a new topic.
   const [exportBusy, setExportBusy] = useState(false)
   const [exportNotice, setExportNotice] = useState<string | null>(null)
-  // Staged new-topic exit: the auxiliary Island plays its 240ms exit first
+  // Staged new-topic exit: the auxiliary Island plays its shared exit first
   // while the dialog fades, and state resets only after both finished —
   // instead of everything snapping to empty in the same frame.
   const [dismissing, setDismissing] = useState(false)
@@ -251,7 +251,7 @@ export function JanusRoundtablePane({
   }
   const handleDismissToNewTopic = () => {
     // Explicit "new topic" is the only path that clears an ended meeting.
-    // Staged: auxiliary exit (240ms) + dialog fade run first; the reset lands
+    // Staged: shared auxiliary exit + dialog fade run first; the reset lands
     // after, so the room never blinks to empty mid-animation.
     if (dismissing) return
     setDismissing(true)

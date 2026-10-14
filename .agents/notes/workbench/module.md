@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-14T07:20:37Z",
+  "updated": "2026-10-14T09:00:04Z",
   "moduleState": "partial"
 }
 ---
@@ -56,6 +56,12 @@
 负责布局、预览、导航及可达交互，不承诺所有插件、主题或预览提案均已交付。下面保留历史阅读链，Note 工具的界面承载在本模块，文档身份和蓝图解析见 [Note 与蓝图](../blueprint/module.md)。
 
 中央工作区以 pane 树统一承载终端与浏览器内容；[工作区标签拖拽与布局](./pane-tab-reorder.md)负责排序、跨 pane 合并与分屏。每个 pane 的标签区独立横向滚动，右侧操作区固定，纯浏览器工作区也可分屏。
+
+备忘录与圆桌羊皮纸、角色结果及问题池已共用 components/island/islandMotion.ts 的开合生命周期、可见内容编排、220ms 动效参数及最终几何展示，components/island/islandLayout.ts 按左右方向求解主附岛布局。memo 与 useAuxiliaryIslandLayout 分别适配宿主；业务状态和材质仍由原模块负责，关闭后恢复所占样式、inert 和焦点。旧独立展示清理定时及固定偏移已移除。羊皮纸快速关开、窄窗两岛边界和关闭恢复通过浏览器检查；其它两种附岛完整业务仍未单独端到端验收，取舍及证据见[里程碑设计评审](../knowledge/milestone-design-review.md)。
+
+Chat 会话删除确认框虽通过 portal 挂到 body，仍属于 island 的交互范围。JanusChat 在确认框及遮罩外层标记 data-island-companion，并阻止指针和键盘事件继续向宿主传播；因此确认／取消不会被判为岛外点击，Esc 只关闭确认框。删除非当前会话保留当前回复；删除当前会话中止其回复并选择剩余会话，删完最后一条则创建空会话，均保持 island 展开。弹窗消失后正常的岛外点击收起仍有效。
+
+2026-10-14 回归：修复前真实组件测试复现点击删除确认后 data-stage 变为 collapsed；修复后 `npx playwright test tests/e2e/chat-conversation-delete.spec.ts --project=island --workers=1 --output=artifacts/chat-delete/verified` 5 项通过，覆盖置顶／未置顶、取消／Esc／遮罩、Enter 删除末会话、删除进行中回复与保留另一会话回复。使用真实组件和会话控制器，持久化与流式 IPC 为测试替身；未另跑桌面删除持久化。`npm run typecheck` 与 `npm run build:app` 通过；JanusChat 范围 ESLint 为 0 错误、4 条既有中文字符串警告。
 
 槽位演进链（非重复，保留先后）：[island-slots](./requirements/island-rightdock-slots.md)、[right-dock](./right-dock.md)、[empty-collapse](./right-dock-empty-collapse.md)、[toggle-motion](./right-rail-toggle-motion.md)、[drawer-resize](./runtime-drawer-cards-resize.md)、[run-orb](./run-orb-budding.md)、[hifi-alignment](./island-hifi-optimized-alignment.md)、[capsule](./island-notification-capsule.md)；turn 双件[island](./turn-change-island.md)与[card](./turn-change-card-external-cli.md)同属本域。
 

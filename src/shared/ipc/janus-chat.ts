@@ -48,6 +48,9 @@ export interface PersistedJanusConversation {
   attachedWorkspaceIds: string[]
   toolTraces: ChatToolTraceEntry[]
   engineeringContext?: EngineeringContext
+  /** The memo file this session maintains. One session owns exactly one memo;
+   *  switching or leaving it ends the session. See .agents/notes/knowledge/user-todo-janus.md */
+  memoId?: string
   artifactRefs?: EngineeringNoteRef[]
   activeRunRefs?: Array<{ taskUri: string; runId: string }>
   pendingActions?: Array<{ id: string; kind: string; createdAt: number }>
@@ -214,6 +217,7 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
 
   const providerId = boundedString(source.providerId, MAX_ID_LENGTH) ?? undefined
   const modelId = boundedString(source.modelId, 256) ?? undefined
+  const memoId = typeof source.memoId === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(source.memoId) ? source.memoId : undefined
   const engineeringContext = normalizeEngineeringContext(source.engineeringContext)
   const rawArtifactRefs = Array.isArray(source.artifactRefs)
     ? source.artifactRefs.flatMap((item) => {
@@ -259,6 +263,7 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
     messages,
     ...(providerId ? { providerId } : {}),
     ...(modelId ? { modelId } : {}),
+    ...(memoId ? { memoId } : {}),
     attachedWorkspaceIds,
     toolTraces,
     ...(engineeringContext ? { engineeringContext } : {}),
