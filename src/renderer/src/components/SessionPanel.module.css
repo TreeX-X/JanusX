@@ -33,17 +33,16 @@
   }
 }
 
-/* 会话面板表面三阶：地 → 卡 → 内卡。
-   地吃 --shell-canvas：planche 解析为纸面 #EFE4C5（= 软件底色），dark 为 v6 HiFi 画布 #151517。
-   卡/内卡仍走 A 方案高保真逐值：牛皮卡 #E2D9BD → 暖白纸内卡 #F8F2E0；
-   dark：卡 #1c1c1f → 内卡提亮块。
-   见 .agents/notes/workbench/session-card-surface.md */
+/* Session surfaces: canvas -> card -> subtly raised content.
+   Inner sheets share the card hue; hairlines preserve separation.
+   See .agents/notes/workbench/session-card-surface.md */
 .panelGround {
   background: var(--shell-canvas);
 }
 
 .cardSurface {
-  background: #E2D9BD;
+  --session-card-surface: #E2D9BD;
+  background: var(--session-card-surface);
   border: 1px solid var(--shell-border);
   border-radius: 6px;
   transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
@@ -101,18 +100,18 @@
 }
 
 :global([data-theme='dark']) .cardSurface {
-  background: #1c1c1f;
+  --session-card-surface: #1c1c1f;
 }
 
-/* 内容卡浅纸面（首轮提示 / 最近轮次） */
+/* First prompt and recent turns: a small lift from the parent card. */
 .sheet {
-  background: #F8F2E0;
+  background: color-mix(in srgb, var(--session-card-surface) 84%, white);
   border: 1px solid var(--shell-border);
   border-radius: 6px;
 }
 
 :global([data-theme='dark']) .sheet {
-  background: color-mix(in srgb, var(--shell-chrome) 88%, white);
+  background: color-mix(in srgb, var(--session-card-surface) 96%, white);
 }
 
 /* 卡片折叠控件：无边框 chevron 按钮。常驻可见（不做 hover-only），

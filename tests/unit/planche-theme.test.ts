@@ -198,15 +198,17 @@ describe('planche theme contract', () => {
     // 内容卡（首轮提示/最近轮次）走 module .sheet 浅纸面，不占 SURFACE_INSET 名额
     expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(5)
     // 会话面板三阶：地吃 --shell-canvas（planche=软件纸面底色，dark=v6 画布），
-    // 卡/内卡仍走 A 方案高保真逐值
+    // 内卡沿用外卡色相，轻微提亮并通过细边框分层
     const sessionMod = read('components/SessionPanel.module.css')
     expect(sessionMod).toContain('background: var(--shell-canvas)')
     expect(sessionMod).not.toContain('#E8E6E2')
-    expect(sessionMod).toContain('background: #E2D9BD')
-    expect(sessionMod).toContain('background: #F8F2E0')
+    expect(sessionMod).toContain('--session-card-surface: #E2D9BD')
+    expect(sessionMod).toContain('background: var(--session-card-surface)')
+    expect(sessionMod).toContain('--session-card-surface: #1c1c1f')
+    expect(sessionMod).toContain('color-mix(in srgb, var(--session-card-surface) 84%, white)')
     expect(sessionMod).toContain(":global([data-theme='dark']) .cardSurface")
     expect(sessionMod).toContain(":global([data-theme='dark']) .sheet")
-    expect(sessionMod).toContain('color-mix(in srgb, var(--shell-chrome) 88%, white)')
+    expect(sessionMod).toContain('color-mix(in srgb, var(--session-card-surface) 96%, white)')
     // 折叠控件为无边框 chevron 按钮（token 化，不吃填充；hover/聚焦走强调色）
     expect(sessionMod).toContain('.foldBtn')
     expect(sessionMod).toMatch(/\.foldBtn \{[^}]*border: none/s)
