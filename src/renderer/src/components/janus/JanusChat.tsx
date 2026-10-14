@@ -1771,8 +1771,10 @@ export function JanusChat({
       </div>
       {modelNotice && !minimalComposer && <div className="janus-chat-model-notice">{modelNotice}</div>}
       </div>
-      {/* The portaled confirmation belongs to the island, including its backdrop. */}
-      {createPortal(<div data-island-companion onPointerDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><PromptDialog
+      {/* The portaled confirmation belongs to the island, including its backdrop.
+          Gated like every other createPortal site so SSR-style unit renders never
+          evaluate document.body with the dialog closed. */}
+      {visible && pendingDeleteConversation !== null && createPortal(<div data-island-companion onPointerDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><PromptDialog
         open={visible && pendingDeleteConversation !== null}
         title={t('janus:chat.thread.deleteTitle')}
         description={t('janus:chat.thread.deleteConfirm', { title: pendingDeleteConversation?.title ?? '' })}

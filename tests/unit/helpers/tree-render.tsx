@@ -45,6 +45,7 @@ export function withSynchronousHooks<T>(render: () => T): T {
       return undefined
     },
     useEffect: () => undefined,
+    useLayoutEffect: () => undefined,
     useMemo: <V,>(factory: () => V) => factory(),
     useReducer: <V,>(initial: V) => [initial, vi.fn()],
     useRef: <V,>(value: V) => ({ current: value }),

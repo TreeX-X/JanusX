@@ -61,7 +61,7 @@ export function MemoPanel({ onBindMemo, compactTrigger = false }: { onBindMemo: 
     document.addEventListener('pointerdown', dismiss, true)
     return () => document.removeEventListener('pointerdown', dismiss, true)
   }, [open])
-  const api = window.electron?.memo
+  const api = typeof window === 'undefined' ? undefined : window.electron?.memo
   const { refresh: refreshMemos, receive } = state
   useEffect(() => {
     if (!api) return
