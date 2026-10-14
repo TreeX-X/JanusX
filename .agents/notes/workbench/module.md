@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-11T05:46:37.000Z",
+  "updated": "2026-10-14T02:01:00Z",
   "moduleState": "partial"
 }
 ---
@@ -64,6 +64,10 @@ Note 工具链三件各司其职：[drawer-toolbar](./note-drawer-markdown-toolb
 配套：[github-maintenance](../desktop/github-maintenance.md)、[markdown-assets](./markdown-preview-local-assets.md)、[experimental-preview](./experimental-preview-features.md)、[file-glyph](./drawer-markdown-file-glyph.md)、[reveal-race](./file-tree-reveal-race.md)、[share-import](../blueprint/workspaces/share-import.md)、[plugin-forms](./requirements/plugin-architecture-forms.md)、[plugin-debug](./requirements/plugin-import-debug.md)、[entry-nav](./entry-switch-navigation.md)、[f12-nav](./f12-navigation.md)。
 
 外部工作流工具探索：[Grok Bot 衔接](./grok-bot-workflow-integration.md)、[Docker 管理网页入口](./docker-management-entry.md)，均为讨论中的想法，不代表已实现。
+
+服务集成探索：[CPA 账号管理复用与 Figma 接入](./service-integrations.md)记录优先复用 CPA 管理能力、暂缓重复建设完整账号面板，以及保留原 CLI 会话与执行逻辑的方向；当前仅记录想法，具体接口与插件开放范围待核对。
+
+运行与测试目标探索：[按当前 worktree 运行与测试项目](./worktree-run-test-target.md)记录现有快捷启动使用工作区根目录的限制，以及目标跟随、进程归属和测试结果标识的建议，作为 0.9.2 候选，尚未实现。
 
 渲染与编辑器：[emphasis](./markdown-emphasis-orange-text.md)（强调色去填充块）、[standalone-refresh](./standalone-editor-auto-refresh.md)（独立编辑器外部变更自刷新）。
 

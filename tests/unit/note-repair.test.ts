@@ -213,7 +213,9 @@ describe('bounded Note repair', () => {
   })
   it('treats an updated-timestamp-only submission as zero-change review and preserves original bytes', async () => {
     const f = await fixture(), plan = await f.prepare(), page = await f.readAll(plan.id); f.mode('empty')
-    const markdown = page.markdown.replace(/"updated": "[^"]+"/, '"updated": "2026-10-12T12:00:00Z"')
+    const priorUpdated = JSON.parse(page.markdown.split('---')[1]).updated
+    const updated = new Date(Date.parse(priorUpdated) + 1000).toISOString()
+    const markdown = page.markdown.replace(/"updated": "[^"]+"/, '"updated": "' + updated + '"')
     expect(await f.service.write(plan.id, { ...page, markdown, reason: 'Already correct' }, f.signal)).toMatchObject({ status: 'unchanged' })
     expect(await f.service.continuation(plan.id)).toBeUndefined()
     expect(await f.service.finish(plan.id, f.signal)).toMatchObject({ phase: 'resolved', changed: false, remaining: 0 })

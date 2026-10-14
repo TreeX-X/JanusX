@@ -50,6 +50,20 @@ describe('TerminalContextCoordinator', () => {
     ])
   })
 
+  it('keeps the launch Codex home through hook refreshes, renderer reads and final collection', async () => {
+    const coordinator = new TerminalContextCoordinator()
+    const codexHome = join(testContext.userData, 'recovery-codex')
+    coordinator.trackTerminal('terminal-a', 'codex', 'C:/repo', undefined, codexHome)
+    coordinator.bindSession('terminal-a', 'codex', 'session-1')
+    coordinator.trackTerminal('terminal-a', 'codex', 'C:/repo')
+    await coordinator.getSnapshot({ terminalId: 'terminal-a', preset: 'codex', cwd: 'C:/repo' })
+    await coordinator.releaseTerminal('terminal-a')
+    expect(testContext.snapshots).toHaveLength(2)
+    expect(testContext.snapshots.every(request => request.codexHome === codexHome)).toBe(true)
+    await coordinator.getSnapshot({ terminalId: 'terminal-a', preset: 'codex', cwd: 'C:/repo' })
+    expect(testContext.snapshots.at(-1)?.codexHome).toBeUndefined()
+  })
+
   it('persists an exact binding for renderer reloads', async () => {
     const first = new TerminalContextCoordinator()
     first.bindSession('terminal-a', 'codex', 'session-1')

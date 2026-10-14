@@ -7,7 +7,7 @@
   "created": "2026-10-03",
   "class": "architecture",
   "tags": [],
-  "updated": "2026-10-09T08:23:28.326Z",
+  "updated": "2026-10-14T09:38:49.072Z",
   "moduleState": "partial",
   "role": "project"
 }
@@ -25,7 +25,7 @@
 
 [Note 与蓝图](blueprint/module.md)按文档读取、模块导航、维护对话、工作区组合细分；[会话与工作区](sessions/module.md)按会话记录、检查点、对话线程、工作树细分。其余模块保持现有职责深度，后续出现独立维护边界时再拆分，不要求树形等深。
 
-工程知识、蓝图与个人画像的后续讨论统一从[当前产品方向](blueprint/product-direction.md)和[交付计划](blueprint/evolution-roadmap.md)进入；这是产品演进方案，尚未改变下属模块的实际实现状态。
+工程知识、蓝图与个人画像的后续讨论统一从[当前产品方向](blueprint/product-direction.md)和[交付计划](blueprint/evolution-roadmap.md)进入；版本演进与节点排期由[工程排期里程碑备忘录](engineering-milestones.md)维护。这是产品演进与版本节奏对齐凭据，尚未改变下属模块的实际实现状态。
 
 模块层级来自最近上级的 parent，普通 Note 通过 module 归属。单根蓝图首页就是项目模块页，进入子模块后显示它自身和直属内容；未归属文档及读取诊断保留访问入口。文件数量、Task 完成和模块状态分别表达，不据目录位置推断功能已经验收。整理依据与迁移证据见[职责目录整理](blueprint/module-responsibilities.md)。
 

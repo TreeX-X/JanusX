@@ -17,6 +17,10 @@
   },
   "context": {
     "row": {
+      "runtimeWindow": "Runtime window",
+      "modelCapacity": "Model capacity",
+      "remaining": "Remaining",
+      "compactions": "Context compactions",
       "cacheRead": "Cache read",
       "cacheWrite": "Cache write",
       "sessionTotal": "Total tokens",

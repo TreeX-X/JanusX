@@ -31,8 +31,9 @@ export interface RuntimeTelemetrySnapshot {
   recentCacheHitRate?: number
   filePath?: string; sessionId?: string; observedAt?: number
   source?: RuntimeTelemetrySource; confidence?: RuntimeTelemetryConfidence
-  /** A hook or adapter explicitly associated this external session with one JanusX terminal. */
-  sessionBinding?: 'exact'
+  /** How this external session was tied to one JanusX terminal: an adapter or
+   *  hook event (exact), or main-process activity correlation (correlated). */
+  sessionBinding?: 'exact' | 'correlated'
   /** Only present when the adapter has counted compactions for an exactly bound session. */
   compactionCount?: number
   compactionCountConfidence?: 'exact'

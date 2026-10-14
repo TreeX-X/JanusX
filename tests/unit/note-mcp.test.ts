@@ -1,6 +1,6 @@
 import { beforeAll, afterAll, expect, it } from 'vitest'
 import { build } from 'esbuild'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -42,6 +42,13 @@ const call = async (name: string, args: Record<string, unknown>) => {
   if (response.isError) throw new Error(text)
   return JSON.parse(text)
 }
+async function freshWorkspace() {
+  const path = join(root, randomUUID())
+  await mkdir(join(path, '.agents/notes'), { recursive: true })
+  await writeFile(join(path, '.agents/harness.json'), await readFile(join(a, '.agents/harness.json')))
+  await writeFile(join(path, '.agents/notes/module.md'), await readFile(join(a, '.agents/notes/module.md')))
+  return path
+}
 it('runs without a desktop or WorkflowX, uses explicit invocation roots and shared suggestions', async () => {
   const tools = (await client.listTools()).tools.map(tool => tool.name)
   expect(tools).toEqual(expect.arrayContaining(['note.list','note.read','note.write','note.init','note.context','note.suggestions','note.suggestions.close']))
@@ -73,4 +80,92 @@ it('reports missing context materials and provides a readable maintenance guide'
   expect(context.continuation).toContain('expectedHash')
   const guide = await client.readResource({ uri: 'janusx-note://maintenance' })
   expect(guide.contents[0].text).toContain('note.suggestions')
+})
+
+it('updates a Note read through context and preserves unrelated sections', async () => {
+  const workspacePath = await freshWorkspace()
+  const context = await call('note.context', { workspacePath, uris: [uri] })
+  const page = context.notes[0]
+  const result = await call('note.write', { workspacePath, reason: 'Define recovery from the selected context',
+    operations: [{ type: 'update', uri, expectedHash: page.expectedHash, sections: { Design: 'Recover after restart.' } }] })
+  expect(result.status).toBe('applied')
+  const updated = await call('note.read', { workspacePath, uri })
+  expect(updated.markdown).toContain('Recover after restart.')
+  expect(updated.markdown).toContain('Read and maintain original Notes.')
+})
+
+it('exposes and executes hash-bound continuation and rejects changed source pages', async () => {
+  const definition = (await client.listTools()).tools.find(tool => tool.name === 'note.read')!
+  expect(definition.inputSchema.properties).toHaveProperty('expectedHash')
+  const file = join(b, '.agents/notes/module.md')
+  const original = await readFile(file, 'utf8')
+  try {
+    await writeFile(file, original + '\n' + 'Long source line\n'.repeat(100))
+    const first = await call('note.read', { workspacePath: b, uri, maxChars: 500 })
+    const next = await call('note.read', { workspacePath: b, uri, offset: first.nextOffset, maxChars: 500, expectedHash: first.expectedHash })
+    expect(next.expectedHash).toBe(first.expectedHash)
+    expect(next.offset).toBe(first.nextOffset)
+    await writeFile(file, original + '\nExternal modification\n')
+    await expect(call('note.read', { workspacePath: b, uri, offset: first.nextOffset, expectedHash: first.expectedHash })).rejects.toThrow('CONFLICT')
+  } finally { await writeFile(file, original) }
+})
+
+it('requires a successful source read rather than a list hash before updating', async () => {
+  const workspacePath = await freshWorkspace()
+  const file = join(workspacePath, '.agents/notes/module.md'), original = await readFile(file, 'utf8')
+  const listed = await call('note.list', { workspacePath })
+  const operations = [{ type: 'update', uri, expectedHash: listed.notes[0].sourceHash, sections: { Design: 'Unexpected change' } }]
+  await expect(call('note.write', { workspacePath, reason: 'Update design', operations })).rejects.toThrow('Read the Note')
+  expect(await readFile(file, 'utf8')).toBe(original)
+  await call('note.read', { workspacePath, uri })
+  expect((await call('note.write', { workspacePath, reason: 'Update design', operations })).status).toBe('applied')
+})
+
+it('identifies malformed update arguments and preserves source for a corrected retry', async () => {
+  const workspacePath = await freshWorkspace()
+  const page = await call('note.read', { workspacePath, uri })
+  const file = join(workspacePath, '.agents/notes/module.md'), original = await readFile(file, 'utf8')
+  await expect(call('note.write', { workspacePath, reason: 'Update design',
+    operations: [{ type: 'update', uri, sections: { Design: 'New design' } }] })).rejects.toThrow('require uri and expectedHash')
+  await expect(call('note.write', { workspacePath, reason: 'Update design',
+    operations: [{ type: 'update', uri, expectedHash: page.expectedHash, sections: ['New design'] }] })).rejects.toThrow('operations.0.sections')
+  await expect(call('note.write', { workspacePath, reason: 'Update design',
+    operations: [{ type: 'update', uri, expectedHash: page.expectedHash, markdown: 'Raw document' }] })).rejects.toThrow('markdown')
+  expect(await readFile(file, 'utf8')).toBe(original)
+  expect((await call('note.write', { workspacePath, reason: 'Update design',
+    operations: [{ type: 'update', uri, expectedHash: page.expectedHash, sections: { Design: 'Corrected design body' } }] })).status).toBe('applied')
+})
+
+it('a stale update cannot partially apply a mixed create/update transaction', async () => {
+  const workspacePath = await freshWorkspace()
+  const page = await call('note.read', { workspacePath, uri })
+  const file = join(workspacePath, '.agents/notes/module.md')
+  const external = page.markdown + '\nExternal change\n'
+  await writeFile(file, external)
+  await expect(call('note.write', { workspacePath, reason: 'Apply changes atomically', operations: [
+    { type: 'create', kind: 'note', title: 'Atomic new topic', module: uri, sections: { Summary: 'New topic body' } },
+    { type: 'update', uri, expectedHash: page.expectedHash, sections: { Design: 'Unexpected overwrite' } },
+  ] })).rejects.toThrow('CONFLICT')
+  expect(await readFile(file, 'utf8')).toBe(external)
+  expect((await call('note.list', { workspacePath })).notes).toHaveLength(1)
+})
+
+it('initializes a workspace explicitly, creates a topic and updates it through its context', async () => {
+  const workspacePath = join(root, randomUUID())
+  await mkdir(workspacePath)
+  const preview = await call('note.init', { workspacePath, name: 'MCP maintenance fixture' })
+  expect(preview.files.map((file: { path: string }) => file.path)).toEqual(expect.arrayContaining(['.agents/harness.json', '.agents/notes/module.md']))
+  await call('note.init', { workspacePath, previewId: preview.previewId })
+  const module = (await call('note.list', { workspacePath })).notes[0]
+  const created = await call('note.write', { workspacePath, reason: 'Create stable topic', operations: [
+    { type: 'create', kind: 'note', title: '维护专题', module: module.uri, sections: { Summary: '原始专题正文。' } },
+  ] })
+  const target = created.files[0].uri
+  const context = await call('note.context', { workspacePath, uris: [target] })
+  expect(context.notes.map((page: { uri: string }) => page.uri)).toContain(module.uri)
+  const page = context.notes.find((page: { uri: string }) => page.uri === target)
+  await call('note.write', { workspacePath, reason: 'Update stable topic', operations: [
+    { type: 'update', uri: target, expectedHash: page.expectedHash, sections: { Summary: '更新后的专题正文。' } },
+  ] })
+  expect((await call('note.read', { workspacePath, uri: target })).markdown).toContain('更新后的专题正文。')
 })

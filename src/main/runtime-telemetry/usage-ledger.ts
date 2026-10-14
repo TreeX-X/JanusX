@@ -18,6 +18,9 @@ interface SessionState extends UsageSessionStatus {
   sourceIdentity?: string
   sourceSize?: number
   sourceHash?: string
+  /** Fixed at first record: a session never switches accounting mode, so a
+   *  corpus event replay can never double-count an existing baseline. */
+  mode?: 'events' | 'cumulative'
 }
 
 /** SQLite commits dedup identities, baselines and deltas together, including across processes. */
@@ -63,6 +66,14 @@ export class UsageLedger {
       if (state.issue?.startsWith('counter-') || state.issue === 'event-changed') {
         database.exec('COMMIT'); return
       }
+      // Mode is fixed at first sighting (legacy rows infer it from their shape):
+      // the terminal path may baseline a session the corpus scanner already
+      // event-imported, and honouring both would double-count every later turn.
+      const lockedMode = previous === undefined
+        ? observation.mode
+        : state.mode ?? (state.counters ? 'cumulative' : 'events')
+      if (lockedMode !== observation.mode) { database.exec('COMMIT'); return }
+      state.mode = lockedMode
       state.issue = observation.issue
       if (!observation.issue && observation.mode === 'events') {
         const findIdentity = database.prepare('SELECT tokens FROM identities WHERE key=?')
@@ -82,6 +93,8 @@ export class UsageLedger {
           state.coverageStart = Math.min(state.coverageStart, at)
           append(tokens, at, exact ? 'event' : 'sample', event.model)
         }
+        // Complete-byte cursor lets the corpus scanner skip unchanged files.
+        if (observation.sourceSize !== undefined) state.sourceSize = observation.sourceSize
       } else if (!observation.issue && observation.mode === 'cumulative') {
         const next = observation.counters
         const changedSource = state.sourceIdentity !== undefined && observation.sourceIdentity !== state.sourceIdentity
@@ -153,6 +166,17 @@ export class UsageLedger {
       if (!row) return undefined
       const { sourceSize, sourceHash, updatedAt, model } = JSON.parse(row.data) as SessionState
       return { sourceSize, sourceHash, updatedAt, model }
+    } finally { database.close() }
+  }
+
+  /** Corpus scanner pre-flight: accounting mode already locked for a session, plus its read cursor. */
+  sessionState(engine: string, namespace: string, sessionId: string): { mode: 'events' | 'cumulative'; sourceSize?: number } | undefined {
+    const database = this.open()
+    try {
+      const row = database.prepare('SELECT data FROM sessions WHERE key=?').get(JSON.stringify([engine, namespace, sessionId])) as { data: string } | undefined
+      if (!row) return undefined
+      const { counters, mode, sourceSize } = JSON.parse(row.data) as SessionState
+      return { mode: mode ?? (counters ? 'cumulative' : 'events'), sourceSize }
     } finally { database.close() }
   }
 }

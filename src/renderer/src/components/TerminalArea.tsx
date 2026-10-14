@@ -9,7 +9,7 @@ import { useBrowserStore } from '@/stores/browser'
 import { BrowserSurface } from './browser/BrowserSurface'
 import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
 import { QuickNote } from './note/QuickNote'
-import { TerminalRuntime, TerminalUsageDetails } from './TerminalUsageDetails'
+import { TerminalContextTooltip, TerminalRuntime, TerminalUsageStats } from './TerminalUsageDetails'
 import {
   applyTerminalDraftLifecycle,
   clampDrawerHeight,
@@ -28,6 +28,15 @@ import { TurnChangeIsland } from './TurnChangeIsland'
 import { HoldToConfirm } from './ui/HoldToConfirm'
 import { useI18n } from '@/i18n/useI18n'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
+import {
+  contextExactLabel,
+  contextLabel,
+  contextPercentLabel,
+  contextRatio,
+  contextRatioColor,
+  modelLabel,
+  providerLabel,
+} from '@/lib/terminal-labels'
 import type { TerminalPreset, Terminal } from '@/types'
 import {
   getActiveBrowserTabDragId,
@@ -47,7 +56,6 @@ import {
 } from '@/lib/workspace-pane'
 import { getPaneDropHint, midpointInsertIndex, paneDropHintLabel, SPLIT_RATIO_EQUAL, type PaneDropHint } from '@/lib/pane-drop-hint'
 import { startPaneTabDrag } from '@/lib/pane-tab-drag'
-import { resolveContextWindows } from '@/lib/runtime-telemetry'
 import { getTerminalStatusVisual } from '@/lib/terminal-sidebar-visual'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
 import {
@@ -64,7 +72,6 @@ import { useThemeStore } from '@/stores/theme'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { TerminalStatusLight } from '@/components/ui/TerminalStatusLight'
 import { TerminalPresetIcon } from '@/components/ui/TerminalPresetIcon'
-import { getThemeDefinition } from '../../../shared/theme/registry'
 import {
   buildWorkspaceTerminalSurfaces,
   HOT_WORKSPACE_EVICTION_GRACE_MS,
@@ -98,96 +105,6 @@ const TERMINAL_MENU_PANEL_WIDTH = 240
 const TERMINAL_MENU_PANEL_ESTIMATED_HEIGHT = 212
 // 收回动画时长：关闭时先播 terminal-menu-out 再卸载，与弹入 140ms 对称
 const TERMINAL_MENU_EXIT_MS = 120
-
-function providerLabel(preset: TerminalPreset, t: (key: string) => string): string {
-  switch (preset) {
-    case 'claude':
-      return t('terminal:provider.claude')
-    case 'codex':
-      return t('terminal:provider.codex')
-    case 'opencode':
-      return t('terminal:provider.opencode')
-    case 'janus':
-      return t('terminal:provider.janus')
-    case 'pi':
-      return t('terminal:provider.pi')
-    case 'dsh':
-      return t('terminal:provider.dsh')
-    case 'shell':
-      return t('terminal:provider.shell')
-  }
-}
-
-function formatTokenCount(value?: number): string {
-  if (!value) return '0'
-  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`
-  return String(value)
-}
-
-function modelLabel(terminal: Terminal, t: (k: string) => string): string {
-  if (terminal.preset === 'shell') return t('terminal:model.na')
-  return terminal.detectedModel ?? t('terminal:model.detecting')
-}
-
-function contextWindow(terminal: Terminal): number | undefined {
-  return resolveContextWindows(
-    terminal.preset,
-    terminal.detectedModel,
-    terminal.contextWindowTokens,
-  ).effectiveWindow
-}
-
-function contextRatio(terminal: Terminal): number | undefined {
-  const windowTokens = contextWindow(terminal)
-  if (!windowTokens || terminal.contextTokens === undefined) return undefined
-  return Math.min(1, terminal.contextTokens / windowTokens)
-}
-
-/** 上下文用量颜色：三段刻度插值，用量越多越警告。
- *  锚点来自 theme definition ctxScale（dark：青蓝→橙→红；planche：深绿→赭黄→朱红），
- *  调用方无需传主题，默认读当前主题（M1 统一结构）。 */
-function contextRatioColor(ratio: number | undefined, theme: unknown = useThemeStore.getState().theme): string {
-  const scale = getThemeDefinition(theme).ctxScale
-  if (ratio === undefined) return scale.empty
-  const r = Math.max(0, Math.min(1, ratio))
-  const [c0, c50, c85, c100] = scale.stops.map(hexToRgb)
-  // 三段插值：[0,0.5] 宽裕→正常，[0.5,0.85] 正常→警告，[0.85,1] 警告加深
-  if (r <= 0.5) {
-    const t = r / 0.5
-    return mixColor(c0, c50, t)
-  }
-  if (r <= 0.85) {
-    const t = (r - 0.5) / 0.35
-    return mixColor(c50, c85, t)
-  }
-  const t = (r - 0.85) / 0.15
-  return mixColor(c85, c100, t)
-}
-
-function hexToRgb(hex: string): number[] {
-  const h = hex.replace('#', '')
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
-}
-
-function mixColor(a: number[], b: number[], t: number): string {
-  const r = Math.round(a[0] + (b[0] - a[0]) * t)
-  const g = Math.round(a[1] + (b[1] - a[1]) * t)
-  const bl = Math.round(a[2] + (b[2] - a[2]) * t)
-  return `rgb(${r}, ${g}, ${bl})`
-}
-
-function contextLabel(terminal: Terminal, t: (k: string) => string): string {
-  if (terminal.contextTokens === undefined) return t('terminal:telemetry.contextUnknown')
-  const used = terminal.contextTokens
-  const windowTokens = contextWindow(terminal)
-  if (!windowTokens) return `${formatTokenCount(used)} ctx`
-  return `${formatTokenCount(used)} / ${formatTokenCount(windowTokens)}`
-}
-
-function contextPercentLabel(terminal: Terminal): string {
-  const ratio = contextRatio(terminal)
-  return ratio === undefined ? '--' : `${(ratio * 100).toFixed(1)}%`
-}
 
 /*-- pane tab 条上的浏览器标签：标题跟随 surface 活动 tab --*/
 function BrowserPaneTabLabel({ surfaceId, isActive }: { surfaceId: string; isActive: boolean }) {
@@ -1640,6 +1557,7 @@ export function TerminalArea() {
                 >
                   <span className="truncate">{modelLabel(activeTerminal, t)}</span>
                 </span>
+                <TerminalContextTooltip terminal={activeTerminal}>
                 <span
                   className="group relative inline-flex h-5 shrink-0 items-center rounded border px-2 font-mono"
                   style={{
@@ -1650,6 +1568,7 @@ export function TerminalArea() {
                 >
                   {contextLabel(activeTerminal, t)}
                 </span>
+                </TerminalContextTooltip>
               </span>
             ) : (
               <span className="truncate font-mono text-[var(--shell-dim)]">No model or context data</span>
@@ -1741,18 +1660,26 @@ export function TerminalArea() {
                         <button
                           key={terminal.id}
                           type="button"
-                          className="flex min-w-0 cursor-pointer flex-col gap-2 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
+                          className="group relative flex min-w-0 cursor-pointer flex-col gap-2 rounded-md border px-2.5 py-2 text-left transition-colors hover:border-[color-mix(in_srgb,var(--shell-text)_18%,transparent)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
                           style={{
-                            borderColor: isActiveCard ? 'var(--shell-accent-border)' : 'rgba(255,255,255,0.07)',
-                            background: isActiveCard ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.018)',
+                            borderColor: isActiveCard ? 'var(--shell-accent-border)' : 'var(--shell-border)',
+                            background: 'transparent',
                           }}
                           aria-current={isActiveCard ? 'true' : undefined}
                           aria-label={identityLabel}
                           onClick={() => setActiveTerminal(terminal.id)}
                         >
+                          {/*-- 选中态=文字着色+2px 强调条；卡片保持透明，不做加深填充 --*/}
+                          {isActiveCard && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute inset-y-0 left-0 w-0.5 rounded-l-md"
+                              style={{ background: 'var(--shell-accent-border)' }}
+                            />
+                          )}
                           <span className="flex min-w-0 flex-wrap items-center justify-between gap-2">
                             <ThemedTooltip label={identityLabel}>
-                            <span className="flex min-w-0 items-center gap-1.5 text-[var(--shell-text)]">
+                            <span className="flex min-w-0 items-center gap-1.5">
                               <TerminalStatusLight status={terminal.status} compact />
                               {/*-- 与抽屉条左端 / 中部 tab 同一枚 preset 图标：卡片只给名称时
                                    分不清 codex 与 opencode，图标是唯一稳定的身份锚点。 --*/}
@@ -1760,31 +1687,29 @@ export function TerminalArea() {
                                 preset={terminal.preset}
                                 className="h-3.5 w-3.5 shrink-0"
                               />
-                              <span className="truncate">{providerLabel(terminal.preset, t)}</span>
+                              <span
+                                className="truncate text-[12px] font-medium"
+                                style={{ color: isActiveCard ? 'var(--shell-accent)' : 'var(--shell-text)' }}
+                              >
+                                {providerLabel(terminal.preset, t)}
+                              </span>
                             </span>
                             </ThemedTooltip>
                             <TerminalRuntime terminal={terminal} />
                           </span>
-                          <span
-                            className="inline-flex h-5 min-w-0 max-w-full items-center self-start rounded border px-2"
-                            style={{
-                              borderColor: 'rgba(255,255,255,0.055)',
-                              background: 'rgba(255,255,255,0.014)',
-                              color: 'var(--shell-muted)',
-                            }}
-                          >
-                            <span className="truncate">{modelLabel(terminal, t)}</span>
-                          </span>
-                          <span
-                            className="group relative flex min-w-0 flex-col gap-1"
-                          >
-                            <span className="flex items-center justify-between gap-2">
-                              <span className="truncate text-[10px] text-[var(--shell-muted)]">{t('terminal:context.row.context')} · {contextLabel(terminal, t)}</span>
-                              <span className="shrink-0 tabular-nums" style={{ color: ratioColor }}>{contextPercentLabel(terminal)}</span>
+                          <span className="truncate text-[10px] text-[var(--shell-dim)]">{modelLabel(terminal, t)}</span>
+                          <TerminalContextTooltip terminal={terminal}>
+                          <span className="flex min-w-0 flex-col gap-1 border-t pt-2" style={{ borderColor: 'var(--shell-border-soft)' }}>
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span className="text-[10px] text-[var(--shell-muted)]">{t('terminal:context.row.context')}</span>
+                              <span className="flex items-baseline gap-1.5">
+                                <span className="tabular-nums text-[11px] text-[var(--shell-text)]">{contextExactLabel(terminal, t)}</span>
+                                <span className="shrink-0 tabular-nums text-[10px]" style={{ color: ratioColor }}>{contextPercentLabel(terminal)}</span>
+                              </span>
                             </span>
                             <span
                               className="block h-1 w-full overflow-hidden rounded-full"
-                              style={{ background: 'rgba(255,255,255,0.06)' }}
+                              style={{ background: 'var(--shell-border-soft)' }}
                             >
                               <span
                                 className="block h-full rounded-full transition-[width,background] duration-300"
@@ -1795,7 +1720,8 @@ export function TerminalArea() {
                               />
                             </span>
                           </span>
-                          <TerminalUsageDetails terminal={terminal} />
+                          </TerminalContextTooltip>
+                          <TerminalUsageStats terminal={terminal} layout="grid" />
                         </button>
                       )
                     })}

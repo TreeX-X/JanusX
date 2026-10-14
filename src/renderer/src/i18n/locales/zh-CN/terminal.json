@@ -17,6 +17,10 @@
   },
   "context": {
     "row": {
+      "runtimeWindow": "运行窗口",
+      "modelCapacity": "模型容量",
+      "remaining": "剩余上下文",
+      "compactions": "上下文压缩次数",
       "cacheRead": "缓存读取",
       "cacheWrite": "缓存写入",
       "sessionTotal": "Token 总数",

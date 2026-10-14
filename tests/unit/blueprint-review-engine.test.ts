@@ -100,6 +100,39 @@ it('rejects a complete verdict that skips the implementation referenced by the t
   await expect(f.review()).rejects.toThrow('did not check implementation')
 })
 
+it('does not count an unrelated source file as the implementation referenced by the target Note', async () => {
+  const f = await setup()
+  await writeFile(join(f.root, 'src/unrelated.ts'), 'export const unrelated = true\n')
+  f.generate.mockImplementationOnce(async (_settings, _input, evidence) => {
+    await evidence.read('.agents/notes/requirement.md')
+    await evidence.read('src/unrelated.ts')
+    return { findings: [], coverage: 'complete', limitations: [] } as any
+  })
+  await expect(f.review()).rejects.toThrow('src/queue.ts')
+  expect(f.workspace.saved(f.context).items.find(item => item.noteId === f.noteId)?.report).toBeNull()
+})
+
+it('requires each local code reference and allows an explicit insufficient report', async () => {
+  const f = await setup()
+  const file = join(f.root, '.agents/notes/requirement.md')
+  const source = await readFile(file, 'utf8')
+  const metadata = JSON.parse(source.split('---')[1])
+  metadata.codeRefs.push({ repoId: f.context.repoId, path: 'src/recovery.ts', role: 'implementation' })
+  await writeFile(file, source.replace(source.split('---')[1], '\n' + JSON.stringify(metadata, null, 2) + '\n'))
+  await writeFile(join(f.root, 'src/recovery.ts'), 'export const recovered = false\n')
+  const result = { findings: [], coverage: 'complete', limitations: [] }
+  f.generate.mockImplementationOnce(async (_settings, _input, evidence) => {
+    await evidence.read('.agents/notes/requirement.md'); await evidence.read('src/queue.ts')
+    return result as any
+  })
+  await expect(f.review()).rejects.toThrow('src/recovery.ts')
+  f.generate.mockImplementationOnce(async (_settings, _input, evidence) => {
+    await evidence.read('.agents/notes/requirement.md'); await evidence.read('src/queue.ts')
+    return { ...result, coverage: 'insufficient', limitations: ['Recovery implementation has not been read.'] } as any
+  })
+  expect((await f.review()).report?.coverage).toBe('insufficient')
+})
+
 it('requires the target Note to be fully paged before a complete review can publish', async () => {
   const f = await setup()
   await writeFile(join(f.root, '.agents/notes/requirement.md'),

@@ -35,7 +35,7 @@ function parseJson(raw: string): unknown {
   }
 }
 
-async function readHookStdin(): Promise<string> {
+async function readHookStdin(): Promise<Buffer> {
   const chunks: Buffer[] = []
   let size = 0
 
@@ -46,7 +46,26 @@ async function readHookStdin(): Promise<string> {
     chunks.push(buffer)
   }
 
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks)
+}
+
+/**
+ * Codex pipes hook stdin as UTF-16LE with a BOM on Windows; Claude pipes
+ * UTF-8. Decoding by BOM keeps both session identities intact — a plain
+ * UTF-8 read of UTF-16 bytes is NUL-separated mojibake and every JSON field
+ * (session_id/thread_id/transcript_path) is lost. No BOM means UTF-8.
+ */
+export function decodeHookStdin(buffer: Buffer): string {
+  if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) {
+    return buffer.toString('utf16le').replace(/^\uFEFF/, '')
+  }
+  if (buffer.length >= 2 && buffer.length % 2 === 0 && buffer[0] === 0xfe && buffer[1] === 0xff) {
+    return buffer.swap16().toString('utf16le').replace(/^\uFEFF/, '')
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+    return buffer.toString('utf8', 3)
+  }
+  return buffer.toString('utf8')
 }
 
 function normalizePayload(source: AgentHookSource, event: string, raw: unknown, matcher?: string): AgentHookPayload {
@@ -117,7 +136,7 @@ export async function runAgentHookClient(argv = process.argv): Promise<void> {
 
   if (!source || !event || !port || !token) return
 
-  const raw = parseJson(await readHookStdin())
+  const raw = parseJson(decodeHookStdin(await readHookStdin()))
   const matcher = getArgValue(argv, JANUSX_HOOK_MATCHER_FLAG)
   const payload = normalizePayload(source, event, raw, matcher)
   await postHookEvent(port, token, payload)

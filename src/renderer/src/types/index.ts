@@ -42,7 +42,7 @@ export interface Terminal {
   contextTokens?: number
   contextWindowTokens?: number
   telemetrySessionId?: string
-  telemetrySessionBinding?: 'exact'
+  telemetrySessionBinding?: 'exact' | 'correlated'
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number

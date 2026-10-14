@@ -634,6 +634,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   void hookBridge.start().catch((err) => {
     console.error('Agent hook bridge prestart failed:', err)
   })
+  // Usage accounting is hook-free: the corpus scan covers closed terminals,
+  // offline periods and sessions JanusX never opened.
+  terminalContextCoordinator.startCorpusScan()
   for (const command of AGENT_CLI_COMMANDS) {
     void resolveCLIPath(command).catch(() => undefined)
   }
@@ -1049,6 +1052,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         // kill 后窗口期实例已移除，appendOutput 返回 null：跳过转发，避免 seq undefined 的乱序数据。
         if (seq === null) return
         queueTerminalData(id, data, seq)
+        // Hook-free attribution input: pty activity is the correlation signal
+        // for binding this terminal to its native session file.
+        terminalContextCoordinator.noteTerminalActivity(id, Date.now())
 
         // PTY output includes user input echo, prompt redraws and ANSI repaint
         // sequences. It is deliberately not used to infer AI activity.
@@ -1171,7 +1177,10 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
 
     terminalContextCoordinator.trackTerminal(id, engine, cwd, telemetry => {
       sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.telemetry, { id, telemetry })
-    })
+    }, recoveryEnv?.codexHome)
+    // Hook-free attribution: bind this terminal to its native session as soon
+    // as its first pty output lands, without waiting for the poll cadence.
+    void terminalContextCoordinator.runAttributionPass().catch(() => undefined)
     sendToRenderer(getMainWindow(), TERMINAL_EVENT_CHANNELS.created, {
       id, workspaceId, cwd, preset: engine, shell, pid: instance.pty.pid,
     })

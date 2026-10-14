@@ -1,5 +1,26 @@
 import { expect, test } from '@playwright/test'
 
+test('collapsed context badge shows exact values and distinguishes zero from unknown', async ({ page }) => {
+  await page.goto('/pane-tabs.html?usage')
+  await page.getByText('4.0k / 200k', { exact: true }).hover()
+  const tooltip = page.getByRole('tooltip')
+  // 悬浮提示与展开卡片同一份数据：上下文明细 + 五项统计
+  await expect(tooltip.getByText('Context', { exact: true }).locator('..')).toContainText('4,000 / 200,000')
+  await expect(tooltip.getByText('Remaining', { exact: true }).locator('..')).toContainText('196,000')
+  await expect(tooltip.getByText('Recent cache hit rate', { exact: true }).locator('..')).toContainText('25.0%')
+  await expect(tooltip.getByText('Total tokens', { exact: true }).locator('..')).toContainText('20,500')
+  await expect(tooltip.getByText('Input/output', { exact: true }).locator('..')).toContainText('10,000 / 2,000')
+  await page.evaluate(() => (window as any).paneFixture.updateUsage({ contextTokens: 0, compactionCount: 0, compactionCountConfidence: 'exact' }))
+  await expect(tooltip.getByText('Context', { exact: true }).locator('..')).toContainText('0 / 200,000')
+  await expect(tooltip.getByText('Context compactions', { exact: true }).locator('..')).toContainText('0')
+  await page.mouse.move(0, 0)
+  await expect(tooltip).toHaveCount(0)
+  await page.evaluate(() => (window as any).paneFixture.updateUsage({ contextTokens: undefined }))
+  await page.getByText('ctx unknown', { exact: true }).hover()
+  await expect(tooltip.getByText('Context', { exact: true }).locator('..')).toContainText('– / 200,000')
+  await expect(tooltip.getByText('Remaining', { exact: true }).locator('..')).toContainText('–')
+})
+
 test('one opening exposes usage, live runtime and unknown values without a detail overlay', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-14T02:00:00Z') })
   await page.clock.pauseAt(new Date('2026-10-14T02:00:01Z'))
@@ -22,7 +43,17 @@ test('one opening exposes usage, live runtime and unknown values without a detai
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await expect(panel).not.toContainText('Telemetry status')
   await card.getByText('Context', { exact: false }).hover()
-  await expect(page.getByRole('tooltip', { name: 'Runtime context' })).toHaveCount(0)
+  await page.clock.fastForward(400)
+  const tooltip = page.getByRole('tooltip')
+  // 悬浮提示内容与展开卡片一致：上下文明细 + 五项统计
+  await expect(tooltip.getByText('Context', { exact: true }).locator('..')).toContainText('4,000 / 200,000')
+  await expect(tooltip.getByText('Remaining', { exact: true }).locator('..')).toContainText('196,000')
+  await expect(tooltip.getByText('Runtime window', { exact: true }).locator('..')).toContainText('200,000')
+  await expect(tooltip.getByText('Recent cache hit rate', { exact: true }).locator('..')).toContainText('25.0%')
+  await expect(tooltip.getByText('Cache read', { exact: true }).locator('..')).toContainText('8,000')
+  await expect(tooltip.getByText('Input/output', { exact: true }).locator('..')).toContainText('10,000 / 2,000')
+  await page.mouse.move(0, 0)
+  await expect(tooltip).toHaveCount(0)
 
   await page.evaluate(() => (window as any).paneFixture.updateUsage({ recentCacheHitRate: 0 }))
   await expect(card).toContainText('0.0%')
@@ -53,5 +84,12 @@ test('Chinese usage labels remain readable at narrow widths', async ({ page }) =
   const inputOutput = await card.getByText('输入/输出', { exact: true }).boundingBox()
   const panelBox = await panel.boundingBox()
   expect(inputOutput && panelBox && inputOutput.y + inputOutput.height <= panelBox.y + panelBox.height).toBeTruthy()
+  await card.getByText('上下文', { exact: true }).hover()
+  const tooltip = page.getByRole('tooltip')
+  await expect(tooltip.getByText('剩余上下文', { exact: true }).locator('..')).toContainText('196,000')
+  await expect(tooltip.getByText('上下文压缩次数', { exact: true }).locator('..')).toContainText('–')
+  await expect(tooltip.getByText('Token 总数', { exact: true }).locator('..')).toContainText('20,500')
+  const tipBox = await tooltip.boundingBox()
+  expect(tipBox && tipBox.x >= 0 && tipBox.x + tipBox.width <= 480).toBeTruthy()
   await page.screenshot({ path: 'artifacts/terminal-usage-narrow.png' })
 })

@@ -572,7 +572,6 @@ export function buildWindowsHookScript(): string {
 $ErrorActionPreference = "Stop"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $OutputEncoding = $utf8NoBom
-[Console]::InputEncoding = $utf8NoBom
 [Console]::OutputEncoding = $utf8NoBom
 
 function Write-Diagnostic($Status, $Detail) {
@@ -616,7 +615,35 @@ try {
     exit 0
   }
 
-  $stdinRaw = [Console]::In.ReadToEnd()
+  # Codex pipes hook stdin as UTF-16LE with a BOM on Windows; Claude pipes
+  # UTF-8. Read the raw stream and decode by BOM so both session identities
+  # survive — reading UTF-16 bytes as UTF-8 yields NUL-separated mojibake,
+  # ConvertFrom-Json then fails, and session_id/thread_id/transcript_path
+  # are silently dropped (the terminal never binds its native session).
+  $stdinBytes = $null
+  if ([Console]::IsInputRedirected) {
+    $stdinStream = [Console]::OpenStandardInput()
+    $bufferStream = New-Object System.IO.MemoryStream
+    try {
+      $stdinStream.CopyTo($bufferStream)
+      $stdinBytes = $bufferStream.ToArray()
+    } finally {
+      $bufferStream.Dispose()
+      $stdinStream.Dispose()
+    }
+  }
+  $stdinRaw = ""
+  if ($null -ne $stdinBytes -and $stdinBytes.Length -ge 2) {
+    if ($stdinBytes[0] -eq 0xFF -and $stdinBytes[1] -eq 0xFE) {
+      $stdinRaw = [System.Text.Encoding]::Unicode.GetString($stdinBytes).TrimStart([char]0xFEFF)
+    } elseif ($stdinBytes[0] -eq 0xFE -and $stdinBytes[1] -eq 0xFF) {
+      $stdinRaw = [System.Text.Encoding]::BigEndianUnicode.GetString($stdinBytes).TrimStart([char]0xFEFF)
+    } elseif ($stdinBytes.Length -ge 3 -and $stdinBytes[0] -eq 0xEF -and $stdinBytes[1] -eq 0xBB -and $stdinBytes[2] -eq 0xBF) {
+      $stdinRaw = [System.Text.Encoding]::UTF8.GetString($stdinBytes, 3, $stdinBytes.Length - 3)
+    } else {
+      $stdinRaw = [System.Text.Encoding]::UTF8.GetString($stdinBytes)
+    }
+  }
   $rawValue = $null
   if (-not [string]::IsNullOrWhiteSpace($stdinRaw)) {
     try {

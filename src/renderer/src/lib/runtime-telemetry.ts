@@ -23,7 +23,7 @@ export interface RuntimeTelemetryPatch {
   observedAt?: number
   source?: RuntimeTelemetrySource
   confidence?: RuntimeTelemetryConfidence
-  sessionBinding?: 'exact'
+  sessionBinding?: 'exact' | 'correlated'
   compactionCount?: number
   compactionCountConfidence?: 'exact'
   modelChangedAt?: number
@@ -35,7 +35,7 @@ export type RuntimeTelemetryState = RuntimeTelemetryPatch & {
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number
-  telemetrySessionBinding?: 'exact'
+  telemetrySessionBinding?: 'exact' | 'correlated'
   compactionCount?: number
   compactionCountConfidence?: 'exact'
   modelChangedAt?: number
@@ -55,7 +55,7 @@ export interface RuntimeTelemetryUpdate {
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number
-  telemetrySessionBinding?: 'exact'
+  telemetrySessionBinding?: 'exact' | 'correlated'
   compactionCount?: number
   compactionCountConfidence?: 'exact'
   modelChangedAt?: number
@@ -146,6 +146,12 @@ export function resolveContextWindows(
   }
 }
 
+/** exact（hook/适配器）与 correlated（活跃度相关性）都算终端级绑定；
+ *  无绑定的 history 快照在同 cwd 多终端下不可归属，一律忽略。 */
+function isTerminalBound(binding: RuntimeTelemetrySnapshot['sessionBinding']): boolean {
+  return binding === 'exact' || binding === 'correlated'
+}
+
 export function mergeRuntimeTelemetrySnapshot(
   current: RuntimeTelemetryState,
   telemetry: RuntimeTelemetrySnapshot
@@ -168,8 +174,8 @@ export function mergeRuntimeTelemetrySnapshot(
   if (
     telemetry.source === 'history' &&
     telemetry.sessionId &&
-    current.telemetrySessionBinding !== 'exact' &&
-    telemetry.sessionBinding !== 'exact'
+    !isTerminalBound(current.telemetrySessionBinding) &&
+    !isTerminalBound(telemetry.sessionBinding)
   ) {
     return {}
   }
@@ -177,7 +183,7 @@ export function mergeRuntimeTelemetrySnapshot(
   const source = telemetry.source ?? 'terminal-text'
   const confidence = telemetry.confidence ?? defaultConfidence(source)
   const sessionChanged = Boolean(
-    telemetry.sessionBinding === 'exact' &&
+    isTerminalBound(telemetry.sessionBinding) &&
     telemetry.sessionId &&
     current.telemetrySessionId &&
     telemetry.sessionId !== current.telemetrySessionId
@@ -190,7 +196,7 @@ export function mergeRuntimeTelemetrySnapshot(
     telemetry.detectedModel !== current.detectedModel,
   )
   if (
-    current.telemetrySessionBinding === 'exact' &&
+    isTerminalBound(current.telemetrySessionBinding) &&
     telemetry.source === 'history' &&
     telemetry.sessionId !== current.telemetrySessionId && !sessionChanged
   ) {

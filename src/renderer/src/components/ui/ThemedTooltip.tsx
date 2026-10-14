@@ -4,13 +4,18 @@ import styles from './ThemedTooltip.module.css'
 
 interface ThemedTooltipProps {
   /** 提示文本（替代原生 title，原生黑框由系统绘制，主题够不着） */
-  label: string
+  label: ReactNode
   children: ReactNode
   /** 首选方位；空间不足自动翻转 */
   placement?: 'top' | 'bottom'
   /** 悬浮多久后出现（毫秒，对齐原生 tooltip 节奏） */
   delayMs?: number
   disabled?: boolean
+  /**
+   * text：居中纯文本（默认，pre-wrap 保留换行）。
+   * panel：左对齐结构化内容（标签/数值列），供用量卡片等同构浮层。
+   */
+  variant?: 'text' | 'panel'
 }
 
 interface TipGeometry {
@@ -23,6 +28,7 @@ interface TipGeometry {
  * 主题化悬浮提示：一键配置机制——底座吃语义令牌，纸面走 :global 加法层。
  * 锚点 `display: contents`，不改变原布局；浮层挂 body portal，
  * 上方空间不足 48px 自动翻到下方；滚动/resize/Esc 关闭。
+ * `variant="panel"` 渲染左对齐的结构化内容（标签列+数值列）。
  */
 export function ThemedTooltip({
   label,
@@ -30,6 +36,7 @@ export function ThemedTooltip({
   placement = 'top',
   delayMs = 350,
   disabled = false,
+  variant = 'text',
 }: ThemedTooltipProps) {
   const anchorRef = useRef<HTMLSpanElement | null>(null)
   const timerRef = useRef<number | null>(null)
@@ -98,7 +105,7 @@ export function ThemedTooltip({
         typeof document !== 'undefined' &&
         createPortal(
           <div
-            className={styles.tip}
+            className={variant === 'panel' ? styles.tipPanel : styles.tip}
             role="tooltip"
             style={{
               left: geometry.left,

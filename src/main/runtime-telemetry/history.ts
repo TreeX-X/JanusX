@@ -9,9 +9,10 @@ import type { UsageEngine, UsageObservation, UsageSourceCheckpoint } from '../..
 import { collectUsageEvents, cumulativeUsage, usageTokens } from './history-usage'
 
 export type HistoryTelemetrySnapshot = RuntimeTelemetrySnapshot & { usageObservation?: UsageObservation }
+export type HistoryTelemetryRequest = RuntimeTelemetryRequest & { codexHome?: string }
 type CheckpointLookup = (engine: UsageEngine, namespace: string, sessionId: string) => UsageSourceCheckpoint | undefined
 
-interface SessionFileRef {
+export interface SessionFileRef {
   path: string
   updatedAt: number
   namespace?: string
@@ -29,7 +30,7 @@ const TELEMETRY_TAIL_BYTES = 256 * 1024
 const MAX_SESSION_BYTES = 64 * 1024 * 1024
 
 export async function getRuntimeTelemetrySnapshot(
-  request: RuntimeTelemetryRequest,
+  request: HistoryTelemetryRequest,
   checkpointLookup?: CheckpointLookup,
 ): Promise<HistoryTelemetrySnapshot | null> {
   const preset = request.preset
@@ -47,9 +48,10 @@ export async function getRuntimeTelemetrySnapshot(
       : readClaudeBootstrapTelemetry()
   }
   if (preset === 'codex') {
+    const codexHome = request.codexHome?.trim() || process.env.CODEX_HOME?.trim() || join(os.homedir(), '.codex')
     return sessionId
-      ? scanCodexHistory(cwd, startedAt, sessionId, checkpointLookup)
-      : readCodexBootstrapTelemetry()
+      ? scanCodexHistory(codexHome, cwd, startedAt, sessionId, checkpointLookup)
+      : readCodexBootstrapTelemetry(codexHome)
   }
   if (preset === 'opencode') {
     return sessionId
@@ -109,8 +111,8 @@ async function scanClaudeHistory(cwd: string, startedAt?: number, sessionId?: st
   return current
 }
 
-async function scanCodexHistory(cwd: string, startedAt?: number, sessionId?: string, checkpointLookup?: CheckpointLookup): Promise<HistoryTelemetrySnapshot | null> {
-  const root = join(os.homedir(), '.codex', 'sessions')
+async function scanCodexHistory(codexHome: string, cwd: string, startedAt?: number, sessionId?: string, checkpointLookup?: CheckpointLookup): Promise<HistoryTelemetrySnapshot | null> {
+  const root = join(codexHome, 'sessions')
   const files = (await listJsonlFilesRecursive(root, (name) => name.startsWith('rollout-') && name.endsWith('.jsonl')))
     .filter((file) => isFileAfterStartedAt(file, startedAt))
     .filter((file) => !sessionId || file.path.toLowerCase().includes(sessionId.toLowerCase()))
@@ -118,7 +120,7 @@ async function scanCodexHistory(cwd: string, startedAt?: number, sessionId?: str
     .slice(0, MAX_CODEX_CANDIDATES)
 
   for (const file of files) {
-    const snapshot = await parseCodexSession(file, cwd, startedAt, true, checkpointLookup)
+    const snapshot = await parseCodexSession(file, cwd, codexHome, startedAt, true, checkpointLookup)
     if (!snapshot) continue
     if (sessionId && snapshot.sessionId !== sessionId) continue
     if (snapshotMatchesCwd(snapshot, cwd)) {
@@ -136,8 +138,8 @@ function recentCacheHitRate(input?: number, cached?: number, written = 0): numbe
   return total > 0 ? cached / total : undefined
 }
 
-async function parseClaudeSession(file: SessionFileRef, startedAt?: number): Promise<HistoryTelemetrySnapshot | null> {
-  const lines = await readJsonlLines(file.path, true)
+export async function parseClaudeSession(file: SessionFileRef, startedAt?: number, preRead?: string[]): Promise<HistoryTelemetrySnapshot | null> {
+  const lines = preRead ?? await readJsonlLines(file.path, true)
   const snapshot: HistoryTelemetrySnapshot = {
     filePath: file.path,
     observedAt: file.updatedAt,
@@ -242,18 +244,20 @@ function createEmptyCurrentSnapshot(modelSnapshot?: RuntimeTelemetrySnapshot | n
   }
 }
 
-async function parseCodexSession(
+export async function parseCodexSession(
   file: SessionFileRef,
-  cwd: string,
+  cwd: string | undefined,
+  codexHome: string,
   startedAt?: number,
   includeCompactions = false,
   checkpointLookup?: CheckpointLookup,
+  preRead?: string[],
 ): Promise<HistoryTelemetrySnapshot | null> {
   // Compression is an auditable count, not a best-effort tail sample. A bound
   // session is read completely so older compactions cannot disappear from a
   // long rollout file.
   let source: { buffer: Buffer; info: Stats } | undefined
-  const lines = await readJsonlLines(file.path, includeCompactions, (buffer, info) => { source = { buffer, info } })
+  const lines = preRead ?? await readJsonlLines(file.path, includeCompactions, (buffer, info) => { source = { buffer, info } })
   const snapshot: HistoryTelemetrySnapshot & { cwd?: string } = {
     filePath: file.path,
     observedAt: file.updatedAt,
@@ -303,7 +307,7 @@ async function parseCodexSession(
     const lastUsage = asRecord(info.last_token_usage) ?? asRecord(info.lastTokenUsage)
     const totalUsage = asRecord(info.total_token_usage) ?? asRecord(info.totalTokenUsage)
 
-    const contextTokens = readPositiveNumber(lastUsage?.total_tokens ?? lastUsage?.totalTokens)
+    const contextTokens = readNonNegativeNumber(lastUsage?.total_tokens ?? lastUsage?.totalTokens)
     const contextWindowTokens = readPositiveNumber(info.model_context_window ?? info.modelContextWindow)
     const inputTokens = readNonNegativeNumber(totalUsage?.input_tokens ?? totalUsage?.inputTokens)
     const cachedInputTokens = readNonNegativeNumber(totalUsage?.cached_input_tokens ?? totalUsage?.cachedInputTokens)
@@ -320,11 +324,13 @@ async function parseCodexSession(
     snapshot.totalTokens = readNonNegativeNumber(totalUsage?.total_tokens ?? totalUsage?.totalTokens)
   }
 
-  if (snapshot.cwd && !pathsEqual(snapshot.cwd, cwd)) {
+  // A terminal read filters foreign workspaces; the corpus scan passes no cwd
+  // and deliberately reads every session.
+  if (snapshot.cwd && cwd && !pathsEqual(snapshot.cwd, cwd)) {
     return null
   }
   if (snapshot.sessionId && snapshot.totalTokens !== undefined) {
-    const namespace = join(os.homedir(), '.codex')
+    const namespace = codexHome
     snapshot.usageObservation = cumulativeUsage('codex', namespace, snapshot.sessionId, usageTokens(snapshot.inputTokens, snapshot.outputTokens, snapshot.cacheReadTokens, undefined, snapshot.totalTokens), snapshot.detectedModel)
     if (source) {
       const checkpoint = checkpointLookup?.('codex', namespace, snapshot.sessionId)
@@ -338,7 +344,7 @@ async function parseCodexSession(
   return hasTelemetry(snapshot) ? snapshot : null
 }
 
-async function listJsonlFiles(
+export async function listJsonlFiles(
   dir: string,
   acceptsName: (name: string) => boolean,
 ): Promise<SessionFileRef[]> {
@@ -357,7 +363,7 @@ async function listJsonlFiles(
   }
 }
 
-async function listJsonlFilesRecursive(
+export async function listJsonlFilesRecursive(
   root: string,
   acceptsName: (name: string) => boolean,
 ): Promise<SessionFileRef[]> {
@@ -377,27 +383,42 @@ async function listJsonlFilesRecursive(
 }
 
 async function readJsonlLines(filePath: string, full = false, capture?: (buffer: Buffer, info: Stats) => void): Promise<string[]> {
+  const { lines } = await readJsonlLinesWithCursor(filePath, full, capture)
+  return lines
+}
+
+/**
+ * Same reads as `readJsonlLines`, plus `completeBytes`: the offset just past
+ * the last newline-terminated line. A half-written tail is excluded, so a
+ * caller can persist the offset as a cursor and never skip a line that only
+ * became complete after the read.
+ */
+export async function readJsonlLinesWithCursor(filePath: string, full = false, capture?: (buffer: Buffer, info: Stats) => void): Promise<{ lines: string[]; completeBytes: number; size: number }> {
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
     handle = await open(filePath, 'r')
     const info = await handle.stat()
     const { size } = info
     if (full || size <= TELEMETRY_TAIL_BYTES + TELEMETRY_HEAD_BYTES) {
-      if (size > MAX_SESSION_BYTES) return []
+      if (size > MAX_SESSION_BYTES) return { lines: [], completeBytes: 0, size }
       const fullBuffer = Buffer.alloc(size)
       let consumed = 0
       while (consumed < size) {
         const { bytesRead } = await handle.read(fullBuffer, consumed, size - consumed, consumed)
-        if (bytesRead === 0) return [] // Truncation during the read is not a complete usage snapshot.
+        if (bytesRead === 0) return { lines: [], completeBytes: 0, size } // Truncation during the read is not a complete usage snapshot.
         consumed += bytesRead
       }
       const raw = fullBuffer.toString('utf-8')
       const lines = raw.split(/\r?\n/)
-      if (!raw.endsWith('\n') && lines.at(-1)?.trim() && !parseJsonObject(lines.at(-1)!)) lines.pop()
+      let completeBytes = size
+      if (!raw.endsWith('\n') && lines.at(-1)?.trim() && !parseJsonObject(lines.at(-1)!)) {
+        lines.pop()
+        completeBytes = fullBuffer.lastIndexOf(0x0a) + 1
+      }
       const complete = lines.filter(line => line.trim())
-      if (complete.some(line => !parseJsonObject(line))) return []
+      if (complete.some(line => !parseJsonObject(line))) return { lines: [], completeBytes: 0, size }
       capture?.(fullBuffer, info)
-      return complete
+      return { lines: complete, completeBytes, size }
     }
 
     const headLength = Math.min(size, TELEMETRY_HEAD_BYTES)
@@ -412,15 +433,15 @@ async function readJsonlLines(filePath: string, full = false, capture?: (buffer:
     const lines = buffer.toString('utf-8').split(/\r?\n/)
     // 从文件中部起读时，首行可能被截断，丢弃它；从头读（start===0）时保留全部
     lines.shift()
-    return [...headLines, ...lines].filter(Boolean)
+    return { lines: [...headLines, ...lines].filter(Boolean), completeBytes: buffer.lastIndexOf(0x0a) + 1 + start, size }
   } catch {
-    return []
+    return { lines: [], completeBytes: 0, size: 0 }
   } finally {
     await handle?.close()
   }
 }
 
-function parseJsonObject(line: string): JsonRecord | null {
+export function parseJsonObject(line: string): JsonRecord | null {
   try {
     const value = JSON.parse(line) as unknown
     return asRecord(value) ?? null
@@ -472,7 +493,7 @@ function readTimestampMs(value: unknown): number | undefined {
   return numeric < 1_000_000_000_000 ? Math.round(numeric * 1000) : Math.round(numeric)
 }
 
-function toClaudeProjectKey(cwd: string): string {
+export function toClaudeProjectKey(cwd: string): string {
   return cwd.replace(/[\\/]/g, '-').replace(/:/g, '-')
 }
 
@@ -506,9 +527,9 @@ function hasTelemetry(snapshot: RuntimeTelemetrySnapshot): boolean {
  * source available. It is deliberately marked declared rather than runtime
  * confirmed; a later task_started/token_count event supersedes it.
  */
-async function readCodexBootstrapTelemetry(): Promise<RuntimeTelemetrySnapshot | null> {
+async function readCodexBootstrapTelemetry(codexHome: string): Promise<RuntimeTelemetrySnapshot | null> {
   try {
-    const config = await readFile(join(os.homedir(), '.codex', 'config.toml'), 'utf8')
+    const config = await readFile(join(codexHome, 'config.toml'), 'utf8')
     const model = config.match(/^\s*model\s*=\s*["']?([^"'\r\n#]+)["']?/m)?.[1]?.trim()
     const window = readPositiveNumber(config.match(/^\s*model_context_window\s*=\s*(\d+)/m)?.[1])
     if (!model && window === undefined) return null
@@ -739,20 +760,22 @@ async function scanPiHistory(cwd: string, startedAt?: number, sessionId?: string
   return null
 }
 
-async function parsePiSession(
+export async function parsePiSession(
   file: SessionFileRef,
-  cwd: string,
+  cwd: string | undefined,
   startedAt?: number,
   sessionId?: string,
+  preRead?: string[],
 ): Promise<HistoryTelemetrySnapshot | null> {
-  const lines = await readJsonlLines(file.path, true)
+  const lines = preRead ?? await readJsonlLines(file.path, true)
   if (lines.length === 0) return null
   const header = parseJsonObject(lines[0])
   if (!header || readString(header.type) !== 'session') return null
   const headerId = readString(header.id)
   const headerCwd = readString(header.cwd)
   if (sessionId && headerId !== sessionId) return null
-  if (headerCwd && !pathsEqual(headerCwd, cwd)) return null
+  // Corpus scans pass no cwd: every workspace's session is in scope.
+  if (headerCwd && cwd && !pathsEqual(headerCwd, cwd)) return null
   if (!isLineAfterStartedAt(header, startedAt)) return null
 
   const entries: Array<{ id: string | undefined; parentId: string | null; timestamp: number | undefined; record: JsonRecord }> = []
@@ -867,7 +890,7 @@ async function parsePiSession(
   return hasTelemetry(snapshot) ? snapshot : null
 }
 
-async function readJsonConfig(filePath: string): Promise<JsonRecord | undefined> {
+export async function readJsonConfig(filePath: string): Promise<JsonRecord | undefined> {
   try {
     const raw = await readFile(filePath, 'utf8')
     return parseJsonObject(stripJsonComments(raw)) ?? undefined
@@ -1044,7 +1067,7 @@ function readPositiveNumber(value: unknown): number | undefined {
   return Math.round(numeric)
 }
 
-function readString(value: unknown): string | undefined {
+export function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 

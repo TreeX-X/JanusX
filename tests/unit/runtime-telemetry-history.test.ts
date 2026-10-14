@@ -24,10 +24,12 @@ async function writeCodexRollout(sessionId: string, lines: string[]) {
 
 describe('runtime telemetry history', () => {
   beforeEach(async () => {
+    vi.stubEnv('CODEX_HOME', '')
     testContext.homeDir = await mkdtemp(join(tmpdir(), 'janusx-telemetry-'))
   })
 
   afterEach(async () => {
+    vi.unstubAllEnvs()
     await rm(testContext.homeDir, { recursive: true, force: true })
   })
 
@@ -189,6 +191,31 @@ describe('runtime telemetry history', () => {
       confidence: 'declared',
     })
     expect(snapshot?.sessionId).toBeUndefined()
+  })
+
+  it('reads Codex configuration, bound usage and ledger namespace from the selected home', async () => {
+    const sessionId = 'custom-home-session'
+    const codexHome = join(testContext.homeDir, 'custom-codex')
+    await mkdir(join(codexHome, 'sessions'), { recursive: true })
+    await writeFile(join(codexHome, 'config.toml'), 'model = "gpt-6.1-sol"\nmodel_context_window = 1000000\n')
+    await writeFile(join(codexHome, 'sessions', `rollout-${sessionId}.jsonl`), [
+      JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo' } }),
+      JSON.stringify({ type: 'turn_context', payload: { model: 'gpt-6.1-sol', cwd: 'C:/repo' } }),
+      JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: {
+        last_token_usage: { total_tokens: 0, input_tokens: 0, cached_input_tokens: 0 },
+        total_token_usage: { total_tokens: 120, input_tokens: 100, cached_input_tokens: 50, output_tokens: 20 },
+        model_context_window: 828400,
+      } } }),
+    ].join('\n'))
+
+    for (const explicit of [false, true]) {
+      vi.stubEnv('CODEX_HOME', explicit ? join(testContext.homeDir, 'wrong-home') : codexHome)
+      const selected = explicit ? { codexHome } : {}
+      const bootstrap = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', ...selected })
+      expect(bootstrap).toMatchObject({ detectedModel: 'gpt-6.1-sol', contextWindowTokens: 1000000, source: 'configuration' })
+      const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId, ...selected })
+      expect(snapshot).toMatchObject({ sessionId, contextTokens: 0, contextWindowTokens: 828400, totalTokens: 120, usageObservation: { namespace: codexHome } })
+    }
   })
 
   it('reads the declared Claude model before the first conversation', async () => {
