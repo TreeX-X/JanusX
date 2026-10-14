@@ -54,7 +54,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-14T14:27:41.271Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/0cb931e1-e33c-4e38-a9d9-9d652796d935"
 }
 ---
@@ -63,24 +63,22 @@
 
 ## Problem
 
-`src/renderer/src/components/SessionPanel.tsx` renders every turn with its bound checkpoint strip, file list, review box, and success banner inside the narrow right dock, so a long session pushes the card list off screen and forces timeline-versus-diff scroll fights. Full transcript prose stays unreachable from the panel even though the transcript path persists on every record. External rows share the same checkpoint chrome as internal rows, which implies restorable state where none exists.
+会话管理同时承载对话阅读和文件还原，使详情窗需要维护检查点列表、逐点文件记录、diff、裁剪提示、冲突和恢复状态。用户已要求移除会话管理中与还原点相关的功能，保留会话阅读与续接。
 
 ## Decision
 
-The card header owns two cheap layers and nothing else. L1 shows the orca-style single title row: engine icon, truncated first prompt, and expand chevron, with the external marker beside the icon where applicable. L2 expands inline with engine, status, turn and checkpoint counts, recency, the full first prompt plus Copy, session metadata with the read-only transcript reference, and the two most recent turns as clamped question-plus-excerpt pairs with kind badges. One 查看详情 action leaves the dock and opens `SessionDetailWindow`.
+卡片保留引擎、状态、首条提示、轮次计数和新鲜度；展开后提供目录分支、可展开的首条提示、最近两轮预览和操作入口。还原点计数与“外部会话无还原点”标记移除，通用展开文案归入 agentSession。
 
-`SessionDetailWindow` centers over the workbench under the shared traffic-bar title, carries session metadata plus Copy chips for the first prompt, log path, and session id, and scrolls the full turn list with per-turn prompts, excerpts, kind badges, and timestamps. Each internal turn renders its one-line checkpoint strip with the file list collapsed behind a click; 查看 diff mounts `DiffSidePanel` as a right-side pane inside the same dialog while the dialog widens rightward, with the file list capped and both panes scrolling independently. Restore keeps the two-step review with prune warning, confirm, success, and conflict disclosure scoped to the owning session, and restores launched from the side panel open the review on the owning strip. External and archived rows render a banner and no checkpoint chrome in any layer; external rows expose a Copy resume command button assembled from the provider session id for claude and codex engines, with a stated reason where the engine has no known resume shape. The panel header gains a text filter over title, engine, directory, and branch. Sixteen locale keys ship in both languages with regenerated types.
+详情窗保留居中阅读布局、轮次导航、滚动定位、问题与回答、时间和状态，以及提示、日志路径、会话 ID、续接命令的复制操作。内部、外部和归档会话均从会话账本与有界转录读取内容，不再加载检查点列表、变更文件或 diff，不再显示恢复确认、成功、裁剪、冲突或孤立还原点。问题只从回合快照与转录合并结果读取。
+
+原生 Resume 与 Continue 的引擎能力、身份校验和执行逻辑保持现有规则。底层快照服务仍被终端和知识模块使用，保留 IPC、存储和历史关联；本次不清空用户数据。
 
 ## Alternatives considered
 
-- Keep the v5 unified inline timeline and add paging — strongest case is zero new surfaces while long sessions shrink page by page. The driver that rules it out is geometry: every page still competes with the dock column for scroll, and full reading never gains a comfortable width.
-- Render the detail view as a second right-dock column instead of a window — strongest case is no overlay plumbing with dock state reuse. The driver that rules it out is the reported symptom: two narrow columns side by side preserve the readability problem the window removes.
-- Open diff in a separate Electron window stacked above the detail window — strongest case is a true editor-grade surface isolated from conversation scroll. The driver that rules it out is plumbing plus focus cost: a second window needs registration, navigation, and focus handling, while the side panel keeps one reading context with per-file focus.
-- Bind checkpoints to external sessions through on-open snapshots — strongest case is uniform restore chrome across all rows. The driver that rules it out is ownership: snapshots of a foreign working directory invent state the provider never asked for and risk washing user files outside JanusX task scope.
-- Do nothing / reuse the v5 dock timeline — no churn. The cost is persistent dock铺开 on long sessions, unreachable full prose, and checkpoint chrome implying restore on external rows.
+只隐藏恢复按钮仍会保留文件、diff 与检查点请求，无法完成会话管理的功能收缩。彻底删除底层快照服务会同时影响终端和知识证据，超出本次界面范围。选择从会话界面删除完整调用链，服务独立保留。
 
 ## Consequences
 
-- **Gains**: dock cards stay concise with preview-only expands; full reading, scoped checkpoints, and file-heavy diffs share one centered window with independent scroll regions; external rows read honestly as transcript-only with a working resume-command copy path.
-- **Costs and limits**: full prose still resolves from cached turn excerpts, so sessions whose transcript holds more than the excerpt cap show excerpts until the bounded transcript-detail read lands; external resume runs only as a copied provider command, and opening a terminal plus running it stays a main-side follow-up; the detail window refetches its session on open beside the card preview fetch. Revisit when transcript schemas drift or a live external feed becomes ownable.
-- **Verification**: machine evidence on touched paths — `npx tsc --noEmit` and `--noUnusedLocals --noUnusedParameters` are clean, `npx eslint` on the component reports zero errors, `npm run i18n:check` reports both languages in sync after `npm run i18n:types`, and unit runs pass on `agent-session-registry` 13/13, `external-session-scanner` 5/5, and `companion-session-state` 1/1. Desktop e2e is not run: the change touches no IPC contract.
+会话阅读不再等待快照数据，详情窗只维护对话相关状态。仅存在于旧检查点中的 prompt 不再作为显示回退；已保存的回合 prompt 和转录不受影响。如需全局下线快照，应另行梳理终端、知识来源和历史数据策略。
+
+验证：`npm run typecheck`、`npm run build:app`、组件 eslint、`npm run i18n:check` 和 `npm run check:notes` 均通过；Note 校验保留 17 项已有外部链接诊断。七个相关单测文件共 80/80 通过，覆盖转录合并、续接参数、原生恢复、会话注册、外部扫描、工作树状态与主题。`npx playwright test tests/e2e/desktop-session-continue.spec.ts --project=desktop --workers=1` 在设置 `NO_PROXY=localhost,127.0.0.1,::1`、`JANUS_E2E_PORT=41739` 后 2/2 通过，覆盖交接与三个引擎续接，且检查卡片、详情窗无还原点文案及恢复按钮。使用模拟 CLI，不代表真实账户调用验证。严格未使用检查仍被其他路径的四项 TS6133 阻挡：TerminalArea 的 QuickNote、TerminalManagerPanel 的 useEffect/load、workspace store 的 getBrowserPaneContent；SessionPanel 无报错。

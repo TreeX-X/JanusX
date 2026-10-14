@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-06",
   "class": "feature",
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-14T14:27:41.274Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -19,7 +19,7 @@ A collapsed session card shows one title line and a chevron. Engine, progress, f
 
 ## Decision
 
-`SessionCard` renders three L1 rows on every card, collapsed or not. The header runs the engine icon, the engine name, an optional external badge, a `「」`-wrapped title derived from the first clause of `firstPrompt` (cut at the first CJK or ASCII punctuation, capped at 24 characters), a mono status tail, and a persistent hairline chevron button that rotates its glyph 180° on the shared 240 ms expand curve. Under it, `firstPrompt` runs one muted ellipsis line, then a mono meta line with turns, checkpoints (or the external no-checkpoint note) and relative time. The L2 region keeps the cwd/branch line and the pale content cards described in [Session surfaces derive from the chrome token](./session-card-surface.md); the meta line L2 used to carry is gone because L1 owns it. The header row and its chevron button share one expand toggle.
+`SessionCard` renders three L1 rows on every card, collapsed or not. The header runs the engine icon, the engine name, an optional external badge, a `「」`-wrapped title derived from the first clause of `firstPrompt` (cut at the first CJK or ASCII punctuation, capped at 24 characters), a mono status tail, and a persistent hairline chevron button that rotates its glyph 180° on the shared 240 ms expand curve. Under it, `firstPrompt` runs one muted ellipsis line, then a mono meta line with turns and relative time; checkpoint counts and no-checkpoint markers have been removed from session management. The L2 region keeps the cwd/branch line and the pale content cards described in [Session surfaces derive from the chrome token](./session-card-surface.md); the meta line L2 used to carry is gone because L1 owns it. The header row and its chevron button share one expand toggle.
 
 ## Alternatives considered
 
@@ -32,4 +32,4 @@ A collapsed session card shows one title line and a chevron. Engine, progress, f
 
 - **Gains**: a collapsed card answers engine, state, progress, freshness and gist without expanding; expand shows depth instead of identity.
 - **Costs and limits**: the title is a derived string — punctuation-free prompts fall back to a 24-character slice and read truncated. The fold control occupies 20px of header width on every card, always-on rather than hover-revealed; archived cards keep their toggle and show `归档` plus the chevron where the design uses a bare `归档`. The meta line lives only in L1, so consumers looking for it in the expanded body will not find it.
-- **Verification**: `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` and `npx eslint src/renderer/src/components/SessionPanel.tsx` exit clean, and `npx vitest run tests/unit/planche-theme.test.ts` passes 14 of 14 with the `.sheet` pale-surface pins.
+- **Verification**: `npm run typecheck` and component eslint pass; `tests/unit/planche-theme.test.ts` passes 14/14 with the remaining two surface declarations and current use sites. Desktop reading and continuation checks plus the unrelated strict-unused failures are recorded in [windowed session reading](../sessions/records/session-windowed-reading.md).

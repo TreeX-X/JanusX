@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, 
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { useSessionStore, type AgentSessionDetail, type AgentSessionSummary } from '@/stores/session'
-import { useCheckpointStore, type ChangedFileRecord, type CheckpointSummary, type ConflictInfo } from '@/stores/checkpoint'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useThemeStore } from '@/stores/theme'
 import { EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
@@ -52,22 +51,7 @@ function formatDate(iso: string, t: (k: string, opt?: Record<string, unknown>) =
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function recordCounts(record: ChangedFileRecord): string {
-  if (record.status === 'binary') return `binary · ${formatSize(record.size)}`
-  if (record.status === 'oversized') return `oversized · ${formatSize(record.size)}`
-  const parts: string[] = []
-  if (record.additions !== null && record.additions > 0) parts.push(`+${record.additions}`)
-  if (record.deletions !== null && record.deletions > 0) parts.push(`−${record.deletions}`)
-  return parts.join(' ') || '±0'
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-}
-
-// Note: 会话表面混色档位只服务详情窗（turn 卡/孤儿卡/diff 面）；右栏列表面板的
+// Note: 会话表面混色档位只服务详情窗（turn 卡）；右栏列表面板的
 // 地走 --shell-canvas 令牌、卡/内卡走 A 方案高保真逐值，在 SessionPanel.module.css — 见
 // .agents/notes/workbench/session-card-surface.md
 //
@@ -75,18 +59,15 @@ function formatSize(bytes: number): string {
 // --shell-canvas / --shell-pane / --shell-chrome / --shell-card 全是 #EFE4C5，纸面里
 // 没有更深的台阶，拿它们当卡片底色等于和底色同值；写死 rgba(0,0,0,.28) / rgba(255,255,255,.03)
 // 落在纸面上分别是冷灰油渍和几乎透明的亮斑，两个主题都只能各对一半。朝文字色混出
-// 3 档是唯一在两主题都能拉出可见台阶的写法：planche 得到偏暖的深纸色，dark 得到
+// 两档在两主题都能拉出可见台阶：planche 得到偏暖的深纸色，dark 得到
 // 逐级浮起的卡片。板面之间的分界交给发丝线，不靠更深的底色。
 const SURFACE_CARD = 'color-mix(in srgb, var(--shell-chrome) 94%, var(--shell-text))'
 const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 90%, var(--shell-text))'
-const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'
 const CARD_BORDER = '1px solid var(--shell-border)'
 const CARD_BORDER_SOFT = '1px solid var(--shell-border-soft)'
 
-// Note: windowed session reading with layered preview — internal
-// turns keep scoped checkpoints with inline diff, external rows stay
-// transcript-only — see
-// .agents/notes/sessions/records/session-windowed-reading.md
+// Note: transcript-only session reading and native continuation — see
+// .agents/notes/sessions/records/module.md
 
 /** Provider resume command; null when the record has no native identity. */
 function buildResumeCommand(session: AgentSessionSummary): string | null {
@@ -137,7 +118,7 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
   const scopePath = activeWorktreePath ?? activeWorkspace?.path ?? null
   const activeWorktree = worktrees.find((w) => w.path === scopePath) ?? null
   const setUiForPath = useWorktreeStore((s) => s.setUiForPath)
-  // Note: single card expand subscribes to uiByPath so timeline toggles re-render — see .agents/notes/sessions/checkpoints/session-checkpoint-expand.md
+  // Single card expansion subscribes to uiByPath so toggles re-render.
   const expandedId = useWorktreeStore((s) =>
     scopePath ? (s.uiByPath[scopePath]?.expandedSessionId ?? null) : null,
   )
@@ -152,7 +133,7 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
   const [query, setQuery] = useState('')
   const [allCounts, setAllCounts] = useState<{ all: number; archived: number } | null>(null)
   // Note: open-card live refresh follows the same session:event — debounced
-  // so submit/checkpoint/turn bursts reload the timeline once — see
+  // so session update bursts reload the timeline once — see
   // .agents/notes/sessions/records/session-timeline-live.md
   const [timelineTick, setTimelineTick] = useState(0)
 
@@ -474,15 +455,6 @@ function promptTitle(prompt: string): string {
   return first.length > 24 ? `${first.slice(0, 24)}…` : first
 }
 
-// Note: session-owned checkpoints with review-gated restore absorb the retired
-// standalone checkpoints tool — see
-// .agents/notes/sessions/checkpoints/session-checkpoint-migration.md
-
-// Note: unified turn timeline follows HiFi v5 — one expand owns Q/A plus the
-// bound checkpoint strip, file lists stay collapsed, diff opens in a
-// traffic-bar modal — see
-// .agents/notes/sessions/records/session-timeline-v5.md
-
 /**
  * Traffic-light title bar shared by the session modals. Matches the
  * StandaloneFileEditor / StandaloneBrowser spec: 38px bar on
@@ -554,334 +526,6 @@ function TrafficBar({ heading, onClose }: { heading: ReactNode; onClose: () => v
   )
 }
 
-const VISIBLE_FILE_CAP = 5
-
-function CheckpointStrip({
-  cp,
-  records,
-  recordsLoading,
-  turnKind,
-  pruneCount,
-  filesOpen,
-  onToggleFiles,
-  reviewOpen,
-  onToggleReview,
-  onConfirmRestore,
-  restoreDonePruned,
-  showRestoreDone,
-  conflicts,
-  onViewDiff,
-}: {
-  cp: CheckpointSummary
-  records: ChangedFileRecord[] | undefined
-  recordsLoading: boolean
-  turnKind: string | undefined
-  pruneCount: number
-  filesOpen: boolean
-  onToggleFiles: () => void
-  reviewOpen: boolean
-  onToggleReview: (open: boolean) => void
-  onConfirmRestore: () => void
-  restoreDonePruned: string | null
-  showRestoreDone: boolean
-  conflicts: ConflictInfo[] | null
-  onViewDiff: () => void
-}) {
-  const { t } = useI18n('terminal')
-  const recs = records ?? []
-  const canDiff = !recordsLoading && recs.length > 0
-  const addTotal = recs.reduce((sum, record) => sum + (record.additions ?? 0), 0)
-  const delTotal = recs.reduce((sum, record) => sum + (record.deletions ?? 0), 0)
-  const visibleRecs = recs.slice(0, VISIBLE_FILE_CAP)
-  const hiddenCount = recs.length - visibleRecs.length
-  return (
-    <div
-      data-cp-strip={cp.id}
-      style={{
-        marginTop: 8,
-        border: '1px solid var(--shell-border-soft)',
-        borderRadius: 6,
-        background: SURFACE_INSET,
-        padding: '8px 10px',
-      }}
-    >
-      <ThemedTooltip label={filesOpen ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}>
-      <div
-        className="flex items-center"
-        style={{ gap: 7, fontSize: 11, color: 'var(--shell-text)', cursor: 'pointer', userSelect: 'none' }}
-        onClick={onToggleFiles}
-      >
-        <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-accent)' }}>
-          #{cp.conversationIndex}
-        </span>
-        <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', whiteSpace: 'nowrap' }}>
-          {cp.changedFileCount} files
-          {(addTotal > 0 || delTotal > 0) && (
-            <>
-              {' · '}
-              {addTotal > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{addTotal}</span>}
-              {addTotal > 0 && delTotal > 0 && ' '}
-              {delTotal > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{delTotal}</span>}
-            </>
-          )}
-          {' '}{filesOpen ? '▴' : '▾'}
-        </span>
-        {turnKind && (
-          <span style={{ fontSize: 9.5, color: turnKind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: turnKind === 'done' ? '1px solid var(--shell-border)' : '1px solid color-mix(in srgb, var(--shell-diff-del) 30%, transparent)', borderRadius: 3, padding: '0 5px' }}>
-            {turnKindLabel(turnKind, t)}
-          </span>
-        )}
-        <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)' }}>
-          {formatDate(cp.createdAt, t)}
-        </span>
-      </div>
-      </ThemedTooltip>
-      {filesOpen && (
-        <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-dim)', marginTop: 6, lineHeight: 1.8, maxHeight: 132, overflowY: 'auto' }}>
-          {recordsLoading && <div style={{ color: 'var(--shell-dim)' }}>…</div>}
-          {!recordsLoading && visibleRecs.map((record) => (
-            <div key={record.path}>
-              {record.path} <FileCounts record={record} />
-            </div>
-          ))}
-          {!recordsLoading && hiddenCount > 0 && (
-            <div style={{ fontSize: 9.5, color: 'var(--shell-dim)' }}>
-              {t('terminal:checkpoint.remainingFiles', { count: hiddenCount })}
-            </div>
-          )}
-        </div>
-      )}
-      <div className="flex" style={{ gap: 6, marginTop: 7 }}>
-        {recordsLoading ? (
-          <button
-            disabled
-            className="flex-1 rounded"
-            style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6 }}
-          >
-            {t('terminal:checkpoint.diffLoading')}
-          </button>
-        ) : (
-          canDiff && (
-            <button
-              onClick={onViewDiff}
-              className="flex-1 rounded cursor-pointer"
-              style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
-            >
-              {t('terminal:checkpoint.viewDiff')}
-            </button>
-          )
-        )}
-        <button
-          onClick={() => onToggleReview(!reviewOpen)}
-          className="flex-1 rounded cursor-pointer"
-          style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
-        >
-          {t('terminal:agentSession.restoreTo', { index: cp.conversationIndex })}
-        </button>
-      </div>
-      {reviewOpen && (
-        <div style={{ marginTop: 8, padding: '10px 12px', background: SURFACE_INSET, border: '1px solid var(--shell-border-soft)', borderRadius: 6 }}>
-          {pruneCount > 0 ? (
-            <div style={{ padding: '8px 10px', background: 'var(--shell-accent-soft)', border: '1px solid var(--shell-accent-border)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', marginBottom: 8, lineHeight: 1.6 }}>
-              {t('terminal:checkpoint.pruneWarn', { count: pruneCount })}
-            </div>
-          ) : (
-            <div style={{ fontSize: 11, color: 'var(--shell-diff-add)', marginBottom: 8, lineHeight: 1.6 }}>
-              {t('terminal:checkpoint.pruneOk')}
-            </div>
-          )}
-          <div className="flex" style={{ gap: 6, marginTop: 8 }}>
-            <button
-              onClick={onConfirmRestore}
-              className="flex-1 rounded cursor-pointer"
-              style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)' }}
-            >
-              {t('terminal:agentSession.restoreConfirm')}
-            </button>
-            <button
-              onClick={() => onToggleReview(false)}
-              className="flex-1 rounded cursor-pointer"
-              style={{ height: 22, fontSize: 10, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)' }}
-            >
-              {t('common:action.cancel')}
-            </button>
-          </div>
-        </div>
-      )}
-      {showRestoreDone && (
-        <div style={{ marginTop: 8, fontSize: 11, color: 'var(--shell-diff-add)', lineHeight: 1.6 }}>
-          {restoreDonePruned
-            ? t('terminal:checkpoint.restoreDonePruned', { index: cp.conversationIndex, pruned: restoreDonePruned })
-            : t('terminal:checkpoint.restoreDone', { index: cp.conversationIndex })}
-        </div>
-      )}
-      {conflicts && conflicts.length > 0 && (
-        <div style={{ marginTop: 8, padding: '8px 10px', background: 'color-mix(in srgb, var(--shell-diff-del) 8%, transparent)', border: '1px solid var(--shell-diff-del)', borderRadius: 6, fontSize: 11, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
-          <div>{t('terminal:checkpoint.conflictFiles', { count: conflicts.length })} · {t('terminal:checkpoint.conflictBadge')}</div>
-          {conflicts.map((conflict) => (
-            <div key={conflict.filePath} style={{ fontFamily: "'SF Mono', monospace", marginTop: 4 }}>
-              {conflict.filePath}
-            </div>
-          ))}
-          <div style={{ marginTop: 4 }}>{t('terminal:checkpoint.conflictHint')}</div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Note: right-side diff panel inside SessionDetailWindow — the dialog widens
-// rightward when it mounts, so file-heavy diffs never stretch the timeline.
-
-function DiffSidePanel({
-  cp,
-  cwd,
-  records,
-  pruneCount,
-  onClose,
-  onRestore,
-}: {
-  cp: CheckpointSummary
-  cwd: string
-  records: ChangedFileRecord[] | undefined
-  pruneCount: number
-  onClose: () => void
-  onRestore: () => void
-}) {
-  const { t } = useI18n('terminal')
-  const fetchAllDiffs = useCheckpointStore((s) => s.fetchAllDiffs)
-  const fullDiff = useCheckpointStore((s) => s.diffs[`${cp.id}:`])
-  const [activePath, setActivePath] = useState<string | null>(null)
-  const [fileDiffs, setFileDiffs] = useState<Record<string, string>>({})
-  const [fileError, setFileError] = useState<string | null>(null)
-
-  useEffect(() => {
-    void fetchAllDiffs(cp.id, cwd)
-  }, [cp.id, cwd, fetchAllDiffs])
-
-  const recs = records ?? []
-  const hasBinary = recs.some((record) => record.status === 'binary' || record.status === 'oversized')
-
-  const openFile = (path: string | null) => {
-    setActivePath((current) => (current === path ? null : path))
-    setFileError(null)
-    if (path && fileDiffs[path] === undefined) {
-      window.electron.checkpoint
-        .diff(cp.id, path, cwd)
-        .then((diff) => setFileDiffs((state) => ({ ...state, [path]: diff })))
-        .catch((err) => setFileError(err instanceof Error ? err.message : String(err)))
-    }
-  }
-
-  const shown = activePath ? (fileDiffs[activePath] ?? null) : fullDiff
-  const renderLines = (text: string) =>
-    text.split('\n').map((line, i) => (
-      <div key={i} style={{ color: line.startsWith('-') ? 'var(--shell-diff-del)' : line.startsWith('+') ? 'var(--shell-diff-add)' : 'var(--shell-dim)' }}>
-        {line}
-      </div>
-    ))
-
-  return (
-    <div
-      className="flex flex-col"
-      style={{ width: 520, maxWidth: '45%', flexShrink: 0, minHeight: 0, borderLeft: '1px solid var(--shell-border-soft)', background: SURFACE_INSET }}
-      aria-label={t('terminal:checkpoint.diffPreview')}
-    >
-      <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--shell-border-soft)', flexShrink: 0 }}>
-        <div className="flex items-center" style={{ gap: 8 }}>
-          <span style={{ fontFamily: "'SF Mono', monospace", fontSize: 11, color: 'var(--shell-text)' }}>
-            #{cp.conversationIndex} · {t('terminal:checkpoint.diffPreview')}
-          </span>
-          <button
-            onClick={onClose}
-            className="rounded cursor-pointer"
-            style={{ marginLeft: 'auto', height: 22, padding: '0 10px', fontSize: 10, fontFamily: "'SF Mono', monospace", border: '1px solid var(--shell-border)', background: 'transparent', color: 'var(--shell-muted)', flexShrink: 0 }}
-          >
-            {t('terminal:agentSession.diffCollapse')} ⟶
-          </button>
-        </div>
-        <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', marginTop: 3 }}>
-          …/{baseNameOf(cwd)} · {formatDate(cp.createdAt, t)}
-        </div>
-      </div>
-      <div style={{ maxHeight: 150, overflowY: 'auto', padding: 6, borderBottom: '1px solid var(--shell-border-soft)', flexShrink: 0 }}>
-        {recs.length === 0 && (
-          <div style={{ fontSize: 11, color: 'var(--shell-dim)', padding: '7px 9px' }}>{t('terminal:checkpoint.diffEmpty')}</div>
-        )}
-        {recs.map((record) => {
-          const isText = record.status !== 'binary' && record.status !== 'oversized'
-          const active = activePath === record.path
-          return (
-            <ThemedTooltip key={record.path} label={isText ? record.path : t('terminal:checkpoint.binaryNoDiff')}>
-            <div
-              onClick={() => {
-                if (isText) openFile(record.path)
-              }}
-              style={{
-                padding: '7px 9px',
-                borderRadius: 4,
-                cursor: isText ? 'pointer' : 'default',
-                opacity: isText ? 1 : 0.55,
-                background: active ? 'var(--shell-accent-soft)' : 'transparent',
-                color: active ? 'var(--shell-text)' : 'var(--shell-muted)',
-                fontFamily: "'SF Mono', monospace",
-                fontSize: 10.5,
-                lineHeight: 1.5,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {record.path}
-              <div style={{ fontSize: 9.5, color: 'var(--shell-dim)' }}>
-                <FileCounts record={record} />
-                {!isText && ` · ${t('terminal:checkpoint.binaryNoDiff')}`}
-              </div>
-            </div>
-            </ThemedTooltip>
-          )
-        })}
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px', fontFamily: "'SF Mono', monospace", fontSize: 10.5, lineHeight: 1.65, background: SURFACE_DEEP }}>
-        {activePath && (
-          <div style={{ position: 'sticky', top: -10, background: SURFACE_DEEP, color: 'var(--shell-muted)', padding: '6px 8px', margin: '0 -12px 6px', paddingLeft: 12, borderBottom: '1px solid var(--shell-border-soft)' }}>
-            {activePath}
-          </div>
-        )}
-        {fileError && <div style={{ color: 'var(--shell-diff-del)' }}>{fileError}</div>}
-        {!fileError && shown !== undefined && shown !== null && shown !== '' && renderLines(shown)}
-        {!fileError && (shown === undefined || shown === null) && (
-          <div style={{ color: 'var(--shell-dim)' }}>{t('terminal:checkpoint.diffLoading')}</div>
-        )}
-        {!fileError && shown === '' && (
-          <div style={{ color: 'var(--shell-dim)' }}>{t('terminal:checkpoint.diffEmpty')}</div>
-        )}
-      </div>
-      <div
-        className="flex items-center"
-        style={{ gap: 8, padding: '9px 12px', borderTop: '1px solid var(--shell-border-soft)', flexShrink: 0 }}
-      >
-        <span style={{ fontSize: 10, fontFamily: "'SF Mono', monospace", color: pruneCount > 0 ? 'var(--shell-accent)' : 'var(--shell-dim)', flex: 1 }}>
-          {pruneCount > 0
-            ? t('terminal:checkpoint.pruneWarn', { count: pruneCount })
-            : t('terminal:checkpoint.pruneOk')}
-          {hasBinary && ` · ${t('terminal:checkpoint.binaryNoDiff')}`}
-        </span>
-        <button
-          onClick={onRestore}
-          className="rounded cursor-pointer"
-          style={{ height: 26, padding: '0 12px', fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0 }}
-        >
-          {t('terminal:agentSession.restoreTo', { index: cp.conversationIndex })}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// Note: single-expand timeline — the card header owns detail plus bound
-// checkpoint strips; the retired split checkpoint section is gone.
-
 function SessionCard({
   session,
   expanded,
@@ -913,8 +557,7 @@ function SessionCard({
     if (!expanded) return
     let alive = true
     // L2 previews reload on every debounced session:event so the first prompt
-    // and recent turns arrive mid-conversation. Checkpoint and diff work lives
-    // in SessionDetailWindow; the dock never fetches it.
+    // and recent turns arrive mid-conversation.
     // Refreshes keep the previous preview visible; only the first load shows
     // the loading line, otherwise every background event flashes the card.
     if (!loadedRef.current) setDetailLoading(true)
@@ -937,9 +580,6 @@ function SessionCard({
   const recentTurns = useMemo(() => (detail?.turns ?? []).slice(-2), [detail])
   const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
   const iconPreset = sessionEnginePreset(session.engine)
-
-  // Checkpoint strips, diffs, reviews, and restore state live in
-  // SessionDetailWindow below; the dock keeps only the L2 preview.
 
   // Note: expand motion keeps the body mounted and animates grid rows; the
   // closed body is inert — see .agents/notes/workbench/session-card-expand-motion.md
@@ -995,13 +635,13 @@ function SessionCard({
         >
           {session.archived ? t('terminal:agentSession.archived') : statusLabel(session.status, t)}
         </span>
-        <ThemedTooltip label={expanded ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}>
+        <ThemedTooltip label={expanded ? t('terminal:agentSession.collapse') : t('terminal:agentSession.expand')}>
         <button
           type="button"
           className={styles.foldBtn}
           data-open={expanded}
           aria-expanded={expanded}
-          aria-label={expanded ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}
+          aria-label={expanded ? t('terminal:agentSession.collapse') : t('terminal:agentSession.expand')}
           onClick={(event) => {
             event.stopPropagation()
             onToggle()
@@ -1018,11 +658,7 @@ function SessionCard({
         </div>
       )}
       <div style={{ marginTop: 4, fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
-        {t('terminal:agentSession.turns', { count: session.turnCount })} ·{' '}
-        {session.external === true
-          ? <span style={{ color: 'var(--shell-dim)' }}>{t('terminal:agentSession.noCheckpointExternal')}</span>
-          : t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}{' '}
-        · {formatDate(session.updatedAt, t)}
+        {t('terminal:agentSession.turns', { count: session.turnCount })} · {formatDate(session.updatedAt, t)}
       </div>
 
       <div className={styles.expand} data-open={expanded}>
@@ -1069,7 +705,7 @@ function SessionCard({
                       cursor: 'pointer',
                     }}
                   >
-                    {promptFull ? t('terminal:checkpoint.collapse') : t('terminal:checkpoint.expand')}
+                    {promptFull ? t('terminal:agentSession.collapse') : t('terminal:agentSession.expand')}
                   </button>
                 )}
               </div>
@@ -1226,19 +862,8 @@ function SessionDetailWindow({
   onContinue: () => void
 }) {
   const { t } = useI18n('terminal')
-  const restoreCheckpoint = useCheckpointStore((s) => s.restoreCheckpoint)
-  const [checkpoints, setCheckpoints] = useState<CheckpointSummary[]>([])
-  const [cpLoaded, setCpLoaded] = useState(false)
-  const [cpError, setCpError] = useState<string | null>(null)
-  const [records, setRecords] = useState<Record<string, ChangedFileRecord[]>>({})
   const [detail, setDetail] = useState<AgentSessionDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [reviewId, setReviewId] = useState<string | null>(null)
-  const [filesOpenIds, setFilesOpenIds] = useState<Set<string>>(new Set())
-  const [diffCp, setDiffCp] = useState<CheckpointSummary | null>(null)
-  const [conflictFor, setConflictFor] = useState<string | null>(null)
-  const [restoreConflicts, setRestoreConflicts] = useState<ConflictInfo[]>([])
-  const [restoreDone, setRestoreDone] = useState<{ id: string; pruned: string } | null>(null)
   const [transcript, setTranscript] = useState<TranscriptDetail | null>(null)
   const [activeTurnId, setActiveTurnId] = useState<string | null>(null)
   const turnRefs = useMemo(() => new Map<string, HTMLDivElement | null>(), [])
@@ -1249,21 +874,9 @@ function SessionDetailWindow({
     turnRefs.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [turnRefs])
   const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
-  // External and archived rows carry no restorable state: the window reads the
-  // transcript ledger only and never fetches checkpoints.
-  const readableOnly = session.external === true || session.archived
-
-  const loadRecords = useCallback(async (checkpointId: string, cwd: string) => {
-    const key = `${checkpointId}:records`
-    const fresh = await window.electron.checkpoint.records(checkpointId, cwd).catch(() => [])
-    setRecords((state) => (state[key] ? state : { ...state, [key]: fresh }))
-  }, [])
-
   useEffect(() => {
     let alive = true
-    // The open window reloads on every debounced session:event so questions,
-    // excerpts, and checkpoint strips arrive mid-conversation. Review, file,
-    // and restore states stay keyed by checkpoint id and survive the reload.
+    // Reload live questions and excerpts on debounced session events.
     setDetailLoading(true)
     window.electron.session
       .get(session.id)
@@ -1273,42 +886,10 @@ function SessionDetailWindow({
         if (fetched) setDetail(fetched)
         setDetailLoading(false)
       })
-    if (readableOnly) {
-      setCpLoaded(true)
-      return () => {
-        alive = false
-      }
-    }
-    setCpError(null)
-    window.electron.checkpoint
-      .list({ sessionId: session.id, cwd: session.cwd })
-      .then((cps) => {
-        if (!alive) return
-        setCheckpoints(cps)
-        setCpLoaded(true)
-        // Drop records of pruned checkpoints; the rest reload lazily.
-        setRecords((state) => {
-          const keep = new Set(cps.map((cp) => `${cp.id}:records`))
-          const next: Record<string, ChangedFileRecord[]> = {}
-          let dropped = false
-          for (const [key, value] of Object.entries(state)) {
-            if (keep.has(key)) next[key] = value
-            else dropped = true
-          }
-          return dropped ? next : state
-        })
-        // Per-checkpoint lazy change records; diffs stay on demand in the side panel.
-        void Promise.all(cps.map((cp) => loadRecords(cp.id, session.cwd)))
-      })
-      .catch((err) => {
-        if (!alive) return
-        setCpLoaded(true)
-        setCpError(err instanceof Error ? err.message : String(err))
-      })
     return () => {
       alive = false
     }
-  }, [session.id, session.cwd, readableOnly, timelineTick, loadRecords])
+  }, [session.id, timelineTick])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1345,69 +926,6 @@ function SessionDetailWindow({
     [detail, transcript, session.createdAt, session.updatedAt],
   )
 
-  const handleRestore = async (checkpoint: CheckpointSummary) => {
-    const pruned = checkpoints
-      .filter((other) => other.conversationIndex > checkpoint.conversationIndex)
-      .map((other) => `#${other.conversationIndex}`)
-      .join(' · ')
-    setReviewId(null)
-    setRestoreDone(null)
-    await restoreCheckpoint(checkpoint.id, session.cwd, { sessionId: session.id })
-    const state = useCheckpointStore.getState()
-    setRestoreConflicts(state.conflicts)
-    setConflictFor(checkpoint.id)
-    if (!state.error) {
-      setRestoreDone({ id: checkpoint.id, pruned })
-    }
-    const cps = await window.electron.checkpoint
-      .list({ sessionId: session.id, cwd: session.cwd })
-      .catch(() => [])
-    setCheckpoints(cps)
-  }
-
-  const toggleFiles = useCallback((checkpointId: string) => {
-    setFilesOpenIds((state) => {
-      const next = new Set(state)
-      if (next.has(checkpointId)) next.delete(checkpointId)
-      else next.add(checkpointId)
-      return next
-    })
-  }, [])
-
-  const openReview = useCallback((checkpoint: CheckpointSummary) => {
-    setConflictFor(null)
-    setRestoreConflicts([])
-    setRestoreDone(null)
-    // Review expands the file list so the confirm step sees the files.
-    setFilesOpenIds((state) => new Set(state).add(checkpoint.id))
-    setReviewId(checkpoint.id)
-  }, [])
-
-  const checkpointById = useMemo(() => new Map(checkpoints.map((cp) => [cp.id, cp])), [checkpoints])
-
-  const turnKindByCheckpointId = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const turn of detail?.turns ?? []) {
-      if (turn.checkpointId) map.set(turn.checkpointId, turn.kind)
-    }
-    return map
-  }, [detail])
-
-  const referencedIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const turn of detail?.turns ?? []) {
-      if (turn.checkpointId) ids.add(turn.checkpointId)
-    }
-    return ids
-  }, [detail])
-
-  // Checkpoints no turn points at (running turn, legacy data): appended after
-  // the turns so the window never hides restorable state.
-  const orphans = useMemo(
-    () => checkpoints.filter((cp) => !referencedIds.has(cp.id)),
-    [checkpoints, referencedIds],
-  )
-
   // Scroll-spy: the rail follows the turn under a reading line near the top
   // of the pane. A zero-width line sits inside exactly one turn at a time, so
   // the focus changes once per boundary crossing and never flickers between
@@ -1442,7 +960,7 @@ function SessionDetailWindow({
       pane.removeEventListener('scroll', onScroll)
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [displayTurns, orphans, turnRefs])
+  }, [displayTurns, turnRefs])
 
   // Keep the active rail entry in view without stealing the reading scroll.
   useEffect(() => {
@@ -1451,39 +969,6 @@ function SessionDetailWindow({
       ?.querySelector(`[data-nav="${CSS.escape(activeTurnId)}"]`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [activeTurnId])
-
-  const pruneCountFor = useCallback(
-    (checkpoint: CheckpointSummary) =>
-      checkpoints.filter((other) => other.conversationIndex > checkpoint.conversationIndex).length,
-    [checkpoints],
-  )
-
-  const renderStrip = (checkpoint: CheckpointSummary) => {
-    const key = `${checkpoint.id}:records`
-    const recs = records[key]
-    return (
-      <CheckpointStrip
-        key={checkpoint.id}
-        cp={checkpoint}
-        records={recs}
-        recordsLoading={recs === undefined}
-        turnKind={turnKindByCheckpointId.get(checkpoint.id)}
-        pruneCount={pruneCountFor(checkpoint)}
-        filesOpen={filesOpenIds.has(checkpoint.id)}
-        onToggleFiles={() => toggleFiles(checkpoint.id)}
-        reviewOpen={reviewId === checkpoint.id}
-        onToggleReview={(open) => {
-          if (open) openReview(checkpoint)
-          else setReviewId(null)
-        }}
-        onConfirmRestore={() => void handleRestore(checkpoint)}
-        restoreDonePruned={restoreDone?.id === checkpoint.id ? restoreDone.pruned : null}
-        showRestoreDone={restoreDone?.id === checkpoint.id}
-        conflicts={conflictFor === checkpoint.id ? restoreConflicts : null}
-        onViewDiff={() => setDiffCp((current) => (current?.id === checkpoint.id ? null : checkpoint))}
-      />
-    )
-  }
 
   const iconPreset = sessionEnginePreset(session.engine)
 
@@ -1500,7 +985,7 @@ function SessionDetailWindow({
         aria-label={session.firstPrompt || session.engine}
         className="overflow-hidden flex flex-col"
         style={{
-          width: diffCp ? 1300 : 1020,
+          width: 1020,
           maxWidth: 'calc(100vw - 40px)',
           height: 660,
           maxHeight: 'calc(100vh - 60px)',
@@ -1508,7 +993,6 @@ function SessionDetailWindow({
           border: '1px solid var(--shell-border)',
           borderRadius: 8,
           boxShadow: '0 24px 60px rgba(0,0,0,0.72)',
-          transition: 'width 0.25s ease',
         }}
       >
         <TrafficBar
@@ -1524,9 +1008,6 @@ function SessionDetailWindow({
           <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10.5, color: 'var(--shell-muted)', lineHeight: 1.7 }}>
             …/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''} · {session.engine} ·{' '}
             {t('terminal:agentSession.turns', { count: session.turnCount })}
-            {session.external !== true && !session.archived && (
-              <> · {t('terminal:agentSession.checkpoints', { count: session.checkpointCount })}</>
-            )}
           </div>
           <div className="flex" style={{ gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
             {session.firstPrompt && <CopyButton text={session.firstPrompt} label={t('terminal:agentSession.firstPrompt')} />}
@@ -1580,32 +1061,6 @@ function SessionDetailWindow({
                 </ThemedTooltip>
               )
             })}
-            {orphans.length > 0 && (
-              <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-dim)', padding: '8px 6px 6px' }}>
-                #
-              </div>
-            )}
-            {orphans.map((cp) => {
-              const active = activeTurnId === `orphan-${cp.id}`
-              return (
-                <ThemedTooltip key={cp.id} label={cp.prompt ?? `#${cp.conversationIndex}`}>
-                <button
-                  data-nav={`orphan-${cp.id}`}
-                  onClick={() => jumpToTurn(`orphan-${cp.id}`)}
-                  className="cursor-pointer"
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
-                    padding: '5px 6px', borderRadius: 4, border: 0, cursor: 'pointer',
-                    background: active ? 'var(--shell-accent-soft)' : 'transparent',
-                    color: active ? 'var(--shell-text)' : 'var(--shell-accent)',
-                    fontFamily: "'SF Mono', monospace", fontSize: 10, lineHeight: 1.5, textAlign: 'left',
-                  }}
-                >
-                  <span className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap">#{cp.conversationIndex}</span>
-                </button>
-                </ThemedTooltip>
-              )
-            })}
           </div>
           <div ref={turnsPaneRef} style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '12px 16px' }}>
             {!detail ? (
@@ -1618,9 +1073,7 @@ function SessionDetailWindow({
                   </div>
                 )}
                 {displayTurns.map((turn, index) => {
-                  const linked = !readableOnly && turn.checkpointId ? checkpointById.get(turn.checkpointId) : undefined
-                  // Turn-owned prompt survives checkpoint prune; linked prompt stays as fallback.
-                  const question = turn.prompt ?? linked?.prompt
+                  const question = turn.prompt
                   return (
                     <div
                       key={turn.id}
@@ -1646,7 +1099,6 @@ function SessionDetailWindow({
                         <span style={{ color: turn.kind === 'done' ? 'var(--shell-muted)' : 'var(--shell-diff-del)', border: '1px solid var(--shell-border)', borderRadius: 3, padding: '0 5px' }}>
                           {turnKindLabel(turn.kind, t)}
                         </span>
-                        {linked && <span style={{ color: 'var(--shell-accent)' }}>#{linked.conversationIndex}</span>}
                         {!question && <span>turn {index + 1} · {formatDate(turn.startedAt, t)}</span>}
                       </div>
                       {turn.excerpt && (
@@ -1654,74 +1106,22 @@ function SessionDetailWindow({
                           {turn.excerpt}
                         </div>
                       )}
-                      {linked && renderStrip(linked)}
-                      {!readableOnly && !linked && !turn.checkpointId && cpLoaded && (
-                        <div style={{ marginTop: 8, border: '1px dashed var(--shell-border)', borderRadius: 6, padding: '8px 10px', opacity: 0.75 }}>
-                          <div className="flex items-center" style={{ gap: 7, fontSize: 11, color: 'var(--shell-text)' }}>
-                            <span>{t('terminal:checkpoint.noCheckpoint')}</span>
-                            <span style={{ marginLeft: 'auto', fontFamily: "'SF Mono', monospace", fontSize: 9.5, color: 'var(--shell-muted)' }}>
-                              {t('terminal:checkpoint.readOnlyHint')}
-                            </span>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )
                 })}
-                {displayTurns.length === 0 && orphans.length === 0 && (
+                {displayTurns.length === 0 && (
                   <div style={{ fontSize: 11, color: 'var(--shell-dim)', padding: '6px 0' }}>{t('terminal:agentSession.empty')}</div>
                 )}
-                {cpError && checkpoints.length === 0 && (
-                  <div style={{ fontSize: 11, color: 'var(--shell-diff-del)', padding: '6px 0' }}>{cpError}</div>
-                )}
-                {orphans.map((cp) => (
-                  <div
-                    key={cp.id}
-                    ref={(node) => { turnRefs.set(`orphan-${cp.id}`, node) }}
-                    style={{
-                      background: SURFACE_CARD,
-                      border: activeTurnId === `orphan-${cp.id}` ? '1px solid var(--shell-accent-border)' : CARD_BORDER,
-                      borderRadius: 8, padding: '11px 12px', marginBottom: 10,
-                    }}
-                  >
-                    {cp.prompt && (
-                      <div style={{ fontSize: 12.5, lineHeight: 1.65, color: 'var(--shell-text)', wordBreak: 'break-all', whiteSpace: 'pre-wrap', marginBottom: 4 }}>
-                        {cp.prompt}
-                      </div>
-                    )}
-                    {renderStrip(cp)}
-                  </div>
-                ))}
               </>
             )}
           </div>
-          {diffCp && (
-            <DiffSidePanel
-              cp={diffCp}
-              cwd={session.cwd}
-              records={records[`${diffCp.id}:records`]}
-              pruneCount={pruneCountFor(diffCp)}
-              onClose={() => setDiffCp(null)}
-              onRestore={() => {
-                const cp = diffCp
-                setDiffCp(null)
-                openReview(cp)
-                // Review renders in the left pane; keep it in view.
-                requestAnimationFrame(() => {
-                  document.querySelector(`[data-cp-strip="${cp.id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                })
-              }}
-            />
-          )}
         </div>
         <div
           className="flex items-center"
           style={{ gap: 8, padding: '10px 14px', borderTop: '1px solid var(--shell-border-soft)', flexShrink: 0, flexWrap: 'wrap' }}
         >
           <span style={{ fontSize: 11, color: 'var(--shell-muted)', flex: 1 }}>
-            {readableOnly
-              ? t('terminal:agentSession.externalHint')
-              : t('terminal:checkpoint.pruneOk')}
+            {t('terminal:agentSession.detailReadOnlyHint')}
           </span>
           <button
             onClick={onClose}
@@ -1765,17 +1165,5 @@ function SessionDetailWindow({
         </div>
       </div>
     </div>
-  )
-}
-
-function FileCounts({ record }: { record: ChangedFileRecord }) {
-  if (record.status === 'binary' || record.status === 'oversized') {
-    return <span style={{ color: 'var(--shell-accent)' }}>{recordCounts(record)}</span>
-  }
-  return (
-    <span>
-      {(record.additions ?? 0) > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{record.additions} </span>}
-      {(record.deletions ?? 0) > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{record.deletions}</span>}
-    </span>
   )
 }

@@ -182,10 +182,9 @@ describe('planche theme contract', () => {
     for (const hex of ['#d4d4d4', '#ddd', '#e06c75', '#4ec9b0']) {
       expect(session, hex).not.toContain(`'${hex}'`)
     }
-    expect(session).toContain('var(--shell-diff-add)')
     expect(session).toContain('var(--shell-diff-del)')
-    // 会话表面（列表卡片、详情 turn 卡片、轮播栏、diff 面板、checkpoint 条、输入框）
-    // 全部由 --shell-chrome 朝 --shell-text 混出的三档承担，弹窗遮罩与红绿灯除外。
+    // 会话表面（列表卡片、详情 turn 卡片、轮次导航、输入框）
+    // 全部由 --shell-chrome 朝 --shell-text 混出的两档承担，弹窗遮罩与红绿灯除外。
     // plankhe 的 --shell-void/canvas/pane/chrome/card 全是 #EFE4C5，纸面里没有更深的
     // 台阶：写死 rgba(0,0,0,.2x) 是冷灰油渍，写死 rgba(255,255,255,.0x) 等于没画，
     // 硬编码的 #8ab4ff 蓝在朱红纸面上完全跑调。三条都不许回来。
@@ -195,12 +194,9 @@ describe('planche theme contract', () => {
     expect(session).toContain(
       "const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 90%, var(--shell-text))'",
     )
-    expect(session).toContain(
-      "const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'",
-    )
-    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(2)
+    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(1)
     // 内容卡（首轮提示/最近轮次）走 module .sheet 浅纸面，不占 SURFACE_INSET 名额
-    expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(8)
+    expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(5)
     // 会话面板三阶：地吃 --shell-canvas（planche=软件纸面底色，dark=v6 画布），
     // 卡/内卡仍走 A 方案高保真逐值
     const sessionMod = read('components/SessionPanel.module.css')
@@ -215,8 +211,7 @@ describe('planche theme contract', () => {
     expect(sessionMod).toContain('.foldBtn')
     expect(sessionMod).toMatch(/\.foldBtn \{[^}]*border: none/s)
     expect(sessionMod).toContain('var(--shell-accent-border)')
-    expect(session.match(/background: SURFACE_DEEP/g) ?? []).toHaveLength(2)
-    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(2)
+    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(1)
     expect(session).not.toMatch(/background: 'rgba\(255,\s*255,\s*255/)
     expect(session).not.toMatch(/background: 'rgba\(0,\s*0,\s*0,\s*0\.[1-5]\d\)'/)
     expect(session).not.toMatch(/(solid|dashed) rgba\(255,\s*255,\s*255/)

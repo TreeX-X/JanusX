@@ -489,6 +489,7 @@ test('Claude, Codex and Opencode restore native history and track follow-up turn
         const beforeRows = await listLive(page)
         const sourceCard = page.locator(`[data-session-id="${source.id}"]`)
         await expect(sourceCard).toBeVisible()
+        await expect(sourceCard).not.toContainText('还原点')
         const fold = sourceCard.getByRole('button', { name: '展开', exact: true })
         if (await fold.count()) await fold.click()
         if (mode === 'continue') {
@@ -499,7 +500,11 @@ test('Claude, Codex and Opencode restore native history and track follow-up turn
         } else {
           await expect(sourceCard.getByRole('button', { name: '回到原会话', exact: true })).toBeEnabled()
           await sourceCard.getByRole('button', { name: '查看详情', exact: true }).click()
-          await page.locator('div.fixed.inset-0').last().getByRole('button', { name: '回到原会话', exact: true }).click()
+          const detailWindow = page.getByRole('dialog')
+          await expect(detailWindow).toContainText('initial ' + engine + ' prompt')
+          await expect(detailWindow).not.toContainText('还原点')
+          await expect(detailWindow.getByRole('button', { name: /查看 diff|确认恢复/ })).toHaveCount(0)
+          await detailWindow.getByRole('button', { name: '回到原会话', exact: true }).click()
         }
         await expect.poll(async () => (await listLive(page!)).length).toBe(beforeRows.length + 1)
         const newRow = (await listLive(page)).find((row) => !beforeRows.some((before) => before.id === row.id))!
