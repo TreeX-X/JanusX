@@ -33,6 +33,8 @@
 ---
 # Runtime drawer cards and drag height
 
+The planned [Markdown pane migration](./markdown-pane-entry.md) removes the Markdown editor and its view tab from this drawer. Runtime cards and their adjustable height remain a bottom monitoring surface. The migration is not implemented; the per-view height model below still describes current code.
+
 
 ## Problem
 

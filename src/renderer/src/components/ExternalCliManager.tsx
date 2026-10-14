@@ -26,7 +26,16 @@ function toRowState(detect: ExternalCliDetectResult | undefined, latestVersion: 
   return 'ready'
 }
 
-export function ExternalCliManager({ toolId }: { toolId: ExternalCliToolId }) {
+export function ExternalCliManager({
+  toolId,
+  visible,
+  onVisibleChange,
+}: {
+  toolId: ExternalCliToolId
+  /** 是否在新建终端入口显示；置灰的图标即由此驱动。 */
+  visible: boolean
+  onVisibleChange: (visible: boolean) => void
+}) {
   const { t } = useI18n('settings')
   const meta = EXTERNAL_CLI_TOOL_META[toolId]
   const [detect, setDetect] = useState<ExternalCliDetectResult>()
@@ -110,27 +119,41 @@ export function ExternalCliManager({ toolId }: { toolId: ExternalCliToolId }) {
   const versionLine = [detect?.version, latestVersion && latestVersion !== detect?.version ? `→ ${latestVersion}` : '', detect?.source]
     .filter(Boolean)
     .join(' · ')
+  const visibilityLabel =
+    !visible ? t('settings:cliTools.visibility.hidden') : t('settings:cliTools.visibility.visible')
+
+  // 品牌图标即显隐开关：点了置灰就不从新建入口显示（已有终端照常运行）。
+  const brandIcon = iconFailed ? (
+    <span
+      className={styles.lsToolIcon}
+      style={{ background: `${meta.color}22`, borderColor: `${meta.color}55`, color: meta.color }}
+      aria-hidden="true"
+    >
+      {meta.monogram}
+    </span>
+  ) : (
+    <img
+      className={styles.lsToolImg}
+      src={EXTERNAL_CLI_TOOL_ICONS[toolId]}
+      alt=""
+      draggable={false}
+      onError={() => setIconFailed(true)}
+    />
+  )
 
   return (
     <div className={styles.lsToolRow}>
       <div className={styles.lsToolRowMain}>
-        {iconFailed ? (
-          <span
-            className={styles.lsToolIcon}
-            style={{ background: `${meta.color}22`, borderColor: `${meta.color}55`, color: meta.color }}
-            aria-hidden="true"
-          >
-            {meta.monogram}
-          </span>
-        ) : (
-          <img
-            className={styles.lsToolImg}
-            src={EXTERNAL_CLI_TOOL_ICONS[toolId]}
-            alt={meta.displayName}
-            draggable={false}
-            onError={() => setIconFailed(true)}
-          />
-        )}
+        <button
+          type="button"
+          className={`${styles.lsIconToggle} ${styles.lsIconEntry}${!visible ? ` ${styles.lsIconToggleOff}` : ''}`}
+          aria-label={visibilityLabel}
+          aria-pressed={visible}
+          title={visibilityLabel}
+          onClick={() => onVisibleChange(!visible)}
+        >
+          {brandIcon}
+        </button>
         <div className={styles.lsToolRowInfo}>
           <span className={styles.lsCardName}>{meta.displayName}</span>
           {loading

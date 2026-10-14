@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-14T07:20:37Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -47,3 +47,15 @@ The workspace embeds a real browsing panel on isolated per-tab views with a pers
 
 - **Gains**: Dev servers, local previews, and documentation resolve inside the workspace beside the code that serves them.
 - **Costs and limits**: Each tab carries a full view process, so tab count needs bounding; agent-driven operation awaits its own protocol, switch, and audit pass.
+
+## Native view visibility and load failures
+
+Electron WebContentsView children render above the shell DOM. CSS z-index cannot put an error panel or quit confirmation above them. The main process attaches an active tab only after receiving positive layout bounds and while that tab has no main-frame load error. Zero bounds detach the view without closing its session; load and tab events respect that hidden state. Closing a tab removes it from the surface before closing its webContents, so close events cannot publish a destroyed tab.
+
+BrowserSurface reports zero bounds while hidden, dragging, covered by a workbench, showing a load error, or covered by a dialog. PromptDialog and ModalFrame hold window-local occlusion leases; nested dialogs keep the view hidden until the last lease ends, including the modal exit animation. Resize, scroll and completed layout transitions refresh the view bounds. Failed navigation retains the attempted URL for the address bar and retry; ERR_ABORTED from a superseded navigation is not a page failure.
+
+2026-10-14 verification: 97 unit tests passed across browser-surface-manager, browser-occlusion, browser-ipc-contract, global-tool-entry, workspace-front-surface, workspace-pane and docker-settings. Typecheck, targeted ESLint and `npm run build:check` passed. The Electron case `Docker load failure, retry, dialogs and close release native browser views` in `tests/e2e/desktop-smoke.spec.ts` passed against `artifacts/build-check/main/index.js` with `JANUSX_E2E_ENTRY` set to that path and `NO_PROXY=127.0.0.1,localhost`. It checks the native child-view tree as well as real dialog clicks, failed HTTP load, retry, pane close, reopen and application quit. The fixture is a local HTTP page; a deployed Portainer service and its authentication were not verified.
+
+The same run confirmed closing and reopening a failed page before retry, and verified the loaded fixture title after retry. A TCP connection to the default local endpoint `127.0.0.1:9443` returned ECONNREFUSED; this is a point-in-time observation of the default endpoint, not a diagnosis of every configured environment. `npm run check:notes` reported two unrelated errors in `terminal/tasks/gitbash-shell-terminal-management.md` (missing Progress and Evidence sections), plus existing cross-repository link diagnostics; those references remain unresolved by this change.
+
+2026-10-14: the Docker integration this verification exercised was removed the same day, together with the rest of the Portainer direction (see [Docker 面板入口](../workbench/docker-management-entry.md)). The case above was renamed to drive the workspace browser entry instead of the Docker one, so the native-view, load-failure, dialog and quit evidence still stands for the browser surface; the `docker-settings` unit suite was deleted with its subject.

@@ -8,6 +8,7 @@ import { PersonalMemoryWorkbench } from '@/components/knowledge'
 import { UpdaterBadge } from '@/components/UpdaterBadge'
 import { PromptDialog } from '@/components/blueprint/PromptDialog'
 import { WorkbenchSwitcher } from '@/components/WorkbenchSwitcher'
+import { TitlebarToolGroup, TitlebarToolSeparator } from '@/components/TitlebarToolGroup'
 import { useJanusChatController } from '@/components/janus/JanusChatProvider'
 import { useGlobalRunning } from '@/components/janus/useGlobalRunning'
 import { JanusRunOrbs } from '@/components/janus/JanusRunOrbs'
@@ -340,7 +341,11 @@ export function Titlebar() {
         document.body,
       )}
 
-      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 titlebar-no-drag">
+      {/*-- 右侧两组：全局工具（浏览器/Markdown）与工作台（蓝图/知识库），
+           组间 12px 并由短竖分隔线隔开；无可见工作台时分隔线自动收起 --*/}
+      <div className="absolute right-3.5 top-1/2 flex -translate-y-1/2 items-center gap-3 titlebar-no-drag">
+        <TitlebarToolGroup />
+        <TitlebarToolSeparator />
         <WorkbenchSwitcher />
       </div>
 

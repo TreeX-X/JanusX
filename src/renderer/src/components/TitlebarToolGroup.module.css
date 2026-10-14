@@ -1,0 +1,95 @@
+/* ==========================================================================
+   TitlebarToolGroup — 标题栏全局工具入口（浏览器 / Markdown）
+   与 WorkbenchSwitcher 同一视觉语言：描边图标按钮，idle 灰 / hover 提亮。
+   每个工具在一个工作区里只开一个实例，"已开着"直接置灰（.button:disabled），
+   关闭对应标签后恢复可点——不做 active 指示条，避免和置灰语义重复。
+   ========================================================================== */
+
+.group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.button {
+  position: relative;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.34);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.button:hover {
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.button:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.65);
+  outline-offset: 1px;
+}
+
+.button:active {
+  transform: scale(0.95);
+}
+
+/* 已开着：置灰且不吃指针事件，但不隐去图标——位置稳定，关闭后才恢复 */
+.button:disabled {
+  cursor: default;
+  color: rgba(255, 255, 255, 0.16);
+  background: transparent;
+}
+
+.icon {
+  display: block;
+}
+
+/* MarkdownIcon 的 svg 硬编码 width/height="24"，必须由外层压到 16px 才能与浏览器同号 */
+.markdownIcon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── 组间竖分隔线：工具组与工作台分组之间的短竖线，无可见工作台时收起 ── */
+.separator {
+  width: 1px;
+  height: 14px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ── planche：纸面标题栏上的墨线图标，单朱红点睛 ── */
+:global([data-theme='planche']) .button {
+  color: rgba(28, 52, 59, 0.45);
+}
+
+:global([data-theme='planche']) .button:hover {
+  color: #1C343B;
+  background: #DCCFA8;
+}
+
+:global([data-theme='planche']) .button:focus-visible {
+  outline: 2px solid #D43D2A;
+}
+
+:global([data-theme='planche']) .button:active {
+  transform: none;
+}
+
+:global([data-theme='planche']) .button:disabled {
+  color: rgba(28, 52, 59, 0.2);
+  background: transparent;
+}
+
+:global([data-theme='planche']) .separator {
+  background: rgba(28, 52, 59, 0.18);
+}
+

@@ -626,6 +626,9 @@
   padding: 0 12px;
   font-size: 11px;
   font-weight: 600;
+  /* 不换行也不被 flex 行挤压：长文案（如“以管理员身份重启”）会撑破卡片 */
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
@@ -755,4 +758,267 @@
 :global([data-theme='planche']) .lsSpinner {
   border: 2px solid var(--line-soft, rgba(28, 52, 59, 0.22));
   border-top-color: var(--ink, #1C343B);
+}
+
+/* ── 终端管理：条目编辑控件 ───────────────────────────────────────────
+   沿用设置界面的既有词汇：卡片用 color-mix 主题色，输入框用 --so-field
+   的“下沉黑”（比卡更黑一档，形成嵌进去的层级），不另起硬编码底色。 */
+.lsFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.lsField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lsFieldLabel {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--shell-dim);
+}
+
+.lsInput {
+  width: 100%;
+  min-width: 0;
+  height: var(--so-control-h);
+  padding: 0 8px;
+  border: 1px solid var(--so-field-border);
+  border-radius: var(--so-radius);
+  background: var(--so-field);
+  color: var(--shell-text);
+  font-size: 12px;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.lsInput:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.lsInput:focus-visible {
+  outline: 1px solid rgba(255, 255, 255, 0.16);
+  outline-offset: -1px;
+}
+
+/* 可执行名缺失：与 lsStateFailed 同一组红，避免另造一套错误色 */
+.lsInputMissing {
+  border-color: rgba(215, 139, 146, 0.7);
+  color: #d78b92;
+}
+
+.lsIconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--so-field-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-muted);
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.lsIconButton:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--shell-text);
+}
+
+.lsIconButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lsEmpty {
+  padding: 8px 0;
+  font-size: 11px;
+  color: var(--shell-dim);
+}
+
+.lsMissingRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lsMissingText {
+  font-size: 11px;
+  color: #d78b92;
+}
+
+.lsLinkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--shell-muted);
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.lsLinkButton:hover {
+  color: var(--shell-text);
+}
+
+:global([data-theme='planche']) .lsInput {
+  background: var(--paper-deep, #DCCFA8);
+}
+
+:global([data-theme='planche']) .lsInputMissing {
+  color: #A4442F;
+}
+
+:global([data-theme='planche']) .lsMissingText {
+  color: #A4442F;
+}
+
+:global([data-theme='planche']) .lsIconButton:hover:not(:disabled) {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+/* 条目名称就是卡片标题：比普通输入框大一号、加粗，压过旁边的勾选控件 */
+.lsInputName {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── 终端管理：图标位 / 显隐 / 默认 ───────────────────────────────────
+   显隐与默认都做成可点图标按钮，不用原生 checkbox/radio：
+   置灰 = 不显示 / 非默认，实色 = 显示 / 默认，状态一眼可辨。 */
+.lsCardEditable {
+  position: relative;
+}
+
+
+
+/* 图标类切换按钮：显隐（眼睛）与默认（星标）共用 */
+.lsIconToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-muted);
+  cursor: pointer;
+  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.lsIconToggle:hover:not(:disabled) {
+  border-color: var(--so-field-border);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--shell-text);
+}
+
+.lsIconToggle:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* 置灰 = 不显示 / 非默认 */
+.lsIconToggleOff {
+  opacity: 0.5;
+}
+
+.lsIconToggleOff:hover:not(:disabled) {
+  opacity: 1;
+}
+
+/* 默认项：主题强调色实心星，随主题变（纸面朱红 / 深色橙） */
+.lsIconToggleOn {
+  color: var(--shell-accent);
+}
+
+.lsIconToggleOn:hover:not(:disabled) {
+  color: var(--shell-accent);
+}
+
+
+
+:global([data-theme='planche']) .lsIconToggle:hover:not(:disabled) {
+  background: var(--paper-deep, #DCCFA8);
+  border-color: var(--planche-red, #D43D2A);
+  color: var(--planche-red, #D43D2A);
+}
+
+:global([data-theme='planche']) .lsIconToggleOn,
+:global([data-theme='planche']) .lsIconToggleOn:hover:not(:disabled) {
+  color: var(--planche-red, #D43D2A);
+}
+
+
+/* 条目图标即显隐开关：比普通图标钮大一圈，好点；置灰 = 不进新建入口。
+   grayscale 让品牌图标也一起退色，状态在两种主题下都一眼可辨。 */
+.lsIconEntry {
+  width: 30px;
+  height: 30px;
+}
+
+.lsIconToggleOff.lsIconEntry {
+  filter: grayscale(1);
+}
+
+/* 检测中：图标自顾旋转，替代原来的文字“检测中…” */
+.lsIconSpin {
+  color: var(--shell-text);
+}
+
+.lsIconSpin > svg {
+  animation: ls-spin 0.8s linear infinite;
+}
+
+/* 列表末尾的添加行：与条目卡同宽的虚线框，读作"下一张空卡位"。
+   用 border 而不是 background 区分，避免在纸面主题下再叠一层底色。 */
+.lsAddRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px dashed var(--so-field-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shell-muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.lsAddRow:hover {
+  border-color: var(--shell-accent-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--shell-text);
+}
+
+.lsAddRow:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: 1px;
+}
+
+:global([data-theme='planche']) .lsAddRow:hover {
+  background: var(--paper-deep, #DCCFA8);
 }

@@ -14,10 +14,17 @@ import {
 } from '../../shared/ipc/workspace'
 import { sortWorkspaceSidebar } from '../../shared/workspace-sidebar'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
+import { SHELL_PROFILE_CHANNELS } from '../../shared/ipc/shell-profiles'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/shell-runtime'
 import { resolveCLIPath } from '../janus-runner/cli-resolver'
 import { buildVSCodeLaunchArgs } from '../ide-launch'
 import { trackBlueprintReviewWorkspace } from '../blueprint/review/runtime'
+import {
+  detectShellCandidates,
+  getDefaultShellCommand,
+  getShellProfilesSettings,
+  saveShellProfiles,
+} from '../terminal/shell-profiles'
 
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
@@ -475,10 +482,12 @@ export function registerWorkspaceHandlers(
   })
 
 
-  ipcMain.handle(SYSTEM_CHANNELS.defaultShell, () => {
-    if (process.platform === 'win32') return 'powershell.exe'
-    return process.env.SHELL || '/bin/bash'
-  })
+  // 默认 shell 取自设置「终端管理」的默认条目，缺席时回落平台默认。
+  ipcMain.handle(SYSTEM_CHANNELS.defaultShell, () => getDefaultShellCommand())
+
+  ipcMain.handle(SHELL_PROFILE_CHANNELS.list, () => getShellProfilesSettings())
+  ipcMain.handle(SHELL_PROFILE_CHANNELS.save, (_event, settings: unknown) => saveShellProfiles(settings))
+  ipcMain.handle(SHELL_PROFILE_CHANNELS.detect, () => detectShellCandidates())
 
   ipcMain.handle(SYSTEM_CHANNELS.platform, () => {
     return process.platform

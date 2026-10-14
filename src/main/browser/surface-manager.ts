@@ -14,6 +14,9 @@ import { createStandaloneBrowserWindow } from '../windows/browser-window'
 interface BrowserTab {
   tabId: string
   view: WebContentsView
+  requestedUrl: string
+  /** 最近一次主框架加载失败的错误描述；undefined 表示没有失败。 */
+  loadError?: string
 }
 
 interface BrowserSurface {
@@ -33,14 +36,9 @@ export interface BrowserSurfaceManagerDeps {
 type StateListener = (surfaceId: string, state: BrowserSurfaceState) => void
 type AgentControlListener = (surfaceId: string, event: BrowserAgentControlEvent) => void
 
-/*-- 用户输入的 URL 归一化：scheme 必须带 "://"（排除 localhost:5173 这类误判），无协议时本地地址走 http，其余走 https --*/
-export function normalizeBrowserUrl(input: string): string {
-  const trimmed = input.trim()
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed
-  if (/^(about|file|data|chrome|devtools):/i.test(trimmed)) return trimmed
-  if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/|$)/i.test(trimmed)) return `http://${trimmed}`
-  return `https://${trimmed}`
-}
+import { normalizeBrowserUrl } from '../../shared/browser-url'
+/*-- URL 归一化规则住在 shared（浏览器 surface 与渲染层地址管理共用），此处再导出保持既有 import 不变 --*/
+export { normalizeBrowserUrl }
 
 /**
  * 浏览器 surface 管理器（P1 纯用户功能）。
@@ -188,8 +186,8 @@ export class BrowserSurfaceManager {
 
     const host = this.hostWindowOf(surface)
     if (host && !host.isDestroyed()) this.detachView(host, tab.view)
-    this.destroyTabView(tab)
     surface.tabs.delete(tabId)
+    this.destroyTabView(tab)
 
     /*-- 关闭的是活动 tab 时切到剩余最后一个；全部关闭后 surface 保留为空 --*/
     if (surface.activeTabId === tabId) {
@@ -211,8 +209,9 @@ export class BrowserSurfaceManager {
   navigate(surfaceId: string, tabId: string, url: string): void {
     const tab = this.getTab(surfaceId, tabId)
     if (!tab) return
+    tab.requestedUrl = normalizeBrowserUrl(url)
     /*-- 导航失败（证书错误、中断等）不抛错，加载态由 webContents 事件回流 --*/
-    void tab.view.webContents.loadURL(normalizeBrowserUrl(url)).catch(() => {})
+    void tab.view.webContents.loadURL(tab.requestedUrl).catch(() => {})
   }
 
   goBack(surfaceId: string, tabId: string): void {
@@ -224,7 +223,13 @@ export class BrowserSurfaceManager {
   }
 
   reload(surfaceId: string, tabId: string): void {
-    this.getTab(surfaceId, tabId)?.view.webContents.reload()
+    const tab = this.getTab(surfaceId, tabId)
+    if (!tab) return
+    if (tab.loadError && tab.requestedUrl) {
+      void tab.view.webContents.loadURL(tab.requestedUrl).catch(() => {})
+    } else {
+      tab.view.webContents.reload()
+    }
   }
 
   /*-- P2 预留：Agent 控制指示；P1 无 IPC 触发源 --*/
@@ -273,7 +278,7 @@ export class BrowserSurfaceManager {
         webSecurity: true,
       },
     })
-    const tab: BrowserTab = { tabId: randomUUID(), view }
+    const tab: BrowserTab = { tabId: randomUUID(), view, requestedUrl: url ? normalizeBrowserUrl(url) : '' }
 
     /*-- 空白 tab 与加载过渡期间保持深色，避免白闪 --*/
     view.setBackgroundColor('#0a0a0a')
@@ -291,13 +296,38 @@ export class BrowserSurfaceManager {
     const emit = (): void => {
       if (this.surfaces.has(surface.surfaceId)) this.emitState(surface)
     }
-    view.webContents.on('did-navigate', emit)
-    view.webContents.on('did-start-loading', emit)
+    /*-- 加载失败要显式记录：否则自签证书被中止、端口没开这类失败完全静默，
+         视图只停在 setBackgroundColor 的深色底上，用户看到的就是一块黑。 --*/
+    view.webContents.on('did-navigate', (_event, navigatedUrl: string) => {
+      if (navigatedUrl) tab.requestedUrl = navigatedUrl
+      tab.loadError = undefined
+      this.attachActiveTab(surface)
+      emit()
+    })
+    view.webContents.on('did-start-loading', () => {
+      tab.loadError = undefined
+      this.attachActiveTab(surface)
+      emit()
+    })
+    view.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      // ERR_ABORTED is normal when a navigation supersedes another navigation.
+      if (errorCode === -3) return
+      // 只在主框架失败时记录：子资源（图片/脚本）失败不该把整个页面标成坏的。
+      if (isMainFrame) {
+        if (validatedURL) tab.requestedUrl = validatedURL
+        tab.loadError = errorDescription || 'Load failed'
+        this.attachActiveTab(surface)
+        console.warn(
+          '[browser][load] did-fail-load',
+          JSON.stringify({ surfaceId: surface.surfaceId, tabId: tab.tabId, errorCode, errorDescription, isMainFrame }),
+        )
+      }
+      emit()
+    })
     view.webContents.on('did-stop-loading', emit)
-    view.webContents.on('did-fail-load', emit)
     view.webContents.on('page-title-updated', emit)
 
-    if (url) void view.webContents.loadURL(normalizeBrowserUrl(url)).catch(() => {})
+    if (url) void view.webContents.loadURL(tab.requestedUrl).catch(() => {})
     return tab
   }
 
@@ -322,14 +352,16 @@ export class BrowserSurfaceManager {
     const host = this.hostWindowOf(surface)
     if (!host || host.isDestroyed()) return
     const active = surface.activeTabId ? surface.tabs.get(surface.activeTabId) ?? null : null
+    const bounds = surface.bounds
+    const showActive = active && !active.loadError && bounds && bounds.width > 0 && bounds.height > 0
 
     for (const tab of surface.tabs.values()) {
-      if (active && tab.tabId === active.tabId) continue
+      if (showActive && tab.tabId === active.tabId) continue
       this.detachView(host, tab.view)
     }
-    if (!active) return
+    if (!showActive) return
+    active.view.setBounds(bounds)
     if (!host.contentView.children.includes(active.view)) host.contentView.addChildView(active.view)
-    if (surface.bounds) active.view.setBounds(surface.bounds)
   }
 
   private buildState(surface: BrowserSurface): BrowserSurfaceState {
@@ -340,11 +372,12 @@ export class BrowserSurfaceManager {
         const contents = tab.view.webContents
         return {
           tabId: tab.tabId,
-          url: contents.getURL(),
+          url: tab.loadError ? tab.requestedUrl : contents.getURL() || tab.requestedUrl,
           title: contents.getTitle(),
           isLoading: contents.isLoading(),
           canGoBack: contents.navigationHistory.canGoBack(),
           canGoForward: contents.navigationHistory.canGoForward(),
+          ...(tab.loadError ? { loadError: tab.loadError } : {}),
         }
       }),
       activeTabId: surface.activeTabId,

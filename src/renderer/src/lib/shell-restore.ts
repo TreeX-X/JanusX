@@ -13,10 +13,15 @@ export function collectShellRestore(): ShellRestoreManifest {
         ? terminals.filter((terminal) => terminal.workspaceId === workspace.id)
         : []
       const snapshotted = terminalSnapshots[workspace.id]?.terminals ?? []
-      const seen = new Map<string, { cwd: string; preset: string; name: string }>()
+      const seen = new Map<string, { cwd: string; preset: string; name: string; shell?: string }>()
       for (const terminal of [...live, ...snapshotted]) {
         if (!terminal.cwd || seen.has(terminal.id)) continue
-        seen.set(terminal.id, { cwd: terminal.cwd, preset: terminal.preset, name: terminal.name })
+        seen.set(terminal.id, {
+          cwd: terminal.cwd,
+          preset: terminal.preset,
+          name: terminal.name,
+          ...(terminal.shell ? { shell: terminal.shell } : {}),
+        })
       }
       return { workspaceId: workspace.id, terminals: [...seen.values()] }
     }),
@@ -53,6 +58,8 @@ export async function restoreShells(): Promise<number> {
           cwd: terminal.cwd,
           name: terminal.name,
           enterTerminalUi: false,
+          // 恢复时保留原 shell：改过默认值也不会把旧终端换成新默认。
+          ...(terminal.shell ? { shellCommand: terminal.shell } : {}),
         })
         if (result?.ok) restored += 1
       } catch {

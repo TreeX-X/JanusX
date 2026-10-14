@@ -60,7 +60,7 @@ cc-switch 机制以总纲为父：[port 总纲](./requirements/cc-switch-port.md
 
 Shell 语义与外围：[adhoc-parity](./adhoc-shell-parity.md)、[self-heal-parity](./command-error-self-heal-parity.md)、[cold-restore](./shell-cold-restore.md)、[orca-parsing](./orca-terminal-acquisition-parsing.md)、[ime-drift](./ime-candidate-drift.md)、[pane-tree](./pane-tree-subagent.md)、[monaco-diff](./monaco-diff-single-line-number.md)、[turn-history](./terminal-right-island-turn-history.md)。
 
-Shell 入口探索：[可选择的普通终端 Shell](./shell-profiles.md)记录 Git Bash、默认项与自定义可执行文件的讨论方向，尚未实现。
+Shell 入口探索：[可选择的普通终端 Shell](./shell-profiles.md)已定稿终端管理设计（用户自建条目、自由命令与启动后缀、显隐与检测候选区、全局默认 PowerShell 种子），P1–P5 已实现；`--login -i` 建议后缀与 Git Bash 落位待 Windows 实测定型（见 Task Results）。
 
 island 一词两义（pane 姿态层与 turn 历史浮层）为术语债，改名消歧前两篇并存，不合并。
 

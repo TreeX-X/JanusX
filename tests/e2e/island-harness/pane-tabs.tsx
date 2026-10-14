@@ -43,18 +43,19 @@ Object.assign(window.electron.terminal, {
 Object.values(surfaces).forEach((surface) => useBrowserStore.getState().applySurfaceState(surface))
 const overflow = new URLSearchParams(location.search).has('overflow')
 const transformed = new URLSearchParams(location.search).has('transformed')
+const browserOnly = new URLSearchParams(location.search).has('browser-only')
 const left = {
-  type: 'leaf' as const, id: 'left', activeTabId: 'terminal:a',
-  tabs: ['a', 'b', 'c'].map((id) => createTerminalPaneContent(id, 'ws')),
+  type: 'leaf' as const, id: 'left', activeTabId: browserOnly ? 'browser:d' : 'terminal:a',
+  tabs: browserOnly ? [createBrowserPaneContent('d')] : ['a', 'b', 'c'].map((id) => createTerminalPaneContent(id, 'ws')),
 }
 const right = {
-  type: 'leaf' as const, id: 'right', activeTabId: 'browser:d',
-  tabs: (overflow ? ['d', 'e', 'f', 'g', 'h', 'i', 'j'] : ['d', 'e']).map(createBrowserPaneContent),
+  type: 'leaf' as const, id: 'right', activeTabId: browserOnly ? 'browser:e' : 'browser:d',
+  tabs: (browserOnly ? ['e'] : overflow ? ['d', 'e', 'f', 'g', 'h', 'i', 'j'] : ['d', 'e']).map(createBrowserPaneContent),
 }
 const paneTree: WorkspacePaneNode = { type: 'split', id: 'split', direction: 'horizontal', ratio: .5, first: left, second: right }
 useWorkspaceStore.setState({
-  workspaces: [workspace], activeWorkspaceId: 'ws', terminals, paneTree,
-  focusedPaneId: 'left', focusedTabId: 'terminal:a', activeTerminalId: 'a', terminalSnapshots: {},
+  workspaces: [workspace], activeWorkspaceId: 'ws', terminals: browserOnly ? [] : terminals, paneTree,
+  focusedPaneId: 'left', focusedTabId: left.activeTabId, activeTerminalId: browserOnly ? null : 'a', terminalSnapshots: {},
 })
 Object.assign(window, {
   paneFixture: {
@@ -63,7 +64,7 @@ Object.assign(window, {
       return {
         panes: getLeafPanes(state.paneTree).map((pane) => ({ id: pane.id, tabs: pane.tabs.map((tab) => tab.id), active: pane.activeTabId })),
         tree: state.paneTree, focusedPane: state.focusedPaneId, focusedTab: state.focusedTabId,
-        active: state.tabDragInFlight, bounds, kills, creates,
+        active: state.tabDragInFlight, terminals: state.terminals.length, bounds, kills, creates,
       }
     },
     switchWorkspace: () => useWorkspaceStore.getState().setActiveWorkspace(null),

@@ -3,8 +3,6 @@ import { useI18n } from '@/i18n/useI18n'
 import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from '@/i18n/config'
 import { Select } from './ui/Select'
 import { LanguageServiceManager } from './LanguageServiceManager'
-import { EXTERNAL_CLI_TOOL_ORDER } from '../../../shared/ipc/external-cli'
-import { ExternalCliManager } from './ExternalCliManager'
 import { WorkflowXStatus } from './janus/WorkflowXMonitor'
 import { UpdaterSettings } from './UpdaterSettings'
 import { useThemeStore } from '@/stores/theme'
@@ -95,20 +93,6 @@ export function GeneralSettingsPanel() {
         </div>
         <div className={styles.generalControlCol}>
           <WorkflowXStatus surface="settings" />
-        </div>
-      </div>
-
-      <div className={styles.generalRow}>
-        <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>{t('settings:cliTools.title')}</div>
-          <div className={styles.generalHelp}>{t('settings:cliTools.subtitle')}</div>
-        </div>
-        <div className={styles.generalControlCol}>
-          <div className={styles.lsCard}>
-            {EXTERNAL_CLI_TOOL_ORDER.map((toolId) => (
-              <ExternalCliManager key={toolId} toolId={toolId} />
-            ))}
-          </div>
         </div>
       </div>
 

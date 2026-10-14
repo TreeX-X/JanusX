@@ -5,8 +5,10 @@ import {
   closePaneTab,
   collapsePaneTree,
   createBrowserPaneContent,
+  createMarkdownPaneContent,
   createTerminalPaneContent,
   findFirstBrowserPaneContent,
+  findFirstMarkdownPaneContent,
   findPaneContent,
   getBrowserPaneContent,
   getLeafPanes,
@@ -169,6 +171,62 @@ describe('workspace pane tree', () => {
         activeTabId: 'terminal:terminal-1',
       },
     ])
+  })
+
+  it('retains browser and markdown tabs across a workspace switch', () => {
+    const { tree } = seedPane()
+    const withBrowser = addPaneContentToTree(tree, 'pane-1', createBrowserPaneContent('surface-1'), 'pane-fallback')
+    const withMarkdown = addPaneContentToTree(withBrowser.tree, 'pane-1', createMarkdownPaneContent('workspace-1'), 'pane-fallback')
+
+    const restored = retainWorkspacePaneContent(withMarkdown.tree, 'workspace-1', new Set(['terminal-1']))
+
+    const tabs = getLeafPanes(restored).flatMap((leaf) => leaf.tabs)
+    expect(tabs.map((tab) => tab.id)).toEqual([
+      'terminal:terminal-1',
+      'browser:surface-1',
+      'markdown:workspace-1',
+    ])
+  })
+
+  it('adds one markdown view per panel and focuses the existing view on repeat', () => {
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-chat', 'after', 0.62)
+    const first = addPaneContentToTree(split.tree, 'pane-chat', createMarkdownPaneContent('workspace-1'), 'pane-fallback')
+    const repeated = addPaneContentToTree(first.tree, 'pane-1', createMarkdownPaneContent('workspace-1'), 'pane-fallback')
+
+    expect(getLeafPanes(repeated.tree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'markdown')).toHaveLength(1)
+    expect(repeated.focus).toEqual({ paneId: 'pane-chat', tabId: 'markdown:workspace-1', terminalId: null })
+  })
+
+  it('locates the first markdown panel across split panes', () => {
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-chat', 'after', 0.62)
+    const added = addPaneContentToTree(split.tree, 'pane-chat', createMarkdownPaneContent('workspace-1'), 'pane-fallback')
+
+    expect(findFirstMarkdownPaneContent(added.tree)).toEqual({
+      paneId: 'pane-chat',
+      tabId: 'markdown:workspace-1',
+      panelId: 'workspace-1',
+    })
+    expect(findFirstMarkdownPaneContent(tree)).toBeNull()
+  })
+
+  it('moves and splits a markdown tab through the content-neutral drop actions', () => {
+    const { tree } = seedPane()
+    const split = splitPaneTree(tree, 'pane-1', 'horizontal', 'split-1', 'pane-2')
+    const added = addPaneContentToTree(split.tree, 'pane-2', createMarkdownPaneContent('workspace-1'), 'pane-fallback')
+
+    // 中央落点：移入目标 pane；源 pane 变空后被剪除，内容本体不复制。
+    const moved = removePaneContentFromTree(added.tree, 'markdown:workspace-1')
+    const placed = addPaneContentToTree(moved, 'pane-1', createMarkdownPaneContent('workspace-1'), 'pane-fallback')
+    expect(getLeafPanes(placed.tree).map((leaf) => leaf.tabs.map((tab) => tab.id))).toEqual([
+      ['terminal:terminal-1', 'markdown:workspace-1'],
+    ])
+
+    // 边缘落点：分屏后仍是一个 markdown tab。
+    const edgeSplit = splitPaneTree(placed.tree, 'pane-1', 'horizontal', 'split-2', 'pane-3', 'after', 0.5)
+    const markdownTabs = getLeafPanes(edgeSplit.tree).flatMap((leaf) => leaf.tabs).filter((tab) => tab.type === 'markdown')
+    expect(markdownTabs).toHaveLength(1)
   })
 
   it('adds one browser view to a split and focuses the existing view on repeat', () => {

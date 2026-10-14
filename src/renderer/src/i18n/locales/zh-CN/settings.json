@@ -445,6 +445,10 @@
     "notice": {
       "existingTerminal": "已打开的终端需重启，新版本与 PATH 才会生效。",
       "installed": "安装完成，重启终端后生效。"
+    },
+    "visibility": {
+      "visible": "在新建终端入口显示",
+      "hidden": "已从新建终端入口隐藏"
     }
   },
   "usageStats": {
@@ -472,16 +476,16 @@
     "customWeekly": "按周",
     "ioTitle": "输入与输出",
     "ioShare": "输出占比",
-      "empty": "该范围内暂无已记录的会话用量。",
-      "typeAll": "全部",
-      "overall": "整体",
-      "trend": "时间趋势",
-      "unknown": "未区分",
-      "hit": "命中",
-      "miss": "未命中",
-      "hitRate": "缓存命中率",
-      "noCacheData": "暂无缓存遥测。",
-      "total": "合计",
+    "empty": "该范围内暂无已记录的会话用量。",
+    "typeAll": "全部",
+    "overall": "整体",
+    "trend": "时间趋势",
+    "unknown": "未区分",
+    "hit": "命中",
+    "miss": "未命中",
+    "hitRate": "缓存命中率",
+    "noCacheData": "暂无缓存遥测。",
+    "total": "合计",
     "input": "输入",
     "output": "输出",
     "context": "上下文",

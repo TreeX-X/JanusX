@@ -3,8 +3,10 @@
    底色只允许出现在瞬时 hover 的小目标（24px 图标钮、列表行）和弹出菜单上。 */
 
 .root {
+  --note-list-width: 200px;
+
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-columns: var(--note-list-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   overflow: hidden;
@@ -15,23 +17,99 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   font-size: 12px;
   line-height: 1.5;
+  /* 轨道宽度就是折叠动画：与蓝图/知识库工作台的侧栏同一曲线和时长，
+     点击后列表是滑出去的，不是闪掉的。 */
+  transition: grid-template-columns 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* 窄 pane：列表自动折成导轨。用户也可以在宽 pane 里手动折叠，语义相同。 */
+.root[data-collapsed='true'] {
+  grid-template-columns: 36px minmax(0, 1fr);
+}
+
+/* 窄 pane 里手动展开时收窄列表，别把编辑器挤得比工具栏还窄。 */
 .root[data-compact='true'] {
-  grid-template-columns: minmax(0, 1fr);
+  --note-list-width: 160px;
 }
 
-.root[data-compact='true'] .sidebar {
-  display: none;
+/* 折叠是交叉淡入淡出，不是二选一硬切：两侧都保持挂载，用 opacity + visibility 过渡。
+   两个方向必须对称，而对称的关键是**延迟只加在进场那一侧**：
+   出场侧一延迟，旧内容就会在全透明度上多留一会儿，和新内容叠在一起——
+   实测展开时列表与导轨曾同时停在 0.95，导轨的按钮像残影一样压在草稿卡片上。
+   所以出场侧一律 0 延迟，进场侧延后 80ms，两个方向都是"旧的先走，新的再来"。
+   visibility 在淡出时延迟到透明度走完，避免内容还在淡就又消失。 */
+.sidebarHead,
+.list {
+  /* 进场侧（展开时）：等导轨先走 */
+  transition: opacity 160ms ease 80ms, visibility 0s;
+}
+
+.root[data-collapsed='true'] .sidebarHead,
+.root[data-collapsed='true'] .list {
+  opacity: 0;
+  visibility: hidden;
+  /* 出场侧（折叠时）：不延迟 */
+  transition: opacity 120ms ease, visibility 0s 120ms;
+}
+
+/* 折叠时把内容宽度冻在展开态的宽度上：轨道从 200px 滑到 36px 时，列表是被
+   .sidebar 的 overflow 裁出去的，不是跟着轨道一起被压扁的。否则文字会在
+   淡出的同时不断重排，看起来像内容在融化而不是在收起。 */
+.root[data-collapsed='true'] .sidebarHead,
+.root[data-collapsed='true'] .list {
+  width: var(--note-list-width);
+}
+
+/* 导轨叠在列表之上，不占弹性布局：这样两侧能同时存在并交叉淡入淡出，
+   且 .sidebar 的 1px 右边框始终贴在轨道边缘（折叠时是 36px 那条）。 */
+.rail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-top: 4px;
+  opacity: 0;
+  visibility: hidden;
+  /* 出场侧（展开时）：不延迟，立刻开始淡出 */
+  transition: opacity 120ms ease, visibility 0s 120ms;
+}
+
+.root[data-collapsed='true'] .rail {
+  opacity: 1;
+  visibility: visible;
+  /* 进场侧（折叠时）：延后 80ms，等列表先走 */
+  transition: opacity 160ms ease 80ms, visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .sidebarHead,
+  .list,
+  .rail {
+    transition: none;
+  }
 }
 
 /* ── 左栏：卡片列表 ─────────────────────────────────────────────────────── */
 
 .sidebar {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
+  /* 折叠时内容宽度被冻住（见上方 width 规则），靠这里裁出轨道边界，
+     列表才是"滑出去"而不是"被压扁"。 */
+  overflow: hidden;
   border-right: 1px solid var(--shell-border);
+}
+
+.sidebarHeadActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
 }
 
 .sidebarHead {
@@ -204,6 +282,40 @@
   color: var(--shell-dim);
   font-size: 11px;
   text-align: center;
+}
+
+/* ── 折叠态导轨：与工作区侧栏收起态同一套语言（图标钮 + 计数）。
+   定位与淡入淡出见文件头部的 .rail；这里只留视觉。 ── */
+
+.railButton {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-dim);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.railButton:hover {
+  color: var(--shell-text, #fff);
+  background: var(--shell-hover);
+}
+
+.railButton:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.65);
+  outline-offset: 1px;
+}
+
+.railCount {
+  margin-top: 2px;
+  color: var(--shell-dim);
+  font-family: 'Cascadia Code', 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
 }
 
 /* ── 右栏：编辑器 ───────────────────────────────────────────────────────── */

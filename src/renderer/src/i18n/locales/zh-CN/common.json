@@ -77,7 +77,8 @@
     "agentActive": "Agent 控制中",
     "agentIdle": "Agent 未接管",
     "popOut": "弹出为独立窗口",
-    "noTabs": "没有打开的标签页"
+    "noTabs": "没有打开的标签页",
+    "retry": "重试"
   },
   "chat": {
     "copy": "复制"
@@ -156,6 +157,15 @@
     "titleWithPending": "{{action}}{{label}}工作台 · 待处理 {{count}} 项",
     "titleWithFocus": "{{action}}{{label}}工作台 · 节点聚焦中",
     "badgeTitle": "{{count}} 项待处理需求"
+  },
+  "toolGroup": {
+    "aria": "工作区工具",
+    "browser": "浏览器",
+    "browserAction": "打开工作区浏览器",
+    "browserOpened": "工作区浏览器已打开",
+    "markdown": "Markdown",
+    "markdownAction": "打开 Markdown 文稿",
+    "markdownOpened": "Markdown 文稿已打开"
   },
   "trafficLight": {
     "close": "关闭",

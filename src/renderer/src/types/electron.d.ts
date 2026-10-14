@@ -25,6 +25,7 @@ import type { ExperimentalAPI } from '../../../shared/ipc/experimental'
 import type { ThemeAPI } from '../../../shared/ipc/theme'
 import type { DesktopToastAPI, DialogAPI, SystemAPI, WindowAPI } from '../../../shared/ipc/system'
 import type { TeamAPI } from '../../../shared/ipc/team'
+import type { ShellProfilesAPI } from '../../../shared/ipc/shell-profiles'
 import type { UpdaterAPI } from '../../../shared/ipc/updater'
 import type { PeerAPI, RemoteAPI } from '../../../shared/ipc/remote'
 
@@ -68,6 +69,7 @@ interface ElectronAPI {
   dialog: DialogAPI
   window: WindowAPI
   system: SystemAPI
+  shellProfiles: ShellProfilesAPI
   desktopToast: DesktopToastAPI
   janusPersona: string
 }
