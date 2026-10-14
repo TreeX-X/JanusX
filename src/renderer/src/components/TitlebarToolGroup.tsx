@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Globe } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { ChevronDown, Globe, PocketKnife } from 'lucide-react'
 import { ThemedTooltip } from './ui/ThemedTooltip'
 import { MarkdownIcon } from './ui/MarkdownIcon'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -9,12 +9,15 @@ import { useI18n } from '@/i18n/useI18n'
 import styles from './TitlebarToolGroup.module.css'
 
 /**
- * 顶栏全局工具入口：一个可展开的工具菜单（浏览器 / Markdown）。
+ * 顶栏全局工具入口：一个可展开的工具菜单。
  *
- * 两个目标都是"打开中央内容"，与终端流程解耦——没有终端、没有项目时同样可达。
- * 主操作一律走 {@link openGlobalTool}：先翻回工作区正面并收起遮挡的工作台，再打开目标 pane。
- * 入口收成一个控件：点击展开菜单再选择开哪个，与 TerminalSelector 的 ShellCard
- * 同一套"主控件 + 展开选择"语言。本组与蓝图/知识库工作台分组同排但由竖分隔线隔开
+ * 触发器只有一枚通用工具图标（PocketKnife，瑞士军刀=一个控件装多件工具），
+ * 展开后是工具列表——现在是浏览器 / Markdown，后续 Docker、HTTP 工具
+ * 各加一条条目即可，触发器外形不再随工具数量变化。
+ *
+ * 每个工具的目标都是"打开中央内容"，与终端流程解耦——没有终端、没有项目时
+ * 同样可达。主操作一律走 {@link openGlobalTool}：先翻回工作区正面并收起遮挡的
+ * 工作台，再打开目标 pane。本组与蓝图/知识库工作台分组同排但由竖分隔线隔开
  * （见 markdown-pane-entry.md 的顶栏分组）。
  *
  * 每个工具在一个工作区里只开一个实例，所以菜单里"已开着"的条目直接置灰并带
@@ -49,6 +52,33 @@ export function TitlebarToolGroup() {
     }
   }, [menuOpen])
 
+  // 工具清单：后续 Docker、HTTP 工具在这里各加一条（图标/文案/打开逻辑/开合状态）。
+  const tools: Array<{
+    id: string
+    icon: ReactNode
+    label: string
+    actionLabel: string
+    opened: boolean
+    open: () => void | Promise<void>
+  }> = [
+    {
+      id: 'browser',
+      icon: <Globe className={styles.menuIcon} size={14} strokeWidth={1.5} aria-hidden="true" />,
+      label: t('common:toolGroup.browser'),
+      actionLabel: openState.browser ? t('common:toolGroup.browserOpened') : t('common:toolGroup.browserAction'),
+      opened: openState.browser,
+      open: () => openBrowserInWorkspace(),
+    },
+    {
+      id: 'markdown',
+      icon: <MarkdownIcon className={`${styles.menuIcon} ${styles.markdownIcon}`} strokeWidth={1.75} aria-hidden="true" />,
+      label: t('common:toolGroup.markdown'),
+      actionLabel: openState.markdown ? t('common:toolGroup.markdownOpened') : t('common:toolGroup.markdownAction'),
+      opened: openState.markdown,
+      open: () => openMarkdownInWorkspace(),
+    },
+  ]
+
   const pick = (open: () => void | Promise<void>) => {
     setMenuOpen(false)
     openGlobalTool(open)
@@ -67,43 +97,30 @@ export function TitlebarToolGroup() {
             aria-label={t('common:toolGroup.triggerAction')}
             onClick={() => setMenuOpen((open) => !open)}
           >
-            <Globe className={styles.icon} size={14} strokeWidth={1.5} aria-hidden="true" />
-            <MarkdownIcon className={`${styles.icon} ${styles.markdownIcon}`} strokeWidth={1.75} aria-hidden="true" />
+            <PocketKnife className={styles.icon} size={16} strokeWidth={1.5} aria-hidden="true" />
             <ChevronDown className={styles.chevron} size={11} strokeWidth={2} aria-hidden="true" />
           </button>
         </ThemedTooltip>
 
         {menuOpen && (
           <div className={styles.menu} role="menu" aria-label={t('common:toolGroup.aria')}>
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItem}
-              data-id="browser"
-              disabled={openState.browser}
-              title={openState.browser ? t('common:toolGroup.browserOpened') : t('common:toolGroup.browserAction')}
-              aria-label={openState.browser ? t('common:toolGroup.browserOpened') : t('common:toolGroup.browserAction')}
-              onClick={() => pick(() => openBrowserInWorkspace())}
-            >
-              <Globe className={styles.menuIcon} size={14} strokeWidth={1.5} aria-hidden="true" />
-              <span className={styles.menuLabel}>{t('common:toolGroup.browser')}</span>
-              {openState.browser && <span className={styles.menuBadge}>{t('common:toolGroup.openedBadge')}</span>}
-            </button>
-
-            <button
-              type="button"
-              role="menuitem"
-              className={styles.menuItem}
-              data-id="markdown"
-              disabled={openState.markdown}
-              title={openState.markdown ? t('common:toolGroup.markdownOpened') : t('common:toolGroup.markdownAction')}
-              aria-label={openState.markdown ? t('common:toolGroup.markdownOpened') : t('common:toolGroup.markdownAction')}
-              onClick={() => pick(() => openMarkdownInWorkspace())}
-            >
-              <MarkdownIcon className={`${styles.menuIcon} ${styles.markdownIcon}`} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.menuLabel}>{t('common:toolGroup.markdown')}</span>
-              {openState.markdown && <span className={styles.menuBadge}>{t('common:toolGroup.openedBadge')}</span>}
-            </button>
+            {tools.map((tool) => (
+              <button
+                key={tool.id}
+                type="button"
+                role="menuitem"
+                className={styles.menuItem}
+                data-id={tool.id}
+                disabled={tool.opened}
+                title={tool.actionLabel}
+                aria-label={tool.actionLabel}
+                onClick={() => pick(tool.open)}
+              >
+                {tool.icon}
+                <span className={styles.menuLabel}>{tool.label}</span>
+                {tool.opened && <span className={styles.menuBadge}>{t('common:toolGroup.openedBadge')}</span>}
+              </button>
+            ))}
           </div>
         )}
       </div>

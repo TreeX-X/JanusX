@@ -1,8 +1,8 @@
 /* ==========================================================================
-   TitlebarToolGroup — 标题栏全局工具入口（浏览器 / Markdown 合一的工具菜单）
+   TitlebarToolGroup — 标题栏全局工具入口（可展开的工具菜单）
    与 WorkbenchSwitcher 同一视觉语言：描边图标按钮，idle 灰 / hover 提亮。
-   一个控件承载两个工具：触发器是图标对 + 小箭头，展开后菜单条目各自置灰
-   （.menuItem:disabled）并带"已打开"标记——关闭对应标签后恢复可点，
+   触发器只有一枚通用工具图标 + 小箭头，不随工具数量变形；展开后菜单条目
+   各自置灰（.menuItem:disabled）并带"已打开"标记——关闭对应标签后恢复可点，
    不做 active 指示条，避免和置灰语义重复。
    菜单浮层沿用 TerminalSelector.shellMenu 的纸片语言（raised 底 + 橙发丝边）。
    ========================================================================== */
@@ -55,7 +55,7 @@
   flex: 0 0 auto;
 }
 
-/* MarkdownIcon 的 svg 硬编码 width/height="24"，必须由外层压到 14px 才能与同排图标同号 */
+/* MarkdownIcon 的 svg 硬编码 width/height="24"，菜单条目里必须由外层压到 14px 才能与其他图标同号 */
 .markdownIcon {
   width: 14px;
   height: 14px;

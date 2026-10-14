@@ -29,6 +29,8 @@ describe('TitlebarToolGroup', () => {
     expect(html).toContain('data-id="tool-menu"')
     expect(html).toContain('aria-haspopup="menu"')
     expect(html).toContain('aria-expanded="false"')
+    // 触发器是一枚通用工具图标 + 小箭头，不是工具图标的拼排——工具都住在菜单里
+    expect(html.match(/<svg/g)?.length).toBe(2)
     // 收起时菜单不在 DOM：浏览器/Markdown 只作为展开后的条目存在
     expect(html).not.toContain('data-id="browser"')
     expect(html).not.toContain('data-id="markdown"')

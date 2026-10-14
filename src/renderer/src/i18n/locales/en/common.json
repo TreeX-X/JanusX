@@ -160,7 +160,7 @@
   },
   "toolGroup": {
     "aria": "Workspace tools",
-    "triggerAction": "Choose a tool: Browser or Markdown",
+    "triggerAction": "Choose a tool to open",
     "browser": "Browser",
     "browserAction": "Open the workspace browser",
     "browserOpened": "The workspace browser is open",
