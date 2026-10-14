@@ -92,14 +92,6 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
         : tab === 'hosted'
         ? tCommon('common:hosted.nav')
         : t(`settings:tab.${tab}.nav`)
-  const tabNavMeta = (tab: SettingsTab) =>
-    tab === 'knowledge' ? tBlueprint('blueprint:review.settingsMeta') : tab === 'personal' ? tKnowledge('knowledge:memorySettings.navMeta') : tab === 'team'
-      ? tTeam('team:settingsTab.navMeta')
-      : tab === 'terminal'
-        ? tTerminal('terminal:shellSettings.navMeta')
-        : tab === 'hosted'
-        ? tCommon('common:hosted.navMeta')
-        : t(`settings:tab.${tab}.navMeta`)
   const meta = activeTab === 'knowledge' ? { title: tBlueprint('blueprint:review.settingsTitle'), subtitle: tBlueprint('blueprint:review.settingsSubtitle') } : activeTab === 'personal' ? { title: tKnowledge('knowledge:memorySettings.title'), subtitle: tKnowledge('knowledge:memorySettings.navMeta') } : activeTab === 'team'
     ? { title: tTeam('team:settingsTab.title'), subtitle: tTeam('team:settingsTab.subtitle') }
     : activeTab === 'terminal'
@@ -139,15 +131,12 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
                           key={tab}
                           type="button"
                           data-tab={tab}
-                          className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''} ${tab === 'experimental' ? styles.tabButtonExperimental : ''}`}
+                          className={`${styles.tabButton} ${activeTab === tab ? styles.tabButtonActive : ''}`}
                           aria-current={activeTab === tab ? 'page' : undefined}
                           onClick={() => setActiveTab(tab)}
                         >
                           <Icon size={16} strokeWidth={1.7} aria-hidden="true" className={styles.tabIcon} />
-                          <span className={styles.tabText}>
-                            <span className={styles.tabLabel}>{tabNav(tab)}{tab === 'experimental' && <span className={styles.tabBadge}>{t('settings:experimental.badge')}</span>}</span>
-                            <span className={styles.tabMeta}>{tabNavMeta(tab)}</span>
-                          </span>
+                          <span className={styles.tabLabel}>{tabNav(tab)}{tab === 'experimental' && <span className={styles.tabBadge}>{t('settings:experimental.badge')}</span>}</span>
                         </button>
                       )
                     })}

@@ -26,7 +26,7 @@
   height: min(760px, calc(100vh - 48px));
   min-height: 0;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 190px minmax(0, 1fr);
   background: var(--shell-canvas);
   border: 1px solid var(--shell-border);
   border-radius: 10px;
@@ -41,7 +41,6 @@
   --so-accent: #f2934f;
   --so-accent-ink: #f0a878;
   --so-accent-hover: #ffbf94;
-  --so-accent-rgb: 244, 125, 67;
   --janus-order: var(--so-accent);
 
   /* Shared control metrics — every panel uses these instead of ad-hoc numbers. */
@@ -62,7 +61,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 14px 10px;
+  padding: 12px 10px;
   background: var(--shell-chrome);
   border-right: 1px solid var(--shell-border);
   min-height: 0;
@@ -101,8 +100,8 @@
 }
 
 .navGroup + .navGroup {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--shell-border);
 }
 
@@ -125,18 +124,12 @@
   flex-shrink: 0;
 }
 
-.tabText {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-
+/* 品牌行压成一行：JanusX + "设置中心" 基线对齐，不再占两行高度。 */
 .brand {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 4px 8px 16px;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 8px 12px;
 }
 
 .brandTitle {
@@ -151,24 +144,24 @@
   font-size: 10px;
   font-weight: 500;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
-/* 导航项与左侧工作区列表同构：透明底 + hover 微亮 + 选中时左侧 2px 强调条。
-   旧版是"橙色半透明填充 + 橙色边框"的整块，四个并排就成了色块墙。 */
+/* 导航项是单行索引，不是双行卡片：icon + 标题一行读完，副标说明由内容区
+   header 的 subtitle 承担。与左侧工作区列表同构：透明底 + hover 微亮 +
+   选中时左侧 2px 强调条。 */
 .tabButton {
   position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 46px;
+  min-height: 32px;
   border: 0;
   border-radius: 5px;
   background: transparent;
   color: var(--shell-muted);
   cursor: pointer;
-  padding: 7px 10px 7px 12px;
+  padding: 0 10px 0 12px;
   text-align: left;
   transition: background 0.16s ease, color 0.16s ease;
 }
@@ -177,8 +170,8 @@
   content: '';
   position: absolute;
   left: 0;
-  top: 8px;
-  bottom: 8px;
+  top: 6px;
+  bottom: 6px;
   width: 2px;
   border-radius: 0 2px 2px 0;
   background: transparent;
@@ -205,34 +198,23 @@
   background: var(--shell-accent);
 }
 
-.tabButtonExperimental {
-  border: 1px solid rgba(var(--so-accent-rgb), 0.45);
-  background: linear-gradient(110deg, rgba(var(--so-accent-rgb), 0.12), transparent);
-}
-
-.tabButtonExperimental .tabIcon,
-.tabButtonExperimental .tabLabel { color: var(--so-accent-ink); }
-.tabButtonExperimental .tabLabel { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.tabButtonExperimental:hover,
-.tabButtonExperimental.tabButtonActive { border-color: var(--so-accent); box-shadow: inset 0 0 12px rgba(var(--so-accent-rgb), 0.1); }
-.tabBadge { padding: 2px 4px; border: 1px solid rgba(var(--so-accent-rgb), 0.5); border-radius: 4px; font-size: 9px; line-height: 1.2; font-weight: 650; }
-
 .tabLabel {
-  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   color: inherit;
   font-size: 12px;
   font-weight: 600;
 }
 
-.tabMeta {
-  width: 100%;
-  color: var(--shell-dim);
+/* 实验性入口只靠一枚强调色文字徽标示意，不做整行渐变/描边色块。 */
+.tabBadge {
+  flex-shrink: 0;
+  color: var(--so-accent-ink);
   font-size: 10px;
-  font-weight: 500;
-}
-
-.tabButtonActive .tabMeta {
-  color: var(--shell-muted);
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 
 .content {
@@ -347,7 +329,7 @@
 
   .tabButton {
     width: auto;
-    min-width: 124px;
+    min-width: 112px;
   }
 
   .header {
@@ -693,7 +675,6 @@
   --so-accent: var(--planche-red, #D43D2A);
   --so-accent-ink: var(--planche-red, #D43D2A);
   --so-accent-hover: var(--planche-red, #D43D2A);
-  --so-accent-rgb: 212, 61, 42;
   --janus-order: var(--planche-red, #D43D2A);
 }
 
