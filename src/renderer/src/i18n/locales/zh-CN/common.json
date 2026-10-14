@@ -160,12 +160,14 @@
   },
   "toolGroup": {
     "aria": "工作区工具",
+    "triggerAction": "展开选择：浏览器 / Markdown",
     "browser": "浏览器",
     "browserAction": "打开工作区浏览器",
     "browserOpened": "工作区浏览器已打开",
     "markdown": "Markdown",
     "markdownAction": "打开 Markdown 文稿",
-    "markdownOpened": "Markdown 文稿已打开"
+    "markdownOpened": "Markdown 文稿已打开",
+    "openedBadge": "已打开"
   },
   "trafficLight": {
     "close": "关闭",

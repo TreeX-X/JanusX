@@ -160,12 +160,14 @@
   },
   "toolGroup": {
     "aria": "Workspace tools",
+    "triggerAction": "Choose a tool: Browser or Markdown",
     "browser": "Browser",
     "browserAction": "Open the workspace browser",
     "browserOpened": "The workspace browser is open",
     "markdown": "Markdown",
     "markdownAction": "Open a Markdown document",
-    "markdownOpened": "A Markdown document is open"
+    "markdownOpened": "A Markdown document is open",
+    "openedBadge": "Open"
   },
   "trafficLight": {
     "close": "Close",

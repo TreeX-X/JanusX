@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-13",
-  "updated": "2026-10-14T09:10:00Z",
+  "updated": "2026-10-14T14:16:48Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -29,12 +29,14 @@
 浏览器、Docker、Markdown 常驻 Titlebar，作为一组打开中央内容的工具入口；蓝图与知识库保留工作台分组。两组之间有独立间距和短竖分隔线，Markdown 不加入 `WorkbenchSwitcher` 或 `ActiveWorkbench`，也不画成与蓝图连续的同一组按钮。
 
 ```text
-[窗口控制] JanusX/设置      灵动岛      [浏览器] [Markdown]    │    [蓝图] [知识库]
+[窗口控制] JanusX/设置      灵动岛      [工具▾]    │    [蓝图] [知识库]
 ```
 
 建议沿用顶栏 24 px 按钮和现有描边图标，组内间距 6 px，组间各留 12 px，分隔线约 14 px 高。Markdown 复用现有折角文件加 M 的 `MarkdownIcon`。两项均有名称提示与键盘焦点（Docker 入口随 Portainer 接入移除，自研面板的入口形态待该文另定）。没有可见工作台按钮时收起两组之间的分隔线。实现要给右侧两组预留宽度，避免现有居中灵动岛与新增入口重叠。
 
-三个工具入口的主操作均为打开或定位已有 pane，重复点击保持内容打开。点击时切回工作区正面并收起遮挡中央区的工作台，打开成功后聚焦目标 pane；关闭内容通过工作区标签的关闭控件完成。蓝图和知识库保留原有工作台开关语义。
+两个工具目标的主操作均为打开或定位已有 pane，重复点击保持内容打开。点击时切回工作区正面并收起遮挡中央区的工作台，打开成功后聚焦目标 pane；关闭内容通过工作区标签的关闭控件完成。蓝图和知识库保留原有工作台开关语义。
+
+入口形态（2026-10-14 收成单控件）：浏览器与 Markdown 不再各占一枚顶栏按钮，合并为一个可展开的工具菜单——触发器是图标对加小箭头（Globe + Markdown 图标 + ChevronDown），点击展开后选择打开浏览器或 Markdown，与 `TerminalSelector` 的 ShellCard 同一套"主控件 + 展开选择"语言。菜单条目保留"每个工具只开一个实例"的置灰语义：已开着的条目置灰并带"已打开"标记，关闭对应标签后恢复可点；触发器本身不置灰，展开即可看到两项状态。菜单右对齐触发器向左铺开（不越出窗口右缘），点外面或 Esc 收起，浮层 z-index 盖过灵动岛簇。
 
 ## Recommended pane interaction
 
@@ -84,4 +86,4 @@ Markdown 移走后，底部仅保留上下文监控，不保留第二个 Markdow
 
 ## Status
 
-2026-10-14 已实现顶栏工具入口与 Markdown 独立 pane，实现记录见 [Docker 管理入口 Task](./tasks/docker-management-entry.md) 的 Progress；其中 Docker 一项已随 Portainer 转向移除，顶栏现余浏览器与 Markdown。当日并落地草稿列表的可操作折叠（见 Agreed direction）。仍未做的：草稿自动保存与重启恢复（当前纯内存）、单篇文稿各自占 pane、Markdown 独立窗口、仓库文件接入。原"未实现"表述作废。
+2026-10-14 已实现顶栏工具入口与 Markdown 独立 pane，实现记录见 [Docker 管理入口 Task](./tasks/docker-management-entry.md) 的 Progress；其中 Docker 一项已随 Portainer 转向移除，顶栏现余浏览器与 Markdown。当日并落地草稿列表的可操作折叠（见 Agreed direction），随后按用户要求把浏览器与 Markdown 两枚按钮收成一个可展开工具菜单（见 Agreed direction 的入口形态）。仍未做的：草稿自动保存与重启恢复（当前纯内存）、单篇文稿各自占 pane、Markdown 独立窗口、仓库文件接入。原"未实现"表述作废。

@@ -527,13 +527,24 @@ test('Browser load failure, retry, dialogs and close release native browser view
     const nativeViews = () => application!.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0].contentView.children.map((view) => ({ bounds: view.getBounds() })),
     )
-    // 工作区浏览器入口每次开的是一个新 surface（id 由渲染层随机生成），且开着时按钮置灰，
-    // 所以"重新打开失败页"= 关掉标签 → 再点入口 → 重新导航到 fixture 地址。
-    const browserButton = page.locator('button[data-id="browser"]')
+    // 工作区浏览器入口收在顶栏工具菜单里（展开 → 选浏览器），每次开的是一个新 surface
+    // （id 由渲染层随机生成），且开着时菜单条目置灰，所以"重新打开失败页"=
+    // 关掉标签 → 再从菜单点入口 → 重新导航到 fixture 地址。
+    const toolTrigger = page.locator('button[data-id="tool-menu"]')
+    const browserItem = page.locator('button[data-id="browser"]')
+    const expectBrowserEntryAvailable = async () => {
+      await expect(toolTrigger).toBeEnabled()
+      await toolTrigger.click()
+      await expect(browserItem).toBeEnabled()
+      // 断言完收起菜单，让"入口恢复可点"与后续"再打开"各测各的，也避免二次点击把菜单切回去。
+      await page.keyboard.press('Escape')
+      await expect(toolTrigger).toHaveAttribute('aria-expanded', 'false')
+    }
     const addressBar = page.getByRole('textbox', { name: 'Address bar' })
     const openFixturePage = async () => {
-      await expect(browserButton).toBeEnabled()
-      await browserButton.click()
+      await expectBrowserEntryAvailable()
+      await toolTrigger.click()
+      await browserItem.click()
       await addressBar.fill(url)
       await addressBar.press('Enter')
       const tabId = await page.locator('[data-tab-id]').first().getAttribute('data-tab-id')
@@ -550,7 +561,7 @@ test('Browser load failure, retry, dialogs and close release native browser view
     await page.locator('[data-tab-id]').first().hover()
     await page.locator('[data-tab-close="true"]').click()
     await expect(error).toHaveCount(0)
-    await expect(browserButton).toBeEnabled()
+    await expectBrowserEntryAvailable()
     expect(await page.evaluate((id) => (window as DesktopWindow).electron.browser.getState(id), surfaceId)).toBeNull()
     await openFixturePage()
     await expect(error).toBeVisible()
@@ -584,7 +595,7 @@ test('Browser load failure, retry, dialogs and close release native browser view
     await page.locator('[data-tab-id]').first().hover()
     await page.locator('[data-tab-close="true"]').click()
     await expect.poll(nativeViews).toHaveLength(0)
-    await expect(browserButton).toBeEnabled()
+    await expectBrowserEntryAvailable()
     expect(await page.evaluate((id) => (window as DesktopWindow).electron.browser.getState(id), surfaceId)).toBeNull()
 
     // Reopen and quit with a live page: the Quit button must remain clickable.
