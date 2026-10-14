@@ -11,6 +11,12 @@
 - PR 标题沿用提交风格（如 `xdo: …`），描述填 Issue 号与 Note 路径（模板自动加载）。
 - 每批开发保持明确范围，及时合入主分支。需要隔离的实验可使用短期功能分支，交付后删除；不复用修复分支积累其他功能。`develop` 长期保留，`gh-pages` 作为官网来源独立保留，worktree 分支在对应工作区结束后清理。决策见 `.agents/notes/2026-09-20-development-branch.md`。
 
+## 本地开发
+
+每个 checkout/worktree 需要自己的依赖目录。在已按 CI 顺序构建同级 `janus-agentX` 后，在 JanusX 根目录运行 `npm ci --include=dev`，再运行 `npm run dev`。仓库 `.npmrc` 固定 `install-links=true`，使本地 `file:` sibling 包按锁文件物化安装；不需要全局安装 TypeScript，也不复用其他工作树的整个 node_modules。
+
+dev 启动前检查本地 TypeScript、Electron-Vite、npm 命令 shim、Electron 二进制和 sibling 发布入口。缺依赖时按提示运行 `npm ci --include=dev`；跳过安装脚本导致 Electron 二进制缺失时运行 `npm rebuild electron`；更新或补构建 sibling 后运行 `npm run prepackage` 刷新已安装副本。检查只报告问题，不自动联网安装或修改 sibling 源码。
+
 ## CI
 
 - 面向 `main` 的 PR，以及 `main`、`develop` 推送自动跑 `verify`（Windows runner）：typecheck、单测、构建、边界检查、lint、i18n、桌面冒烟。红灯不合；`develop` 的推送检查用于提前发现故障，PR 检查验证与主分支的合并结果。
