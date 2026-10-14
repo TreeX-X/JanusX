@@ -1,0 +1,57 @@
+import { expect, test } from '@playwright/test'
+
+test('one opening exposes usage, live runtime and unknown values without a detail overlay', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-14T02:00:00Z') })
+  await page.clock.pauseAt(new Date('2026-10-14T02:00:01Z'))
+  await page.goto('/pane-tabs.html?usage')
+  await page.getByRole('button', { name: 'Toggle usage panel' }).click()
+  const panel = page.getByRole('region', { name: 'Usage', exact: true })
+  const card = panel.getByRole('button', { name: /Codex/ })
+  await expect(page.getByRole('tab', { name: 'Usage', exact: true })).toBeVisible()
+  for (const text of ['Context', 'Recent cache hit rate', 'Cache read', 'Cache write', 'Total tokens', 'Input/output', 'Runtime']) {
+    await expect(card).toContainText(text)
+  }
+  await expect(card).toContainText('25.0%')
+  await expect(card).toContainText('8,000')
+  await expect(card).toContainText('20,500')
+  await expect(card).toContainText('10,000 / 2,000')
+  await expect(card).toContainText('0:01:05')
+  await page.clock.fastForward(10_000)
+  await expect(card).toContainText('0:01:15')
+  await card.getByText('Cache read', { exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(panel).not.toContainText('Telemetry status')
+  await card.getByText('Context', { exact: false }).hover()
+  await expect(page.getByRole('tooltip', { name: 'Runtime context' })).toHaveCount(0)
+
+  await page.evaluate(() => (window as any).paneFixture.updateUsage({ recentCacheHitRate: 0 }))
+  await expect(card).toContainText('0.0%')
+  await page.evaluate(() => (window as any).paneFixture.updateUsage({ recentCacheHitRate: undefined, cacheReadTokens: undefined }))
+  await expect(card.getByText('Recent cache hit rate').locator('..')).toContainText('–')
+  await expect(card.getByText('Cache read', { exact: true }).locator('..')).toContainText('–')
+  await page.evaluate(() => (window as any).paneFixture.updateUsage({ exitCode: 1 }))
+  await page.clock.fastForward(20_000)
+  await expect(card).toContainText('0:01:15')
+  await panel.getByRole('button', { name: /Shell/ }).first().click()
+  await expect(panel.getByRole('button', { name: /Shell/ }).first()).toHaveAttribute('aria-current', 'true')
+})
+
+test('Chinese usage labels remain readable at narrow widths', async ({ page }) => {
+  await page.setViewportSize({ width: 480, height: 720 })
+  await page.goto('/pane-tabs.html?usage')
+  await page.evaluate(() => (window as any).paneFixture.changeLanguage('zh-CN'))
+  await page.getByRole('button', { name: '切换用量面板' }).click()
+  const panel = page.getByRole('region', { name: '用量', exact: true })
+  const card = panel.getByRole('button', { name: /Codex/ })
+  await expect(page.getByRole('tab', { name: '用量', exact: true })).toBeVisible()
+  for (const text of ['最近缓存命中率', '运行时间', '缓存读取', '缓存写入', 'Token 总数', '输入/输出']) {
+    await expect(card).toContainText(text)
+  }
+  await expect(panel).not.toContainText('遥测状态')
+  await expect(panel).not.toContainText('更新时间')
+  expect(await panel.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
+  const inputOutput = await card.getByText('输入/输出', { exact: true }).boundingBox()
+  const panelBox = await panel.boundingBox()
+  expect(inputOutput && panelBox && inputOutput.y + inputOutput.height <= panelBox.y + panelBox.height).toBeTruthy()
+  await page.screenshot({ path: 'artifacts/terminal-usage-narrow.png' })
+})

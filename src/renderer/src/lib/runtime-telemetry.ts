@@ -17,6 +17,7 @@ export interface RuntimeTelemetryPatch {
   outputTokens?: number
   cacheReadTokens?: number
   cacheWriteTokens?: number
+  recentCacheHitRate?: number
   totalTokens?: number
   sessionId?: string
   observedAt?: number
@@ -48,6 +49,7 @@ export interface RuntimeTelemetryUpdate {
   outputTokens?: number
   cacheReadTokens?: number
   cacheWriteTokens?: number
+  recentCacheHitRate?: number
   totalTokens?: number
   telemetrySessionId?: string
   telemetrySource?: RuntimeTelemetrySource
@@ -151,7 +153,7 @@ export function mergeRuntimeTelemetrySnapshot(
   if (telemetry.source === 'configuration') {
     // A new unbound terminal must not retain runtime numbers restored from an older process.
     const patch: RuntimeTelemetryUpdate = {}
-    for (const field of ['contextTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'totalTokens', 'compactionCount', 'compactionCountConfidence', 'telemetrySessionId', 'telemetrySessionBinding', 'modelChangedAt'] as const) {
+    for (const field of ['contextTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'recentCacheHitRate', 'totalTokens', 'compactionCount', 'compactionCountConfidence', 'telemetrySessionId', 'telemetrySessionBinding', 'modelChangedAt'] as const) {
       if (current[field] !== undefined) patch[field] = undefined
     }
     if (current.detectedModel !== telemetry.detectedModel) patch.detectedModel = telemetry.detectedModel
@@ -207,6 +209,12 @@ export function mergeRuntimeTelemetrySnapshot(
   if (!lowerConfidence || current.detectedModel === undefined) assign('detectedModel', telemetry.detectedModel)
   if (!lowerConfidence || current.contextTokens === undefined) assign('contextTokens', telemetry.contextTokens)
   if (!lowerConfidence || current.contextWindowTokens === undefined) assign('contextWindowTokens', telemetry.contextWindowTokens)
+  if (!lowerConfidence || current.recentCacheHitRate === undefined) {
+    assign('recentCacheHitRate', telemetry.recentCacheHitRate)
+    if (telemetry.source === 'history' && telemetry.recentCacheHitRate === undefined && current.recentCacheHitRate !== undefined) {
+      patch.recentCacheHitRate = undefined
+    }
+  }
 
   const cumulativeFields = [
     'inputTokens',
@@ -228,7 +236,7 @@ export function mergeRuntimeTelemetrySnapshot(
   }
 
   if (sessionChanged) {
-    for (const field of ['contextTokens', 'contextWindowTokens', ...cumulativeFields] as const) {
+    for (const field of ['contextTokens', 'contextWindowTokens', 'recentCacheHitRate', ...cumulativeFields] as const) {
       if (telemetry[field] === undefined && current[field] !== undefined) patch[field] = undefined
     }
   }

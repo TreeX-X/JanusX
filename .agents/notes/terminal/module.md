@@ -31,7 +31,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e29da5b4-dc65-40a9-883d-9026e3b280b1"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a976752-d637-40c7-9fa3-bce52ac5dc15"}
   ],
-  "updated": "2026-10-13T02:25:17.000Z",
+  "updated": "2026-10-14T03:16:04.601Z",
   "moduleState": "partial"
 }
 ---
@@ -61,6 +61,8 @@ Shell 语义与外围：[adhoc-parity](./adhoc-shell-parity.md)、[self-heal-par
 Shell 入口探索：[可选择的普通终端 Shell](./shell-profiles.md)记录 Git Bash、默认项与自定义可执行文件的讨论方向，尚未实现。
 
 island 一词两义（pane 姿态层与 turn 历史浮层）为术语债，改名消歧前两篇并存，不合并。
+
+底部[用量面板](./requirements/usage-panel-direct-content.md)直接展示上下文、最近请求缓存命中率、累计缓存读取/写入、Token 总数及输入/输出；运行时间按当前终端实例计时。普通对话入口同名，原二次详情浮层及遥测诊断展示已移除。
 
 ## Acceptance criteria
 

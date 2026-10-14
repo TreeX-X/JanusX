@@ -96,7 +96,7 @@ export function DrawerViewTabs({ open, activeView, onSelect, labels, ariaLabel }
 export const DRAWER_COLLAPSED_HEIGHT = 28
 export const DRAWER_MIN_HEIGHT = 120
 export const DRAWER_MIN_PANE_HEIGHT = 160
-export const DRAWER_DEFAULT_HEIGHT: Record<DrawerView, number> = { runtime: 210, note: 380 }
+export const DRAWER_DEFAULT_HEIGHT: Record<DrawerView, number> = { runtime: 320, note: 380 }
 
 export type DrawerHeights = Partial<Record<DrawerView, number>>
 

@@ -21,6 +21,12 @@ let creates = 0
 const workspace = { id: 'ws', name: 'Tabs', path: 'C:/tabs', clis: [], layout: { mode: 'tabs' as const, positions: [] }, createdAt: new Date().toISOString() }
 const terminals = ['a', 'b', 'c', 'sidebar'].map((id) => ({
   id, workspaceId: 'ws', cwd: 'C:/tabs', preset: 'shell' as const, name: `Terminal ${id}`, status: 'wait' as const,
+  ...(new URLSearchParams(location.search).has('usage') && id === 'a' ? {
+    preset: 'codex' as const, detectedModel: 'gpt-5.5', telemetryStartedAt: Date.now() - 65_000,
+    contextTokens: 4_000, contextWindowTokens: 200_000, inputTokens: 10_000, outputTokens: 2_000,
+    cacheReadTokens: 8_000, cacheWriteTokens: 500, totalTokens: 20_500, recentCacheHitRate: 0.25,
+    telemetryUpdatedAt: Date.now(),
+  } : {}),
 }))
 const surfaces: Record<string, BrowserSurfaceState> = Object.fromEntries(['d', 'e', 'f', 'g', 'h', 'i', 'j'].map((surfaceId) => [surfaceId, {
   surfaceId, carrier: 'pane', tabs: [], activeTabId: null, agentControlled: false,
@@ -62,6 +68,8 @@ Object.assign(window, {
     },
     switchWorkspace: () => useWorkspaceStore.getState().setActiveWorkspace(null),
     removeSource: () => useWorkspaceStore.getState().closePaneTab('left', 'terminal:a'),
+    updateUsage: (patch: object) => useWorkspaceStore.getState().updateTerminal('a', patch),
+    changeLanguage,
   },
 })
 await initI18n()

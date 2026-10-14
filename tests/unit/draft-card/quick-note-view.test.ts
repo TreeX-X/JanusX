@@ -52,7 +52,7 @@ describe('Quick Note view behavior', () => {
 
   it('uses the specified collapsed, runtime, and note drawer heights', () => {
     expect(getDrawerHeight(false, 'note')).toBe('28px')
-    expect(getDrawerHeight(true, 'runtime')).toBe('210px')
+    expect(getDrawerHeight(true, 'runtime')).toBe('320px')
     expect(getDrawerHeight(true, 'note')).toBe('380px')
   })
 

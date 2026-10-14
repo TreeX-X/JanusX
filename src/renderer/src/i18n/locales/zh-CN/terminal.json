@@ -13,60 +13,17 @@
     "detecting": "检测模型中"
   },
   "telemetry": {
-    "quality": {
-      "authoritative": "精确",
-      "derived": "推导",
-      "declared": "已声明",
-      "estimated": "估算",
-      "unknown": "未知"
-    },
-    "binding": {
-      "exact": "精确",
-      "pending": "待定"
-    },
-    "contextUnknown": "上下文未知",
-    "sessionSuffix": "会话",
-    "compactionNotReported": "未报告",
-    "sourceUnknown": "未知",
-    "windowSourceRuntime": "运行时遥测"
+    "contextUnknown": "上下文未知"
   },
   "context": {
-    "popoverTitle": "运行时上下文",
-    "openDetailsAria": "打开运行时上下文详情",
-    "updatedAgo": "{{age}}前更新",
-    "section": {
-      "capacity": "上下文容量",
-      "session": "会话 Token",
-      "telemetry": "遥测状态"
-    },
-    "source": {
-      "provider-event": "Provider 事件",
-      "history": "会话历史",
-      "terminal-text": "终端文本",
-      "model-registry": "模型注册表",
-      "configuration": "配置"
-    },
-    "windowSource": {
-      "runtime": "运行时遥测",
-      "model-registry": "模型注册表",
-      "estimated": "估算",
-      "unknown": "未知"
-    },
     "row": {
-      "runtimeWindow": "运行时窗口",
-      "modelCapacity": "模型容量",
-      "remaining": "剩余",
-      "sessionInput": "会话输入",
-      "sessionOutput": "会话输出",
       "cacheRead": "缓存读取",
       "cacheWrite": "缓存写入",
-      "sessionTotal": "会话合计",
-      "sessionBinding": "会话绑定",
-      "compactions": "上下文压缩次数",
-      "modelChanged": "模型变更",
-      "usageSource": "用量来源",
-      "windowSource": "窗口来源",
-      "updated": "更新时间"
+      "sessionTotal": "Token 总数",
+      "context": "上下文",
+      "recentCacheHitRate": "最近缓存命中率",
+      "inputOutput": "输入/输出",
+      "runtime": "运行时间"
     }
   },
   "error": {
@@ -147,17 +104,16 @@
     "closeBrowser": "关闭浏览器",
     "closeChat": "关闭对话",
     "noActiveTerminal": "无活动终端",
-    "terminalRuntime": "终端运行状态",
-    "noTelemetryData": "暂无终端运行数据",
+    "terminalRuntime": "用量",
+    "noTelemetryData": "暂无用量数据",
     "focusWorkspaceTitle": "焦点终端工作区：{{name}} · {{path}}",
-    "runtimePanelToggle": "切换 Runtime 状态面板",
+    "runtimePanelToggle": "切换用量面板",
     "janusChatFallback": "Janus 对话",
-    "runtimeAria": "运行时遥测",
+    "runtimeAria": "用量",
     "drawerResizeAria": "调整底部面板高度",
-    "tokenSummaryTitle": "输入 {{input}} · 输出 {{output}}",
     "drawerViewAria": "底部面板视图",
     "view": {
-      "runtime": "上下文监控",
+      "runtime": "用量",
       "note": "Markdown"
     }
   },

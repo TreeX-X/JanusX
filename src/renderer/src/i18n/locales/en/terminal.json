@@ -13,60 +13,17 @@
     "detecting": "detecting model"
   },
   "telemetry": {
-    "quality": {
-      "authoritative": "Exact",
-      "derived": "Derived",
-      "declared": "Configured",
-      "estimated": "Estimated",
-      "unknown": "Unknown"
-    },
-    "binding": {
-      "exact": "Exact",
-      "pending": "Pending"
-    },
-    "contextUnknown": "ctx unknown",
-    "sessionSuffix": "session",
-    "compactionNotReported": "Not reported",
-    "sourceUnknown": "unknown",
-    "windowSourceRuntime": "Runtime telemetry"
+    "contextUnknown": "ctx unknown"
   },
   "context": {
-    "popoverTitle": "Runtime context",
-    "openDetailsAria": "Open runtime context details",
-    "updatedAgo": "Updated {{age}} ago",
-    "section": {
-      "capacity": "Context capacity",
-      "session": "Session tokens",
-      "telemetry": "Telemetry status"
-    },
-    "source": {
-      "provider-event": "Provider event",
-      "history": "Session history",
-      "terminal-text": "Terminal text",
-      "model-registry": "Model registry",
-      "configuration": "Configuration"
-    },
-    "windowSource": {
-      "runtime": "Runtime telemetry",
-      "model-registry": "Model registry",
-      "estimated": "Estimated",
-      "unknown": "Unknown"
-    },
     "row": {
-      "runtimeWindow": "Runtime window",
-      "modelCapacity": "Model capacity",
-      "remaining": "Remaining",
-      "sessionInput": "Session input",
-      "sessionOutput": "Session output",
       "cacheRead": "Cache read",
       "cacheWrite": "Cache write",
-      "sessionTotal": "Session total",
-      "sessionBinding": "Session binding",
-      "compactions": "Context compactions",
-      "modelChanged": "Model changed",
-      "usageSource": "Usage source",
-      "windowSource": "Window source",
-      "updated": "Updated"
+      "sessionTotal": "Total tokens",
+      "context": "Context",
+      "recentCacheHitRate": "Recent cache hit rate",
+      "inputOutput": "Input/output",
+      "runtime": "Runtime"
     }
   },
   "error": {
@@ -147,17 +104,16 @@
     "closeBrowser": "Close Browser",
     "closeChat": "Close Chat",
     "noActiveTerminal": "No active terminal",
-    "terminalRuntime": "Terminal Runtime",
-    "noTelemetryData": "No terminal runtime data",
+    "terminalRuntime": "Usage",
+    "noTelemetryData": "No usage data",
     "focusWorkspaceTitle": "Focused terminal workspace: {{name}} · {{path}}",
-    "runtimePanelToggle": "Toggle Runtime status panel",
+    "runtimePanelToggle": "Toggle usage panel",
     "janusChatFallback": "Janus Chat",
-    "runtimeAria": "Runtime telemetry",
+    "runtimeAria": "Usage",
     "drawerResizeAria": "Resize bottom panel height",
-    "tokenSummaryTitle": "Input {{input}} · Output {{output}}",
     "drawerViewAria": "Bottom panel view",
     "view": {
-      "runtime": "Context",
+      "runtime": "Usage",
       "note": "Markdown"
     }
   },

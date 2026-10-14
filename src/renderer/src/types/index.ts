@@ -37,6 +37,7 @@ export interface Terminal {
   outputTokens?: number
   cacheReadTokens?: number
   cacheWriteTokens?: number
+  recentCacheHitRate?: number
   totalTokens?: number
   contextTokens?: number
   contextWindowTokens?: number

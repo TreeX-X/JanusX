@@ -62,6 +62,7 @@ describe('runtime telemetry history', () => {
     expect(snapshot).toMatchObject({
       sessionId: 'session-1',
       contextTokens: 650,
+      recentCacheHitRate: 500 / 650,
       inputTokens: 250,
       outputTokens: 50,
       cacheReadTokens: 800,
@@ -92,7 +93,7 @@ describe('runtime telemetry history', () => {
         payload: {
           type: 'token_count',
           info: {
-            last_token_usage: { total_tokens: 8_000 },
+            last_token_usage: { total_tokens: 8_000, input_tokens: 7_000, cached_input_tokens: 3_500 },
             total_token_usage: {
               total_tokens: 12_000,
               input_tokens: 10_000,
@@ -115,6 +116,7 @@ describe('runtime telemetry history', () => {
       sessionId,
       detectedModel: 'gpt-5.5',
       contextTokens: 8_000,
+      recentCacheHitRate: 0.5,
       contextWindowTokens: 200_000,
       inputTokens: 8_000,
       outputTokens: 2_000,
@@ -123,6 +125,22 @@ describe('runtime telemetry history', () => {
       source: 'history',
       confidence: 'authoritative',
     })
+  })
+
+  it('distinguishes a latest Codex zero cache hit from missing cache fields and cumulative usage', async () => {
+    const sessionId = '12345678-1234-1234-1234-123456789abc'
+    for (const lastUsage of [{ input_tokens: 100, cached_input_tokens: 0 }, { input_tokens: 100 }]) {
+      await writeCodexRollout(sessionId, [
+        JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo' } }),
+        JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: {
+          last_token_usage: lastUsage,
+          total_token_usage: { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 200, total_tokens: 1200 },
+        } } }),
+      ])
+      const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId })
+      expect(snapshot?.cacheReadTokens).toBe(800)
+      expect(snapshot?.recentCacheHitRate).toBe('cached_input_tokens' in lastUsage ? 0 : undefined)
+    }
   })
 
   it('reads Codex startup capacity and exact compactions only for a bound session', async () => {
@@ -261,6 +279,7 @@ describe('runtime telemetry history', () => {
       sessionId: 'session-1',
       detectedModel: 'glm-5.2',
       contextTokens: 925,
+      recentCacheHitRate: 200 / 925,
       inputTokens: 1_200,
       outputTokens: 300,
       cacheReadTokens: 400,
@@ -302,6 +321,7 @@ describe('runtime telemetry history', () => {
       sessionId: 'session-win',
       detectedModel: 'glm-5.2',
       contextTokens: 85,
+      recentCacheHitRate: 20 / 85,
       source: 'history',
       confidence: 'authoritative',
     })
@@ -402,6 +422,7 @@ describe('runtime telemetry history', () => {
       cacheWriteTokens: 7,
       totalTokens: 1_867,
       contextTokens: 567,
+      recentCacheHitRate: 60 / 567,
       compactionCount: 1,
       compactionCountConfidence: 'exact',
       source: 'history',

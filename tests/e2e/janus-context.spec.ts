@@ -4,6 +4,7 @@ test('both chat entries send early decisions after more than 24 messages', async
   await page.goto('/project.html?manual-stream')
   for (const id of ['main-chat', 'blueprint-chat']) {
     const chat = page.getByTestId(id)
+    await expect(chat.locator('.janus-context-indicator summary')).toContainText('Usage')
     for (let index = 0; index < 14; index++) {
       await chat.locator('textarea').fill(index ? `Follow-up ${index}` : `FIRST_DECISION_${id}`)
       await chat.locator('textarea').press('Enter')
@@ -179,7 +180,7 @@ test('late catalog detection does not reopen manual settings for a newly selecte
   await expect(indicator.getByRole('button', { name: 'Updating…', exact: true })).toBeDisabled()
   await page.getByRole('button', { name: 'Choose model B', exact: true }).click()
   await expect(indicator).toContainText('model-b')
-  await expect(indicator.locator('summary')).toHaveText('Model limits unavailable')
+  await expect(indicator.locator('summary')).toHaveText('Usage · Model limits unavailable')
   await page.evaluate(() => (window as any).projectFixture.finishCatalogUpdate())
   await expect(indicator.locator('input')).toHaveCount(0)
   await expect(indicator).toContainText('Update the model catalog first')
