@@ -100,7 +100,9 @@ P5 三处入口适配：Shell 卡片（主体启动默认项 + 始终可见下�
 
 ## Results
 
-2026-10-13 落地 P1–P5（Main Agent xdo，单次执行，无子代理）：
+2026-10-13 落地 P1–P5（Main Agent xdo，单次执行，无子代理）。V-1 `npm run typecheck` 与 V-2 终端相关单测通过；V-3 Windows 手动实测未执行，AC 勾选待 V-3 与界面走查后由维护者确认。实现记录见 Progress，自动化证据见 Evidence。
+
+## Progress
 
 - P1 数据模型与存储：`src/shared/shellProfiles.ts` 定义条目 schema（名称、可选字形、自由命令、启动后缀、显隐、默认标记）与 CLI 预设显隐；`GlobalConfig.shellProfiles` 持久化，缺席时回落 PowerShell 种子条目（兼容旧配置）；`normalizeShellProfiles` 保证默认项唯一、id 唯一、空列表不被重新播种。
 - P2 启动链路：命令按可执行名与参数解析（引号内 Windows 路径保持整体），后缀追加为尾参；`terminal:create` 新增 `shellProfileId` / `shellCommand`，主进程据此直启；工作目录沿用既有 cwd（worktree）。启动前校验：显式路径不存在或可执行名不在 PATH 时报错，错误在已有 try 内抛出，走完整 rollback。冷恢复在 manifest 记录 `shell` 启动行并按原样重建，改默认值不替换现有终端；retry 沿用记录里的启动行。
@@ -108,20 +110,37 @@ P5 三处入口适配：Shell 卡片（主体启动默认项 + 始终可见下�
 - P4 设置「终端管理」：新增 AppSettingsModal `terminal` 页（文案走 terminal 命名空间，未给 settings.json 追加 key），含已配置列表（增删改、显隐、默认单选）、CLI 预设卡片显隐、检测候选区三个区块。
 - P5 三处入口：空白页 Shell 卡片主体启动默认项并显示默认 shell 启动行，常驻下拉箭头提供本次临时选择；`TerminalPresetCapsule` 菜单改为「可见 shell 条目 + 可见 CLI 预设」，默认项带标记；临时选择只作用本次新建，不改全局默认值，也不改 Claude/Codex 等 CLI 预设启动语义。
 
-验证状态：
-
-- V-1 `npm run typecheck`：**通过**（退出码 0，2026-10-13 在本机跑通）。
-- V-2 `npx vitest run tests/unit/terminal`：**通过** —— 17 个文件 109 个测试全绿（含既有终端启动与会话恢复回归）。新增 `tests/unit/shell-profiles.test.ts`（23 例：条目 schema、命令解析、启动拼接、显隐过滤、候选探针、带空格路径加引号）与 `tests/unit/shell-profile-launch.test.ts`（14 例：默认/临时选择解析、缺失路径与 PATH 报错、冷恢复直启、Git Bash 择优、候选已配置标记）单独跑 41 例全绿。
-- V-3 Windows 手动实测仍未执行：Git Bash `bash.exe` 实测定位与 worktree 落位、`--login -i` 建议后缀、三处入口交互、恢复会话保留原 shell 待实测。`--login -i` 目前只是候选区预填建议值，未经 Windows 实测定型。AC 勾选待 V-3 与界面走查后由维护者确认。
-
-补记（本地无 node_modules 期间的替代验证，已被上面的正式结果取代，留作过程记录）：曾用 node 24 类型剥离对纯逻辑跑过 shared 24 条、主进程 18 条断言（`.cache/` 临时脚本，已删）。正是那段验证暴露出下面两处缺陷。
-
-落地过程中修过的两处自身缺陷（均由上述替代验证暴露）：
+落地过程中修过的两处自身缺陷（由本地无 node_modules 期间的替代验证暴露：曾用 node 24 类型剥离对纯逻辑跑过 shared 24 条、主进程 18 条断言，`.cache/` 临时脚本已删；该替代验证已被下面的正式结果取代，留作过程记录）：
 
 - 候选区预填的绝对路径若含空格（`C:\Program Files\Git\cmd\bash.exe`）会被命令行解析拆开，导致启动失败且匹配不上「已配置」；改为预填时自动加引号，并补了回归用例。
 - `terminal:create` 的 continue 路径原先只传 `shell` 字符串，普通终端会落到当前默认条目而丢掉原 shell；改为按 `preset === 'shell'` 传 `shellCommand`。
 
 另外：新建终端菜单的 shell 项名称来自条目名（种子项为 PowerShell），`tests/e2e/desktop-smoke.spec.ts` 里 `New Shell terminal` 的选择器随之改为 `New PowerShell terminal`；菜单行宽放不下完整启动行，默认 shell 的启动行改由该项 tooltip 展示。
+
+验证状态：
+
+- V-1 `npm run typecheck`：**通过**（退出码 0，2026-10-13 在本机跑通；2026-10-14 合入 main 后复跑仍为退出码 0）。
+- V-2 `npx vitest run tests/unit/terminal`：**通过** —— 17 个文件 109 个测试全绿（含既有终端启动与会话恢复回归）。新增 `tests/unit/shell-profiles.test.ts`（23 例：条目 schema、命令解析、启动拼接、显隐过滤、候选探针、带空格路径加引号）与 `tests/unit/shell-profile-launch.test.ts`（14 例：默认/临时选择解析、缺失路径与 PATH 报错、冷恢复直启、Git Bash 择优、候选已配置标记）单独跑 41 例全绿。
+- V-3 Windows 手动实测仍未执行：Git Bash `bash.exe` 实测定位与 worktree 落位、`--login -i` 建议后缀、三处入口交互、恢复会话保留原 shell 待实测。`--login -i` 目前只是候选区预填建议值，未经 Windows 实测定型。
+
+遗留与未决：
+
+- V-3 手动实测未执行，AC-1～AC-6 均未勾选。
+- `tests/e2e/desktop-smoke.spec.ts` 的 `built desktop exposes typed Workspace, Terminal, and Project critical paths` 在用 `out/main/index.js` 实跑时于 `page.getByRole('main').getByText('Shell', { exact: true }).click()` 超时失败——Windows 上新 shell 种子名为 `PowerShell`（`createShellProfileSeed`），Shell 卡片渲染条目名而非 "Shell"。属本 Task 未收尾项。
+
+## Evidence
+
+代码与自动化证据（2026-10-13 本机；2026-10-14 随 feature/gitbash-docker 合入 main 后复跑）：
+
+- `npm run typecheck`：退出码 0。
+- `npx vitest run tests/unit/terminal`：17 个文件 / 109 个测试全通过，含既有终端启动与会话恢复回归。
+- `tests/unit/shell-profiles.test.ts`（23 例）与 `tests/unit/shell-profile-launch.test.ts`（14 例）单独运行全通过，合计 41 例。
+- `npm run i18n:check`：12 个命名空间双语同步（本 Task 未新增 settings.json 键，文案走 terminal 命名空间）。
+
+尚缺的实测证据（未执行）：
+
+- V-3 全部三项：Git Bash `bash.exe` 检测与 worktree 落位、`--login -i` 建议后缀定型、三处入口交互与临时选择语义。
+- 桌面冒烟里 `built desktop exposes typed Workspace, Terminal, and Project critical paths` 的 Shell 卡片点击路径（种子项改名导致的选择器超时）。
 
 ## Handoff
 
