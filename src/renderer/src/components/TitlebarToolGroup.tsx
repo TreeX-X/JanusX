@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, Globe, PocketKnife } from 'lucide-react'
+import { ChevronDown, Globe } from 'lucide-react'
 import { ThemedTooltip } from './ui/ThemedTooltip'
 import { MarkdownIcon } from './ui/MarkdownIcon'
+import { ToolboxIcon } from './ui/ToolboxIcon'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useExperimentalStore } from '@/stores/experimental'
 import { openGlobalTool, resolveGlobalToolOpenState } from '@/lib/global-tool-entry'
@@ -11,7 +12,7 @@ import styles from './TitlebarToolGroup.module.css'
 /**
  * 顶栏全局工具入口：一个可展开的工具菜单。
  *
- * 触发器只有一枚通用工具图标（PocketKnife，瑞士军刀=一个控件装多件工具），
+ * 触发器只有一枚通用工具图标（工具箱=一个控件装多件工具），
  * 展开后是工具列表——现在是浏览器 / Markdown，后续 Docker、HTTP 工具
  * 各加一条条目即可，触发器外形不再随工具数量变化。
  *
@@ -97,7 +98,7 @@ export function TitlebarToolGroup() {
             aria-label={t('common:toolGroup.triggerAction')}
             onClick={() => setMenuOpen((open) => !open)}
           >
-            <PocketKnife className={styles.icon} size={16} strokeWidth={1.5} aria-hidden="true" />
+            <ToolboxIcon className={styles.icon} size={16} strokeWidth={1.5} aria-hidden="true" />
             <ChevronDown className={styles.chevron} size={11} strokeWidth={2} aria-hidden="true" />
           </button>
         </ThemedTooltip>
