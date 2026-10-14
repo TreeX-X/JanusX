@@ -7,7 +7,9 @@ import {
   closePaneTab,
   collapsePaneTree,
   createBrowserPaneContent,
+  createMarkdownPaneContent,
   createTerminalPaneContent,
+  findFirstMarkdownPaneContent,
   findFirstBrowserPaneContent,
   findLeafPane,
   findPaneContent,
@@ -29,6 +31,7 @@ import {
   type WorkspacePaneNode,
 } from '@/lib/workspace-pane'
 import { createBrowserSurface, openBrowserTab } from '@/services/browser'
+import { activePaneScopeId } from '@/lib/workspace-front-surface'
 
 type TerminalSnapshot = {
   terminals: Terminal[]
@@ -70,7 +73,7 @@ interface WorkspaceStore {
   setTabDragInFlight: (active: boolean) => void
   addBrowserSurfaceToTree: (surfaceId: string) => void
   openBrowserInWorkspace: (url?: string) => Promise<void>
-  addBrowserToPane: (paneId: string, url?: string) => Promise<void>
+  openMarkdownInWorkspace: () => void
   splitPane: (paneId: string | null, direction: PaneSplitDirection) => void
   unsplitPane: (paneId: string | null) => void
   collapsePaneLayout: () => void
@@ -80,8 +83,8 @@ interface WorkspaceStore {
   movePaneTabToIndex: (contentId: string, paneId: string, targetIndex: number) => void
   moveTerminalToPane: (terminalId: string, paneId: string) => void
   splitPaneWithTerminal: (terminalId: string, paneId: string, edge: PaneDropEdge, ratio?: number) => void
-  moveBrowserToPane: (surfaceId: string, paneId: string) => void
-  splitPaneWithBrowser: (surfaceId: string, paneId: string, edge: PaneDropEdge, ratio?: number) => void
+  movePaneContentToPane: (contentId: string, paneId: string) => void
+  splitPaneWithContent: (contentId: string, paneId: string, edge: PaneDropEdge, ratio?: number) => void
 
   updateFileTree: (nodes: FileNode[]) => void
   setActiveFilePath: (path: string | null) => void
@@ -224,9 +227,21 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   removeWorkspace: (id) =>
     set((s) => {
       const { [id]: _, ...rest } = s.terminalSnapshots
+      // 删掉的是活动工作区时一并清掉活动 pane 宿主：否则已删工作区的终端标签会
+      // 悬在无项目作用域里（全局 pane 哨兵会把它渲染出来），空白页反而回不去。
+      const becomingProjectless = s.activeWorkspaceId === id
       return {
         workspaces: s.workspaces.filter((w) => w.id !== id),
-        activeWorkspaceId: s.activeWorkspaceId === id ? null : s.activeWorkspaceId,
+        activeWorkspaceId: becomingProjectless ? null : s.activeWorkspaceId,
+        ...(becomingProjectless
+          ? {
+              terminals: [],
+              activeTerminalId: null,
+              paneTree: null,
+              focusedPaneId: null,
+              focusedTabId: null,
+            }
+          : {}),
         terminalSnapshots: rest,
       }
     }),
@@ -423,7 +438,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         activeTerminalId: null,
       }
     }),
-  /*-- 用户主动调用浏览器：已有 browser tab 则激活（带 url 则在其 surface 新开 tab），否则创建新 surface 入网 --*/
+  /*-- 用户主动调用浏览器：已有"用户浏览" tab 则激活（带 url 则在其 surface 新开 tab），
+       否则创建新 surface 入网。 --*/
   openBrowserInWorkspace: async (url) => {
     const existing = findFirstBrowserPaneContent(get().paneTree)
     if (existing) {
@@ -441,17 +457,31 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     if (!result.success) return
     get().addBrowserSurfaceToTree(surfaceId)
   },
-  /*-- pane 内 "+" 入口：在指定 pane 直接新建 browser tab --*/
-  addBrowserToPane: async (paneId, url) => {
-    const surfaceId = createBrowserSurfaceId()
-    const result = await createBrowserSurface(surfaceId, 'pane', url)
-    if (!result.success) return
+  /*-- 顶栏 Markdown 入口：已有面板则激活，否则按当前作用域新建 --*/
+  openMarkdownInWorkspace: () => {
+    const scopeId = activePaneScopeId(get().activeWorkspaceId)
+    const existing = findFirstMarkdownPaneContent(get().paneTree)
+    if (existing) {
+      const { paneId, tabId } = existing
+      set((s) => ({
+        paneTree: activatePaneTab(s.paneTree, paneId, tabId),
+        focusedPaneId: paneId,
+        focusedTabId: tabId,
+        activeTerminalId: null,
+      }))
+      return
+    }
     set((s) => {
-      const added = addPaneContentToTree(s.paneTree, paneId, createBrowserPaneContent(surfaceId), createPaneId())
+      const result = addPaneContentToTree(
+        s.paneTree,
+        s.focusedPaneId,
+        createMarkdownPaneContent(scopeId),
+        createPaneId()
+      )
       return {
-        paneTree: added.tree,
-        focusedPaneId: added.focus.paneId,
-        focusedTabId: added.focus.tabId,
+        paneTree: result.tree,
+        focusedPaneId: result.focus.paneId,
+        focusedTabId: result.focus.tabId,
         activeTerminalId: null,
       }
     })
@@ -611,12 +641,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       }
     }),
 
-  /*-- 拖拽移动 browser tab 到目标 pane（仅 pane 树换位置，surface 本体不动） --*/
-  moveBrowserToPane: (surfaceId, paneId) =>
+  /*-- 内容中立的 tab 拖拽落点：browser / markdown 共用，终端另有 moveTerminalToPane --*/
+  movePaneContentToPane: (contentId, paneId) =>
     set((s) => {
-      const content = getBrowserPaneContent(s.paneTree, surfaceId)
-      if (!content) return {}
-      const removed = removePaneContentFromTree(s.paneTree, content.id)
+      const content = getPaneContentById(s.paneTree, contentId)
+      if (!content || content.type === 'terminal') return {}
+      const removed = removePaneContentFromTree(s.paneTree, contentId)
       const result = addPaneContentToTree(removed, paneId, content, createPaneId())
       return {
         paneTree: result.tree,
@@ -625,13 +655,12 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
         activeTerminalId: null,
       }
     }),
-  /*-- 拖拽 browser tab 触发分屏：先摘除原 tab，再在目标 pane 边缘 split 后插入 --*/
-  splitPaneWithBrowser: (surfaceId, paneId, edge, ratio = 0.5) =>
+  splitPaneWithContent: (contentId, paneId, edge, ratio = 0.5) =>
     set((s) => {
-      const content = getBrowserPaneContent(s.paneTree, surfaceId)
-      if (!content) return {}
+      const content = getPaneContentById(s.paneTree, contentId)
+      if (!content || content.type === 'terminal') return {}
 
-      const removed = removePaneContentFromTree(s.paneTree, content.id)
+      const removed = removePaneContentFromTree(s.paneTree, contentId)
       const direction: PaneSplitDirection = edge === 'left' || edge === 'right' ? 'horizontal' : 'vertical'
       const placement = edge === 'left' || edge === 'top' ? 'before' : 'after'
       const clampedRatio = Math.min(0.85, Math.max(0.15, ratio))

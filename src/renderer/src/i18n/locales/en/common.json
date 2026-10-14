@@ -77,7 +77,8 @@
     "agentActive": "Agent in control",
     "agentIdle": "Agent not in control",
     "popOut": "Pop out to standalone window",
-    "noTabs": "No open tabs"
+    "noTabs": "No open tabs",
+    "retry": "Retry"
   },
   "chat": {
     "copy": "Copy"
@@ -156,6 +157,15 @@
     "titleWithPending": "{{action}} {{label}} workbench - {{count}} pending",
     "titleWithFocus": "{{action}} {{label}} workbench - node focused",
     "badgeTitle": "{{count}} pending requirement"
+  },
+  "toolGroup": {
+    "aria": "Workspace tools",
+    "browser": "Browser",
+    "browserAction": "Open the workspace browser",
+    "browserOpened": "The workspace browser is open",
+    "markdown": "Markdown",
+    "markdownAction": "Open a Markdown document",
+    "markdownOpened": "A Markdown document is open"
   },
   "trafficLight": {
     "close": "Close",

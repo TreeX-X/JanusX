@@ -139,12 +139,59 @@
     "hint": "Select a type to create a terminal automatically.",
     "starting": "Starting…"
   },
+  "shellMenu": {
+    "default": "Default",
+    "pickShell": "Pick the shell for this new terminal",
+    "shell": "Shell",
+    "cli": "CLI presets"
+  },
+  "shellSettings": {
+    "nav": "Terminal",
+    "navMeta": "Shell",
+    "title": "Terminal management",
+    "subtitle": "Terminal · user-built shell entries and new-terminal visibility",
+    "saveError": "Save failed; rolled back to the last valid configuration",
+    "configured": {
+      "title": "Configured shells",
+      "help": "Command plus suffix is spawned verbatim, never parsed or restricted; the working directory always follows the active worktree.",
+      "add": "Add entry",
+      "empty": "No entries yet: add one to pick it from the three entry points, or confirm a detected shell below.",
+      "newName": "New shell",
+      "name": "Name",
+      "command": "Command",
+      "suffix": "Launch suffix",
+      "remove": "Remove entry",
+      "missing": "{{executable}} was not detected",
+      "redetect": "Re-detect",
+      "hide": "Hide entry"
+    },
+    "candidates": {
+      "title": "Detected candidates",
+      "help": "Shells found on this machine. They stay out of the new-terminal entries until you confirm them, which prefills the command and suggested suffix.",
+      "scan": "Detect",
+      "empty": "No new shells detected.",
+      "add": "Add",
+      "configured": "Configured",
+      "idle": "Not scanned yet",
+      "count": "{{count}} found"
+    },
+    "externalCli": {
+      "title": "External CLIs",
+      "help": "Detect versions and install or upgrade in one click; unchecking Visible only hides the new-terminal entry — existing terminals and sessions keep running."
+    },
+    "visibility": {
+      "visible": "Shown at the new-terminal entries",
+      "hidden": "Hidden from the new-terminal entries",
+      "default": "Set as the default shell"
+    }
+  },
   "tab": {
     "closeTerminal": "Close terminal",
     "killCurrentTerminal": "End current terminal",
     "collapseLayout": "End layout",
     "newBrowser": "New Browser",
     "closeBrowser": "Close Browser",
+    "closeMarkdown": "Close the document panel",
     "closeChat": "Close Chat",
     "noActiveTerminal": "No active terminal",
     "terminalRuntime": "Terminal Runtime",
@@ -165,6 +212,8 @@
     "listAria": "Notes for the active terminal",
     "listTitle": "Notes",
     "listEmpty": "No notes yet",
+    "collapseList": "Collapse the note list",
+    "expandList": "Expand the note list",
     "newNote": "New note",
     "untitled": "Untitled",
     "emptyExcerpt": "Empty",
@@ -333,8 +382,18 @@
     "historyLabel": "History",
     "historyEmpty": "No file changes recorded",
     "collapse": "Collapse file changes",
-    "kind": { "done": "Completed", "failed": "Failed", "interrupted": "Interrupted" },
-    "status": { "added": "Added", "deleted": "Deleted", "modified": "Modified", "binary": "Binary", "oversized": "Large file" },
+    "kind": {
+      "done": "Completed",
+      "failed": "Failed",
+      "interrupted": "Interrupted"
+    },
+    "status": {
+      "added": "Added",
+      "deleted": "Deleted",
+      "modified": "Modified",
+      "binary": "Binary",
+      "oversized": "Large file"
+    },
     "files": "{{count}} files",
     "more": "{{count}} additional files not listed",
     "narrowHint": "Pane too narrow to expand — widen to view changes",

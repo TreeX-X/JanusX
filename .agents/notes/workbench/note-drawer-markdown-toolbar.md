@@ -27,11 +27,13 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-13T17:24:35Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
 # Note drawer underline tabs, black tray and Markdown toolbar
+
+Planned presentation change: [Markdown 独立 pane 与顶栏工具分组](./markdown-pane-entry.md) moves the Markdown entry and editor out of the bottom drawer into a central pane, while retaining the editing capabilities documented here. That migration is not implemented; this decision still describes the current drawer. The bottom runtime telemetry view keeps its own responsibility.
 
 
 ## Problem

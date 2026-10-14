@@ -29,7 +29,7 @@ import {
   summarizeHookPayload,
 } from '../notifications/agent-hook-diagnostics'
 import { logTerminalDiagnostic } from '../terminal/diagnostics'
-import { getDefaultShell } from '../terminal/presets'
+import { getDefaultShellCommand, resolveShellProfileLaunch } from '../terminal/shell-profiles'
 import { agentTurnRecorder } from '../knowledge/agent-turn-recorder'
 import { readAssistantExcerpt } from '../sessions/transcript-excerpt'
 import { appShutdown } from '../shutdown/AppShutdown'
@@ -114,6 +114,9 @@ function isHookInputRequest(payload: AgentHookPayload, lowerEvent: string): bool
 }
 
 let companionTerminalCreator: ((config: TerminalCreateRequest) => Promise<{ pid: number }>) | null = null
+
+/** 直启程序；shell 条目解析失败时用 error 占位，错误在调用方已有 try 内抛出。 */
+type ResolvedLaunchProgram = { command: string; args: string[] } | { error: string } | undefined
 
 export type ContinueSessionOptions = {
   engine?: string
@@ -713,7 +716,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   })
 
   const createTerminalLifecycle = async (config: TerminalCreateRequest, recoveryEnv?: SessionRecoveryEnvironment) => {
-    const { id, cwd, shell, preset, command, args, cols, rows, extraArgs } = config
+    const { id, cwd, shell, preset, command, args, cols, rows, extraArgs, shellProfileId, shellCommand } = config
 
     const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
     const engine: CheckpointEngine =
@@ -788,7 +791,19 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       isTerminalPreset(preset) ? preset : { command, args },
     )
 
-    const resolveProgramPromise = (async () => {
+    // 普通终端按用户自建 shell 条目直启（默认条目或本次临时选择），CLI 预设仍走上面解析。
+    // shell 条目解析失败时返回 error 而不 reject：Promise.all 位于 pre-stub 之后，
+    // reject 会漏掉 creationLocked（与 officePromise 的守卫同一理由），错误改在下面
+    // 已有 try 内抛出，走完整的 rollback。
+    const resolveProgramPromise = (async (): Promise<ResolvedLaunchProgram> => {
+      if (engine === 'shell') {
+        const shellLaunch = await resolveShellProfileLaunch({
+          ...(shellProfileId ? { id: shellProfileId } : {}),
+          ...(shellCommand ? { commandLine: shellCommand } : {}),
+        })
+        if (shellLaunch.error) return { error: shellLaunch.error }
+        return shellLaunch.program
+      }
       if (!launchProgram) return undefined
       try {
         const resolved = await resolveCLIPath(launchProgram.command)
@@ -860,6 +875,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       officePromise,
     ])
 
+    const launchProgramError = resolvedProgram && 'error' in resolvedProgram ? resolvedProgram.error : undefined
+    const launchProgramResolved = resolvedProgram && 'command' in resolvedProgram ? resolvedProgram : undefined
+
     // pi loads the JanusX-owned notify extension via CLI flag, never via the
     // user's pi settings. Missing file (setup failed) launches bare pi: status
     // stays wait, exactly the pre-hook behavior.
@@ -873,7 +891,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         // Best effort: launch bare pi below.
       }
     }
-    const programArgs = [...(resolvedProgram?.args ?? []), ...piExtensionArgs, ...(extraArgs ?? [])]
+    const programArgs = [...(launchProgramResolved?.args ?? []), ...piExtensionArgs, ...(extraArgs ?? [])]
 
     logTerminalDiagnostic('terminal create requested', {
       id,
@@ -882,12 +900,13 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       shell,
       preset,
       engine,
-      program: resolvedProgram?.command,
+      program: launchProgramResolved?.command,
       programArgs,
     })
 
     let instance
     try {
+      if (launchProgramError) throw new Error(launchProgramError)
       if (recoveryHookError) throw recoveryHookError
       if (engine !== 'shell') await turnChangeTracker.register(id, cwd)
       const officeMcpEntry = resolve(__dirname, '..', 'office-mcp.js')
@@ -901,7 +920,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         workspaceId,
         cwd,
         shell,
-        program: resolvedProgram?.command,
+        program: launchProgramResolved?.command,
         programArgs,
         cols: typeof cols === 'number' ? cols : undefined,
         rows: typeof rows === 'number' ? rows : undefined,
@@ -1231,6 +1250,8 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         cwd: source.cwd,
         shell,
         preset,
+        // 普通终端沿用记录里的启动行：continue 不会把旧终端换成当前默认 shell。
+        ...(preset === 'shell' ? { shellCommand: shell } : {}),
         extraArgs: resumeArgs,
       }, prepared?.environment)
     } catch (err) {
@@ -1250,15 +1271,15 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       if (!resumeArgs) {
         throw new Error(`Native resume is unavailable for this ${source.engine} session; its original history identity is missing`)
       }
-      return spawnResumeTerminal(source, resumeArgs, source.shell ?? getDefaultShell(), opts?.workspaceId)
+      return spawnResumeTerminal(source, resumeArgs, source.shell ?? getDefaultShellCommand(), opts?.workspaceId)
     }
     const nativeResumeArgs = buildContinueResumeArgs(source, opts?.engine)
     if (nativeResumeArgs) {
-      return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShell(), opts?.workspaceId)
+      return spawnResumeTerminal(source, nativeResumeArgs, source.shell ?? getDefaultShellCommand(), opts?.workspaceId)
     }
     const engine = (opts?.engine ?? source.engine) as CheckpointEngine
     // External rows carry no shell capture: their terminals were never ours.
-    const shell = source.external === true ? (source.shell ?? getDefaultShell()) : source.shell
+    const shell = source.external === true ? (source.shell ?? getDefaultShellCommand()) : source.shell
     if (!shell) {
       throw new Error('Session predates shell capture; open a terminal manually')
     }

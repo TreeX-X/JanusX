@@ -46,6 +46,7 @@ import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, 
 import { TEAM_CHANNELS, type TeamAPI } from '../shared/ipc/team'
 import { UPDATER_CHANNELS, UPDATER_EVENT_CHANNELS, type UpdaterAPI } from '../shared/ipc/updater'
 import { PEER_CHANNELS, REMOTE_CHANNELS, type PeerAPI, type RemoteAPI } from '../shared/ipc/remote'
+import { SHELL_PROFILE_CHANNELS, type ShellProfilesAPI } from '../shared/ipc/shell-profiles'
 
 const blueprintReviewAPI: BlueprintReviewAPI = {
   repairPrepare: input => ipcRenderer.invoke(BLUEPRINT_REVIEW_CHANNELS.repairPrepare, input),
@@ -552,6 +553,11 @@ const windowAPI: WindowAPI = {
   onEditorEmbedded: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.editorEmbedded, callback),
   onEditorRefresh: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.refreshEditor, callback),
 }
+const shellProfilesAPI: ShellProfilesAPI = {
+  list: () => ipcRenderer.invoke(SHELL_PROFILE_CHANNELS.list),
+  save: (settings) => ipcRenderer.invoke(SHELL_PROFILE_CHANNELS.save, settings),
+  detect: () => ipcRenderer.invoke(SHELL_PROFILE_CHANNELS.detect),
+}
 const systemAPI: SystemAPI = {
   getDefaultShell: () => ipcRenderer.invoke(SYSTEM_CHANNELS.defaultShell),
   getPlatform: () => ipcRenderer.invoke(SYSTEM_CHANNELS.platform),
@@ -673,5 +679,6 @@ contextBridge.exposeInMainWorld('electron', {
   dialog: dialogAPI,
   window: windowAPI,
   system: systemAPI,
+  shellProfiles: shellProfilesAPI,
   desktopToast: desktopToastAPI,
 })

@@ -27,6 +27,11 @@ import {
 } from '../../shared/ipc/experimental'
 import { normalizeAgentApprovalMode, type AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 import { DEFAULT_APP_THEME, normalizeAppTheme, type AppTheme } from '../../shared/ipc/theme'
+import {
+  createShellProfileSeed,
+  normalizeShellProfiles,
+  type ShellProfilesSettings,
+} from '../../shared/shellProfiles'
 
 /** P6：janus-chat 循环步数默认 40（P6 前为硬编码 20），钳制 1~100。 */
 export const DEFAULT_AGENT_MAX_STEPS = 40
@@ -49,6 +54,11 @@ const DEFAULT_CONFIG: GlobalConfig = {
   theme: DEFAULT_APP_THEME,
   defaultTerminalPreset: 'shell',
   defaultShell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
+  // 首版种子：全新用户只预置 PowerShell 一条默认项，其余 shell 经检测候选区确认。
+  shellProfiles: {
+    entries: [createShellProfileSeed(process.platform)],
+    hiddenCliPresets: [],
+  },
   registeredCLIs: [
     {
       id: 'claude-code',
@@ -104,6 +114,10 @@ export class ConfigService {
         agentMaxSteps: normalizeAgentMaxSteps(parsed.agentMaxSteps),
         safeCompileAutoAllow: normalizeSafeCompileAutoAllow(parsed.safeCompileAutoAllow),
         experimentalFeatures: normalizeExperimentalFeatures(parsed.experimentalFeatures),
+        // 缺席（旧配置）时沿用 DEFAULT_CONFIG 的 PowerShell 种子，不写空列表。
+        shellProfiles: parsed.shellProfiles
+          ? normalizeShellProfiles(parsed.shellProfiles)
+          : DEFAULT_CONFIG.shellProfiles,
       }
     } catch (error) {
       // 解析失败（文件存在但损坏）时先备份，避免默认配置覆盖后用户数据无法恢复
@@ -333,6 +347,17 @@ export class ConfigService {
 
   getRegisteredCLIs(): GlobalConfig['registeredCLIs'] {
     return this.config?.registeredCLIs ?? DEFAULT_CONFIG.registeredCLIs
+  }
+
+  /** 同步读缓存（PTY 启动热路径用，不做 IO；未加载时回落种子）。 */
+  getShellProfiles(): ShellProfilesSettings {
+    return normalizeShellProfiles(this.config?.shellProfiles ?? DEFAULT_CONFIG.shellProfiles)
+  }
+
+  async updateShellProfiles(settings: unknown): Promise<ShellProfilesSettings> {
+    const normalized = normalizeShellProfiles(settings)
+    await this.update({ shellProfiles: normalized })
+    return normalized
   }
 
   /** 同步读缓存主题（PTY OSC 探针热路径用，不做 IO；未加载时回落默认）。 */

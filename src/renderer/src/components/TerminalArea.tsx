@@ -1,26 +1,23 @@
 import { useState, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { Globe, X } from 'lucide-react'
+import { ChevronDown, Globe, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
 import { useBrowserStore } from '@/stores/browser'
 import { BrowserSurface } from './browser/BrowserSurface'
 import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
-import { QuickNote } from './note/QuickNote'
+import { MarkdownPane } from './MarkdownPane'
+import { MarkdownIcon } from './ui/MarkdownIcon'
 import {
   applyTerminalDraftLifecycle,
   clampDrawerHeight,
   DRAWER_DEFAULT_HEIGHT,
   DRAWER_MIN_HEIGHT,
   DRAWER_MIN_PANE_HEIGHT,
-  DRAWER_VIEWS,
-  DrawerViewTabs,
   getDrawerHeight,
-  getDrawerPanelAttributes,
-  type DrawerHeights,
-  type DrawerView,
+  getDrawerPanelId,
 } from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
 import { TurnChangeIsland } from './TurnChangeIsland'
@@ -50,9 +47,17 @@ import { resolveContextWindows } from '@/lib/runtime-telemetry'
 import { getTerminalStatusVisual } from '@/lib/terminal-sidebar-visual'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
 import {
+  describeShellEntry,
+  listVisibleCliPresets,
+  listVisibleShellEntries,
+  type ShellProfilesSettings,
+} from '../../../shared/shellProfiles'
+import { useShellProfilesStore } from '@/stores/shell-profiles'
+import {
   launchTerminalPreset,
   retryTerminalCreate,
   warmDefaultShellCache,
+  warmShellProfilesCache,
   warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
 // Note: terminal event subscriptions (created/status/exit/focus) are owned by
@@ -66,26 +71,46 @@ import { TerminalPresetIcon } from '@/components/ui/TerminalPresetIcon'
 import { getThemeDefinition } from '../../../shared/theme/registry'
 import {
   buildWorkspaceTerminalSurfaces,
+  GLOBAL_PANE_SCOPE,
   HOT_WORKSPACE_EVICTION_GRACE_MS,
   MAX_HOT_WORKSPACE_SURFACES,
   touchWorkspaceSurfaceRecency,
 } from '@/lib/workspace-front-surface'
 
-type TerminalPresetOption = { type: TerminalPreset; name: string }
-
-function createPreset(type: TerminalPreset): TerminalPresetOption {
-  return { type, name: getTerminalPresetMeta(type).label }
+/** 新建终端菜单项：CLI 预设卡片 + 用户自建 shell 条目（默认项带标记）。 */
+interface TerminalPresetOption {
+  key: string
+  type: TerminalPreset
+  name: string
+  /** shell 条目的完整启动行，菜单行放不下，走 tooltip。 */
+  command?: string
+  shellProfileId?: string
+  isDefaultShell?: boolean
 }
 
-const PRESETS: TerminalPresetOption[] = [
-  createPreset('shell'),
-  createPreset('janus'),
-  createPreset('claude'),
-  createPreset('codex'),
-  createPreset('opencode'),
-  createPreset('pi'),
-  createPreset('dsh'),
-]
+function createPreset(type: TerminalPreset): TerminalPresetOption {
+  return { key: type, type, name: getTerminalPresetMeta(type).label }
+}
+
+/**
+ * 菜单内容按「已配置 + 显示」过滤：shell 条目在前（默认项带标记），其后是可见的
+ * CLI 预设卡片。隐藏只影响这里，已有终端与会话照常运行。
+ */
+function buildTerminalMenuItems(settings: ShellProfilesSettings): TerminalPresetOption[] {
+  const shellEntries: TerminalPresetOption[] = listVisibleShellEntries(settings).map((entry) => ({
+    key: `shell:${entry.id}`,
+    type: 'shell' as TerminalPreset,
+    name: entry.name,
+    command: describeShellEntry(entry),
+    shellProfileId: entry.id,
+    isDefaultShell: entry.isDefault,
+  }))
+  const cliPresets = listVisibleCliPresets(
+    settings,
+    ['janus', 'claude', 'codex', 'opencode', 'pi', 'dsh'],
+  ).map(createPreset)
+  return [...shellEntries, ...cliPresets]
+}
 
 // 收起态 24×24 圆角 4,与工具栏相邻 h-6 w-6 rounded 按钮对齐
 const TERMINAL_MENU_COLLAPSED_SIZE = 24
@@ -94,7 +119,9 @@ const TERMINAL_MENU_COLLAPSED_SIZE = 24
 // 不再用“展开宽度写死 = f(类型数量)”的内联胶囊——类型从 4 加到 6 时旧 166px
 // 会把后两个图标裁掉，加第 7 个又得重算。
 const TERMINAL_MENU_PANEL_WIDTH = 240
-const TERMINAL_MENU_PANEL_ESTIMATED_HEIGHT = 212
+// 分组后（Shell 整行 + CLI 两列网格 + 两个分区标题）面板比早期纯网格高，
+// 预估值只用于挂载首帧的视口钳制，量到真实尺寸后由 useLayoutEffect 纠正。
+const TERMINAL_MENU_PANEL_ESTIMATED_HEIGHT = 240
 // 收回动画时长：关闭时先播 terminal-menu-out 再卸载，与弹入 140ms 对称
 const TERMINAL_MENU_EXIT_MS = 120
 
@@ -525,8 +552,8 @@ interface PaneTreeViewProps {
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
   onKillTerminalFromTab: (terminalId: string, e?: React.MouseEvent) => void
-  onOpenBrowser: (paneId: string) => void
   onCloseBrowserTab: (paneId: string, tabId: string, surfaceId: string) => void
+  onCloseMarkdownTab: (paneId: string, tabId: string) => void
   onBrowserPopOut: (paneId: string, tabId: string, surfaceId: string) => void
   onBrowserTabDrop: (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
@@ -539,6 +566,8 @@ interface PaneTreeViewProps {
   onToggleTerminalMenu: (paneId: string) => void
   onCloseTerminalMenu: () => void
   onCreateTerminal: (preset: TerminalPresetOption) => void
+  /** 新建终端菜单内容（shell 条目 + 可见 CLI 预设），由顶层按设置算出。 */
+  terminalMenuItems: TerminalPresetOption[]
 }
 
 function PaneTreeView(props: PaneTreeViewProps) {
@@ -621,16 +650,24 @@ function TerminalPresetCapsule({
   onToggle,
   onSelect,
   onClose,
+  items,
 }: {
   open: boolean
   onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void
   onSelect: (preset: TerminalPresetOption) => void
   onClose: () => void
+  items: TerminalPresetOption[]
 }) {
   const toggleRef = useRef<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const exitTimerRef = useRef<number | null>(null)
   const wasOpenRef = useRef(open)
+  // Shell 与 CLI 分两组：前者是"可切换的 shell 清单"，后者是终端类型卡片
+  const shellItems = items.filter((item) => item.type === 'shell')
+  const cliItems = items.filter((item) => item.type !== 'shell')
+  // Shell 区默认折叠：头部即默认 shell，展开后才铺开全部
+  const defaultShell = shellItems.find((item) => item.isDefaultShell) ?? shellItems[0]
+  const [shellOpen, setShellOpen] = useState(false)
   const [anchorRect, setAnchorRect] = useState<PopoverAnchorRect | null>(null)
   const [panelSize, setPanelSize] = useState<PopoverSize>({
     width: TERMINAL_MENU_PANEL_WIDTH,
@@ -641,6 +678,7 @@ function TerminalPresetCapsule({
   const [exiting, setExiting] = useState(false)
   // planche 下预设菜单走纸面 + 朱红，悬浮不再是深棕黑底
   const plancheMenu = useThemeStore((s) => s.theme) === 'planche'
+  const { t } = useI18n('terminal')
 
   useEffect(() => {
     if (open) {
@@ -780,6 +818,10 @@ function TerminalPresetCapsule({
               left: position.left,
               width: TERMINAL_MENU_PANEL_WIDTH,
               maxWidth: 'calc(100vw - 16px)',
+              padding: 6,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
               borderColor: plancheMenu ? '#1C343B' : 'rgba(255,120,48,0.28)',
               background: 'var(--shell-chrome-raised)',
               boxShadow: plancheMenu
@@ -791,37 +833,164 @@ function TerminalPresetCapsule({
                 : 'terminal-menu-in 140ms ease-out',
             }}
           >
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: 4,
-                padding: 6,
-              }}
-            >
-              {PRESETS.map((preset) => (
-                <ThemedTooltip key={preset.type} label={preset.name}>
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label={`New ${preset.name} terminal`}
-                  className={`terminal-preset-item flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+            {/* Shell 区默认折叠：头部一行就是默认 shell（点了直接开终端），
+                箭头展开后才铺开全部已配置 shell —— 与空白页 Shell 卡片同一套交互 */}
+            {shellItems.length > 0 && (
+              <>
+                <div className="terminal-menu-section" role="presentation">
+                  {t('terminal:shellMenu.shell')}
+                </div>
+                <div className="terminal-menu-shell-head">
+                  <ThemedTooltip
+                    label={
+                      defaultShell?.command
+                        ? `${defaultShell.name} · ${defaultShell.command}`
+                        : (defaultShell?.name ?? '')
+                    }
+                  >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label={`New ${defaultShell?.name ?? 'shell'} terminal`}
+                    className={`terminal-preset-item terminal-preset-item-wide flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+                    style={{
+                      borderColor: 'transparent',
+                      background: 'transparent',
+                      color: plancheMenu ? '#1C343B' : '#d4d4d4',
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (defaultShell) onSelect(defaultShell)
+                    }}
+                  >
+                    <TerminalPresetIcon preset="shell" className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {defaultShell?.name ?? t('terminal:provider.shell')}
+                    </span>
+                    {defaultShell?.isDefaultShell && (
+                      <span
+                        aria-hidden="true"
+                        className="shrink-0 rounded-[3px] px-1 text-[9px] leading-[14px]"
+                        style={{
+                          background: plancheMenu ? 'rgba(212,61,42,0.14)' : 'rgba(255,120,48,0.16)',
+                          color: plancheMenu ? '#D43D2A' : '#ffb27d',
+                        }}
+                      >
+                        {t('terminal:shellMenu.default')}
+                      </span>
+                    )}
+                  </button>
+                  </ThemedTooltip>
+                  {/* 只有一条 shell 时没有可铺开的内容，箭头不出现 */}
+                  {shellItems.length > 1 && (
+                    <ThemedTooltip label={t('terminal:shellMenu.pickShell')}>
+                    <button
+                      type="button"
+                      className={`terminal-preset-item terminal-menu-shell-toggle flex items-center justify-center rounded-md border transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+                      style={{
+                        borderColor: 'transparent',
+                        background: 'transparent',
+                        color: plancheMenu ? '#1C343B' : '#d4d4d4',
+                      }}
+                      aria-expanded={shellOpen}
+                      aria-label={t('terminal:shellMenu.pickShell')}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setShellOpen((open) => !open)
+                      }}
+                    >
+                      <ChevronDown
+                        size={13}
+                        strokeWidth={2}
+                        aria-hidden="true"
+                        style={{
+                          transition: 'transform 160ms ease',
+                          transform: shellOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        }}
+                      />
+                    </button>
+                    </ThemedTooltip>
+                  )}
+                </div>
+
+                {shellOpen && (
+                  <div className="flex flex-col gap-1">
+                    {shellItems.map((item) => (
+                      <ThemedTooltip key={item.key} label={item.command ? `${item.name} · ${item.command}` : item.name}>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-label={`New ${item.name} terminal`}
+                        className={`terminal-preset-item terminal-preset-item-wide terminal-preset-item-nested flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+                        style={{
+                          borderColor: 'transparent',
+                          background: 'transparent',
+                          color: plancheMenu ? '#1C343B' : '#d4d4d4',
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onSelect(item)
+                        }}
+                      >
+                        <TerminalPresetIcon preset={item.type} className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                        {item.isDefaultShell && (
+                          <span
+                            aria-hidden="true"
+                            className="shrink-0 rounded-[3px] px-1 text-[9px] leading-[14px]"
+                            style={{
+                              background: plancheMenu ? 'rgba(212,61,42,0.14)' : 'rgba(255,120,48,0.16)',
+                              color: plancheMenu ? '#D43D2A' : '#ffb27d',
+                            }}
+                          >
+                            {t('terminal:shellMenu.default')}
+                          </span>
+                        )}
+                      </button>
+                      </ThemedTooltip>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {cliItems.length > 0 && (
+              <>
+                <div className="terminal-menu-section" role="presentation">
+                  {t('terminal:shellMenu.cli')}
+                </div>
+                <div
+                  className="grid"
                   style={{
-                    borderColor: 'transparent',
-                    background: 'transparent',
-                    color: plancheMenu ? '#1C343B' : '#d4d4d4',
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onSelect(preset)
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gap: 4,
                   }}
                 >
-                  <TerminalPresetIcon preset={preset.type} className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{preset.name}</span>
-                </button>
-                </ThemedTooltip>
-              ))}
-            </div>
+                  {cliItems.map((item) => (
+                    <ThemedTooltip key={item.key} label={item.command ? `${item.name} · ${item.command}` : item.name}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`New ${item.name} terminal`}
+                      className={`terminal-preset-item flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+                      style={{
+                        borderColor: 'transparent',
+                        background: 'transparent',
+                        color: plancheMenu ? '#1C343B' : '#d4d4d4',
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onSelect(item)
+                      }}
+                    >
+                      <TerminalPresetIcon preset={item.type} className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                    </button>
+                    </ThemedTooltip>
+                  ))}
+                </div>
+              </>
+            )}
           </div>,
           document.body,
         )}
@@ -838,8 +1007,8 @@ function LeafPane({
   onPaneFocus,
   onTabSelect,
   onKillTerminalFromTab,
-  onOpenBrowser,
   onCloseBrowserTab,
+  onCloseMarkdownTab,
   onBrowserPopOut,
   onBrowserTabDrop,
   onKillTerminal,
@@ -851,6 +1020,7 @@ function LeafPane({
   onToggleTerminalMenu,
   onCloseTerminalMenu,
   onCreateTerminal,
+  terminalMenuItems,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
   const { t } = useI18n('terminal')
   const plancheEmpty = useThemeStore((s) => s.theme) === 'planche'
@@ -1010,7 +1180,15 @@ function LeafPane({
     return (
       <ThemedTooltip
         key={tab.id}
-        label={terminal && tabStatusLabel ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
+        label={
+          terminal && tabStatusLabel
+            ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}`
+            : tab.type === 'browser'
+              ? 'Browser'
+              : tab.type === 'markdown'
+                ? t('terminal:tab.view.note')
+                : tab.terminalId
+        }
       >
       <div
         role="button"
@@ -1060,6 +1238,13 @@ function LeafPane({
         )}
         {tab.type === 'browser' ? (
           <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
+        ) : tab.type === 'markdown' ? (
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            <MarkdownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
+              {t('terminal:tab.view.note')}
+            </span>
+          </span>
         ) : (
           <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
             {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
@@ -1078,7 +1263,9 @@ function LeafPane({
             <X size={12} strokeWidth={1.8} />
           </HoldToConfirm>
         ) : (
-          <ThemedTooltip label={t('terminal:tab.closeBrowser')}>
+          <ThemedTooltip
+            label={tab.type === 'markdown' ? t('terminal:tab.closeMarkdown') : t('terminal:tab.closeBrowser')}
+          >
           <span
             tabIndex={-1}
             data-tab-close="true"
@@ -1086,7 +1273,9 @@ function LeafPane({
             style={{ color: 'var(--shell-muted)' }}
             onClick={(event) => {
               event.stopPropagation()
-              onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
+              // 关闭 Markdown 标签只是关闭呈现：文稿另有独立的删除动作。
+              if (tab.type === 'markdown') onCloseMarkdownTab(leaf.id, tab.id)
+              else onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
             }}
           >
             <X size={12} strokeWidth={1.8} aria-hidden="true" />
@@ -1151,13 +1340,9 @@ function LeafPane({
         </div>
       )}
       <div
-        data-tab-strip={leaf.id}
-        onDragOver={handleTabStripDragOver}
-        onDragLeave={handleTabStripDragLeave}
-        onDrop={handleTabStripDrop}
         /*-- 左侧贴边：首 tab 直接顶住条底左缘（只留右侧 pr-1 给动作按钮呼吸），
              左缘不留 4px chrome 缝，圆角由首 tab 自己的左上倒角一次成型。 --*/
-        className="relative flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto pl-0 pr-1"
+        className="relative flex h-8 min-w-0 shrink-0 items-stretch gap-0 pl-0 pr-1"
         style={{
           /*-- tab 条吃实色 pane-chrome：与下方 canvas 内容床拉开一阶，
                两主题下选中 tab（canvas 底）与未选中（chrome 底）都有明确明度差；
@@ -1168,52 +1353,61 @@ function LeafPane({
           borderBottom: '1px solid var(--shell-border)',
           borderTopLeftRadius: showFocusChrome ? 10 : 7,
           borderTopRightRadius: showFocusChrome ? 10 : 7,
-          scrollbarWidth: 'none',
         }}
       >
-        {(() => {
-          /*-- 排序占位：同 pane 拖拽先摘除源 tab，异 pane 全量保留；
-               占位与 tab 同宽（basis 144px），兄弟 tab 被 flex 自然挤开即让位。
-               visualIndex 含占位在内，首位圆角只落在一个元素上。 --*/
-          if (tabInsertIndex == null) {
-            return leaf.tabs.map((tab, visualIndex) => renderPaneTab(tab, visualIndex))
-          }
-          const ordered = stripDraggedIsLocal && stripDraggedTabId
-            ? leaf.tabs.filter((tab) => tab.id !== stripDraggedTabId)
-            : leaf.tabs
-          const slots: ReactNode[] = []
-          for (let slot = 0; slot <= ordered.length; slot += 1) {
-            if (slot === tabInsertIndex) {
-              slots.push(
-                <div
-                  key={`tab-drop-placeholder-${leaf.id}`}
-                  aria-hidden="true"
-                  data-tab-placeholder="true"
-                  className="relative flex h-8 min-w-0 basis-[144px] shrink-0 grow-0 items-center justify-center px-2.5"
-                  style={{
-                    background: 'rgba(255,120,48,0.10)',
-                    borderRight: '1px solid var(--shell-border-soft)',
-                    boxShadow: 'inset 0 0 0 1px rgba(255,120,48,0.55)',
-                    borderTopLeftRadius: slot === 0 ? (showFocusChrome ? 10 : 7) : 0,
-                    animation: 'pane-drop-hint-in 110ms ease-out',
-                  }}
-                >
-                  <span className="block h-[3px] w-10 rounded-full" style={{ background: 'rgba(255,120,48,0.75)' }} />
-                </div>
-              )
+        {/*-- 仅标签滚动，动作区保持为不可收缩的兄弟节点，窄 pane 与多 tab 不会把按钮滚出视口。 --*/}
+        <div
+          data-tab-strip={leaf.id}
+          onDragOver={handleTabStripDragOver}
+          onDragLeave={handleTabStripDragLeave}
+          onDrop={handleTabStripDrop}
+          className="relative flex min-w-0 flex-1 items-stretch overflow-x-auto"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          {(() => {
+            /*-- 排序占位：同 pane 拖拽先摘除源 tab，异 pane 全量保留；
+                 占位与 tab 同宽（basis 144px），兄弟 tab 被 flex 自然挤开即让位。
+                 visualIndex 含占位在内，首位圆角只落在一个元素上。 --*/
+            if (tabInsertIndex == null) {
+              return leaf.tabs.map((tab, visualIndex) => renderPaneTab(tab, visualIndex))
             }
-            if (slot < ordered.length) {
-              slots.push(renderPaneTab(ordered[slot], slot + (slot >= tabInsertIndex ? 1 : 0)))
+            const ordered = stripDraggedIsLocal && stripDraggedTabId
+              ? leaf.tabs.filter((tab) => tab.id !== stripDraggedTabId)
+              : leaf.tabs
+            const slots: ReactNode[] = []
+            for (let slot = 0; slot <= ordered.length; slot += 1) {
+              if (slot === tabInsertIndex) {
+                slots.push(
+                  <div
+                    key={`tab-drop-placeholder-${leaf.id}`}
+                    aria-hidden="true"
+                    data-tab-placeholder="true"
+                    className="relative flex h-8 min-w-0 basis-[144px] shrink-0 grow-0 items-center justify-center px-2.5"
+                    style={{
+                      background: 'rgba(255,120,48,0.10)',
+                      borderRight: '1px solid var(--shell-border-soft)',
+                      boxShadow: 'inset 0 0 0 1px rgba(255,120,48,0.55)',
+                      borderTopLeftRadius: slot === 0 ? (showFocusChrome ? 10 : 7) : 0,
+                      animation: 'pane-drop-hint-in 110ms ease-out',
+                    }}
+                  >
+                    <span className="block h-[3px] w-10 rounded-full" style={{ background: 'rgba(255,120,48,0.75)' }} />
+                  </div>
+                )
+              }
+              if (slot < ordered.length) {
+                slots.push(renderPaneTab(ordered[slot], slot + (slot >= tabInsertIndex ? 1 : 0)))
+              }
             }
-          }
-          return slots
-        })()}
-        <div data-tab-drag-spacer="" aria-hidden="true" style={{ width: 0, flexShrink: 0 }} />
-        <div data-tab-drag-slot="" aria-hidden="true" style={{
-          display: 'none', position: 'absolute', top: 0, height: '100%', pointerEvents: 'none',
-          background: 'rgba(255,120,48,.10)', boxShadow: 'inset 0 0 0 1px rgba(255,120,48,.4)',
-        }} />
-        <div className="ml-auto flex h-8 shrink-0 items-center gap-1 pl-1">
+            return slots
+          })()}
+          <div data-tab-drag-spacer="" aria-hidden="true" style={{ width: 0, flexShrink: 0 }} />
+          <div data-tab-drag-slot="" aria-hidden="true" style={{
+            display: 'none', position: 'absolute', top: 0, height: '100%', pointerEvents: 'none',
+            background: 'rgba(255,120,48,.10)', boxShadow: 'inset 0 0 0 1px rgba(255,120,48,.4)',
+          }} />
+        </div>
+        <div className="flex h-8 shrink-0 items-center gap-1 pl-1">
           <span
             aria-hidden="true"
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none font-mono"
@@ -1221,25 +1415,17 @@ function LeafPane({
           >
             x
           </span>
-          <ThemedTooltip label={t('terminal:tab.newBrowser')}>
-          <button
-            type="button"
-            aria-label={t('terminal:tab.newBrowser')}
-            className="flex h-6 w-6 items-center justify-center rounded border text-[11px] leading-none transition-colors hover:bg-[rgba(255,120,48,0.1)]"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--shell-muted)' }}
-            onClick={(event) => {
-              event.stopPropagation()
-              onOpenBrowser(leaf.id)
-            }}
-          >
-            <Globe size={11} />
-          </button>
-          </ThemedTooltip>
-          <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} onClose={onCloseTerminalMenu} />
+          <TerminalPresetCapsule
+            open={terminalMenuOpen}
+            onToggle={openMenu}
+            onSelect={onCreateTerminal}
+            onClose={onCloseTerminalMenu}
+            items={terminalMenuItems}
+          />
           <HoldToConfirm
             label={t('terminal:tab.killCurrentTerminal')}
             disabled={!activeTerminal}
-            className="flex h-6 w-6 items-center justify-center rounded border text-[14px] leading-none transition-colors enabled:hover:bg-[rgba(255,88,88,0.1)] disabled:cursor-not-allowed disabled:opacity-35"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-[14px] leading-none transition-colors enabled:hover:bg-[rgba(255,88,88,0.1)] disabled:cursor-not-allowed disabled:opacity-35"
             style={{ borderColor: 'rgba(255,255,255,0.08)', color: activeTerminal ? '#b86b6b' : '#666' }}
             onConfirm={() => activeTerminal && onKillTerminal(activeTerminal.id)}
           >
@@ -1274,6 +1460,24 @@ function LeafPane({
                   visible={workspaceVisible && isActive}
                   onRequestPopOut={() => onBrowserPopOut(leaf.id, tab.id, tab.surfaceId)}
                 />
+              </div>
+            )
+          }
+
+          if (tab.type === 'markdown') {
+            const isActive = tab.id === activeTabId
+            return (
+              <div
+                key={tab.id}
+                className="absolute inset-0"
+                style={{
+                  visibility: isActive ? 'visible' : 'hidden',
+                  pointerEvents: isActive ? 'auto' : 'none',
+                  zIndex: isActive ? 1 : 0,
+                }}
+                aria-hidden={!isActive}
+              >
+                <MarkdownPane panelId={tab.panelId} />
               </div>
             )
           }
@@ -1388,8 +1592,8 @@ export function TerminalArea() {
     resizePane,
     moveTerminalToPane,
     splitPaneWithTerminal,
-    moveBrowserToPane,
-    splitPaneWithBrowser,
+    movePaneContentToPane,
+    splitPaneWithContent,
     reorderPaneTab,
     movePaneTabToIndex,
     closePaneTab,
@@ -1411,8 +1615,8 @@ export function TerminalArea() {
       resizePane: s.resizePane,
       moveTerminalToPane: s.moveTerminalToPane,
       splitPaneWithTerminal: s.splitPaneWithTerminal,
-      moveBrowserToPane: s.moveBrowserToPane,
-      splitPaneWithBrowser: s.splitPaneWithBrowser,
+      movePaneContentToPane: s.movePaneContentToPane,
+      splitPaneWithContent: s.splitPaneWithContent,
       reorderPaneTab: s.reorderPaneTab,
       movePaneTabToIndex: s.movePaneTabToIndex,
       closePaneTab: s.closePaneTab,
@@ -1426,8 +1630,7 @@ export function TerminalArea() {
   const setLoadState = useAppStore((s) => s.setLoadState)
   const terminalAreaRef = useRef<HTMLDivElement>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerView, setDrawerView] = useState<DrawerView>('runtime')
-  const [drawerHeights, setDrawerHeights] = useState<DrawerHeights>({})
+  const [drawerHeight, setDrawerHeight] = useState<number | undefined>(undefined)
   const [drawerResizing, setDrawerResizing] = useState(false)
   const drawerResizeRef = useRef<{ pointerId: number; target: HTMLDivElement; startY: number; startHeight: number; maximum: number } | null>(null)
   const drawerBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
@@ -1438,6 +1641,9 @@ export function TerminalArea() {
   // launchingPreset pattern. Prevents double-click / rapid preset selection
   // from firing two concurrent terminal:create requests for the same preset.
   const [launchingPreset, setLaunchingPreset] = useState(false)
+  // 新建终端菜单按设置里的条目与显隐实时生成；设置「终端管理」改完即生效。
+  const shellProfiles = useShellProfilesStore((s) => s.settings)
+  const terminalMenuItems = useMemo(() => buildTerminalMenuItems(shellProfiles), [shellProfiles])
   const terminalsById = useMemo(() => {
     const map = new Map<string, Terminal>()
     for (const snapshot of Object.values(terminalSnapshots)) {
@@ -1538,13 +1744,8 @@ export function TerminalArea() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!event.shiftKey || (!event.ctrlKey && !event.metaKey)) return
       const key = event.key.toLowerCase()
-      if (key === 'n') {
-        event.preventDefault()
-        setDrawerView('note')
-        setDrawerOpen(true)
-        return
-      }
-      /*-- Ctrl/Cmd+Shift+B：主动调用浏览器（已有则激活，否则新建） --*/
+      /*-- Ctrl/Cmd+Shift+B：主动调用浏览器（已有则激活，否则新建）。
+           Markdown 的 Ctrl/Cmd+Shift+N 已随入口移到全局，不再依赖抽屉挂载。 --*/
       if (key === 'b') {
         event.preventDefault()
         void useWorkspaceStore.getState().openBrowserInWorkspace()
@@ -1554,15 +1755,18 @@ export function TerminalArea() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  /*-- pane "+" 菜单新增浏览器 tab --*/
-  const handleOpenBrowser = useCallback((paneId: string) => {
-    void useWorkspaceStore.getState().addBrowserToPane(paneId)
-  }, [])
-
   /*-- 关闭浏览器 pane tab：先销毁主进程 surface 再移除 pane 内容 --*/
   const handleCloseBrowserTab = useCallback(
     async (paneId: string, tabId: string, surfaceId: string) => {
       await destroyBrowserSurface(surfaceId)
+      closePaneTab(paneId, tabId)
+    },
+    [closePaneTab]
+  )
+
+  /*-- 关闭 Markdown 标签只移除呈现，不碰草稿：删除文稿是编辑器里的独立动作 --*/
+  const handleCloseMarkdownTab = useCallback(
+    (paneId: string, tabId: string) => {
       closePaneTab(paneId, tabId)
     },
     [closePaneTab]
@@ -1590,16 +1794,24 @@ export function TerminalArea() {
     [moveTerminalToPane, splitPaneWithTerminal]
   )
 
-  /*-- browser tab 拖拽落点：边缘分屏，否则移入目标 pane（与 terminal 同语义） --*/
-  const handleBrowserTabDrop = useCallback(
-    (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
+  /*-- browser / markdown tab 拖拽落点：边缘分屏，否则移入目标 pane（与 terminal 同语义） --*/
+  const handlePaneContentDrop = useCallback(
+    (contentId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
       if (edge) {
-        splitPaneWithBrowser(surfaceId, paneId, edge, ratio)
+        splitPaneWithContent(contentId, paneId, edge, ratio)
         return
       }
-      moveBrowserToPane(surfaceId, paneId)
+      movePaneContentToPane(contentId, paneId)
     },
-    [moveBrowserToPane, splitPaneWithBrowser]
+    [movePaneContentToPane, splitPaneWithContent]
+  )
+
+  /*-- 侧栏 HTML5 拖入的 browser tab：带上 browser: 前缀转内容中立的落点处理 --*/
+  const handleBrowserTabDrop = useCallback(
+    (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
+      handlePaneContentDrop(`browser:${surfaceId}`, paneId, edge, ratio)
+    },
+    [handlePaneContentDrop]
   )
 
   /*-- tab 条内排序落点：同 pane 调整顺序，异 pane 按下标插入（画布中央落点仍走追加合并） --*/
@@ -1640,13 +1852,15 @@ export function TerminalArea() {
         }
         const edge = target.zone === 'center' ? null : target.zone
         if (contentId.startsWith('terminal:')) handleTerminalDrop(contentId.slice(9), target.paneId, edge, SPLIT_RATIO_EQUAL)
-        else if (contentId.startsWith('browser:')) handleBrowserTabDrop(contentId.slice(8), target.paneId, edge, SPLIT_RATIO_EQUAL)
+        else if (contentId.startsWith('browser:') || contentId.startsWith('markdown:')) {
+          handlePaneContentDrop(contentId, target.paneId, edge, SPLIT_RATIO_EQUAL)
+        }
       },
     })
-  }, [setTabDragInFlight, handleReorderTab, handleMoveTabToIndex, setPaneTab, handleTerminalDrop, handleBrowserTabDrop])
+  }, [setTabDragInFlight, handleReorderTab, handleMoveTabToIndex, setPaneTab, handleTerminalDrop, handlePaneContentDrop])
 
   const handlePresetSelect = useCallback(
-    async (preset: typeof PRESETS[number]) => {
+    async (item: TerminalPresetOption) => {
       closeTerminalMenu()
       if (!activeWorkspaceId) return
       // AC7: reject concurrent preset launches (double-click, rapid reselect).
@@ -1658,11 +1872,14 @@ export function TerminalArea() {
       setLaunchingPreset(true)
       try {
         await launchTerminalPreset({
-          preset: preset.type,
+          preset: item.type,
           workspaceId: activeWorkspaceId,
           workspacePath: workspace.path,
           cwd: useWorktreeStore.getState().activePaths[activeWorkspaceId] ?? workspace.path,
-          name: preset.name.toLowerCase(),
+          // shell 条目保留用户写的名称（新建后终端显示实际 shell 名），CLI 预设沿用原小写名。
+          name: item.type === 'shell' ? item.name : item.name.toLowerCase(),
+          // 临时选择只作用本次新建：传条目 id，不动全局默认值。
+          ...(item.shellProfileId ? { shellProfileId: item.shellProfileId } : {}),
         })
       } finally {
         setLaunchingPreset(false)
@@ -1673,6 +1890,7 @@ export function TerminalArea() {
 
   useEffect(() => {
     warmDefaultShellCache()
+    warmShellProfilesCache()
     warmTerminalCreatePath()
   }, [])
 
@@ -1682,7 +1900,6 @@ export function TerminalArea() {
     ? workspaces.find((workspace) => workspace.id === activeTerminal.workspaceId) ?? null
     : null
   const otherTerminals = terminals.filter((terminal) => terminal.id !== activeTerminal?.id)
-  const drawerHeight = drawerHeights[drawerView] ?? DRAWER_DEFAULT_HEIGHT[drawerView]
 
   const getDrawerMaxHeight = useCallback(() => {
     const areaHeight = terminalAreaRef.current?.clientHeight ?? 0
@@ -1717,7 +1934,7 @@ export function TerminalArea() {
       pointerId: event.pointerId,
       target: event.currentTarget,
       startY: event.clientY,
-      startHeight: Math.min(drawerHeight, maximum),
+      startHeight: Math.min(drawerHeight ?? DRAWER_DEFAULT_HEIGHT, maximum),
       maximum,
     }
     drawerBodyStyleRef.current = {
@@ -1734,8 +1951,7 @@ export function TerminalArea() {
   const handleDrawerResizeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const session = drawerResizeRef.current
     if (!session || session.pointerId !== event.pointerId) return
-    const height = clampDrawerHeight(session.startHeight + session.startY - event.clientY, session.maximum)
-    setDrawerHeights((current) => ({ ...current, [drawerView]: height }))
+    setDrawerHeight(clampDrawerHeight(session.startHeight + session.startY - event.clientY, session.maximum))
   }
 
   const handleDrawerResizeEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1744,7 +1960,7 @@ export function TerminalArea() {
 
   const handleDrawerResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const maximum = getDrawerMaxHeight()
-    const current = Math.min(drawerHeight, maximum)
+    const current = Math.min(drawerHeight ?? DRAWER_DEFAULT_HEIGHT, maximum)
     const heights: Partial<Record<string, number>> = {
       ArrowUp: current + 16,
       ArrowDown: current - 16,
@@ -1757,7 +1973,7 @@ export function TerminalArea() {
     // The focused terminal re-takes DOM focus on every refit; keep the handle focused for the keystrokes that follow.
     drawerKeyboardResizeUntilRef.current = Date.now() + 250
     const clamped = clampDrawerHeight(height, maximum)
-    setDrawerHeights((current) => ({ ...current, [drawerView]: clamped }))
+    setDrawerHeight(clamped)
   }
 
   const handleDrawerResizeBlur = (event: React.FocusEvent<HTMLDivElement>) => {
@@ -1809,7 +2025,11 @@ export function TerminalArea() {
         }
       >
         {workspaceSurfaces.map((surface) => {
-          const workspaceVisible = surface.workspaceId === activeWorkspaceId
+          // 无项目时活动 surface 的宿主是全局哨兵，可见性按哨兵判；
+          // 有项目时仍按真实 workspaceId 判。
+          const workspaceVisible = activeWorkspaceId === null
+            ? surface.workspaceId === GLOBAL_PANE_SCOPE
+            : surface.workspaceId === activeWorkspaceId
           return (
             <div
               key={surface.workspaceId}
@@ -1830,8 +2050,8 @@ export function TerminalArea() {
                 onPaneFocus={setFocusedPane}
                 onTabSelect={setPaneTab}
                 onKillTerminalFromTab={handleKillTerminal}
-                onOpenBrowser={handleOpenBrowser}
                 onCloseBrowserTab={handleCloseBrowserTab}
+                onCloseMarkdownTab={handleCloseMarkdownTab}
                 onBrowserPopOut={handleBrowserPopOut}
                 onKillTerminal={handleKillTerminal}
                 onTerminalDrop={handleTerminalDrop}
@@ -1844,6 +2064,7 @@ export function TerminalArea() {
                 onToggleTerminalMenu={toggleTerminalMenu}
                 onCloseTerminalMenu={closeTerminalMenu}
                 onCreateTerminal={handlePresetSelect}
+                terminalMenuItems={terminalMenuItems}
               />
             </div>
           )
@@ -1855,7 +2076,7 @@ export function TerminalArea() {
         style={{
           background: drawerOpen ? 'var(--shell-drawer)' : 'var(--shell-canvas)',
           borderTop: '1px solid var(--shell-border)',
-          height: getDrawerHeight(drawerOpen, drawerView, drawerHeights),
+          height: getDrawerHeight(drawerOpen, drawerHeight),
           maxHeight: `calc(100% - ${DRAWER_MIN_PANE_HEIGHT}px)`,
           transition: drawerResizing ? 'none' : undefined,
         }}
@@ -1869,7 +2090,7 @@ export function TerminalArea() {
             aria-orientation="horizontal"
             aria-valuemin={DRAWER_MIN_HEIGHT}
             aria-valuemax={Math.round(getDrawerMaxHeight())}
-            aria-valuenow={Math.round(Math.min(drawerHeight, getDrawerMaxHeight()))}
+            aria-valuenow={Math.round(Math.min(drawerHeight ?? DRAWER_DEFAULT_HEIGHT, getDrawerMaxHeight()))}
             tabIndex={0}
             onPointerDown={handleDrawerResizeStart}
             onPointerMove={handleDrawerResizeMove}
@@ -2001,39 +2222,19 @@ export function TerminalArea() {
             </div>
           </div>
         </div>
-        {drawerOpen && (
-          <div className="absolute right-3 top-0 z-10 h-7">
-            <DrawerViewTabs
-              open={drawerOpen}
-              activeView={drawerView}
-              onSelect={setDrawerView}
-              ariaLabel={t('terminal:tab.drawerViewAria')}
-              labels={{ runtime: t('terminal:tab.view.runtime'), note: t('terminal:tab.view.note') }}
-            />
-          </div>
-        )}
-        {DRAWER_VIEWS.map((view) => (
-          <div
-            key={view}
-            {...getDrawerPanelAttributes(view)}
-            hidden={!drawerOpen || drawerView !== view}
-            className="overflow-hidden px-3 pb-3 pt-2 text-[11px] font-mono"
-            style={{ height: 'calc(100% - 28px)' }}
-          >
-            {drawerOpen && drawerView === view && (
-              view === 'note' ? activeTerminalId ? (
-              <QuickNote
-                terminalId={activeTerminalId}
-                onPasteToTerminal={(data) => window.electron.terminal.input(activeTerminalId, data)}
-              />
-            ) : (
-              <div className="grid h-full place-items-center text-[var(--shell-dim)]">{t('terminal:tab.noActiveTerminal')}</div>
-            ) : (
-              <section
-                className="flex h-full min-h-0 flex-col overflow-hidden border"
-                style={{ borderColor: 'rgba(255,255,255,0.07)' }}
-                aria-label={t('terminal:tab.runtimeAria')}
-              >
+        {/*-- Markdown 已迁为独立 pane，底部抽屉只留上下文监控 --*/}
+        <div
+          id={getDrawerPanelId()}
+          hidden={!drawerOpen}
+          className="overflow-hidden px-3 pb-3 pt-2 text-[11px] font-mono"
+          style={{ height: 'calc(100% - 28px)' }}
+        >
+          {drawerOpen && (
+            <section
+              className="flex h-full min-h-0 flex-col overflow-hidden border"
+              style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+              aria-label={t('terminal:tab.runtimeAria')}
+            >
               <div className="flex h-8 shrink-0 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,255,255,0.055)' }}>
                 <span className="text-[var(--shell-muted)]">{t('terminal:tab.terminalRuntime')}</span>
                 <span className="text-[var(--shell-dim)]">{terminals.length} {t('terminal:sessions.countSuffix')}</span>
@@ -2125,11 +2326,9 @@ export function TerminalArea() {
                   </div>
                 )}
               </div>
-              </section>
-              )
-            )}
-          </div>
-        ))}
+            </section>
+          )}
+        </div>
       </div>
 
     </div>

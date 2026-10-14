@@ -4,6 +4,7 @@ import type { UpdaterSettings } from '../../shared/ipc/updater'
 import type { AgentApprovalMode } from '../../shared/ipc/agent-runtime'
 import type { ExperimentalFeatures } from '../../shared/ipc/experimental'
 import type { AppTheme } from '../../shared/ipc/theme'
+import type { ShellProfilesSettings } from '../../shared/shellProfiles'
 
 export interface Workspace {
   id: string
@@ -57,6 +58,8 @@ export interface GlobalConfig {
   language?: string
   defaultTerminalPreset: string
   defaultShell: string
+  /** 用户自建 shell 条目与 CLI 预设显隐；缺席即默认种子（兼容旧配置）。 */
+  shellProfiles?: ShellProfilesSettings
   registeredCLIs: CLIRegistration[]
   recentWorkspaces: string[]
   notificationSettings: AgentNotificationSettings

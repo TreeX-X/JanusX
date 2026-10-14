@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useI18n } from '@/i18n/useI18n'
+import { useBrowserOcclusion } from '@/hooks/useBrowserOcclusion'
 
 export interface PromptDialogProps {
   open: boolean
@@ -43,6 +44,7 @@ export function PromptDialog({
   onCancel,
   validate
 }: PromptDialogProps) {
+  useBrowserOcclusion(open)
   const { t } = useI18n('common')
   const resolvedConfirmText = confirmText ?? t('common:action.ok')
   const resolvedCancelText = cancelText ?? t('common:action.cancel')

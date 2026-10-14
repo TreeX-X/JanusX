@@ -36,6 +36,8 @@ export interface BrowserTabState {
   isLoading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  /** 最近一次主框架加载失败的错误描述；开始新导航或导航成功后清空。 */
+  loadError?: string
 }
 
 export interface BrowserSurfaceState {

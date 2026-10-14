@@ -202,6 +202,8 @@ export interface ShellRestoreTerminal {
   cwd: string
   preset: string
   name: string
+  /** Launch line the terminal was started with; absent on manifests written before shell profiles. */
+  shell?: string
 }
 
 export interface ShellRestoreWorkspace {

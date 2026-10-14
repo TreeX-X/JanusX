@@ -10,6 +10,13 @@ import {
   resolveTerminalLaunchCommand,
   resolveTerminalLaunchProgram,
 } from '../../../shared/terminalLaunch'
+import {
+  describeShellEntry,
+  getDefaultShellEntry,
+  isShellEntryLaunchable,
+  type ShellProfilesSettings,
+} from '../../../shared/shellProfiles'
+import { loadShellProfiles, useShellProfilesStore } from '@/stores/shell-profiles'
 
 let cachedDefaultShell: string | null = null
 let shellFetchPromise: Promise<string> | null = null
@@ -52,6 +59,11 @@ export function ensureDefaultShell(): Promise<string> {
 /** Fire-and-forget warm of the default-shell cache. */
 export function warmDefaultShellCache(): void {
   void ensureDefaultShell()
+}
+
+/** Fire-and-forget warm of the shell-profile cache (三处新建入口与设置共用)。 */
+export function warmShellProfilesCache(): void {
+  void useShellProfilesStore.getState().load()
 }
 
 /**
@@ -135,11 +147,28 @@ export interface LaunchTerminalPresetOptions {
    * "implement in terminal" passes the Goal/AC prompt here.
    */
   initialInput?: string
+  /** Shell profile id for an ordinary shell terminal; the default entry when omitted. */
+  shellProfileId?: string
+  /** Exact launch line for a cold-restored shell; bypasses profile lookup. */
+  shellCommand?: string
 }
 
 export type LaunchTerminalResult =
   | { ok: true; terminalId: string; pid: number; prefilled: boolean }
   | { ok: false; terminalId: string; error: string }
+
+/** 临时选择按 id 取条目；缺席、已删除或仍是草稿时回落默认条目（主进程同样兜底）。 */
+function resolveShellEntry(
+  profiles: ShellProfilesSettings | null,
+  shellProfileId?: string,
+): ShellProfilesSettings['entries'][number] | undefined {
+  if (!profiles) return undefined
+  if (shellProfileId) {
+    const matched = profiles.entries.find((entry) => entry.id === shellProfileId)
+    if (matched && isShellEntryLaunchable(matched)) return matched
+  }
+  return getDefaultShellEntry(profiles)
+}
 
 /**
  * Optimistic terminal launch:
@@ -158,6 +187,8 @@ export async function launchTerminalPreset(
     name,
     enterTerminalUi = true,
     initialInput,
+    shellProfileId,
+    shellCommand,
   } = options
 
   if (!workspaceId || !workspacePath) return null
@@ -168,6 +199,8 @@ export async function launchTerminalPreset(
   // Resolve the real default shell in parallel so create still gets the correct value.
   const shellPromise = ensureDefaultShell()
   const shell = cachedDefaultShell ?? fallbackShell()
+  // 普通终端才需要条目：默认项或本次临时选择；CLI 预留给 null 避免多余 IPC。
+  const profilesPromise = preset === 'shell' && !shellCommand ? loadShellProfiles() : null
 
   const terminalId = crypto.randomUUID()
   // Subscribe before spawn: the created event may arrive before create resolves.
@@ -198,9 +231,16 @@ export async function launchTerminalPreset(
   }
 
   // Parallel: mount listeners + resolve shell (no UI gate on either alone).
-  const [, resolvedShell] = await Promise.all([waitForTerminalMount(), shellPromise])
-  if (resolvedShell !== shell) {
-    useWorkspaceStore.getState().updateTerminal(terminalId, { shell: resolvedShell })
+  const [, resolvedShell, profiles] = await Promise.all([
+    waitForTerminalMount(),
+    shellPromise,
+    profilesPromise ?? Promise.resolve(null),
+  ])
+  // 普通终端的 shell 字段记完整启动行（命令 + 后缀）：retry 与冷恢复都靠它还原同一个 shell。
+  const shellEntry = resolveShellEntry(profiles, shellProfileId)
+  const shellLine = shellEntry ? describeShellEntry(shellEntry) : (shellCommand ?? resolvedShell)
+  if (shellLine !== shell) {
+    useWorkspaceStore.getState().updateTerminal(terminalId, { shell: shellLine })
   }
 
   // Measure pane via FitAddon before spawning so TUI first-paint matches the host.
@@ -212,11 +252,13 @@ export async function launchTerminalPreset(
       id: terminalId,
       workspaceId,
       cwd,
-      shell: resolvedShell,
+      shell: shellLine,
       autoCommand,
       preset,
       command: launchProgram?.command,
       args: launchProgram?.args,
+      ...(shellEntry ? { shellProfileId: shellEntry.id } : {}),
+      ...(shellCommand ? { shellCommand } : {}),
       ...(geometry ? { cols: geometry.cols, rows: geometry.rows } : {}),
     })
 
@@ -288,6 +330,8 @@ async function runRetryTerminalCreate(terminalId: string): Promise<boolean> {
       preset: terminal.preset,
       command: launchProgram?.command,
       args: launchProgram?.args,
+      // 普通终端重试沿用记录里的启动行：改默认值不替换现有终端，retry 也不换 shell。
+      ...(terminal.preset === 'shell' ? { shellCommand: terminal.shell } : {}),
       ...(geometry ? { cols: geometry.cols, rows: geometry.rows } : {}),
     })
 

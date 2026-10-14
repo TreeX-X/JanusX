@@ -1,0 +1,11 @@
+/* Markdown 面板坐在 pane 内容床(--shell-canvas)上：自身不刷底，只负责铺满并让
+   内部的 QuickNote 拿到完整高度。窄 pane 时的草稿列表折叠由 QuickNote 自己处理。 */
+
+.pane {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 6px;
+}

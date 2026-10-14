@@ -1,20 +1,16 @@
 import { readFileSync } from 'node:fs'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import {
   applyTerminalDraftLifecycle,
   clampDrawerHeight,
+  DRAWER_DEFAULT_HEIGHT,
   DRAWER_MIN_HEIGHT,
-  DRAWER_VIEWS,
-  DrawerViewTabs,
   formatNoteAge,
   getDrawerHeight,
-  getDrawerPanelAttributes,
-  getNextDrawerView,
+  getDrawerPanelId,
   shouldRemoveTerminalDrafts,
 } from '../../../src/renderer/src/components/note/quick-note-behavior'
-import { useDraftCardStore } from '../../../src/renderer/src/stores/draft-card'
+import { getDraftsByScope, useDraftCardStore } from '../../../src/renderer/src/stores/draft-card'
 
 describe('Quick Note view behavior', () => {
   it('suppresses only the content editor perimeter focus highlight', () => {
@@ -50,55 +46,42 @@ describe('Quick Note view behavior', () => {
     expect(source).toContain('if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setExportOpen(false)')
   })
 
-  it('uses the specified collapsed, runtime, and note drawer heights', () => {
-    expect(getDrawerHeight(false, 'note')).toBe('28px')
-    expect(getDrawerHeight(true, 'runtime')).toBe('210px')
-    expect(getDrawerHeight(true, 'note')).toBe('380px')
+  it('reads drafts by scope rather than by terminal', () => {
+    const source = readFileSync(new URL('../../../src/renderer/src/components/note/QuickNote.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('getDraftsByScope(state, scopeId)')
+    expect(source).toContain('state.activeDraftIdByScope[scopeId]')
+    expect(source).not.toContain('terminalId={')
+    // 没有终端时"粘贴到终端"整个按钮不渲染，而不是留一个必然后患的空调用。
+    expect(source).toContain('{onPasteToTerminal && (')
   })
 
-  it('prefers a per-view user height and clamps it between the floor and the pane reserve', () => {
-    expect(getDrawerHeight(true, 'runtime', { runtime: 300 })).toBe('300px')
-    expect(getDrawerHeight(true, 'note', { runtime: 300 })).toBe('380px')
-    expect(getDrawerHeight(false, 'runtime', { runtime: 300 })).toBe('28px')
+  it('uses the specified collapsed and runtime drawer heights', () => {
+    expect(getDrawerHeight(false)).toBe('28px')
+    expect(getDrawerHeight(true)).toBe(`${DRAWER_DEFAULT_HEIGHT}px`)
+    expect(getDrawerHeight(true, 300)).toBe('300px')
+  })
+
+  it('clamps a user height between the floor and the pane reserve', () => {
     expect(clampDrawerHeight(40, 500)).toBe(DRAWER_MIN_HEIGHT)
     expect(clampDrawerHeight(900, 500)).toBe(500)
     expect(clampDrawerHeight(333.6, 500)).toBe(334)
     expect(clampDrawerHeight(300, 50)).toBe(DRAWER_MIN_HEIGHT)
   })
 
-  it('associates the active tab with its panel and uses roving tab focus', () => {
-    const markup = renderToStaticMarkup(createElement(
-      'div',
-      null,
-      createElement(DrawerViewTabs, { open: true, activeView: 'note', onSelect: () => {}, labels: { runtime: 'Context', note: 'Markdown' }, ariaLabel: 'Bottom panel view' }),
-      ...DRAWER_VIEWS.map((view) => createElement('div', { key: view, ...getDrawerPanelAttributes(view) })),
-    ))
-
-    expect(markup).toContain('id="drawer-runtime-tab"')
-    expect(markup).toContain('aria-controls="drawer-runtime-panel"')
-    expect(markup).toContain('id="drawer-note-tab"')
-    expect(markup).toContain('aria-controls="drawer-note-panel"')
-    expect(markup).toContain('id="drawer-runtime-panel" role="tabpanel" aria-labelledby="drawer-runtime-tab"')
-    expect(markup).toContain('id="drawer-note-panel" role="tabpanel" aria-labelledby="drawer-note-tab"')
-    expect(markup).toContain('aria-selected="true" tabindex="0"')
-    expect(markup).toContain('aria-selected="false" tabindex="-1"')
-    expect(markup).toContain('aria-label="Bottom panel view"')
-    expect(markup).toContain('<span>Context</span>')
-    expect(markup).toContain('<span>Markdown</span>')
-    expect(markup).toContain('<svg')
+  it('gives the single runtime drawer panel a stable id', () => {
+    expect(getDrawerPanelId()).toBe('drawer-runtime-panel')
   })
 
-  it('does not render drawer tabs while the drawer is collapsed', () => {
-    const markup = renderToStaticMarkup(createElement(DrawerViewTabs, {
-      open: false,
-      activeView: 'runtime',
-      onSelect: () => {},
-    }))
-
-    expect(markup).toBe('')
+  it('keeps the drawer to the runtime monitor after the Markdown move', () => {
+    const source = readFileSync(new URL('../../../src/renderer/src/components/TerminalArea.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('DrawerViewTabs')
+    expect(source).not.toContain('setDrawerView')
+    expect(source).toContain('id={getDrawerPanelId()}')
+    expect(source).toContain('hidden={!drawerOpen}')
+    expect(source).toContain('height: getDrawerHeight(drawerOpen, drawerHeight)')
   })
 
-  it('reserves header space for tabs only while the drawer is expanded', () => {
+  it('reserves header space for the drawer handle only while the drawer is expanded', () => {
     const source = readFileSync(new URL('../../../src/renderer/src/components/TerminalArea.tsx', import.meta.url), 'utf8')
     expect(source).toContain("drawerOpen ? 'pr-52' : 'pr-3'")
   })
@@ -125,34 +108,24 @@ describe('Quick Note view behavior', () => {
     expect(leafSource).not.toContain('drawerView')
     expect(terminalAreaSource).toContain("display: workspaceVisible ? 'block' : 'none'")
     expect(terminalAreaSource).toContain("...(!workspaceVisible ? { inert: '' } : {})")
-    expect(terminalAreaSource).toContain('height: getDrawerHeight(drawerOpen, drawerView, drawerHeights)')
+    // 无项目时活动 surface 的宿主是全局哨兵，可见性按哨兵判。
+    expect(terminalAreaSource).toContain('surface.workspaceId === GLOBAL_PANE_SCOPE')
   })
 
-  it('supports arrow, Home, and End navigation with wrapping', () => {
-    expect(getNextDrawerView('runtime', 'ArrowRight')).toBe('note')
-    expect(getNextDrawerView('note', 'ArrowRight')).toBe('runtime')
-    expect(getNextDrawerView('runtime', 'ArrowLeft')).toBe('note')
-    expect(getNextDrawerView('note', 'ArrowLeft')).toBe('runtime')
-    expect(getNextDrawerView('note', 'Home')).toBe('runtime')
-    expect(getNextDrawerView('runtime', 'End')).toBe('note')
-    expect(getNextDrawerView('runtime', 'Enter')).toBeNull()
-  })
-
-  it('clears terminal drafts only after the kill/remove branch', () => {
-    expect(shouldRemoveTerminalDrafts('kill-removed')).toBe(true)
+  it('keeps drafts through every terminal lifecycle event', () => {
+    // 草稿归属已改为工作区/全局作用域：结束终端只是关闭呈现。
+    expect(shouldRemoveTerminalDrafts('kill-removed')).toBe(false)
     expect(shouldRemoveTerminalDrafts('exit')).toBe(false)
     expect(shouldRemoveTerminalDrafts('workspace-switch')).toBe(false)
 
     useDraftCardStore.getState().clearAll()
-    useDraftCardStore.getState().addDraft('killed')
-    useDraftCardStore.getState().addDraft('exited')
-    useDraftCardStore.getState().addDraft('switched')
+    useDraftCardStore.getState().addDraft('workspace-1', 'killed')
+    useDraftCardStore.getState().addDraft('workspace-1', 'exited')
+    useDraftCardStore.getState().addDraft('workspace-1', 'switched')
     applyTerminalDraftLifecycle('kill-removed', 'killed')
     applyTerminalDraftLifecycle('exit', 'exited')
     applyTerminalDraftLifecycle('workspace-switch', 'switched')
-    expect(useDraftCardStore.getState().drafts['killed']).toBeUndefined()
-    expect(useDraftCardStore.getState().drafts['exited']).toHaveLength(1)
-    expect(useDraftCardStore.getState().drafts['switched']).toHaveLength(1)
+    expect(getDraftsByScope(useDraftCardStore.getState(), 'workspace-1')).toHaveLength(3)
   })
 
   it('formats draft update times for the list metadata', () => {
@@ -163,11 +136,11 @@ describe('Quick Note view behavior', () => {
     expect(formatNoteAge(now - 3 * 24 * 60 * 60_000, now)).toBe('3d ago')
   })
 
-  it('switches draft groups with the active terminal id without deleting either group', () => {
+  it('groups drafts by scope so two terminals in one workspace share a list', () => {
     useDraftCardStore.getState().clearAll()
-    useDraftCardStore.getState().addDraft('terminal-a')
-    useDraftCardStore.getState().addDraft('terminal-b')
-    expect(useDraftCardStore.getState().drafts['terminal-a']).toHaveLength(1)
-    expect(useDraftCardStore.getState().drafts['terminal-b']).toHaveLength(1)
+    useDraftCardStore.getState().addDraft('workspace-1', 'terminal-a')
+    useDraftCardStore.getState().addDraft('workspace-1', 'terminal-b')
+    expect(getDraftsByScope(useDraftCardStore.getState(), 'workspace-1')).toHaveLength(2)
+    expect(useDraftCardStore.getState().drafts['terminal-a']).toBeUndefined()
   })
 })

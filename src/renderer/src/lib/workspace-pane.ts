@@ -1,4 +1,5 @@
 // Note: pane tree focus with island as sole subagent surface — see .agents/notes/terminal/pane-tree-subagent.md
+
 export type PaneSplitDirection = 'horizontal' | 'vertical'
 export type PaneSplitPlacement = 'before' | 'after'
 export type PaneDropEdge = 'left' | 'right' | 'top' | 'bottom'
@@ -19,7 +20,16 @@ export type BrowserPaneContent = {
   workspaceId?: never
 }
 
-export type PaneContent = TerminalPaneContent | BrowserPaneContent
+/*-- Markdown pane 内容：id 形如 markdown:{panelId}，草稿按工作区/全局作用域归属，与 pane 位置无关 --*/
+export type MarkdownPaneContent = {
+  type: 'markdown'
+  id: `markdown:${string}`
+  panelId: string
+  terminalId?: never
+  workspaceId?: never
+}
+
+export type PaneContent = TerminalPaneContent | BrowserPaneContent | MarkdownPaneContent
 
 export type WorkspacePaneLeaf = {
   type: 'leaf'
@@ -56,6 +66,23 @@ export function createTerminalPaneContent(terminalId: string, workspaceId: strin
 
 export function createBrowserPaneContent(surfaceId: string): BrowserPaneContent {
   return { type: 'browser', id: `browser:${surfaceId}`, surfaceId }
+}
+
+export function createMarkdownPaneContent(panelId: string): MarkdownPaneContent {
+  return { type: 'markdown', id: `markdown:${panelId}`, panelId }
+}
+
+/*-- 找到 pane 树中第一个 Markdown 面板（顶栏入口的"已有则激活"语义） --*/
+export function findFirstMarkdownPaneContent(
+  node: WorkspacePaneNode | null
+): { paneId: string; tabId: string; panelId: string } | null {
+  for (const leaf of getLeafPanes(node)) {
+    const tab = leaf.tabs.find((item) => item.type === 'markdown')
+    if (tab && tab.type === 'markdown') {
+      return { paneId: leaf.id, tabId: tab.id, panelId: tab.panelId }
+    }
+  }
+  return null
 }
 
 /*-- 找到 pane 树中第一个浏览器 tab（Sidebar/快捷键入口的"已有则激活"语义） --*/
@@ -369,8 +396,11 @@ export function retainWorkspacePaneContent(
     if (current.type === 'leaf') {
       // Legacy tab kinds (e.g. removed janus-chat tabs in persisted snapshots)
       // match neither branch and fall out of the tree here.
+      // Browser and Markdown tabs are workspace-agnostic: a browser or a draft
+      // opened under this workspace stays in its snapshot across switches.
       const tabs = current.tabs.filter((item) =>
         item.type === 'browser'
+        || item.type === 'markdown'
         || (item.type === 'terminal'
           && item.workspaceId === workspaceId
           && (!terminalIds || terminalIds.has(item.terminalId)))
