@@ -42,6 +42,31 @@ function createInput(terminalId: string, workspaceId = 'ws-1') {
 }
 
 describe('agent session registry', () => {
+  it('refreshes provider counts and previews without rewriting hook turns or status', async () => {
+    const registry = track(new AgentSessionRegistry(await userDataDir()))
+    const owned = registry.createSession(createInput('live'))
+    registry.notePrompt('live', 'hook question')
+    registry.noteProviderSession('live', 'provider-1')
+    registry.recordTurnEnd('live', 'failed', undefined, 'hook answer')
+    const original = structuredClone(registry.getSession(owned.id)!)
+    const input = {
+      engine: 'claude', providerSessionId: 'provider-1', cwd: '/repo', transcriptPath: '/history.jsonl',
+      firstPrompt: 'hook question', turnCount: 3, updatedAt: '2099-01-01T00:00:00.000Z',
+      preview: [{ prompt: 'outside follow-up', excerpt: 'outside answer' }],
+    }
+    const listener = vi.fn()
+    registry.setChangeListener(listener)
+    registry.importExternalSession(input)
+    expect(registry.listSessions()[0].turnCount).toBe(3)
+    expect(registry.getSession(owned.id)).toMatchObject({
+      turns: original.turns, status: original.status, terminalIds: original.terminalIds,
+      transcriptPreview: input.preview, transcriptUpdatedAt: input.updatedAt,
+    })
+    listener.mockClear()
+    registry.importExternalSession(input)
+    expect(listener).not.toHaveBeenCalled()
+  })
+
   it('seeds native recovery history without sharing checkpoints or future turns', async () => {
     const dir = await userDataDir()
     const registry = track(new AgentSessionRegistry(dir))

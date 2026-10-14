@@ -17,9 +17,11 @@ import type {
   SessionFilter,
   SessionTurnRecord,
   ShellRestoreManifest,
+  TranscriptTurn,
 } from '../../shared/ipc/session'
 
 export interface AgentSessionRecord extends AgentSessionDetail {
+  transcriptTurnCount?: number
   shell?: string
   preset?: string
   command?: string
@@ -36,6 +38,7 @@ export interface ImportExternalSessionInput {
   firstPrompt: string
   lastExcerpt?: string
   turnCount: number
+  preview?: TranscriptTurn[]
   createdAt?: string
   updatedAt?: string
 }
@@ -660,6 +663,9 @@ export class AgentSessionRegistry {
           if (isStaleFirstPrompt(existing.lastPrompt)) existing.lastPrompt = firstPrompt
           changed = true
         }
+        // Provider prose/counts may advance in an outside terminal without
+        // hooks. Keep that projection separate from run status and turn ids.
+        if (this.updateTranscriptProjection(existing, input, updatedAt, turnCount)) changed = true
         if (changed) {
           this.persist()
           this.notify(existing.id)
@@ -667,6 +673,7 @@ export class AgentSessionRegistry {
         return existing
       }
       let changed = false
+      if (this.updateTranscriptProjection(existing, input, updatedAt, turnCount)) changed = true
       // Transcript is display truth for external rows: a rescan heals stale
       // first prompts (pre-fix rows stored the AGENTS.md injection as title)
       // and keeps the seed turns in step with the healed question.
@@ -702,6 +709,10 @@ export class AgentSessionRegistry {
       if (excerptSeed && lastExcerpt && excerptSeed.excerpt !== lastExcerpt) {
         excerptSeed.excerpt = lastExcerpt
         excerptSeed.endedAt = existing.updatedAt
+        changed = true
+      }
+      if (!excerptSeed && lastExcerpt) {
+        existing.turns.push({ id: randomUUID(), kind: 'done', startedAt: updatedAt, endedAt: updatedAt, excerpt: lastExcerpt })
         changed = true
       }
       if (firstPrompt && existing.turns.length > 0 && (!promptSeed || isStaleFirstPrompt(promptSeed.prompt))) {
@@ -767,11 +778,29 @@ export class AgentSessionRegistry {
       archived: false,
       external: true,
     }
+    this.updateTranscriptProjection(record, input, updatedAt, turnCount)
     this.sessions.set(record.id, record)
     this.prune()
     this.persist()
     this.notify(record.id)
     return record
+  }
+
+  private updateTranscriptProjection(record: AgentSessionRecord, input: ImportExternalSessionInput, updatedAt: string, count: number): boolean {
+    if (!input.preview || (record.transcriptUpdatedAt && updatedAt < record.transcriptUpdatedAt)) return false
+    let changed = false
+    if (record.transcriptTurnCount !== count || JSON.stringify(record.transcriptPreview) !== JSON.stringify(input.preview)
+      || record.transcriptUpdatedAt !== updatedAt) {
+      record.transcriptTurnCount = count
+      record.transcriptPreview = input.preview
+      record.transcriptUpdatedAt = updatedAt
+      changed = true
+    }
+    if (updatedAt > record.updatedAt) {
+      record.updatedAt = updatedAt
+      changed = true
+    }
+    return changed
   }
 
   setPendingHandoff(
@@ -863,7 +892,7 @@ function toSummary(record: AgentSessionRecord): AgentSessionSummary {
     cwd: record.cwd,
     branch: record.branch,
     firstPrompt: record.firstPrompt,
-    turnCount: record.turnCount,
+    turnCount: record.external ? record.turnCount : Math.max(record.turnCount, record.transcriptTurnCount ?? 0),
     checkpointCount: record.checkpointIds.length,
     status: toStatus(record),
     providerSessionId: record.providerSessionId,

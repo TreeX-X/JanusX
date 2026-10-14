@@ -11,6 +11,7 @@ import { buildContinueResumeArgs, buildProviderResumeCommand, canOfferSessionRes
 import { TerminalPresetIcon } from './ui/TerminalPresetIcon'
 import type { TerminalPreset } from '@/types'
 import { mergeTranscriptTurns } from '@/lib/session-turn-merge'
+import { startExternalSessionSync } from '@/lib/external-session-sync'
 import styles from './SessionPanel.module.css'
 
 /** 会话 engine 与终端 preset 同名；未知 engine 落到 shell 字形（与旧 fallback 一致）。 */
@@ -140,31 +141,25 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
   useEffect(() => {
     if (!active) return
     setContinueTarget(null)
-    // Pull-mode backfill: provider transcripts written outside JanusX have no
-    // hook traffic, so each panel open triggers one bounded rescan; the
-    // registry notifies on import and the event subscription refreshes cards.
-    // Concurrent scans share one in-flight pass main-side.
-    // Let the dock and its cached cards paint before a provider-store scan
-    // competes with the first list IPC on the main process.
-    const scanTimer = setTimeout(() => {
-      void window.electron.session.scanExternal().catch(() => undefined)
-    }, 120)
     if (scope === 'all') {
       void fetchSessions({})
-      return () => clearTimeout(scanTimer)
+      return
     }
     if (scope === 'archived') {
       void fetchSessions({ includeArchived: true })
-      return () => clearTimeout(scanTimer)
+      return
     }
     if (!activeWorkspaceId && !scopePath) {
       clearWorkspaceScope()
-      return () => clearTimeout(scanTimer)
+      return
     }
     // Project scope follows the workspace until the project model lands (P2).
     void fetchSessions(scopePath ? { cwd: scopePath } : { workspaceId: activeWorkspaceId ?? undefined })
-    return () => clearTimeout(scanTimer)
   }, [active, fetchSessions, clearWorkspaceScope, activeWorkspaceId, scopePath, scope])
+
+  useEffect(() => active
+    ? startExternalSessionSync(() => window.electron.session.scanExternal())
+    : undefined, [active, scopePath, scope])
 
   const handleToggle = useCallback((sessionId: string) => {
     if (!scopePath) return
@@ -577,7 +572,14 @@ function SessionCard({
     }
   }, [expanded, session.id, timelineTick])
 
-  const recentTurns = useMemo(() => (detail?.turns ?? []).slice(-2), [detail])
+  const recentTurns = useMemo(() => {
+    const turns = detail?.turns ?? []
+    const ledgerTime = turns.at(-1)?.endedAt ?? ''
+    return detail?.transcriptPreview && (detail.transcriptUpdatedAt ?? '') >= ledgerTime
+      ? mergeTranscriptTurns([], detail.transcriptPreview, {
+        createdAt: detail.createdAt, updatedAt: detail.transcriptUpdatedAt ?? detail.updatedAt,
+      }) : turns.slice(-2)
+  }, [detail])
   const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
   const iconPreset = sessionEnginePreset(session.engine)
 
@@ -899,23 +901,21 @@ function SessionDetailWindow({
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Bounded full-prose transcript read, fetched once per window open. Registry
-  // excerpts stay the live source; transcript pairs only backfill missing
-  // prose or replace the single seeded turn on external rows.
+  // Refresh provider prose alongside the ledger; keep the prior reading view
+  // while a background read is in flight, and discard superseded responses.
   useEffect(() => {
     let alive = true
-    setTranscript(null)
     window.electron.session
       .getTranscript(session.id)
       .catch(() => null)
       .then((fetched) => {
         if (!alive) return
-        if (fetched) setTranscript(fetched)
+        setTranscript(fetched)
       })
     return () => {
       alive = false
     }
-  }, [session.id])
+  }, [session.id, timelineTick])
 
   const displayTurns = useMemo(
     () =>

@@ -36,7 +36,7 @@
       }
     }
   },
-  "updated": "2026-10-11T14:38:02Z",
+  "updated": "2026-10-14T15:29:12.880Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/0cb931e1-e33c-4e38-a9d9-9d652796d935"
 }
 ---
@@ -51,7 +51,7 @@ Turn classification in `agent-hook-coordinator.ts` and `agent-turn-recorder.ts` 
 
 `src/main/notifications/agent-engine-capabilities.ts` holds one table keyed by hook source: start, complete, fail, approval/attention rules, turn-end excerpt source, sentinel flag, and external session-store kind. The coordinator, recorder, terminal approval check, and sentinel gate consume it. Table membership alone does not prove that a CLI emits these events: DSH has a row but its hook installer is a no-op and has no live hook contract.
 
-Turn-end excerpts dispatch through `src/main/sessions/transcript-excerpt.ts`: Claude reads the hook transcript tail; Codex prefers the recorded exact path, then finds rollouts in configured CODEX_HOME by thread/provider ID, retaining cwd fallback only without identity. Janus reads its history document by provider ID. Excerpts cap at 500 characters; file tails cap at 64KB and Janus documents at 2MB. Opencode, Pi, and DSH have no turn-end excerpt resolver. Opencode has a sqlite list/detail driver and discovery respects XDG_DATA_HOME; Pi JSONL supports external discovery and detail reads. Current prose windows and recovery validation belong to [Transcript detail reads plus provider resume runs](session-resume-detail.md).
+Turn-end excerpts dispatch through `src/main/sessions/transcript-excerpt.ts`: Claude reads the hook transcript tail; Codex prefers the recorded exact path, then finds rollouts in configured CODEX_HOME by thread/provider ID, retaining cwd fallback only without identity. Janus reads its history document by provider ID. Excerpts cap at 500 characters; Claude tails cap at 64KB and Janus documents at 2MB. Codex reads complete records through the bounded-prose streaming snapshot described in [external session sync](external-session-backfill.md), so trailing tools do not displace its answer. Opencode, Pi, and DSH have no turn-end excerpt resolver. Opencode has a sqlite list/detail driver and discovery respects XDG_DATA_HOME; Pi JSONL supports external discovery and detail reads. Current prose windows and recovery validation belong to [Transcript detail reads plus provider resume runs](session-resume-detail.md).
 
 ### Current terminal capability matrix
 

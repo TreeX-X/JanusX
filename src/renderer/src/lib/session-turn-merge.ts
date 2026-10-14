@@ -62,8 +62,10 @@ export function mergeTranscriptTurns(
     const pair = pairs[index + offset]
     merged.push({
       ...turn,
-      prompt: pair?.prompt ?? turn.prompt,
-      excerpt: pair?.excerpt ?? turn.excerpt,
+      // An existing pair is authoritative even while its answer is pending.
+      // Cached prose belongs only to ledger turns outside the transcript.
+      prompt: pair ? pair.prompt : turn.prompt,
+      excerpt: pair ? pair.excerpt : turn.excerpt,
     })
   }
   return merged

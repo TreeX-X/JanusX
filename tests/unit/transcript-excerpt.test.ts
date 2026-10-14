@@ -29,6 +29,17 @@ const userLine = (text: string) =>
   JSON.stringify({ type: 'user', message: { content: text } })
 
 describe('readAssistantExcerpt', () => {
+  it('reads Codex cwd from the actual head and answers before large trailing tools', async () => {
+    const baseDir = await home()
+    await writeHomeFile(baseDir, '.codex/sessions/rollout-large.jsonl', [
+      { type: 'session_meta', payload: { id: 'large', cwd: 'C:/repo', instructions: 'x'.repeat(80000) } },
+      { type: 'response_item', payload: { role: 'user', content: [{ type: 'input_text', text: 'q' }] } },
+      { type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text', text: 'answer before tools' }] } },
+      { type: 'response_item', payload: { type: 'function_call_output', output: 'x'.repeat(3 * 1024 * 1024) } },
+    ].map((record) => JSON.stringify(record)).join('\n') + '\n')
+    await expect(readAssistantExcerpt({ engine: 'codex', baseDir, cwd: 'C:/repo' })).resolves.toBe('answer before tools')
+  })
+
   it('returns the last assistant text for claude transcripts', async () => {
     const baseDir = await home()
     const path = await writeHomeFile(

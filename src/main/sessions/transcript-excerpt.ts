@@ -1,17 +1,18 @@
-// Note: transcript tail read per engine capability — see
+// Note: transcript prose read per engine capability — see
 // .agents/notes/sessions/records/session-engine-capabilities.md
 import { open, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { AGENT_ENGINE_CAPABILITIES, resolveSessionStorePath } from '../notifications/agent-engine-capabilities'
 import type { AgentHookSource } from '../notifications/agent-hook-types'
+import { readTranscriptSnapshot } from './transcript-snapshot'
 
 // Bounded read: backward chunk reads with a hard cap; full history never loads.
 const TRANSCRIPT_TAIL_BYTES = 64 * 1024
 const EXCERPT_MAX_CHARS = 500
 /** Single-doc histories (janus) parse whole with a size cap instead. */
 const SINGLE_DOC_MAX_BYTES = 2 * 1024 * 1024
-const META_HEAD_BYTES = 4096
+const META_HEAD_BYTES = 2 * 1024 * 1024
 
 export interface ExcerptContext {
   transcriptPath?: string
@@ -114,41 +115,28 @@ async function claudeExcerpt(transcriptPath: string): Promise<string | undefined
   return text ? truncate(text) : undefined
 }
 
-interface CodexContentBlock {
-  type?: string
-  text?: string
-}
-
-function codexTextOf(record: Record<string, unknown>): string | undefined {
-  const payload = record.payload
-  if (!payload || typeof payload !== 'object') return undefined
-  const content = (payload as { content?: unknown }).content
-  if (!Array.isArray(content)) return undefined
-  const texts = content
-    .filter(
-      (block): block is CodexContentBlock =>
-        !!block && typeof block === 'object' && (block as CodexContentBlock).type === 'output_text',
-    )
-    .map((block) => (typeof block.text === 'string' ? block.text : ''))
-    .join('')
-    .trim()
-  return texts || undefined
-}
-
-function codexRoleOf(record: Record<string, unknown>): string | undefined {
-  const payload = record.payload
-  if (!payload || typeof payload !== 'object') return undefined
-  const role = (payload as { role?: unknown }).role
-  if (role !== 'assistant' || record.type !== 'response_item') return undefined
-  return 'assistant'
-}
-
 async function codexMetaHead(path: string): Promise<Record<string, unknown> | null> {
-  const head = await readTail(path, META_HEAD_BYTES)
-  if (!head) return null
-  // session_meta is the first record; the head window may cut mid-line, so
-  // only the first complete line qualifies.
-  return parseJsonLine(head.split('\n')[0])
+  const handle = await open(path, 'r').catch(() => null)
+  if (!handle) return null
+  try {
+    const chunks: Buffer[] = []
+    let position = 0
+    while (position < META_HEAD_BYTES) {
+      const buffer = Buffer.alloc(64 * 1024)
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, position)
+      if (!bytesRead) break
+      const part = buffer.subarray(0, bytesRead)
+      const newline = part.indexOf(10)
+      chunks.push(newline < 0 ? part : part.subarray(0, newline))
+      position += bytesRead
+      if (newline >= 0) return parseJsonLine(Buffer.concat(chunks).toString('utf8'))
+    }
+    return position < META_HEAD_BYTES ? parseJsonLine(Buffer.concat(chunks).toString('utf8')) : null
+  } catch {
+    return null
+  } finally {
+    await handle.close().catch(() => undefined)
+  }
 }
 
 async function* walkJsonlFiles(root: string): AsyncGenerator<string> {
@@ -213,9 +201,7 @@ async function codexExcerpt(
   const path = context.transcriptPath?.trim()
     || await resolveCodexRollout(store, context.threadId ?? context.sessionId, context.cwd)
   if (!path) return undefined
-  const tail = await readTail(path, TRANSCRIPT_TAIL_BYTES)
-  if (!tail) return undefined
-  const text = lastAssistantText(tail.split('\n'), codexRoleOf, codexTextOf)
+  const text = (await readTranscriptSnapshot(path, 'codex', 1))?.lastExcerpt
   return text ? truncate(text) : undefined
 }
 

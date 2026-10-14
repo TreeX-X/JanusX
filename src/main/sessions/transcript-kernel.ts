@@ -159,7 +159,7 @@ function isCodexInputRecord(record: Record<string, unknown>): boolean {
 }
 
 const CODEX_INJECTION_TEXT =
-  /^(?:# AGENTS\.md instructions for |<ENVIRONMENT_CONTEXT>|<user_instructions>|<INSTRUCTIONS>)/
+  /^(?:# AGENTS\.md instructions for |<ENVIRONMENT_CONTEXT>|<user_instructions>|<INSTRUCTIONS>)/i
 
 /** Environment-context text a CLI injected as a user message; never a question. */
 export function isEnvironmentInjectionText(text: string): boolean {
@@ -211,10 +211,11 @@ export function extractKernelMessages(lines: string[], engine: TranscriptKernelE
 export function kernelMessagesFromRecords(
   records: Record<string, unknown>[],
   engine: TranscriptKernelEngine,
+  options: { hasInputOrder?: boolean } = {},
 ): KernelMessage[] {
   const hasSource = engine === 'codex' && records.some((r) => readString(r.type)?.toLowerCase() === 'response_item')
-  const hasInputOrder =
-    engine === 'codex' && records.some((r) => typeof asRecord(r.metadata)?.user_input_order === 'number')
+  const hasInputOrder = options.hasInputOrder ??
+    (engine === 'codex' && records.some((r) => typeof asRecord(r.metadata)?.user_input_order === 'number'))
   const messages: KernelMessage[] = []
   for (const record of records) {
     let user =
