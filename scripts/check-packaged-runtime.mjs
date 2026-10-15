@@ -232,12 +232,17 @@ console.log(
 // in the startup graph rather than in the one module llm-runtime happens to touch.
 const SMOKE_MODES = ['llm-runtime', 'module-graph']
 const STARTUP_TIMEOUT_MS = 60_000
+// Elevated Windows runners cannot start Chromium's sandboxed GPU process.
+// These headless import checks do not exercise GPU rendering; scope the flags
+// to verification children rather than changing the application's launch mode.
+const smokePlatformArgs = process.platform === 'win32' && process.env.CI
+  ? ['--disable-gpu', '--disable-gpu-sandbox'] : []
 
 async function runSmoke(executable, mode, stage, label) {
   const profile = await mkdtemp(join(stage, 'profile-'))
   try {
     await new Promise((resolvePromise, reject) => {
-      const child = spawn(resolve(executable), [`--smoke-test=${mode}`, `--user-data-dir=${profile}`], {
+      const child = spawn(resolve(executable), [...smokePlatformArgs, `--smoke-test=${mode}`, `--user-data-dir=${profile}`], {
         stdio: 'inherit',
         windowsHide: true,
         env: { ...process.env, JANUSX_KNOWLEDGE_ROOT: join(profile, 'knowledge') },
@@ -310,7 +315,7 @@ async function verifyPortableStub(stage) {
   const alreadyRunning = new Set(processIds('janusx.exe'))
   const profile = await mkdtemp(join(stage, 'profile-'))
   try {
-    const stub = spawn(resolve(portableExecutable), [`--smoke-test=module-graph`, `--user-data-dir=${profile}`], {
+    const stub = spawn(resolve(portableExecutable), [...smokePlatformArgs, `--smoke-test=module-graph`, `--user-data-dir=${profile}`], {
       stdio: 'ignore',
       windowsHide: true,
       env: { ...process.env, JANUSX_KNOWLEDGE_ROOT: join(profile, 'knowledge') },
