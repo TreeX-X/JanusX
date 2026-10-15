@@ -58,6 +58,10 @@ export interface ThemeDefinition {
 /* ── dark（经典黑，第二位）：值与历史 :root 逐字一致 ─────────────────────────── */
 
 const DARK_TOKENS = {
+  'sidebar-codex-filter': 'invert(1)',
+  'session-sheet-base-weight': '96%',
+  'cli-logo-light': '#f4f4f4',
+  'cli-logo-dark': '#202024',
   'shell-void': '#101012',
   'shell-canvas': '#151517',
   'shell-pane': '#191919',
@@ -202,6 +206,10 @@ export const DARK_THEME_DEFINITION: ThemeDefinition = {
    来源 design/pelican-lithograph-style.md：纸 #EFE4C5 / 墨 #1C343B / 朱红 #D43D2A。 */
 
 const PLANCHE_TOKENS = {
+  'sidebar-codex-filter': 'none',
+  'session-sheet-base-weight': '84%',
+  'cli-logo-light': '#f4f4f4',
+  'cli-logo-dark': '#202024',
   'paper': '#EFE4C5',
   'paper-deep': '#DCCFA8',
   'ink': '#1C343B',

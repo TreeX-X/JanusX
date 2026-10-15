@@ -3,6 +3,10 @@
 
 /* Default (planche): Print-style light: paper/ink single-vermilion accent, flat fills, no gradients. */
 :root {
+  --sidebar-codex-filter: none;
+  --session-sheet-base-weight: 84%;
+  --cli-logo-light: #f4f4f4;
+  --cli-logo-dark: #202024;
   --paper: #EFE4C5;
   --paper-deep: #DCCFA8;
   --ink: #1C343B;
@@ -78,6 +82,10 @@
 
 /* dark: Default. Surface ramp keeps canvas below chrome (~9pt gap) so panes read sunk, not punched. */
 [data-theme='dark'] {
+  --sidebar-codex-filter: invert(1);
+  --session-sheet-base-weight: 96%;
+  --cli-logo-light: #f4f4f4;
+  --cli-logo-dark: #202024;
   --shell-void: #101012;
   --shell-canvas: #151517;
   --shell-pane: #191919;

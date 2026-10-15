@@ -14,7 +14,6 @@ import {
   findLeafPane,
   findPaneContent,
   findTerminalPane,
-  getBrowserPaneContent,
   getLeafPanes,
   getPaneContentById,
   insertPaneContentAtIndex,

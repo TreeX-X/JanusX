@@ -41,9 +41,9 @@
   padding: 6px;
   border: 1px solid var(--shell-border);
   border-radius: 8px;
-  background: var(--popover-bg, var(--shell-card));
+  background: var(--popover-background);
   color: var(--shell-text);
-  box-shadow: var(--popover-shadow, 0 8px 24px #0002);
+  box-shadow: var(--popover-shadow);
 }
 .blueprint-toolbar-menu:popover-open { display: flex; flex-direction: column; gap: 2px; }
 .blueprint-toolbar-menu .blueprint-btn { width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--shell-text); text-align: left; font: inherit; font-size: 12px; }

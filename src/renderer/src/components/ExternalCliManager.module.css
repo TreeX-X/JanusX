@@ -6,8 +6,8 @@
 .main { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; }
 .identity { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 .icon { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 0; border: 1px solid var(--shell-border-soft); border-radius: 8px; background: var(--shell-card); cursor: pointer; }
-.icon[data-tool='codex'] { background: #f4f4f4; }
-.icon[data-tool='opencode'], .icon[data-tool='janus'] { background: #202024; }
+.icon[data-tool='codex'] { background: var(--cli-logo-light); }
+.icon[data-tool='opencode'], .icon[data-tool='janus'] { background: var(--cli-logo-dark); }
 .icon:hover { outline: 1px solid var(--control-border); outline-offset: 2px; }
 .icon:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 3px; }
 .icon[aria-pressed='false'] { opacity: .45; filter: grayscale(1); }

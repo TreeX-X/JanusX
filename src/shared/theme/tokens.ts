@@ -6,6 +6,10 @@
 import { getThemeDefinition, listThemeDefinitions } from './registry'
 
 export const SEMANTIC_TOKENS = [
+  'sidebar-codex-filter',
+  'session-sheet-base-weight',
+  'cli-logo-light',
+  'cli-logo-dark',
   'shell-void',
   'shell-canvas',
   'shell-pane',

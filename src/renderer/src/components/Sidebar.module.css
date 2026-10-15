@@ -1,6 +1,5 @@
 /* Navigation uses neutral surfaces; color is reserved for actionable status. */
-.sidebar { font-family: inherit; --sidebar-codex-filter: none; }
-:global([data-theme='dark']) .sidebar { --sidebar-codex-filter: invert(1); }
+.sidebar { font-family: inherit; }
 
 .header {
   display: flex;
