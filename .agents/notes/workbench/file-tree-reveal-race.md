@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-15T17:45:52.708Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -31,7 +31,7 @@
 
 ## Problem
 
-`loadWorkspaceFileTree` in `src/renderer/src/features/workspace/actions.ts` is the single entry for full tree loads, and every load shares one generation counter plus one `fileTreeLoadState` (`loading`/`revealing`/`idle`/`error`). A workspace switch starts a visual load that is supposed to play a full top-to-bottom sweep (`revealing`), but the file watcher in `useWorkspaceBootstrap.ts` fires background loads for the same path concurrently. The commit path writes state unconditionally, so two failure shapes exist. When the background load commits after the visual load, it overwrites `revealing` with `idle` and the overlay unmounts mid-sweep: the first rows sweep, the rest appear instantly. When the background load commits first, the visual load hits the generation guard and returns without committing, so no sweep plays at all and the tree swaps instantly. The sweep is therefore flaky in exactly the situation switches create: fresh file events for the incoming workspace.
+`loadWorkspaceFileTree` in `src/renderer/src/features/workspace/actions.ts` is the single entry for full tree loads, and every load shares one generation counter plus one `fileTreeLoadState` (`loading`/`revealing`/`idle`/`error`). A workspace switch starts a visual load that is supposed to play a full top-to-bottom sweep (`revealing`), but the file watcher in `useWorkspaceBootstrap.ts` can overlap a background load with the switch load. The commit path writes state unconditionally, so two failure shapes exist. When the background load commits after the visual load, it overwrites `revealing` with `idle` and the overlay unmounts mid-sweep: the first rows sweep, the rest appear instantly. When the background load commits first, the visual load hits the generation guard and returns without committing, so no sweep plays at all and the tree swaps instantly. The sweep is therefore flaky in exactly the situation switches create: fresh file events for the incoming workspace.
 
 ## Decision
 
@@ -48,3 +48,15 @@ A module-level `pendingVisualRevealPath` records the target path when a visual l
 - **Gains**: every workspace switch plays one complete sweep at a fixed speed over the newest committed tree, regardless of how many background refreshes land during it; data freshness still follows latest-commit-wins.
 - **Costs and limits**: one module-level nullable string plus a functional setState on the commit path; reviewers of this file keep the flag and the generation guard consistent. When two overlapping loads both abort through the directory-mutation guard, the state can rest on `loading` with no commit arriving, which predates this change and is left untouched.
 - **Verification**: `npx tsc --noEmit` passes; `npx eslint` on `actions.ts` reports no errors; `tests/unit/file-tree-scan.test.ts`, `workspace-source-files.test.ts`, `workspace-sidebar.test.ts` and `workspace-pane.test.ts` pass (34 tests).
+
+## Background refresh pressure
+
+File watcher refreshes run one active pass and keep at most one merged trailing pass. Multiple changed paths invalidate all open editors instead of retaining only the final filename. A workspace switch discards obsolete root responses before directory expansion; expanded-directory reads use at most four workers and stop scheduling when superseded. The reveal handoff described above still applies.
+
+`src/main/ipc/file-tree-ignore.ts` batches queued directory candidates by workspace root and runs at most two Git ignore checks across roots. Each check has a three-second timeout; Windows cleanup targets the process tree because Git may launch a second executable. Failed checks leave ignore decoration unavailable for that pass and retry on the next refresh. There is no persistent ignore cache to invalidate after `.gitignore` changes.
+
+Raw watcher subscribers continue receiving all events. Renderer broadcasts omit Git lock/object/log churn and hidden `.janusX` state, while index, HEAD and refs changes remain visible. Git service commands use `GIT_OPTIONAL_LOCKS=0` so read-only status refreshes do not rewrite the index and feed their own watcher. A three-second timeout can temporarily remove ignore dimming on unusually slow disks; directory contents still load. The bounds reduce competing work; they do not establish a measured end-to-end input latency guarantee or replace testing an updated packaged application.
+
+Regression coverage: `file-tree-ignore-pressure.test.ts` checks batching, concurrent roots and timeout cleanup; `file-tree-refresh-pressure.test.ts` checks 1,000 overlapping events, scope changes and failure recovery; `file-tree-load-pressure.test.ts` checks directory concurrency and stale scans; `office/workspace-watcher-coordinator.test.ts` checks raw subscriber delivery, Git event filtering and merged editor invalidation.
+
+Validation for refresh pressure: 38 tests across eight focused files passed; targeted ESLint, `npm run build:check` and `npm run check:notes` passed (the latter reports 17 existing external-link diagnostics). The final whole-repository `npm run typecheck` reports TS2702/TS2538 in the separately modified `src/main/blueprint/review/models.ts:140`; it does not report errors in the performance changes. Packaged long-session latency has not been remeasured.

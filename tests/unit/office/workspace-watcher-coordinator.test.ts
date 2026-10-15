@@ -105,6 +105,32 @@ describe('workspace watcher coordinator', () => {
     expect(mocks.watchers[0].close).toHaveBeenCalledTimes(1)
   })
 
+  it('filters Git churn from renderer refreshes but preserves raw subscribers and real Git changes', async () => {
+    const subscriber = vi.fn()
+    subscribeWorkspaceWatcher(temporaryRoot, subscriber)
+    const send = vi.fn()
+    const mainWindow = { on: vi.fn(), isDestroyed: () => false,
+      webContents: { isDestroyed: () => false, send } } as any
+    registerWorkspaceHandlers(() => mainWindow)
+    await mocks.handlers.get('filetree:load')!({}, temporaryRoot)
+    for (const path of ['.git/index.lock', '.git/objects/ab/cd', '.git/logs/HEAD', '.janusX/cache']) {
+      mocks.watchers[0].callback('change', path)
+    }
+    await vi.advanceTimersByTimeAsync(150)
+    expect(subscriber).toHaveBeenCalledTimes(4)
+    expect(send).not.toHaveBeenCalled()
+    mocks.watchers[0].callback('change', '.git/index')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(send).toHaveBeenCalledTimes(1)
+    send.mockClear()
+    mocks.watchers[0].callback('change', 'one.ts')
+    mocks.watchers[0].callback('change', 'two.ts')
+    await vi.advanceTimersByTimeAsync(150)
+    expect(send).toHaveBeenCalledWith('filetree:changed', {
+      workspacePath: temporaryRoot, changedFilePath: null,
+    })
+  })
+
   it('notifies subscribers and replaces a failed watcher without leaking recovery timers', async () => {
     const subscriber = vi.fn()
     subscribeWorkspaceWatcher(temporaryRoot, subscriber)

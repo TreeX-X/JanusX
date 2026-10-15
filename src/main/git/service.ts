@@ -18,7 +18,7 @@ async function runGit(
   signal?: AbortSignal,
 ): Promise<string> {
   try {
-    const { stdout } = await execFileAsync('git', args, { cwd, timeout, maxBuffer, signal })
+    const { stdout } = await execFileAsync('git', args, { cwd, timeout, maxBuffer, signal, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } })
     return stdout
   } catch (err: any) {
     throw new Error(err.stderr?.trim() || err.message)

@@ -74,6 +74,7 @@ export async function loadWorkspaceFileTree(
     throw error
   }
 
+  if (generation !== fileTreeLoadGeneration || !shouldCommit()) return
   // 当前 store 中的树属于活动 scope;仅当目标一致时才带着已展开分支去刷新
   const loadedPaths =
     getActiveScopePath() === workspacePath
@@ -81,13 +82,17 @@ export async function loadWorkspaceFileTree(
       : []
   const childrenByPath = new Map<string, FileNode[]>()
   if (loadedPaths.length > 0) {
-    const results = await Promise.all(
-      loadedPaths.map(async (path) => {
+    // Stop superseded scans before starting more IPC/Git work; never fan out
+    // every expanded directory at once.
+    let nextDirectory = 0
+    await Promise.all(Array.from({ length: Math.min(4, loadedPaths.length) }, async () => {
+      while (nextDirectory < loadedPaths.length) {
+        if (generation !== fileTreeLoadGeneration || !shouldCommit()) return
+        const path = loadedPaths[nextDirectory++]
         const children = await window.electron.fileTree.children(workspacePath, path).catch(() => [])
-        return [path, children] as const
-      }),
-    )
-    for (const [path, children] of results) childrenByPath.set(path, children)
+        childrenByPath.set(path, children)
+      }
+    }))
   }
 
   if (

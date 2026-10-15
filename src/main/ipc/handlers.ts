@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
+import { getGitIgnoredPaths } from './file-tree-ignore'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { watch, type FSWatcher } from 'node:fs'
 import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from 'node:fs/promises'
@@ -33,6 +34,7 @@ const watcherRegistry = new Map<string, FSWatcher>()
 const nestedWatcherRegistry = new Map<string, Map<string, FSWatcher>>()
 const nonRecursiveWatchWorkspaces = new Set<string>()
 const watcherTimers = new Map<string, NodeJS.Timeout>()
+const watcherChangedPaths = new Map<string, string | null>()
 const watcherWindows = new Map<string, Set<BrowserWindow>>()
 const watcherSubscribers = new Map<string, Set<WorkspaceWatcherSubscriber>>()
 const watcherRecoveryTimers = new Map<string, NodeJS.Timeout>()
@@ -94,39 +96,6 @@ function sanitizeEntryName(nameValue: string): string | null {
 
 function fileTreeResult(success: boolean, error?: string, path?: string): { success: boolean; error?: string; path?: string } {
   return { success, error, path }
-}
-
-async function getGitIgnoredPaths(rootPath: string, paths: string[]): Promise<Set<string>> {
-  if (paths.length === 0) return new Set()
-
-  return new Promise((resolve) => {
-    let output = ''
-    let settled = false
-    const finish = (ignored: Set<string>) => {
-      if (settled) return
-      settled = true
-      resolve(ignored)
-    }
-
-    let command
-    try {
-      command = spawn('git', ['check-ignore', '--no-index', '--stdin', '-z'], {
-        cwd: rootPath,
-        windowsHide: true,
-      })
-    } catch {
-      finish(new Set())
-      return
-    }
-
-    command.stdout.setEncoding('utf8')
-    command.stdout.on('data', (chunk: string) => { output += chunk })
-    command.on('error', () => finish(new Set()))
-    command.on('close', () => {
-      finish(new Set(output.split('\0').filter(Boolean).map((path) => path.replace(/\\/g, '/').replace(/\/$/, ''))))
-    })
-    command.stdin.end(paths.join('\0') + '\0')
-  })
 }
 
 async function inspectGitEntries(
@@ -203,6 +172,7 @@ function closeWorkspaceWatcher(workspacePath: string): void {
   const timer = watcherTimers.get(workspacePath)
   if (timer) clearTimeout(timer)
   watcherTimers.delete(workspacePath)
+  watcherChangedPaths.delete(workspacePath)
   const recoveryTimer = watcherRecoveryTimers.get(workspacePath)
   if (recoveryTimer) clearTimeout(recoveryTimer)
   watcherRecoveryTimers.delete(workspacePath)
@@ -217,8 +187,17 @@ function emitWorkspaceFsChange(
     subscriber(eventType, filename)
   }
 
+  // Subscribers still receive raw events. Lock/object/log churn must not
+  // trigger whole-tree refreshes; retain index/HEAD/refs for external Git edits.
+  const normalized = filename?.toString().replace(/\\/g, '/')
+  if (normalized && (/^\.git\/(?:objects|logs)(?:\/|$)/i.test(normalized)
+    || /^\.git\/.*\.lock$/i.test(normalized)
+    || /^\.janusX(?:\/|$)/i.test(normalized))) return
   const windows = watcherWindows.get(workspacePath)
   if (!windows?.size && getWorkspaceAllowedWindows().length === 0) return
+  const changedPath = filename ? join(workspacePath, filename.toString()) : null
+  watcherChangedPaths.set(workspacePath, watcherChangedPaths.has(workspacePath)
+    && watcherChangedPaths.get(workspacePath) !== changedPath ? null : changedPath)
   const existingTimer = watcherTimers.get(workspacePath)
   if (existingTimer) clearTimeout(existingTimer)
 
@@ -226,7 +205,8 @@ function emitWorkspaceFsChange(
     workspacePath,
     setTimeout(() => {
       watcherTimers.delete(workspacePath)
-      const changedFilePath = filename ? join(workspacePath, filename.toString()) : null
+      const changedFilePath = watcherChangedPaths.get(workspacePath) ?? null
+      watcherChangedPaths.delete(workspacePath)
       // Note: standalone editor windows share the file-tree change channel so double-click editors auto-refresh — see .agents/notes/workbench/standalone-editor-auto-refresh.md
       const targets = new Set<BrowserWindow>()
       for (const window of watcherWindows.get(workspacePath) ?? []) targets.add(window)

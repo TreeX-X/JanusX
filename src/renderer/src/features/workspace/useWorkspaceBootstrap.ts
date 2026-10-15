@@ -8,6 +8,7 @@ import { useGitStore } from '@/stores/git'
 import { warmupIndex } from '@/services/harness'
 import { getActiveScopePath, getScopePathForWorkspace, loadWorkspaceFileTree, refreshScopeFileTree } from './actions'
 import { collectShellRestore, restoreShells } from '@/lib/shell-restore'
+import { createWorkspaceRefreshQueue } from './refresh-queue'
 
 /**
  * Idle-time note-index warmup: fills the main-process index cache for every
@@ -97,13 +98,22 @@ export function useWorkspaceBootstrap(): void {
     void refreshScopeFileTree(nextScope, true).catch(() => {})
   }), [])
 
-  useEffect(() => window.electron.fileTree.onChanged((payload) => {
-    const workspacePath = payload.workspacePath
-    const scopePath = getActiveScopePath()
-    if (!scopePath || scopePath !== workspacePath) return
-    invalidateEditorFileCache(workspacePath)
-    void useGitStore.getState().fetchStatus(workspacePath)
-    void loadWorkspaceFileTree(workspacePath, () => getActiveScopePath() === workspacePath).catch(() => {})
-    void useEditorStore.getState().reloadOpenFiles(workspacePath, payload.changedFilePath ?? null)
-  }), [])
+  useEffect(() => {
+    const queue = createWorkspaceRefreshQueue(async (workspacePath, changedFilePath) => {
+      if (getActiveScopePath() !== workspacePath) return
+      await Promise.allSettled([
+        useGitStore.getState().fetchStatus(workspacePath),
+        loadWorkspaceFileTree(workspacePath, () => getActiveScopePath() === workspacePath),
+        useEditorStore.getState().reloadOpenFiles(workspacePath, changedFilePath),
+      ])
+    })
+    const unsubscribe = window.electron.fileTree.onChanged((payload) => {
+      const workspacePath = payload.workspacePath
+      const scopePath = getActiveScopePath()
+      if (!scopePath || scopePath !== workspacePath) return
+      invalidateEditorFileCache(workspacePath)
+      queue.enqueue(workspacePath, payload.changedFilePath ?? null)
+    })
+    return () => { queue.dispose(); unsubscribe() }
+  }, [])
 }
