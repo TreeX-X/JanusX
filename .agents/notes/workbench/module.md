@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-15T17:32:21Z",
+  "updated": "2026-10-15T18:00:40.305Z",
   "moduleState": "partial"
 }
 ---
@@ -52,6 +52,8 @@
 组织 Island、右侧工具栏、产物预览与共享编辑器的交互和视觉。RightDock 负责工具承载与布局，ProductWorkspacePanel 负责生成文件的预览，JanusIsland 负责工作状态及通知入口。文件事实由既有读取服务提供，会话耐久、Agent 执行与工程 Note 事务分别由对应模块负责。
 
 ## Design
+
+[长时间使用性能分析](./long-session-performance.md)记录 0.9.2 便携版进程风暴、应用数据自监听、审查注册、遥测与界面更新风险，区分实测证据、已有修复和待验证方向。
 
 生成文件面板统一显示“预览”，本地 Markdown／文本及应用状态界面跟随主题，HTML／Office 文档保留自身配色。[预览实现与主题检查](./product-workspace.md)记录统一扫描入口、历史迁移预算和固定色例外；新增主题可集中定位遗留项，verify 拒绝新增扫描问题。
 
