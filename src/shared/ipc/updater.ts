@@ -6,11 +6,13 @@ export const UPDATER_CHANNELS = {
   getSettings: 'updater:get-settings',
   updateSettings: 'updater:update-settings',
   openReleases: 'updater:open-releases',
+  openRepository: 'updater:open-repository',
 } as const
 
 // Note: unsupported runtimes open the designed download page, not raw Releases — see .agents/notes/desktop/app-auto-update-win.md
 /** 单一来源：便携版/开发版手动下载入口，main 与 fallback 共用。 */
 export const UPDATER_RELEASES_URL = 'https://treex-x.github.io/JanusX/#downloads'
+export const APP_REPOSITORY_URL = 'https://github.com/TreeX-X/JanusX'
 
 export const UPDATER_EVENT_CHANNELS = {
   event: 'updater:event',
@@ -57,6 +59,8 @@ export interface UpdaterAPI {
   updateSettings(settings: Partial<UpdaterSettings>): Promise<UpdaterSettings>
   /** 固定下载页，主进程 shell 打开，不接受外部输入。 */
   openReleases(): Promise<void>
+  /** 关于页的固定项目仓库入口，不接受渲染端 URL。 */
+  openRepository(): Promise<void>
 }
 
 export interface UpdaterSettings {

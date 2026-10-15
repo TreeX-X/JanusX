@@ -8,6 +8,11 @@
     "collaboration": "Agents & collaboration"
   },
   "tab": {
+    "about": {
+      "title": "About",
+      "subtitle": "Version, updates and support",
+      "nav": "About"
+    },
     "general": {
       "title": "General",
       "subtitle": "General · Language and appearance preferences",
@@ -138,6 +143,15 @@
     },
     "error": {
       "save": "Failed to save experimental feature toggles"
+    }
+  },
+  "about": {
+    "description": "Your AI coding assistants and workspaces, together.",
+    "support": {
+      "title": "Enjoying JanusX?",
+      "description": "If JanusX saves you time, a star on GitHub means a lot.",
+      "action": "Star on GitHub",
+      "error": "Could not open the browser. Visit github.com/TreeX-X/JanusX."
     }
   },
   "updater": {

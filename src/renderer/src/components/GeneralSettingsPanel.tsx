@@ -4,7 +4,6 @@ import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from '@/i18n/config'
 import { Select } from './ui/Select'
 import { LanguageServiceManager } from './LanguageServiceManager'
 import { WorkflowXStatus } from './janus/WorkflowXMonitor'
-import { UpdaterSettings } from './UpdaterSettings'
 import { useThemeStore } from '@/stores/theme'
 import { getThemeDefinition } from '../../../shared/theme/registry'
 import { ThemePreviewPicker } from './ThemePreviewPicker'
@@ -96,19 +95,6 @@ export function GeneralSettingsPanel() {
           </div>
           <div className={styles.generalControlCol}>
             <WorkflowXStatus surface="settings" />
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.generalSection}>
-        <h3 className={styles.generalSectionTitle}>{t('settings:general.section.application')}</h3>
-        <div className={`${styles.generalRow} ${styles.generalRowWide}`}>
-          <div className={styles.generalLabelCol}>
-            <div className={styles.generalLabel}>{t('settings:updater.title')}</div>
-            <div className={styles.generalHelp}>{t('settings:updater.subtitle')}</div>
-          </div>
-          <div className={styles.generalControlCol}>
-            <UpdaterSettings />
           </div>
         </div>
       </section>

@@ -8,9 +8,14 @@
     "collaboration": "代理与协作"
   },
   "tab": {
+    "about": {
+      "title": "关于",
+      "subtitle": "版本、更新与支持",
+      "nav": "关于"
+    },
     "general": {
       "title": "通用",
-      "subtitle": "外观、语言与应用维护",
+      "subtitle": "外观、语言与开发环境",
       "nav": "通用",
       "navMeta": "Language"
     },
@@ -138,6 +143,15 @@
     },
     "error": {
       "save": "创新功能开关保存失败"
+    }
+  },
+  "about": {
+    "description": "统一管理你的 AI 编程助手与工作区。",
+    "support": {
+      "title": "喜欢 JanusX？点个赞",
+      "description": "如果它帮你省下了一些时间，欢迎在 GitHub 点亮一颗 Star。",
+      "action": "去 GitHub 点个赞",
+      "error": "无法打开浏览器，请访问 github.com/TreeX-X/JanusX。"
     }
   },
   "updater": {

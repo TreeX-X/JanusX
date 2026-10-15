@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Bell, BookOpen, Brain, ChartNoAxesCombined, Cloud, ListFilter, Settings, ShieldCheck, SlidersHorizontal, Sparkles, SquareTerminal, Users, X, type LucideIcon } from 'lucide-react'
+import { Bell, BookOpen, Brain, ChartNoAxesCombined, Cloud, Info, ListFilter, Settings, ShieldCheck, SlidersHorizontal, Sparkles, SquareTerminal, Users, X, type LucideIcon } from 'lucide-react'
 import { ModalFrame } from '@/components/shared/ModalFrame'
 import { GeneralSettingsPanel } from './GeneralSettingsPanel'
+import { AboutSettingsPanel } from './AboutSettingsPanel'
 import { TerminalManagerPanel } from './TerminalManagerPanel'
 import { ExperimentalSettingsPanel } from './ExperimentalSettingsPanel'
 import { NotificationSettingsPanel } from './NotificationSettingsPanel'
@@ -17,7 +18,7 @@ import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
 
-export type SettingsTab = 'general' | 'terminal' | 'experimental' | 'notifications' | 'personal' | 'knowledge' | 'agent' | 'llm' | 'usage' | 'models' | 'team' | 'hosted'
+export type SettingsTab = 'general' | 'terminal' | 'experimental' | 'notifications' | 'personal' | 'knowledge' | 'agent' | 'llm' | 'usage' | 'models' | 'team' | 'hosted' | 'about'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -31,12 +32,13 @@ const TAB_GROUPS: { id: string; tabs: SettingsTab[] }[] = [
   { id: 'memory', tabs: ['knowledge', 'personal'] },
   { id: 'models', tabs: ['llm', 'models', 'usage'] },
   { id: 'collaboration', tabs: ['agent', 'team', 'hosted'] },
+  { id: 'about', tabs: ['about'] },
 ]
 const TAB_ICONS: Record<SettingsTab, LucideIcon> = {
   general: Settings, terminal: SquareTerminal, notifications: Bell, experimental: Sparkles,
   knowledge: BookOpen, personal: Brain, llm: SlidersHorizontal,
   models: ListFilter, usage: ChartNoAxesCombined, agent: ShieldCheck,
-  team: Users, hosted: Cloud,
+  team: Users, hosted: Cloud, about: Info,
 }
 
 // Note: the modal mounts only while open, so ModalFrame owns the whole
@@ -120,8 +122,8 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
             </div>
             <nav className={styles.navigation} aria-label={t('settings:brand')}>
               {groups.map((group) => (
-                <section key={group.id} className={styles.navGroup} aria-label={t(`settings:groups.${group.id}`)}>
-                  <h3 className={styles.groupTitle}>{t(`settings:groups.${group.id}`)}</h3>
+                <section key={group.id} className={styles.navGroup} aria-label={group.id === 'about' ? tabNav('about') : t(`settings:groups.${group.id}`)}>
+                  {group.id !== 'about' && <h3 className={styles.groupTitle}>{t(`settings:groups.${group.id}`)}</h3>}
                   <div className={styles.groupItems}>
                     {group.tabs.map((tab) => {
                       const Icon = TAB_ICONS[tab]
@@ -158,6 +160,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
 
             <main className={styles.body}>
               {activeTab === 'general' && <GeneralSettingsPanel />}
+              {activeTab === 'about' && <AboutSettingsPanel />}
               {activeTab === 'terminal' && <TerminalManagerPanel />}
               {activeTab === 'experimental' && <ExperimentalSettingsPanel />}
               {activeTab === 'notifications' && <NotificationSettingsPanel />}

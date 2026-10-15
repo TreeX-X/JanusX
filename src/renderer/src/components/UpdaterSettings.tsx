@@ -12,7 +12,7 @@ const UNSUPPORTED_KEY: Record<string, string> = {
 }
 
 /**
- * 设置中心通用页的应用更新区（Win P0）。
+ * 设置中心关于页的应用更新区（Win P0）。
  * 状态机归主进程，UI 只做展示与触发：自动检查开关（即时保存）/ 手动检查 / 重启安装。
  */
 export function UpdaterSettings() {
@@ -106,7 +106,7 @@ export function UpdaterSettings() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', fontSize: 12 }}>
       <div className={styles.status}>
-        {t('settings:updater.currentVersion', { version: state?.currentVersion ?? '…' })}
+        {t('settings:updater.currentVersion', { version: state?.currentVersion || '—' })}
       </div>
       <SettingSwitch
         label={t('settings:updater.autoCheck.label')}
@@ -221,6 +221,7 @@ function SettingSwitch({ label,
       <label className={styles.switch}>
         <input
           type="checkbox"
+          aria-label={label}
           checked={checked}
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}

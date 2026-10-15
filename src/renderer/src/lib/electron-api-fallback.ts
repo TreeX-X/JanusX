@@ -1,4 +1,4 @@
-import { UPDATER_RELEASES_URL } from '../../../shared/ipc/updater'
+import { APP_REPOSITORY_URL, UPDATER_RELEASES_URL } from '../../../shared/ipc/updater'
 import { EXPERIMENTAL_ENABLED_ALL } from '../../../shared/ipc/experimental'
 import { DEFAULT_APP_THEME } from '../../../shared/ipc/theme'
 import type { ExternalCliToolId } from '../../../shared/ipc/external-cli'
@@ -402,6 +402,10 @@ export function installElectronApiFallback(): void {
       }),
       openReleases: () => {
         window.open(UPDATER_RELEASES_URL, '_blank', 'noopener')
+        return Promise.resolve()
+      },
+      openRepository: () => {
+        window.open(APP_REPOSITORY_URL, '_blank', 'noopener')
         return Promise.resolve()
       },
     },

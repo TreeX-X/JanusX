@@ -491,6 +491,7 @@ const updaterAPI: UpdaterAPI = {
   getSettings: () => ipcRenderer.invoke(UPDATER_CHANNELS.getSettings),
   updateSettings: (settings) => ipcRenderer.invoke(UPDATER_CHANNELS.updateSettings, settings),
   openReleases: () => ipcRenderer.invoke(UPDATER_CHANNELS.openReleases).then(() => undefined),
+  openRepository: () => ipcRenderer.invoke(UPDATER_CHANNELS.openRepository).then(() => undefined),
 }
 
 const subAgentRunAPI: SubAgentRunAPI = {

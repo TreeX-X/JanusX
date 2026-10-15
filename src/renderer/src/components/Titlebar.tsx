@@ -238,7 +238,7 @@ export function Titlebar() {
   }, [])
 
   const handleUpdaterBadgeClick = useCallback(() => {
-    setSettingsInitialTab('general')
+    setSettingsInitialTab('about')
     setSettingsModalOpen(true)
   }, [])
 

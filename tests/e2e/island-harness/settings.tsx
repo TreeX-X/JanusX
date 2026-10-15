@@ -7,12 +7,37 @@ import { useThemeStore } from '../../../src/renderer/src/stores/theme'
 import { normalizeAppTheme } from '../../../src/shared/ipc/theme'
 import { DEFAULT_AGENT_NOTIFICATION_SETTINGS, normalizeAgentNotificationSettings } from '../../../src/shared/notifications'
 import type { AgentNotificationSettingsView } from '../../../src/shared/notifications'
+import type { UpdaterEvent, UpdaterState } from '../../../src/shared/ipc/updater'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/styles/themes.generated.css'
 
 installElectronApiFallback()
 const params = new URLSearchParams(location.search)
 const language = params.has('en') ? 'en' : 'zh-CN'
+if (params.has('updater')) {
+  let autoCheck = true
+  let listener: ((event: UpdaterEvent) => void) | undefined
+  let state: UpdaterState = {
+    phase: 'idle', supported: true, unsupportedReason: null, currentVersion: '1.0.0',
+    availableVersion: null, downloadPercent: null, releaseNotes: null, error: null,
+  }
+  Object.assign(window.electron.updater, {
+    getState: async () => state,
+    getSettings: async () => ({ autoCheck }),
+    updateSettings: async (next: { autoCheck: boolean }) => { autoCheck = next.autoCheck; return { autoCheck } },
+    onEvent: (callback: (event: UpdaterEvent) => void) => { listener = callback; return () => { listener = undefined } },
+    check: async () => {
+      state = { ...state, phase: 'downloaded', availableVersion: '1.1.0', releaseNotes: 'A more focused workspace.' }
+      listener?.({ type: 'downloaded', version: '1.1.0' })
+      return state
+    },
+    install: async () => { document.documentElement.dataset.updateInstalled = 'true'; return { ok: true } },
+    openRepository: async () => {
+      if (params.has('linkFail')) throw new Error('Browser unavailable')
+      document.documentElement.dataset.repositoryOpened = 'true'
+    },
+  })
+}
 let theme = normalizeAppTheme(params.get('theme'))
 Object.assign(window.electron.system, { getLanguage: async () => language, setLanguage: async () => undefined })
 Object.assign(window.electron.theme, { get: async () => theme, update: async (id: string) => { theme = normalizeAppTheme(id); return theme } })
