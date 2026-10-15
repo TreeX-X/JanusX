@@ -38,20 +38,20 @@ export function OfficePreviewFrame({ port, status, errorCode, onRetry, onClose }
   const { t } = useI18n('editor')
   const src = buildOfficePreviewUrl(port)
   if (status === 'error' || !src) {
-    if (status !== 'error') return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[#777]">
+    if (status !== 'error') return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[var(--shell-dim)]">
       <span className="product-spinner" aria-hidden="true" />
       <span>{t('editor:office.startingPreview')}</span>
     </div>
-    return <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-xs text-[#aaa]">
+    return <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center text-xs text-[var(--shell-muted)]">
       <div>{getOfficeErrorCopy(errorCode ?? 'UNAVAILABLE', t)}</div>
       <div className="flex gap-2">
-        <button className="rounded border border-white/10 px-2 py-1 hover:bg-white/5" onClick={onRetry}>{t('editor:office.retry')}</button>
-        <button className="rounded border border-white/10 px-2 py-1 hover:bg-white/5" onClick={onClose}>{t('editor:office.close')}</button>
+        <button className="rounded border border-[var(--shell-border)] px-2 py-1 hover:bg-[var(--shell-hover)]" onClick={onRetry}>{t('editor:office.retry')}</button>
+        <button className="rounded border border-[var(--shell-border)] px-2 py-1 hover:bg-[var(--shell-hover)]" onClick={onClose}>{t('editor:office.close')}</button>
       </div>
     </div>
   }
   return <div className="relative h-full">
-    {status === 'reloading' && <div className="absolute inset-x-0 top-0 z-10 bg-black/60 py-1 text-center text-[10px] text-[#aaa]">{t('editor:office.reloading')}</div>}
+    {status === 'reloading' && <div className="absolute inset-x-0 top-0 z-10 bg-[var(--shell-chrome)] py-1 text-center text-[10px] text-[var(--shell-muted)]">{t('editor:office.reloading')}</div>}
     <iframe title={t('editor:office.iframeTitle')} className="h-full w-full border-0 bg-white" src={src} sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer" />
   </div>
 }

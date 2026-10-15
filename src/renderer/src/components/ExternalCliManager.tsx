@@ -9,6 +9,7 @@ import {
 import { externalCliService } from '@/services/external-cli'
 import { EXTERNAL_CLI_TOOL_ICONS } from '@/lib/cli-tool-icons'
 import styles from './AppSettingsModal.module.css'
+import cliStyles from './ExternalCliManager.module.css'
 
 type RowState = 'not-installed' | 'broken' | 'ready' | 'update-available'
 
@@ -26,7 +27,16 @@ function toRowState(detect: ExternalCliDetectResult | undefined, latestVersion: 
   return 'ready'
 }
 
-export function ExternalCliManager({ toolId }: { toolId: ExternalCliToolId }) {
+export function ExternalCliManager({
+  toolId,
+  visible,
+  onVisibleChange,
+}: {
+  toolId: ExternalCliToolId
+  /** 是否在新建终端入口显示；置灰的图标即由此驱动。 */
+  visible: boolean
+  onVisibleChange: (visible: boolean) => void
+}) {
   const { t } = useI18n('settings')
   const meta = EXTERNAL_CLI_TOOL_META[toolId]
   const [detect, setDetect] = useState<ExternalCliDetectResult>()
@@ -110,56 +120,61 @@ export function ExternalCliManager({ toolId }: { toolId: ExternalCliToolId }) {
   const versionLine = [detect?.version, latestVersion && latestVersion !== detect?.version ? `→ ${latestVersion}` : '', detect?.source]
     .filter(Boolean)
     .join(' · ')
+  const visibilityLabel =
+    !visible ? t('settings:cliTools.visibility.hidden') : t('settings:cliTools.visibility.visible')
+
+  // 品牌图标即显隐开关：点了置灰就不从新建入口显示（已有终端照常运行）。
+  const brandIcon = iconFailed ? (
+    <span
+      className={styles.lsToolIcon}
+      style={{ background: `${meta.color}22`, borderColor: `${meta.color}55`, color: meta.color }}
+      aria-hidden="true"
+    >
+      {meta.monogram}
+    </span>
+  ) : (
+    <img
+      className={cliStyles.logo}
+      src={EXTERNAL_CLI_TOOL_ICONS[toolId]}
+      alt=""
+      draggable={false}
+      onError={() => setIconFailed(true)}
+    />
+  )
 
   return (
-    <div className={styles.lsToolRow}>
-      <div className={styles.lsToolRowMain}>
-        {iconFailed ? (
-          <span
-            className={styles.lsToolIcon}
-            style={{ background: `${meta.color}22`, borderColor: `${meta.color}55`, color: meta.color }}
-            aria-hidden="true"
+    <div className={cliStyles.client} role="group" aria-label={meta.displayName} data-cli-tool={toolId}>
+      <div className={cliStyles.main}>
+        <div className={cliStyles.identity}>
+          <button
+            type="button"
+            className={cliStyles.icon}
+            data-tool={toolId}
+            aria-label={visibilityLabel}
+            aria-pressed={visible}
+            title={visibilityLabel}
+            onClick={() => onVisibleChange(!visible)}
           >
-            {meta.monogram}
-          </span>
-        ) : (
-          <img
-            className={styles.lsToolImg}
-            src={EXTERNAL_CLI_TOOL_ICONS[toolId]}
-            alt={meta.displayName}
-            draggable={false}
-            onError={() => setIconFailed(true)}
-          />
-        )}
-        <div className={styles.lsToolRowInfo}>
-          <span className={styles.lsCardName}>{meta.displayName}</span>
-          {loading
-            ? (
-              <span className={styles.lsLoadingRow}>
-                <span className={styles.lsSpinner} aria-hidden="true" />
-                <span className={styles.lsToolRowMeta}>{t('settings:cliTools.loading')}</span>
-              </span>
-            )
-            : versionLine
-              ? <span className={styles.lsToolRowMeta}>{versionLine}</span>
-              : <span className={styles.lsToolRowMeta}>{t(`settings:cliTools.tools.${toolId}.desc`)}</span>}
+            {brandIcon}
+          </button>
+          <div className={cliStyles.info}>
+            <div className={cliStyles.heading}>
+              <span>{meta.displayName}</span>
+              {!loading && <span className={cliStyles.status} data-state={state}>{t(STATE_LABEL_KEY[state])}</span>}
+            </div>
+            {loading
+              ? (
+                <span className={styles.lsLoadingRow}>
+                  <span className={styles.lsSpinner} aria-hidden="true" />
+                  <span className={cliStyles.meta}>{t('settings:cliTools.loading')}</span>
+                </span>
+              )
+              : versionLine
+                ? <span className={cliStyles.meta}>{versionLine}</span>
+                : <span className={cliStyles.meta}>{t(`settings:cliTools.tools.${toolId}.desc`)}</span>}
+          </div>
         </div>
-        {!loading && (
-          <span
-            className={`${styles.lsStateBadge} ${
-              state === 'ready'
-                ? styles.lsStateReady
-                : state === 'update-available'
-                  ? styles.lsStateUpdate
-                  : state === 'not-installed'
-                    ? styles.lsStateIdle
-                    : styles.lsStateFailed
-            }`}
-          >
-            {t(STATE_LABEL_KEY[state])}
-          </span>
-        )}
-        <span className={styles.lsToolRowActions}>
+        <span className={`${styles.lsToolRowActions} ${cliStyles.actions}`}>
           {!loading && state === 'not-installed' && !busy && (
             <button
               type="button"
@@ -203,15 +218,15 @@ export function ExternalCliManager({ toolId }: { toolId: ExternalCliToolId }) {
         </span>
       </div>
 
-      {hint && <div className={styles.lsCardHint}>{hint}</div>}
+      {hint && <div className={`${styles.lsCardHint} ${cliStyles.feedback}`}>{hint}</div>}
       {notice && (
-        <div className={styles.lsCardMeta}>
+        <div className={`${styles.lsCardMeta} ${cliStyles.feedback}`}>
           <span className={styles.lsMetaItem}>{notice}</span>
         </div>
       )}
-      {error && <div className={styles.lsCardError}>{error}</div>}
+      {error && <div className={`${styles.lsCardError} ${cliStyles.feedback}`} role="alert">{error}</div>}
       {justInstalled && state === 'ready' && (
-        <div className={styles.lsCardMeta}>
+        <div className={`${styles.lsCardMeta} ${cliStyles.feedback}`}>
           <span className={styles.lsMetaItem}>{t('settings:cliTools.notice.existingTerminal')}</span>
         </div>
       )}

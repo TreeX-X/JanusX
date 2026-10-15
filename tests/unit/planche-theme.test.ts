@@ -182,10 +182,9 @@ describe('planche theme contract', () => {
     for (const hex of ['#d4d4d4', '#ddd', '#e06c75', '#4ec9b0']) {
       expect(session, hex).not.toContain(`'${hex}'`)
     }
-    expect(session).toContain('var(--shell-diff-add)')
     expect(session).toContain('var(--shell-diff-del)')
-    // 会话表面（列表卡片、详情 turn 卡片、轮播栏、diff 面板、checkpoint 条、输入框）
-    // 全部由 --shell-chrome 朝 --shell-text 混出的三档承担，弹窗遮罩与红绿灯除外。
+    // 会话表面（列表卡片、详情 turn 卡片、轮次导航、输入框）
+    // 全部由 --shell-chrome 朝 --shell-text 混出的两档承担，弹窗遮罩与红绿灯除外。
     // plankhe 的 --shell-void/canvas/pane/chrome/card 全是 #EFE4C5，纸面里没有更深的
     // 台阶：写死 rgba(0,0,0,.2x) 是冷灰油渍，写死 rgba(255,255,255,.0x) 等于没画，
     // 硬编码的 #8ab4ff 蓝在朱红纸面上完全跑调。三条都不许回来。
@@ -195,28 +194,25 @@ describe('planche theme contract', () => {
     expect(session).toContain(
       "const SURFACE_INSET = 'color-mix(in srgb, var(--shell-chrome) 90%, var(--shell-text))'",
     )
-    expect(session).toContain(
-      "const SURFACE_DEEP = 'color-mix(in srgb, var(--shell-chrome) 86%, var(--shell-text))'",
-    )
-    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(2)
+    expect(session.match(/background: SURFACE_CARD/g) ?? []).toHaveLength(1)
     // 内容卡（首轮提示/最近轮次）走 module .sheet 浅纸面，不占 SURFACE_INSET 名额
-    expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(8)
+    expect(session.match(/background: SURFACE_INSET/g) ?? []).toHaveLength(3)
     // 会话面板三阶：地吃 --shell-canvas（planche=软件纸面底色，dark=v6 画布），
-    // 卡/内卡仍走 A 方案高保真逐值
+    // 内卡沿用外卡色相，轻微提亮并通过细边框分层
     const sessionMod = read('components/SessionPanel.module.css')
     expect(sessionMod).toContain('background: var(--shell-canvas)')
     expect(sessionMod).not.toContain('#E8E6E2')
-    expect(sessionMod).toContain('background: #E2D9BD')
-    expect(sessionMod).toContain('background: #F8F2E0')
-    expect(sessionMod).toContain(":global([data-theme='dark']) .cardSurface")
-    expect(sessionMod).toContain(":global([data-theme='dark']) .sheet")
-    expect(sessionMod).toContain('color-mix(in srgb, var(--shell-chrome) 88%, white)')
+    expect(sessionMod).toContain('--session-card-surface: var(--shell-canvas)')
+    expect(sessionMod).toContain('background: var(--session-card-surface)')
+    expect(sessionMod).toContain('color-mix(in srgb, var(--session-card-surface) var(--session-sheet-base-weight), white)')
+    expect(sessionMod).not.toContain(":global([data-theme='dark']) .sheet")
+    expect(getThemeDefinition('planche').tokens['session-sheet-base-weight']).toBe('84%')
+    expect(getThemeDefinition('dark').tokens['session-sheet-base-weight']).toBe('96%')
     // 折叠控件为无边框 chevron 按钮（token 化，不吃填充；hover/聚焦走强调色）
     expect(sessionMod).toContain('.foldBtn')
     expect(sessionMod).toMatch(/\.foldBtn \{[^}]*border: none/s)
     expect(sessionMod).toContain('var(--shell-accent-border)')
-    expect(session.match(/background: SURFACE_DEEP/g) ?? []).toHaveLength(2)
-    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(2)
+    expect(session.match(/CARD_BORDER,/g) ?? []).toHaveLength(1)
     expect(session).not.toMatch(/background: 'rgba\(255,\s*255,\s*255/)
     expect(session).not.toMatch(/background: 'rgba\(0,\s*0,\s*0,\s*0\.[1-5]\d\)'/)
     expect(session).not.toMatch(/(solid|dashed) rgba\(255,\s*255,\s*255/)
@@ -375,16 +371,17 @@ describe('planche theme contract', () => {
   it('routes the workspace ⋯ menu through theme tokens', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
     const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
-    // 左侧工作区 ⋯ 菜单：底座吃令牌，纸面点睛走 plancheMenu 分支（与终端菜单同构）
+    // Workspace menus use the shared popover palette rather than theme-id branches.
     const sidebar = read('components/Sidebar.tsx')
-    expect(sidebar).toContain('plancheMenu')
-    expect(sidebar).toContain("background: 'var(--shell-chrome-raised)'")
+    expect(sidebar).not.toContain('plancheMenu')
+    expect(sidebar).toContain("background: 'var(--popover-background)'")
     expect(sidebar).toContain("border: '1px solid var(--control-border)'")
     expect(sidebar).toContain('separatorClassName')
     expect(sidebar).toContain('bg-[var(--shell-border)]')
     expect(sidebar).not.toContain('rgba(25,25,25,0.98)')
     expect(sidebar).not.toContain("'1px solid rgba(255,255,255,0.09)'")
-    expect(sidebar).toContain("hover:bg-[#DCCFA8]' : 'hover:bg-[rgba(255,255,255,0.06)]'")
+    expect(sidebar).toContain('hover:bg-[var(--popover-hover)]')
+    expect(sidebar).toContain("boxShadow: 'var(--popover-shadow)'")
     expect(sidebar).not.toContain('onMouseEnter={(event) => {')
   })
 
@@ -548,10 +545,9 @@ describe('planche theme contract', () => {
       expect(source, file).toContain('ThemedTooltip')
       expect(source, file).not.toMatch(/title=\{/)
     }
-    // 终端区同样：菜单/页签/遥测卡/底部抽屉栏提示走 ThemedTooltip，折叠箭头纸面分支
+    // 终端区同样：菜单/页签/遥测卡/底部抽屉栏提示走 ThemedTooltip
     const area = read('components/TerminalArea.tsx')
     expect(area).toContain('ThemedTooltip')
-    expect(area).toContain('plancheBottomBar')
     expect(area).not.toMatch(/title=\{/)
   })
 })

@@ -95,8 +95,9 @@ for (const surface of ['', '&workbench']) {
     }
     await expect(card(page, 'Parser submodule').locator('.bp-node-card--module')).toBeVisible()
     await expect(card(page, 'Child note').locator('.bp-node-card--document')).toBeVisible()
-    const outlines = await page.locator('.bp-node-card--module').first().evaluate(el => ({ tab: getComputedStyle(el, '::before').content, border: getComputedStyle(el).borderTopWidth, radius: getComputedStyle(el).borderTopRightRadius }))
-    expect(outlines.tab).toBe('""'); expect(outlines.border).toBe('2px'); expect(outlines.radius).toBe('10px')
+    await expect(card(page, 'Parser submodule').locator('.bp-node-card')).toHaveCSS('border-radius', '8px')
+    await expect(card(page, 'Child note').locator('.bp-node-card')).toHaveCSS('border-radius', '4px')
+    await expect(card(page, 'Parser submodule').locator('.bp-node-card__enter')).toBeVisible()
     await page.screenshot({ path: test.info().outputPath('module-page-light.png'), fullPage: true })
     await page.evaluate(() => (window as any).architectureFixture.theme('dark'))
     await page.screenshot({ path: test.info().outputPath('module-page-dark.png'), fullPage: true })

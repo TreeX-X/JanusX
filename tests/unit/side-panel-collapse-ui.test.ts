@@ -11,7 +11,8 @@ describe('side panel collapse UI', () => {
       readFile('src/renderer/src/components/right-tools/RightDock.module.css', 'utf8'),
     ])
 
-    expect(app).toContain('grid-template-columns ${SIDE_PANEL_TRANSITION_MS}ms')
+    expect(app).toContain('${dockStyles.workbenchGrid}')
+    expect(rightDockStyles).toContain('transition: grid-template-columns 240ms')
     expect(sidebar).toContain('className="workspace-sidebar__expanded"')
     expect(sidebar).toContain('className="workspace-sidebar__collapsed')
     expect(sidebar).not.toContain('{!sidebarCollapsed && (')
@@ -35,7 +36,7 @@ describe('side panel collapse UI', () => {
     expect(rail).toContain('data-visible={toggleAnim.visible')
     expect(rail).not.toContain('{hasOpenTools && panelToggle && (')
 
-    // 高度也参与过渡，下方工具图标跟着滑动而不是跳位。
+    // 底部控件高度参与过渡，顶部工具图标保持固定。
     expect(railStyles).toContain(".railToggle[data-visible='true']")
     expect(railStyles).toContain('height: 40px')
     expect(railStyles).toContain('height: 0')

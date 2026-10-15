@@ -64,6 +64,7 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>, toolId: RightToolId) => {
+    if (event.target !== event.currentTarget) return
     const nextToolId = getTabKeyboardTarget(event.key, toolId, tools.map(({ id }) => id))
     if (nextToolId) {
       focusTool(nextToolId)

@@ -1,6 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, ListResourcesRequestSchema, ReadResourceRequestSchema } from '@modelcontextprotocol/sdk/types.js'
-import { ToolRegistry, type ToolDefinition } from '@janus-agent/agent-core'
+import { ToolRegistry, toolSchemaToZod, type ToolDefinition } from '@janus-agent/agent-core'
 import { registerNoteTools } from '@janus-agent/node-hosts'
 import { NoteChatEditor } from '@janus-agent/harness-node'
 import { realpath } from 'node:fs/promises'
@@ -26,9 +26,9 @@ export function createNoteMcpServer(stateRoot = defaultNoteStateRoot()) {
   const store = new ReviewStore(join(stateRoot, 'current-suggestions.sqlite'))
   const suggestions = new WorkspaceSuggestions(new SuggestionService(store), sources)
   const registry = new ToolRegistry()
-  registerNoteTools(registry, sources.notes)
-  registerSuggestionTools(registry, () => ({ sources, suggestions }))
   const editor = new NoteChatEditor(sources.notes)
+  registerNoteTools(registry, sources.notes, editor)
+  registerSuggestionTools(registry, () => ({ sources, suggestions }))
   registry.register({ name: 'note.context', actionRisk: 'read', description: 'Read a fixed bounded context of explicitly selected original Notes, with exact hashes and current source coverage. Does not generate a review.',
     inputSchema: { type: 'object', properties: { uris: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 16 } }, required: ['uris'], additionalProperties: false },
     async execute(input, context) {
@@ -45,10 +45,8 @@ export function createNoteMcpServer(stateRoot = defaultNoteStateRoot()) {
       for (const uri of selected) {
         const expected = first.entries.find(entry => entry.uri === uri && entry.classification === 'valid')
         if (!expected?.sourceHash) { unavailable.push({ uri, reason: 'Source is absent or invalid' }); continue }
-        // readPage 不接受 expectedHash 入参；它经 ...read 透出当前 sha256，
-        // 下面用返回值比对快照 hash 做失效检测。
-        const page = await editor.readPage(context.workspaceRoot, uri, { maxChars: Math.min(12000, Math.floor(80000 / selected.size)) })
-        if (page.expectedHash !== expected.sourceHash) throw new Error('Note sources changed; read context again')
+        const page = await editor.readPage(context.workspaceRoot, uri, { expectedHash: expected.sourceHash,
+          maxChars: Math.min(12000, Math.floor(80000 / selected.size)) })
         notes.push(page)
       }
       const relations = first.relations.filter(edge => selected.has(edge.sourceUri) || selected.has(edge.targetUri))
@@ -80,10 +78,15 @@ export function createNoteMcpServer(stateRoot = defaultNoteStateRoot()) {
       const root = await realpath(workspacePath)
       const workspaceId = root
       const input = tool.inputSchema.required?.includes('workspaceId') ? { ...args, workspaceId } : args
-      registry.validateCall({ toolName: tool.name, input })
+      toolSchemaToZod(tool.inputSchema).parse(input)
       const value = await tool.execute(input, { workspaceId, workspaceRoot: root, signal: extra.signal })
       return { content: [{ type: 'text', text: JSON.stringify(value) }] }
-    } catch (error) { return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : 'Note operation failed' }] } }
+    } catch (error) {
+      const message = error instanceof z.ZodError
+        ? 'Invalid Note tool arguments: ' + error.issues.slice(0, 5).map(issue => `${issue.path.join('.') || 'arguments'}: ${issue.message}`).join('; ')
+        : error instanceof Error ? error.message : 'Note operation failed'
+      return { isError: true, content: [{ type: 'text', text: message }] }
+    }
   })
   let closed = false
   return { server, async close() { if (closed) return; closed = true; await server.close(); sources.notes.unwatchAll(); store.close() } }

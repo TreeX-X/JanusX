@@ -8,7 +8,7 @@
   "class": "feature",
   "tags": ["telemetry","usage-stats","terminal","session-files"],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/61b5d05c-e1ad-4f7a-a3e9-57982fb78c4e",
-  "updated": "2026-10-13T07:07:31.000Z",
+  "updated": "2026-10-15T03:06:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -22,6 +22,8 @@
 改动前，`UsageStatsPanel` 的 `aggregateUsageStats`（`src/renderer/src/lib/usage-stats.ts`）按当前终端 store 快照归桶，以 `telemetryUpdatedAt` 入桶。[用量统计修复与全局统计](./usage-telemetry-fix-and-stats.md) 记录了该阶段的快照口径。聚合没有独立持久账本，关闭、移除或重建终端会影响结果；恢复会话后能否重新读出数字，不能替代历史时间分布的持久化。
 
 用户确认本方案并要求 xdo 实施后，当前 worktree 已切换为原生会话源和持久账本。本文记录实现、验收证据及保留边界；Janus/DSH 原生用量接入仍属于后续扩展。
+
+> 2026-10-14：本文的 hook 归属与采集范围已被[hook 解耦决策](../usage-telemetry-hook-decoupling.md)（accepted，未实施）取代——统计链路将完全移除 hook，账本改纯会话扫描并覆盖未打开历史，归属改会话诞生/激活时刻的 pty×文件相关性。决策落地前，本文契约仍是现行实现；其中"Out of scope：无绑定的全磁盘历史普查"一条按决策移入范围，Codex 的累计基线差分将升级为事件模式重放（迁移政策见决策待定项）。
 
 ## Stability assessment
 
@@ -76,6 +78,24 @@
 | janus | 已接入历史只存消息与工具轨迹，无 usage | 找到并验证原生用量落盘点，否则未知 |
 | dsh | session.v4.jsonl.zstd，当前只定位不解码 | 解码器加真实样本，并验证用量字段，否则未知 |
 
+Codex 来源目录与启动一致：优先使用主进程为该终端登记的恢复目录，其次取 `CODEX_HOME`，最后回退 `~/.codex`。声明配置、会话扫描、账本 namespace 及 checkpoint 均使用所选目录；Hook 刷新和 renderer 读取不会覆盖启动目录，终端释放前最后采集仍使用原目录。renderer 不提供目录选择。`last_token_usage.total_tokens = 0` 是有效上下文读数，不再当作缺失。对应回归位于 `runtime-telemetry-history.test.ts` 与 `runtime-telemetry-coordinator.test.ts`，连同 renderer 合并测试共三文件 42 项通过。本机近期日志的结构仍包含 `token_count.info.last_token_usage/total_token_usage`；未以目录兼容性修复代替用户当前实例的绑定实测结论。
+
+### 缓存写入字段适配（2026-10-15）
+
+Codex 本机原生 `total_token_usage` 已提供 `cache_write_input_tokens`。终端累计投影与历史事件差分都读取该字段：新鲜输入 = 原生输入 − 缓存读取 − 缓存写入，总 token 保持原值；最近命中率仍为最近缓存读取 / 最近原生输入，写入不另加分母。缺少写入字段的旧日志保持未知，明确零写入保留为 0；继承事件的缓存写入也留在父会话。缓存写入是新建缓存的 token 用量，不是磁盘容量或每轮对话的必有增量。
+
+账本升级保持已有消耗：旧事件会话即使文件大小不变也重新读取一次；只有新旧用量满足“旧输入 = 新鲜输入 + 写入”且读取、输出、总量一致时，才原位补充分项并保留记录 id、日期和模型。缺源或核对不一致不猜测。旧累计基线没有历史写入分量，升级过渡区间保留原有未拆分输入，随后使用新写入基线差分；不回填无法还原的旧采样区间，真实计数回退仍暂停。
+
+Claude 的 `cache_creation_input_tokens` 原已接入，本轮补充正数/零/缺失回归并修正整段缺失被投影成 0 的情况。近期完整日志使用 `mimo-v2.6-pro`、`step-5-preview`，原生写入均缺失或为零，缓存读取为正；不从读取反推写入。
+
+验证：`npx vitest run tests/unit/runtime-telemetry-history.test.ts tests/unit/runtime-telemetry-corpus-scan.test.ts tests/unit/runtime-telemetry-accounting.test.ts tests/unit/usage-ledger.test.ts tests/unit/runtime-telemetry-coordinator.test.ts tests/unit/usage-stats.test.ts --maxWorkers=2 --reporter=dot`，6 文件 81 项通过；遥测三文件定向 ESLint、普通类型检查通过。真实日志只读核验（临时账本）：5 个近期 Codex 会话均满足事件写入之和等于累计写入、事件总量之和等于累计总量，且输入/读/写/输出守恒；3 个近期 Claude 会话解析写入为 0，与源一致。未运行 live Electron 验证。全项目 `typecheck:strict-unused` 被其他文件的 3 个未使用变量错误阻塞（TerminalManagerPanel 的 useEffect/load、workspace 的 getBrowserPaneContent），未改动这些文件。
+
+### Codex 绑定实证（2026-10-14，用户 dev 实例）
+
+用户实测 dev 版时 Codex 上下文与用量均未统计、Claude 正常。定位结论：**不是 rollout 解析不适配新格式**——本机 codex 0.162.1 的 `session_meta.payload.id/cwd`、`event_msg/token_count.info.*`、`turn_context.payload.model/cwd` 与解析器字段路径完全匹配。真正断点在 hook 载荷解码：Codex 在 Windows 上把 hook stdin 写成 **UTF-16LE 带 BOM**（实测捕获 payload 首字节 `FF FE`），而 `buildWindowsHookScript()` 用 `[Console]::In.ReadToEnd()`（InputEncoding=UTF8）读取，得到 NUL 间隔乱码，`ConvertFrom-Json` 失败后 catch 把载荷降级为字符串，`Get-FirstString` 对字符串输入返回 null，`session_id`/`thread_id`/`transcript_path` 全部丢失。后果链：`bindSession` 从不调用 → coordinator 无绑定 → 每 10s 轮询走 bootstrap 分支只返回 config.toml 声明模型 → 无上下文、无用量。实证：dev 应用绑定账本中 codex 条目停留在 8 月 2 日，用户当前 codex 终端（hook 正常发出 Stop）从未入账。
+
+修复：hook 脚本改为读原始字节流并按 BOM 解码（UTF-16LE/BE/UTF-8 通吃），Node 版 hook client 同步加 BOM 探测。已实测两种编码的 stdin 经生成脚本都能正确解出 sessionId。codex 的 `hooks.state.trusted_hash` 只覆盖 hooks.json 中的命令、不覆盖脚本内容，更新脚本不需要用户重新信任 hooks；应用重启后创建终端即自动重部署脚本（`ensureHookClientScript` 每次安装都重写）。Claude stdin 为 UTF-8，走同一解码的 else 分支，行为不变。
+
 ### janus / dsh 挂账：未解决，后续扩展
 
 已按用户确认的方案采用声明模型、带来源的窗口容量和「无用量数据」，当前占用无法读取时保持未知。Janus footer 和 DSH 文本数字不再参与统计；对应筛选没有已记录用量时显示「–」。关闭挂账需要原生会话源的真实样本、读取实现及回归验证；仅有解码器或未经验证的新文件不算完成。
@@ -117,6 +137,8 @@ Out of scope：DSH 解码、Janus 新增用量落盘协议、费用定价、无�
 coordinator 在主进程跟踪终端，hook 触发刷新，10 秒轮询补偿漏事件；同终端读数串行，读数未完成时不叠加周期任务。renderer 只订阅上下文、查询账本。异步读取后复核同一绑定对象，拒绝换绑或解绑后的结果；退出时先停轮询，再尝试最后一次采集并解除原绑定。精确绑定不以新终端 `startedAt` 过滤原生历史，恢复同一会话沿用原基线。事件源可补原生历史；累计源只能保留离线区间和采样增量，不能还原区间内每次请求。
 
 `usage-ledger.ts` 使用 SQLite WAL、synchronous FULL、busy_timeout 3000ms；`BEGIN IMMEDIATE` 将会话基线、事件身份和增量记录作为一次原子提交，并处理跨进程写入互斥。写入失败回滚，保留旧基线供重试；损坏或未来版本显式报错，保留原数据库。相同事件源重放可幂等校验，但账本损坏后不自动重建；累计源无法重建已经丢失的采样时间分布。异常会话与读写错误在统计页提示，正常重试可清除暂时不可用状态，源改写或计数回落的暂停不自动解除。
+
+2026-10-14 用户要求下的偏离：**Codex 的 issue 会话不再触发统计页的“用量尚不完整”提示**。理由是本机 24 个 codex 暂停会话全部源于压缩后累计计数器重置（实测回落点≈上下文窗口值），属已知 CLI 行为而非数据损坏，提示只是噪音；提示对 codex Filter 与“全部”视图均屏蔽，其他引擎的缺口照常提示。会话本身仍处于暂停状态（压缩后消耗不入账），界面不再可见该信号——若后续要把这部分消耗补上，需要识别重置并重新建立基线，属账本正确性扩展而非展示问题。
 
 ### 时间、模型与展示
 

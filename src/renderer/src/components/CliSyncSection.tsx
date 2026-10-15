@@ -787,23 +787,6 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
         </>
       )}
 
-      <div className={`${styles.testStatus} ${styles[testStatus.state]}`}>
-        {testStatus.message}
-      </div>
-      <div className={styles.footerActions}>
-        <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={handleTest}>
-          {t('llm:test.button')}
-        </button>
-        <button
-          type="button"
-          className={`${styles.btn} ${styles.btnPrimary}`}
-          onClick={handleSave}
-          disabled={saveStatus === 'saving'}
-        >
-          {saveStatus === 'saving' ? t('llm:save.saving') : editingId ? t('llm:save.update') : t('llm:save.save')}
-        </button>
-      </div>
-
       {isJanus && (
         <div className={styles.inlineHint}>{t('llm:terminals.internalNote')}</div>
       )}
@@ -859,6 +842,24 @@ function TerminalProviderPanel({ terminal }: { terminal: ExternalCliToolId }) {
       {notice && <div className={styles.inlineHint}>{notice}</div>}
       {error && <div className={styles.notice}>{error}</div>}
       <div className={styles.inlineHint}>{t('llm:terminals.liveHint')}</div>
+      <div className={styles.providerFooter}>
+        <div className={`${styles.testStatus} ${styles[testStatus.state]}`}>
+          {testStatus.message}
+        </div>
+        <div className={styles.footerActions}>
+          <button type="button" className={`${styles.btn} ${styles.btnGhost}`} onClick={handleTest}>
+            {t('llm:test.button')}
+          </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.btnPrimary}`}
+            onClick={handleSave}
+            disabled={saveStatus === 'saving'}
+          >
+            {saveStatus === 'saving' ? t('llm:save.saving') : editingId ? t('llm:save.update') : t('llm:save.save')}
+          </button>
+        </div>
+      </div>
     </>
   )
 }

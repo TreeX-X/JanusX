@@ -36,7 +36,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-15T07:27:29.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/35d88be6-50e5-466b-9514-9ecd7ac8ba7e"
 }
 ---
@@ -53,7 +53,7 @@ The sidebar listed workspaces as flat rows with no notion of worktrees, so linke
 
 Repo avatars ship without any login. GitHub checkouts resolve to the unauthenticated owner image URL while every other host keeps the letter fallback, matching the reference scope. Downloads pass through a seven-day disk cache under `userData`, stale bytes serve offline instead of failing, oversized payloads are refused, and failures resolve to null so the folder glyph stays. Team identity is untouched and no credential is stored.
 
-The sidebar renders worktrees as sub-rows under the expanded workspace with branch icons, branch-first labels, and path subtitles, but only when more than one checkout exists; single-checkout workspaces keep the existing terminals-only view. Rows switch the active worktree path per workspace, and session cards, checkpoints, and diffs re-scope to that path on every switch. Expanded session and checkpoint selections persist per path and restore on return. New terminals still open in the workspace root until the creation flow arrives.
+The sidebar renders worktrees under expanded workspaces with branch icons and branch-first labels, including a single main checkout. The 2026-10-15 revision moves paths to tooltips and removes the repeated branch line; terminal grouping and direct navigation are owned by [terminal hierarchy](../../terminal/sidebar-terminal-hierarchy.md). Rows switch the active worktree path per workspace, and session cards, checkpoints, and diffs re-scope to that path on every switch. Expanded session and checkpoint selections persist per path and restore on return. Unselected workspace rows show a folder at rest and crossfade to the cached avatar on hover; the selected workspace keeps its avatar visible after the pointer leaves. Both occupy the same 14px slot. Missing or failed images keep the folder glyph in every state.
 
 ## Alternatives considered
 

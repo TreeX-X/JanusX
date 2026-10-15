@@ -6,6 +6,7 @@ import type {
 } from '@janusx/llm-core'
 import type { KnowledgeRecallTrace } from '../knowledge'
 import type { BlueprintMaintenanceTask } from '../janus/maintenance-types'
+import type { MemoBinding } from '../memo'
 
 export const LLM_CHANNELS = {
   getTerminalProviders: 'llm:get-terminal-providers', saveTerminalProvider: 'llm:save-terminal-provider',
@@ -32,6 +33,9 @@ export interface ChatWorkspaceResource {
   agentSessionId: string
 }
 export interface ChatRequest {
+  memoBinding?: MemoBinding
+  /** Originating user message, including turns with no bound memo yet. */
+  memoMessageId?: string
   contextCheckpoint?: import('../chat-context').ChatContextCheckpoint
   contextEpoch?: number
   compact?: { keepRecentUnits: number }
@@ -111,6 +115,7 @@ export interface ChatAnswerQuestionPayload {
  * Note: alignment trade-offs live with the contract — see .agents/notes/agent/janus-agent-chat-alignment.md
  */
 export type ChatAgentEvent =
+  | { type: 'memo_created'; requestId: string; conversationId: string; binding: MemoBinding }
   | { type: 'context_state'; requestId: string; state: import('../chat-context').ChatContextStatus }
   | { type: 'note_repair'; requestId: string; update: import('../note-repair').NoteRepairUpdate }
   | { type: 'note_change'; requestId: string; change: import('../note-chat').NoteChatChange }
@@ -140,6 +145,7 @@ export interface ChatSteerInput {
   conversationId?: string
   entryId: string
   text: string
+  memoBinding?: MemoBinding
 }
 export interface ChatSteerResult {
   accepted: boolean

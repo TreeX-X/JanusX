@@ -93,7 +93,6 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await expect(capsule).toContainText('IDLE')
     await expect(capsule.locator('.janus-identity-eye')).toHaveCount(2)
     await settleWorkbench()
-    const canvasWidthBefore = (await canvasCard.boundingBox())?.width
 
     if (await capsule.getAttribute('aria-expanded') === 'false') await capsule.click()
     await expect(capsule).toHaveAttribute('aria-expanded', 'true')
@@ -109,6 +108,10 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
     await expect(sendButton).toBeEnabled()
     await chatInput.clear()
     await expect(sendButton).toBeDisabled()
+    // Opening Chat consumes its own grid column. Measure the detail baseline
+    // only after that separate transition has settled.
+    await settleWorkbench()
+    const canvasWidthBefore = (await canvasCard.boundingBox())?.width
     const conversationBoxBeforeDetail = await conversation.boundingBox()
 
     await page.locator('.react-flow__node').first().dblclick()
@@ -178,9 +181,9 @@ test('JanusX capsule keeps detail, canvas, and conversation as independent cards
       }
     }
 
-    // 来源入口与四个画布操作均须保持在工作台内且互不重叠。
-    const toolbarActions = workbenchToolbar.locator('.blueprint-btn')
-    await expect(toolbarActions).toHaveCount(5)
+    // 主栏保留适配、详情、来源和更多；收进更多菜单的操作不占主栏空间。
+    const toolbarActions = workbenchToolbar.locator('.blueprint-btn:visible')
+    await expect(toolbarActions).toHaveCount(4)
     await expect(workbenchToolbar.getByRole('button', { name: '系统结构', exact: true })).toHaveCount(0)
     await expect(workbenchToolbar.getByRole('button', { name: /^数据来源/ })).toBeVisible()
     const toolbarActionBoxes = await toolbarActions.evaluateAll((elements) =>

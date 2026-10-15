@@ -12,6 +12,9 @@ import {
   type ChatMessage,
 } from '@/services/llm'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { memoBinding, useMemoStore } from '@/stores/memo'
+import { useExperimentalStore } from '@/stores/experimental'
+import type { MemoBinding } from '../../../../shared/memo'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useNoteRepairStore } from '@/stores/note-repair'
 import { useNoteChatStore } from '@/stores/note-chat'
@@ -37,6 +40,7 @@ import {
   NEW_CONVERSATION_TITLE,
   capChatMessages,
   bindProjectConversation,
+  continueConversation,
   createJanusConversation,
   getRetryTurn,
   createInitialSnapshot,
@@ -75,6 +79,8 @@ export interface ConversationSummary {
   messageCount: number
   isStreaming: boolean
   hasError: boolean
+  /** The memo this session maintains, when it has one. */
+  memoId?: string
 }
 
 export interface ChatModelOption {
@@ -152,6 +158,8 @@ export interface UseJanusChatReturn {
   selectConversation: (conversationId: string) => void
   renameConversation: (conversationId: string, title: string) => void
   deleteConversation: (conversationId: string) => void
+  /** Records the session's memo, or ends the session when switching/leaving. */
+  bindMemo: (memoId: string | null) => void
   approvalMode: AgentApprovalMode
   setApprovalMode: (mode: AgentApprovalMode) => void
 }
@@ -583,11 +591,13 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
   }, [updateConversation])
 
   // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/blueprint/tasks/blueprint-dialog-separation.md
-  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }, compact?: { keepRecentUnits: number }, noteRepairId?: string) => {
+  const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }, compact?: { keepRecentUnits: number }, noteRepairId?: string, boundMemo?: { binding?: MemoBinding }) => {
     const runtime = runtimesRef.current[id]
     const conversation = conversationsRef.current.find((item) => item.id === id)
     const handles = getHandles(id)
     if (!conversation || (!recovery && runtime?.isStreaming) || handles.active) return
+    const memoEnabled = useExperimentalStore.getState().memo
+    const requestMemoBinding = !memoEnabled || !window.electron.memo || compact || maintenanceTaskId || noteRepairId ? undefined : boundMemo ? boundMemo.binding : memoBinding(id, userMessage.id)
     handles.proposalRetry = maintenanceTaskId ? { message: userMessage, taskId: maintenanceTaskId } : undefined
     const generation = handles.generation + 1
     handles.generation = generation
@@ -675,7 +685,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           const startedAt = runtimesRef.current[id]?.turnStartedAt ?? Date.now()
           const latestUser = conversationsRef.current.find(item => item.id === id)?.messages.filter(message => message.role === 'user').at(-1)
           if (noteRepairId) useNoteRepairStore.getState().receive({ id: noteRepairId, phase: 'failed', error })
-          const canRecover = !noteRepairId && !maintenanceTaskId && !recovery && replaySafe
+          const canRecover = !requestMemoBinding && !noteRepairId && !maintenanceTaskId && !recovery && replaySafe
             && latestUser?.id === userMessage.id
             && /function response parts|function call parts/i.test(error)
           const final = flushPending(id)
@@ -703,6 +713,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           ...(model ? { providerId: model.providerId, modelId: model.modelId } : {}),
           sourceTag: 'janus-chat',
           conversationId: id,
+          memoBinding: requestMemoBinding,
+          memoMessageId: memoEnabled && window.electron.memo && !compact && !maintenanceTaskId && !noteRepairId ? userMessage.id : undefined,
           contextCheckpoint: latest.contextCheckpoint,
           contextEpoch: latest.contextEpoch,
           compact,
@@ -736,6 +748,16 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             }))
           },
           onAgentEvent: (agentEvent) => {
+            if (agentEvent.type === 'memo_created') {
+              if (agentEvent.conversationId !== id || agentEvent.binding.messageId !== userMessage.id) return
+              replaySafe = false
+              // The originating conversation owns the binding, even if another
+              // conversation is visible. Never replace a manual binding.
+              updateConversation(id, current => current.memoId ? current : { ...current, memoId: agentEvent.binding.memoId, updatedAt: Date.now() })
+              useMemoStore.getState().receive(agentEvent.binding.memoId)
+              void useMemoStore.getState().refresh().catch(() => undefined)
+              return
+            }
             if (agentEvent.type === 'note_repair') {
               if (agentEvent.update.id === noteRepairId) useNoteRepairStore.getState().receive(agentEvent.update)
               return
@@ -859,6 +881,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       // R6-full：流式中发送走 steering——乐观追加用户消息（随会话落盘即 durable），
       // 再向主侧投递抢占。主侧 accept 即入队；拒绝（流已结束/队满）按下述回退。
       const entry: Message = { id: crypto.randomUUID(), role: 'user', content: trimmed, timestamp: Date.now() }
+      const entryMemoBinding = useExperimentalStore.getState().memo && window.electron.memo ? memoBinding(id, entry.id) : undefined
       updateConversation(id, (current) => ({ ...current, messages: [...current.messages, entry], updatedAt: Date.now() }))
       setRuntime(id, (current) => current.pendingSteerIds.includes(entry.id)
         ? current
@@ -895,10 +918,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             updateConversation(id, (current) => ({ ...current, messages: [...current.messages, entry], updatedAt: Date.now() }))
             return
           }
-          startRequest(id, latest.messages, entry)
+          startRequest(id, latest.messages, entry, undefined, undefined, undefined, undefined, { binding: entryMemoBinding })
         }, 0)
       }
-      void steerChat({ conversationId: id, entryId: entry.id, text: trimmed }).then(
+      void steerChat({ conversationId: id, entryId: entry.id, text: trimmed, memoBinding: entryMemoBinding }).then(
         settleSteer,
         () => settleSteer({ accepted: false }),
       )
@@ -995,8 +1018,10 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     }
   }), [clear, updateConversation])
 
-  const attachWorkspace = useCallback((id: string, workspaceId: string) => {
-    if (!workspacesRef.current.some((workspace) => workspace.id === workspaceId)) return
+  const attachWorkspace = useCallback(async (id: string, workspaceId: string) => {
+    const workspace = workspacesRef.current.find(item => item.id === workspaceId)
+    const conversation = conversationsRef.current.find(item => item.id === id)
+    if (!workspace || !conversation) return
     updateConversation(id, (conversation) => conversation.attachedWorkspaceIds.includes(workspaceId)
       ? conversation
       : {
@@ -1006,7 +1031,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
         })
   }, [updateConversation])
 
-  const detachWorkspace = useCallback((id: string, workspaceId: string) => {
+  const detachWorkspace = useCallback(async (id: string, workspaceId: string) => {
+    const conversation = conversationsRef.current.find(item => item.id === id)
+    if (!conversation) return
     const handles = handlesRef.current.get(id)
     const session = handles?.sessions.get(workspaceId)
     if (session) {
@@ -1107,6 +1134,30 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     }
   }, [])
 
+  /* One session maintains exactly one memo. Picking a memo in a session that
+   * has none just records it; switching to another memo or leaving the memo
+   * ends this session and opens a fresh one, keeping the ended session in the
+   * list for later viewing. See .agents/notes/knowledge/user-todo-janus.md */
+  const bindMemo = useCallback((id: string, memoId: string | null) => {
+    const current = conversationsRef.current.find((item) => item.id === id)
+    if (!current) return
+    if (!current.memoId) {
+      if (memoId) updateConversation(id, (conversation) => ({ ...conversation, memoId, updatedAt: Date.now() }))
+      return
+    }
+    if (current.memoId === memoId) return
+    const next = continueConversation(current, memoId ?? undefined)
+    updateConversations((list) => [next, ...list])
+    setIslandConversationId(next.id)
+  }, [updateConversation, updateConversations])
+
+  // The memo panel and the Chat turn read the active session's memo through the
+  // store; the conversation record stays the single source of truth.
+  useEffect(() => {
+    const active = conversationsRef.current.find((item) => item.id === islandConversationId)
+    useMemoStore.getState().bindConversation(islandConversationId, active?.memoId ?? null)
+  }, [conversations, islandConversationId])
+
   const renameConversation = useCallback((id: string, title: string) => {
     const normalized = title.trim().replace(/\s+/g, ' ')
     if (!normalized) return
@@ -1152,6 +1203,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     messageCount: conversation.messages.length,
     isStreaming: runtimeStates[conversation.id]?.isStreaming ?? false,
     hasError: !!runtimeStates[conversation.id]?.error,
+    ...(conversation.memoId ? { memoId: conversation.memoId } : {}),
   })).sort((a, b) => b.updatedAt - a.updatedAt), [conversations, runtimeStates])
 
   const getController = useCallback((requestedId?: string): UseJanusChatReturn => {
@@ -1242,6 +1294,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       selectConversation,
       renameConversation,
       deleteConversation,
+      bindMemo: (memoId) => bindMemo(id, memoId),
       approvalMode: runtime.approvalMode,
       setApprovalMode: (mode) => setApprovalMode(id, mode),
     }
@@ -1249,6 +1302,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     answerQuestion,
     attachWorkspace,
     availableWorkspaces,
+    bindMemo,
     getHandles,
     cancelSteeredMessage,
     clear,

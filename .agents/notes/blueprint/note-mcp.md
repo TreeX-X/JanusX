@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "proposed",
   "created": "2026-10-09",
-  "updated": "2026-10-10T08:35:33.327Z",
+  "updated": "2026-10-13T03:34:53.540Z",
   "class": "architecture",
   "tags": ["note", "mcp", "onboarding", "blueprint"],
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
@@ -147,7 +147,11 @@ Q7–Q8 已确认首版工具范围、终端顺序、全局导入、项目定位
 
 ## 当前实现与实际兼容性
 
-服务提供 note.list/read/write/init、note.context、note.suggestions 和 note.suggestions.close，以及 janusx-note://maintenance 指南。建议查询的模块归属、摘要裁剪和分页修订保护由 tests/unit/blueprint-suggestion-query.test.ts 验证；独立 stdio 读写与清理由 tests/unit/note-mcp.test.ts 验证。摘要不替代处理前的原文依据读取。note.context 返回目标及显式模块/父模块的有界原文、关系、hash、缺失说明和续读方式；它不替代 note.read 的写前授权。分页续读可带 expectedHash，变化时必须重新读取。上下文不宣称读过全部关系正文。
+服务提供 note.list/read/write/init、note.context、note.suggestions 和 note.suggestions.close，以及 janusx-note://maintenance 指南。建议查询的模块归属、摘要裁剪和分页修订保护由 tests/unit/blueprint-suggestion-query.test.ts 验证；独立 stdio 读写与清理由 tests/unit/note-mcp.test.ts 验证。摘要不替代处理前的原文依据读取。note.context 返回目标及显式模块/父模块的有界原文、关系、hash、缺失说明和续读方式；它与 note.read/write 共用一个 NoteChatEditor，成功返回的目标页可作为写前读取基线。分页续读可带 expectedHash，变化时拒绝续页并要求重读。上下文不宣称读过全部关系正文。
+
+更新操作要求 operations 中的 uri 与成功读取返回的 expectedHash；sections 是现有二级标题到替换正文的对象，不能传整篇 markdown 或数组。同一事务为 1–16 个操作，省略未改动的章节。note.list 的 sourceHash 仅用于定位，未读取不能直接更新；服务重连后须重新读取。版本冲突不覆盖外部修改，混合新建与更新的批次失败时不部分落盘。错误返回具体参数路径，便于 Agent 修正后重试。基础规则由 agentX 共享实现，MCP 不额外放宽身份或版本检查。
+
+已复现并修复独立上下文读者与写入读者分离造成的“已读但未授权更新”，以及维护指南要求 expectedHash 但共享 note.read 参数未暴露该字段的问题。tests/unit/note-mcp.test.ts 的 8 项通过，覆盖独立上下文更新、分页版本变化、未读更新拒绝、错误字段及修正重试、事务冲突和初始化后中文专题创建／更新。本机 OpenCode 真实进程在隔离配置和确定性模型响应下完成 list → context → write → read → suggestions，写后原文核对成功；这是传输与文件维护验证，不证明真实模型总能生成正确参数，也不能确认无日志的历史失败命中了哪条路径。验证脚本现在将未完成调用或实际未写入作为失败退出。
 
 | 客户端 | 全局配置与实测 |
 | --- | --- |

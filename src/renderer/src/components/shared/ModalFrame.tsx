@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useReducedMotion, useWorkbenchPhase } from './CardFrame'
+import { useBrowserOcclusion } from '@/hooks/useBrowserOcclusion'
 import './ModalFrame.css'
 
 /**
@@ -114,6 +115,7 @@ export function ModalFrame({
   const requestClose = useCallback(() => {
     phaseRequestClose()
   }, [phaseRequestClose])
+  useBrowserOcclusion(phase !== 'hidden')
 
   // Hold the first frame so the panel always starts from the entrance keyframe
   // rather than painting its final state before the animation kicks in.

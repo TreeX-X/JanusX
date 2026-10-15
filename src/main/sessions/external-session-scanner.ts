@@ -1,16 +1,17 @@
 // Note: external provider sessions import by transcript backfill — see
 // .agents/notes/sessions/records/external-session-backfill.md
-import { open, readdir, readFile, stat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import {
   AGENT_ENGINE_CAPABILITIES,
   resolveSessionStorePath,
-  type SessionStoreKind,
 } from '../notifications/agent-engine-capabilities'
 import type { AgentHookSource } from '../notifications/agent-hook-types'
 import type { AgentSessionRegistry, ImportExternalSessionInput } from './session-registry'
 import { listOpencodeSessions } from './opencode-sessions'
+import { readTranscriptSnapshot } from './transcript-snapshot'
+import type { TranscriptTurn } from '../../shared/ipc/session'
 // One per-engine record classification shared with the detail reader; the
 // session pipeline and the knowledge pipeline read the same shapes.
 import {
@@ -18,12 +19,9 @@ import {
   claudeUserText,
   codexAssistantText,
   codexUserText,
-  extractKernelMessages,
-  firstCleanPrompt,
   parseJsonLine,
   piAssistantText,
   piUserText,
-  segmentTurns,
   textOfContent,
 } from './transcript-kernel'
 
@@ -53,22 +51,18 @@ export interface ExternalScanSummary {
 
 /**
  * Engines with a readable session store, derived from the capability table in
- * table order. Adding a driver is a capability-table row plus a parser entry
- * below — this list never needs a manual edit.
+ * table order. File-backed engines share the streaming transcript reader.
  */
 const SCAN_ENGINES: AgentHookSource[] = (
   Object.keys(AGENT_ENGINE_CAPABILITIES) as AgentHookSource[]
 ).filter((source) => AGENT_ENGINE_CAPABILITIES[source].sessionStore !== null)
 const MAX_FILES_PER_ENGINE = 200
-/** Full read cap; larger files fall back to head plus tail windows. */
-const MAX_FULL_BYTES = 512 * 1024
-const HEAD_BYTES = 16 * 1024
-const TAIL_BYTES = 64 * 1024
 const EXCERPT_MAX_CHARS = 500
 
 interface FileCandidate {
   path: string
   mtimeMs: number
+  size: number
 }
 
 interface ParsedTranscript {
@@ -77,34 +71,13 @@ interface ParsedTranscript {
   firstPrompt: string
   lastExcerpt?: string
   turnCount: number
+  preview: TranscriptTurn[]
   createdAt?: string
   updatedAt?: string
 }
 
 function truncate(text: string): string {
   return text.length > EXCERPT_MAX_CHARS ? text.slice(0, EXCERPT_MAX_CHARS) : text
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined
-}
-
-function toIso(value: unknown): string | undefined {
-  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-    const ms = value < 1_000_000_000_000 ? Math.round(value * 1000) : Math.round(value)
-    return new Date(ms).toISOString()
-  }
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Date.parse(value.trim())
-    if (Number.isFinite(parsed)) return new Date(parsed).toISOString()
-  }
-  return undefined
 }
 
 function codexThreadFromFilename(path: string): string | undefined {
@@ -137,7 +110,7 @@ async function collectCandidates(root: string, maxFiles: number): Promise<FileCa
     try {
       const info = await stat(path)
       if (!info.isFile() || info.size <= 0) continue
-      candidates.push({ path, mtimeMs: info.mtimeMs })
+      candidates.push({ path, mtimeMs: info.mtimeMs, size: info.size })
     } catch {
       continue
     }
@@ -146,153 +119,6 @@ async function collectCandidates(root: string, maxFiles: number): Promise<FileCa
   return candidates.slice(0, maxFiles)
 }
 
-export interface BoundedContent {
-  lines: string[]
-  /** Lines belonging to the head window; beyond this index a windowed read has a gap. */
-  headLines: number
-  size: number
-  mtimeMs: number
-}
-
-export async function readBounded(path: string): Promise<BoundedContent | null> {
-  let info
-  try {
-    info = await stat(path)
-  } catch {
-    return null
-  }
-  if (!info.isFile() || info.size <= 0) return null
-  const mtimeMs = info.mtimeMs
-  try {
-    if (info.size <= MAX_FULL_BYTES) {
-      const raw = await readFile(path, 'utf-8')
-      const lines = raw.split(/\r?\n/)
-      return { lines, headLines: lines.length, size: info.size, mtimeMs }
-    }
-    const handle = await open(path, 'r')
-    try {
-      const headLength = Math.min(info.size, HEAD_BYTES)
-      const headBuffer = Buffer.alloc(headLength)
-      await handle.read(headBuffer, 0, headLength, 0)
-      const tailLength = Math.min(info.size - headLength, TAIL_BYTES)
-      const tailBuffer = Buffer.alloc(Math.max(0, tailLength))
-      if (tailLength > 0) {
-        await handle.read(tailBuffer, 0, tailLength, info.size - tailLength)
-      }
-      const headLines = headBuffer.toString('utf-8').split(/\r?\n/)
-      headLines.pop()
-      const tailLines = tailLength > 0 ? tailBuffer.toString('utf-8').split(/\r?\n/) : []
-      if (tailLength > 0) tailLines.shift()
-      return {
-        lines: [...headLines, ...tailLines],
-        headLines: headLines.length,
-        size: info.size,
-        mtimeMs,
-      }
-    } finally {
-      await handle.close().catch(() => undefined)
-    }
-  } catch {
-    return null
-  }
-}
-
-function recordTimestamp(record: Record<string, unknown>): string | undefined {
-  const message = asRecord(record.message)
-  const payload = asRecord(record.payload)
-  return (
-    toIso(record.timestamp) ??
-    toIso(record.created_at) ??
-    toIso(record.createdAt) ??
-    toIso(message?.timestamp) ??
-    toIso(payload?.timestamp)
-  )
-}
-
-function lastExcerptOf(turns: { prompt?: string; excerpt?: string }[]): string | undefined {
-  for (let i = turns.length - 1; i >= 0; i -= 1) {
-    const excerpt = turns[i].excerpt
-    if (excerpt) return excerpt
-  }
-  return undefined
-}
-
-function parseClaudeFile(lines: string[], path: string, mtimeMs: number, headLines: number): ParsedTranscript | null {
-  let providerSessionId: string | undefined
-  let cwd: string | undefined
-  let earliest: string | undefined
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const record = parseJsonLine(trimmed)
-    if (!record) continue
-    providerSessionId ??= readString(record.sessionId) ?? readString(record.session_id)
-    cwd ??= readString(record.cwd)
-    const stamp = recordTimestamp(record)
-    if (stamp && (!earliest || stamp < earliest)) earliest = stamp
-  }
-  providerSessionId ??= basename(path).endsWith('.jsonl') ? basename(path).slice(0, -6) : undefined
-  if (!providerSessionId || !cwd) return null
-  const turns = segmentTurns(lines, headLines, 'claude')
-  const firstPrompt = firstCleanPrompt(extractKernelMessages(lines, 'claude'))
-  const lastExcerpt = lastExcerptOf(turns)
-  if (!firstPrompt && !lastExcerpt) return null
-  const updatedAt = new Date(mtimeMs).toISOString()
-  return {
-    providerSessionId,
-    cwd,
-    firstPrompt: firstPrompt ?? '',
-    ...(lastExcerpt ? { lastExcerpt: truncate(lastExcerpt) } : {}),
-    turnCount: turns.length,
-    ...(earliest ? { createdAt: earliest } : {}),
-    updatedAt,
-  }
-}
-
-function parseCodexFile(lines: string[], path: string, mtimeMs: number, headLines: number): ParsedTranscript | null {
-  let providerSessionId: string | undefined
-  let cwd: string | undefined
-  let earliest: string | undefined
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const record = parseJsonLine(trimmed)
-    if (!record) continue
-    const rootType = readString(record.type)?.toLowerCase()
-    const payload = asRecord(record.payload)
-    if (rootType === 'session_meta' && payload) {
-      providerSessionId ??= readString(payload.id) ?? readString(record.session_id)
-      cwd ??= readString(payload.cwd)
-    }
-    if (rootType === 'turn_context' && payload && !cwd) {
-      cwd ??= readString(payload.cwd)
-    }
-    const stamp = recordTimestamp(record)
-    if (stamp && (!earliest || stamp < earliest)) earliest = stamp
-  }
-  providerSessionId ??= codexThreadFromFilename(path)
-  if (!providerSessionId || !cwd) return null
-  const turns = segmentTurns(lines, headLines, 'codex')
-  const firstPrompt = firstCleanPrompt(extractKernelMessages(lines, 'codex'))
-  const lastExcerpt = lastExcerptOf(turns)
-  if (!firstPrompt && !lastExcerpt) return null
-  const updatedAt = new Date(mtimeMs).toISOString()
-  return {
-    providerSessionId,
-    cwd,
-    firstPrompt: firstPrompt ?? '',
-    ...(lastExcerpt ? { lastExcerpt: truncate(lastExcerpt) } : {}),
-    turnCount: turns.length,
-    ...(earliest ? { createdAt: earliest } : {}),
-    updatedAt,
-  }
-}
-
-/**
- * Pi slug directories encode the cwd (`--C--Users-Tree-...--`). The session
- * record carries the authoritative cwd; this decode is the fallback only, and
- * directory names containing dashes stay approximate.
- */
 function decodePiSlugDir(slug: string): string | undefined {
   const trimmed = slug.replace(/^-+|-+$/g, '')
   const drive = trimmed.match(/^([A-Za-z])--(.*)$/)
@@ -309,57 +135,27 @@ function piSessionIdFromFilename(path: string): string | undefined {
   return base.endsWith('.jsonl') && base.length > 6 ? base.slice(0, -6) : undefined
 }
 
-function parsePiFile(lines: string[], path: string, mtimeMs: number, headLines: number): ParsedTranscript | null {
-  let providerSessionId: string | undefined
-  let cwd: string | undefined
-  let earliest: string | undefined
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const record = parseJsonLine(trimmed)
-    if (!record) continue
-    if (readString(record.type)?.toLowerCase() === 'session') {
-      providerSessionId ??= readString(record.id)
-      cwd ??= readString(record.cwd)
-    }
-    const stamp = recordTimestamp(record)
-    if (stamp && (!earliest || stamp < earliest)) earliest = stamp
-  }
-  providerSessionId ??= piSessionIdFromFilename(path)
-  cwd ??= decodePiSlugDir(basename(dirname(path)))
-  if (!providerSessionId || !cwd) return null
-  const turns = segmentTurns(lines, headLines, 'pi')
-  const firstPrompt = firstCleanPrompt(extractKernelMessages(lines, 'pi'))
-  const lastExcerpt = lastExcerptOf(turns)
-  if (!firstPrompt && !lastExcerpt) return null
-  const updatedAt = new Date(mtimeMs).toISOString()
+// Per-registry cache: unchanged polling passes avoid re-reading tool-heavy files.
+const parsedFiles = new WeakMap<AgentSessionRegistry, Map<string, { mtimeMs: number; size: number; parsed: ParsedTranscript | null }>>()
+
+async function parseFile(candidate: FileCandidate, engine: 'claude' | 'codex' | 'pi'): Promise<ParsedTranscript | null> {
+  const snapshot = await readTranscriptSnapshot(candidate.path, engine, 2)
+  if (!snapshot) return null
+  const providerSessionId = snapshot.providerSessionId ?? (engine === 'codex'
+    ? codexThreadFromFilename(candidate.path)
+    : engine === 'pi' ? piSessionIdFromFilename(candidate.path) : basename(candidate.path, '.jsonl'))
+  const cwd = snapshot.cwd ?? (engine === 'pi' ? decodePiSlugDir(basename(dirname(candidate.path))) : undefined)
+  if (!providerSessionId || !cwd || (!snapshot.firstPrompt && !snapshot.lastExcerpt)) return null
   return {
-    providerSessionId,
-    cwd,
-    firstPrompt: firstPrompt ?? '',
-    ...(lastExcerpt ? { lastExcerpt: truncate(lastExcerpt) } : {}),
-    turnCount: turns.length,
-    ...(earliest ? { createdAt: earliest } : {}),
-    updatedAt,
+    providerSessionId, cwd, firstPrompt: snapshot.firstPrompt,
+    lastExcerpt: snapshot.lastExcerpt ? truncate(snapshot.lastExcerpt) : undefined,
+    turnCount: snapshot.totalTurns,
+    preview: snapshot.turns.map((turn) => ({
+      ...(turn.prompt ? { prompt: truncate(turn.prompt) } : {}),
+      ...(turn.excerpt ? { excerpt: truncate(turn.excerpt) } : {}),
+    })),
+    createdAt: snapshot.createdAt, updatedAt: snapshot.updatedAt,
   }
-}
-
-type TranscriptFileParser = (
-  lines: string[],
-  path: string,
-  mtimeMs: number,
-  headLines: number,
-) => ParsedTranscript | null
-
-/**
- * File-based transcript parsers keyed by the capability-table store kind. A
- * new file-backed engine lands here beside its table row; engines without an
- * entry skip file by file instead of failing the scan.
- */
-const FILE_PARSERS: Partial<Record<Exclude<SessionStoreKind, null>, TranscriptFileParser>> = {
-  'claude-projects': parseClaudeFile,
-  'codex-sessions': parseCodexFile,
-  'pi-sessions': parsePiFile,
 }
 
 /**
@@ -426,6 +222,9 @@ export async function scanExternalSessions(
 
   // One bulk pass emits one session:event: per-row notifies would refetch
   // and reorder the card list hundreds of times per scan.
+  const cache = parsedFiles.get(registry) ?? new Map()
+  parsedFiles.set(registry, cache)
+  const visited = new Set<string>()
   registry.beginBatch()
   try {
     for (const engine of SCAN_ENGINES) {
@@ -440,18 +239,12 @@ export async function scanExternalSessions(
       const candidates = await collectCandidates(store, maxFiles)
       for (const candidate of candidates) {
         summary.scanned += 1
-        const bounded = await readBounded(candidate.path)
-        if (!bounded) {
-          summary.skipped += 1
-          continue
-        }
-        const kind: SessionStoreKind = AGENT_ENGINE_CAPABILITIES[engine].sessionStore
-        const parser = kind ? FILE_PARSERS[kind] : undefined
-        if (!parser) {
-          summary.skipped += 1
-          continue
-        }
-        const parsed = parser(bounded.lines, candidate.path, bounded.mtimeMs, bounded.headLines)
+        visited.add(candidate.path)
+        const cached = cache.get(candidate.path)
+        const parsed = cached && cached.mtimeMs === candidate.mtimeMs && cached.size === candidate.size
+          ? cached.parsed
+          : await parseFile(candidate, engine as 'claude' | 'codex' | 'pi')
+        cache.set(candidate.path, { mtimeMs: candidate.mtimeMs, size: candidate.size, parsed })
         if (!parsed) {
           summary.skipped += 1
           continue
@@ -464,6 +257,7 @@ export async function scanExternalSessions(
           firstPrompt: parsed.firstPrompt,
           ...(parsed.lastExcerpt ? { lastExcerpt: parsed.lastExcerpt } : {}),
           turnCount: parsed.turnCount,
+          preview: parsed.preview,
           ...(parsed.createdAt ? { createdAt: parsed.createdAt } : {}),
           ...(parsed.updatedAt ? { updatedAt: parsed.updatedAt } : {}),
         }
@@ -482,6 +276,7 @@ export async function scanExternalSessions(
     }
     return summary
   } finally {
+    for (const path of cache.keys()) if (!visited.has(path)) cache.delete(path)
     registry.endBatch()
   }
 }

@@ -17,12 +17,13 @@ export interface RuntimeTelemetryPatch {
   outputTokens?: number
   cacheReadTokens?: number
   cacheWriteTokens?: number
+  recentCacheHitRate?: number
   totalTokens?: number
   sessionId?: string
   observedAt?: number
   source?: RuntimeTelemetrySource
   confidence?: RuntimeTelemetryConfidence
-  sessionBinding?: 'exact'
+  sessionBinding?: 'exact' | 'correlated'
   compactionCount?: number
   compactionCountConfidence?: 'exact'
   modelChangedAt?: number
@@ -34,7 +35,7 @@ export type RuntimeTelemetryState = RuntimeTelemetryPatch & {
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number
-  telemetrySessionBinding?: 'exact'
+  telemetrySessionBinding?: 'exact' | 'correlated'
   compactionCount?: number
   compactionCountConfidence?: 'exact'
   modelChangedAt?: number
@@ -48,12 +49,13 @@ export interface RuntimeTelemetryUpdate {
   outputTokens?: number
   cacheReadTokens?: number
   cacheWriteTokens?: number
+  recentCacheHitRate?: number
   totalTokens?: number
   telemetrySessionId?: string
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number
-  telemetrySessionBinding?: 'exact'
+  telemetrySessionBinding?: 'exact' | 'correlated'
   compactionCount?: number
   compactionCountConfidence?: 'exact'
   modelChangedAt?: number
@@ -144,6 +146,12 @@ export function resolveContextWindows(
   }
 }
 
+/** exact（hook/适配器）与 correlated（活跃度相关性）都算终端级绑定；
+ *  无绑定的 history 快照在同 cwd 多终端下不可归属，一律忽略。 */
+function isTerminalBound(binding: RuntimeTelemetrySnapshot['sessionBinding']): boolean {
+  return binding === 'exact' || binding === 'correlated'
+}
+
 export function mergeRuntimeTelemetrySnapshot(
   current: RuntimeTelemetryState,
   telemetry: RuntimeTelemetrySnapshot
@@ -151,7 +159,7 @@ export function mergeRuntimeTelemetrySnapshot(
   if (telemetry.source === 'configuration') {
     // A new unbound terminal must not retain runtime numbers restored from an older process.
     const patch: RuntimeTelemetryUpdate = {}
-    for (const field of ['contextTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'totalTokens', 'compactionCount', 'compactionCountConfidence', 'telemetrySessionId', 'telemetrySessionBinding', 'modelChangedAt'] as const) {
+    for (const field of ['contextTokens', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'recentCacheHitRate', 'totalTokens', 'compactionCount', 'compactionCountConfidence', 'telemetrySessionId', 'telemetrySessionBinding', 'modelChangedAt'] as const) {
       if (current[field] !== undefined) patch[field] = undefined
     }
     if (current.detectedModel !== telemetry.detectedModel) patch.detectedModel = telemetry.detectedModel
@@ -166,8 +174,8 @@ export function mergeRuntimeTelemetrySnapshot(
   if (
     telemetry.source === 'history' &&
     telemetry.sessionId &&
-    current.telemetrySessionBinding !== 'exact' &&
-    telemetry.sessionBinding !== 'exact'
+    !isTerminalBound(current.telemetrySessionBinding) &&
+    !isTerminalBound(telemetry.sessionBinding)
   ) {
     return {}
   }
@@ -175,7 +183,7 @@ export function mergeRuntimeTelemetrySnapshot(
   const source = telemetry.source ?? 'terminal-text'
   const confidence = telemetry.confidence ?? defaultConfidence(source)
   const sessionChanged = Boolean(
-    telemetry.sessionBinding === 'exact' &&
+    isTerminalBound(telemetry.sessionBinding) &&
     telemetry.sessionId &&
     current.telemetrySessionId &&
     telemetry.sessionId !== current.telemetrySessionId
@@ -188,7 +196,7 @@ export function mergeRuntimeTelemetrySnapshot(
     telemetry.detectedModel !== current.detectedModel,
   )
   if (
-    current.telemetrySessionBinding === 'exact' &&
+    isTerminalBound(current.telemetrySessionBinding) &&
     telemetry.source === 'history' &&
     telemetry.sessionId !== current.telemetrySessionId && !sessionChanged
   ) {
@@ -207,6 +215,12 @@ export function mergeRuntimeTelemetrySnapshot(
   if (!lowerConfidence || current.detectedModel === undefined) assign('detectedModel', telemetry.detectedModel)
   if (!lowerConfidence || current.contextTokens === undefined) assign('contextTokens', telemetry.contextTokens)
   if (!lowerConfidence || current.contextWindowTokens === undefined) assign('contextWindowTokens', telemetry.contextWindowTokens)
+  if (!lowerConfidence || current.recentCacheHitRate === undefined) {
+    assign('recentCacheHitRate', telemetry.recentCacheHitRate)
+    if (telemetry.source === 'history' && telemetry.recentCacheHitRate === undefined && current.recentCacheHitRate !== undefined) {
+      patch.recentCacheHitRate = undefined
+    }
+  }
 
   const cumulativeFields = [
     'inputTokens',
@@ -228,7 +242,7 @@ export function mergeRuntimeTelemetrySnapshot(
   }
 
   if (sessionChanged) {
-    for (const field of ['contextTokens', 'contextWindowTokens', ...cumulativeFields] as const) {
+    for (const field of ['contextTokens', 'contextWindowTokens', 'recentCacheHitRate', ...cumulativeFields] as const) {
       if (telemetry[field] === undefined && current[field] !== undefined) patch[field] = undefined
     }
   }

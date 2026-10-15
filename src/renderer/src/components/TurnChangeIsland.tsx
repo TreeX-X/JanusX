@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Files, History, ChevronLeft } from 'lucide-react'
 import { useTurnChangesStore, type TerminalTurnChangesEvent } from '@/stores/turn-changes'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useEditorStore } from '@/stores/editor'
+import { useWorktreeStore } from '@/stores/worktree'
+import { resolveTerminalEditorScope } from '@/lib/terminal-editor-scope'
 import { useI18n } from '@/i18n/useI18n'
 import './TurnChangeIsland.css'
 
@@ -17,9 +18,9 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
   const lastEvent = useTurnChangesStore(s => s.lastEventByTerminal[terminalId])
   const history = useTurnChangesStore(s => s.historyByTerminal[terminalId] ?? EMPTY_TURNS)
   const subscribe = useTurnChangesStore(s => s.subscribeToEvents)
-  const cwd = useWorkspaceStore(s => s.terminals.find(item => item.id === terminalId)?.cwd
-    ?? Object.values(s.terminalSnapshots).flatMap(snapshot => snapshot.terminals).find(item => item.id === terminalId)?.cwd)
-  const openFile = useEditorStore(s => s.openFile)
+  const terminal = useWorkspaceStore(s => s.terminals.find(item => item.id === terminalId)
+    ?? Object.values(s.terminalSnapshots).flatMap(snapshot => snapshot.terminals).find(item => item.id === terminalId))
+  const cwd = terminal?.cwd
   const [expanded, setExpanded] = useState(false)
   const [view, setView] = useState<IslandView>('latest')
   const [pinned, setPinned] = useState(false)
@@ -77,7 +78,18 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
     setPinned(true)
   }
   const openPreview = (file: FileChange) => {
-    if (cwd && file.status !== 'deleted') void openFile(`${cwd}/${file.path}`.replace(/\\/g, '/'), cwd)
+    if (!terminal || !cwd || file.status === 'deleted') return
+    const workspace = useWorkspaceStore.getState().workspaces.find(item => item.id === terminal.workspaceId)
+    const { activePaths, worktreesByWorkspace } = useWorktreeStore.getState()
+    const workspacePath = resolveTerminalEditorScope(cwd, [
+      workspace?.path,
+      activePaths[terminal.workspaceId],
+      ...(worktreesByWorkspace[terminal.workspaceId] ?? []).map(item => item.path),
+    ])
+    void window.electron.window.openEditor({
+      filePath: `${cwd.replace(/[\\/]+$/, '')}/${file.path}`.replace(/\\/g, '/'),
+      workspacePath,
+    })
   }
   const formatTime = (value: string) => new Intl.DateTimeFormat(currentLanguage, {
     month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit',

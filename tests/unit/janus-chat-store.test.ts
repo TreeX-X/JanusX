@@ -45,6 +45,15 @@ describe('JanusChatStore', () => {
     expect(await store.load()).toMatchObject({ activeConversationId: 'legacy' })
   })
 
+  it.each(['00000000-0000-4000-8000-000000000123', '../outside', '', null])('round-trips valid memo bindings and discards invalid identities: %s', async memoId => {
+    const { JanusChatStore } = await import('../../src/main/janus/chat-store')
+    const state = snapshot('memo-chat')
+    Object.assign(state.conversations[0], { memoId })
+    await new JanusChatStore({ journalPath, legacyPath }).save(state)
+    const loaded = await new JanusChatStore({ journalPath, legacyPath }).load()
+    expect(loaded!.conversations[0].memoId).toBe(typeof memoId === 'string' && memoId.startsWith('0000') ? memoId : undefined)
+  })
+
   it('appends linked snapshot revisions and loads the current head', async () => {
     const { JanusChatStore } = await import('../../src/main/janus/chat-store')
     const store = new JanusChatStore({ journalPath, legacyPath })

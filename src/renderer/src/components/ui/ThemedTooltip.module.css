@@ -3,11 +3,14 @@
   display: contents;
 }
 
-.tip {
+/* 底座：两个变体共享（居中纯文本 / 左对齐结构面板） */
+.tip,
+.tipPanel {
   position: fixed;
   z-index: 13000;
-  transform: translateX(-50%);
-  max-width: min(300px, calc(100vw - 16px));
+  box-sizing: border-box;
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
   padding: 5px 9px;
   border-radius: 6px;
   background: rgba(20, 20, 20, 0.98);
@@ -16,32 +19,47 @@
   color: var(--shell-text, #e8e8e8);
   font-size: 11px;
   line-height: 1.45;
+  pointer-events: none;
+  animation: themed-tip-in 120ms ease-out;
+}
+
+.tip {
+  max-width: min(300px, calc(100vw - 16px));
   text-align: center;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  pointer-events: none;
-  animation: themed-tip-in 120ms ease-out;
+}
+
+/* 结构化面板：标签列左、数值列右，行距对齐；宽度收窄避免窄窗溢出 */
+.tipPanel {
+  min-width: min(224px, calc(100vw - 16px));
+  max-width: min(332px, calc(100vw - 16px));
+  padding: 7px 11px;
+  text-align: start;
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes themed-tip-in {
   from {
     opacity: 0;
-    transform: translateX(-50%) translateY(2px);
+    transform: translateY(2px);
   }
   to {
     opacity: 1;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tip {
+  .tip,
+  .tipPanel {
     animation: none;
   }
 }
 
 /* ── planche：提示纸面化（加法层，dark 原样不动）── */
-:global([data-theme='planche']) .tip {
+:global([data-theme='planche']) .tip,
+:global([data-theme='planche']) .tipPanel {
   background: var(--paper, #EFE4C5);
   border: 1px solid var(--line, #1C343B);
   box-shadow: 3px 3px 0 var(--line, #1C343B);

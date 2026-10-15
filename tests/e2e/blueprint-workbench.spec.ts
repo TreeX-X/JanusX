@@ -38,6 +38,8 @@ async function open(page: Page, query = '?workbench') {
   await page.goto('/project.html' + query)
   await expect(detail(page).locator('.markdown-preview')).toContainText('Root Note body from the authorized checkout.')
   await expect(page.locator('.react-flow__node')).toHaveCount(5)
+  await expect(page.locator('.blueprint-janus-capsule')).toHaveAttribute('aria-expanded', 'false')
+  await page.locator('.blueprint-janus-capsule').click()
   await expect(chat(page).locator('.janus-chat textarea')).toBeVisible()
   // Wait for the production entrance animations rather than changing their CSS.
   await expect.poll(() => page.locator('.blueprint-workbench-shell').evaluate(element =>
@@ -57,6 +59,26 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
     })
     // Note: the canvas is inspection-only; writing and dispatching both live in
     // the Janus panel — see .agents/notes/blueprint/maintenance/blueprint-dispatch-panel.md
+    test('fresh launch keeps Janus closed until explicitly opened', async ({ page }) => {
+      await page.goto('/project.html?workbench')
+      await expect(detail(page).locator('.markdown-preview')).toContainText('Root Note body from the authorized checkout.')
+      const body = page.locator('.blueprint-workbench-body')
+      const copilot = page.locator('.blueprint-janus-capsule')
+      await expect(body).toHaveAttribute('data-janus-open', 'false')
+      await expect(copilot).toHaveAttribute('aria-expanded', 'false')
+      await expect(chat(page)).toHaveCount(0)
+      await toolbar(page).locator('input').fill('Root')
+      await toolbar(page).locator('input').clear()
+      await expect(body).toHaveAttribute('data-janus-open', 'false')
+      await copilot.click()
+      await expect(chat(page).locator('textarea')).toBeVisible()
+      await expect(copilot).toHaveAttribute('aria-expanded', 'true')
+      await chat(page).locator('.bp-maintenance-panel__header .bp-panel-close').click()
+      await expect(chat(page)).toHaveCount(0)
+      await node(page, childId).click()
+      await expect(body).toHaveAttribute('data-janus-open', 'false')
+    })
+
     test('the canvas carries no work, terminal or dispatch control', async ({ page }) => {
       await open(page)
       await node(page, childId).click()
@@ -66,10 +88,9 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
         await expect(page.getByRole('button', { name: label, exact: true })).toHaveCount(0)
       }
       await expect(toolbar(page).getByRole('button', { name: 'Edit in chat', exact: true })).toHaveCount(0)
-      // The terminal row survives as read-only state with no control of its own.
+      // Note readers have no terminal footer or dispatch controls.
       const terminalRow = nodeDetail.locator('.bp-node-detail__terminal-footer')
-      await expect(terminalRow).toBeVisible()
-      await expect(terminalRow.getByRole('button')).toHaveCount(0)
+      await expect(terminalRow).toHaveCount(0)
       await expect(chat(page).locator('.bp-maintenance-policy-hint')).toHaveCount(0)
       await expect(chat(page).getByRole('toolbar')).toHaveCount(0)
       // Nothing is expanded until a decision demands it.
@@ -146,6 +167,43 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       expect(errors).toEqual([])
     })
 
+    test('toolbar and source menus dismiss without closing the reader, while review stays reachable', async ({ page }) => {
+      await open(page)
+      const more = toolbar(page).getByRole('button', { name: '更多', exact: true })
+      const menu = page.locator('.blueprint-toolbar-menu')
+      await more.focus(); await page.keyboard.press('Enter')
+      await expect(more).toHaveAttribute('aria-expanded', 'true')
+      await page.keyboard.press('Escape')
+      await expect(menu).toBeHidden()
+      await expect(more).toBeFocused()
+      await page.keyboard.press('Enter'); await page.keyboard.press('Tab')
+      await expect(menu.getByRole('button').first()).toBeFocused()
+      await page.keyboard.press('Escape')
+      await expect(more).toBeFocused()
+      await more.click()
+      await detail(page).locator('.bp-node-detail__title').click()
+      await expect(menu).toBeHidden()
+      const actions = detail(page).locator('.bp-note-wiki__actions')
+      await actions.locator('summary').click()
+      await page.keyboard.press('Tab'); await page.keyboard.press('Escape')
+      await expect(actions).not.toHaveAttribute('open')
+      await expect(actions.locator('summary')).toBeFocused()
+      await actions.locator('summary').click()
+      await detail(page).locator('.markdown-preview').click()
+      await expect(actions).not.toHaveAttribute('open')
+      const review = detail(page).locator('.bp-note-review')
+      await expect(review).toBeVisible()
+      await expect(review.locator('.bp-note-review__toggle')).toHaveAttribute('aria-expanded', 'false')
+      await expect(review.locator('.bp-note-review__content')).toBeHidden()
+      await detail(page).locator('.bp-note-review-shortcut').click()
+      await expect(review.locator('.bp-note-review__content')).toBeVisible()
+      await review.locator('.bp-note-review__toggle').click()
+      await expect(review.locator('.bp-note-review__toggle')).toBeVisible()
+      await expect(review.locator('.bp-note-review__content')).toBeHidden()
+      await expect(detail(page).locator('.markdown-preview')).toBeVisible()
+      await expect(chat(page).locator('textarea')).toBeVisible()
+    })
+
     test('confirmed reset repairs saved horizontal positions, undo and drag persist through IPC', async ({ page }) => {
       test.setTimeout(45_000)
       const errors: string[] = []
@@ -153,7 +211,8 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       await open(page)
       const initial = await positions(page)
       expect(new Set(Object.values(initial).map(position => position.y)).size).toBe(1)
-      const reset = toolbar(page).getByRole('button', { name: '恢复默认布局', exact: true })
+      await toolbar(page).getByRole('button', { name: '更多', exact: true }).click()
+      const reset = page.getByRole('button', { name: '恢复默认布局', exact: true })
       await reset.click()
       const confirmation = page.getByRole('dialog')
       await expect(confirmation).toBeVisible()
@@ -168,9 +227,11 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1280, height: 720
       // Reset clears persisted overrides; the production layout derives the
       // hierarchy above. Dragging below must save explicit coordinates again.
       expect(await page.evaluate(() => (window as any).workbenchFixture.saves[0])).toEqual({ cwd: 'C:/fixture', id: `harness:project:${repoId}`, patch: { canvasLayout: {} } })
-      await toolbar(page).getByRole('button', { name: '撤销恢复', exact: true }).click()
+      await toolbar(page).getByRole('button', { name: '更多', exact: true }).click()
+      await page.getByRole('button', { name: '撤销恢复', exact: true }).click()
       await expect.poll(() => positions(page)).toEqual(initial)
       await expect.poll(() => page.evaluate(() => (window as any).workbenchFixture.saves.length)).toBe(2)
+      await toolbar(page).getByRole('button', { name: '更多', exact: true }).click()
       await reset.click()
       await confirmation.getByRole('button', { name: '恢复', exact: true }).click()
       await expect.poll(() => positions(page)).toEqual(restored)
@@ -280,7 +341,8 @@ test.describe('isolated roots folding', () => {
     await page.goto('/project.html?workbench&isolated')
     // The original graph already has two isolated roots beside its three-node tree.
     await expect(page.locator('.react-flow__node')).toHaveCount(3)
-    const toggle = page.locator('.blueprint-workbench-toolbar').getByRole('button', { name: /未关联/ })
+    await page.locator('.blueprint-toolbar__more').click()
+    const toggle = page.locator('.blueprint-workbench-toolbar .blueprint-toolbar__toggle')
     await expect(toggle).toHaveAttribute('aria-pressed', 'true')
     await expect(toggle).toContainText('32')
     await toggle.click()
@@ -289,6 +351,7 @@ test.describe('isolated roots folding', () => {
     // while preserving all 35 source nodes, rather than rendering 35 DOM nodes.
     await expect.poll(() => page.locator('.react-flow__node[data-id^="isolated-"]').count()).toBeGreaterThan(0)
     expect(await page.evaluate(() => (window as any).projectFixture.snapshot().graph.nodeIds.length)).toBe(35)
+    await page.locator('.blueprint-toolbar__more').click()
     await toggle.click()
     await expect(page.locator('.react-flow__node')).toHaveCount(3)
     expect(errors).toEqual([])

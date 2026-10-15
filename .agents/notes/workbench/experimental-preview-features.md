@@ -11,22 +11,28 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/b3704d91-c17d-4492-ae71-a44cfec8bbd7"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/908d675a-aec9-4791-8c8b-05f1e4c923ca"}
   ],
-  "updated": "2026-10-10T08:56:32.429Z",
+  "updated": "2026-10-15T11:05:22.111Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
 
-# 创新实验功能预览管理与会话管理入口
+# 创新实验功能预览管理
 
 ## Problem
 
-创新实验功能开关（`src/shared/ipc/experimental.ts` 的 `ExperimentalFeatures`、设置中心实验页 `ExperimentalSettingsPanel`、右坞门控 `isRightToolEnabled`）承载蓝图、知识库、圆桌、个人画像、远程协作控制、团队协作六路独立开关，但语料里没有任何 Note 记录这套机制的契约与取舍。会话管理（右坞 `sessions` 工具：卡片、时间线、详情与续接）此前不在预览管理内，无法随其他创新功能统一隐藏、灰度与回收；与此同时会话解析与还原点仍在完善期，入口常驻与成熟度不匹配。
+创新功能需要通过设置中心统一表达成熟度并控制入口。会话管理和备忘录都处于预览阶段：会话管理提供卡片、时间线、详情与续接，备忘录提供星座里程碑、人工编辑与 Chat 联动。它们需要独立开关，避免入口常驻与成熟度不匹配；关闭功能不能删除既有数据或打断已经开始的回复。
 
 ## Decision
 
 机制契约：`ExperimentalFeatures` 逐路布尔开关，`experimental:get/update` IPC 持久化到工作区配置，`normalizeExperimentalFeatures` 对缺席/非法一律回落默认值（默认全关 = 打包默认隐藏，仅设置中心开启后可用），无 IPC 环境以 `EXPERIMENTAL_ENABLED_ALL` 全开降级避免浏览器预览误杀。设置中心实验页分「预览」与「开发」两区（`PREVIEW_FEATURES`/`DEV_FEATURES`），每个开/关走逐项确认弹窗；知识库开关有键与文案但暂不在面板两区列表中。右坞入口统一经 `isRightToolEnabled(toolId, features)` 门控，`RightDock` 对被禁工具隐藏并关闭（重开启用后从关闭态开始），`RightToolRail` 不渲染被禁工具。
 
-本次将**会话管理**纳入预览管理：`sessions` 开关进「预览」分区（与蓝图同区），**默认关闭**（对齐「默认全关」契约，缺席键回落 false），**关闭仅隐藏右坞入口**——会话账本、转录扫描、检查点与续接数据全部保留，重新开启即恢复（与团队协作「关闭仅隐藏入口」同语义）。`isRightToolEnabled` 增 `sessions` 门；`RightDock`/`RightToolRail` 的 features 实参补 `sessions`。
+「预览」分区包含蓝图、会话管理和备忘录；个人画像、圆桌、远程协作与团队协作仍归「开发」分区。`sessions` 与 `memo` 均默认关闭，旧配置缺席键或非法值回落 false。会话管理关闭仅隐藏右坞入口，会话账本和转录扫描保留；当前界面提供对话详情与续接，已移除还原点、文件变更、diff 和文件恢复操作，底层检查点仍由[检查点模块](../sessions/checkpoints/module.md)独立维护。`isRightToolEnabled`、`RightDock` 和 `RightToolRail` 共用入口门控。
+
+设置页红色说明表达当前使用条件或能力边界，随实现维护，中英文同步：蓝图文档需符合 Note 格式，可用 WorkflowX 或 Note MCP；会话转录解析和原生续接因终端不同而有差异；备忘录人工编辑可直接使用，Chat 联动需支持工具调用的模型；圆桌需可用的全局默认模型；远控公网连接尚未打通；团队已有账号与组织管理基础，跨设备项目和文档同步尚未完成。个人画像的采集、工程习惯、对话使用与保留期说明仍适用。隐藏的旧 knowledge 文案明确工程入口已退出，不再宣传旧工程采集和本地模型部署。来源分别见[独立 Note MCP](../blueprint/note-mcp.md)、[会话记录模块](../sessions/records/module.md)、[备忘录专题](../knowledge/user-todo-janus.md)与[远程协作模块](../remote/module.md)，圆桌默认模型条件由 src/main/roundtable/service.ts 校验。
+
+备忘录关闭时 MemoPanel 不挂载编辑器，已打开的附岛和对话布局一并恢复；开关不删除文件、不解除会话 memoId 绑定、不取消正在执行的回复。重新开启从面板关闭态进入，可继续使用原文件与绑定。普通隐藏面板仍保留编辑器草稿；关闭功能会卸载编辑器，尚未保存的组件内草稿不持久化。渲染端在发送和追加消息时读取最新开关，关闭后不发送 memoBinding 或 memoMessageId；主进程在装配新轮次时再次读取持久开关，即使收到旧绑定也不提供 memo_create/read/edit，并说明需要开启预览。轮次开始后关闭开关不撤销当轮工具或已有写入。底层 MemoStore 和 IPC 保留，不执行数据迁移。
+
+渲染端 memo 初始关闭，等待配置读取，读取失败继续关闭，避免持久配置加载前短暂显示或提供工具；无 IPC 的浏览器预览沿用全开降级。备忘录文件、星节点及 Chat 绑定的具体契约由[备忘录专题](../knowledge/user-todo-janus.md)维护。
 
 ## Alternatives considered
 
@@ -37,6 +43,12 @@
 
 ## Consequences
 
-- **Gains**: 会话管理与其他创新功能同池管理——打包默认隐藏、设置中心逐项确认开/关、关闭仅隐藏入口；机制契约与取舍首次入档，后续新功能入池有据可循。
-- **Costs and limits**: 默认关闭意味着旧配置与新装升级后会话面板不出现，需在设置中心「实验」页开启一次；`knowledge` 开关留在契约与文案但不进面板列表的现状照旧（归属 memory-domain-controls 的成熟度裁量）；门控只覆盖右坞入口，主进程侧会话扫描与 hook 采集不做开关级停用。
-- **Verification**: `npm run typecheck` 干净（一次运行中出现的 `stores/blueprint.ts` 报错来自工作区并行未提交改动，复查后已自行消失，与本切片无关）；`npx vitest run tests/unit/experimental-features.test.ts tests/unit/right-tool-state.test.ts` 31/31 通过（七路 normalize、sessions 缺席回落 false、严格布尔强转、sessions 门控开/关）；`npm run i18n:types` 重生成 3310 keys，`npm run i18n:check` 双语同步；`npm run check:notes` 与 `node scripts/verify-note-corpus.mjs` 0 errors。
+- **Gains**: 会话管理与备忘录统一归入预览管理，打包默认隐藏，设置中心逐项确认开关。备忘录 UI 与后续 Chat 工具共用开关，保留文件、绑定与在途回复。
+- **Costs and limits**: 默认关闭意味着旧配置与新装升级后会话、备忘录入口不出现，需在设置中心「实验」页开启；`knowledge` 开关仍保留在契约与文案，但不进面板列表。会话门控只覆盖右坞入口，不停扫描或 Hook 采集；备忘录门控覆盖编辑入口与新 Chat 工具，不取消在途轮次，也不清理文件。
+- **Original verification (2026-10-10)**: `npm run typecheck` 干净；`npx vitest run tests/unit/experimental-features.test.ts tests/unit/right-tool-state.test.ts` 31/31 通过（七路 normalize、sessions 缺席回落 false、严格布尔强转、sessions 门控开/关）；`npm run i18n:types` 当时生成 3310 keys，`npm run i18n:check` 双语同步；Note 检查零错误。
+
+## 备忘录预览验证（2026-10-15）
+
+`npx vitest run tests/unit/experimental-features.test.ts tests/unit/llm/chat-turn-guard.test.ts tests/unit/memo-chat.test.ts tests/unit/llm/janus-agent-ports.test.ts --maxWorkers=2 --reporter=dot`：4 个文件、70 项通过，覆盖旧配置缺席和非法 memo 值、启用后的工具装配、关闭后主进程收到旧绑定仍不提供工具，以及共享 Chat 宿主端口。
+
+Chromium 运行 memo-preview、memo-trigger 和 memo-chat-selection 三份 Playwright，共 7 个场景通过；预览场景覆盖分区归属、默认隐藏、确认取消、开启、关闭已打开面板、在途回复不取消、文件和绑定保留、后续消息无备忘录上下文、重新开启恢复。首次测试直接点击透明 checkbox 被装饰层遮挡，改为真实键盘 Space 触发后该场景重跑通过；原先 6 项入口与选星回归均通过。产物位于本地 artifacts/memo-preview-acceptance/ 与 artifacts/memo-preview-fixed/。`npm run typecheck`、`npm run i18n:check` 和 6 个变更生产文件的 ESLint 通过。尚未运行 Electron 桌面或完整发布验收。

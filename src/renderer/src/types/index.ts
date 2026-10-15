@@ -37,11 +37,12 @@ export interface Terminal {
   outputTokens?: number
   cacheReadTokens?: number
   cacheWriteTokens?: number
+  recentCacheHitRate?: number
   totalTokens?: number
   contextTokens?: number
   contextWindowTokens?: number
   telemetrySessionId?: string
-  telemetrySessionBinding?: 'exact'
+  telemetrySessionBinding?: 'exact' | 'correlated'
   telemetrySource?: RuntimeTelemetrySource
   telemetryConfidence?: RuntimeTelemetryConfidence
   telemetryUpdatedAt?: number

@@ -40,6 +40,43 @@ function claudeAssistant(text: string) {
 }
 
 describe('transcript reader', () => {
+  it('keeps legacy Codex mirrors when only tool source records exist and deduplicates real sources', async () => {
+    const mirror = [
+      { type: 'event_msg', payload: { type: 'user_message', message: 'q' } },
+      { type: 'event_msg', payload: { type: 'agent_message', message: 'a' } },
+      { type: 'response_item', payload: { type: 'function_call_output', output: 'tool' } },
+    ]
+    for (const withSources of [false, true]) {
+      const path = await writeLines(await tempFile(`mirror-${withSources}.jsonl`), [
+        ...mirror,
+        ...(withSources ? [
+          { type: 'response_item', payload: { role: 'user', content: [{ type: 'input_text', text: 'q' }] } },
+          { type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text', text: 'a' }] } },
+        ] : []),
+      ])
+      expect((await readTranscriptDetail(path, 'codex'))?.turns).toEqual([{ prompt: 'q', excerpt: 'a' }])
+    }
+  })
+
+  it('reads conversation records across large tool output and marks the real turn cap', async () => {
+    const lines: Array<Record<string, unknown>> = [
+      { type: 'session_meta', payload: { id: 'large', cwd: 'C:/repo', instructions: '规'.repeat(24000) } },
+    ]
+    for (let index = 0; index < 105; index++) {
+      lines.push(
+        { type: 'response_item', payload: { role: 'user', content: [{ type: 'input_text', text: `q${index}` }] } },
+        { type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text', text: `a${index}` }] } },
+        { type: 'response_item', payload: { type: 'function_call_output', output: 'x'.repeat(8000) } },
+      )
+    }
+    lines.push({ type: 'response_item', payload: { type: 'function_call_output', output: 'x'.repeat(3 * 1024 * 1024) } })
+    const detail = await readTranscriptDetail(await writeLines(await tempFile('large-codex.jsonl'), lines), 'codex')
+    expect(detail).toMatchObject({ totalTurns: 105, truncated: true })
+    expect(detail?.turns).toHaveLength(100)
+    expect(detail?.turns[0]).toEqual({ prompt: 'q5', excerpt: 'a5' })
+    expect(detail?.turns.at(-1)).toEqual({ prompt: 'q104', excerpt: 'a104' })
+  })
+
   it('pairs claude questions with answers in order', async () => {
     const path = await writeLines(await tempFile('claude.jsonl'), [
       claudeUser('first question'),

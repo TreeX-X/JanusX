@@ -6,8 +6,11 @@ import type { ProjectAPI } from '../../src/shared/ipc/project'
 import type { TerminalAPI } from '../../src/shared/ipc/terminal'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
 import { createDesktopTestEnv } from './desktop-test-env'
+import { createServer } from 'node:http'
+import type { BrowserAPI } from '../../src/shared/ipc/browser'
 
 interface DesktopAPI {
+  browser: BrowserAPI
   system: { setLanguage(language: string): Promise<void> }
   project: ProjectAPI
   terminal: TerminalAPI
@@ -174,6 +177,10 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
 
     const workspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace' }).first()
     await expect(workspaceRow).toBeVisible()
+    const sidebarHeader = page.locator('[data-workspace-sidebar-header]')
+    await expect(sidebarHeader).toHaveCSS('border-bottom-width', '0px')
+    await expect(sidebarHeader).toHaveCSS('height', '40px')
+    await page.screenshot({ path: test.info().outputPath('sidebar-heading.png') })
     const secondWorkspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace two' }).first()
     await expect(secondWorkspaceRow).toBeVisible()
     const secondWorkspaceRowBox = await secondWorkspaceRow.boundingBox()
@@ -366,7 +373,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.getByRole('button', { name: '收起工作区侧栏', exact: true }).click()
     await expect(rail).toBeVisible()
     expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
-    await page.getByRole('main').getByText('Shell', { exact: true }).click()
+    await page.getByRole('main').getByRole('button', { name: 'PowerShell', exact: true }).click()
     const terminalInput = page.locator('.xterm-helper-textarea').first()
     await expect(terminalInput).toBeAttached({ timeout: 15_000 })
     const terminalScreen = page.locator('.xterm-screen').first()
@@ -381,6 +388,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await terminalInput.pressSequentially('echo JANUSX_DOCK_FIT')
     await terminalInput.press('Enter')
     await expect(page.locator('.xterm-rows')).toContainText('JANUSX_DOCK_FIT', { timeout: 10_000 })
+    await page.screenshot({ path: test.info().outputPath('continuous-workspace.png') })
 
     const terminalTabs = page.locator('main [data-tab-id^="terminal:"]')
     await expect(terminalTabs).toHaveCount(1)
@@ -389,9 +397,12 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     if (!firstTerminalElement) throw new Error('First terminal did not expose an xterm screen')
 
     await page.getByRole('main').getByRole('button', { name: 'New Terminal', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'New Shell terminal', exact: true }).click()
+    // 新建终端菜单列出用户自建 shell 条目；全新 profile 的种子项是 PowerShell
+    // （见 .agents/notes/terminal/shell-profiles.md 的 Decisions）。
+    await page.getByRole('menuitem', { name: 'New PowerShell terminal', exact: true }).click()
     await expect(terminalTabs).toHaveCount(2, { timeout: 15_000 })
     await expect(page.locator('.xterm-screen')).toHaveCount(2, { timeout: 15_000 })
+    await page.screenshot({ path: test.info().outputPath('rounded-workspace-tabs.png') })
     await expect(firstTerminalView).toHaveAttribute('aria-hidden', 'true')
     expect(await firstTerminalElement.evaluate((element) => element.isConnected)).toBe(true)
 
@@ -484,5 +495,128 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     if (fixtureRoot) {
       await rm(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
+  }
+})
+
+test('Browser load failure, retry, dialogs and close release native browser views', async () => {
+  const entry = resolve(process.env.JANUSX_E2E_ENTRY || 'out/main/index.js')
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-browser-smoke-'))
+  let application: ElectronApplication | undefined
+  let applicationClosed = false
+  let failRequests = true
+  const server = createServer((_request, response) => {
+    if (failRequests) {
+      response.destroy()
+      return
+    }
+    response.writeHead(200, { 'Content-Type': 'text/html' })
+    response.end('<!doctype html><title>Browser fixture</title><h1>Workspace browser</h1>')
+  })
+  try {
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') throw new Error('Missing fixture port')
+    const url = `http://127.0.0.1:${address.port}/`
+    application = await electron.launch({
+      args: [entry, `--user-data-dir=${join(fixtureRoot, 'user-data')}`],
+      env: createDesktopTestEnv(fixtureRoot),
+    })
+    application.on('close', () => { applicationClosed = true })
+    const page = await application.firstWindow()
+    await page.waitForLoadState('domcontentloaded')
+    await page.evaluate(async () => {
+      const api = (window as DesktopWindow).electron
+      await api.system.setLanguage('en')
+    })
+    await page.reload()
+
+    const nativeViews = () => application!.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0].contentView.children.map((view) => ({ bounds: view.getBounds() })),
+    )
+    // 工作区浏览器入口收在顶栏工具菜单里（展开 → 选浏览器），每次开的是一个新 surface
+    // （id 由渲染层随机生成），且开着时菜单条目置灰，所以"重新打开失败页"=
+    // 关掉标签 → 再从菜单点入口 → 重新导航到 fixture 地址。
+    const toolTrigger = page.locator('button[data-id="tool-menu"]')
+    const browserItem = page.locator('button[data-id="browser"]')
+    const expectBrowserEntryAvailable = async () => {
+      await expect(toolTrigger).toBeEnabled()
+      await toolTrigger.click()
+      await expect(browserItem).toBeEnabled()
+      // 断言完收起菜单，让"入口恢复可点"与后续"再打开"各测各的，也避免二次点击把菜单切回去。
+      await page.keyboard.press('Escape')
+      await expect(toolTrigger).toHaveAttribute('aria-expanded', 'false')
+    }
+    const addressBar = page.getByRole('textbox', { name: 'Address bar' })
+    const openFixturePage = async () => {
+      await expectBrowserEntryAvailable()
+      await toolTrigger.click()
+      await browserItem.click()
+      await addressBar.fill(url)
+      await addressBar.press('Enter')
+      const tabId = await page.locator('[data-tab-id]').first().getAttribute('data-tab-id')
+      expect(tabId).toMatch(/^browser:/)
+      return tabId!.slice('browser:'.length)
+    }
+    const surfaceId = await openFixturePage()
+    const error = page.getByRole('alert').filter({ hasText: 'ERR_EMPTY_RESPONSE' })
+    await expect(error).toBeVisible()
+    await expect(error).toContainText(url)
+    await expect(addressBar).toHaveValue(url)
+    await expect.poll(nativeViews).toHaveLength(0)
+
+    await page.locator('[data-tab-id]').first().hover()
+    await page.locator('[data-tab-close="true"]').click()
+    await expect(error).toHaveCount(0)
+    await expectBrowserEntryAvailable()
+    expect(await page.evaluate((id) => (window as DesktopWindow).electron.browser.getState(id), surfaceId)).toBeNull()
+    await openFixturePage()
+    await expect(error).toBeVisible()
+
+    failRequests = false
+    await error.getByRole('button', { name: 'Retry' }).click()
+    await expect(error).toHaveCount(0)
+    await expect.poll(nativeViews).toHaveLength(1)
+    await expect.poll(() => application!.evaluate(({ webContents }) =>
+      webContents.getAllWebContents().some((contents) => contents.getTitle() === 'Browser fixture'),
+    )).toBe(true)
+
+    // A DOM visibility assertion alone cannot detect a WebContentsView covering a dialog.
+    // Check Electron's native child tree as well, then click the real cancel button.
+    const closeButton = page.locator('[class*="bg-[#ff5f57]"]')
+    await closeButton.click()
+    const confirmation = page.getByRole('dialog', { name: 'Confirm close', exact: true })
+    await expect(confirmation).toBeVisible()
+    await expect.poll(nativeViews).toHaveLength(0)
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(confirmation).toHaveCount(0)
+    await expect.poll(nativeViews).toHaveLength(1)
+
+    await page.getByTitle('Settings', { exact: true }).click()
+    await expect(page.locator('.modal-frame-panel')).toBeVisible()
+    await expect.poll(nativeViews).toHaveLength(0)
+    await page.keyboard.press('Escape')
+    await expect(page.locator('.modal-frame-panel')).toHaveCount(0)
+    await expect.poll(nativeViews).toHaveLength(1)
+
+    await page.locator('[data-tab-id]').first().hover()
+    await page.locator('[data-tab-close="true"]').click()
+    await expect.poll(nativeViews).toHaveLength(0)
+    await expectBrowserEntryAvailable()
+    expect(await page.evaluate((id) => (window as DesktopWindow).electron.browser.getState(id), surfaceId)).toBeNull()
+
+    // Reopen and quit with a live page: the Quit button must remain clickable.
+    await openFixturePage()
+    await expect.poll(nativeViews).toHaveLength(1)
+    await closeButton.click()
+    await expect.poll(nativeViews).toHaveLength(0)
+    await Promise.all([
+      application.waitForEvent('close'),
+      confirmation.getByRole('button', { name: 'Quit', exact: true }).click(),
+    ])
+  } finally {
+    if (application && !applicationClosed) await application.close()
+    server.closeAllConnections()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    await rm(fixtureRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 })

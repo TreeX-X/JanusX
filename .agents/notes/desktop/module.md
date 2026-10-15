@@ -16,7 +16,7 @@
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/index.ts","role":"entry"},
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/ipc/register.ts","role":"implementation"}
   ],
-  "updated": "2026-10-13T02:43:00.000Z",
+  "updated": "2026-10-14T06:18:06.205Z",
   "moduleState": "partial"
 }
 ---
@@ -38,6 +38,8 @@
 流程治理：[development-branch](./development-branch.md)、[reproducible-verification](./reproducible-verification.md)（两篇已补 `--uuid` 后缀正名）、[github-maintenance](./github-maintenance.md)归属产品面而不属本域。
 
 早期基石（均保留，无孤儿）：[toast](./desktop-toast.md)、[model-registry](../agent/model-registry.md)、[llm-runtime](../agent/llm-tool-runtime.md)、[browser-surface](./browser-surface.md)、[auto-update](./app-auto-update-win.md)、[cli-scope](./cli-manager-scope.md)、[i18n](./i18n-pipeline.md)、[statusbar](./runtime-statusbar.md)。
+
+内嵌浏览器按实际可见性挂载原生网页视图：隐藏、加载失败和对话框遮挡时摘除，恢复后按布局重新挂载。错误提示保留失败地址与重试入口；退出确认和设置等共享弹窗通过窗口内计数协调遮挡，不能依靠 CSS 层级覆盖原生网页。具体行为及 Docker 入口回归证据见 [browser-surface](./browser-surface.md)。
 
 Windows 分发先刷新已构建的 sibling 发布文件，再构建、检查边界和同步排除清单。双目标打包与单目标 portable 迭代均禁用自动发布；迭代子进程使用压缩级别 1 并保留体积预算，正式发行保持默认压缩配置。独立发布脚本先检查运行时和更新清单，上传同一批产物到草稿后再公开。llm-core 的增量信息保存在 dist 内，清理 dist 同时清理缓存；verify 先构建 core 供测试使用，后续 build:app 仅构建 Electron 应用。
 

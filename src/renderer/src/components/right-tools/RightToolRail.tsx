@@ -53,29 +53,6 @@ export function RightToolRail({
     : t('common:rightDock.collapseAria')
   return (
     <div className={styles.rail} role="toolbar" aria-label={t('common:rightTool.railAria')}>
-      {toggleAnim.rendered && panelToggle && (
-        <div
-          className={styles.railToggle}
-          data-visible={toggleAnim.visible ? 'true' : 'false'}
-          aria-hidden={toggleAnim.visible ? undefined : 'true'}
-        >
-          <ThemedTooltip label={panelToggleLabel}>
-          <button
-            type="button"
-            className={styles.railButton}
-            aria-label={panelToggleLabel}
-            aria-expanded={!collapsed}
-            aria-controls="right-tool-panel"
-            disabled={forcedCollapsed}
-            onClick={panelToggle}
-          >
-            {collapsed
-              ? <PanelRightOpen size={16} strokeWidth={1.6} aria-hidden="true" />
-              : <PanelRightClose size={16} strokeWidth={1.6} aria-hidden="true" />}
-          </button>
-          </ThemedTooltip>
-        </div>
-      )}
       <div className={styles.railTools}>
         {visibleTools.map((tool) => {
           const state = activeToolId === tool.id ? 'active' : openToolIds.includes(tool.id) ? 'open' : 'closed'
@@ -85,7 +62,7 @@ export function RightToolRail({
               ? t('common:rightTool.railStateOpen')
               : t('common:rightTool.railStateClosed')
           return (
-            <ThemedTooltip key={tool.id} label={t(tool.titleKey)}>
+            <ThemedTooltip key={tool.id} label={t(tool.titleKey)} placement="left">
             <button
               type="button"
               className={styles.railButton}
@@ -102,6 +79,29 @@ export function RightToolRail({
           )
         })}
       </div>
+      {toggleAnim.rendered && panelToggle && (
+        <div
+          className={styles.railToggle}
+          data-visible={toggleAnim.visible ? 'true' : 'false'}
+          aria-hidden={toggleAnim.visible ? undefined : 'true'}
+        >
+          <ThemedTooltip label={panelToggleLabel} placement="left">
+          <button
+            type="button"
+            className={styles.railButton}
+            aria-label={panelToggleLabel}
+            aria-expanded={!collapsed}
+            aria-controls="right-tool-panel"
+            disabled={forcedCollapsed}
+            onClick={panelToggle}
+          >
+            {collapsed
+              ? <PanelRightOpen size={16} strokeWidth={1.6} aria-hidden="true" />
+              : <PanelRightClose size={16} strokeWidth={1.6} aria-hidden="true" />}
+          </button>
+          </ThemedTooltip>
+        </div>
+      )}
     </div>
   )
 }

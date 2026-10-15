@@ -52,6 +52,9 @@ export interface AgentSessionSummary {
 export interface AgentSessionDetail extends AgentSessionSummary {
   terminalIds: string[]
   turns: SessionTurnRecord[]
+  /** Recent provider prose, independent of hook-owned turn identities. */
+  transcriptPreview?: TranscriptTurn[]
+  transcriptUpdatedAt?: string
   pendingHandoff?: string
   /**
    * Why the handoff is still pending. `unconfirmed` means it was written but no
@@ -202,6 +205,8 @@ export interface ShellRestoreTerminal {
   cwd: string
   preset: string
   name: string
+  /** Launch line the terminal was started with; absent on manifests written before shell profiles. */
+  shell?: string
 }
 
 export interface ShellRestoreWorkspace {

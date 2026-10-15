@@ -60,6 +60,24 @@
   font-weight: 600;
 }
 
+/* Embedded navigation shares the continuous workspace surface. */
+.shell[data-carrier='pane'] .header {
+  background: var(--shell-canvas);
+  border-bottom-color: var(--shell-border-soft);
+}
+
+.shell[data-carrier='pane'] .tab {
+  border-bottom: 0;
+  border-radius: 5px;
+}
+
+.shell[data-carrier='pane'] .tab[data-active='true'] {
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+}
+
+.shell[data-carrier='pane'] .iconBtn { border-color: transparent; background: transparent; }
+.shell[data-carrier='pane'] .iconBtn:hover:not(:disabled) { background: var(--shell-accent-soft); }
+
 .tabTitle {
   min-width: 0;
   overflow: hidden;
@@ -210,6 +228,58 @@
   color: var(--shell-dim);
   font-family: var(--font-mono, monospace);
   font-size: 12px;
+}
+
+/*-- 加载失败时原生视图已摘除，在 DOM 中展示地址、原因和重试 --*/
+.loadError {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  background: var(--shell-canvas);
+  color: var(--shell-muted);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  text-align: center;
+}
+
+.loadErrorUrl {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--shell-dim);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loadErrorText {
+  max-width: 42ch;
+  color: var(--shell-text);
+  line-height: 1.5;
+}
+
+.loadError button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 14px;
+  border: 1px solid var(--shell-accent-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-accent);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.loadError button:hover {
+  background: var(--shell-accent-soft);
 }
 
 .spin {

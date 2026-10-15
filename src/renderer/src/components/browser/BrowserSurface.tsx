@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { useBrowserStore } from '@/stores/browser'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useAppStore } from '@/stores/app'
+import { useBrowserOcclusionStore } from '@/stores/browser-occlusion'
 import { useI18n } from '@/i18n/useI18n'
 import {
   activateBrowserTab,
@@ -46,7 +48,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   const surface = useBrowserStore((s) => s.surfaces[surfaceId])
   /*-- tab 拖拽期间隐藏原生视图：WebContentsView 盖在 DOM 之上会吞掉 dragover，落点区只有先让位才能命中 --*/
   const tabDragInFlight = useWorkspaceStore((s) => s.tabDragInFlight)
-  const effectiveVisible = visible && !tabDragInFlight
+  const dialogOpen = useBrowserOcclusionStore((s) => s.count > 0)
+  const workbenchCovered = useAppStore((s) => s.activeWorkbench !== null || s.blueprintMode || s.isIslandDragging)
   const [missing, setMissing] = useState(false)
   const [addressDraft, setAddressDraft] = useState('')
   const [addressFocused, setAddressFocused] = useState(false)
@@ -57,6 +60,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
     () => surface?.tabs.find((tab) => tab.tabId === surface.activeTabId) ?? null,
     [surface],
   )
+  const effectiveVisible = visible && !tabDragInFlight && !dialogOpen
+    && !(carrier === 'pane' && workbenchCovered) && !activeTab?.loadError
 
   /*-- 挂载时拉取一次最新状态：独立窗口首载、工作区切换回挂都靠它对齐 --*/
   useEffect(() => {
@@ -72,9 +77,12 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   }, [surfaceId])
 
   /*-- bounds 上报：ResizeObserver + window resize，rAF 节流；不可见则归零隐藏原生视图 --*/
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = bodyRef.current
     if (!node) return
+
+    // Hide immediately; waiting for rAF leaves a native view over the new dialog.
+    if (!effectiveVisible) void setBrowserSurfaceBounds(surfaceId, ZERO_BOUNDS)
 
     const report = (): void => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current)
@@ -97,10 +105,14 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
     const observer = new ResizeObserver(report)
     observer.observe(node)
     window.addEventListener('resize', report)
+    window.addEventListener('scroll', report, true)
+    document.addEventListener('transitionend', report)
     report()
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', report)
+      window.removeEventListener('scroll', report, true)
+      document.removeEventListener('transitionend', report)
       if (frameRef.current) cancelAnimationFrame(frameRef.current)
       frameRef.current = 0
       /*-- 卸载隐藏：仅 pane 宿主组件且 store 载体仍为 pane（工作区切换等）时归零；
@@ -109,7 +121,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
         void setBrowserSurfaceBounds(surfaceId, ZERO_BOUNDS)
       }
     }
-  }, [surfaceId, effectiveVisible, carrier])
+  }, [surfaceId, effectiveVisible, carrier, activeTab?.tabId])
 
   /*-- 地址栏草稿：未聚焦时跟随活动 tab 的 URL --*/
   useEffect(() => {
@@ -130,7 +142,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   const isEmpty = !surface || surface.tabs.length === 0
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-carrier={carrier}>
       <div className={styles.header}>
         <div className={styles.tabs} role="tablist">
           {surface?.tabs.map((tab) => {
@@ -258,6 +270,18 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
             <span>{t('common:browser.noTabs')}</span>
             <button type="button" onClick={() => void openBrowserTab(surfaceId)}>
               {t('common:browser.openNewTab')}
+            </button>
+          </div>
+        )}
+        {/*-- 加载失败兜底：没有它的时候自签证书被中止、端口没开这类失败完全静默，
+             只能看到一块黑——用户无法区分"在加载"和"加载失败了"。 --*/}
+        {!isEmpty && activeTab?.loadError && (
+          <div className={styles.loadError} role="alert">
+            <span className={styles.loadErrorUrl}>{activeTab.url}</span>
+            <span className={styles.loadErrorText}>{activeTab.loadError}</span>
+            <button type="button" onClick={() => void reloadBrowserTab(surfaceId, activeTab.tabId)}>
+              <RotateCw size={12} aria-hidden="true" />
+              {t('common:browser.retry')}
             </button>
           </div>
         )}

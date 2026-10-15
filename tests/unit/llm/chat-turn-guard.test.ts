@@ -15,6 +15,8 @@ const { search, searchWithUser, recordAccess, recordProjectAccess, capture, stre
   capturePersonEpisode: vi.fn(),
 }))
 const { proposeForConversation, invalidateConversationProposal } = vi.hoisted(() => ({ proposeForConversation: vi.fn(), invalidateConversationProposal: vi.fn() }))
+const { readMemo, createMemo } = vi.hoisted(() => ({ readMemo: vi.fn(), createMemo: vi.fn() }))
+vi.mock('../../../src/main/memo/service', () => ({ memoStore: () => ({ get: readMemo, create: createMemo }) }))
 vi.mock('../../../src/main/janus/maintenance/service', () => ({ blueprintMaintenanceService: { proposeForConversation, invalidateConversationProposal } }))
 
 const repairs = vi.hoisted(() => ({ claim: vi.fn(), prompt: vi.fn(() => 'Fix selected Note only.'), continuation: vi.fn(), recordExecution: vi.fn(), finish: vi.fn(), fail: vi.fn((id, error, cancelled) => ({ id, phase: cancelled ? 'cancelled' : 'failed', error: String(error) })) }))
@@ -69,6 +71,8 @@ vi.mock('../../../src/main/agent/runtime/shell-runtime', () => ({
 
 import { abortChatStream, answerChatQuestion, gateFromToolAllowlist, handleChatStream, prepareJanusChatRecall, steerChatStream } from '../../../src/main/llm/chat-orchestrator'
 import { llmService } from '../../../src/main/llm/LlmService'
+import { configService } from '../../../src/main/config/service'
+import { DEFAULT_EXPERIMENTAL_FEATURES } from '../../../src/shared/ipc/experimental'
 
 const emptyResult: KnowledgeContextResult = {
   items: [],
@@ -90,6 +94,85 @@ function immediateStream(text: string) {
 }
 
 describe('chat turn guard (S6-a)', () => {
+  it('withholds memo tools when the persisted preview gate is disabled despite a stale binding', async () => {
+    vi.mocked(configService.getExperimentalFeatures).mockResolvedValueOnce({ ...DEFAULT_EXPERIMENTAL_FEATURES })
+    immediateStream('Enable Memo in preview settings')
+    const reply = vi.fn()
+    await handleChatStream({ reply } as never, {
+      requestId: 'memo-disabled', conversationId: 'memo-disabled-chat', providerId: 'p',
+      sourceTag: 'janus-chat', domain: 'project', messages: userMessages,
+      memoMessageId: 'disabled-origin', memoBinding: { memoId: 'stale-memo', messageId: 'disabled-origin', selectedNodeId: null },
+    })
+    const options = streamText.mock.calls[0][0]
+    expect(Object.keys(options.tools ?? {}).filter(name => name.startsWith('memo_'))).toEqual([])
+    expect(JSON.stringify(options.messages)).toContain('Memo preview is disabled')
+    expect(readMemo).not.toHaveBeenCalled()
+    expect(createMemo).not.toHaveBeenCalled()
+    expect(reply.mock.calls.some(([channel]) => channel === 'llm:chat:error')).toBe(false)
+  })
+  it('offers unbound memo creation and emits a binding for the originating message', async () => {
+    const memo = { id: '00000000-0000-4000-8000-000000000300', title: '工程排期', revision: 0, nodes: [] }
+    createMemo.mockResolvedValue(memo)
+    immediateStream('Created in the left memo workspace')
+    streamText.mockImplementationOnce(async options => {
+      expect(Object.keys(options.tools)).toContain('memo_create')
+      expect(JSON.stringify(options.messages)).toContain('never substitute a repository Note')
+      return { textStream: (async function* () {})(), fullStream: (async function* () {
+        yield { type: 'tool-call', toolCallId: 'create', toolName: 'memo_create', args: { title: '工程排期' } }
+        yield { type: 'finish', finishReason: 'tool-calls' }
+      })() }
+    })
+    const reply = vi.fn()
+    await handleChatStream({ reply } as never, { requestId: 'memo-create', conversationId: 'memo-create-chat', providerId: 'p', sourceTag: 'janus-chat', domain: 'project', memoMessageId: 'origin-message', messages: [{ role: 'user', content: '帮我建立一个关于工程排期的里程碑备忘录' }] })
+    expect(createMemo).toHaveBeenCalledWith('工程排期', expect.any(Function))
+    expect(reply).toHaveBeenCalledWith('llm:chat:agent-event', { type: 'memo_created', requestId: 'memo-create', conversationId: 'memo-create-chat', binding: { memoId: memo.id, messageId: 'origin-message', selectedNodeId: null } })
+    expect(reply.mock.calls.some(([channel]) => channel === 'llm:chat:error')).toBe(false)
+  })
+
+  it('refreshes selected star context across turns in the same cached conversation', async () => {
+    const memoId = '00000000-0000-4000-8000-000000000100'
+    const nodes = ['00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-000000000102']
+    readMemo.mockResolvedValue({ id: memoId, title: 'Memo', revision: 1, nodes: nodes.map(id => ({ id, title: id, label: '', points: [] })) })
+    immediateStream('Memo read')
+    const reply = vi.fn()
+    for (const [index, selectedNodeId] of nodes.entries()) {
+      await handleChatStream({ reply } as never, { requestId: `memo-selection-${index}`, conversationId: 'memo-selection-cache', providerId: 'p', sourceTag: 'janus-chat', messages: userMessages,
+        memoBinding: { memoId, messageId: `memo-message-${index}`, selectedNodeId } })
+      const context = JSON.stringify(streamText.mock.calls.at(-1)![0])
+      expect(context).toContain(JSON.stringify({ status: 'selected', nodeId: selectedNodeId }).replaceAll('"', '\\"'))
+    }
+    expect(reply.mock.calls.some(([channel]) => channel === 'llm:chat:error')).toBe(false)
+  })
+
+  it('passes each steering message its own selected star without changing the original context', async () => {
+    const memoId = '00000000-0000-4000-8000-000000000200'
+    const nodes = ['00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000202']
+    readMemo.mockResolvedValue({ id: memoId, title: 'Memo', revision: 1, nodes: nodes.map(id => ({ id, title: id, label: '', points: [] })) })
+    let release!: () => void
+    immediateStream('Done')
+    streamText.mockImplementationOnce(async () => {
+      await new Promise<void>(resolve => { release = resolve })
+      return { textStream: (async function* () { yield 'Initial' })() }
+    })
+    const reply = vi.fn()
+    const turn = handleChatStream({ reply } as never, { requestId: 'memo-steer', conversationId: 'memo-steer-chat', providerId: 'p', sourceTag: 'janus-chat', messages: userMessages,
+      memoBinding: { memoId, messageId: 'first-message', selectedNodeId: nodes[0] } })
+    await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+    const input = { conversationId: 'memo-steer-chat', entryId: 'next-message', text: 'Record in this star', memoBinding: { memoId, messageId: 'next-message', selectedNodeId: nodes[1] } }
+    expect(steerChatStream(input).accepted).toBe(true)
+    expect(steerChatStream(input).accepted).toBe(true)
+    expect(steerChatStream({ ...input, memoBinding: { ...input.memoBinding, selectedNodeId: nodes[0] } }).accepted).toBe(false)
+    release()
+    await turn
+    expect(streamText.mock.calls.length).toBeGreaterThanOrEqual(2)
+    const messages = streamText.mock.calls.at(-1)![0].messages as Array<{ role: string; content: string }>
+    const steered = messages.filter(message => typeof message.content === 'string' && message.content.startsWith(input.text))
+    expect(steered).toHaveLength(1)
+    expect(steered[0].content).toContain(JSON.stringify({ memoId, messageId: 'next-message', selectedNode: { status: 'unverified', nodeId: nodes[1] } }))
+    expect(JSON.stringify(messages)).toContain('first-message')
+    expect(reply.mock.calls.some(([channel]) => channel === 'llm:chat:error')).toBe(false)
+  })
+
   it('switches WorkflowX mode without resolving a provider or starting a model stream', async () => {
     vi.mocked(llmService.getLanguageModel).mockClear()
     streamText.mockClear()
@@ -143,6 +226,9 @@ describe('chat turn guard (S6-a)', () => {
     expect(steerChatStream({ conversationId: 'project-cancel', entryId: 'late', text: 'late' }).accepted).toBe(false)
   })
   beforeEach(() => {
+    vi.spyOn(configService, 'getExperimentalFeatures').mockResolvedValue({ ...DEFAULT_EXPERIMENTAL_FEATURES, memo: true })
+    readMemo.mockReset()
+    createMemo.mockReset()
     vi.mocked(llmService.getProviderSettings).mockReset().mockResolvedValue({ modelId: 'test-model' } as never)
     vi.mocked(llmService.resolveModelMetadata).mockReset().mockResolvedValue({ effectiveContextWindow: 16384, maxOutputTokens: 4096 } as never)
     search.mockReset().mockResolvedValue(emptyResult)

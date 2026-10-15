@@ -31,11 +31,6 @@
   flex: 0 0 auto;
 }
 
-/* 辅助浮岛位移：簇已承担 -50% 居中，母体只需额外偏移半个浮岛宽 */
-.janus-island-cluster .janus-island-shell[data-stage="expanded"][data-auxiliary-open="true"] {
-  transform: translateX(calc(-1 * var(--janus-auxiliary-shift))) !important;
-}
-
 /* 展开态隐藏卫星：展开面板的 monitor 视图已承担运行表达，避免巨 panel 旁挂小球 */
 .janus-island-cluster:has(.janus-island-shell[data-stage="expanded"]) .janus-run-orbs {
   display: none;

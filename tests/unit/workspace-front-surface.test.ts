@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildWorkspaceTerminalSurfaces,
+  GLOBAL_PANE_SCOPE,
   MAX_HOT_WORKSPACE_SURFACES,
   shouldRenderWorkspacePane,
   touchWorkspaceSurfaceRecency,
@@ -75,5 +76,42 @@ describe('workspace front surface', () => {
     }, ['a'])
 
     expect(surfaces.map(({ workspaceId }) => workspaceId)).toEqual(['a'])
+  })
+
+  it('hosts a project-less pane tree under the global scope so a blank page can open a browser', () => {
+    const globalPane = createEmptyPaneLeaf('pane-global')
+
+    const surfaces = buildWorkspaceTerminalSurfaces({}, null, {
+      paneTree: globalPane,
+      activeTerminalId: null,
+      focusedPaneId: 'pane-global',
+    }, [])
+
+    expect(surfaces.map(({ workspaceId }) => workspaceId)).toEqual([GLOBAL_PANE_SCOPE])
+    expect(surfaces[0]?.paneTree).toBe(globalPane)
+  })
+
+  it('builds no surface when there is neither a project nor a pane tree', () => {
+    expect(buildWorkspaceTerminalSurfaces({}, null, {
+      paneTree: null,
+      activeTerminalId: null,
+      focusedPaneId: null,
+    }, [])).toEqual([])
+  })
+
+  it('does not leak the global scope into hot snapshot surfaces', () => {
+    const paneA = createEmptyPaneLeaf('pane-a')
+    const globalPane = createEmptyPaneLeaf('pane-global')
+
+    const surfaces = buildWorkspaceTerminalSurfaces({
+      a: { paneTree: paneA, activeTerminalId: 'terminal-a', focusedPaneId: 'pane-a' },
+    }, null, {
+      paneTree: globalPane,
+      activeTerminalId: null,
+      focusedPaneId: 'pane-global',
+    }, ['a'])
+
+    // 热快照仍按真实 workspaceId 呈现并全部不可见，活动面单独走全局哨兵。
+    expect(surfaces.map(({ workspaceId }) => workspaceId)).toEqual(['a', GLOBAL_PANE_SCOPE])
   })
 })

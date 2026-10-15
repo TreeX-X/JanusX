@@ -42,7 +42,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-14T15:39:52.322Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/0cb931e1-e33c-4e38-a9d9-9d652796d935"
 }
 ---
@@ -55,7 +55,7 @@
 
 ## Decision
 
-The panel holds a debounced timeline tick beside the existing list subscription: each `session:event` restarts a 600ms trailing timer, and one tick reloads every expanded card. The card load effect reruns on the tick while expanded, refetching detail plus the session-scoped checkpoint list and lazily filling change records for new checkpoints. Review, file-expand, and restore states stay keyed by checkpoint id, so an open restore review survives the reload with recomputed prune counts. Records of pruned checkpoints drop from the local cache on each reload. Collapsed cards and archived sessions skip the work exactly as before.
+The panel holds a debounced timeline tick beside the list subscription: each session:event restarts a 600ms trailing timer. One tick reloads expanded-card previews through session.get and refreshes both session.get and session.getTranscript in the open detail window. Transcript pairs replace prose even when an answer is still pending, so cached answers cannot migrate onto new questions. These reads update questions and excerpts; checkpoint lists, file records, review and restore state have been removed from session management. Collapsed cards skip detail reads. Visible-panel provider polling and bounded transcript previews are maintained in [external session sync](external-session-backfill.md).
 
 ## Alternatives considered
 
@@ -66,5 +66,5 @@ The panel holds a debounced timeline tick beside the existing list subscription:
 
 ## Consequences
 
-- **Gains**: questions, excerpts, and checkpoint strips arrive in an open timeline within one debounce window of the ledger write, with review and expand states preserved across reloads.
-- **Costs and limits**: rapid multi-terminal bursts still reload once per 600ms quiet window per panel; a reload in flight loses to the newer one through the existing alive guard, so the last writer wins without tearing. Per-engine excerpt coverage is untouched: non-claude turns stay status-only pending the parser slice. Verification is machine evidence on touched paths: `tsc --noEmit` plus `typecheck:strict-unused` are clean, `eslint` on the component reports zero errors with one pre-existing Chinese-literal warning on the transcript line, and unit runs pass on `worktree-store` 2/2, `agent-session-registry` 13/13, and `transcript-excerpt` 4/4.
+- **Gains**: questions and excerpts arrive in an open timeline within one debounce window of the ledger write, with card expansion preserved across reloads.
+- **Costs and limits**: rapid multi-terminal bursts still reload once per 600ms quiet window per panel; a reload in flight loses to the newer one through the existing alive guard, so the last writer wins without tearing. Codex excerpts use the shared streaming reader; provider polling updates prose independently of hook status. Verification is machine evidence on touched paths: `tsc --noEmit` plus `typecheck:strict-unused` are clean, `eslint` on the component reports zero errors with one pre-existing Chinese-literal warning on the transcript line, and unit runs pass on `worktree-store` 2/2, `agent-session-registry` 13/13, and `transcript-excerpt` 4/4.

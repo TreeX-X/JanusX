@@ -162,9 +162,11 @@ export class ReviewEvidenceSession {
     if (coverage !== 'complete') return
     const snapshot = await this.sources.snapshot(this.input.context)
     const target = snapshot.entries.find(entry => entry.classification === 'valid' && entry.doc?.id === this.input.target.noteId)
-    const hasLocalCodeRef = target?.doc?.metadata?.codeRefs?.some(ref => ref.repoId === this.input.context.repoId)
-    if (hasLocalCodeRef && !this.input.materials.some(item => item.kind === 'code' && !item.path.startsWith('.agents/'))) {
-      throw new Error('Agent did not check implementation referenced by the Note')
+    const refs = target?.doc?.metadata?.codeRefs?.filter(ref => ref.repoId === this.input.context.repoId) ?? []
+    const unread = refs.filter(ref => !this.input.materials.some(item => item.kind === 'code'
+      && (item.path === ref.path || item.path.startsWith(ref.path.replace(/\/$/, '') + '/'))))
+    if (unread.length) {
+      throw new Error('Agent did not check implementation referenced by the Note: ' + [...new Set(unread.map(ref => ref.path))].join(', '))
     }
   }
 }

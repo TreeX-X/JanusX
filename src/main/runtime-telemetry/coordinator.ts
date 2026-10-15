@@ -4,10 +4,19 @@ import { dirname, join } from 'node:path'
 import { mkdirSync } from 'node:fs'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
 import { getRuntimeTelemetrySnapshot } from './history'
+import { scanNativeSessionCorpus } from './corpus-scan'
+import { findCorrelatedSession } from './session-attribution'
 import { UsageLedger } from './usage-ledger'
 import type { UsageLedgerPage, UsageLedgerQuery } from '../../shared/usage'
 
 type TelemetryEngine = Exclude<NonNullable<RuntimeTelemetryRequest['preset']>, 'shell'>
+
+/** First corpus pass waits for app boot; later passes are cheap cursor checks. */
+const CORPUS_INITIAL_DELAY_MS = 20_000
+const CORPUS_INTERVAL_MS = 5 * 60_000
+/** Correlation is IO per unbound terminal; the context bar tolerates this lag. */
+const ATTRIBUTION_INTERVAL_MS = 15_000
+const ACTIVITY_THROTTLE_MS = 1_000
 
 interface ModelSegment {
   model?: string
@@ -21,6 +30,10 @@ interface TerminalLedgerEntry {
   compactionCount?: number
   modelSegments: ModelSegment[]
   updatedAt: number
+  /** hook: an adapter/hook event asserted this session. correlated: the main
+   *  process matched the session file to this terminal's pty activity. Legacy
+   *  rows predate the field and came from hooks. */
+  source?: 'hook' | 'correlated'
 }
 
 interface TelemetryLedger {
@@ -38,16 +51,26 @@ export class TerminalContextCoordinator {
   private readonly sessionOwners = new Map<string, string>()
   private loaded = false
   private readonly requests = new Map<string, RuntimeTelemetryRequest>()
+  private readonly codexHomes = new Map<string, string>()
   private readonly listeners = new Map<string, (snapshot: RuntimeTelemetrySnapshot) => void>()
   private readonly pending = new Map<string, Promise<RuntimeTelemetrySnapshot | null>>()
   private pollTimer?: ReturnType<typeof setInterval>
+  private corpusTimer?: ReturnType<typeof setInterval>
+  private corpusScanning = false
+  private lastAttributionAt = 0
+  private attributionBusy = false
+  /** Per-terminal pty activity and first-seen time, for hook-free attribution. */
+  private readonly activity = new Map<string, number>()
+  private readonly startedAt = new Map<string, number>()
   private readonly usageLedger = new UsageLedger(() => join(app.getPath('userData'), 'janusx', 'usage-ledger.sqlite'))
   private usageError?: string
   private readonly failedSessions = new Map<string, string>()
 
-  trackTerminal(terminalId: string, preset: RuntimeTelemetryRequest['preset'], cwd: string, notify?: (snapshot: RuntimeTelemetrySnapshot) => void): void {
+  trackTerminal(terminalId: string, preset: RuntimeTelemetryRequest['preset'], cwd: string, notify?: (snapshot: RuntimeTelemetrySnapshot) => void, codexHome?: string): void {
     if (!preset || preset === 'shell') return
+    if (preset === 'codex' && codexHome) this.codexHomes.set(terminalId, codexHome)
     this.requests.set(terminalId, { terminalId, preset, cwd })
+    if (!this.startedAt.has(terminalId)) this.startedAt.set(terminalId, Date.now())
     if (notify) this.listeners.set(terminalId, notify)
     if (!this.pollTimer) {
       this.pollTimer = setInterval(() => {
@@ -57,8 +80,63 @@ export class TerminalContextCoordinator {
             if (snapshot && this.requests.get(request.terminalId!) === request) this.listeners.get(request.terminalId!)?.(snapshot)
           }).catch(error => this.reportUsageError(error))
         }
+        // Hook-free attribution: only terminals without a binding are scanned,
+        // and a hook binding always wins over a correlated one.
+        if (Date.now() - this.lastAttributionAt >= ATTRIBUTION_INTERVAL_MS && !this.attributionBusy) {
+          this.lastAttributionAt = Date.now()
+          void this.runAttributionPass()
+        }
       }, 10_000)
       this.pollTimer.unref()
+    }
+  }
+
+  /** Called from the pty data path; throttled so chatty output is one write. */
+  noteTerminalActivity(terminalId: string, at: number): void {
+    const previous = this.activity.get(terminalId)
+    if (previous !== undefined && at - previous < ACTIVITY_THROTTLE_MS) return
+    this.activity.set(terminalId, at)
+  }
+
+  /**
+   * Binds unbound terminals to the native session their pty activity matches.
+   * Runs only for terminals without a hook binding, so a working hook path is
+   * never disturbed; failures leave the terminal unbound (unknown) instead of
+   * guessing another terminal's session.
+   */
+  /**
+   * Runs one attribution sweep now. The poll timer drives it on a cadence;
+   * terminal creation can also call it so a fresh terminal binds within one IO
+   * cycle instead of waiting out the interval. Awaited by callers that need the
+   * result, and re-entrant calls collapse onto the in-flight pass.
+   */
+  async runAttributionPass(): Promise<void> {
+    if (this.attributionBusy) return
+    this.attributionBusy = true
+    try { await this.attributeUnboundTerminals() } finally { this.attributionBusy = false }
+  }
+
+  private async attributeUnboundTerminals(): Promise<void> {
+    for (const request of this.requests.values()) {
+      const terminalId = request.terminalId
+      const preset = request.preset
+      if (!terminalId || !preset || preset === 'shell' || !request.cwd) continue
+      if (this.entries.has(terminalId)) continue
+      const startedAt = this.startedAt.get(terminalId)
+      const lastActivityAt = this.activity.get(terminalId)
+      if (startedAt === undefined || lastActivityAt === undefined) continue
+      try {
+        const candidate = await findCorrelatedSession({
+          engine: preset,
+          cwd: request.cwd,
+          terminalStartedAt: startedAt,
+          lastActivityAt,
+          codexHome: this.codexHomes.get(terminalId),
+        })
+        if (candidate) this.bindSession(terminalId, preset, candidate.sessionId, 'correlated')
+      } catch (error) {
+        this.reportUsageError(error)
+      }
     }
   }
 
@@ -72,6 +150,33 @@ export class TerminalContextCoordinator {
     finally { if (this.entries.get(terminalId) === bound) this.unbindTerminal(terminalId) }
   }
 
+  /**
+   * Hook-free usage accounting: scans every native session store on a timer,
+   * independent of terminals. A pass with zero open terminals still imports
+   * history, which is what closed terminals and never-opened sessions need.
+   */
+  startCorpusScan(): void {
+    if (this.corpusTimer) return
+    const run = () => {
+      if (this.corpusScanning) return
+      this.corpusScanning = true
+      scanNativeSessionCorpus({
+        ledger: this.usageLedger,
+        checkpointLookup: (engine, namespace, nativeId) => {
+          try { return this.usageLedger.sourceCheckpoint(engine, namespace, nativeId) }
+          catch (error) {
+            this.failedSessions.set(this.sessionKey(engine, nativeId), error instanceof Error ? error.message : String(error))
+            return undefined
+          }
+        },
+      }).catch(error => this.reportUsageError(error))
+        .finally(() => { this.corpusScanning = false })
+    }
+    setTimeout(run, CORPUS_INITIAL_DELAY_MS).unref?.()
+    this.corpusTimer = setInterval(run, CORPUS_INTERVAL_MS)
+    this.corpusTimer.unref()
+  }
+
   listUsage(query: UsageLedgerQuery): UsageLedgerPage {
     try { return { ...this.usageLedger.list(query), warning: this.usageError ?? this.failedSessions.values().next().value } }
     catch (error) { this.reportUsageError(error); return { records: [], sessions: [], error: this.usageError } }
@@ -82,7 +187,7 @@ export class TerminalContextCoordinator {
     console.error('Usage ledger:', this.usageError)
   }
 
-  bindSession(terminalId: string, engine: TelemetryEngine, sessionId?: string): boolean {
+  bindSession(terminalId: string, engine: TelemetryEngine, sessionId?: string, source: 'hook' | 'correlated' = 'hook'): boolean {
     const normalizedSessionId = sessionId?.trim()
     if (!terminalId || !normalizedSessionId) return false
     this.load()
@@ -91,7 +196,14 @@ export class TerminalContextCoordinator {
     if (owner && owner !== terminalId) return false
 
     const previous = this.entries.get(terminalId)
-    if (previous?.sessionId === normalizedSessionId && previous.engine === engine) return true
+    if (previous?.sessionId === normalizedSessionId && previous.engine === engine) {
+      // A hook assertion upgrades an earlier correlation for the same session.
+      if (source === 'hook' && previous.source !== 'hook') {
+        previous.source = 'hook'
+        this.persist()
+      }
+      return true
+    }
     if (previous) this.sessionOwners.delete(this.sessionKey(previous.engine, previous.sessionId))
 
     this.entries.set(terminalId, {
@@ -99,6 +211,7 @@ export class TerminalContextCoordinator {
       sessionId: normalizedSessionId,
       modelSegments: [],
       updatedAt: Date.now(),
+      source,
     })
     this.sessionOwners.set(this.sessionKey(engine, normalizedSessionId), terminalId)
     this.persist()
@@ -109,7 +222,10 @@ export class TerminalContextCoordinator {
     if (!terminalId) return
     this.load()
     this.requests.delete(terminalId)
+    this.codexHomes.delete(terminalId)
     this.listeners.delete(terminalId)
+    this.activity.delete(terminalId)
+    this.startedAt.delete(terminalId)
     if (this.requests.size === 0 && this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = undefined }
     const entry = this.entries.get(terminalId)
     if (!entry) return
@@ -136,7 +252,8 @@ export class TerminalContextCoordinator {
     // binding. This also makes restored windows safe after renderer reloads.
     const sessionId = bound?.sessionId
     // Restoring the same native session must not redefine its accounting or context range.
-    const snapshot = await getRuntimeTelemetrySnapshot({ ...request, sessionId, startedAt: bound ? undefined : request.startedAt }, (engine, namespace, nativeId) => {
+    const codexHome = request.terminalId ? this.codexHomes.get(request.terminalId) : undefined
+    const snapshot = await getRuntimeTelemetrySnapshot({ ...request, codexHome, sessionId, startedAt: bound ? undefined : request.startedAt }, (engine, namespace, nativeId) => {
       try { return this.usageLedger.sourceCheckpoint(engine, namespace, nativeId) }
       catch (error) {
         this.failedSessions.set(this.sessionKey(engine, nativeId), error instanceof Error ? error.message : String(error))
@@ -169,7 +286,7 @@ export class TerminalContextCoordinator {
       ...telemetry,
       observedAt: Date.now(),
       sessionId: bound.sessionId,
-      sessionBinding: 'exact',
+      sessionBinding: bound.source === 'correlated' ? 'correlated' : 'exact',
     }
     this.recordSnapshot(request.terminalId!, bound, exact)
     return exact

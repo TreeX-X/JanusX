@@ -70,7 +70,7 @@ export function ChatContextIndicator({ controller }: { controller: UseJanusChatR
   }
   const phase = status?.phase === 'ready' && status.checkpoint ? 'compacted' : status?.phase
   return <details className="janus-context-indicator">
-    <summary role="status">{budget?.resolved
+    <summary role="status">{t('terminal:tab.view.runtime')} · {budget?.resolved
       ? t('janus:chat.context.usage', { used: Math.round(status?.usedTokens ?? 0).toLocaleString(), limit: budget.contextWindow.toLocaleString() })
       : t(budget || error ? 'janus:chat.context.unmatched' : 'janus:chat.context.detecting')}
       {budget?.resolved && <> · {t(`janus:chat.context.${budget.source}`)}</>}

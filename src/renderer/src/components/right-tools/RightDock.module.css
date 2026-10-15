@@ -1,4 +1,20 @@
+.workbenchGrid {
+  transition: grid-template-columns 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.workbenchGrid[data-resizing='true'] {
+  transition: none;
+}
+
 .dock {
+  /* Note: .agents/notes/workbench/right-dock.md — neutral tool surfaces. */
+  --shell-canvas: var(--tool-canvas);
+  --shell-chrome: var(--tool-canvas);
+  --shell-card: var(--tool-card);
+  --shell-pane-chrome: var(--tool-chrome);
+  --shell-chrome-raised: var(--tool-chrome);
+  --shell-drawer: var(--tool-chrome);
+  --shell-hover: var(--tool-hover);
   position: relative;
   display: flex;
   min-width: 0;
@@ -12,6 +28,7 @@
   position: absolute;
   top: 0;
   right: 48px;
+  width: calc(100% - 48px);
   bottom: 0;
   display: flex;
   min-width: 0;
@@ -20,7 +37,15 @@
   overflow: hidden;
   opacity: 1;
   transform: translateX(0);
-  transition: width 240ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 240ms ease, transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity 240ms ease, transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The grid owns geometry; lay content out once at the destination width.
+   Right alignment keeps controls anchored while the shell reveals the left edge. */
+.panelHeader,
+.host {
+  width: var(--right-tool-content-width);
+  align-self: flex-end;
 }
 
 .panel[data-resizing='true'] {
@@ -39,8 +64,8 @@
   height: 36px;
   flex: 0 0 36px;
   align-items: center;
-  padding: 0 6px;
-  border-bottom: 1px solid var(--shell-border);
+  padding: 4px 6px;
+  background: var(--shell-canvas);
 }
 
 .tabsWrap {
@@ -48,6 +73,7 @@
   display: flex;
   min-width: 0;
   flex: 1;
+  height: 26px;
 }
 
 .tabsWrap::before,
@@ -65,12 +91,12 @@
 
 .tabsWrap::before {
   left: 0;
-  background: linear-gradient(to right, var(--shell-chrome), transparent);
+  background: linear-gradient(to right, var(--shell-canvas), transparent);
 }
 
 .tabsWrap::after {
   right: 0;
-  background: linear-gradient(to left, var(--shell-chrome), transparent);
+  background: linear-gradient(to left, var(--shell-canvas), transparent);
 }
 
 .tabsWrap[data-overflow-left='true']::before,
@@ -86,7 +112,6 @@
   gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 2px 0;
   scrollbar-width: none;
 }
 
@@ -103,34 +128,33 @@
   align-items: center;
   gap: 4px;
   height: 26px;
-  margin-top: 0;
   padding: 0 6px 0 10px;
   color: var(--shell-muted);
+  background: transparent;
+  font-family: inherit;
   font-size: 11px;
-  cursor: default;
-  outline: none;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+  line-height: normal;
+  cursor: pointer;
+  user-select: none;
+  border: 0;
+  border-radius: 7px;
+  transition: color 140ms ease, background-color 140ms ease;
 }
 
 .tab:hover:not([data-active='true']) {
   color: var(--shell-text);
-  background: var(--shell-hover);
-}
-
-.tab:active:not([data-active='true']) {
-  background: var(--shell-active);
+  background: color-mix(in srgb, var(--shell-text) 5%, var(--shell-canvas));
 }
 
 .tab[data-active='true'] {
   color: var(--shell-text);
-  background: var(--shell-accent-soft);
-  border-color: var(--shell-accent-border);
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+  font-weight: 600;
 }
 
 .tab:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--shell-accent-border);
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
 }
 
 .tabLabel {
@@ -143,25 +167,29 @@
 
 .tabClose {
   position: relative;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  padding: 0;
+  border: 0;
   border-radius: 4px;
+  background: transparent;
+  color: var(--shell-muted);
   opacity: 0;
-  transition: opacity 140ms ease, background 140ms ease;
+  cursor: pointer;
+  transition: opacity 140ms ease, color 140ms ease, background-color 140ms ease;
 }
 
 .tab:hover .tabClose,
-.tab:focus-visible .tabClose,
-.tabClose:focus-visible {
-  opacity: 1;
+.tab:focus-within .tabClose {
+  opacity: 0.65;
 }
 
 .tabClose::before,
 .tabClose::after {
   position: absolute;
-  top: 8px;
-  left: 5px;
+  top: 9.5px;
+  left: 6px;
   width: 8px;
   height: 1px;
   background: currentColor;
@@ -170,7 +198,14 @@
 
 .tabClose::before { transform: rotate(45deg); }
 .tabClose::after { transform: rotate(-45deg); }
-.tabClose:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.tab .tabClose:hover,
+.tab .tabClose:focus-visible {
+  opacity: 1;
+  color: var(--shell-text);
+  background: color-mix(in srgb, var(--shell-text) 12%, transparent);
+}
+
+.tabClose:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: -1px; }
 
 .host,
 .toolPanel,
@@ -183,6 +218,12 @@
 .host { flex: 1; overflow: hidden; }
 .toolPanel { overflow: hidden; }
 .toolPanel[hidden] { display: none; }
+.toolPanel:not([hidden]) { animation: toolReveal 160ms ease-out; }
+
+@keyframes toolReveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 .toolError {
   display: flex;
@@ -254,13 +295,15 @@
   background: var(--shell-chrome-raised);
 }
 
-/* 折叠/展开控件：随第一个 tab 淡入并撑开高度，随最后一个 tab 淡出并收回高度，
-   让下方工具图标平滑滑动而不是跳位。高度 40px = 控件 36px + 与图标间距 4px。
+/* 折叠/展开控件放在栏底部，随第一个/最后一个 tab 淡入/淡出，工具图标始终固定。
+   高度 40px = 控件 36px + 间距 4px。
    data-visible 由 useAnimatedOpen 驱动（见 components/shared/CardFrame.tsx），
    时长与 RightToolRail.tsx 的 RAIL_TOGGLE_MOTION_MS = 320ms 一致，
    visibility 延时 = 卸载定时器，改一个就要改另一个；.panel 的展开用同一组时长。
    必须写在 reduced-motion 媒体查询之前，否则同特异性后者会被这里覆盖。 */
 .railToggle {
+  order: 1;
+  margin-top: auto;
   flex: 0 0 auto;
   height: 0;
   overflow: hidden;
@@ -295,10 +338,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .workbenchGrid,
   .panel,
+  .tab,
+  .tabClose,
+  .tabsWrap::before,
+  .tabsWrap::after,
   .railToggle,
   .railToggle[data-visible='true'],
   .railToggle[data-visible='false'] { transition: none; }
+  .toolPanel:not([hidden]) { animation: none; }
 }
 
 .dock[data-collapsed='true'] .rail { border-left-color: transparent; }
@@ -310,7 +359,7 @@
   width: 36px;
   height: 36px;
   place-items: center;
-  border-radius: 4px;
+  border-radius: 7px;
   color: var(--shell-dim);
   transition: color 140ms ease, background 140ms ease;
 }
@@ -318,7 +367,7 @@
 .railButton:hover:not(:disabled) { color: var(--shell-text); background: var(--shell-active); }
 .railButton:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: 1px; }
 .railButton:disabled { opacity: 0.25; }
-.railButton[data-state='active'] { color: var(--shell-accent-strong); background: var(--shell-accent-soft); }
+.railButton[data-state='active'] { color: var(--shell-text); background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas)); }
 
 .railIcon { display: block; }
 
@@ -338,11 +387,7 @@
 
 .railButton[data-state='open'] .railState { display: block; }
 .railButton[data-state='active'] .railState {
-  display: block;
-  width: 2.5px;
-  height: 16px;
-  border-radius: 2px;
-  opacity: 1;
+  display: none;
 }
 
 /* 画像候选数：去色块的极简数字。无填充、与图标同色（currentColor 随 dim/hover/active 自动一致），

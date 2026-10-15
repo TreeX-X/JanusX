@@ -206,7 +206,7 @@ textarea::placeholder {
   width: 4px;
   min-height: 28px;
   border-radius: 999px;
-  background: rgba(154, 154, 158, 0.45);
+  background: color-mix(in srgb, var(--shell-text) 35%, transparent);
   transition: right 140ms ease, width 140ms ease, background 140ms ease;
   cursor: grab;
 }
@@ -214,7 +214,7 @@ textarea::placeholder {
 .preview-scrollbar-track:hover .preview-scrollbar-thumb {
   right: 2px;
   width: 10px;
-  background: rgba(200, 200, 204, 0.72);
+  background: color-mix(in srgb, var(--shell-text) 55%, transparent);
 }
 .preview-scrollbar-track:active .preview-scrollbar-thumb { cursor: grabbing; }
 
@@ -995,8 +995,8 @@ textarea::placeholder {
   width: 18px;
   height: 18px;
   border-radius: 9999px;
-  border: 2px solid rgba(255, 120, 48, 0.2);
-  border-top-color: #ff7830;
+  border: 2px solid var(--shell-accent-soft);
+  border-top-color: var(--shell-accent);
   animation: product-stage-spin 0.8s linear infinite;
 }
 

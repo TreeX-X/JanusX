@@ -24,10 +24,12 @@ async function writeCodexRollout(sessionId: string, lines: string[]) {
 
 describe('runtime telemetry history', () => {
   beforeEach(async () => {
+    vi.stubEnv('CODEX_HOME', '')
     testContext.homeDir = await mkdtemp(join(tmpdir(), 'janusx-telemetry-'))
   })
 
   afterEach(async () => {
+    vi.unstubAllEnvs()
     await rm(testContext.homeDir, { recursive: true, force: true })
   })
 
@@ -62,6 +64,7 @@ describe('runtime telemetry history', () => {
     expect(snapshot).toMatchObject({
       sessionId: 'session-1',
       contextTokens: 650,
+      recentCacheHitRate: 500 / 650,
       inputTokens: 250,
       outputTokens: 50,
       cacheReadTokens: 800,
@@ -92,7 +95,7 @@ describe('runtime telemetry history', () => {
         payload: {
           type: 'token_count',
           info: {
-            last_token_usage: { total_tokens: 8_000 },
+            last_token_usage: { total_tokens: 8_000, input_tokens: 7_000, cached_input_tokens: 3_500 },
             total_token_usage: {
               total_tokens: 12_000,
               input_tokens: 10_000,
@@ -115,6 +118,7 @@ describe('runtime telemetry history', () => {
       sessionId,
       detectedModel: 'gpt-5.5',
       contextTokens: 8_000,
+      recentCacheHitRate: 0.5,
       contextWindowTokens: 200_000,
       inputTokens: 8_000,
       outputTokens: 2_000,
@@ -123,6 +127,57 @@ describe('runtime telemetry history', () => {
       source: 'history',
       confidence: 'authoritative',
     })
+  })
+
+  it('distinguishes a latest Codex zero cache hit from missing cache fields and cumulative usage', async () => {
+    const sessionId = '12345678-1234-1234-1234-123456789abc'
+    for (const lastUsage of [{ input_tokens: 100, cached_input_tokens: 0 }, { input_tokens: 100 }]) {
+      await writeCodexRollout(sessionId, [
+        JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo' } }),
+        JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: {
+          last_token_usage: lastUsage,
+          total_token_usage: { input_tokens: 1000, cached_input_tokens: 800, output_tokens: 200, total_tokens: 1200 },
+        } } }),
+      ])
+      const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId })
+      expect(snapshot?.cacheReadTokens).toBe(800)
+      expect(snapshot?.recentCacheHitRate).toBe('cached_input_tokens' in lastUsage ? 0 : undefined)
+    }
+  })
+
+  it('splits Codex cache writes from inclusive input without changing totals or hit rate', async () => {
+    const sessionId = '12345678-1234-1234-1234-123456789abc'
+    for (const written of [400, 0, undefined]) {
+      await writeCodexRollout(sessionId, [
+        JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo' } }),
+        JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: {
+          last_token_usage: { input_tokens: 100, cached_input_tokens: 60, cache_write_input_tokens: written === undefined ? undefined : 30, total_tokens: 120 },
+          total_token_usage: { input_tokens: 1000, cached_input_tokens: 500, cache_write_input_tokens: written, output_tokens: 200, total_tokens: 1200 },
+        } } }),
+      ])
+      const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId })
+      expect(snapshot).toMatchObject({ inputTokens: 500 - (written ?? 0), cacheReadTokens: 500, totalTokens: 1200, recentCacheHitRate: 0.6, contextTokens: 120 })
+      expect(snapshot?.cacheWriteTokens).toBe(written)
+      expect(snapshot?.usageObservation?.counters?.cacheWriteTokens).toBe(written)
+      expect(snapshot?.usageObservation?.issue).toBeUndefined()
+    }
+  })
+
+  it('reads Claude positive writes and distinguishes missing write fields from explicit zero', async () => {
+    const projectDir = join(testContext.homeDir, '.claude', 'projects', 'C--repo')
+    await mkdir(projectDir, { recursive: true })
+    for (const written of [400, 0, undefined]) {
+      await writeFile(join(projectDir, 'session-write.jsonl'), JSON.stringify({
+        sessionId: 'session-write', timestamp: '2026-07-30T10:00:00Z',
+        message: { id: 'response-write', role: 'assistant', stop_reason: 'end_turn', usage: {
+          input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 300, cache_creation_input_tokens: written,
+        } },
+      }))
+      const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'claude', cwd: 'C:/repo', sessionId: 'session-write' })
+      expect(snapshot?.cacheWriteTokens).toBe(written)
+      expect(snapshot?.totalTokens).toBe(420 + (written ?? 0))
+      expect(snapshot?.usageObservation?.events?.[0].cacheWriteTokens).toBe(written)
+    }
   })
 
   it('reads Codex startup capacity and exact compactions only for a bound session', async () => {
@@ -171,6 +226,31 @@ describe('runtime telemetry history', () => {
       confidence: 'declared',
     })
     expect(snapshot?.sessionId).toBeUndefined()
+  })
+
+  it('reads Codex configuration, bound usage and ledger namespace from the selected home', async () => {
+    const sessionId = 'custom-home-session'
+    const codexHome = join(testContext.homeDir, 'custom-codex')
+    await mkdir(join(codexHome, 'sessions'), { recursive: true })
+    await writeFile(join(codexHome, 'config.toml'), 'model = "gpt-6.1-sol"\nmodel_context_window = 1000000\n')
+    await writeFile(join(codexHome, 'sessions', `rollout-${sessionId}.jsonl`), [
+      JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo' } }),
+      JSON.stringify({ type: 'turn_context', payload: { model: 'gpt-6.1-sol', cwd: 'C:/repo' } }),
+      JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: {
+        last_token_usage: { total_tokens: 0, input_tokens: 0, cached_input_tokens: 0 },
+        total_token_usage: { total_tokens: 120, input_tokens: 100, cached_input_tokens: 50, output_tokens: 20 },
+        model_context_window: 828400,
+      } } }),
+    ].join('\n'))
+
+    for (const explicit of [false, true]) {
+      vi.stubEnv('CODEX_HOME', explicit ? join(testContext.homeDir, 'wrong-home') : codexHome)
+      const selected = explicit ? { codexHome } : {}
+      const bootstrap = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', ...selected })
+      expect(bootstrap).toMatchObject({ detectedModel: 'gpt-6.1-sol', contextWindowTokens: 1000000, source: 'configuration' })
+      const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId, ...selected })
+      expect(snapshot).toMatchObject({ sessionId, contextTokens: 0, contextWindowTokens: 828400, totalTokens: 120, usageObservation: { namespace: codexHome } })
+    }
   })
 
   it('reads the declared Claude model before the first conversation', async () => {
@@ -261,6 +341,7 @@ describe('runtime telemetry history', () => {
       sessionId: 'session-1',
       detectedModel: 'glm-5.2',
       contextTokens: 925,
+      recentCacheHitRate: 200 / 925,
       inputTokens: 1_200,
       outputTokens: 300,
       cacheReadTokens: 400,
@@ -302,6 +383,7 @@ describe('runtime telemetry history', () => {
       sessionId: 'session-win',
       detectedModel: 'glm-5.2',
       contextTokens: 85,
+      recentCacheHitRate: 20 / 85,
       source: 'history',
       confidence: 'authoritative',
     })
@@ -402,6 +484,7 @@ describe('runtime telemetry history', () => {
       cacheWriteTokens: 7,
       totalTokens: 1_867,
       contextTokens: 567,
+      recentCacheHitRate: 60 / 567,
       compactionCount: 1,
       compactionCountConfidence: 'exact',
       source: 'history',

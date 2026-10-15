@@ -1,32 +1,39 @@
-import { useState, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { Globe, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Globe, Minimize2, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
 import { useBrowserStore } from '@/stores/browser'
 import { BrowserSurface } from './browser/BrowserSurface'
 import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
-import { QuickNote } from './note/QuickNote'
+import { TerminalContextTooltip, TerminalRuntime, TerminalUsageStats } from './TerminalUsageDetails'
+import { MarkdownPane } from './MarkdownPane'
+import { MarkdownIcon } from './ui/MarkdownIcon'
 import {
   applyTerminalDraftLifecycle,
   clampDrawerHeight,
   DRAWER_DEFAULT_HEIGHT,
   DRAWER_MIN_HEIGHT,
   DRAWER_MIN_PANE_HEIGHT,
-  DRAWER_VIEWS,
-  DrawerViewTabs,
   getDrawerHeight,
-  getDrawerPanelAttributes,
-  type DrawerHeights,
-  type DrawerView,
+  getDrawerPanelId,
 } from './note/quick-note-behavior'
 import { CLITerminal } from './CLITerminal'
 import { TurnChangeIsland } from './TurnChangeIsland'
 import { HoldToConfirm } from './ui/HoldToConfirm'
 import { useI18n } from '@/i18n/useI18n'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
+import {
+  contextExactLabel,
+  contextLabel,
+  contextPercentLabel,
+  contextRatio,
+  contextRatioColor,
+  modelLabel,
+  providerLabel,
+} from '@/lib/terminal-labels'
 import type { TerminalPreset, Terminal } from '@/types'
 import {
   getActiveBrowserTabDragId,
@@ -46,13 +53,20 @@ import {
 } from '@/lib/workspace-pane'
 import { getPaneDropHint, midpointInsertIndex, paneDropHintLabel, SPLIT_RATIO_EQUAL, type PaneDropHint } from '@/lib/pane-drop-hint'
 import { startPaneTabDrag } from '@/lib/pane-tab-drag'
-import { resolveContextWindows } from '@/lib/runtime-telemetry'
 import { getTerminalStatusVisual } from '@/lib/terminal-sidebar-visual'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
+import {
+  describeShellEntry,
+  listVisibleCliPresets,
+  listVisibleShellEntries,
+  type ShellProfilesSettings,
+} from '../../../shared/shellProfiles'
+import { useShellProfilesStore } from '@/stores/shell-profiles'
 import {
   launchTerminalPreset,
   retryTerminalCreate,
   warmDefaultShellCache,
+  warmShellProfilesCache,
   warmTerminalCreatePath,
 } from '@/lib/terminal-launch'
 // Note: terminal event subscriptions (created/status/exit/focus) are owned by
@@ -63,29 +77,49 @@ import { useThemeStore } from '@/stores/theme'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { TerminalStatusLight } from '@/components/ui/TerminalStatusLight'
 import { TerminalPresetIcon } from '@/components/ui/TerminalPresetIcon'
-import { getThemeDefinition } from '../../../shared/theme/registry'
+import styles from './TerminalArea.module.css'
 import {
   buildWorkspaceTerminalSurfaces,
+  GLOBAL_PANE_SCOPE,
   HOT_WORKSPACE_EVICTION_GRACE_MS,
   MAX_HOT_WORKSPACE_SURFACES,
   touchWorkspaceSurfaceRecency,
 } from '@/lib/workspace-front-surface'
 
-type TerminalPresetOption = { type: TerminalPreset; name: string }
-
-function createPreset(type: TerminalPreset): TerminalPresetOption {
-  return { type, name: getTerminalPresetMeta(type).label }
+/** 新建终端菜单项：CLI 预设卡片 + 用户自建 shell 条目（默认项带标记）。 */
+interface TerminalPresetOption {
+  key: string
+  type: TerminalPreset
+  name: string
+  /** shell 条目的完整启动行，菜单行放不下，走 tooltip。 */
+  command?: string
+  shellProfileId?: string
+  isDefaultShell?: boolean
 }
 
-const PRESETS: TerminalPresetOption[] = [
-  createPreset('shell'),
-  createPreset('janus'),
-  createPreset('claude'),
-  createPreset('codex'),
-  createPreset('opencode'),
-  createPreset('pi'),
-  createPreset('dsh'),
-]
+function createPreset(type: TerminalPreset): TerminalPresetOption {
+  return { key: type, type, name: getTerminalPresetMeta(type).label }
+}
+
+/**
+ * 菜单内容按「已配置 + 显示」过滤：shell 条目在前（默认项带标记），其后是可见的
+ * CLI 预设卡片。隐藏只影响这里，已有终端与会话照常运行。
+ */
+function buildTerminalMenuItems(settings: ShellProfilesSettings): TerminalPresetOption[] {
+  const shellEntries: TerminalPresetOption[] = listVisibleShellEntries(settings).map((entry) => ({
+    key: `shell:${entry.id}`,
+    type: 'shell' as TerminalPreset,
+    name: entry.name,
+    command: describeShellEntry(entry),
+    shellProfileId: entry.id,
+    isDefaultShell: entry.isDefault,
+  }))
+  const cliPresets = listVisibleCliPresets(
+    settings,
+    ['janus', 'claude', 'codex', 'opencode', 'pi', 'dsh'],
+  ).map(createPreset)
+  return [...shellEntries, ...cliPresets]
+}
 
 // 收起态 24×24 圆角 4,与工具栏相邻 h-6 w-6 rounded 按钮对齐
 const TERMINAL_MENU_COLLAPSED_SIZE = 24
@@ -94,412 +128,11 @@ const TERMINAL_MENU_COLLAPSED_SIZE = 24
 // 不再用“展开宽度写死 = f(类型数量)”的内联胶囊——类型从 4 加到 6 时旧 166px
 // 会把后两个图标裁掉，加第 7 个又得重算。
 const TERMINAL_MENU_PANEL_WIDTH = 240
-const TERMINAL_MENU_PANEL_ESTIMATED_HEIGHT = 212
+// 分组后（Shell 整行 + CLI 两列网格 + 两个分区标题）面板比早期纯网格高，
+// 预估值只用于挂载首帧的视口钳制，量到真实尺寸后由 useLayoutEffect 纠正。
+const TERMINAL_MENU_PANEL_ESTIMATED_HEIGHT = 240
 // 收回动画时长：关闭时先播 terminal-menu-out 再卸载，与弹入 140ms 对称
 const TERMINAL_MENU_EXIT_MS = 120
-
-function providerLabel(preset: TerminalPreset, t: (key: string) => string): string {
-  switch (preset) {
-    case 'claude':
-      return t('terminal:provider.claude')
-    case 'codex':
-      return t('terminal:provider.codex')
-    case 'opencode':
-      return t('terminal:provider.opencode')
-    case 'janus':
-      return t('terminal:provider.janus')
-    case 'pi':
-      return t('terminal:provider.pi')
-    case 'dsh':
-      return t('terminal:provider.dsh')
-    case 'shell':
-      return t('terminal:provider.shell')
-  }
-}
-
-function formatAge(updatedAt?: number): string {
-  if (!updatedAt) return 'unknown'
-  const seconds = Math.max(0, Math.floor((Date.now() - updatedAt) / 1000))
-  if (seconds < 5) return 'now'
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m`
-  return `${Math.floor(minutes / 60)}h`
-}
-
-function formatTokenCount(value?: number): string {
-  if (!value) return '0'
-  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`
-  return String(value)
-}
-
-function formatExactTokenCount(value?: number): string {
-  return value === undefined ? '' : value.toLocaleString('en-US')
-}
-
-function modelLabel(terminal: Terminal, t: (k: string) => string): string {
-  if (terminal.preset === 'shell') return t('terminal:model.na')
-  return terminal.detectedModel ?? t('terminal:model.detecting')
-}
-
-function contextWindow(terminal: Terminal): number | undefined {
-  return resolveContextWindows(
-    terminal.preset,
-    terminal.detectedModel,
-    terminal.contextWindowTokens,
-  ).effectiveWindow
-}
-
-function telemetryQualityLabel(terminal: Terminal, t: (k: string) => string): string {
-  if (terminal.telemetryConfidence === 'authoritative') return t('terminal:telemetry.quality.authoritative')
-  if (terminal.telemetryConfidence === 'derived') return t('terminal:telemetry.quality.derived')
-  if (terminal.telemetryConfidence === 'declared') return t('terminal:telemetry.quality.declared')
-  if (terminal.telemetryConfidence === 'estimated') return t('terminal:telemetry.quality.estimated')
-  return t('terminal:telemetry.quality.unknown')
-}
-
-function contextRatio(terminal: Terminal): number | undefined {
-  const windowTokens = contextWindow(terminal)
-  if (!windowTokens || terminal.contextTokens === undefined) return undefined
-  return Math.min(1, terminal.contextTokens / windowTokens)
-}
-
-/** 上下文用量颜色：三段刻度插值，用量越多越警告。
- *  锚点来自 theme definition ctxScale（dark：青蓝→橙→红；planche：深绿→赭黄→朱红），
- *  调用方无需传主题，默认读当前主题（M1 统一结构）。 */
-function contextRatioColor(ratio: number | undefined, theme: unknown = useThemeStore.getState().theme): string {
-  const scale = getThemeDefinition(theme).ctxScale
-  if (ratio === undefined) return scale.empty
-  const r = Math.max(0, Math.min(1, ratio))
-  const [c0, c50, c85, c100] = scale.stops.map(hexToRgb)
-  // 三段插值：[0,0.5] 宽裕→正常，[0.5,0.85] 正常→警告，[0.85,1] 警告加深
-  if (r <= 0.5) {
-    const t = r / 0.5
-    return mixColor(c0, c50, t)
-  }
-  if (r <= 0.85) {
-    const t = (r - 0.5) / 0.35
-    return mixColor(c50, c85, t)
-  }
-  const t = (r - 0.85) / 0.15
-  return mixColor(c85, c100, t)
-}
-
-function hexToRgb(hex: string): number[] {
-  const h = hex.replace('#', '')
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
-}
-
-function mixColor(a: number[], b: number[], t: number): string {
-  const r = Math.round(a[0] + (b[0] - a[0]) * t)
-  const g = Math.round(a[1] + (b[1] - a[1]) * t)
-  const bl = Math.round(a[2] + (b[2] - a[2]) * t)
-  return `rgb(${r}, ${g}, ${bl})`
-}
-
-function contextLabel(terminal: Terminal, t: (k: string) => string): string {
-  if (terminal.contextTokens === undefined) return t('terminal:telemetry.contextUnknown')
-  const used = terminal.contextTokens
-  const windowTokens = contextWindow(terminal)
-  if (!windowTokens) return `${formatTokenCount(used)} ctx`
-  return `${formatTokenCount(used)} / ${formatTokenCount(windowTokens)} ${t('terminal:telemetry.sessionSuffix')}`
-}
-
-function contextPercentLabel(terminal: Terminal): string {
-  const ratio = contextRatio(terminal)
-  return ratio === undefined ? '--' : `${(ratio * 100).toFixed(1)}%`
-}
-
-interface ContextUsagePopoverProps {
-  terminal: Terminal
-  children: ReactNode
-  className: string
-  style?: CSSProperties
-  interactive?: boolean
-  clickable?: boolean
-}
-
-type ContextPopoverRow = [label: string, value: string]
-
-function ContextPopoverRows({ rows }: { rows: ContextPopoverRow[] }) {
-  return rows.map(([label, value]) => (
-    <div key={label} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 py-1">
-      <span className="truncate text-[var(--shell-muted)]">{label}</span>
-      <span className="min-w-0 max-w-[170px] truncate text-right text-[var(--shell-text)]">{value}</span>
-    </div>
-  ))
-}
-
-function ContextUsagePopover({
-  terminal,
-  children,
-  className,
-  style,
-  interactive = true,
-  clickable = false,
-}: ContextUsagePopoverProps) {
-  const { t } = useI18n('terminal')
-  const popoverId = useId()
-  const triggerRef = useRef<HTMLButtonElement | HTMLSpanElement | null>(null)
-  const popoverRef = useRef<HTMLDivElement | null>(null)
-  const [anchorRect, setAnchorRect] = useState<PopoverAnchorRect | null>(null)
-  const [openMode, setOpenMode] = useState<'closed' | 'preview' | 'details'>('closed')
-  const [popoverSize, setPopoverSize] = useState<PopoverSize>({ width: 320, height: 230 })
-  const windows = resolveContextWindows(
-    terminal.preset,
-    terminal.detectedModel,
-    terminal.contextWindowTokens,
-  )
-  const windowTokens = windows.effectiveWindow
-  const remainingTokens = windowTokens !== undefined && terminal.contextTokens !== undefined
-    ? Math.max(0, windowTokens - terminal.contextTokens)
-    : undefined
-  const compacted = terminal.compactionCountConfidence === 'exact'
-    ? String(terminal.compactionCount ?? 0)
-    : undefined
-  const sessionSummaryRows = [
-    terminal.inputTokens === undefined ? null : [t('terminal:context.row.sessionInput'), formatExactTokenCount(terminal.inputTokens)],
-    terminal.outputTokens === undefined ? null : [t('terminal:context.row.sessionOutput'), formatExactTokenCount(terminal.outputTokens)],
-    terminal.totalTokens === undefined ? null : [t('terminal:context.row.sessionTotal'), formatExactTokenCount(terminal.totalTokens)],
-  ].filter((row): row is ContextPopoverRow => row !== null)
-  const capacityRows = [
-    windows.runtimeWindow === undefined ? null : [t('terminal:context.row.runtimeWindow'), formatExactTokenCount(windows.runtimeWindow)],
-    windows.modelCapacity === undefined ? null : [t('terminal:context.row.modelCapacity'), formatExactTokenCount(windows.modelCapacity)],
-    remainingTokens === undefined ? null : [t('terminal:context.row.remaining'), formatExactTokenCount(remainingTokens)],
-    compacted === undefined ? null : [t('terminal:context.row.compactions'), compacted],
-  ].filter((row): row is ContextPopoverRow => row !== null)
-  const sessionDetailRows = [
-    terminal.inputTokens === undefined ? null : [t('terminal:context.row.sessionInput'), formatExactTokenCount(terminal.inputTokens)],
-    terminal.outputTokens === undefined ? null : [t('terminal:context.row.sessionOutput'), formatExactTokenCount(terminal.outputTokens)],
-    terminal.cacheReadTokens === undefined ? null : [t('terminal:context.row.cacheRead'), formatExactTokenCount(terminal.cacheReadTokens)],
-    terminal.cacheWriteTokens === undefined ? null : [t('terminal:context.row.cacheWrite'), formatExactTokenCount(terminal.cacheWriteTokens)],
-    terminal.totalTokens === undefined ? null : [t('terminal:context.row.sessionTotal'), formatExactTokenCount(terminal.totalTokens)],
-  ].filter((row): row is ContextPopoverRow => row !== null)
-  const telemetrySource = terminal.telemetrySource
-    ? t(`terminal:context.source.${terminal.telemetrySource}`)
-    : null
-  const telemetryRows = [
-    [t('terminal:context.row.sessionBinding'), terminal.telemetrySessionBinding === 'exact' ? t('terminal:telemetry.binding.exact') : t('terminal:telemetry.binding.pending')],
-    terminal.modelChangedAt === undefined ? null : [t('terminal:context.row.modelChanged'), formatAge(terminal.modelChangedAt)],
-    telemetrySource === null ? null : [t('terminal:context.row.usageSource'), `${telemetryQualityLabel(terminal, t)} · ${telemetrySource}`],
-    [t('terminal:context.row.windowSource'), t(`terminal:context.windowSource.${windows.effectiveSource}`)],
-    terminal.telemetryUpdatedAt === undefined ? null : [t('terminal:context.row.updated'), formatAge(terminal.telemetryUpdatedAt)],
-  ].filter((row): row is ContextPopoverRow => row !== null)
-
-  const open = useCallback((mode: 'preview' | 'details') => {
-    const rect = triggerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    setAnchorRect({ top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width })
-    setOpenMode(mode)
-  }, [])
-
-  const close = useCallback(() => {
-    setOpenMode('closed')
-    setAnchorRect(null)
-  }, [])
-
-  useLayoutEffect(() => {
-    if (openMode === 'closed' || !popoverRef.current) return
-    const rect = popoverRef.current.getBoundingClientRect()
-    if (rect.width !== popoverSize.width || rect.height !== popoverSize.height) {
-      setPopoverSize({ width: rect.width, height: rect.height })
-    }
-  }, [openMode, popoverSize.height, popoverSize.width])
-
-  useEffect(() => {
-    if (openMode === 'closed') return
-    const handleViewportChange = () => close()
-    window.addEventListener('resize', handleViewportChange)
-    window.addEventListener('scroll', handleViewportChange, true)
-    return () => {
-      window.removeEventListener('resize', handleViewportChange)
-      window.removeEventListener('scroll', handleViewportChange, true)
-    }
-  }, [close, openMode])
-
-  useEffect(() => {
-    if (openMode !== 'details') return
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node
-      if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) close()
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close()
-    }
-    document.addEventListener('pointerdown', handlePointerDown)
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown)
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [close, openMode])
-
-  useEffect(() => close(), [close, terminal.id])
-
-  const position = anchorRect
-    ? getContextPopoverPosition(anchorRect, popoverSize, { width: window.innerWidth, height: window.innerHeight })
-    : null
-
-  const popover = position && createPortal(
-    <div
-      id={popoverId}
-      ref={popoverRef}
-      role={openMode === 'details' ? 'dialog' : 'tooltip'}
-      aria-label={t('terminal:context.popoverTitle')}
-      className={`fixed z-50 w-[320px] max-w-[calc(100vw-16px)] overflow-y-auto rounded-lg border px-4 py-3.5 text-left font-mono text-[11px] shadow-[0_18px_42px_rgba(0,0,0,0.48)] ${openMode === 'details' ? 'pointer-events-auto max-h-[calc(100vh-16px)]' : 'pointer-events-none'}`}
-      style={{
-        top: position.top,
-        left: position.left,
-        borderColor: 'rgba(255,255,255,0.12)',
-        background: 'var(--shell-chrome-raised)',
-        color: 'var(--shell-text)',
-      }}
-    >
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <span className="min-w-0">
-          <span className="block text-[10px] uppercase tracking-[0.12em] text-[var(--shell-muted)]">{t('terminal:context.popoverTitle')}</span>
-          <span className="mt-1 block truncate text-[12px] text-[var(--shell-text)]">
-            {terminal.contextTokens === undefined || windowTokens === undefined
-              ? t('terminal:telemetry.contextUnknown')
-              : `${formatExactTokenCount(terminal.contextTokens)} / ${formatExactTokenCount(windowTokens)}`}
-          </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          <span className="rounded border border-[var(--control-border)] px-1.5 py-0.5 text-[9px] uppercase text-[var(--shell-muted)]">
-            {telemetryQualityLabel(terminal, t)}
-          </span>
-          <span className="text-[18px] leading-none" style={{ color: contextRatioColor(contextRatio(terminal)) }}>
-            {contextPercentLabel(terminal)}
-          </span>
-        </span>
-      </div>
-      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-[rgba(255,255,255,0.07)]">
-        <span
-          className="block h-full rounded-full"
-          style={{
-            width: `${Math.round((contextRatio(terminal) ?? 0) * 100)}%`,
-            background: contextRatioColor(contextRatio(terminal)),
-          }}
-        />
-      </div>
-      {(remainingTokens !== undefined || compacted !== undefined) && (
-        <div className="grid grid-cols-2 gap-x-5 border-t border-[rgba(255,255,255,0.07)] py-2.5">
-          {remainingTokens !== undefined && (
-            <div className="min-w-0">
-              <div className="text-[9px] uppercase text-[var(--shell-dim)]">{t('terminal:context.row.remaining')}</div>
-              <div className="mt-1 truncate text-[13px] text-[var(--shell-text)]">{formatExactTokenCount(remainingTokens)}</div>
-            </div>
-          )}
-          {compacted !== undefined && (
-            <div className="min-w-0">
-              <div className="text-[9px] uppercase text-[var(--shell-dim)]">{t('terminal:context.row.compactions')}</div>
-              <div className="mt-1 truncate text-[13px] text-[var(--shell-text)]">{compacted}</div>
-            </div>
-          )}
-        </div>
-      )}
-      {openMode === 'preview' ? (
-        sessionSummaryRows.length > 0 && (
-          <div className="border-t border-[rgba(255,255,255,0.07)] pt-2.5">
-            <div className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[var(--shell-dim)]">{t('terminal:context.section.session')}</div>
-            <ContextPopoverRows rows={sessionSummaryRows} />
-          </div>
-        )
-      ) : (
-        <div className="space-y-3 border-t border-[rgba(255,255,255,0.07)] pt-3">
-          {capacityRows.length > 0 && (
-            <section>
-              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[var(--shell-dim)]">{t('terminal:context.section.capacity')}</h3>
-              <ContextPopoverRows rows={capacityRows} />
-            </section>
-          )}
-          {sessionDetailRows.length > 0 && (
-            <section className="border-t border-[rgba(255,255,255,0.07)] pt-3">
-              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[var(--shell-dim)]">{t('terminal:context.section.session')}</h3>
-              <ContextPopoverRows rows={sessionDetailRows} />
-            </section>
-          )}
-          {telemetryRows.length > 0 && (
-            <section className="border-t border-[rgba(255,255,255,0.07)] pt-3">
-              <h3 className="mb-1 text-[9px] uppercase tracking-[0.1em] text-[var(--shell-dim)]">{t('terminal:context.section.telemetry')}</h3>
-              <ContextPopoverRows rows={telemetryRows} />
-            </section>
-          )}
-        </div>
-      )}
-      {terminal.telemetryUpdatedAt !== undefined && openMode === 'preview' && (
-        <div className="mt-2.5 border-t border-[rgba(255,255,255,0.07)] pt-2 text-[9px] text-[var(--shell-dim)]">
-          {t('terminal:context.updatedAgo', { age: formatAge(terminal.telemetryUpdatedAt) })}
-        </div>
-      )}
-    </div>,
-    document.body,
-  )
-
-  const triggerEvents = {
-    onMouseEnter: () => {
-      if (openMode === 'closed') open('preview')
-    },
-    onMouseLeave: () => {
-      if (openMode === 'preview') close()
-    },
-  }
-
-  if (!interactive) {
-    return (
-      <span
-        ref={(node) => { triggerRef.current = node }}
-        className={className}
-        style={style}
-        role={clickable ? 'button' : undefined}
-        tabIndex={clickable ? 0 : undefined}
-        aria-controls={clickable && openMode === 'details' ? popoverId : undefined}
-        aria-expanded={clickable ? openMode === 'details' : undefined}
-        aria-haspopup={clickable ? 'dialog' : undefined}
-        aria-label={clickable ? t('terminal:context.openDetailsAria') : undefined}
-        onClick={clickable ? (event) => {
-          event.stopPropagation()
-          openMode === 'details' ? close() : open('details')
-        } : undefined}
-        onKeyDown={clickable ? (event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            event.stopPropagation()
-            openMode === 'details' ? close() : open('details')
-          }
-        } : undefined}
-        {...triggerEvents}
-      >
-        {children}
-        {popover}
-      </span>
-    )
-  }
-
-  return (
-    <button
-      ref={(node) => { triggerRef.current = node }}
-      type="button"
-      className={className}
-      style={style}
-      aria-controls={openMode === 'details' ? popoverId : undefined}
-      aria-expanded={openMode === 'details'}
-      aria-haspopup="dialog"
-      aria-label={t('terminal:context.openDetailsAria')}
-      onFocus={() => {
-        if (openMode === 'closed') open('preview')
-      }}
-      onBlur={() => {
-        if (openMode === 'preview') close()
-      }}
-      onClick={() => openMode === 'details' ? close() : open('details')}
-      {...triggerEvents}
-    >
-      {children}
-      {popover}
-    </button>
-  )
-}
 
 /*-- pane tab 条上的浏览器标签：标题跟随 surface 活动 tab --*/
 function BrowserPaneTabLabel({ surfaceId, isActive }: { surfaceId: string; isActive: boolean }) {
@@ -522,11 +155,12 @@ interface PaneTreeViewProps {
   focusedPaneId: string | null
   activeTerminalId: string | null
   showFocusChrome: boolean
+  onCollapseLayout: () => void
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
   onKillTerminalFromTab: (terminalId: string, e?: React.MouseEvent) => void
-  onOpenBrowser: (paneId: string) => void
   onCloseBrowserTab: (paneId: string, tabId: string, surfaceId: string) => void
+  onCloseMarkdownTab: (paneId: string, tabId: string) => void
   onBrowserPopOut: (paneId: string, tabId: string, surfaceId: string) => void
   onBrowserTabDrop: (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => void
   onKillTerminal: (terminalId: string, event?: React.MouseEvent) => void
@@ -539,6 +173,8 @@ interface PaneTreeViewProps {
   onToggleTerminalMenu: (paneId: string) => void
   onCloseTerminalMenu: () => void
   onCreateTerminal: (preset: TerminalPresetOption) => void
+  /** 新建终端菜单内容（shell 条目 + 可见 CLI 预设），由顶层按设置算出。 */
+  terminalMenuItems: TerminalPresetOption[]
 }
 
 function PaneTreeView(props: PaneTreeViewProps) {
@@ -560,55 +196,66 @@ function PaneTreeView(props: PaneTreeViewProps) {
 
 function SplitPaneNode({ split, onResize, ...props }: PaneTreeViewProps & { split: WorkspacePaneSplit }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [resizing, setResizing] = useState(false)
   const isHorizontal = split.direction === 'horizontal'
 
-  const handlePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-      const container = containerRef.current
-      if (!container) return
+  const resizeFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const container = containerRef.current
+    if (!container || !event.currentTarget.hasPointerCapture(event.pointerId)) return
+    const rect = container.getBoundingClientRect()
+    const dividerSize = isHorizontal ? event.currentTarget.offsetWidth : event.currentTarget.offsetHeight
+    onResize(split.id, isHorizontal
+      ? (event.clientX - rect.left - dividerSize / 2) / (rect.width - dividerSize)
+      : (event.clientY - rect.top - dividerSize / 2) / (rect.height - dividerSize))
+  }
 
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        const rect = container.getBoundingClientRect()
-        const rawRatio = isHorizontal
-          ? (moveEvent.clientX - rect.left) / rect.width
-          : (moveEvent.clientY - rect.top) / rect.height
-        onResize(split.id, rawRatio)
-      }
-
-      const handlePointerUp = () => {
-        window.removeEventListener('pointermove', handlePointerMove)
-        window.removeEventListener('pointerup', handlePointerUp)
-      }
-
-      window.addEventListener('pointermove', handlePointerMove)
-      window.addEventListener('pointerup', handlePointerUp)
-    },
-    [isHorizontal, onResize, split.id]
-  )
+  const endResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    setResizing(false)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
 
   return (
     <div
       ref={containerRef}
       className={`flex h-full w-full min-h-0 min-w-0 ${isHorizontal ? 'flex-row' : 'flex-col'}`}
     >
-      <div className="min-h-0 min-w-0" style={{ flexBasis: `${split.ratio * 100}%`, flexGrow: 0, flexShrink: 0 }}>
+      <div className="min-h-0 min-w-0" style={{ flexBasis: `calc((100% - var(--pane-divider-size)) * ${split.ratio})`, flexGrow: 0, flexShrink: 0 }}>
         <PaneTreeView {...props} node={split.first} onResize={onResize} />
       </div>
-      {/* Soft gutter between cards; transparent hit strip keeps resize easy */}
-      <div
-        role="separator"
-        aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
-        onPointerDown={handlePointerDown}
-        className="shrink-0 transition-colors hover:bg-[rgba(255,120,48,0.2)]"
-        style={{
-          width: isHorizontal ? 8 : '100%',
-          height: isHorizontal ? '100%' : 8,
-          cursor: isHorizontal ? 'col-resize' : 'row-resize',
-          background: 'transparent',
-        }}
-      />
+      <div className={styles.divider} data-direction={split.direction}>
+        <div
+          role="separator"
+          aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
+          aria-valuemin={15}
+          aria-valuemax={85}
+          aria-valuenow={Math.round(split.ratio * 100)}
+          tabIndex={0}
+          className={styles.resize}
+          data-resizing={resizing}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return
+            event.preventDefault()
+            event.stopPropagation()
+            event.currentTarget.focus()
+            event.currentTarget.setPointerCapture(event.pointerId)
+            setResizing(true)
+          }}
+          onPointerMove={resizeFromPointer}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          onLostPointerCapture={() => setResizing(false)}
+          onDoubleClick={() => onResize(split.id, 0.5)}
+          onKeyDown={(event) => {
+            const decrease = isHorizontal ? 'ArrowLeft' : 'ArrowUp'
+            const increase = isHorizontal ? 'ArrowRight' : 'ArrowDown'
+            if (![decrease, increase, 'Home', 'End'].includes(event.key)) return
+            event.preventDefault()
+            event.stopPropagation()
+            onResize(split.id, event.key === 'Home' ? 0.15 : event.key === 'End' ? 0.85
+              : split.ratio + (event.key === decrease ? -0.05 : 0.05))
+          }}
+        />
+      </div>
       <div className="min-h-0 min-w-0 flex-1">
         <PaneTreeView {...props} node={split.second} onResize={onResize} />
       </div>
@@ -621,16 +268,24 @@ function TerminalPresetCapsule({
   onToggle,
   onSelect,
   onClose,
+  items,
 }: {
   open: boolean
   onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void
   onSelect: (preset: TerminalPresetOption) => void
   onClose: () => void
+  items: TerminalPresetOption[]
 }) {
   const toggleRef = useRef<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const exitTimerRef = useRef<number | null>(null)
   const wasOpenRef = useRef(open)
+  // Shell 与 CLI 分两组：前者是"可切换的 shell 清单"，后者是终端类型卡片
+  const shellItems = items.filter((item) => item.type === 'shell')
+  const cliItems = items.filter((item) => item.type !== 'shell')
+  // Shell 区默认折叠：头部即默认 shell，展开后才铺开全部
+  const defaultShell = shellItems.find((item) => item.isDefaultShell) ?? shellItems[0]
+  const [shellOpen, setShellOpen] = useState(false)
   const [anchorRect, setAnchorRect] = useState<PopoverAnchorRect | null>(null)
   const [panelSize, setPanelSize] = useState<PopoverSize>({
     width: TERMINAL_MENU_PANEL_WIDTH,
@@ -641,6 +296,7 @@ function TerminalPresetCapsule({
   const [exiting, setExiting] = useState(false)
   // planche 下预设菜单走纸面 + 朱红，悬浮不再是深棕黑底
   const plancheMenu = useThemeStore((s) => s.theme) === 'planche'
+  const { t } = useI18n('terminal')
 
   useEffect(() => {
     if (open) {
@@ -740,15 +396,10 @@ function TerminalPresetCapsule({
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={onToggle}
-        className={`flex shrink-0 items-center justify-center rounded border focus:outline-none focus-visible:ring-1 hover:bg-[rgba(255,255,255,0.055)] ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+        className={styles.action}
         style={{
           width: TERMINAL_MENU_COLLAPSED_SIZE,
           height: TERMINAL_MENU_COLLAPSED_SIZE,
-          borderColor: open ? (plancheMenu ? 'rgba(212,61,42,0.5)' : 'rgba(255,120,48,0.46)') : 'var(--shell-border)',
-          background: open ? (plancheMenu ? 'var(--shell-chrome-raised)' : 'rgb(36, 27, 21)') : 'var(--shell-chrome-raised)',
-          color: open ? (plancheMenu ? '#D43D2A' : '#ffb27d') : 'var(--shell-muted)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
-          transition: 'color 180ms ease, background-color 150ms ease, border-color 180ms ease',
         }}
       >
         {/* 用两条细条绘制 +,文本字形在行框内偏上,旋转 45° 后偏差会沿对角放大 */}
@@ -780,48 +431,177 @@ function TerminalPresetCapsule({
               left: position.left,
               width: TERMINAL_MENU_PANEL_WIDTH,
               maxWidth: 'calc(100vw - 16px)',
-              borderColor: plancheMenu ? '#1C343B' : 'rgba(255,120,48,0.28)',
-              background: 'var(--shell-chrome-raised)',
-              boxShadow: plancheMenu
-                ? '3px 3px 0 #E8A08A'
-                : '0 8px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)',
+              padding: 6,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              borderColor: 'var(--control-border)',
+              background: 'var(--popover-background)',
+              boxShadow: 'var(--popover-shadow)',
               transformOrigin: position.placement === 'above' ? 'bottom right' : 'top right',
               animation: exiting
                 ? `terminal-menu-out ${TERMINAL_MENU_EXIT_MS}ms ease-in forwards`
                 : 'terminal-menu-in 140ms ease-out',
             }}
           >
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: 4,
-                padding: 6,
-              }}
-            >
-              {PRESETS.map((preset) => (
-                <ThemedTooltip key={preset.type} label={preset.name}>
-                <button
-                  type="button"
-                  role="menuitem"
-                  aria-label={`New ${preset.name} terminal`}
-                  className={`terminal-preset-item flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+            {/* Shell 区默认折叠：头部一行就是默认 shell（点了直接开终端），
+                箭头展开后才铺开全部已配置 shell —— 与空白页 Shell 卡片同一套交互 */}
+            {shellItems.length > 0 && (
+              <>
+                <div className="terminal-menu-section" role="presentation">
+                  {t('terminal:shellMenu.shell')}
+                </div>
+                <div className="terminal-menu-shell-head">
+                  <ThemedTooltip
+                    label={
+                      defaultShell?.command
+                        ? `${defaultShell.name} · ${defaultShell.command}`
+                        : (defaultShell?.name ?? '')
+                    }
+                  >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    aria-label={`New ${defaultShell?.name ?? 'shell'} terminal`}
+                    className={`terminal-preset-item terminal-preset-item-wide flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+                    style={{
+                      borderColor: 'transparent',
+                      background: 'transparent',
+                      color: plancheMenu ? '#1C343B' : '#d4d4d4',
+                    }}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (defaultShell) onSelect(defaultShell)
+                    }}
+                  >
+                    <TerminalPresetIcon preset="shell" className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">
+                      {defaultShell?.name ?? t('terminal:provider.shell')}
+                    </span>
+                    {defaultShell?.isDefaultShell && (
+                      <span
+                        aria-hidden="true"
+                        className="shrink-0 rounded-[3px] px-1 text-[9px] leading-[14px]"
+                        style={{
+                          background: plancheMenu ? 'rgba(212,61,42,0.14)' : 'rgba(255,120,48,0.16)',
+                          color: plancheMenu ? '#D43D2A' : '#ffb27d',
+                        }}
+                      >
+                        {t('terminal:shellMenu.default')}
+                      </span>
+                    )}
+                  </button>
+                  </ThemedTooltip>
+                  {/* 只有一条 shell 时没有可铺开的内容，箭头不出现 */}
+                  {shellItems.length > 1 && (
+                    <ThemedTooltip label={t('terminal:shellMenu.pickShell')}>
+                    <button
+                      type="button"
+                      className={`terminal-preset-item terminal-menu-shell-toggle flex items-center justify-center rounded-md border transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+                      style={{
+                        borderColor: 'transparent',
+                        background: 'transparent',
+                        color: plancheMenu ? '#1C343B' : '#d4d4d4',
+                      }}
+                      aria-expanded={shellOpen}
+                      aria-label={t('terminal:shellMenu.pickShell')}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setShellOpen((open) => !open)
+                      }}
+                    >
+                      <ChevronDown
+                        size={13}
+                        strokeWidth={2}
+                        aria-hidden="true"
+                        style={{
+                          transition: 'transform 160ms ease',
+                          transform: shellOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                        }}
+                      />
+                    </button>
+                    </ThemedTooltip>
+                  )}
+                </div>
+
+                {shellOpen && (
+                  <div className="flex flex-col gap-1">
+                    {shellItems.map((item) => (
+                      <ThemedTooltip key={item.key} label={item.command ? `${item.name} · ${item.command}` : item.name}>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-label={`New ${item.name} terminal`}
+                        className={`terminal-preset-item terminal-preset-item-wide terminal-preset-item-nested flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+                        style={{
+                          borderColor: 'transparent',
+                          background: 'transparent',
+                          color: plancheMenu ? '#1C343B' : '#d4d4d4',
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onSelect(item)
+                        }}
+                      >
+                        <TerminalPresetIcon preset={item.type} className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                        {item.isDefaultShell && (
+                          <span
+                            aria-hidden="true"
+                            className="shrink-0 rounded-[3px] px-1 text-[9px] leading-[14px]"
+                            style={{
+                              background: plancheMenu ? 'rgba(212,61,42,0.14)' : 'rgba(255,120,48,0.16)',
+                              color: plancheMenu ? '#D43D2A' : '#ffb27d',
+                            }}
+                          >
+                            {t('terminal:shellMenu.default')}
+                          </span>
+                        )}
+                      </button>
+                      </ThemedTooltip>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {cliItems.length > 0 && (
+              <>
+                <div className="terminal-menu-section" role="presentation">
+                  {t('terminal:shellMenu.cli')}
+                </div>
+                <div
+                  className="grid"
                   style={{
-                    borderColor: 'transparent',
-                    background: 'transparent',
-                    color: plancheMenu ? '#1C343B' : '#d4d4d4',
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onSelect(preset)
+                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                    gap: 4,
                   }}
                 >
-                  <TerminalPresetIcon preset={preset.type} className="h-4 w-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{preset.name}</span>
-                </button>
-                </ThemedTooltip>
-              ))}
-            </div>
+                  {cliItems.map((item) => (
+                    <ThemedTooltip key={item.key} label={item.command ? `${item.name} · ${item.command}` : item.name}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      aria-label={`New ${item.name} terminal`}
+                      className={`terminal-preset-item flex min-w-0 items-center gap-2 rounded-md border px-2 py-[7px] text-left text-[12px] leading-none transition-[background,border-color] focus:outline-none focus-visible:ring-1 ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+                      style={{
+                        borderColor: 'transparent',
+                        background: 'transparent',
+                        color: plancheMenu ? '#1C343B' : '#d4d4d4',
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onSelect(item)
+                      }}
+                    >
+                      <TerminalPresetIcon preset={item.type} className="h-4 w-4 shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                    </button>
+                    </ThemedTooltip>
+                  ))}
+                </div>
+              </>
+            )}
           </div>,
           document.body,
         )}
@@ -835,11 +615,12 @@ function LeafPane({
   terminalsById,
   focusedPaneId,
   showFocusChrome,
+  onCollapseLayout,
   onPaneFocus,
   onTabSelect,
   onKillTerminalFromTab,
-  onOpenBrowser,
   onCloseBrowserTab,
+  onCloseMarkdownTab,
   onBrowserPopOut,
   onBrowserTabDrop,
   onKillTerminal,
@@ -851,6 +632,7 @@ function LeafPane({
   onToggleTerminalMenu,
   onCloseTerminalMenu,
   onCreateTerminal,
+  terminalMenuItems,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
   const { t } = useI18n('terminal')
   const plancheEmpty = useThemeStore((s) => s.theme) === 'planche'
@@ -859,7 +641,6 @@ function LeafPane({
   const [tabInsertIndex, setTabInsertIndex] = useState<number | null>(null)
   const tabNodeRefs = useRef(new Map<string, HTMLDivElement>())
   const isFocused = leaf.id === focusedPaneId
-  const showFocus = showFocusChrome && isFocused
   const activeTabId = leaf.activeTabId ?? leaf.tabs[0]?.id ?? null
   const activeTab = activeTabId ? leaf.tabs.find((tab) => tab.id === activeTabId) ?? null : null
   const activeTerminal = activeTab?.type === 'terminal' ? terminalsById.get(activeTab.terminalId) ?? null : null
@@ -998,11 +779,7 @@ function LeafPane({
     onTerminalDrop(terminalId, leaf.id, edge, ratio)
   }, [leaf.id, onTerminalDrop, onBrowserTabDrop])
 
-  /*-- 单个 pane tab：visualIndex 是含占位在内的视觉位置，首位圆角跟随条底。 --*/
-  const renderPaneTab = (
-    tab: WorkspacePaneLeaf['tabs'][number],
-    visualIndex: number,
-  ) => {
+  const renderPaneTab = (tab: WorkspacePaneLeaf['tabs'][number]) => {
     const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
     const isActive = tab.id === activeTabId
     const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
@@ -1010,7 +787,15 @@ function LeafPane({
     return (
       <ThemedTooltip
         key={tab.id}
-        label={terminal && tabStatusLabel ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}` : tab.type === 'browser' ? 'Browser' : tab.terminalId}
+        label={
+          terminal && tabStatusLabel
+            ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}`
+            : tab.type === 'browser'
+              ? 'Browser'
+              : tab.type === 'markdown'
+                ? t('terminal:tab.view.note')
+                : tab.terminalId
+        }
       >
       <div
         role="button"
@@ -1028,23 +813,9 @@ function LeafPane({
           event.preventDefault()
           onTabSelect(leaf.id, tab.id)
         }}
-        className="pane-tab group/tab relative flex h-8 min-w-0 basis-[144px] shrink-0 grow-0 cursor-pointer select-none items-center gap-1.5 border-0 px-2.5 text-left font-mono text-[11px] leading-none transition-colors"
+        className={`${styles.tab} group/tab font-mono`}
         data-active={isActive ? 'true' : 'false'}
-        style={{
-          touchAction: 'none',
-          color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
-          /*-- 选中态与下方内容床同色，让 tab 与画布连成一体；不再是压在浅色条上的黑块。
-               未选中态刻意不写 inline background —— 内联样式会盖过 hover 类，
-               写死 transparent 等于让 hover 失效（Tailwind preflight 已把 button 置为透明）。 --*/
-          background: isActive ? 'var(--shell-canvas)' : undefined,
-          borderRight: '1px solid var(--shell-border-soft)',
-          boxShadow: isActive ? 'inset 0 1px 0 var(--shell-border-soft)' : 'none',
-          fontWeight: isActive ? 600 : 400,
-          /*-- 首个 tab 左上倒角 = 条底圆角（贴边后两者同缘，必须等值才同心）：
-               多 pane 10 / 单 pane 7，与上方 borderTopLeftRadius 呼应。
-               底边不倒角：选中态底边要与内容床连成一体。 --*/
-          borderTopLeftRadius: visualIndex === 0 ? (showFocusChrome ? 10 : 7) : 0,
-        }}
+        aria-pressed={isActive}
       >
         {/*-- tab 左侧状态灯：与左侧工作区同一盏灯（TerminalStatusLight 紧凑环），
              色/形/动效三编码；8px 环比原来 6px 点宽 2px，仍在 144px 预算余量内。 --*/}
@@ -1060,6 +831,13 @@ function LeafPane({
         )}
         {tab.type === 'browser' ? (
           <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
+        ) : tab.type === 'markdown' ? (
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            <MarkdownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
+              {t('terminal:tab.view.note')}
+            </span>
+          </span>
         ) : (
           <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
             {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
@@ -1078,7 +856,9 @@ function LeafPane({
             <X size={12} strokeWidth={1.8} />
           </HoldToConfirm>
         ) : (
-          <ThemedTooltip label={t('terminal:tab.closeBrowser')}>
+          <ThemedTooltip
+            label={tab.type === 'markdown' ? t('terminal:tab.closeMarkdown') : t('terminal:tab.closeBrowser')}
+          >
           <span
             tabIndex={-1}
             data-tab-close="true"
@@ -1086,7 +866,9 @@ function LeafPane({
             style={{ color: 'var(--shell-muted)' }}
             onClick={(event) => {
               event.stopPropagation()
-              onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
+              // 关闭 Markdown 标签只是关闭呈现：文稿另有独立的删除动作。
+              if (tab.type === 'markdown') onCloseMarkdownTab(leaf.id, tab.id)
+              else onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
             }}
           >
             <X size={12} strokeWidth={1.8} aria-hidden="true" />
@@ -1101,146 +883,97 @@ function LeafPane({
   return (
       <section
       data-pane-id={leaf.id}
-      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden transition-[border-color,box-shadow,background,border-radius]"
+      className={styles.pane}
+      data-focused={isFocused}
+      data-split={showFocusChrome}
       onPointerDownCapture={() => onPaneFocus(leaf.id)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      style={{
-        // Multi-pane: rounded card chrome with gap-friendly silhouette.
-        // Single-pane: lighter radius so it stays intentional without double-framing.
-        borderRadius: showFocusChrome ? 11 : 8,
-        background: showFocus ? 'var(--shell-pane-chrome)' : 'var(--shell-pane)',
-        border: showFocus ? '1px solid rgba(255,120,48,0.28)' : '1px solid var(--shell-border)',
-        boxShadow: showFocus
-          ? '0 0 0 1px rgba(255,120,48,0.08), inset 0 0 0 1px rgba(255,120,48,0.05), 0 6px 18px rgba(0,0,0,0.28)'
-          : showFocusChrome
-            ? '0 1px 0 rgba(255,255,255,0.035), 0 6px 16px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.03)'
-            : 'inset 0 1px 0 rgba(255,255,255,0.025)',
-      }}
     >
       {dragHint && (
         <div
-          className="pointer-events-none absolute z-20 flex items-center justify-center"
+          className={`${styles.dropHint} pointer-events-none absolute z-20`}
           style={{
             /*-- 预览区域 = 松手后新 pane 的真实占比（first/second 语义与 splitPaneTree 一致） --*/
             top: dragHint.zone === 'bottom' ? `${dragHint.ratio * 100}%` : 0,
             right: dragHint.zone === 'left' ? `${(1 - dragHint.ratio) * 100}%` : 0,
             bottom: dragHint.zone === 'top' ? `${(1 - dragHint.ratio) * 100}%` : 0,
             left: dragHint.zone === 'right' ? `${dragHint.ratio * 100}%` : 0,
-            background: dragHint.zone === 'center' ? 'rgba(255,255,255,0.05)' : 'rgba(255,120,48,0.12)',
-            border: dragHint.zone === 'center'
-              ? '1px solid rgba(255,255,255,0.16)'
-              : '1px solid rgba(255,120,48,0.58)',
-            boxShadow: dragHint.zone === 'center' ? 'none' : 'inset 0 0 22px rgba(255,120,48,0.08)',
             transition: 'top 70ms ease-out, right 70ms ease-out, bottom 70ms ease-out, left 70ms ease-out',
             animation: 'pane-drop-hint-in 110ms ease-out',
           }}
         >
           {/*-- 预览语义标签：让落点结果（分屏方向/合并）在松手前自解释 --*/}
           <span
-            className="rounded-full border px-2.5 py-1 font-mono text-[11px] leading-none"
-            style={{
-              color: dragHint.zone === 'center' ? 'rgba(255,255,255,0.82)' : '#ffc6a6',
-              borderColor: dragHint.zone === 'center' ? 'rgba(255,255,255,0.2)' : 'rgba(255,120,48,0.4)',
-              background: 'rgba(10,10,12,0.78)',
-            }}
+            className={styles.dropLabel}
           >
             {paneDropHintLabel(dragHint.zone)}
           </span>
         </div>
       )}
-      <div
-        data-tab-strip={leaf.id}
-        onDragOver={handleTabStripDragOver}
-        onDragLeave={handleTabStripDragLeave}
-        onDrop={handleTabStripDrop}
-        /*-- 左侧贴边：首 tab 直接顶住条底左缘（只留右侧 pr-1 给动作按钮呼吸），
-             左缘不留 4px chrome 缝，圆角由首 tab 自己的左上倒角一次成型。 --*/
-        className="relative flex h-8 shrink-0 items-stretch gap-0 overflow-x-auto pl-0 pr-1"
-        style={{
-          /*-- tab 条吃实色 pane-chrome：与下方 canvas 内容床拉开一阶，
-               两主题下选中 tab（canvas 底）与未选中（chrome 底）都有明确明度差；
-               之前半透明白叠加在纸面主题下近乎不可见。focus 不再单独洗色，
-               焦点态由外层 pane 边框统一表达。
-               顶边圆角跟随外层 section（radius - 1px 边框），否则方形条底会顶出圆角容器。 --*/
-          background: 'var(--shell-pane-chrome)',
-          borderBottom: '1px solid var(--shell-border)',
-          borderTopLeftRadius: showFocusChrome ? 10 : 7,
-          borderTopRightRadius: showFocusChrome ? 10 : 7,
-          scrollbarWidth: 'none',
-        }}
-      >
-        {(() => {
-          /*-- 排序占位：同 pane 拖拽先摘除源 tab，异 pane 全量保留；
-               占位与 tab 同宽（basis 144px），兄弟 tab 被 flex 自然挤开即让位。
-               visualIndex 含占位在内，首位圆角只落在一个元素上。 --*/
-          if (tabInsertIndex == null) {
-            return leaf.tabs.map((tab, visualIndex) => renderPaneTab(tab, visualIndex))
-          }
-          const ordered = stripDraggedIsLocal && stripDraggedTabId
-            ? leaf.tabs.filter((tab) => tab.id !== stripDraggedTabId)
-            : leaf.tabs
-          const slots: ReactNode[] = []
-          for (let slot = 0; slot <= ordered.length; slot += 1) {
-            if (slot === tabInsertIndex) {
-              slots.push(
-                <div
-                  key={`tab-drop-placeholder-${leaf.id}`}
-                  aria-hidden="true"
-                  data-tab-placeholder="true"
-                  className="relative flex h-8 min-w-0 basis-[144px] shrink-0 grow-0 items-center justify-center px-2.5"
-                  style={{
-                    background: 'rgba(255,120,48,0.10)',
-                    borderRight: '1px solid var(--shell-border-soft)',
-                    boxShadow: 'inset 0 0 0 1px rgba(255,120,48,0.55)',
-                    borderTopLeftRadius: slot === 0 ? (showFocusChrome ? 10 : 7) : 0,
-                    animation: 'pane-drop-hint-in 110ms ease-out',
-                  }}
-                >
-                  <span className="block h-[3px] w-10 rounded-full" style={{ background: 'rgba(255,120,48,0.75)' }} />
-                </div>
-              )
+      <div className={styles.header}>
+        {/*-- 仅标签滚动，动作区保持为不可收缩的兄弟节点，窄 pane 与多 tab 不会把按钮滚出视口。 --*/}
+        <div
+          data-tab-strip={leaf.id}
+          onDragOver={handleTabStripDragOver}
+          onDragLeave={handleTabStripDragLeave}
+          onDrop={handleTabStripDrop}
+          className={styles.strip}
+        >
+          {(() => {
+            /*-- 排序占位：同 pane 拖拽先摘除源 tab，异 pane 全量保留；
+                 占位与 tab 同宽（basis 144px），兄弟 tab 被 flex 自然挤开即让位。
+                 占位与正式标签使用相同圆角和间隔。 --*/
+            if (tabInsertIndex == null) {
+              return leaf.tabs.map(renderPaneTab)
             }
-            if (slot < ordered.length) {
-              slots.push(renderPaneTab(ordered[slot], slot + (slot >= tabInsertIndex ? 1 : 0)))
+            const ordered = stripDraggedIsLocal && stripDraggedTabId
+              ? leaf.tabs.filter((tab) => tab.id !== stripDraggedTabId)
+              : leaf.tabs
+            const slots: ReactNode[] = []
+            for (let slot = 0; slot <= ordered.length; slot += 1) {
+              if (slot === tabInsertIndex) {
+                slots.push(
+                  <div
+                    key={`tab-drop-placeholder-${leaf.id}`}
+                    aria-hidden="true"
+                    data-tab-placeholder="true"
+                    className={styles.placeholder}
+                    style={{
+                      animation: 'pane-drop-hint-in 110ms ease-out',
+                    }}
+                  >
+                    <span className="block h-[3px] w-10 rounded-full" style={{ background: 'var(--shell-accent)' }} />
+                  </div>
+                )
+              }
+              if (slot < ordered.length) {
+                slots.push(renderPaneTab(ordered[slot]))
+              }
             }
-          }
-          return slots
-        })()}
-        <div data-tab-drag-spacer="" aria-hidden="true" style={{ width: 0, flexShrink: 0 }} />
-        <div data-tab-drag-slot="" aria-hidden="true" style={{
-          display: 'none', position: 'absolute', top: 0, height: '100%', pointerEvents: 'none',
-          background: 'rgba(255,120,48,.10)', boxShadow: 'inset 0 0 0 1px rgba(255,120,48,.4)',
-        }} />
-        <div className="ml-auto flex h-8 shrink-0 items-center gap-1 pl-1">
-          <span
-            aria-hidden="true"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none font-mono"
-            style={{ color: 'var(--shell-muted)', visibility: 'hidden' }}
-          >
-            x
-          </span>
-          <ThemedTooltip label={t('terminal:tab.newBrowser')}>
-          <button
-            type="button"
-            aria-label={t('terminal:tab.newBrowser')}
-            className="flex h-6 w-6 items-center justify-center rounded border text-[11px] leading-none transition-colors hover:bg-[rgba(255,120,48,0.1)]"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', color: 'var(--shell-muted)' }}
-            onClick={(event) => {
-              event.stopPropagation()
-              onOpenBrowser(leaf.id)
-            }}
-          >
-            <Globe size={11} />
-          </button>
-          </ThemedTooltip>
-          <TerminalPresetCapsule open={terminalMenuOpen} onToggle={openMenu} onSelect={onCreateTerminal} onClose={onCloseTerminalMenu} />
+            return slots
+          })()}
+          <div data-tab-drag-spacer="" aria-hidden="true" style={{ width: 0, flexShrink: 0 }} />
+          <div data-tab-drag-slot="" aria-hidden="true" className={styles.slot} />
+        </div>
+        <div className={styles.controls}>
+          {showFocusChrome && (
+            <HoldToConfirm label={t('terminal:tab.collapseLayout')} onConfirm={onCollapseLayout} className={styles.action}>
+              <Minimize2 size={13} strokeWidth={1.6} aria-hidden="true" />
+            </HoldToConfirm>
+          )}
+          <TerminalPresetCapsule
+            open={terminalMenuOpen}
+            onToggle={openMenu}
+            onSelect={onCreateTerminal}
+            onClose={onCloseTerminalMenu}
+            items={terminalMenuItems}
+          />
           <HoldToConfirm
             label={t('terminal:tab.killCurrentTerminal')}
             disabled={!activeTerminal}
-            className="flex h-6 w-6 items-center justify-center rounded border text-[14px] leading-none transition-colors enabled:hover:bg-[rgba(255,88,88,0.1)] disabled:cursor-not-allowed disabled:opacity-35"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', color: activeTerminal ? '#b86b6b' : '#666' }}
+            className={`${styles.action} ${styles.danger} text-[14px] leading-none`}
             onConfirm={() => activeTerminal && onKillTerminal(activeTerminal.id)}
           >
             -
@@ -1278,6 +1011,24 @@ function LeafPane({
             )
           }
 
+          if (tab.type === 'markdown') {
+            const isActive = tab.id === activeTabId
+            return (
+              <div
+                key={tab.id}
+                className="absolute inset-0"
+                style={{
+                  visibility: isActive ? 'visible' : 'hidden',
+                  pointerEvents: isActive ? 'auto' : 'none',
+                  zIndex: isActive ? 1 : 0,
+                }}
+                aria-hidden={!isActive}
+              >
+                <MarkdownPane panelId={tab.panelId} />
+              </div>
+            )
+          }
+
           if (tab.type !== 'terminal') return null
           const terminal = terminalsById.get(tab.terminalId)
           if (!terminal) return null
@@ -1286,7 +1037,7 @@ function LeafPane({
           return (
             <div
               key={tab.id}
-              className="absolute inset-0"
+              className={`${styles.terminalContent} absolute inset-0`}
               style={{
                 visibility: isActive ? 'visible' : 'hidden',
                 pointerEvents: isActive ? 'auto' : 'none',
@@ -1369,8 +1120,6 @@ function LeafPane({
 
 export function TerminalArea() {
   const { t } = useI18n('terminal')
-  // 底部抽屉折叠箭头等纸面点睛走分支（与菜单 plancheMenu 同构，作用域独立）
-  const plancheBottomBar = useThemeStore((s) => s.theme) === 'planche'
   // P5: useShallow 细粒度订阅——整 store 订阅会让任意无关字段变化都重渲染这棵大组件树
   const {
     workspaces,
@@ -1388,8 +1137,8 @@ export function TerminalArea() {
     resizePane,
     moveTerminalToPane,
     splitPaneWithTerminal,
-    moveBrowserToPane,
-    splitPaneWithBrowser,
+    movePaneContentToPane,
+    splitPaneWithContent,
     reorderPaneTab,
     movePaneTabToIndex,
     closePaneTab,
@@ -1411,8 +1160,8 @@ export function TerminalArea() {
       resizePane: s.resizePane,
       moveTerminalToPane: s.moveTerminalToPane,
       splitPaneWithTerminal: s.splitPaneWithTerminal,
-      moveBrowserToPane: s.moveBrowserToPane,
-      splitPaneWithBrowser: s.splitPaneWithBrowser,
+      movePaneContentToPane: s.movePaneContentToPane,
+      splitPaneWithContent: s.splitPaneWithContent,
       reorderPaneTab: s.reorderPaneTab,
       movePaneTabToIndex: s.movePaneTabToIndex,
       closePaneTab: s.closePaneTab,
@@ -1426,8 +1175,7 @@ export function TerminalArea() {
   const setLoadState = useAppStore((s) => s.setLoadState)
   const terminalAreaRef = useRef<HTMLDivElement>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerView, setDrawerView] = useState<DrawerView>('runtime')
-  const [drawerHeights, setDrawerHeights] = useState<DrawerHeights>({})
+  const [drawerHeight, setDrawerHeight] = useState<number | undefined>(undefined)
   const [drawerResizing, setDrawerResizing] = useState(false)
   const drawerResizeRef = useRef<{ pointerId: number; target: HTMLDivElement; startY: number; startHeight: number; maximum: number } | null>(null)
   const drawerBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
@@ -1438,6 +1186,9 @@ export function TerminalArea() {
   // launchingPreset pattern. Prevents double-click / rapid preset selection
   // from firing two concurrent terminal:create requests for the same preset.
   const [launchingPreset, setLaunchingPreset] = useState(false)
+  // 新建终端菜单按设置里的条目与显隐实时生成；设置「终端管理」改完即生效。
+  const shellProfiles = useShellProfilesStore((s) => s.settings)
+  const terminalMenuItems = useMemo(() => buildTerminalMenuItems(shellProfiles), [shellProfiles])
   const terminalsById = useMemo(() => {
     const map = new Map<string, Terminal>()
     for (const snapshot of Object.values(terminalSnapshots)) {
@@ -1538,13 +1289,8 @@ export function TerminalArea() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!event.shiftKey || (!event.ctrlKey && !event.metaKey)) return
       const key = event.key.toLowerCase()
-      if (key === 'n') {
-        event.preventDefault()
-        setDrawerView('note')
-        setDrawerOpen(true)
-        return
-      }
-      /*-- Ctrl/Cmd+Shift+B：主动调用浏览器（已有则激活，否则新建） --*/
+      /*-- Ctrl/Cmd+Shift+B：主动调用浏览器（已有则激活，否则新建）。
+           Markdown 的 Ctrl/Cmd+Shift+N 已随入口移到全局，不再依赖抽屉挂载。 --*/
       if (key === 'b') {
         event.preventDefault()
         void useWorkspaceStore.getState().openBrowserInWorkspace()
@@ -1554,15 +1300,18 @@ export function TerminalArea() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  /*-- pane "+" 菜单新增浏览器 tab --*/
-  const handleOpenBrowser = useCallback((paneId: string) => {
-    void useWorkspaceStore.getState().addBrowserToPane(paneId)
-  }, [])
-
   /*-- 关闭浏览器 pane tab：先销毁主进程 surface 再移除 pane 内容 --*/
   const handleCloseBrowserTab = useCallback(
     async (paneId: string, tabId: string, surfaceId: string) => {
       await destroyBrowserSurface(surfaceId)
+      closePaneTab(paneId, tabId)
+    },
+    [closePaneTab]
+  )
+
+  /*-- 关闭 Markdown 标签只移除呈现，不碰草稿：删除文稿是编辑器里的独立动作 --*/
+  const handleCloseMarkdownTab = useCallback(
+    (paneId: string, tabId: string) => {
       closePaneTab(paneId, tabId)
     },
     [closePaneTab]
@@ -1590,16 +1339,24 @@ export function TerminalArea() {
     [moveTerminalToPane, splitPaneWithTerminal]
   )
 
-  /*-- browser tab 拖拽落点：边缘分屏，否则移入目标 pane（与 terminal 同语义） --*/
-  const handleBrowserTabDrop = useCallback(
-    (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
+  /*-- browser / markdown tab 拖拽落点：边缘分屏，否则移入目标 pane（与 terminal 同语义） --*/
+  const handlePaneContentDrop = useCallback(
+    (contentId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
       if (edge) {
-        splitPaneWithBrowser(surfaceId, paneId, edge, ratio)
+        splitPaneWithContent(contentId, paneId, edge, ratio)
         return
       }
-      moveBrowserToPane(surfaceId, paneId)
+      movePaneContentToPane(contentId, paneId)
     },
-    [moveBrowserToPane, splitPaneWithBrowser]
+    [movePaneContentToPane, splitPaneWithContent]
+  )
+
+  /*-- 侧栏 HTML5 拖入的 browser tab：带上 browser: 前缀转内容中立的落点处理 --*/
+  const handleBrowserTabDrop = useCallback(
+    (surfaceId: string, paneId: string, edge: PaneDropEdge | null, ratio: number) => {
+      handlePaneContentDrop(`browser:${surfaceId}`, paneId, edge, ratio)
+    },
+    [handlePaneContentDrop]
   )
 
   /*-- tab 条内排序落点：同 pane 调整顺序，异 pane 按下标插入（画布中央落点仍走追加合并） --*/
@@ -1640,13 +1397,15 @@ export function TerminalArea() {
         }
         const edge = target.zone === 'center' ? null : target.zone
         if (contentId.startsWith('terminal:')) handleTerminalDrop(contentId.slice(9), target.paneId, edge, SPLIT_RATIO_EQUAL)
-        else if (contentId.startsWith('browser:')) handleBrowserTabDrop(contentId.slice(8), target.paneId, edge, SPLIT_RATIO_EQUAL)
+        else if (contentId.startsWith('browser:') || contentId.startsWith('markdown:')) {
+          handlePaneContentDrop(contentId, target.paneId, edge, SPLIT_RATIO_EQUAL)
+        }
       },
     })
-  }, [setTabDragInFlight, handleReorderTab, handleMoveTabToIndex, setPaneTab, handleTerminalDrop, handleBrowserTabDrop])
+  }, [setTabDragInFlight, handleReorderTab, handleMoveTabToIndex, setPaneTab, handleTerminalDrop, handlePaneContentDrop])
 
   const handlePresetSelect = useCallback(
-    async (preset: typeof PRESETS[number]) => {
+    async (item: TerminalPresetOption) => {
       closeTerminalMenu()
       if (!activeWorkspaceId) return
       // AC7: reject concurrent preset launches (double-click, rapid reselect).
@@ -1658,11 +1417,14 @@ export function TerminalArea() {
       setLaunchingPreset(true)
       try {
         await launchTerminalPreset({
-          preset: preset.type,
+          preset: item.type,
           workspaceId: activeWorkspaceId,
           workspacePath: workspace.path,
           cwd: useWorktreeStore.getState().activePaths[activeWorkspaceId] ?? workspace.path,
-          name: preset.name.toLowerCase(),
+          // shell 条目保留用户写的名称（新建后终端显示实际 shell 名），CLI 预设沿用原小写名。
+          name: item.type === 'shell' ? item.name : item.name.toLowerCase(),
+          // 临时选择只作用本次新建：传条目 id，不动全局默认值。
+          ...(item.shellProfileId ? { shellProfileId: item.shellProfileId } : {}),
         })
       } finally {
         setLaunchingPreset(false)
@@ -1673,6 +1435,7 @@ export function TerminalArea() {
 
   useEffect(() => {
     warmDefaultShellCache()
+    warmShellProfilesCache()
     warmTerminalCreatePath()
   }, [])
 
@@ -1682,7 +1445,6 @@ export function TerminalArea() {
     ? workspaces.find((workspace) => workspace.id === activeTerminal.workspaceId) ?? null
     : null
   const otherTerminals = terminals.filter((terminal) => terminal.id !== activeTerminal?.id)
-  const drawerHeight = drawerHeights[drawerView] ?? DRAWER_DEFAULT_HEIGHT[drawerView]
 
   const getDrawerMaxHeight = useCallback(() => {
     const areaHeight = terminalAreaRef.current?.clientHeight ?? 0
@@ -1717,7 +1479,7 @@ export function TerminalArea() {
       pointerId: event.pointerId,
       target: event.currentTarget,
       startY: event.clientY,
-      startHeight: Math.min(drawerHeight, maximum),
+      startHeight: Math.min(drawerHeight ?? DRAWER_DEFAULT_HEIGHT, maximum),
       maximum,
     }
     drawerBodyStyleRef.current = {
@@ -1734,8 +1496,7 @@ export function TerminalArea() {
   const handleDrawerResizeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const session = drawerResizeRef.current
     if (!session || session.pointerId !== event.pointerId) return
-    const height = clampDrawerHeight(session.startHeight + session.startY - event.clientY, session.maximum)
-    setDrawerHeights((current) => ({ ...current, [drawerView]: height }))
+    setDrawerHeight(clampDrawerHeight(session.startHeight + session.startY - event.clientY, session.maximum))
   }
 
   const handleDrawerResizeEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1744,7 +1505,7 @@ export function TerminalArea() {
 
   const handleDrawerResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const maximum = getDrawerMaxHeight()
-    const current = Math.min(drawerHeight, maximum)
+    const current = Math.min(drawerHeight ?? DRAWER_DEFAULT_HEIGHT, maximum)
     const heights: Partial<Record<string, number>> = {
       ArrowUp: current + 16,
       ArrowDown: current - 16,
@@ -1757,7 +1518,7 @@ export function TerminalArea() {
     // The focused terminal re-takes DOM focus on every refit; keep the handle focused for the keystrokes that follow.
     drawerKeyboardResizeUntilRef.current = Date.now() + 250
     const clamped = clampDrawerHeight(height, maximum)
-    setDrawerHeights((current) => ({ ...current, [drawerView]: clamped }))
+    setDrawerHeight(clamped)
   }
 
   const handleDrawerResizeBlur = (event: React.FocusEvent<HTMLDivElement>) => {
@@ -1768,48 +1529,15 @@ export function TerminalArea() {
   return (
       <div
         ref={terminalAreaRef}
-        className="flex h-full w-full min-w-0 flex-col relative overflow-hidden"
-        style={{
-          background: 'var(--shell-canvas)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
-      }}
+        className={styles.area}
     >
-      {paneCount > 1 && (
-        <div
-          className="flex h-5 shrink-0 items-center justify-end px-3 pt-1"
-          style={{ background: 'transparent' }}
-        >
-          <HoldToConfirm
-            label={t('terminal:tab.collapseLayout')}
-            onConfirm={collapsePaneLayout}
-            className="flex h-4 w-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent font-mono text-[14px] leading-none opacity-28 transition-[opacity,background,color] hover:bg-[rgba(255,255,255,0.045)] hover:opacity-75 focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.28)]"
-            style={{ color: 'rgba(255,255,255,0.74)' }}
-          >
-            -
-          </HoldToConfirm>
-        </div>
-      )}
-
-      {/* Pane tree — multi-pane host stays soft so leaf cards read as floating surfaces */}
-      <div
-        className="relative m-2 min-h-0 min-w-0 flex-1 overflow-hidden"
-        style={
-          paneCount > 1
-            ? {
-                background: 'transparent',
-                border: '1px solid transparent',
-                boxShadow: 'none',
-              }
-            : {
-                background: 'var(--shell-pane)',
-                border: '1px solid var(--shell-border)',
-                borderRadius: 10,
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
-              }
-        }
-      >
+      <div className={styles.paneHost} data-pane-host="">
         {workspaceSurfaces.map((surface) => {
-          const workspaceVisible = surface.workspaceId === activeWorkspaceId
+          // 无项目时活动 surface 的宿主是全局哨兵，可见性按哨兵判；
+          // 有项目时仍按真实 workspaceId 判。
+          const workspaceVisible = activeWorkspaceId === null
+            ? surface.workspaceId === GLOBAL_PANE_SCOPE
+            : surface.workspaceId === activeWorkspaceId
           return (
             <div
               key={surface.workspaceId}
@@ -1827,11 +1555,12 @@ export function TerminalArea() {
                 focusedPaneId={surface.focusedPaneId}
                 activeTerminalId={surface.activeTerminalId}
                 showFocusChrome={workspaceVisible && paneCount > 1}
+                onCollapseLayout={collapsePaneLayout}
                 onPaneFocus={setFocusedPane}
                 onTabSelect={setPaneTab}
                 onKillTerminalFromTab={handleKillTerminal}
-                onOpenBrowser={handleOpenBrowser}
                 onCloseBrowserTab={handleCloseBrowserTab}
+                onCloseMarkdownTab={handleCloseMarkdownTab}
                 onBrowserPopOut={handleBrowserPopOut}
                 onKillTerminal={handleKillTerminal}
                 onTerminalDrop={handleTerminalDrop}
@@ -1844,6 +1573,7 @@ export function TerminalArea() {
                 onToggleTerminalMenu={toggleTerminalMenu}
                 onCloseTerminalMenu={closeTerminalMenu}
                 onCreateTerminal={handlePresetSelect}
+                terminalMenuItems={terminalMenuItems}
               />
             </div>
           )
@@ -1851,11 +1581,11 @@ export function TerminalArea() {
       </div>
 
       <div
-        className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"
+        data-runtime-drawer=""
+        data-open={drawerOpen}
+        className={styles.drawer}
         style={{
-          background: drawerOpen ? 'var(--shell-drawer)' : 'var(--shell-canvas)',
-          borderTop: '1px solid var(--shell-border)',
-          height: getDrawerHeight(drawerOpen, drawerView, drawerHeights),
+          height: getDrawerHeight(drawerOpen, drawerHeight),
           maxHeight: `calc(100% - ${DRAWER_MIN_PANE_HEIGHT}px)`,
           transition: drawerResizing ? 'none' : undefined,
         }}
@@ -1869,7 +1599,7 @@ export function TerminalArea() {
             aria-orientation="horizontal"
             aria-valuemin={DRAWER_MIN_HEIGHT}
             aria-valuemax={Math.round(getDrawerMaxHeight())}
-            aria-valuenow={Math.round(Math.min(drawerHeight, getDrawerMaxHeight()))}
+            aria-valuenow={Math.round(Math.min(drawerHeight ?? DRAWER_DEFAULT_HEIGHT, getDrawerMaxHeight()))}
             tabIndex={0}
             onPointerDown={handleDrawerResizeStart}
             onPointerMove={handleDrawerResizeMove}
@@ -1880,42 +1610,26 @@ export function TerminalArea() {
             onBlur={handleDrawerResizeBlur}
           />
         )}
-        <div
-          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] ${drawerOpen ? 'pr-52' : 'pr-3'}`}
+        <button
+          type="button"
+          className={styles.drawerBar}
+          aria-expanded={drawerOpen}
+          aria-controls={getDrawerPanelId()}
+          aria-label={t('terminal:tab.runtimePanelToggle')}
           onClick={() => setDrawerOpen((value) => !value)}
         >
-          <div className="flex h-full min-w-0 items-center gap-1.5 text-[11px]">
-            <button
-              type="button"
-              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
-              onClick={(event) => {
-                event.stopPropagation()
-                setDrawerOpen((value) => !value)
-              }}
-              aria-expanded={drawerOpen}
-              aria-label={t('terminal:tab.runtimePanelToggle')}
-            >
-              <span
-                className="h-[7px] w-[7px] transition-transform"
-                style={{
-                  borderRight: plancheBottomBar ? '1.5px solid var(--shell-dim)' : '1.5px solid rgba(255, 255, 255, 0.2)',
-                  borderBottom: plancheBottomBar ? '1.5px solid var(--shell-dim)' : '1.5px solid rgba(255, 255, 255, 0.2)',
-                  transform: drawerOpen ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg)',
-                }}
-              />
-            </button>
+          <span className={styles.drawerPrimary}>
+            <span className={styles.drawerToggle}>
+              <ChevronRight size={12} strokeWidth={1.6} aria-hidden="true" className={styles.drawerChevron} />
+              <span>{t('terminal:tab.runtimeAria')}</span>
+            </span>
             {activeTerminal ? (
-              <span className="flex min-w-0 items-center gap-1.5">
+              <span className={styles.drawerDetails}>
                 {/*-- 抽屉左端补一枚 preset 图标：抽屉条本身是"当前终端"的入口，
                      收起时也要能一眼认出是哪个 CLI，展开时与中部 tab / 左侧栏同一套图标语言。 --*/}
                 <ThemedTooltip label={`${providerLabel(activeTerminal.preset, t)} · ${activeTerminal.cwd}`}>
                 <span
-                  className="inline-flex h-5 min-w-0 max-w-[140px] shrink-0 items-center gap-1.5 rounded border px-1.5 font-mono"
-                  style={{
-                    borderColor: 'rgba(255,255,255,0.055)',
-                    background: 'rgba(255,255,255,0.014)',
-                    color: 'var(--shell-muted)',
-                  }}
+                  className={`${styles.metadata} ${styles.drawerProvider} font-mono`}
                 >
                   <TerminalPresetIcon
                     preset={activeTerminal.preset}
@@ -1927,59 +1641,48 @@ export function TerminalArea() {
                 {focusedTerminalWorkspace && (
                   <ThemedTooltip label={t('terminal:tab.focusWorkspaceTitle', { name: focusedTerminalWorkspace.name, path: focusedTerminalWorkspace.path })}>
                   <span
-                    className="hidden min-w-0 max-w-[150px] items-center gap-1.5 border-r pr-2 font-mono text-[10px] sm:inline-flex"
+                    className={`${styles.drawerWorkspace} min-w-0 max-w-[150px] items-center gap-1.5 font-mono text-[10px]`}
                     style={{
-                      borderColor: 'rgba(255,255,255,0.055)',
                       color: 'var(--shell-dim)',
                     }}
                   >
                     <span
                       aria-hidden="true"
                       className="h-1 w-1 shrink-0 rounded-full"
-                      style={{ background: 'rgba(255,255,255,0.24)' }}
+                      style={{ background: 'var(--shell-dim)' }}
                     />
                     <span className="truncate">{focusedTerminalWorkspace.name}</span>
                   </span>
                   </ThemedTooltip>
                 )}
                 <span
-                  className="inline-flex h-5 min-w-0 max-w-[180px] items-center rounded border px-2 font-mono"
-                  style={{
-                    borderColor: 'rgba(255,255,255,0.055)',
-                    background: 'rgba(255,255,255,0.014)',
-                    color: 'var(--shell-muted)',
-                  }}
+                  className={`${styles.metadata} ${styles.drawerModel} font-mono`}
                 >
                   <span className="truncate">{modelLabel(activeTerminal, t)}</span>
                 </span>
-                <ContextUsagePopover
-                  terminal={activeTerminal}
-                  interactive={false}
-                  clickable
-                  className="group relative inline-flex h-5 shrink-0 items-center rounded border px-2 font-mono"
+                <TerminalContextTooltip terminal={activeTerminal}>
+                <span
+                  className={`${styles.contextBadge} group font-mono`}
                   style={{
-                    borderColor: `${contextRatioColor(contextRatio(activeTerminal))}33`,
                     background: `${contextRatioColor(contextRatio(activeTerminal))}12`,
                     color: contextRatioColor(contextRatio(activeTerminal)),
                   }}
                 >
                   {contextLabel(activeTerminal, t)}
-                </ContextUsagePopover>
+                </span>
+                </TerminalContextTooltip>
               </span>
             ) : (
-              <span className="truncate font-mono text-[var(--shell-dim)]">No model or context data</span>
+              <span className="truncate text-[var(--shell-dim)]">{t('terminal:tab.noTelemetryData')}</span>
             )}
-          </div>
-          <div className="flex h-full shrink-0 items-center gap-2 text-[10px]">
-            <div className="hidden h-full items-center gap-1.5 md:flex">
+          </span>
+            <span className={styles.drawerOthers}>
               {otherTerminals.slice(0, 3).map((terminal) => {
                 return (
                 <ThemedTooltip key={terminal.id} label={`${providerLabel(terminal.preset, t)} · ${modelLabel(terminal, t)} · ${contextLabel(terminal, t)}`}>
                 <span
-                  className="inline-flex h-5 max-w-[126px] items-center gap-1.5 overflow-hidden rounded border px-1.5 font-mono"
+                  className={`${styles.metadata} max-w-[126px] overflow-hidden font-mono`}
                   style={{
-                    borderColor: 'rgba(255,255,255,0.055)',
-                    background: 'rgba(255,255,255,0.018)',
                     color: 'var(--shell-dim)',
                   }}
                 >
@@ -1994,47 +1697,25 @@ export function TerminalArea() {
                 )
               })}
               {otherTerminals.length > 3 && (
-                <span className="inline-flex h-5 items-center rounded border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[var(--shell-dim)]">
+                <span className="inline-flex h-5 items-center px-1.5 font-mono text-[var(--shell-dim)]">
                   +{otherTerminals.length - 3}
                 </span>
               )}
-            </div>
-          </div>
-        </div>
-        {drawerOpen && (
-          <div className="absolute right-3 top-0 z-10 h-7">
-            <DrawerViewTabs
-              open={drawerOpen}
-              activeView={drawerView}
-              onSelect={setDrawerView}
-              ariaLabel={t('terminal:tab.drawerViewAria')}
-              labels={{ runtime: t('terminal:tab.view.runtime'), note: t('terminal:tab.view.note') }}
-            />
-          </div>
-        )}
-        {DRAWER_VIEWS.map((view) => (
-          <div
-            key={view}
-            {...getDrawerPanelAttributes(view)}
-            hidden={!drawerOpen || drawerView !== view}
-            className="overflow-hidden px-3 pb-3 pt-2 text-[11px] font-mono"
-            style={{ height: 'calc(100% - 28px)' }}
-          >
-            {drawerOpen && drawerView === view && (
-              view === 'note' ? activeTerminalId ? (
-              <QuickNote
-                terminalId={activeTerminalId}
-                onPasteToTerminal={(data) => window.electron.terminal.input(activeTerminalId, data)}
-              />
-            ) : (
-              <div className="grid h-full place-items-center text-[var(--shell-dim)]">{t('terminal:tab.noActiveTerminal')}</div>
-            ) : (
-              <section
-                className="flex h-full min-h-0 flex-col overflow-hidden border"
-                style={{ borderColor: 'rgba(255,255,255,0.07)' }}
-                aria-label={t('terminal:tab.runtimeAria')}
-              >
-              <div className="flex h-8 shrink-0 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,255,255,0.055)' }}>
+            </span>
+        </button>
+        {/*-- Markdown 已迁为独立 pane，底部抽屉只留上下文监控 --*/}
+        <div
+          id={getDrawerPanelId()}
+          hidden={!drawerOpen}
+          className="overflow-hidden px-3 pb-3 pt-2 text-[11px] font-mono"
+          style={{ height: 'calc(100% - 28px)' }}
+        >
+          {drawerOpen && (
+            <section
+              className="flex h-full min-h-0 flex-col overflow-hidden"
+              aria-label={t('terminal:tab.runtimeAria')}
+            >
+              <div className="flex h-8 shrink-0 items-center justify-between px-2.5">
                 <span className="text-[var(--shell-muted)]">{t('terminal:tab.terminalRuntime')}</span>
                 <span className="text-[var(--shell-dim)]">{terminals.length} {t('terminal:sessions.countSuffix')}</span>
               </div>
@@ -2042,7 +1723,7 @@ export function TerminalArea() {
                 {terminals.length === 0 ? (
                   <div className="px-1 py-3 text-[var(--shell-dim)]">{t('terminal:tab.noTelemetryData')}</div>
                 ) : (
-                  <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+                  <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))' }}>
                     {terminals.map((terminal) => {
                       const ratio = contextRatio(terminal)
                       const ratioColor = contextRatioColor(ratio)
@@ -2053,24 +1734,25 @@ export function TerminalArea() {
                         ? `${providerLabel(terminal.preset, t)} · ${cardStatusLabel} · ${terminal.cwd}`
                         : `${providerLabel(terminal.preset, t)} · ${terminal.cwd}`
                       return (
-                        // Note: 卡片不再用整卡 ThemedTooltip 包裹 — 外层 `provider·cwd`
-                        // 与内层 ContextUsagePopover / tokenSummary 会在用量条与 age 上
-                        // 双浮层重叠。身份信息只绑在 header，用量详情只走内层 popover。
                         <button
                           key={terminal.id}
                           type="button"
-                          className="flex min-w-0 cursor-pointer flex-col gap-2 rounded-md border px-2.5 py-2 text-left transition-colors hover:bg-[rgba(255,255,255,0.035)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
-                          style={{
-                            borderColor: isActiveCard ? 'var(--shell-accent-border)' : 'rgba(255,255,255,0.07)',
-                            background: isActiveCard ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.018)',
-                          }}
+                          className={`${styles.runtimeCard} group flex min-w-0 cursor-pointer flex-col gap-2 px-2.5 py-2 text-left`}
                           aria-current={isActiveCard ? 'true' : undefined}
                           aria-label={identityLabel}
                           onClick={() => setActiveTerminal(terminal.id)}
                         >
-                          <span className="flex min-w-0 items-center justify-between gap-2">
+                          {/* Current terminal is marked locally; no perimeter outline. */}
+                          {isActiveCard && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute inset-y-0 left-0 w-0.5 rounded-l-md"
+                              style={{ background: 'var(--shell-accent-border)' }}
+                            />
+                          )}
+                          <span className="flex min-w-0 flex-wrap items-center justify-between gap-2">
                             <ThemedTooltip label={identityLabel}>
-                            <span className="flex min-w-0 items-center gap-1.5 text-[var(--shell-text)]">
+                            <span className="flex min-w-0 items-center gap-1.5">
                               <TerminalStatusLight status={terminal.status} compact />
                               {/*-- 与抽屉条左端 / 中部 tab 同一枚 preset 图标：卡片只给名称时
                                    分不清 codex 与 opencode，图标是唯一稳定的身份锚点。 --*/}
@@ -2078,37 +1760,29 @@ export function TerminalArea() {
                                 preset={terminal.preset}
                                 className="h-3.5 w-3.5 shrink-0"
                               />
-                              <span className="truncate">{providerLabel(terminal.preset, t)}</span>
+                              <span
+                                className="truncate text-[12px] font-medium"
+                                style={{ color: isActiveCard ? 'var(--shell-accent)' : 'var(--shell-text)' }}
+                              >
+                                {providerLabel(terminal.preset, t)}
+                              </span>
                             </span>
                             </ThemedTooltip>
-                            <ThemedTooltip label={t('terminal:tab.tokenSummaryTitle', { input: formatTokenCount(terminal.inputTokens), output: formatTokenCount(terminal.outputTokens) })}>
-                            <span className="shrink-0 text-[10px] text-[var(--shell-dim)]">
-                              {formatAge(terminal.telemetryUpdatedAt)}
-                            </span>
-                            </ThemedTooltip>
+                            <TerminalRuntime terminal={terminal} />
                           </span>
-                          <span
-                            className="inline-flex h-5 min-w-0 max-w-full items-center self-start rounded border px-2"
-                            style={{
-                              borderColor: 'rgba(255,255,255,0.055)',
-                              background: 'rgba(255,255,255,0.014)',
-                              color: 'var(--shell-muted)',
-                            }}
-                          >
-                            <span className="truncate">{modelLabel(terminal, t)}</span>
-                          </span>
-                          <ContextUsagePopover
-                            terminal={terminal}
-                            interactive={false}
-                            className="group relative flex min-w-0 flex-col gap-1"
-                          >
-                            <span className="flex items-center justify-between gap-2">
-                              <span className="truncate text-[10px] text-[var(--shell-dim)]">{contextLabel(terminal, t)}</span>
-                              <span className="shrink-0 tabular-nums" style={{ color: ratioColor }}>{contextPercentLabel(terminal)}</span>
+                          <span className="truncate text-[10px] text-[var(--shell-dim)]">{modelLabel(terminal, t)}</span>
+                          <TerminalContextTooltip terminal={terminal}>
+                          <span className="flex min-w-0 flex-col gap-1 pt-1">
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span className="text-[10px] text-[var(--shell-muted)]">{t('terminal:context.row.context')}</span>
+                              <span className="flex items-baseline gap-1.5">
+                                <span className="tabular-nums text-[11px] text-[var(--shell-text)]">{contextExactLabel(terminal, t)}</span>
+                                <span className="shrink-0 tabular-nums text-[10px]" style={{ color: ratioColor }}>{contextPercentLabel(terminal)}</span>
+                              </span>
                             </span>
                             <span
                               className="block h-1 w-full overflow-hidden rounded-full"
-                              style={{ background: 'rgba(255,255,255,0.06)' }}
+                              style={{ background: 'var(--shell-border-soft)' }}
                             >
                               <span
                                 className="block h-full rounded-full transition-[width,background] duration-300"
@@ -2118,18 +1792,18 @@ export function TerminalArea() {
                                 }}
                               />
                             </span>
-                          </ContextUsagePopover>
+                          </span>
+                          </TerminalContextTooltip>
+                          <TerminalUsageStats terminal={terminal} layout="grid" />
                         </button>
                       )
                     })}
                   </div>
                 )}
               </div>
-              </section>
-              )
-            )}
-          </div>
-        ))}
+            </section>
+          )}
+        </div>
       </div>
 
     </div>

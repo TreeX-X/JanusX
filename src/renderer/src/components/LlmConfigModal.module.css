@@ -58,8 +58,7 @@
 }
 
 .embeddedRoot {
-  min-height: 0;
-  height: 100%;
+  min-height: 100%;
 }
 
 .embeddedPanel {
@@ -116,7 +115,7 @@
 }
 
 .embeddedPanel .configBody {
-  gap: 14px;
+  gap: 20px;
 }
 
 .embeddedPanel .configBody {
@@ -172,26 +171,22 @@
 .section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--shell-border-soft);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
+  gap: 18px;
+  padding: 0;
 }
 
 .section:last-child {
   margin-bottom: 0;
-  padding-bottom: 12px;
+  padding-bottom: 0;
 }
 
 .sectionTitle {
   margin: 0;
   color: var(--shell-muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   line-height: 1.35;
-  text-transform: uppercase;
 }
 
 .formGroup {
@@ -201,8 +196,8 @@
 }
 
 .formGroup label {
-  color: #d9d9dd;
-  font-size: 12px;
+  color: var(--shell-text);
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -215,7 +210,7 @@
   padding: 8px 10px;
   border-radius: var(--so-radius);
   color: var(--shell-text);
-  font-size: 12px;
+  font-size: 13px;
   font-family: inherit;
   outline: none;
   transition: background 0.18s ease, border-color 0.18s ease;
@@ -344,8 +339,8 @@
 }
 
 .inlineHint {
-  color: var(--shell-dim);
-  font-size: 11px;
+  color: var(--shell-muted);
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -465,15 +460,20 @@
 }
 
 .btnPrimary {
-  border-color: var(--so-field-border);
-  color: var(--shell-text);
+  border-color: transparent;
+  background: var(--shell-text);
+  color: var(--shell-canvas);
 }
 
 .btnPrimary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.045);
-  border-color: rgba(255, 255, 255, 0.16);
-  color: var(--shell-text);
+  background: color-mix(in srgb, var(--shell-text) 85%, var(--shell-canvas));
+  color: var(--shell-canvas);
 }
+
+.providerFooter { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 0 0; border-top: 1px solid var(--shell-border-soft); }
+.embeddedPanel .providerFooter { position: sticky; bottom: calc(var(--so-body-pad-y) * -1); margin: 6px calc(var(--so-body-pad-x) * -1) calc(var(--so-body-pad-y) * -1); padding: 13px var(--so-body-pad-x); background: var(--shell-canvas); z-index: 1; }
+:global([data-theme]) .llmConfigPanel.embeddedPanel { box-shadow: none; }
+@media (max-width: 720px) { .providerFooter { flex-wrap: wrap; } .providerFooter .footerActions { margin-left: auto; } }
 
 /* 终端 Tab：顶部一行切换，不再垂直铺开；选中态与工作区列表同语言（浅底 + 左强调已让位给文字高亮，此处用下划线）。 */
 .terminalTabs {

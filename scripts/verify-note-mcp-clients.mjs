@@ -16,7 +16,7 @@ const production=path.resolve('artifacts/build-check/main/note-mcp.js')
 const wrapper=path.join(base,'note-mcp.mjs')
 await fs.writeFile(wrapper,`import {spawn} from 'node:child_process';import fs from 'node:fs';let input='';const c=spawn(process.execPath,[${JSON.stringify(production)}],{env:process.env,stdio:['pipe','pipe','pipe'],windowsHide:true});process.stdin.on('data',b=>{input+=b;let i;while((i=input.indexOf('\\n'))>=0){const line=input.slice(0,i);input=input.slice(i+1);try{let x=JSON.parse(line);if(x.method==='tools/call')fs.appendFileSync(process.env.NOTE_CALL_LOG,JSON.stringify(x.params)+'\\n')}catch{}}c.stdin.write(b)});process.stdin.on('end',()=>c.stdin.end());c.stdout.pipe(process.stdout);c.stderr.pipe(process.stderr);process.on('SIGTERM',()=>c.kill());c.on('exit',code=>process.exit(code??0));`)
 const sessions={}
-const plan=[['list',{workspacePath:workspace}],['read',{workspacePath:workspace,uri:`note://${repoId}/${noteId}`}],['write',{workspacePath:workspace,reason:'Acceptance fixture update',operations:[{type:'update',uri:`note://${repoId}/${noteId}`,expectedHash:createHash('sha256').update(original).digest('hex'),sections:{Responsibility:'Terminal read and write acceptance verified.'}}]}],['suggestions',{workspacePath:workspace,noteId}],['context',{workspacePath:workspace,uris:[`note://${repoId}/${noteId}`]}]]
+const plan=[['list',{workspacePath:workspace}],['context',{workspacePath:workspace,uris:[`note://${repoId}/${noteId}`]}],['write',{workspacePath:workspace,reason:'Acceptance fixture update',operations:[{type:'update',uri:`note://${repoId}/${noteId}`,expectedHash:createHash('sha256').update(original).digest('hex'),sections:{Responsibility:'Terminal read and write acceptance verified.'}}]}],['read',{workspacePath:workspace,uri:`note://${repoId}/${noteId}`}],['suggestions',{workspacePath:workspace,noteId}]]
 const server=http.createServer(async(req,res)=>{
  let raw='';for await(const b of req)raw+=b
  let body;try{body=JSON.parse(raw)}catch{res.end('{}');return}
@@ -69,8 +69,11 @@ async function run(client,entry,args,extra={}){
  await fs.writeFile(path.join(home,'output.txt'),output)
  const calls=(await fs.readFile(log,'utf8')).trim().split('\n').filter(Boolean).map(JSON.parse)
  const report={client,exit,calls,sessions:sessions[client],writeVerified:(await fs.readFile(path.join(workspace,'.agents/notes/module.md'),'utf8')).includes('Terminal read and write acceptance verified.'),tail:output.slice(-1500)}
- await fs.writeFile(path.join(home,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({...report,calls:calls.map(c=>c.name),tail:report.tail.slice(-500)}));return report
+ await fs.writeFile(path.join(home,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({...report,calls:calls.map(c=>c.name),tail:report.tail.slice(-500)}))
+ if(exit!==0||!report.writeVerified||runIncomplete(report,calls))process.exitCode=1
+ return report
 }
+function runIncomplete(report,calls){return report.sessions?.step!==plan.length||!report.tail.includes('NOTE_CLIENT_ACCEPTANCE_COMPLETE')||calls.length<plan.length}
 try{
  const target=process.argv[2]??'claude'
  if(target==='claude')await run('claude',path.join(npm,'@anthropic-ai/claude-code/bin/claude.exe'),async({config})=>['-p','Call the Note MCP note.list tool for workspacePath '+workspace+'. Then print NOTE_CLIENT_ACCEPTANCE_COMPLETE.','--bare','--mcp-config',config,'--strict-mcp-config','--allowedTools','mcp__janusx-note__*','--tools','','--model','claude-sonnet-4-6','--output-format','stream-json','--verbose','--no-session-persistence'])

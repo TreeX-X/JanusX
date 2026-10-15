@@ -3,6 +3,10 @@
 
 /* Default (planche): Print-style light: paper/ink single-vermilion accent, flat fills, no gradients. */
 :root {
+  --sidebar-codex-filter: none;
+  --session-sheet-base-weight: 84%;
+  --cli-logo-light: #f4f4f4;
+  --cli-logo-dark: #202024;
   --paper: #EFE4C5;
   --paper-deep: #DCCFA8;
   --ink: #1C343B;
@@ -23,6 +27,17 @@
   --shell-chrome-raised: #DCCFA8;
   --shell-card: #EFE4C5;
   --shell-drawer: #E7D9B4;
+  --island-panel-background: var(--shell-canvas);
+  --island-panel-border: var(--shell-text);
+  --island-panel-radius: 26px;
+  --island-panel-shadow: 3px 3px 0 var(--shell-text);
+  --tool-canvas: #EFE4C5;
+  --tool-card: #F2E9D2;
+  --tool-chrome: #EAE0C6;
+  --tool-hover: #E5D9BB;
+  --popover-background: #F3EBD7;
+  --popover-hover: #EAE0C8;
+  --popover-shadow: 0 8px 24px rgba(28,52,59,0.12), 0 2px 6px rgba(28,52,59,0.06);
   --control-h: 30px;
   --control-border: rgba(28, 52, 59, 0.22);
   --shell-hover: #DCCFA8;
@@ -67,6 +82,10 @@
 
 /* dark: Default. Surface ramp keeps canvas below chrome (~9pt gap) so panes read sunk, not punched. */
 [data-theme='dark'] {
+  --sidebar-codex-filter: invert(1);
+  --session-sheet-base-weight: 96%;
+  --cli-logo-light: #f4f4f4;
+  --cli-logo-dark: #202024;
   --shell-void: #101012;
   --shell-canvas: #151517;
   --shell-pane: #191919;
@@ -75,6 +94,17 @@
   --shell-chrome-raised: #252527;
   --shell-card: #1c1c1f;
   --shell-drawer: #0c0c0e;
+  --island-panel-background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.045), transparent 30%), #030303;
+  --island-panel-border: rgba(255,255,255,0.075);
+  --island-panel-radius: 26px;
+  --island-panel-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 24px 64px rgba(0,0,0,0.6), 0 0 16px rgba(255,120,48,0.06);
+  --tool-canvas: #1e1e20;
+  --tool-card: #1c1c1f;
+  --tool-chrome: #1e1e1f;
+  --tool-hover: #2b2b2e;
+  --popover-background: #252527;
+  --popover-hover: rgba(255,255,255,0.06);
+  --popover-shadow: 0 14px 36px rgba(0,0,0,0.55);
   --control-h: 30px;
   --control-border: rgba(255, 255, 255, 0.07);
   --shell-hover: #2b2b2e;

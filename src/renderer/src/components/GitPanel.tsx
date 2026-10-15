@@ -30,7 +30,6 @@ export function GitPanel({ active = true }: { active?: boolean }) {
   const openFile = useEditorStore((state) => state.openFile)
   const [hoveredCommit, setHoveredCommit] = useState<{ commit: typeof commits[number]; top: number; left: number } | null>(null)
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadCommitPreview = useCallback(async (commit: typeof commits[number]) => {
     if (!cwd || commitFiles[commit.hash]) return
@@ -42,16 +41,21 @@ export function GitPanel({ active = true }: { active?: boolean }) {
 
   const clearHoverTimers = useCallback(() => {
     if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
-    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
     hoverTimerRef.current = null
-    closeTimerRef.current = null
   }, [])
+
+  // Note: .agents/notes/workbench/right-dock.md — previews never capture pointer input.
+  const closePreview = useCallback(() => {
+    clearHoverTimers()
+    setHoveredCommit(null)
+  }, [clearHoverTimers])
 
   const schedulePreview = useCallback((commit: typeof commits[number], target: HTMLElement) => {
     clearHoverTimers()
-    const rect = target.getBoundingClientRect()
+    setHoveredCommit(null)
     hoverTimerRef.current = setTimeout(() => {
-      const previewWidth = 280
+      const rect = target.getBoundingClientRect()
+      const previewWidth = Math.min(280, window.innerWidth - 16)
       const left = Math.max(8, rect.left - previewWidth - 8)
       const top = Math.max(8, Math.min(window.innerHeight - 220, rect.top))
       setHoveredCommit({ commit, top, left })
@@ -59,16 +63,26 @@ export function GitPanel({ active = true }: { active?: boolean }) {
     }, 280)
   }, [clearHoverTimers, loadCommitPreview])
 
-  const schedulePreviewClose = useCallback(() => {
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current)
-    closeTimerRef.current = setTimeout(() => setHoveredCommit(null), 140)
-  }, [])
-
   useEffect(() => () => clearHoverTimers(), [clearHoverTimers])
 
   useEffect(() => {
     if (!active) setConfirmAction(null)
-  }, [active])
+    closePreview()
+  }, [active, cwd, closePreview])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closePreview() }
+    window.addEventListener('scroll', closePreview, true)
+    window.addEventListener('resize', closePreview)
+    document.addEventListener('pointerdown', closePreview, true)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('scroll', closePreview, true)
+      window.removeEventListener('resize', closePreview)
+      document.removeEventListener('pointerdown', closePreview, true)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [closePreview])
 
   const refreshGitData = useCallback(async () => {
     if (!cwd) return
@@ -184,20 +198,17 @@ export function GitPanel({ active = true }: { active?: boolean }) {
     <>
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden text-xs" aria-busy={loading}>
       {/* Branch bar */}
-      <div
-        className="flex items-center gap-2 px-3 py-2"
-        style={{ borderBottom: '1px solid var(--border)' }}
-      >
+      <div className={styles.branchToolbar}>
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <div
             className="w-2 h-2 rounded-full shrink-0"
-            style={{ border: '1.5px solid #ff7830' }}
+            style={{ border: '1.5px solid var(--shell-muted)' }}
           />
           <span className="text-[var(--shell-text)] font-medium truncate">
             {status?.branch.name ?? '...'}
           </span>
           {status?.branch.upstream && (
-            <span className="text-[var(--shell-dim)] truncate">
+            <span className="text-[var(--shell-dim)] truncate" title={status.branch.upstream}>
               {status.branch.upstream}
             </span>
           )}
@@ -215,20 +226,17 @@ export function GitPanel({ active = true }: { active?: boolean }) {
       </div>
 
       {/* Status summary */}
-      <div className="flex gap-3 px-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#e5c07b' }} />
+      {(modifiedCount > 0 || addedCount > 0 || deletedCount > 0) && <div className={styles.statusSummary}>
+        {modifiedCount > 0 && <div>
           <span className="text-[var(--shell-muted)]">{t('git:statusSummary.modified', { count: modifiedCount })}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--shell-diff-add)' }} />
+        </div>}
+        {addedCount > 0 && <div>
           <span className="text-[var(--shell-muted)]">{t('git:statusSummary.added', { count: addedCount })}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--shell-diff-del)' }} />
+        </div>}
+        {deletedCount > 0 && <div>
           <span className="text-[var(--shell-muted)]">{t('git:statusSummary.deleted', { count: deletedCount })}</span>
-        </div>
-      </div>
+        </div>}
+      </div>}
 
       {/* Changed files */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="git-scroll-region">
@@ -303,10 +311,12 @@ export function GitPanel({ active = true }: { active?: boolean }) {
                 key={commit.hash}
                 tabIndex={0}
                 onMouseEnter={(event) => schedulePreview(commit, event.currentTarget)}
-                onMouseLeave={schedulePreviewClose}
-                onFocus={(event) => schedulePreview(commit, event.currentTarget)}
-                onBlur={schedulePreviewClose}
-                onClick={() => void handleToggleCommit(commit.hash)}
+                onMouseLeave={closePreview}
+                onFocus={(event) => {
+                  if (event.currentTarget.matches(':focus-visible')) schedulePreview(commit, event.currentTarget)
+                }}
+                onBlur={closePreview}
+                onClick={() => { closePreview(); void handleToggleCommit(commit.hash) }}
                 className={`relative px-3 py-2 transition-colors ${styles.commitRow}`}
               >
                 <div
@@ -341,10 +351,6 @@ export function GitPanel({ active = true }: { active?: boolean }) {
       {hoveredCommit && createPortal(
         <div
           role="tooltip"
-          onMouseEnter={() => {
-            if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
-          }}
-          onMouseLeave={schedulePreviewClose}
           className={styles.commitPreview}
           style={{
             top: hoveredCommit.top,

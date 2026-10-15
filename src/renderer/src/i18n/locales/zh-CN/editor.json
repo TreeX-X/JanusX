@@ -219,8 +219,8 @@
     "promptInsert": "插入（不提交）"
   },
   "product": {
-    "panelTitle": "产物工作区",
-    "closeAria": "关闭产物工作区",
+    "panelTitle": "预览",
+    "closeAria": "关闭预览",
     "closeTabAria": "关闭 {{relPath}}",
     "reloadFromDisk": "从磁盘重新加载",
     "emptyStage": "在灵动岛提醒或监控界面的产物分区点击文件，即可在此预览",

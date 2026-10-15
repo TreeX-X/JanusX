@@ -39,7 +39,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-15T06:47:54.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -52,9 +52,11 @@ The expanded workspace listed worktree rows and every terminal in one flat colum
 
 ## Decision
 
-`Sidebar.tsx` groups terminals by worktree before rendering. `groupTerminalsByWorktree` matches `terminal.cwd` against each worktree path across separators and Windows case, and terminals with no match fall back to the main worktree, so worktrees created outside JanusX and non-git checkouts keep every terminal visible instead of losing rows. Each worktree row renders its group beneath it in a right-offset block (`margin 0 4px 2px 26px` with the reference's hairline border) holding a branch line (`分支 <branch> → <base>`, `origin/` stripped for display) and that worktree's terminals sorted by attention order. Worktrees without terminals render the row alone; the empty hint stays for terminal-less sections.
+`Sidebar.tsx` groups terminals by worktree before rendering. `groupTerminalsByWorktree` matches `terminal.cwd` against each worktree path across separators and Windows case, and terminals with no match fall back to the main worktree, so worktrees created outside JanusX and non-git checkouts keep every terminal visible instead of losing rows. Each worktree keeps a branch-first row and a shallowly indented terminal group sorted by attention order. Worktrees without terminals render the row alone; the empty hint stays for terminal-less sections.
 
-Each worktree row carries a neutral terminal-count badge (minimal terminal glyph, count, one status dot per present state), so the count follows the worktree item it belongs to. The badge glyph is the lucide `Terminal` outline matching the reference badge icon, never the shell asset image. The workspace row carries no terminal badge; the collapsed-rail dot keeps its existing summary behavior and stays untouched. Terminal rows keep their existing grid, drag handling, focus style, and the ring indicator: the status ring system already matches the reference verbatim (orbit arc for running, pulse for needs-action, dashed for degraded, filled for error, dimmed for idle), so no indicator change ships here. Subtitles always read `preset · …/<basename>` per the reference, falling back to the preset name when cwd is empty. No new translation key exists; the branch line reuses `terminal:worktree.branchLabel` and the badge reuses the workspace count title keys.
+The 2026-10-15 sidebar revision uses single-line interface-font labels: workspace names are 13px, terminals 12px, worktrees 11px. Paths, preset labels and the branch start point remain in tooltips; repeated path subtitles and branch explanation rows are removed. Worktree counts are plain numbers, with at most one compact shared status ring for approval/input, errors or degraded operation in that priority order. Running and idle states remain visible on individual terminals. Active workspace and terminal rows use neutral theme surfaces without a colored selection stripe; worktree scope uses text contrast. `Sidebar.module.css` owns these styles, fixed-slot hover actions and the dark-theme Codex icon correction.
+
+Terminal rows are draggable keyboard-accessible navigation targets. Click, Enter or Space activates the existing pane tab through `setActiveTerminal`; background entries first restore their owning workspace snapshot. The file-tree scope follows the same worktree grouping as the displayed terminal, including terminals launched from checkout subdirectories. Switching workspace invalidates the editor file cache and uses guarded file-tree loading. Navigation does not launch or kill PTYs. Full paths require hover or keyboard focus; terminal names can still truncate at the sidebar width.
 
 ## Alternatives considered
 
@@ -65,5 +67,9 @@ Each worktree row carries a neutral terminal-count badge (minimal terminal glyph
 
 ## Consequences
 
-- **Gains**: every terminal renders under its checkout with branch context and directory hint; attention sort, drag-to-reference, focus highlight, and session archiving paths are unchanged because rows only move, never change identity.
-- **Costs and limits**: grouping runs per render over small arrays with no memoization; cwd matching is heuristic and a terminal whose cwd escapes every worktree lands on main, which misattributes only in exotic layouts. Verification is machine evidence on touched paths: `tsc --noEmit` shows no new error (six pre-existing missing-module errors in `llm-core` and `renderer-loader` remain), `tsc --noEmit --noUnusedLocals --noUnusedParameters` is clean for the touched files, and `tests/unit/worktree-store.test.ts` passes 2/2; built-app Electron acceptance was not exercised here. Related ring semantics stay owned by [the status-ring note](./terminal-status-ring.md).
+- **Gains**: terminal ownership, attention sorting and drag identity remain intact while the list becomes more compact and directly navigable. Repeated technical details move out of the scan path.
+- **Costs and limits**: grouping runs per render over small arrays; cwd matching is heuristic and unmatched terminals fall back to main. Hover/focus is required to read paths. The revision uses browser fixtures with real Sidebar and stores; built-app Electron navigation was not exercised. Related ring semantics stay owned by [the status-ring note](./terminal-status-ring.md).
+
+## Verification
+
+2026-10-15 machine checks: `npx playwright test tests/e2e/sidebar-design.spec.ts --project=island --workers=2` passes 6 cases for pane focus, cross-workspace restoration, keyboard operation, stable hover layout, native drag identity and both themes. `tests/e2e/pane-tab-drag.spec.ts` passes all 21 cases in the combined run; the new sidebar drag case initially raced its expand animation, then passed after the fixture waited for finite transitions. `npx vitest run tests/unit/workspace-sidebar.test.ts tests/unit/worktree-store.test.ts tests/unit/terminal-sidebar-visual.test.ts tests/unit/side-panel-collapse-ui.test.ts tests/unit/planche-theme.test.ts` passes 28 cases. `npm run typecheck` and touched-file ESLint pass. The preview uses fixture data; screenshots are at `artifacts/sidebar-design/comparison.png`.

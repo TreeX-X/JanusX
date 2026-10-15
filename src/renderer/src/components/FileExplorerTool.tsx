@@ -560,15 +560,10 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
   return (
     <>
       <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="flex gap-1.5 p-2">
+        <div className="flex gap-1.5 px-3 py-2">
           <input
             type="text"
-            className="h-7 min-w-0 flex-1 rounded px-2.5 text-xs transition-colors focus:border-[rgba(255,120,48,0.4)] focus:bg-[rgba(255,255,255,0.05)] focus:outline-none"
-            style={{
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              color: 'var(--shell-text)',
-            }}
+            className={`h-7 min-w-0 flex-1 rounded px-2.5 text-xs text-[var(--shell-text)] transition-colors ${styles.searchInput}`}
             placeholder={t('editor:fileTree.searchPlaceholder')}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
@@ -581,7 +576,7 @@ export function FileExplorerTool({ active = true }: { active?: boolean }) {
           />
           <button
             type="button"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[rgba(255,255,255,0.08)] text-[var(--shell-muted)] transition-colors hover:border-[rgba(255,120,48,0.4)] hover:text-[var(--shell-accent)] disabled:cursor-not-allowed disabled:opacity-40"
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles.externalEditorButton}`}
             title={t('editor:fileTree.openInVSCode')}
             aria-label={t('editor:fileTree.openInVSCode')}
             disabled={!activeScopePath || openingVSCode}

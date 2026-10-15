@@ -27,10 +27,13 @@ export type RuntimeTelemetryConfidence = 'authoritative' | 'derived' | 'declared
 export interface RuntimeTelemetrySnapshot {
   detectedModel?: string; contextTokens?: number; contextWindowTokens?: number; inputTokens?: number; outputTokens?: number
   cacheReadTokens?: number; cacheWriteTokens?: number; totalTokens?: number
+  /** Cached input / all input for the latest native request; absent when unavailable. */
+  recentCacheHitRate?: number
   filePath?: string; sessionId?: string; observedAt?: number
   source?: RuntimeTelemetrySource; confidence?: RuntimeTelemetryConfidence
-  /** A hook or adapter explicitly associated this external session with one JanusX terminal. */
-  sessionBinding?: 'exact'
+  /** How this external session was tied to one JanusX terminal: an adapter or
+   *  hook event (exact), or main-process activity correlation (correlated). */
+  sessionBinding?: 'exact' | 'correlated'
   /** Only present when the adapter has counted compactions for an exactly bound session. */
   compactionCount?: number
   compactionCountConfidence?: 'exact'

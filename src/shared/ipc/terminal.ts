@@ -49,6 +49,13 @@ export interface TerminalCreateRequest {
   args?: string[]
   autoCommand?: string
   /**
+   * Shell profile id for an ordinary shell terminal: the configured default
+   * entry when omitted. Drives a direct PTY spawn of the user's free command.
+   */
+  shellProfileId?: string
+  /** Full launch line captured for cold restore, so a restored shell keeps its own shell. */
+  shellCommand?: string
+  /**
    * Extra argv appended after the preset launch program. Lets a caller resume
    * a provider session (for example `claude --resume <id>`) while the preset
    * keeps hook wiring on the owning engine.

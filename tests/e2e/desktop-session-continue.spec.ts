@@ -5,7 +5,7 @@
 // .agents/notes/sessions/requirements/workspace-session-checkpoint-continue.md
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -276,21 +276,19 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     await expect(workspaceRow).toBeVisible({ timeout: 10_000 })
     await workspaceRow.click()
     await page.getByRole('button', { name: /打开会话工具/ }).click()
-    await expect(page.getByText('会话管理', { exact: true })).toBeVisible()
+    await expect(page.getByRole('tabpanel', { name: /会话/ })).toBeVisible()
 
-    // Live rows in scope: source, the API-continued card, and the imported
-    // external row — each non-archived card offers 在新会话中继续 behind its
-    // fold (single-card expansion), so expand the first card right before its click.
+    // Count live cards, since actions are only rendered for the expanded card.
+    const sessionCards = page.getByRole('tabpanel', { name: /会话/ }).locator('[data-session-id]')
+    await expect(sessionCards).toHaveCount(3, { timeout: 10_000 })
     const internalCard = page.locator('div[class*="cardSurface"]')
       .filter({ hasText: HANDOFF_MARKER }).first()
     await internalCard.getByRole('button', { name: '展开', exact: true }).click()
-    const continueButtons = page.getByRole('button', { name: '在新会话中继续', exact: true })
-    await expect(continueButtons).toHaveCount(3, { timeout: 10_000 })
     const xtermsBeforeUiContinue = await page.locator('.xterm-rows').count()
     await internalCard.getByRole('button', { name: '在新会话中继续', exact: true }).click()
     await expect(page.getByRole('button', { name: '开始新会话', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '开始新会话', exact: true }).click()
-    await expect(continueButtons).toHaveCount(4, { timeout: 15_000 })
+    await expect(sessionCards).toHaveCount(4, { timeout: 15_000 })
     // The workbench must mount the new terminal view, not just the ledger row:
     // the terminal:created subscription is app-level, so a main-side launch
     // bootstraps even when the pane tree was empty before it.
@@ -303,10 +301,7 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     const external = (await listLive(page)).find((row) => row.external === true)
     expect(external, 'boot backfill imports the fake transcript').toBeTruthy()
     expect(external?.providerSessionId).toBe(PROVIDER_SESSION_ID)
-    const externalCard = page
-      .locator('div[class*="cardSurface"]')
-      .filter({ has: page.getByText('外部', { exact: true }) })
-      .first()
+    const externalCard = page.locator(`[data-session-id="${external!.id}"]`)
     const externalFold = externalCard.getByRole('button', { name: '展开', exact: true })
     if ((await externalFold.count()) > 0) await externalFold.click()
     const resumeButton = externalCard.getByRole('button', { name: '回到原会话', exact: true })
@@ -397,6 +392,60 @@ async function accessFixture(entry: string): Promise<void> {
     throw new Error(`Built desktop entry missing at ${entry}; run npm run build before the desktop project`)
   }
 }
+
+test('external Codex growth refreshes the open conversation without reopening or manual scans', async () => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-codex-live-'))
+  let application: ElectronApplication | undefined
+  try {
+    const cwd = join(fixtureRoot, 'workspace')
+    const binDir = join(fixtureRoot, 'bin')
+    const store = join(fixtureRoot, '.codex', 'sessions')
+    await Promise.all([mkdir(cwd), mkdir(binDir), mkdir(store, { recursive: true })])
+    const transcript = join(store, 'rollout-external-live.jsonl')
+    const user = (text: string) => ({ type: 'response_item', payload: { role: 'user', content: [{ type: 'input_text', text }] } })
+    const assistant = (text: string) => ({ type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text', text }] } })
+    await writeFile(transcript, [
+      { type: 'session_meta', payload: { id: 'external-live', cwd, instructions: 'x'.repeat(80000) } },
+      user('external initial question'), assistant('external initial answer'),
+      { type: 'response_item', payload: { type: 'function_call_output', output: 'x'.repeat(600000) } },
+    ].map((record) => JSON.stringify(record)).join('\n') + '\n')
+    application = await electron.launch({
+      args: [resolve('out/main/index.js'), `--user-data-dir=${join(fixtureRoot, 'user-data')}`],
+      env: fixtureEnv(fixtureRoot, binDir),
+    })
+    const page = await application.firstWindow()
+    await page.waitForLoadState('domcontentloaded')
+    await page.evaluate((path) => (window as DesktopWindow).electron.workspace.create({ name: 'Codex live drill', path }), cwd)
+    await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('zh-CN'))
+    await page.evaluate(() => (window as DesktopWindow).electron.experimental.update({ sessions: true }))
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await page.locator('.ws').filter({ hasText: 'Codex live drill' }).first().click()
+    await page.getByRole('button', { name: /打开会话工具|Open Sessions tool/ }).click()
+    await expect.poll(async () => (await listLive(page)).find((row) => row.providerSessionId === 'external-live')).toBeTruthy()
+    const source = (await listLive(page)).find((row) => row.providerSessionId === 'external-live')!
+    const card = page.locator(`[data-session-id="${source.id}"]`)
+    await card.getByRole('button', { name: '展开', exact: true }).click()
+    await expect(card).toContainText('external initial answer')
+    await card.getByRole('button', { name: '查看详情', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText('external initial answer')
+
+    await appendFile(transcript, JSON.stringify(user('external follow-up question')) + '\n')
+    const pendingQuestion = dialog.getByText('external follow-up question', { exact: true })
+    await expect(pendingQuestion).toBeVisible({ timeout: 20_000 })
+    await expect(pendingQuestion.locator('..').locator('..')).not.toContainText('external initial answer')
+    await appendFile(transcript, JSON.stringify(assistant('external updated answer')) + '\n')
+    await expect(dialog).toContainText('external updated answer', { timeout: 20_000 })
+    await expect(dialog).toContainText('external follow-up question')
+    await expect(card).toContainText('2 轮次')
+    await page.keyboard.press('Escape')
+    await expect(card).toContainText('external updated answer')
+  } finally {
+    await closeApplication(application)
+    await rm(fixtureRoot, { recursive: true, force: true }).catch(() => undefined)
+  }
+})
 
 async function seedRecoveryFixture(fixtureRoot: string, cwd: string) {
   const binDir = join(fixtureRoot, 'bin')
@@ -489,6 +538,7 @@ test('Claude, Codex and Opencode restore native history and track follow-up turn
         const beforeRows = await listLive(page)
         const sourceCard = page.locator(`[data-session-id="${source.id}"]`)
         await expect(sourceCard).toBeVisible()
+        await expect(sourceCard).not.toContainText('还原点')
         const fold = sourceCard.getByRole('button', { name: '展开', exact: true })
         if (await fold.count()) await fold.click()
         if (mode === 'continue') {
@@ -499,7 +549,11 @@ test('Claude, Codex and Opencode restore native history and track follow-up turn
         } else {
           await expect(sourceCard.getByRole('button', { name: '回到原会话', exact: true })).toBeEnabled()
           await sourceCard.getByRole('button', { name: '查看详情', exact: true }).click()
-          await page.locator('div.fixed.inset-0').last().getByRole('button', { name: '回到原会话', exact: true }).click()
+          const detailWindow = page.getByRole('dialog')
+          await expect(detailWindow).toContainText('initial ' + engine + ' prompt')
+          await expect(detailWindow).not.toContainText('还原点')
+          await expect(detailWindow.getByRole('button', { name: /查看 diff|确认恢复/ })).toHaveCount(0)
+          await detailWindow.getByRole('button', { name: '回到原会话', exact: true }).click()
         }
         await expect.poll(async () => (await listLive(page!)).length).toBe(beforeRows.length + 1)
         const newRow = (await listLive(page)).find((row) => !beforeRows.some((before) => before.id === row.id))!

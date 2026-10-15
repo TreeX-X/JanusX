@@ -1,5 +1,5 @@
 // Note: the note pane routes toolbar edits through execCommand so the browser keeps undo history — see .agents/notes/workbench/note-drawer-markdown-toolbar.md
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -18,6 +18,8 @@ import {
   ListChecks,
   ListOrdered,
   Minus,
+  PanelLeftClose,
+  PanelLeftOpen,
   PencilLine,
   Plus,
   Quote,
@@ -27,8 +29,9 @@ import {
   Trash2,
   type LucideIcon,
 } from 'lucide-react'
-import { getDraftsByTerminal, useDraftCardStore } from '@/stores/draft-card'
+import { getDraftsByScope, useDraftCardStore } from '@/stores/draft-card'
 import { useI18n } from '@/i18n/useI18n'
+import { ThemedTooltip } from '../ui/ThemedTooltip'
 import styles from './QuickNote.module.css'
 import tabs from '../ui/TabStrip.module.css'
 import { exportDraftCard, type QuickNoteExportFormat } from './quick-note-export'
@@ -70,22 +73,39 @@ const TOOL_GROUPS: { action: NoteFormatAction; icon: LucideIcon }[][] = [
   [{ action: 'link', icon: Link }, { action: 'codeBlock', icon: SquareCode }, { action: 'table', icon: Table }, { action: 'hr', icon: Minus }],
 ]
 
-// Below this width the card list would leave the editor narrower than the toolbar, so the list folds away.
+// Below this width the card list would leave the editor narrower than the toolbar, so the list folds
+// into a rail on its own. The fold is only the default — the rail carries an expand control, and a
+// manual fold/expand sticks until the pane crosses this threshold again.
 const COMPACT_WIDTH = 520
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 
-export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: string; onPasteToTerminal: (text: string) => void }) {
+/**
+ * Markdown 编辑器。草稿按 `scopeId`（工作区，或无项目时的全局作用域）归属，
+ * 因此面板可以放在任意 pane、分屏或合并后继续编辑同一正文；
+ * `onPasteToTerminal` 只为可选的"粘贴到终端"动作服务，没有终端时留空即可正常写作。
+ */
+export function QuickNote({
+  scopeId,
+  sourceTerminalId,
+  onPasteToTerminal,
+}: {
+  scopeId: string
+  sourceTerminalId?: string
+  onPasteToTerminal?: (text: string) => void
+}) {
   const { t } = useI18n('terminal')
-  const drafts = useDraftCardStore((state) => getDraftsByTerminal(state, terminalId))
-  const activeId = useDraftCardStore((state) => state.activeDraftIdByTerminal[terminalId] ?? null)
+  const drafts = useDraftCardStore((state) => getDraftsByScope(state, scopeId))
+  const activeId = useDraftCardStore((state) => state.activeDraftIdByScope[scopeId] ?? null)
   const addDraft = useDraftCardStore((state) => state.addDraft)
   const removeDraft = useDraftCardStore((state) => state.removeDraft)
   const updateDraft = useDraftCardStore((state) => state.updateDraft)
   const setActiveDraft = useDraftCardStore((state) => state.setActiveDraft)
   const [mode, setMode] = useState<NoteMode>('edit')
   const [compact, setCompact] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportError, setExportError] = useState('')
+  const listId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const exportButtonRef = useRef<HTMLButtonElement>(null)
@@ -106,6 +126,13 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
     observer.observe(root)
     return () => observer.disconnect()
   }, [])
+
+  // 宽度跨过阈值时重新听自动折叠：用户手动展开/折叠是显式选择，但只在本侧宽区间内有效，
+  // 拖宽或拖窄回到另一侧时仍按该侧的默认来。只依赖 compact（仅跨阈值时变化），因此不会
+  // 每次手动切换都把用户的选择冲掉。
+  useEffect(() => {
+    setCollapsed(compact)
+  }, [compact])
 
   // The selection is restored after React commits the new value; setting it before the commit would be overwritten.
   useLayoutEffect(() => {
@@ -134,8 +161,8 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
       return
     }
     pendingSelectionRef.current = { start: edit.selectionStart, end: edit.selectionEnd }
-    updateDraft(terminalId, active.id, { content: expected })
-  }, [active, terminalId, updateDraft])
+    updateDraft(scopeId, active.id, { content: expected })
+  }, [active, scopeId, updateDraft])
 
   const runAction = useCallback((action: NoteFormatAction) => {
     const editor = editorRef.current
@@ -167,13 +194,13 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
 
   const selectDraft = (draftId: string) => {
     setExportOpen(false)
-    setActiveDraft(terminalId, draftId)
+    setActiveDraft(scopeId, draftId)
   }
 
   const createDraft = () => {
     setMode('edit')
     setExportOpen(false)
-    addDraft(terminalId)
+    addDraft(scopeId, sourceTerminalId)
   }
 
   const exportDraft = (format: QuickNoteExportFormat) => {
@@ -197,18 +224,33 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
   )
 
   return (
-    <div ref={rootRef} className={styles.root} data-compact={compact}>
+    <div ref={rootRef} className={styles.root} data-compact={compact} data-collapsed={collapsed}>
       <aside className={styles.sidebar} aria-label={t('terminal:note.listAria')}>
         <div className={styles.sidebarHead}>
           <span className={styles.sidebarTitle}>
             {t('terminal:note.listTitle')}
             <span className={styles.sidebarCount}>{drafts.length}</span>
           </span>
-          <button type="button" className={styles.tool} onClick={createDraft} title={t('terminal:note.newNote')} aria-label={t('terminal:note.newNote')}>
-            <Plus strokeWidth={1.75} aria-hidden="true" />
-          </button>
+          <div className={styles.sidebarHeadActions}>
+            <button type="button" className={styles.tool} onClick={createDraft} title={t('terminal:note.newNote')} aria-label={t('terminal:note.newNote')}>
+              <Plus strokeWidth={1.75} aria-hidden="true" />
+            </button>
+            {/* 折叠与工作区侧栏同构：主体给 PanelLeftClose，aria 指向真正被折叠的列表 */}
+            <ThemedTooltip label={t('terminal:note.collapseList')}>
+              <button
+                type="button"
+                className={styles.tool}
+                onClick={() => setCollapsed(true)}
+                aria-expanded={false}
+                aria-controls={listId}
+                aria-label={t('terminal:note.collapseList')}
+              >
+                <PanelLeftClose size={14} strokeWidth={1.75} aria-hidden="true" />
+              </button>
+            </ThemedTooltip>
+          </div>
         </div>
-        <div className={styles.list}>
+        <div className={styles.list} id={listId}>
           {drafts.length === 0 && <div className={styles.listEmpty}>{t('terminal:note.listEmpty')}</div>}
           {drafts.map((draft) => {
             const title = draft.title || t('terminal:note.untitled')
@@ -221,12 +263,31 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
                     <time dateTime={new Date(draft.updatedAt).toISOString()}>{formatNoteAge(draft.updatedAt)}</time>
                   </span>
                 </button>
-                <button type="button" className={styles.deleteCard} aria-label={t('terminal:note.deleteNote', { title })} title={t('terminal:note.deleteNote', { title })} onClick={() => removeDraft(terminalId, draft.id)}>
+                <button type="button" className={styles.deleteCard} aria-label={t('terminal:note.deleteNote', { title })} title={t('terminal:note.deleteNote', { title })} onClick={() => removeDraft(scopeId, draft.id)}>
                   <Trash2 size={12} strokeWidth={1.75} aria-hidden="true" />
                 </button>
               </div>
             )
           })}
+        </div>
+        {/* 折叠态导轨：窄 pane 里列表让位给编辑器，但新建与展开仍在一击之内 */}
+        <div className={styles.rail}>
+          <ThemedTooltip label={t('terminal:note.expandList')}>
+            <button
+              type="button"
+              className={styles.railButton}
+              onClick={() => setCollapsed(false)}
+              aria-expanded
+              aria-controls={listId}
+              aria-label={t('terminal:note.expandList')}
+            >
+              <PanelLeftOpen size={15} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+          </ThemedTooltip>
+          <button type="button" className={styles.railButton} onClick={createDraft} title={t('terminal:note.newNote')} aria-label={t('terminal:note.newNote')}>
+            <Plus size={15} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+          <span className={styles.railCount}>{drafts.length}</span>
         </div>
       </aside>
       <section className={styles.editor} aria-label={t('terminal:note.editorAria')}>
@@ -250,7 +311,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
                 aria-label={t('terminal:note.titleAria')}
                 placeholder={t('terminal:note.untitled')}
                 spellCheck={false}
-                onChange={(event) => updateDraft(terminalId, active.id, { title: event.target.value })}
+                onChange={(event) => updateDraft(scopeId, active.id, { title: event.target.value })}
               />
               <div className={tabs.strip} role="group" aria-label={t('terminal:note.modeAria')}>
                 {MODES.map(({ mode: item, icon: Icon, labelKey }) => (
@@ -297,7 +358,7 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
                   placeholder={t('terminal:note.placeholder')}
                   spellCheck={false}
                   value={active.content}
-                  onChange={(event) => updateDraft(terminalId, active.id, { content: event.target.value })}
+                  onChange={(event) => updateDraft(scopeId, active.id, { content: event.target.value })}
                   onKeyDown={handleEditorKeyDown}
                 />
               )}
@@ -339,10 +400,12 @@ export function QuickNote({ terminalId, onPasteToTerminal }: { terminalId: strin
                     </div>
                   )}
                 </div>
-                <button type="button" className={styles.paste} onClick={() => onPasteToTerminal(active.content)}>
-                  <ClipboardPaste strokeWidth={1.75} aria-hidden="true" />
-                  {t('terminal:note.pasteToTerminal')}
-                </button>
+                {onPasteToTerminal && (
+                  <button type="button" className={styles.paste} onClick={() => onPasteToTerminal(active.content)}>
+                    <ClipboardPaste strokeWidth={1.75} aria-hidden="true" />
+                    {t('terminal:note.pasteToTerminal')}
+                  </button>
+                )}
               </div>
             </div>
             {exportError && <div role="alert" className={styles.error}>{exportError}</div>}

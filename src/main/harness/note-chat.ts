@@ -11,6 +11,7 @@ export { NoteChatEditor, hasNoteMutationIntent, listNoteChatChanges } from '@jan
 import { harnessNoteService } from './service'
 import { NOTE_FOCUS_SCHEMA, NOTE_SCOPE_SCHEMA, resolveNoteFocus } from './note-focus'
 import type { NoteChatChange, NoteFocusEvent } from '../../shared/note-chat'
+import { mentionsMemoWorkspace } from '../../shared/memo-chat-target'
 const rootKey = (root: string) => process.platform === 'win32' ? resolve(root).toLowerCase() : resolve(root)
 const fail = (error: unknown) => error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
 
@@ -30,7 +31,7 @@ export function attachNoteChatTools(ports: ChatTurnPorts, options: {
 }) {
   const original = ports.tools
   const editor = new NoteChatEditor(harnessNoteService)
-  const authorized = hasNoteMutationIntent(options.userText)
+  const authorized = !mentionsMemoWorkspace(options.userText) && hasNoteMutationIntent(options.userText)
   // Successful Note access remains visible even when the model omits a display tool.
   const accessed = new Map<string, { uri: string; title: string; role: 'target' | 'reference'; reason: string }>()
   const highlight = (root: string, notes: Array<{ uri: string; title: string }>, role: 'target' | 'reference') => {

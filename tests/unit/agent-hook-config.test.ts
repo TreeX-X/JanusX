@@ -439,4 +439,49 @@ describe('AgentHookConfigManager', () => {
     expect(script).toContain('@("session_id", "sessionId", "thread_id", "threadId")')
     expect(script).toContain('transcript_path')
   })
+
+  it('decodes hook stdin by BOM so codex utf-16 payloads keep their session id', () => {
+    const script = buildWindowsHookScript()
+
+    // Codex pipes UTF-16LE with a BOM on Windows while Claude pipes UTF-8.
+    // A UTF-8 read of UTF-16 bytes is NUL-separated mojibake: ConvertFrom-Json
+    // fails, the catch demotes the payload to a string, and session_id is
+    // silently dropped — the terminal then never binds its native session.
+    expect(script).toContain('[Console]::OpenStandardInput()')
+    expect(script).toContain('0xFF -and $stdinBytes[1] -eq 0xFE')
+    expect(script).toContain('[System.Text.Encoding]::Unicode.GetString($stdinBytes)')
+    expect(script).toContain('[System.Text.Encoding]::BigEndianUnicode.GetString($stdinBytes)')
+    expect(script).not.toContain('[Console]::In.ReadToEnd()')
+  })
+})
+
+describe('decodeHookStdin', () => {
+  // The Node sender runs on non-Windows platforms; the same BOM contract applies.
+  const payload = JSON.stringify({ session_id: 'codex-thread-1', cwd: 'C:\\work' })
+
+  const decode = async (buffer: Buffer) => (await import('../../src/main/notifications/agent-hook-client')).decodeHookStdin(buffer)
+
+  it('decodes utf-16le BOM payloads from codex', async () => {
+    expect(JSON.parse(await decode(Buffer.from(`\uFEFF${payload}`, 'utf16le')))).toEqual({
+      session_id: 'codex-thread-1',
+      cwd: 'C:\\work',
+    })
+  })
+
+  it('decodes utf-16be BOM payloads', async () => {
+    const buffer = Buffer.from(`\uFEFF${payload}`, 'utf16le')
+    buffer.swap16()
+    buffer[0] = 0xfe
+    buffer[1] = 0xff
+    expect(JSON.parse(await decode(buffer)).session_id).toBe('codex-thread-1')
+  })
+
+  it('decodes plain and BOM-prefixed utf-8 payloads from claude', async () => {
+    expect(JSON.parse(await decode(Buffer.from(payload, 'utf8'))).session_id).toBe('codex-thread-1')
+    expect(JSON.parse(await decode(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(payload, 'utf8')]))).session_id).toBe('codex-thread-1')
+  })
+
+  it('returns an empty string for empty stdin', async () => {
+    expect(await decode(Buffer.alloc(0))).toBe('')
+  })
 })

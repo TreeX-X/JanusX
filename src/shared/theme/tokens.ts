@@ -6,6 +6,10 @@
 import { getThemeDefinition, listThemeDefinitions } from './registry'
 
 export const SEMANTIC_TOKENS = [
+  'sidebar-codex-filter',
+  'session-sheet-base-weight',
+  'cli-logo-light',
+  'cli-logo-dark',
   'shell-void',
   'shell-canvas',
   'shell-pane',
@@ -14,6 +18,17 @@ export const SEMANTIC_TOKENS = [
   'shell-chrome-raised',
   'shell-card',
   'shell-drawer',
+  'island-panel-background',
+  'island-panel-border',
+  'island-panel-radius',
+  'island-panel-shadow',
+  'tool-canvas',
+  'tool-card',
+  'tool-chrome',
+  'tool-hover',
+  'popover-background',
+  'popover-hover',
+  'popover-shadow',
   'control-h',
   'control-border',
   'shell-hover',

@@ -6,6 +6,7 @@ import { createBrowserPaneContent, createTerminalPaneContent, getLeafPanes, type
 import { setTerminalDragData, clearTerminalDragData } from '../../../src/renderer/src/lib/terminal-file-reference'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { useBrowserStore } from '../../../src/renderer/src/stores/browser'
+import { useThemeStore } from '../../../src/renderer/src/stores/theme'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import { DEFAULT_APP_THEME } from '../../../src/shared/ipc/theme'
 import type { BrowserBounds, BrowserSurfaceState } from '../../../src/shared/ipc/browser'
@@ -15,12 +16,20 @@ import '../../../src/renderer/src/styles/themes.generated.css'
 installElectronApiFallback()
 Object.assign(window.electron.system, { getLanguage: async () => 'en', setLanguage: async () => undefined })
 document.documentElement.dataset.theme = DEFAULT_APP_THEME
+const params = new URLSearchParams(location.search)
+useThemeStore.getState().applyExternal(params.get('theme') === 'dark' ? 'dark' : DEFAULT_APP_THEME)
 const bounds: Record<string, BrowserBounds> = {}
 let kills = 0
 let creates = 0
 const workspace = { id: 'ws', name: 'Tabs', path: 'C:/tabs', clis: [], layout: { mode: 'tabs' as const, positions: [] }, createdAt: new Date().toISOString() }
 const terminals = ['a', 'b', 'c', 'sidebar'].map((id) => ({
   id, workspaceId: 'ws', cwd: 'C:/tabs', preset: 'shell' as const, name: `Terminal ${id}`, status: 'wait' as const,
+  ...(new URLSearchParams(location.search).has('usage') && id === 'a' ? {
+    preset: 'codex' as const, detectedModel: 'gpt-5.5', telemetryStartedAt: Date.now() - 65_000,
+    contextTokens: 4_000, contextWindowTokens: 200_000, inputTokens: 10_000, outputTokens: 2_000,
+    cacheReadTokens: 8_000, cacheWriteTokens: 500, totalTokens: 20_500, recentCacheHitRate: 0.25,
+    telemetryUpdatedAt: Date.now(),
+  } : {}),
 }))
 const surfaces: Record<string, BrowserSurfaceState> = Object.fromEntries(['d', 'e', 'f', 'g', 'h', 'i', 'j'].map((surfaceId) => [surfaceId, {
   surfaceId, carrier: 'pane', tabs: [], activeTabId: null, agentControlled: false,
@@ -37,18 +46,21 @@ Object.assign(window.electron.terminal, {
 Object.values(surfaces).forEach((surface) => useBrowserStore.getState().applySurfaceState(surface))
 const overflow = new URLSearchParams(location.search).has('overflow')
 const transformed = new URLSearchParams(location.search).has('transformed')
+const browserOnly = new URLSearchParams(location.search).has('browser-only')
 const left = {
-  type: 'leaf' as const, id: 'left', activeTabId: 'terminal:a',
-  tabs: ['a', 'b', 'c'].map((id) => createTerminalPaneContent(id, 'ws')),
+  type: 'leaf' as const, id: 'left', activeTabId: browserOnly ? 'browser:d' : 'terminal:a',
+  tabs: browserOnly ? [createBrowserPaneContent('d')] : ['a', 'b', 'c'].map((id) => createTerminalPaneContent(id, 'ws')),
 }
 const right = {
-  type: 'leaf' as const, id: 'right', activeTabId: 'browser:d',
-  tabs: (overflow ? ['d', 'e', 'f', 'g', 'h', 'i', 'j'] : ['d', 'e']).map(createBrowserPaneContent),
+  type: 'leaf' as const, id: 'right', activeTabId: browserOnly ? 'browser:e' : 'browser:d',
+  tabs: (browserOnly ? ['e'] : overflow ? ['d', 'e', 'f', 'g', 'h', 'i', 'j'] : ['d', 'e']).map(createBrowserPaneContent),
 }
-const paneTree: WorkspacePaneNode = { type: 'split', id: 'split', direction: 'horizontal', ratio: .5, first: left, second: right }
+const paneTree: WorkspacePaneNode = params.has('single') ? left : {
+  type: 'split', id: 'split', direction: params.has('vertical') ? 'vertical' : 'horizontal', ratio: .5, first: left, second: right,
+}
 useWorkspaceStore.setState({
-  workspaces: [workspace], activeWorkspaceId: 'ws', terminals, paneTree,
-  focusedPaneId: 'left', focusedTabId: 'terminal:a', activeTerminalId: 'a', terminalSnapshots: {},
+  workspaces: [workspace], activeWorkspaceId: 'ws', terminals: browserOnly ? [] : terminals, paneTree,
+  focusedPaneId: 'left', focusedTabId: left.activeTabId, activeTerminalId: browserOnly ? null : 'a', terminalSnapshots: {},
 })
 Object.assign(window, {
   paneFixture: {
@@ -57,11 +69,13 @@ Object.assign(window, {
       return {
         panes: getLeafPanes(state.paneTree).map((pane) => ({ id: pane.id, tabs: pane.tabs.map((tab) => tab.id), active: pane.activeTabId })),
         tree: state.paneTree, focusedPane: state.focusedPaneId, focusedTab: state.focusedTabId,
-        active: state.tabDragInFlight, bounds, kills, creates,
+        active: state.tabDragInFlight, terminals: state.terminals.length, bounds, kills, creates,
       }
     },
     switchWorkspace: () => useWorkspaceStore.getState().setActiveWorkspace(null),
     removeSource: () => useWorkspaceStore.getState().closePaneTab('left', 'terminal:a'),
+    updateUsage: (patch: object) => useWorkspaceStore.getState().updateTerminal('a', patch),
+    changeLanguage,
   },
 })
 await initI18n()

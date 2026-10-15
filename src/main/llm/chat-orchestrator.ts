@@ -21,7 +21,9 @@ import { captureEngineeringUserMemory } from '../knowledge/engineering-user-memo
 import { knowledgeProcessingQueue } from '../knowledge/processing-queue'
 import { knowledgeContextService } from '../knowledge/context-service'
 import { LLM_CHANNELS } from '../../shared/ipc/llm'
-import type { ChatAgentEvent, ChatAnswerQuestionPayload, ChatQuestionAnswer, ChatWorkspaceResource } from '../../shared/ipc/llm'
+import type { ChatAgentEvent, ChatAnswerQuestionPayload, ChatQuestionAnswer, ChatSteerInput, ChatWorkspaceResource } from '../../shared/ipc/llm'
+import { attachMemoChatTools, memoSteeringContext } from '../memo/chat-tools'
+import { MEMO_TARGET_PROMPT, mentionsMemoWorkspace } from '../../shared/memo-chat-target'
 import { workspaceAgentRuntime, workflowSessionParents } from '../agent/runtime/shell-runtime'
 import { streamText } from './ai-runtime'
 import {
@@ -56,6 +58,8 @@ export interface ChatMessage {
 
 /** 流式对话请求参数 */
 export interface ChatStreamRequest {
+  memoBinding?: import('../../shared/memo').MemoBinding
+  memoMessageId?: string
   contextCheckpoint?: ChatContextCheckpoint
   contextEpoch?: number
   compact?: { keepRecentUnits: number }
@@ -220,11 +224,11 @@ export function abortChatStream(requestId: string): void {
  * 主侧无需另行落盘；请求结束（成功/失败/取消）即丢弃未消费条目——下次发送
  * 会从渲染端历史自然带上这些文本，不丢不重。
  */
-const activeSteerTargets = new Map<string, { requestId: string; port: AgentSteeringPort; entries: Map<string, string> }>()
+const activeSteerTargets = new Map<string, { requestId: string; port: AgentSteeringPort; entries: Map<string, string>; memoId?: string }>()
 const MAX_STEER_ENTRIES_PER_REQUEST = 10
 
-export function steerChatStream(input: { conversationId?: string; entryId: string; text: string }): { accepted: boolean; error?: string } {
-  const content = typeof input.text === 'string' ? input.text.trim() : ''
+export function steerChatStream(input: ChatSteerInput): { accepted: boolean; error?: string } {
+  let content = typeof input.text === 'string' ? input.text.trim() : ''
   if (!content) return { accepted: false, error: 'Empty steering text' }
   if (typeof input.entryId !== 'string' || !input.entryId) return { accepted: false, error: 'Invalid steering entry id' }
   const key = input.conversationId || ''
@@ -233,6 +237,7 @@ export function steerChatStream(input: { conversationId?: string; entryId: strin
     if (key) activeSteerTargets.delete(key)
     return { accepted: false, error: 'No active stream for this conversation' }
   }
+  if (target.memoId) content += '\n\n' + memoSteeringContext(target.memoId, input.entryId, input.memoBinding)
   const previous = target.entries.get(input.entryId)
   if (previous !== undefined) return previous === content ? { accepted: true } : { accepted: false, error: 'Steering identity conflicts with an earlier message' }
   if (target.port.size >= MAX_STEER_ENTRIES_PER_REQUEST) {
@@ -437,7 +442,8 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
   // second entry with the same conversationId steers instead of spawning.
   const steerKey = conversationId || requestId
   const steeringPort = new AgentSteeringPort()
-  activeSteerTargets.set(steerKey, { requestId, port: steeringPort, entries: new Map() })
+  activeSteerTargets.set(steerKey, { requestId, port: steeringPort, entries: new Map(),
+    memoId: sourceTag === 'janus-chat' && !request.compact && !request.maintenanceTaskId && !request.noteRepairId ? request.memoBinding?.memoId : undefined })
 
   // 窗口销毁后 event.reply 会抛异常并造成 unhandled rejection，统一守卫
   const sendEvent = (
@@ -484,6 +490,14 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     const ports = defaultChatTurnPorts(callerId, requestId, domain, conversationId)
     let turnAllowlist = toolAllowlist
     let turnToolGate = gateFromToolAllowlist(toolAllowlist, toolGate)
+    const userText = [...messages].reverse().find(message => message.role === 'user')?.content ?? ''
+    const ordinaryMemoTurn = sourceTag === 'janus-chat' && conversationId && !request.compact && !request.maintenanceTaskId && !request.noteRepairId
+    if (ordinaryMemoTurn && mentionsMemoWorkspace(userText)) {
+      const previousGate = turnToolGate
+      turnToolGate = async call => normalizeToolName(call.name) === 'notewrite'
+        ? { block: true, reason: 'Memo workspace requests do not authorize repository Note writes. Use memo tools; never substitute a Note.' }
+        : previousGate?.(call)
+    }
     const modeCommand = parseWorkflowXCommand([...messages].reverse().find(message => message.role === 'user')?.content ?? '')
     if (modeCommand && !modeCommand.prompt && !request.maintenanceTaskId) {
       await runChatTurn({ requestId, messages, providerId, modelId, sourceTag: turnSourceTag, toolAllowlist, toolGate: turnToolGate }, ports, { onEvent: agentEvent => {
@@ -500,7 +514,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
     ports.model.resolve = async () => endpoint
     const source = (endpoint as typeof endpoint & { source?: ChatContextStatus['source'] }).source ?? 'estimated'
     const scopeKey = JSON.stringify([domain ?? 'personal', request.contextEpoch ?? 0,
-      (workspaceResources ?? []).map(item => [item.workspaceId, item.workspacePath]).sort()])
+      (workspaceResources ?? []).map(item => [item.workspaceId, item.workspacePath]).sort(), request.memoBinding?.memoId ?? null])
     const turnMessages = chatSession.beginTurn(messages, scopeKey, request.contextCheckpoint,
       state => sendAgentEvent({ type: 'context_state', requestId, state }), source)
     const modelStream = ports.streamTextFn
@@ -580,6 +594,36 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         signal: controller.signal,
         onChange: change => sendAgentEvent({ type: 'config_change', requestId, change }),
       })
+    }
+
+    if (ordinaryMemoTurn) projectContext = (projectContext ?? '') + '\n' + MEMO_TARGET_PROMPT
+    if ((request.memoBinding || request.memoMessageId) && ordinaryMemoTurn) {
+      // Note: persisted preview gate controls new turns, retaining in-flight work — see .agents/notes/workbench/experimental-preview-features.md
+      const memoEnabled = (await configService.getExperimentalFeatures()).memo
+      if (!memoEnabled) {
+        const target = activeSteerTargets.get(steerKey)
+        if (target?.requestId === requestId) target.memoId = undefined
+      }
+      const { memoStore } = await import('../memo/service')
+      let memoContext = memoEnabled
+        ? 'Memo editing unavailable: this model does not support tool calling. Do not claim memo updates.'
+        : 'Memo preview is disabled. Ask the user to enable Memo in Settings > Experimental > Preview before editing. Do not claim memo updates.'
+      if (memoEnabled && endpoint.supportsFunctionCalling !== false) {
+        try {
+          memoContext = await attachMemoChatTools(ports, {
+            store: memoStore(), binding: request.memoBinding, messageId: request.memoMessageId, conversationId: conversationId!, signal: controller.signal,
+            onCreated: binding => {
+              const target = activeSteerTargets.get(steerKey)
+              if (target?.requestId === requestId) target.memoId = binding.memoId
+              sendAgentEvent({ type: 'memo_created', requestId, conversationId: conversationId!, binding })
+            },
+          })
+        } catch (error) {
+          controller.signal.throwIfAborted()
+          memoContext = `Memo unavailable: ${error instanceof Error ? error.message : String(error)}. Continue the reply without claiming memo updates.`
+        }
+      }
+      projectContext = (projectContext ?? '') + '\n' + memoContext
     }
 
     if (request.maintenanceTaskId) {

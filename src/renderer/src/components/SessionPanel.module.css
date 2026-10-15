@@ -33,27 +33,43 @@
   }
 }
 
-/* 会话面板表面三阶：地 → 卡 → 内卡。
-   地吃 --shell-canvas：planche 解析为纸面 #EFE4C5（= 软件底色），dark 为 v6 HiFi 画布 #151517。
-   卡/内卡仍走 A 方案高保真逐值：牛皮卡 #E2D9BD → 暖白纸内卡 #F8F2E0；
-   dark：卡 #1c1c1f → 内卡提亮块。
-   见 .agents/notes/workbench/session-card-surface.md */
+/* Session list rests on canvas; expanded rows use the shared tool card.
+   Inner sheets use a subtle lift; hairlines preserve separation.
+   See .agents/notes/workbench/session-card-surface.md */
 .panelGround {
   background: var(--shell-canvas);
 }
 
+:global([data-theme='dark']) .codexIcon { filter: invert(1); }
+
+.toolbar { flex-shrink: 0; padding: 8px 12px 10px; }
+.searchInput {
+  width: 100%; height: 28px; padding: 0 9px;
+  font: inherit; font-size: 12px; color: var(--shell-text);
+  background: var(--shell-card); border: 1px solid var(--shell-border);
+  border-radius: 6px; outline: none;
+}
+.scopeFilters { display: flex; align-items: center; gap: 4px; margin-top: 8px; min-width: 0; }
+.scopeContext { min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--shell-dim); }
+.sessionList { min-height: 0; padding: 0 12px 12px; overflow-y: auto; }
+.promptPreview { margin: 5px 0 0 21px; font-size: 12px; line-height: 1.5; color: var(--shell-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sessionMeta { display: flex; gap: 8px; margin: 5px 0 0 21px; font-size: 11px; color: var(--shell-dim); line-height: 1.6; }
+
 .cardSurface {
-  background: #E2D9BD;
-  border: 1px solid var(--shell-border);
-  border-radius: 6px;
-  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  --session-card-surface: var(--shell-canvas);
+  background: var(--session-card-surface);
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--shell-border-soft);
+  border-radius: 0;
+  transition: background-color 160ms ease;
 }
 
 .cardSurface:hover,
 .cardSurface:focus-within {
-  border-color: var(--shell-accent-border);
-  box-shadow: 0 2px 12px color-mix(in srgb, var(--shell-text) 9%, transparent);
+  background: var(--shell-hover);
 }
+
+.cardSurface[data-expanded='true'] { background: var(--tool-card); border-radius: 6px; }
 
 .cardHeader {
   border-radius: 4px;
@@ -66,12 +82,17 @@
 }
 
 .scopeTab {
-  transition: color 140ms ease, border-color 140ms ease;
+  padding: 4px 7px; border: 0; border-radius: 5px; background: transparent;
+  color: var(--shell-dim); font: inherit; font-size: 11.5px; white-space: nowrap; cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease;
 }
+
+.scopeTab[aria-current='page'] { color: var(--shell-text); background: var(--shell-hover); font-weight: 500; }
 
 .scopeTab:hover,
 .scopeTab:focus-visible {
-  color: var(--shell-accent) !important;
+  color: var(--shell-text);
+  background: var(--shell-hover);
 }
 
 .scopeTab:focus-visible {
@@ -84,10 +105,8 @@
 }
 
 .cardAction:hover:not(:disabled) {
-  background: var(--shell-accent-soft) !important;
-  border-color: var(--shell-accent-border) !important;
-  color: var(--shell-accent) !important;
-  transform: translateY(-1px);
+  background: var(--shell-hover) !important;
+  color: var(--shell-text) !important;
 }
 
 .cardAction:focus-visible {
@@ -100,19 +119,45 @@
   opacity: 0.48;
 }
 
-:global([data-theme='dark']) .cardSurface {
-  background: #1c1c1f;
+/* Reading is a quiet text action; continuation choices share a stable row. */
+.sessionActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--shell-border-soft);
 }
 
-/* 内容卡浅纸面（首轮提示 / 最近轮次） */
-.sheet {
-  background: #F8F2E0;
+.sessionAction {
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 8px;
   border: 1px solid var(--shell-border);
   border-radius: 6px;
+  background: transparent;
+  color: var(--shell-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
 
-:global([data-theme='dark']) .sheet {
-  background: color-mix(in srgb, var(--shell-chrome) 88%, white);
+.sessionAction:hover:not(:disabled) { background: var(--shell-hover); border-color: var(--shell-muted); }
+.sessionAction:focus-visible { outline: 2px solid var(--shell-accent-border); outline-offset: 2px; }
+.sessionAction:disabled { opacity: 0.45; cursor: not-allowed; }
+.resumeAction { background: var(--shell-hover); font-weight: 500; }
+.resumeAction:disabled { background: transparent; font-weight: 400; }
+.detailAction { grid-column: 1 / -1; justify-self: start; min-height: 28px; padding: 4px 6px; border-color: transparent; color: var(--shell-muted); }
+.detailAction:hover:not(:disabled) { border-color: transparent; color: var(--shell-text); }
+.sessionAction:last-child:nth-child(2) { grid-column: 1 / -1; }
+
+/* First prompt and recent turns: a small lift from the parent card. */
+.sheet {
+  background: color-mix(in srgb, var(--session-card-surface) var(--session-sheet-base-weight), white);
+  border: 0;
+  border-radius: 6px;
 }
 
 /* 卡片折叠控件：无边框 chevron 按钮。常驻可见（不做 hover-only），

@@ -1,0 +1,191 @@
+/* ==========================================================================
+   TitlebarToolGroup — 标题栏全局工具入口（可展开的工具菜单）
+   与 WorkbenchSwitcher 同一视觉语言：描边图标按钮，idle 灰 / hover 提亮。
+   触发器只有一枚通用工具图标 + 小箭头，不随工具数量变形；展开后菜单条目
+   各自置灰（.menuItem:disabled）并带"已打开"标记——关闭对应标签后恢复可点，
+   不做 active 指示条，避免和置灰语义重复。
+   菜单浮层沿用 TerminalSelector.shellMenu 的纸片语言（raised 底 + 橙发丝边）。
+   ========================================================================== */
+
+.group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 展开的菜单要盖到内容区和灵动岛簇之上（岛簇 z-index 2000） */
+.combo {
+  position: relative;
+  z-index: 2100;
+}
+
+.trigger {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 7px;
+  gap: 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.34);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease;
+}
+
+.trigger:hover,
+.triggerOpen {
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.trigger:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.65);
+  outline-offset: 1px;
+}
+
+.trigger:active {
+  transform: scale(0.95);
+}
+
+.icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+/* MarkdownIcon 的 svg 硬编码 width/height="24"，菜单条目里必须由外层压到 14px 才能与其他图标同号 */
+.markdownIcon {
+  width: 14px;
+  height: 14px;
+}
+
+/* 小箭头只作"可展开"的示意，比图标再退半档 */
+.chevron {
+  display: block;
+  flex: 0 0 auto;
+  opacity: 0.72;
+}
+
+/* ── 展开菜单：右侧对齐触发器，向左铺开，不越出窗口右缘 ── */
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 152px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid rgba(255, 120, 48, 0.28);
+  border-radius: 10px;
+  background: var(--shell-chrome-raised);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #d4d4d4;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menuItem:hover:not(:disabled) {
+  border-color: rgba(255, 120, 48, 0.3);
+  background: rgba(255, 120, 48, 0.08);
+}
+
+.menuItem:focus-visible {
+  outline: 1px solid rgba(255, 120, 48, 0.65);
+  outline-offset: -1px;
+}
+
+/* 已开着：置灰且不吃指针事件，但不隐去图标与名称——位置稳定，关闭后才恢复 */
+.menuItem:disabled {
+  cursor: default;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.menuIcon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.menuLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+/* "已打开"标记：条目行尾的安静字样，不做成徽章底色 */
+.menuBadge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+/* ── 组间竖分隔线：工具组与工作台分组之间的短竖线，无可见工作台时收起 ── */
+.separator {
+  width: 1px;
+  height: 14px;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ── planche：纸面标题栏上的墨线图标，单朱红点睛 ── */
+:global([data-theme='planche']) .trigger {
+  color: rgba(28, 52, 59, 0.45);
+}
+
+:global([data-theme='planche']) .trigger:hover,
+:global([data-theme='planche']) .triggerOpen {
+  color: #1C343B;
+  background: #DCCFA8;
+}
+
+:global([data-theme='planche']) .trigger:focus-visible {
+  outline: 2px solid #D43D2A;
+}
+
+:global([data-theme='planche']) .trigger:active {
+  transform: none;
+}
+
+:global([data-theme='planche']) .menu {
+  border-color: #1C343B;
+  background: #EFE4C5;
+  box-shadow: 3px 3px 0 #E8A08A;
+}
+
+:global([data-theme='planche']) .menuItem {
+  color: #1C343B;
+}
+
+:global([data-theme='planche']) .menuItem:hover:not(:disabled) {
+  border-color: #D43D2A;
+  background: #DCCFA8;
+}
+
+:global([data-theme='planche']) .menuItem:disabled {
+  color: rgba(28, 52, 59, 0.28);
+}
+
+:global([data-theme='planche']) .menuBadge {
+  color: rgba(28, 52, 59, 0.4);
+}
+
+:global([data-theme='planche']) .separator {
+  background: rgba(28, 52, 59, 0.18);
+}

@@ -54,6 +54,13 @@ for (const surface of ['', '&workbench']) test(`real Note tools navigate modules
   page.on('pageerror', error => errors.push(error.message))
   try {
     await page.goto('/blueprint-architecture.html?v2&focus&cwd=' + encodeURIComponent(root) + surface)
+    if (surface) {
+      await page.locator('.blueprint-janus-capsule').click()
+      await expect(page.locator('.blueprint-canvas-main')).toHaveAttribute('data-graph-ready', 'true')
+      await expect.poll(() => page.locator('.blueprint-workbench-shell').evaluate(element =>
+        element.getAnimations({ subtree: true }).filter(animation => animation.effect?.getTiming().iterations !== Infinity && animation.playState === 'running').length,
+      )).toBe(0)
+    }
     expect(errors).toEqual([])
     await expect(current(page)).toHaveText('Workbench architecture')
     await panel(page).locator('textarea').fill('请查看、预览、进入和定位相关模块与文档')

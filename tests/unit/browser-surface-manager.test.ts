@@ -123,12 +123,12 @@ describe('BrowserSurfaceManager', () => {
     manager.onStateChanged((_id, state) => states.push(state))
   })
 
-  it('creates a pane surface with one active tab attached to the main window', () => {
+  it('waits for layout bounds before attaching a new pane surface', () => {
     const result = manager.createSurface({ surfaceId: 's1', carrier: 'pane' })
     expect(result).toEqual({ success: true, data: { surfaceId: 's1' } })
 
     const view = h.MockWebContentsView.instances[0]
-    expect(mainWindow.contentView.children).toContain(view)
+    expect(mainWindow.contentView.children).not.toContain(view)
     expect(view.setBounds).not.toHaveBeenCalled()
 
     const state = lastState()
@@ -145,6 +145,7 @@ describe('BrowserSurfaceManager', () => {
 
   it('attaches only the active tab and keeps others detached', () => {
     manager.createSurface({ surfaceId: 's1', carrier: 'pane' })
+    manager.setBounds('s1', { x: 10, y: 20, width: 300, height: 200 })
     const first = h.MockWebContentsView.instances[0]
     const second = manager.openTab('s1', 'example.com/two')
     expect(second.success).toBe(true)
@@ -178,6 +179,7 @@ describe('BrowserSurfaceManager', () => {
 
   it('activates the remaining tab when the active tab is closed', () => {
     manager.createSurface({ surfaceId: 's1', carrier: 'pane' })
+    manager.setBounds('s1', { x: 10, y: 20, width: 300, height: 200 })
     const firstTabId = lastState().tabs[0].tabId
     manager.openTab('s1')
     const secondTabId = lastState().activeTabId as string
@@ -219,6 +221,42 @@ describe('BrowserSurfaceManager', () => {
     contents.emit('page-title-updated')
     contents.emit('did-navigate')
     expect(states.length).toBe(before + 2)
+  })
+
+  it('records a main-frame load failure and clears it on the next navigation', () => {
+    manager.createSurface({ surfaceId: 's1', carrier: 'pane', url: 'https://localhost:9443' })
+    const contents = h.MockWebContentsView.instances[0].webContents
+    const tabId = lastState().tabs[0].tabId
+
+    // 自签证书被中止这类失败必须显式记录，否则视图只停在深色底上，用户看到一块黑。
+    contents.emit('did-fail-load', {}, -202, 'net::ERR_CERT_AUTHORITY_INVALID', 'https://localhost:9443/', true)
+    expect(lastState().tabs[0]).toMatchObject({ tabId, loadError: 'net::ERR_CERT_AUTHORITY_INVALID' })
+
+    contents.emit('did-start-loading')
+    expect(lastState().tabs[0].loadError).toBeUndefined()
+
+    contents.emit('did-fail-load', {}, -202, 'net::ERR_CERT_AUTHORITY_INVALID', 'https://localhost:9443/', true)
+    expect(lastState().tabs[0].loadError).toBe('net::ERR_CERT_AUTHORITY_INVALID')
+    contents.emit('did-navigate')
+    expect(lastState().tabs[0].loadError).toBeUndefined()
+  })
+
+  it('ignores a sub-frame load failure instead of failing the whole page', () => {
+    manager.createSurface({ surfaceId: 's1', carrier: 'pane', url: 'https://example.com/' })
+    const contents = h.MockWebContentsView.instances[0].webContents
+
+    contents.emit('did-fail-load', {}, -20, 'net::ERR_BLOCKED_BY_CLIENT', 'https://ads.example.com/', false)
+
+    expect(lastState().tabs[0].loadError).toBeUndefined()
+  })
+
+  it('falls back to a generic message when the failure carries no description', () => {
+    manager.createSurface({ surfaceId: 's1', carrier: 'pane', url: 'https://example.com/' })
+    const contents = h.MockWebContentsView.instances[0].webContents
+
+    contents.emit('did-fail-load', {}, -999, '', 'https://example.com/', true)
+
+    expect(lastState().tabs[0].loadError).toBe('Load failed')
   })
 
   it('pops out to a standalone window without destroying webContents', () => {
@@ -292,6 +330,8 @@ describe('BrowserSurfaceManager', () => {
     const standalone = h.MockBrowserWindow.instances[h.MockBrowserWindow.instances.length - 1]
     const view = h.MockWebContentsView.instances[0]
     expect(lastState().carrier).toBe('window')
+    expect(standalone.contentView.children).not.toContain(view)
+    manager.setBounds('s2', { x: 0, y: 34, width: 300, height: 200 })
     expect(standalone.contentView.children).toContain(view)
     expect(mainWindow.contentView.children).not.toContain(view)
     expect(view.webContents.loadURL).toHaveBeenCalledWith('https://example.com')
@@ -303,5 +343,48 @@ describe('BrowserSurfaceManager', () => {
     off()
     manager.createSurface({ surfaceId: 's1', carrier: 'pane' })
     expect(extra).toHaveLength(0)
+  })
+
+  it('detaches hidden views and does not reattach them on tab changes or load events', () => {
+    manager.createSurface({ surfaceId: 's1', carrier: 'pane' })
+    manager.setBounds('s1', { x: 10, y: 60, width: 400, height: 300 })
+    expect(mainWindow.contentView.children).toHaveLength(1)
+
+    manager.setBounds('s1', { x: 0, y: 0, width: 0, height: 0 })
+    manager.openTab('s1', 'https://example.com/two')
+    h.MockWebContentsView.instances[1].webContents.emit('did-start-loading')
+    expect(mainWindow.contentView.children).toHaveLength(0)
+
+    manager.setBounds('s1', { x: 10, y: 60, width: 400, height: 300 })
+    expect(mainWindow.contentView.children).toEqual([h.MockWebContentsView.instances[1]])
+  })
+
+  it('exposes a failed address, detaches the black view, and retries that address', () => {
+    manager.createSurface({ surfaceId: 's1', carrier: 'pane', url: 'http://localhost:9443' })
+    const view = h.MockWebContentsView.instances[0]
+    const contents = view.webContents
+    contents.getURL.mockReturnValue('')
+    const tabId = lastState().activeTabId as string
+    manager.setBounds('s1', { x: 10, y: 60, width: 400, height: 300 })
+    contents.emit('did-fail-load', {}, -102, 'net::ERR_CONNECTION_REFUSED', 'http://localhost:9443/', true)
+
+    expect(mainWindow.contentView.children).toHaveLength(0)
+    expect(lastState().tabs[0]).toMatchObject({ url: 'http://localhost:9443/', loadError: 'net::ERR_CONNECTION_REFUSED' })
+    manager.setBounds('s1', { x: 10, y: 60, width: 400, height: 300 })
+    expect(mainWindow.contentView.children).toHaveLength(0)
+    manager.reload('s1', tabId)
+    expect(contents.loadURL).toHaveBeenLastCalledWith('http://localhost:9443/')
+    contents.emit('did-start-loading')
+    expect(mainWindow.contentView.children).toEqual([view])
+    expect(lastState().tabs[0].loadError).toBeUndefined()
+  })
+
+  it('does not show a failure when navigation is superseded', () => {
+    manager.createSurface({ surfaceId: 's1', carrier: 'pane', url: 'https://example.com' })
+    manager.setBounds('s1', { x: 10, y: 60, width: 400, height: 300 })
+    const view = h.MockWebContentsView.instances[0]
+    view.webContents.emit('did-fail-load', {}, -3, 'net::ERR_ABORTED', 'https://example.com', true)
+    expect(lastState().tabs[0].loadError).toBeUndefined()
+    expect(mainWindow.contentView.children).toEqual([view])
   })
 })

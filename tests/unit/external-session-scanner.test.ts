@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionRegistry } from '../../src/main/sessions/session-registry'
 import { scanExternalSessions } from '../../src/main/sessions/external-session-scanner'
+import * as snapshots from '../../src/main/sessions/transcript-snapshot'
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/janusx-test-userdata' },
@@ -15,6 +16,7 @@ const registries: AgentSessionRegistry[] = []
 afterEach(async () => {
   for (const registry of registries.splice(0)) await registry.flush()
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
+  vi.restoreAllMocks()
 })
 
 async function tempDir(prefix: string): Promise<string> {
@@ -45,6 +47,42 @@ function claudeAssistant(text: string, sessionId: string, cwd: string, timestamp
 }
 
 describe('external session scanner', () => {
+  it('reuses unchanged parses without notifications and invalidates them on growth', async () => {
+    const home = await tempDir('scan-cache-')
+    const registry = new AgentSessionRegistry(await tempDir('scan-data-'))
+    registries.push(registry)
+    const path = join(home, '.claude', 'projects', 'proj', 'cache.jsonl')
+    const question = claudeUser('question', 'cache', '/repo', '2026-09-22T10:00:00Z')
+    await writeJsonl(path, [question])
+    const read = vi.spyOn(snapshots, 'readTranscriptSnapshot')
+    const listener = vi.fn()
+    registry.setChangeListener(listener)
+    await scanExternalSessions(registry, { env: {}, home })
+    listener.mockClear()
+    await scanExternalSessions(registry, { env: {}, home })
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(listener).not.toHaveBeenCalled()
+    await writeJsonl(path, [question, claudeAssistant('new answer', 'cache', '/repo', '2026-09-22T10:01:00Z')])
+    await scanExternalSessions(registry, { env: {}, home })
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(registry.getSession(registry.listSessions()[0].id)?.transcriptPreview?.[0].excerpt).toBe('new answer')
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('imports Codex with oversized metadata and tool records without losing the conversation', async () => {
+    const home = await tempDir('scan-codex-large-')
+    const registry = new AgentSessionRegistry(await tempDir('scan-data-'))
+    registries.push(registry)
+    await writeJsonl(join(home, '.codex', 'sessions', 'rollout-large.jsonl'), [
+      { type: 'session_meta', payload: { id: 'large', cwd: 'C:/repo', instructions: '规'.repeat(24000) } },
+      { type: 'response_item', payload: { role: 'user', content: [{ type: 'input_text', text: 'real question' }] } },
+      { type: 'response_item', payload: { role: 'assistant', content: [{ type: 'output_text', text: 'real answer' }] } },
+      { type: 'response_item', payload: { type: 'custom_tool_call_output', output: 'x'.repeat(3 * 1024 * 1024) } },
+    ])
+    expect(await scanExternalSessions(registry, { env: {}, home })).toMatchObject({ imported: 1, skipped: 0 })
+    expect(registry.listSessions()[0]).toMatchObject({ firstPrompt: 'real question', turnCount: 1, cwd: 'C:/repo' })
+  })
+
   it('imports claude and codex transcripts as external sessions', async () => {
     const home = await tempDir('scan-home-')
     const data = await tempDir('scan-data-')
@@ -162,7 +200,7 @@ describe('external session scanner', () => {
     expect(detail?.turns[0]).toMatchObject({ prompt: 'live question', excerpt: 'live answer' })
   })
 
-  it('reads large transcripts through head plus tail windows without loading all', async () => {
+  it('streams large transcripts without splitting a real turn across byte windows', async () => {
     const home = await tempDir('scan-home-')
     const data = await tempDir('scan-data-')
     const registry = new AgentSessionRegistry(data)
@@ -178,9 +216,7 @@ describe('external session scanner', () => {
     expect(summary.imported).toBe(1)
     const [session] = registry.listSessions()
     expect(session.firstPrompt).toBe('head question')
-    // Head and tail windows pair internally: the visible pieces stay two
-    // partial turns instead of one fabricated question-answer pair.
-    expect(session.turnCount).toBe(2)
+    expect(session.turnCount).toBe(1)
     const seeds = registry.getSession(session.id)?.turns ?? []
     expect(seeds.find((turn) => turn.prompt)?.prompt).toBe('head question')
     expect(seeds.find((turn) => turn.excerpt)?.excerpt).toBe('tail answer')

@@ -1,5 +1,6 @@
 ﻿import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useId } from 'react'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './Select.module.css'
 
@@ -29,6 +30,7 @@ export interface SelectProps {
   style?: CSSProperties
   /** 触发按钮的无障碍名称 */
   ariaLabel?: string
+  role?: 'combobox'
   /** 指定浮层挂载容器，避免 Modal 内部下拉被外层遮罩覆盖 */
   getPortalContainer?: () => HTMLElement | null
 }
@@ -51,6 +53,7 @@ export function Select({
   dropdownClassName,
   style,
   ariaLabel,
+  role,
   getPortalContainer
 }: SelectProps) {
   const { t } = useI18n('common')
@@ -58,6 +61,17 @@ export function Select({
   const listRef = useRef<HTMLDivElement | null>(null)
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<DropdownPos | null>(null)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const listId = useId()
+  const openList = () => {
+    const selectedIndex = options.findIndex(option => option.value === value && !option.disabled)
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : options.findIndex(option => !option.disabled))
+    setOpen(true)
+  }
+
+  useEffect(() => {
+    if (open && pos) listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+  }, [activeIndex, open, pos])
 
   const selected = options.find((o) => o.value === value)
   // 计算浮层位置：向下展开，空间不够则向上
@@ -136,8 +150,27 @@ export function Select({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
+        role={role}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={role === 'combobox' && open && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (open) setOpen(false); else openList() }}
+        onKeyDown={event => {
+          if (event.key === 'Tab') { setOpen(false); return }
+          if (open && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault(); event.stopPropagation()
+            if (options[activeIndex]) handleSelect(options[activeIndex])
+            return
+          }
+          if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+          event.preventDefault(); event.stopPropagation()
+          if (!open) { openList(); return }
+          const enabled = options.map((option, index) => option.disabled ? -1 : index).filter(index => index >= 0)
+          if (!enabled.length) return
+          const index = enabled.indexOf(activeIndex)
+          setActiveIndex(event.key === 'Home' ? enabled[0] : event.key === 'End' ? enabled[enabled.length - 1]
+            : enabled[(index + (event.key === 'ArrowDown' ? 1 : -1) + enabled.length) % enabled.length])
+        }}
       >
         {prefix && <span className={styles.triggerPrefix}>{prefix}</span>}
         <span className={styles.triggerLabel}>
@@ -175,24 +208,30 @@ export function Select({
               animationDuration: '0.12s'
             }}
             data-select-dropdown=""
+            id={listId}
+            aria-label={ariaLabel}
             role="listbox"
             onPointerDown={(event) => event.stopPropagation()}
           >
             {options.length === 0 && (
               <div className={styles.empty}>{t('common:select.empty')}</div>
             )}
-            {options.map((o) => {
+            {options.map((o, index) => {
               const isSel = o.value === value
               return (
                 <div
                   key={o.value}
                   role="option"
+                  id={`${listId}-${index}`}
+                  data-active={index === activeIndex || undefined}
                   aria-selected={isSel}
                   aria-disabled={o.disabled || undefined}
                   className={`${styles.option} ${
                     isSel ? styles.optionSelected : ''
                   } ${o.disabled ? styles.optionDisabled : ''}`}
                   style={o.depth ? { paddingLeft: `${10 + o.depth * 14}px` } : undefined}
+                  onMouseDown={event => event.preventDefault()}
+                  onMouseEnter={() => { if (!o.disabled) setActiveIndex(index) }}
                   onClick={() => handleSelect(o)}
                 >
                   {o.icon && <span className={styles.optionIcon}>{o.icon}</span>}

@@ -1,17 +1,7 @@
-/**
- * @file 蓝图统一操作栏（高保真顶栏）
- * @description
- *  复刻 design/blueprint-note-graph.html 的 toolbar：scope 徽 + 只读锁 +
- *  搜索 + 状态/kind 自定义下拉 + 适应画布 / 重放加载 / 在对话中变更 +
- *  本机布局保存态。整条栏位于工作台 shell 内、横跨三列之上。
- *
- *  画布中部的旧操作栏（节点操作组/匹配导航/更多折叠面板）已收敛到此，
- *  节点详情与恢复布局使用 Canvas 注册的入口；本机布局不修改 Note。
- *  搜索/过滤/选中等状态由 BlueprintToolbarProvider 持有，
- *  BlueprintCanvas 在 workbench 下受控消费（embedded 无 provider 时走本地态）。
- */
+/** Shared canvas controls: search and navigation stay visible; layout tools open on demand. */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Ellipsis } from 'lucide-react'
 import type { Blueprint } from '@/services/blueprint'
 import type { BlueprintLayoutSaveStatus } from '@/features/blueprint/useBlueprintGraphController'
 import { groupRootsByConnectivity, ISOLATED_HIDE_THRESHOLD } from '@/features/blueprint/canvas-navigation'
@@ -184,15 +174,6 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
 
   return (
     <div className="blueprint-toolbar blueprint-workbench-toolbar" role="toolbar" aria-label={t('blueprint:ariaLabel.focus')}>
-      {currentBlueprint ? (
-        <span className="blueprint-toolbar__scope" title={t('blueprint:view.scopeBadge', { name: currentBlueprint.name, rev: currentBlueprint.contentRevision, count: currentBlueprint.nodeIds.length, adapter: currentBlueprint.adapterVersion ?? 'v1' })}>
-          {t('blueprint:view.scopeBadge', { name: currentBlueprint.name, rev: currentBlueprint.contentRevision, count: currentBlueprint.nodeIds.length, adapter: currentBlueprint.adapterVersion ?? 'v1' })}
-        </span>
-      ) : null}
-      <span className="blueprint-toolbar__lock" title={t('blueprint:view.readOnlyBadge')}>
-        {t('blueprint:view.readOnlyBadge')}
-      </span>
-      <div className="blueprint-toolbar__spacer" />
       {loading ? <span className="blueprint-toolbar__loading">{t('blueprint:toolbar.loading')}</span> : null}
       {error ? <span className="blueprint-toolbar__error">{error}</span> : null}
       <div className="blueprint-toolbar__search-wrap">
@@ -221,16 +202,6 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
       <button className="blueprint-btn" onClick={() => fitRef.current?.()} title={t('blueprint:action.fitCanvas')}>
         {t('blueprint:action.fitCanvas')}
       </button>
-      {!moduleBrowsing && isolatedCount > 0 && (
-        <button
-          className={`blueprint-btn blueprint-toolbar__toggle${hideIsolated ? ' blueprint-toolbar__toggle--active' : ''}`}
-          onClick={() => setHideIsolated((visible) => !visible)}
-          aria-pressed={hideIsolated}
-          title={hideIsolated ? t('blueprint:action.showIsolated', { count: isolatedCount }) : t('blueprint:action.hideIsolated', { count: isolatedCount })}
-        >
-          {hideIsolated ? t('blueprint:action.showIsolated', { count: isolatedCount }) : t('blueprint:action.hideIsolated', { count: isolatedCount })}
-        </button>
-      )}
       <button
         className="blueprint-btn"
         onClick={() => toggleDetailRef.current?.()}
@@ -239,15 +210,67 @@ export function BlueprintToolbar({ getSelectPortalContainer }: BlueprintToolbarP
       >
         {t('blueprint:action.nodeDetail')}
       </button>
-      <button className="blueprint-btn" disabled={!currentBlueprint || moduleBrowsing} onClick={() => restoreLayoutRef.current?.()}>
-        {t('blueprint:action.restoreDefaultLayout')}
-      </button>
-      {canUndoLayout && <button className="blueprint-btn" onClick={() => undoLayoutRef.current?.()}>{t('blueprint:action.undoRestore')}</button>}
+      <div className="blueprint-toolbar__spacer" />
       {architecture && <BlueprintSourceInfo key={currentBlueprint.id} source={currentBlueprint} projection={architecture} onSelect={id => revealSourceNodeRef.current?.(id)} />}
-      {/* 面板常驻且自带上下文，这里不再需要「把节点带进对话」的中转按钮。 */}
-      <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${saveStatus === 'clean' ? 'saved' : saveStatus}`}>
-        {moduleBrowsing ? t('blueprint:action.autoLayout') : saveStatus === 'saving' ? '保存中…' : saveStatus === 'pending' ? '待保存' : saveStatus === 'failed' ? '保存失败' : '布局已保存（本机）'}
-      </span>
+      {saveStatus === 'failed' && !moduleBrowsing && <span role="status" className="blueprint-toolbar__save-status blueprint-toolbar__save-status--failed">{t('toolbar.layoutSaveFailed')}</span>}
+      <ToolbarMore>
+        {!moduleBrowsing && isolatedCount > 0 && (
+          <button
+            className={`blueprint-btn blueprint-toolbar__toggle${hideIsolated ? ' blueprint-toolbar__toggle--active' : ''}`}
+            onClick={() => setHideIsolated((visible) => !visible)}
+            aria-pressed={hideIsolated}
+            title={hideIsolated ? t('blueprint:action.showIsolated', { count: isolatedCount }) : t('blueprint:action.hideIsolated', { count: isolatedCount })}
+          >
+            {hideIsolated ? t('blueprint:action.showIsolated', { count: isolatedCount }) : t('blueprint:action.hideIsolated', { count: isolatedCount })}
+          </button>
+        )}
+        <button className="blueprint-btn" disabled={!currentBlueprint || moduleBrowsing} onClick={() => restoreLayoutRef.current?.()}>
+          {t('blueprint:action.restoreDefaultLayout')}
+        </button>
+        {canUndoLayout && <button className="blueprint-btn" onClick={() => undoLayoutRef.current?.()}>{t('blueprint:action.undoRestore')}</button>}
+        {/* 面板常驻且自带上下文，这里不再需要「把节点带进对话」的中转按钮。 */}
+        <span className={`blueprint-toolbar__save-status blueprint-toolbar__save-status--${saveStatus === 'clean' ? 'saved' : saveStatus}`}>
+          {moduleBrowsing ? t('blueprint:action.autoLayout') : saveStatus === 'saving' ? '保存中…' : saveStatus === 'pending' ? '待保存' : saveStatus === 'failed' ? '保存失败' : '布局已保存（本机）'}
+        </span>
+      </ToolbarMore>
     </div>
   )
+}
+
+function ToolbarMore({ children }: { children: ReactNode }) {
+  const { t } = useI18n('blueprint')
+  const id = useId()
+  const button = useRef<HTMLButtonElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const menu = panel.current!
+    menu.setAttribute('popover', 'auto')
+    button.current!.setAttribute('popovertarget', id)
+    const update = (event: Event) => setOpen((event as ToggleEvent).newState === 'open')
+    const close = () => menu.hidePopover()
+    menu.addEventListener('toggle', update)
+    window.addEventListener('resize', close)
+    return () => { menu.removeEventListener('toggle', update); window.removeEventListener('resize', close) }
+  }, [id])
+  return <>
+    <button ref={button} type="button" className="blueprint-btn blueprint-toolbar__more" aria-label={t('blueprint:action.more')}
+      onKeyDown={event => {
+        if (panel.current?.matches(':popover-open') && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); panel.current.hidePopover() }
+      }}
+      aria-expanded={open} aria-controls={id} onClick={() => {
+        const rect = button.current!.getBoundingClientRect()
+        const menu = panel.current!
+        menu.style.top = `${rect.bottom + 6}px`
+        menu.style.left = `${Math.max(8, Math.min(rect.right - 240, window.innerWidth - 248))}px`
+      }}><Ellipsis size={17} aria-hidden="true" /></button>
+    <div id={id} ref={panel} className="blueprint-toolbar-menu" aria-label={t('blueprint:action.more')}
+      onKeyDown={event => {
+        event.stopPropagation()
+        if (event.key === 'Escape') { event.preventDefault(); panel.current?.hidePopover(); button.current?.focus() }
+      }}
+      onClick={event => { if ((event.target as HTMLElement).closest('button:not(:disabled)')) { panel.current?.hidePopover(); button.current?.focus() } }}>
+      {children}
+    </div>
+  </>
 }

@@ -181,6 +181,7 @@ export function NotificationSettingsPanel() {
     }
   }
 
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(settings)
   const isBusy = status === 'loading' || status === 'saving'
   const isTesting = testStatus === 'testing'
   const statusClass =
@@ -284,283 +285,299 @@ export function NotificationSettingsPanel() {
           disabled={isBusy}
           onChange={(checked) => updateRemoteDraft('enabled', checked)}
         />
-        <SettingSwitch
-          label={t('settings:notification.toggle.remoteComplete.label')}
-          hint={t('settings:notification.toggle.remoteComplete.hint')}
-          checked={draft.remote.notifyOnCompleted}
-          disabled={isBusy || !draft.remote.enabled}
-          onChange={(checked) => updateRemoteDraft('notifyOnCompleted', checked)}
-        />
-        <SettingSwitch
-          label={t('settings:notification.toggle.remoteFailure.label')}
-          hint={t('settings:notification.toggle.remoteFailure.hint')}
-          checked={draft.remote.notifyOnFailed}
-          disabled={isBusy || !draft.remote.enabled}
-          onChange={(checked) => updateRemoteDraft('notifyOnFailed', checked)}
-        />
-        <SettingSwitch
-          label={t('settings:notification.toggle.remoteAttention.label')}
-          hint={t('settings:notification.toggle.remoteAttention.hint')}
-          checked={draft.remote.notifyOnAttention}
-          disabled={isBusy || !draft.remote.enabled}
-          onChange={(checked) => updateRemoteDraft('notifyOnAttention', checked)}
-        />
-        <SettingSwitch
-          label={t('settings:notification.toggle.remoteApproval.label')}
-          hint={t('settings:notification.toggle.remoteApproval.hint')}
-          checked={draft.remote.notifyOnApproval}
-          disabled={isBusy || !draft.remote.enabled}
-          onChange={(checked) => updateRemoteDraft('notifyOnApproval', checked)}
-        />
-        <div className={styles.row}>
-          <div className={styles.label}>
-            <span className={styles.labelText}>{t('settings:notification.row.remoteCompleteThreshold.label')}</span>
-            <span className={styles.hint}>{t('settings:notification.row.remoteCompleteThreshold.hint')}</span>
-          </div>
-          <div className={styles.numberControl}>
-            <input
-              className={styles.input}
-              type="number"
-              min={0}
-              max={86400}
-              step={5}
-              value={draft.remote.minDurationSeconds}
-              disabled={isBusy || !draft.remote.enabled}
-              onChange={(event) => handleRemoteNumberChange('minDurationSeconds', event.target.value)}
-            />
-            <span className={styles.unit}>sec</span>
-          </div>
-        </div>
-        <div className={styles.row}>
-          <div className={styles.label}>
-            <span className={styles.labelText}>{t('settings:notification.row.dedupeWindow.label')}</span>
-            <span className={styles.hint}>{t('settings:notification.row.dedupeWindow.hint')}</span>
-          </div>
-          <div className={styles.numberControl}>
-            <input
-              className={styles.input}
-              type="number"
-              min={0}
-              max={86400}
-              step={30}
-              value={draft.remote.dedupeWindowSeconds}
-              disabled={isBusy || !draft.remote.enabled}
-              onChange={(event) => handleRemoteNumberChange('dedupeWindowSeconds', event.target.value)}
-            />
-            <span className={styles.unit}>{t('settings:notification.unit.sec')}</span>
-          </div>
-        </div>
-        <div className={styles.row}>
-          <div className={styles.label}>
-            <span className={styles.labelText}>{t('settings:notification.row.sendTimeout.label')}</span>
-            <span className={styles.hint}>{t('settings:notification.row.sendTimeout.hint')}</span>
-          </div>
-          <div className={styles.numberControl}>
-            <input
-              className={styles.input}
-              type="number"
-              min={1}
-              max={120}
-              step={1}
-              value={draft.remote.timeoutSeconds}
-              disabled={isBusy || !draft.remote.enabled}
-              onChange={(event) => handleRemoteNumberChange('timeoutSeconds', event.target.value)}
-            />
-            <span className={styles.unit}>{t('settings:notification.unit.sec')}</span>
-          </div>
-        </div>
-      </section>
-
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>{t('settings:notification.section.feishu')}</h3>
-        <SettingSwitch
-          label={t('settings:notification.toggle.feishu.label')}
-          hint={t('settings:notification.toggle.feishu.hint')}
-          checked={draft.remote.providers.feishu.enabled}
-          disabled={isBusy || !draft.remote.enabled}
-          onChange={(checked) => updateFeishuDraft('enabled', checked)}
-        />
-        <div className={styles.row}>
-          <div className={styles.label}>
-            <span className={styles.labelText}>{t('settings:notification.row.feishuMode.label')}</span>
-            <span className={styles.hint}>{t('settings:notification.row.feishuMode.hint')}</span>
-          </div>
-          <select
-            className={styles.select}
-            value={draft.remote.providers.feishu.mode}
-            disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
-            onChange={(event) => handleFeishuModeChange(event.target.value === 'app' ? 'app' : 'webhook')}
-          >
-            <option value="webhook">{t('settings:notification.option.webhook')}</option>
-            <option value="app">{t('settings:notification.option.app')}</option>
-          </select>
-        </div>
-        {draft.remote.providers.feishu.mode === 'webhook' ? (
-          <TextInputRow
-            label={t('settings:notification.row.webhookUrl.label')}
-            hint={t('settings:notification.row.webhookUrl.hint')}
-            value={draft.remote.providers.feishu.webhookUrl}
-            disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
-            onChange={(value) => updateFeishuDraft('webhookUrl', value)}
-          />
-        ) : (
+        {draft.remote.enabled && (
           <>
-            <TextInputRow
-              label={t('settings:notification.row.appId.label')}
-              hint={t('settings:notification.row.appId.hint')}
-              value={draft.remote.providers.feishu.appId}
-              disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
-              onChange={(value) => updateFeishuDraft('appId', value)}
+            <SettingSwitch
+              label={t('settings:notification.toggle.remoteComplete.label')}
+              hint={t('settings:notification.toggle.remoteComplete.hint')}
+              checked={draft.remote.notifyOnCompleted}
+              disabled={isBusy || !draft.remote.enabled}
+              onChange={(checked) => updateRemoteDraft('notifyOnCompleted', checked)}
             />
-            <TextInputRow
-              label={t('settings:notification.row.appSecret.label')}
-              hint={t('settings:notification.row.appSecret.hint')}
-              type="password"
-              value={draft.remote.providers.feishu.appSecret}
-              disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
-              onChange={(value) => updateFeishuDraft('appSecret', value)}
+            <SettingSwitch
+              label={t('settings:notification.toggle.remoteFailure.label')}
+              hint={t('settings:notification.toggle.remoteFailure.hint')}
+              checked={draft.remote.notifyOnFailed}
+              disabled={isBusy || !draft.remote.enabled}
+              onChange={(checked) => updateRemoteDraft('notifyOnFailed', checked)}
+            />
+            <SettingSwitch
+              label={t('settings:notification.toggle.remoteAttention.label')}
+              hint={t('settings:notification.toggle.remoteAttention.hint')}
+              checked={draft.remote.notifyOnAttention}
+              disabled={isBusy || !draft.remote.enabled}
+              onChange={(checked) => updateRemoteDraft('notifyOnAttention', checked)}
+            />
+            <SettingSwitch
+              label={t('settings:notification.toggle.remoteApproval.label')}
+              hint={t('settings:notification.toggle.remoteApproval.hint')}
+              checked={draft.remote.notifyOnApproval}
+              disabled={isBusy || !draft.remote.enabled}
+              onChange={(checked) => updateRemoteDraft('notifyOnApproval', checked)}
             />
             <div className={styles.row}>
               <div className={styles.label}>
-                <span className={styles.labelText}>{t('settings:notification.row.receiveIdType.label')}</span>
-                <span className={styles.hint}>{t('settings:notification.row.receiveIdType.hint')}</span>
+                <span className={styles.labelText}>{t('settings:notification.row.remoteCompleteThreshold.label')}</span>
+                <span className={styles.hint}>{t('settings:notification.row.remoteCompleteThreshold.hint')}</span>
               </div>
-              <select
-                className={styles.select}
-                value={draft.remote.providers.feishu.receiveIdType}
-                disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
-                onChange={(event) =>
-                  updateFeishuDraft(
-                    'receiveIdType',
-                    event.target.value === 'open_id' ? 'open_id' : 'chat_id',
-                  )
-                }
-              >
-                <option value="chat_id">{t('settings:notification.option.chatId')}</option>
-                <option value="open_id">{t('settings:notification.option.openId')}</option>
-              </select>
-            </div>
-            <TextInputRow
-              label={t('settings:notification.row.receiveId.label')}
-              hint={t('settings:notification.row.receiveId.hint')}
-              value={draft.remote.providers.feishu.receiveId}
-              disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
-              onChange={(value) => updateFeishuDraft('receiveId', value)}
-            />
-            <SettingSwitch
-              label={t('settings:notification.toggle.feishuControl.label')}
-              hint={t('settings:notification.toggle.feishuControl.hint')}
-              checked={draft.remote.providers.feishu.inboundControlEnabled}
-              disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
-              onChange={(checked) => updateFeishuDraft('inboundControlEnabled', checked)}
-            />
-            <TextAreaRow
-              label={t('settings:notification.row.allowedOpenIds.label')}
-              hint={t('settings:notification.row.allowedOpenIds.hint')}
-              value={draft.remote.providers.feishu.allowedOpenIds.join('\n')}
-              disabled={isBusy || !draft.remote.providers.feishu.enabled}
-              onChange={(value) => updateFeishuDraft(
-                'allowedOpenIds',
-                value.split(/[\s,]+/).filter(Boolean),
-              )}
-            />
-            <TextInputRow
-              label={t('settings:notification.row.groupPromptPrefix.label')}
-              hint={t('settings:notification.row.groupPromptPrefix.hint')}
-              value={draft.remote.providers.feishu.groupPromptPrefix}
-              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
-              onChange={(value) => updateFeishuDraft('groupPromptPrefix', value)}
-            />
-            <ControlNumberRow
-              label={t('settings:notification.row.bindingTtl.label')}
-              hint={t('settings:notification.row.bindingTtl.hint')}
-              value={draft.remote.providers.feishu.bindingTtlMinutes}
-              min={FEISHU_CONTROL_LIMITS.bindingTtlMinutes.min}
-              max={FEISHU_CONTROL_LIMITS.bindingTtlMinutes.max}
-              unit={t('settings:notification.unit.min')}
-              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
-              onChange={(value) => handleFeishuNumberChange('bindingTtlMinutes', value)}
-            />
-            <ControlNumberRow
-              label={t('settings:notification.row.cardActionTtl.label')}
-              hint={t('settings:notification.row.cardActionTtl.hint')}
-              value={draft.remote.providers.feishu.actionTokenTtlMinutes}
-              min={FEISHU_CONTROL_LIMITS.actionTokenTtlMinutes.min}
-              max={FEISHU_CONTROL_LIMITS.actionTokenTtlMinutes.max}
-              unit={t('settings:notification.unit.min')}
-              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
-              onChange={(value) => handleFeishuNumberChange('actionTokenTtlMinutes', value)}
-            />
-            <ControlNumberRow
-              label={t('settings:notification.row.auditRetentionDays.label')}
-              hint={t('settings:notification.row.auditRetentionDays.hint')}
-              value={draft.remote.providers.feishu.auditRetentionDays}
-              min={FEISHU_CONTROL_LIMITS.auditRetentionDays.min}
-              max={FEISHU_CONTROL_LIMITS.auditRetentionDays.max}
-              unit={t('settings:notification.unit.days')}
-              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
-              onChange={(value) => handleFeishuNumberChange('auditRetentionDays', value)}
-            />
-            <ControlNumberRow
-              label={t('settings:notification.row.maxFollowUpLength.label')}
-              hint={t('settings:notification.row.maxFollowUpLength.hint')}
-              value={draft.remote.providers.feishu.maxPromptLength}
-              min={FEISHU_CONTROL_LIMITS.maxPromptLength.min}
-              max={FEISHU_CONTROL_LIMITS.maxPromptLength.max}
-              unit={t('settings:notification.unit.chars')}
-              disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
-              onChange={(value) => handleFeishuNumberChange('maxPromptLength', value)}
-            />
-            <div className={styles.controlStatus}>
-              <div className={styles.label}>
-                <span className={styles.labelText}>{t('settings:notification.row.controlStatus.label')}</span>
-                <span className={styles.hint}>
-                  {controlStatus
-                    ? `${controlStatus.state} / ${controlStatus.configured ? 'configured' : 'not configured'} / ${new Date(controlStatus.updatedAt).toLocaleString()}`
-                    : t('settings:notification.row.controlStatus.unavailable')}
-                </span>
-                {controlStatus?.error && <span className={styles.statusError}>{controlStatus.error}</span>}
+              <div className={styles.numberControl}>
+                <input
+                  className={styles.input}
+                  type="number"
+                  min={0}
+                  max={86400}
+                  step={5}
+                  value={draft.remote.minDurationSeconds}
+                  disabled={isBusy || !draft.remote.enabled}
+                  onChange={(event) => handleRemoteNumberChange('minDurationSeconds', event.target.value)}
+                />
+                <span className={styles.unit}>{t('settings:notification.unit.sec')}</span>
               </div>
-              <RefreshIconButton
-                accent="blue"
-                label={t('settings:notification.action.refreshFeishu')}
-                loading={statusRefreshing}
-                onClick={() => { void refreshControlStatus() }}
-              />
             </div>
-            <p className={styles.controlNotice}>
-              {t('settings:notification.controlNotice')}
-            </p>
+            <details className={styles.advanced}>
+              <summary>{t('settings:notification.advanced')}</summary>
+              <div className={styles.dependentFields}>
+                <div className={styles.row}>
+                  <div className={styles.label}>
+                    <span className={styles.labelText}>{t('settings:notification.row.dedupeWindow.label')}</span>
+                    <span className={styles.hint}>{t('settings:notification.row.dedupeWindow.hint')}</span>
+                  </div>
+                  <div className={styles.numberControl}>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min={0}
+                      max={86400}
+                      step={30}
+                      value={draft.remote.dedupeWindowSeconds}
+                      disabled={isBusy || !draft.remote.enabled}
+                      onChange={(event) => handleRemoteNumberChange('dedupeWindowSeconds', event.target.value)}
+                    />
+                    <span className={styles.unit}>{t('settings:notification.unit.sec')}</span>
+                  </div>
+                </div>
+                <div className={styles.row}>
+                  <div className={styles.label}>
+                    <span className={styles.labelText}>{t('settings:notification.row.sendTimeout.label')}</span>
+                    <span className={styles.hint}>{t('settings:notification.row.sendTimeout.hint')}</span>
+                  </div>
+                  <div className={styles.numberControl}>
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min={1}
+                      max={120}
+                      step={1}
+                      value={draft.remote.timeoutSeconds}
+                      disabled={isBusy || !draft.remote.enabled}
+                      onChange={(event) => handleRemoteNumberChange('timeoutSeconds', event.target.value)}
+                    />
+                    <span className={styles.unit}>{t('settings:notification.unit.sec')}</span>
+                  </div>
+                </div>
+              </div>
+            </details>
           </>
         )}
-        <div className={styles.testRow}>
-          <button
-            type="button"
-            className={`${styles.button} ${styles.ghostButton}`}
-            onClick={handleTestFeishu}
-            disabled={isBusy || isTesting || !draft.remote.providers.feishu.enabled}
-          >
-            {isTesting ? t('settings:notification.action.testing') : t('settings:notification.action.testFeishu')}
-          </button>
-          <span
-            className={
-              testStatus === 'error'
-                ? `${styles.status} ${styles.statusError}`
-                : testStatus === 'success'
-                  ? `${styles.status} ${styles.statusSuccess}`
-                  : styles.status
-            }
-          >
-            {testMessage}
-          </span>
-        </div>
       </section>
 
+      {draft.remote.enabled && (
+        <section className={styles.section}>
+          <h3 className={styles.sectionTitle}>{t('settings:notification.section.feishu')}</h3>
+          <SettingSwitch
+            label={t('settings:notification.toggle.feishu.label')}
+            hint={t('settings:notification.toggle.feishu.hint')}
+            checked={draft.remote.providers.feishu.enabled}
+            disabled={isBusy || !draft.remote.enabled}
+            onChange={(checked) => updateFeishuDraft('enabled', checked)}
+          />
+          {draft.remote.providers.feishu.enabled && (
+            <>
+              <div className={styles.row}>
+                <div className={styles.label}>
+                  <span className={styles.labelText}>{t('settings:notification.row.feishuMode.label')}</span>
+                  <span className={styles.hint}>{t('settings:notification.row.feishuMode.hint')}</span>
+                </div>
+                <select
+                  className={styles.select}
+                  value={draft.remote.providers.feishu.mode}
+                  disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
+                  onChange={(event) => handleFeishuModeChange(event.target.value === 'app' ? 'app' : 'webhook')}
+                >
+                  <option value="webhook">{t('settings:notification.option.webhook')}</option>
+                  <option value="app">{t('settings:notification.option.app')}</option>
+                </select>
+              </div>
+              {draft.remote.providers.feishu.mode === 'webhook' ? (
+                <TextInputRow
+                  label={t('settings:notification.row.webhookUrl.label')}
+                  hint={t('settings:notification.row.webhookUrl.hint')}
+                  value={draft.remote.providers.feishu.webhookUrl}
+                  disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
+                  onChange={(value) => updateFeishuDraft('webhookUrl', value)}
+                />
+              ) : (
+                <>
+                  <TextInputRow
+                    label={t('settings:notification.row.appId.label')}
+                    hint={t('settings:notification.row.appId.hint')}
+                    value={draft.remote.providers.feishu.appId}
+                    disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
+                    onChange={(value) => updateFeishuDraft('appId', value)}
+                  />
+                  <TextInputRow
+                    label={t('settings:notification.row.appSecret.label')}
+                    hint={t('settings:notification.row.appSecret.hint')}
+                    type="password"
+                    value={draft.remote.providers.feishu.appSecret}
+                    disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
+                    onChange={(value) => updateFeishuDraft('appSecret', value)}
+                  />
+                  <div className={styles.row}>
+                    <div className={styles.label}>
+                      <span className={styles.labelText}>{t('settings:notification.row.receiveIdType.label')}</span>
+                      <span className={styles.hint}>{t('settings:notification.row.receiveIdType.hint')}</span>
+                    </div>
+                    <select
+                      className={styles.select}
+                      value={draft.remote.providers.feishu.receiveIdType}
+                      disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
+                      onChange={(event) =>
+                        updateFeishuDraft(
+                          'receiveIdType',
+                          event.target.value === 'open_id' ? 'open_id' : 'chat_id',
+                        )
+                      }
+                    >
+                      <option value="chat_id">{t('settings:notification.option.chatId')}</option>
+                      <option value="open_id">{t('settings:notification.option.openId')}</option>
+                    </select>
+                  </div>
+                  <TextInputRow
+                    label={t('settings:notification.row.receiveId.label')}
+                    hint={t('settings:notification.row.receiveId.hint')}
+                    value={draft.remote.providers.feishu.receiveId}
+                    disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
+                    onChange={(value) => updateFeishuDraft('receiveId', value)}
+                  />
+                  <SettingSwitch
+                    label={t('settings:notification.toggle.feishuControl.label')}
+                    hint={t('settings:notification.toggle.feishuControl.hint')}
+                    checked={draft.remote.providers.feishu.inboundControlEnabled}
+                    disabled={isBusy || !draft.remote.enabled || !draft.remote.providers.feishu.enabled}
+                    onChange={(checked) => updateFeishuDraft('inboundControlEnabled', checked)}
+                  />
+                  <TextAreaRow
+                    label={t('settings:notification.row.allowedOpenIds.label')}
+                    hint={t('settings:notification.row.allowedOpenIds.hint')}
+                    value={draft.remote.providers.feishu.allowedOpenIds.join('\n')}
+                    disabled={isBusy || !draft.remote.providers.feishu.enabled}
+                    onChange={(value) => updateFeishuDraft(
+                      'allowedOpenIds',
+                      value.split(/[\s,]+/).filter(Boolean),
+                  )}
+                />
+                <TextInputRow
+                  label={t('settings:notification.row.groupPromptPrefix.label')}
+                  hint={t('settings:notification.row.groupPromptPrefix.hint')}
+                  value={draft.remote.providers.feishu.groupPromptPrefix}
+                  disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+                  onChange={(value) => updateFeishuDraft('groupPromptPrefix', value)}
+                />
+                <ControlNumberRow
+                  label={t('settings:notification.row.bindingTtl.label')}
+                  hint={t('settings:notification.row.bindingTtl.hint')}
+                  value={draft.remote.providers.feishu.bindingTtlMinutes}
+                  min={FEISHU_CONTROL_LIMITS.bindingTtlMinutes.min}
+                  max={FEISHU_CONTROL_LIMITS.bindingTtlMinutes.max}
+                  unit={t('settings:notification.unit.min')}
+                  disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+                  onChange={(value) => handleFeishuNumberChange('bindingTtlMinutes', value)}
+                />
+                <ControlNumberRow
+                  label={t('settings:notification.row.cardActionTtl.label')}
+                  hint={t('settings:notification.row.cardActionTtl.hint')}
+                  value={draft.remote.providers.feishu.actionTokenTtlMinutes}
+                  min={FEISHU_CONTROL_LIMITS.actionTokenTtlMinutes.min}
+                  max={FEISHU_CONTROL_LIMITS.actionTokenTtlMinutes.max}
+                  unit={t('settings:notification.unit.min')}
+                  disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+                  onChange={(value) => handleFeishuNumberChange('actionTokenTtlMinutes', value)}
+                />
+                <ControlNumberRow
+                  label={t('settings:notification.row.auditRetentionDays.label')}
+                  hint={t('settings:notification.row.auditRetentionDays.hint')}
+                  value={draft.remote.providers.feishu.auditRetentionDays}
+                  min={FEISHU_CONTROL_LIMITS.auditRetentionDays.min}
+                  max={FEISHU_CONTROL_LIMITS.auditRetentionDays.max}
+                  unit={t('settings:notification.unit.days')}
+                  disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+                  onChange={(value) => handleFeishuNumberChange('auditRetentionDays', value)}
+                />
+                <ControlNumberRow
+                  label={t('settings:notification.row.maxFollowUpLength.label')}
+                  hint={t('settings:notification.row.maxFollowUpLength.hint')}
+                  value={draft.remote.providers.feishu.maxPromptLength}
+                  min={FEISHU_CONTROL_LIMITS.maxPromptLength.min}
+                  max={FEISHU_CONTROL_LIMITS.maxPromptLength.max}
+                  unit={t('settings:notification.unit.chars')}
+                  disabled={isBusy || !draft.remote.providers.feishu.inboundControlEnabled}
+                  onChange={(value) => handleFeishuNumberChange('maxPromptLength', value)}
+                />
+                <div className={styles.controlStatus}>
+                  <div className={styles.label}>
+                    <span className={styles.labelText}>{t('settings:notification.row.controlStatus.label')}</span>
+                    <span className={styles.hint}>
+                      {controlStatus
+                        ? `${controlStatus.state} / ${controlStatus.configured ? 'configured' : 'not configured'} / ${new Date(controlStatus.updatedAt).toLocaleString()}`
+                        : t('settings:notification.row.controlStatus.unavailable')}
+                    </span>
+                    {controlStatus?.error && <span className={styles.statusError}>{controlStatus.error}</span>}
+                  </div>
+                  <RefreshIconButton
+                    accent="blue"
+                    label={t('settings:notification.action.refreshFeishu')}
+                    loading={statusRefreshing}
+                    onClick={() => { void refreshControlStatus() }}
+                  />
+                </div>
+                <p className={styles.controlNotice}>
+                  {t('settings:notification.controlNotice')}
+                </p>
+              </>
+            )}
+            <div className={styles.testRow}>
+              <button
+                type="button"
+                className={`${styles.button} ${styles.ghostButton}`}
+                onClick={handleTestFeishu}
+                disabled={isBusy || isTesting || !draft.remote.providers.feishu.enabled}
+              >
+                {isTesting ? t('settings:notification.action.testing') : t('settings:notification.action.testFeishu')}
+              </button>
+              <span
+                className={
+                  testStatus === 'error'
+                    ? `${styles.status} ${styles.statusError}`
+                    : testStatus === 'success'
+                      ? `${styles.status} ${styles.statusSuccess}`
+                      : styles.status
+                }
+              >
+                {testMessage}
+              </span>
+            </div>
+            </>
+          )}
+        </section>
+      )}
+
       <div className={styles.footer}>
-        <div className={statusClass}>
+        <div className={statusClass} role="status">
           {status === 'loading' && t('settings:footer.loading')}
           {status === 'saving' && t('settings:footer.saving')}
           {status === 'saved' && t('settings:footer.saved')}
+          {status === 'idle' && isDirty && t('settings:footer.unsaved')}
           {status === 'error' && error}
         </div>
         <div className={styles.actions}>
@@ -568,7 +585,7 @@ export function NotificationSettingsPanel() {
             type="button"
             className={`${styles.button} ${styles.ghostButton}`}
             onClick={handleReset}
-            disabled={isBusy}
+            disabled={isBusy || !isDirty}
           >
             {t('settings:footer.reset')}
           </button>
@@ -576,7 +593,7 @@ export function NotificationSettingsPanel() {
             type="button"
             className={`${styles.button} ${styles.primaryButton}`}
             onClick={handleSave}
-            disabled={isBusy}
+            disabled={isBusy || !isDirty}
           >
             {t('settings:footer.save')}
           </button>
@@ -610,6 +627,7 @@ function TextInputRow({
       <input
         className={`${styles.input} ${styles.textInput}`}
         type={type}
+        aria-label={label}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
@@ -711,6 +729,7 @@ function SettingSwitch({
       <label className={styles.switch}>
         <input
           type="checkbox"
+          aria-label={label}
           checked={checked}
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}

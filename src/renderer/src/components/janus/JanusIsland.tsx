@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Download } from 'lucide-react'
 import { useAppStore } from '@/stores/app'
@@ -45,10 +45,9 @@ const ROUNDTABLE_CARD_STATUS_KEYS: Record<AgentWorkState, string> = {
   cancelled: 'janus:roundtable.cardDetail.status.cancelled',
 }
 import { faceClass } from './janusIslandRuntime'
-import { clampIslandDragOffset, shouldSuppressIslandDismiss } from './islandInteraction'
+import { shouldSuppressIslandDismiss } from './islandInteraction'
 
 const ISLAND_PINNED_STORAGE_KEY = 'janus:island-chat-pinned'
-const DRAG_OFFSET_STORAGE_KEY = 'janus:island-drag-offset'
 
 function loadIslandPinned(): boolean {
   try {
@@ -56,20 +55,6 @@ function loadIslandPinned(): boolean {
   } catch {
     return false
   }
-}
-
-function loadDragOffset(): { x: number; y: number } {
-  try {
-    const raw = window.localStorage.getItem(DRAG_OFFSET_STORAGE_KEY)
-    if (!raw) return { x: 0, y: 0 }
-    const parsed = JSON.parse(raw) as { x?: unknown; y?: unknown }
-    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
-      return clampIslandDragOffset({ x: parsed.x, y: parsed.y }, { width: window.innerWidth, height: window.innerHeight })
-    }
-  } catch {
-    /* corrupted offset falls back to centered */
-  }
-  return { x: 0, y: 0 }
 }
 import { nudgeRunOrb } from '@/stores/running'
 import { useRightToolStore } from '@/stores/right-tools'
@@ -80,6 +65,8 @@ import type { RoundtableState } from '../../../../shared/roundtable/events'
 import type { RoundtableToolCall } from './agentWorkProjection'
 import { projectParchment } from '../../../../shared/roundtable/parchment'
 import { useProjectRunning } from './useProjectRunning'
+import { useIslandPresence } from '../island/islandMotion'
+import { useAuxiliaryIslandLayout } from './useAuxiliaryIslandLayout'
 
 /* ════════════════════════════════════════════════════════════
    JanusIsland �?52×26px 折叠态胶�?
@@ -124,16 +111,12 @@ export function JanusIsland({
   const shellRef = useRef<HTMLDivElement | null>(null)
   const [view, setView] = useState<JanusExpandedView>('monitor')
 
-  /* Island window persistence + drag (expanded stage, all views).
+  /* Island window pin (expanded stage, all views).
    * Pin survives implicit dismiss (outside click / Esc / terminal switch);
-   * explicit double-activate still collapses back to the capsule. The drag
-   * offset applies to the expanded panel only — the capsule always stays
-   * centered, and streaming never blocks the collapse. */
+   * explicit double-activate still collapses back to the capsule. The
+   * expanded panel keeps its fixed centered position — it never drags — and
+   * streaming never blocks the collapse. */
   const [islandPinned, setIslandPinned] = useState<boolean>(() => loadIslandPinned())
-  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>(() => loadDragOffset())
-  const [isDraggingIsland, setIsDraggingIsland] = useState(false)
-  const dragStartRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; panelW: number; panelH: number } | null>(null)
-  const pendingOffsetRef = useRef<{ x: number; y: number } | null>(null)
   const chatLoading = isStreaming || pendingContent.length > 0
 
   const updateIslandPinned = useCallback((next: boolean) => {
@@ -150,91 +133,30 @@ export function JanusIsland({
     updateIslandPinned(!islandPinned)
   }, [islandPinned, updateIslandPinned])
 
-  const applyDragTransform = useCallback((offset: { x: number; y: number }) => {
-    const shell = shellRef.current
-    if (!shell) return
-    shell.style.transform = offset.x === 0 && offset.y === 0
-      ? ''
-      : `translate(calc(-50% + ${offset.x}px), ${offset.y}px)`
+  // Legacy: the expanded island no longer drags, so a persisted offset from an
+  // earlier build is dead state. Drop it once instead of leaving it behind.
+  useEffect(() => {
+    try {
+      window.localStorage.removeItem('janus:island-drag-offset')
+    } catch {
+      /* persistence is best-effort */
+    }
   }, [])
-
-  const handleIslandTopbarPointerDown = useCallback((event: ReactPointerEvent) => {
-    if (stage !== 'expanded' || event.button !== 0) return
-    const target = event.target as HTMLElement | null
-    if (target?.closest('button, input, textarea, select, a, [contenteditable="true"]')) return
-    // Keep the island gesture layer out: a topbar drag is a window move,
-    // never a tap/double-tap on the island body.
-    event.preventDefault()
-    event.stopPropagation()
-    // Measure once per gesture: reading offsetWidth mid-drag would thrash
-    // layout against the direct transform writes below.
-    const shell = shellRef.current
-    dragStartRef.current = {
-      startX: event.clientX, startY: event.clientY, baseX: dragOffset.x, baseY: dragOffset.y,
-      panelW: shell?.offsetWidth ?? 0, panelH: shell?.offsetHeight ?? 0,
-    }
-    pendingOffsetRef.current = null
-    setIsDraggingIsland(true)
-  }, [stage, dragOffset])
-
-  useEffect(() => {
-    if (!isDraggingIsland) return
-    const handleMove = (event: PointerEvent) => {
-      const start = dragStartRef.current
-      if (!start) return
-      const next = clampIslandDragOffset(
-        { x: start.baseX + (event.clientX - start.startX), y: start.baseY + (event.clientY - start.startY) },
-        { width: window.innerWidth, height: window.innerHeight },
-        { width: start.panelW, height: start.panelH },
-      )
-      pendingOffsetRef.current = next
-      // Direct DOM write: dragging must not re-render the chat subtree.
-      const shell = shellRef.current
-      if (shell) {
-        shell.style.transform = next.x === 0 && next.y === 0
-          ? ''
-          : `translate(calc(-50% + ${next.x}px), ${next.y}px)`
-      }
-    }
-    const handleUp = () => {
-      const next = pendingOffsetRef.current
-      pendingOffsetRef.current = null
-      dragStartRef.current = null
-      setIsDraggingIsland(false)
-      if (next) {
-        setDragOffset(next)
-        try {
-          window.localStorage.setItem(DRAG_OFFSET_STORAGE_KEY, JSON.stringify(next))
-        } catch {
-          /* persistence is best-effort */
-        }
-      }
-    }
-    window.addEventListener('pointermove', handleMove)
-    window.addEventListener('pointerup', handleUp)
-    window.addEventListener('pointercancel', handleUp)
-    return () => {
-      window.removeEventListener('pointermove', handleMove)
-      window.removeEventListener('pointerup', handleUp)
-      window.removeEventListener('pointercancel', handleUp)
-    }
-  }, [isDraggingIsland])
-
-  // Re-apply the persisted offset whenever the expanded panel (re)mounts;
-  // collapsing always clears the transform so the capsule stays centered.
-  useEffect(() => {
-    if (stage !== 'expanded') {
-      if (shellRef.current) shellRef.current.style.transform = ''
-      return
-    }
-    applyDragTransform(dragOffset)
-  }, [stage, dragOffset, applyDragTransform])
   const [parchmentOpen, setParchmentOpen] = useState(false)
   const [auxiliaryModule, setAuxiliaryModule] = useState<JanusAuxiliaryModuleType | null>(null)
   const [activeAgentCard, setActiveAgentCard] = useState<import('../../../../shared/roundtable/events').AgentResultCard | null>(null)
   const [roundtableState, setRoundtableState] = useState<RoundtableState | null>(null)
   const [roundtableToolCalls, setRoundtableToolCalls] = useState<RoundtableToolCall[]>([])
-  const [auxiliaryClosing, setAuxiliaryClosing] = useState(false)
+  const auxiliaryPresence = useIslandPresence(stage === 'expanded' && view === 'roundtable' && auxiliaryModule !== null)
+  const lastAuxiliaryModule = useRef(auxiliaryModule)
+  if (auxiliaryModule) lastAuxiliaryModule.current = auxiliaryModule
+  const displayedAuxiliary = auxiliaryPresence.present ? auxiliaryModule ?? lastAuxiliaryModule.current : null
+  const auxiliaryLayout = useAuxiliaryIslandLayout(shellRef, auxiliaryPresence.present, !auxiliaryModule || stage !== 'expanded' || view !== 'roundtable')
+  const auxiliaryOpener = useRef<Element | null>(null)
+  const openAuxiliary = (module: JanusAuxiliaryModuleType) => {
+    if (!auxiliaryPresence.present) auxiliaryOpener.current = document.activeElement
+    setAuxiliaryModule(module)
+  }
   // Parchment detail export (mid-meeting DRAFT or ended FINAL). Read-only
   // snapshot: never advances the round or ends the meeting.
   const [parchmentExportBusy, setParchmentExportBusy] = useState(false)
@@ -574,14 +496,16 @@ export function JanusIsland({
   }, [stage, view])
 
   const requestCloseAuxiliary = useCallback(() => {
-    if (!auxiliaryModule || auxiliaryClosing) return
-    setAuxiliaryClosing(true)
-    window.setTimeout(() => {
-      setAuxiliaryModule(null)
-      setAuxiliaryClosing(false)
-      setParchmentOpen(false)
-    }, 260)
-  }, [auxiliaryModule, auxiliaryClosing])
+    setAuxiliaryModule(null)
+    setParchmentOpen(false)
+  }, [])
+
+  useEffect(() => {
+    if (auxiliaryPresence.present) return
+    const opener = auxiliaryOpener.current
+    auxiliaryOpener.current = null
+    if (stage === 'expanded' && view === 'roundtable' && opener instanceof HTMLElement && opener.isConnected) opener.focus({ preventScroll: true })
+  }, [auxiliaryPresence.present, stage, view])
 
   useEffect(() => {
     if (!auxiliaryModule) return
@@ -593,7 +517,7 @@ export function JanusIsland({
     }
     document.addEventListener('keydown', handleAuxiliaryEscape, true)
     return () => document.removeEventListener('keydown', handleAuxiliaryEscape, true)
-  }, [auxiliaryModule, auxiliaryClosing, requestCloseAuxiliary])
+  }, [auxiliaryModule, requestCloseAuxiliary])
 
   // A newly arrived user turn follows into the chat view from the monitor
   // overview. Streaming/thinking ticks (isStreaming, pendingContent) never
@@ -620,7 +544,7 @@ export function JanusIsland({
       const target = event.target as Node | null
       const targetElement = target instanceof Element ? target : target?.parentElement
       const shell = shellRef.current
-      if (!shell || !target || shell.contains(target) || targetElement?.closest('[data-select-dropdown]')) return
+      if (!shell || !target || shell.contains(target) || targetElement?.closest('[data-select-dropdown], [data-island-companion]')) return
       onDismiss()
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -640,15 +564,15 @@ export function JanusIsland({
     }
   }, [islandDismissSuppressed, onDismiss, stage, trayOpen])
 
-  const auxiliaryDescriptor: JanusAuxiliaryModuleDescriptor | null = auxiliaryModule === 'roundtable-parchment'
+  const auxiliaryDescriptor: JanusAuxiliaryModuleDescriptor | null = displayedAuxiliary === 'roundtable-parchment'
     ? {
         id: 'janus-roundtable-parchment-detail',
         type: 'roundtable-parchment',
         title: t('janus:roundtable.auxiliary.parchmentTitle'),
         ariaLabel: t('janus:roundtable.auxiliary.parchmentAria'),
       }
-    : auxiliaryModule === 'agent-result' ? { id: 'janus-agent-result-detail', type: 'agent-result', title: t('janus:roundtable.auxiliary.agentResultTitle'), ariaLabel: t('janus:roundtable.auxiliary.agentResultAria') }
-    : auxiliaryModule === 'roundtable-questions' ? { id: 'janus-roundtable-questions-detail', type: 'roundtable-questions', title: t('janus:roundtable.auxiliary.questionsTitle'), ariaLabel: t('janus:roundtable.auxiliary.questionsAria') } : null
+    : displayedAuxiliary === 'agent-result' ? { id: 'janus-agent-result-detail', type: 'agent-result', title: t('janus:roundtable.auxiliary.agentResultTitle'), ariaLabel: t('janus:roundtable.auxiliary.agentResultAria') }
+    : displayedAuxiliary === 'roundtable-questions' ? { id: 'janus-roundtable-questions-detail', type: 'roundtable-questions', title: t('janus:roundtable.auxiliary.questionsTitle'), ariaLabel: t('janus:roundtable.auxiliary.questionsAria') } : null
 
   // §37.10: question pool projection shared by the questions detail island.
   const roundtableOpenQuestions = (roundtableState?.facts ?? [])
@@ -688,14 +612,13 @@ export function JanusIsland({
       data-stage={stage}
       data-view={view}
       data-mode={mode}
-      data-auxiliary-open={auxiliaryDescriptor ? 'true' : 'false'}
+      data-auxiliary-open={auxiliaryModule ? 'true' : 'false'}
       data-auxiliary-module={auxiliaryDescriptor?.type ?? 'none'}
       data-peek-kind={splitCapsule ? 'split' : capsuleTopNotification?.kind ?? 'empty'}
       data-peek-layout={splitCapsule ? 'split' : 'single'}
       data-capsule-tier={capsuleTierValue}
       data-pinned={islandPinned ? 'true' : 'false'}
       data-loading={chatLoading ? 'true' : 'false'}
-      data-dragging={isDraggingIsland ? 'true' : 'false'}
       onMouseDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
     >
@@ -793,16 +716,14 @@ export function JanusIsland({
               return
             }
             setParchmentOpen(true)
-            setAuxiliaryClosing(false)
-            setAuxiliaryModule('roundtable-parchment')
+            openAuxiliary('roundtable-parchment')
           }}
           onOpenParchmentDetail={() => {
             setParchmentOpen(true)
-            setAuxiliaryClosing(false)
-            setAuxiliaryModule('roundtable-parchment')
+            openAuxiliary('roundtable-parchment')
           }}
-          onOpenAgentResult={(card) => { setActiveAgentCard(card); setAuxiliaryModule('agent-result'); setAuxiliaryClosing(false) }}
-          onOpenQuestionsDetail={() => { setAuxiliaryClosing(false); setAuxiliaryModule('roundtable-questions') }}
+          onOpenAgentResult={(card) => { setActiveAgentCard(card); openAuxiliary('agent-result') }}
+          onOpenQuestionsDetail={() => openAuxiliary('roundtable-questions')}
           onRequestAuxiliaryClose={requestCloseAuxiliary}
           onRoundtableStateChange={setRoundtableState}
           mode={mode}
@@ -845,16 +766,15 @@ export function JanusIsland({
           toolTraces={toolTraces}
           islandPinned={islandPinned}
           onToggleIslandPin={toggleIslandPinned}
-          onTopbarPointerDown={handleIslandTopbarPointerDown}
-          isDraggingIsland={isDraggingIsland}
         />
       </div>
-      {stage === 'expanded' && auxiliaryDescriptor ? (
+      {stage === 'expanded' && auxiliaryDescriptor && auxiliaryLayout ? (
         <JanusAuxiliaryIsland
           module={auxiliaryDescriptor}
-          closing={auxiliaryClosing}
+          phase={auxiliaryPresence.phase}
+          layout={auxiliaryLayout}
           onClose={requestCloseAuxiliary}
-          actions={auxiliaryModule === 'roundtable-parchment' && roundtableState?.sessionId && roundtableState.phase !== 'idle' ? (
+          actions={displayedAuxiliary === 'roundtable-parchment' && roundtableState?.sessionId && roundtableState.phase !== 'idle' ? (
             <>
               {parchmentExportNotice ? (
                 <span className="janus-auxiliary-export-notice" role="status">{
@@ -879,7 +799,7 @@ export function JanusIsland({
             </>
           ) : undefined}
         >
-          {auxiliaryModule === 'roundtable-parchment' ? <JanusRoundtableParchment detailed document={roundtableState ? projectParchment(roundtableState) : undefined} /> : auxiliaryModule === 'roundtable-questions' ? <JanusRoundtableQuestions roundNumber={roundtableState?.roundNumber ?? 0} open={roundtableOpenQuestions} answered={roundtableAnsweredQuestions} /> : <div key={activeAgentCard?.id ?? 'agent-result-empty'} className="janus-agent-result-detail" data-detailed="true">
+          {displayedAuxiliary === 'roundtable-parchment' ? <JanusRoundtableParchment detailed document={roundtableState ? projectParchment(roundtableState) : undefined} /> : displayedAuxiliary === 'roundtable-questions' ? <JanusRoundtableQuestions roundNumber={roundtableState?.roundNumber ?? 0} open={roundtableOpenQuestions} answered={roundtableAnsweredQuestions} /> : <div key={activeAgentCard?.id ?? 'agent-result-empty'} className="janus-agent-result-detail" data-detailed="true">
             <div className="janus-agent-result-detail__eyebrow">{t('janus:roundtable.cardDetail.eyebrow')} // {activeAgentCard?.status ? t(ROUNDTABLE_CARD_STATUS_KEYS[activeAgentCard.status]) : t('janus:roundtable.cardDetail.waiting')}</div>
             <h2>{activeAgentCard?.title ?? t('janus:roundtable.cardDetail.titleFallback')}</h2>
             <p className="janus-agent-result-detail__summary">{activeAgentCard?.summary ?? t('janus:roundtable.cardDetail.summaryFallback')}</p>

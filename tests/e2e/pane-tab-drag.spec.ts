@@ -44,13 +44,14 @@ test('reorders both ways with stable preview and preserves mounted terminal cont
   const screen = await page.locator('.xterm-screen').first().elementHandle()
   await start(page, 'terminal:a')
   await move(page, last)
-  await expect(tab(page, 'terminal:b')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -144, 0)')
+  await expect(tab(page, 'terminal:b')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -148, 0)')
   const slot = page.locator('[data-tab-strip="left"] [data-tab-drag-slot]')
   const before = await slot.boundingBox()
   // Let the give-way animation finish without moving the pointer.
   await page.waitForTimeout(220)
   expect(await slot.boundingBox()).toEqual(before)
   await test.info().attach('tab-reorder-preview', { body: await page.screenshot(), contentType: 'image/png' })
+  await page.screenshot({ path: test.info().outputPath('tab-reorder-preview.png') })
   expect((await state(page)).panes[0].tabs).toEqual(['terminal:a', 'terminal:b', 'terminal:c'])
   await page.mouse.up()
   await clean(page)
@@ -91,6 +92,7 @@ for (const zone of ['left', 'right', 'top', 'bottom', 'center'] as const) {
     await start(page, 'terminal:b')
     await move(page, destination)
     await expect(page.locator('[data-tab-drag-hint]')).toHaveAttribute('data-zone', zone)
+    await page.screenshot({ path: test.info().outputPath(`split-preview-${zone}.png`) })
     await page.mouse.up()
     await clean(page)
     const result = await state(page)
@@ -159,6 +161,64 @@ test('scrolls an overflowing strip with a stationary pointer and appends precise
   expect((await state(page)).panes[1].tabs.at(-1)).toBe('terminal:a')
   await clean(page)
 })
+
+for (const width of [1280, 800]) {
+  test(`keeps pane controls visible while overflowing tabs scroll at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 })
+    await page.goto('/pane-tabs.html?overflow')
+    const pane = page.locator('[data-pane-id="right"]')
+    const strip = pane.locator('[data-tab-strip]')
+    // 浏览器入口已移到顶栏全局工具组，pane 头部只保留新建终端与结束终端。
+    const controls = [
+      pane.getByRole('button', { name: 'New Terminal', exact: true }),
+      pane.getByRole('button', { name: /End current terminal/ }),
+    ]
+    await expect(controls[0]).toBeVisible()
+    const paneBox = (await pane.boundingBox())!
+    const boxes = await Promise.all(controls.map((control) => control.boundingBox()))
+    for (const box of boxes) {
+      expect(box).not.toBeNull()
+      expect(box!.x).toBeGreaterThanOrEqual(paneBox.x)
+      expect(box!.x + box!.width).toBeLessThanOrEqual(paneBox.x + paneBox.width)
+      expect(box!.width).toBe(24)
+    }
+    await expect.poll(() => strip.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0)
+    await strip.evaluate((element) => { element.scrollLeft = element.scrollWidth })
+    await expect.poll(() => strip.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
+    for (let index = 0; index < controls.length; index += 1) {
+      expect(await controls[index].boundingBox()).toEqual(boxes[index])
+    }
+    await controls[0].click()
+    await expect(page.getByRole('menu')).toBeVisible()
+    await pane.getByRole('button', { name: 'Close terminal menu', exact: true }).click()
+    await expect(page.getByRole('menu')).toHaveCount(0)
+    await test.info().attach('overflow-with-fixed-controls', { body: await page.screenshot(), contentType: 'image/png' })
+  })
+}
+
+for (const zone of ['right', 'bottom'] as const) {
+  test(`splits a browser-only workspace at the ${zone} edge without creating a terminal`, async ({ page }) => {
+    await page.goto('/pane-tabs.html?browser-only')
+    await expect(tab(page, 'browser:d')).toBeVisible()
+    expect((await state(page)).terminals).toBe(0)
+    const destination = await point(page, '[data-pane-id="right"]', zone === 'right' ? .97 : .5, zone === 'bottom' ? .97 : .5)
+    await start(page, 'browser:d')
+    await move(page, destination)
+    await expect(page.locator('[data-tab-drag-hint]')).toHaveAttribute('data-zone', zone)
+    await page.mouse.up()
+    await clean(page)
+    const result = await state(page)
+    expect(result.tree.ratio).toBe(.5)
+    expect(result.tree.direction).toBe(zone === 'right' ? 'horizontal' : 'vertical')
+    expect(result.panes).toHaveLength(2)
+    expect(result.panes.flatMap((pane: { tabs: string[] }) => pane.tabs).sort()).toEqual(['browser:d', 'browser:e'])
+    expect(result.focusedTab).toBe('browser:d')
+    expect(result.terminals).toBe(0)
+    expect(result.kills).toBe(0)
+    expect(result.creates).toBe(0)
+    await expect.poll(async () => (await state(page)).bounds.d?.width ?? 0).toBeGreaterThan(0)
+  })
+}
 
 test('keeps native sidebar terminal insertion available', async ({ page }) => {
   const destination = tab(page, 'browser:d')

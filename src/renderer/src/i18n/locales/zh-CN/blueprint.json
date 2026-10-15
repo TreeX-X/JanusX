@@ -276,6 +276,7 @@
     "closeNodeDetail": "关闭节点详情"
   },
   "toolbar": {
+    "layoutSaveFailed": "布局保存失败",
     "loading": "正在投影 note…",
     "recent": "最近",
     "times": "次",
@@ -362,7 +363,7 @@
     "placeholder": "搜索标题 / 状态 / tag…",
     "statusAll": "全部状态",
     "typeAll": "全部类型",
-    "kindAll": "全部 kind"
+    "kindAll": "全部类型"
   },
   "prompt": {
     "newChild": "新建子节点",
@@ -960,6 +961,7 @@
     "changeSummary": "正文新增 {{added}} 行，移除 {{removed}} 行"
   },
   "reader": {
+    "sourceActions": "原文操作",
     "openNote": "打开笔记：{{title}}",
     "reviewUnavailable": "审核状态暂不可用",
     "structureIssue": "文档结构有问题",

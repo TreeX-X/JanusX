@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
 } from 'react'
@@ -169,7 +170,7 @@ export function RightDock({
       <div
         className={styles.panel}
         id="right-tool-panel"
-        style={{ width: renderedPanelWidth }}
+        style={{ '--right-tool-content-width': `${renderedPanelWidth}px` } as CSSProperties}
         data-visible={contentVisible}
         data-resizing={resizing}
         aria-hidden={!contentVisible}

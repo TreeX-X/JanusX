@@ -19,6 +19,7 @@ import { registerJanusHandlers } from './janus-handlers'
 import { registerHarnessHandlers } from './harness-handlers'
 import { registerBlueprintReviewHandlers } from './blueprint-review-handlers'
 import { registerJanusChatHandlers } from './janus-chat-handlers'
+import { registerMemoHandlers } from './memo-handlers'
 import { registerRoundtableHandlers } from './roundtable-handlers'
 import { registerKnowledgeHandlers } from './knowledge-handlers'
 import { registerLanguageHandlers } from './language-handlers'
@@ -126,6 +127,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   registerHarnessHandlers(getCurrentMainWindow)
   registerBlueprintReviewHandlers()
   registerJanusChatHandlers()
+  registerMemoHandlers()
   registerRoundtableHandlers(getCurrentMainWindow)
   registerRuntimeTelemetryHandlers()
   registerSettingsHandlers()

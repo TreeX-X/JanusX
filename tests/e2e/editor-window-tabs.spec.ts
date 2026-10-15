@@ -77,6 +77,19 @@ test('file opens share one workspace editor window and switch existing tabs', as
       return document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2) === element
     })).toBe(true)
 
+    await editorPage.getByRole('button', { name: /^(Pin window on top|锁定窗口置顶)$/ }).click()
+    await expect.poll(() => application!.evaluate(({ BrowserWindow }) => {
+      return BrowserWindow.getAllWindows()
+        .find(window => new URL(window.webContents.getURL()).searchParams.get('editorWindow') === '1')
+        ?.isAlwaysOnTop()
+    })).toBe(true)
+    await editorPage.getByRole('button', { name: /^(Unpin window|取消窗口置顶)$/ }).click()
+    await expect.poll(() => application!.evaluate(({ BrowserWindow }) => {
+      return BrowserWindow.getAllWindows()
+        .find(window => new URL(window.webContents.getURL()).searchParams.get('editorWindow') === '1')
+        ?.isAlwaysOnTop()
+    })).toBe(false)
+
     await mainPage.evaluate(
       ({ first, workspace }) => (window as EditorWindowAPI).electron.window.openEditor({ filePath: first, workspacePath: workspace }),
       { first: firstPath, workspace: workspacePath },

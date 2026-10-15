@@ -19,6 +19,28 @@ beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'janusx-usage-
 afterEach(async () => { await rm(directory, { recursive: true, force: true }) })
 
 describe('persistent native usage accounting', () => {
+  it('continues legacy Codex cumulative accounting when the write breakdown becomes available', () => {
+    ledger.record(sample(1000, 100))
+    ledger.record({ ...sample(2000, 120), counters: { ...counts(40), cacheWriteTokens: 80, totalTokens: 120 } })
+    ledger.record({ ...sample(3000, 150), counters: { ...counts(50), cacheWriteTokens: 100, totalTokens: 150 } })
+    expect(all().hasIssues).toBe(false)
+    expect(all().records.map(row => row.totalTokens)).toEqual([20, 30])
+    expect(all().records[0].cacheWriteTokens).toBeUndefined()
+    expect(all().records[1]).toMatchObject({ inputTokens: 10, cacheWriteTokens: 20 })
+  })
+  it('accepts newly split Codex event identities without double-booking legacy records', () => {
+    ledger.record({ ...events(2000), engine: 'codex' })
+    ledger.record({ ...events(3000), engine: 'codex', events: [
+      { ...counts(3, 5), cacheWriteTokens: 7, totalTokens: 15, id: 'response-1', at: 1000 },
+      { ...counts(2), cacheWriteTokens: 8, totalTokens: 10, id: 'response-2', at: 2000 },
+    ] })
+    expect(all().hasIssues).toBe(false)
+    expect(all().records.map(row => row.totalTokens)).toEqual([15, 10])
+    expect(all().records[0]).toMatchObject({ inputTokens: 3, cacheWriteTokens: 7, at: 1000 })
+    expect(all().records[1].cacheWriteTokens).toBe(8)
+    ledger.record({ ...events(4000), engine: 'codex', events: [{ ...counts(3, 5), cacheWriteTokens: 7, totalTokens: 15, id: 'response-1', at: 1000 }] })
+    expect(all().records).toHaveLength(2)
+  })
   it('seeds first cumulative observation, deduplicates polls and resumes after restart', () => {
     ledger.record(sample(1000, 100))
     expect(all().records).toEqual([])

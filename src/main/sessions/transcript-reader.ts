@@ -5,23 +5,22 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { TranscriptDetail, TranscriptTurn } from '../../shared/ipc/session'
-import { readBounded } from './external-session-scanner'
+import { readTranscriptSnapshot, SNAPSHOT_TEXT_CAP, SNAPSHOT_TURN_CAP } from './transcript-snapshot'
 import {
   kernelMessagesFromRecords,
   pairTurns,
   parseJsonLine,
-  segmentTurns,
   type KernelTurn,
 } from './transcript-kernel'
 import { readOpencodeTurns } from './opencode-sessions'
 
 /** Most-recent pairs kept; older pairs drop with the truncated flag set. */
-export const TRANSCRIPT_TURN_CAP = 100
+export const TRANSCRIPT_TURN_CAP = SNAPSHOT_TURN_CAP
 /**
  * Display prose stays full inside the bounded window; only a pathological
  * single row is capped and marked, normal answers never truncate.
  */
-export const TRANSCRIPT_TEXT_CAP = 200_000
+export const TRANSCRIPT_TEXT_CAP = SNAPSHOT_TEXT_CAP
 /** Single-doc histories (janus) parse whole with a size cap instead. */
 const JANUS_DOC_MAX_BYTES = 2 * 1024 * 1024
 
@@ -59,11 +58,8 @@ async function readJanusDoc(path: string): Promise<TranscriptTurn[] | null> {
 }
 
 /**
- * Bounded full-prose read of one provider transcript. Corrupt lines and
- * unknown shapes are skipped inline; a missing or unreadable file resolves
- * null so callers fall back to cached excerpts without failing. Windowed
- * reads never pair a question from the head window with an answer from the
- * tail window — segments pair internally and concatenate.
+ * Stream complete provider records, retaining bounded recent prose. Tool
+ * output never displaces conversation or metadata; counts cover the file.
  */
 export async function readTranscriptDetail(
   transcriptPath: string,
@@ -96,15 +92,7 @@ export async function readTranscriptDetail(
   }
   if (engine !== 'claude' && engine !== 'codex' && engine !== 'pi') return null
   if (!transcriptPath) return null
-  const bounded = await readBounded(transcriptPath)
-  if (!bounded) return null
-  const turns: TranscriptTurn[] = []
-  let totalTurns = 0
-  for (const turn of segmentTurns(bounded.lines, bounded.headLines, engine)) {
-    totalTurns += 1
-    turns.push(toTurn(turn))
-    if (turns.length > TRANSCRIPT_TURN_CAP) turns.shift()
-  }
-  if (totalTurns === 0) return null
-  return { transcriptPath, turns, totalTurns, truncated: totalTurns > turns.length }
+  const snapshot = await readTranscriptSnapshot(transcriptPath, engine)
+  if (!snapshot || snapshot.totalTurns === 0) return null
+  return { transcriptPath, turns: snapshot.turns, totalTurns: snapshot.totalTurns, truncated: snapshot.truncated }
 }

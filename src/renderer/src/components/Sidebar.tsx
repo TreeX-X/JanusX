@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { createPortal } from 'react-dom'
-import { ChevronRight, Ellipsis, Folder, GitBranch, PanelLeftClose, PanelLeftOpen, Plus, Terminal as TerminalGlyph } from 'lucide-react'
+import { ChevronRight, Ellipsis, Folder, GitBranch, PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { EMPTY_PENDING_LIST, EMPTY_STRING_LIST, EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
@@ -39,6 +39,7 @@ import {
   JANUS_PROJECT_CANDIDATE_EVENT,
   type JanusProjectCandidate,
 } from './janus/janusProjectCandidate'
+import styles from './Sidebar.module.css'
 
 const WORKSPACE_DRAG_TYPE = 'application/x-janus-workspace'
 const GROUP_HOVER_DELAY = 300
@@ -67,7 +68,8 @@ interface WorkspaceContextMenuProps {
   onDelete: (workspace: Workspace) => void
 }
 
-// Note: expanded workspace rows open this menu only from their ⋯ button, which stays hidden until the row is hovered or focused so the terminal badge keeps the right edge; right-click stays on the collapsed rail and group headers — see .agents/notes/sessions/workspace-row-actions-menu.md and .agents/notes/sessions/workspace-row-hover-reveal.md
+// Expanded rows reveal a fixed-slot ⋯ on hover/focus; names do not move.
+// See .agents/notes/sessions/workspace-row-hover-reveal.md.
 function WorkspaceContextMenu({
   menu,
   onRunConfiguration,
@@ -80,8 +82,7 @@ function WorkspaceContextMenu({
   const { t } = useI18n('common')
   const menuRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ x: menu.x, y: menu.y })
-  // 一键主题：底座走语义令牌，纸面点睛（硬偏移影/去毛玻璃）走分支，与终端菜单同构
-  const plancheMenu = useThemeStore((s) => s.theme) === 'planche'
+  // Note: .agents/notes/workbench/right-dock.md — shared neutral popover surface.
 
   useLayoutEffect(() => {
     const element = menuRef.current
@@ -93,7 +94,7 @@ function WorkspaceContextMenu({
     })
   }, [menu.x, menu.y])
 
-  const itemClassName = `block w-full border-0 bg-transparent px-3 py-1.5 text-left text-[12px] text-[var(--shell-text)] transition-colors hover:text-[var(--shell-text)] ${plancheMenu ? 'hover:bg-[#DCCFA8]' : 'hover:bg-[rgba(255,255,255,0.06)]'}`
+  const itemClassName = 'block w-full border-0 bg-transparent px-3 py-1.5 text-left text-[12px] text-[var(--shell-text)] transition-colors hover:bg-[var(--popover-hover)] hover:text-[var(--shell-text)] focus-visible:bg-[var(--popover-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2 focus-visible:outline-[var(--shell-accent)]'
   const separatorClassName = 'my-1 h-px bg-[var(--shell-border)]'
   const target = menu.target
 
@@ -106,12 +107,9 @@ function WorkspaceContextMenu({
         top: position.y,
         width: MENU_WIDTH,
         zIndex: 1200,
-        background: 'var(--shell-chrome-raised)',
+        background: 'var(--popover-background)',
         border: '1px solid var(--control-border)',
-        boxShadow: plancheMenu
-          ? '3px 3px 0 #E8A08A'
-          : '0 14px 36px rgba(0,0,0,0.55)',
-        backdropFilter: plancheMenu ? 'none' : 'blur(16px)',
+        boxShadow: 'var(--popover-shadow)',
       }}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
@@ -142,7 +140,7 @@ function WorkspaceContextMenu({
           <div className={separatorClassName} />
           <button
             type="button"
-            className={`${itemClassName} !text-[var(--shell-diff-del)] ${plancheMenu ? 'hover:!bg-[var(--shell-accent-soft)]' : 'hover:!bg-[rgba(255,88,88,0.1)]'}`}
+            className={`${itemClassName} !text-[var(--shell-diff-del)] hover:!bg-[var(--shell-accent-soft)]`}
             onClick={() => onDelete(target.workspace)}
           >
             {t('common:workspace.deleteWorkspace')}
@@ -189,7 +187,7 @@ function terminalPresetLabel(preset: Terminal['preset'], t: (key: string) => str
   }
 }
 
-// Note: preset 图标走共享 TerminalPresetIcon（单色字形 mask + currentColor，跨主题可读）——见 src/renderer/src/components/ui/TerminalPresetIcon.tsx
+// Preset 图标走共享 TerminalPresetIcon；侧栏单独修正 Codex 在深色主题的对比度。
 // Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/terminal/terminal-status-ring.md
 // 形态走共享 TerminalStatusLight（与中部 tab 同一盏灯），此处只保留 tooltip 与 20px 点击区。
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
@@ -214,9 +212,7 @@ function workspaceInitial(name: string): string {
   return Array.from(name.trim())[0]?.toUpperCase() ?? '?'
 }
 
-// Note: folder is the resting glyph; the repo avatar crossfades in on row
-// hover only, with no bordered box in either state — see
-// .agents/notes/sessions/worktrees/worktree-sidebar-scoping.md
+// Folder at rest; cached avatar appears on hover and remains for the selected workspace.
 function RepoRowIcon({ workspacePath }: { workspacePath: string }) {
   const avatar = useWorktreeStore((s) => s.avatars[workspacePath])
   const [failed, setFailed] = useState(false)
@@ -224,18 +220,13 @@ function RepoRowIcon({ workspacePath }: { workspacePath: string }) {
     return <Folder size={14} strokeWidth={1.6} className="shrink-0" aria-hidden="true" />
   }
   return (
-    <span className="relative flex shrink-0" style={{ width: 14, height: 14 }} aria-hidden="true">
-      <Folder
-        size={14}
-        strokeWidth={1.6}
-        className="transition-opacity duration-150 group-hover/ws:opacity-0"
-      />
+    <span className={styles.repoIcon} aria-hidden="true">
+      <Folder size={14} strokeWidth={1.6} className={styles.repoFolder} />
       <img
         src={avatar}
         alt=""
         onError={() => setFailed(true)}
-        className="absolute inset-0 transition-opacity duration-150 opacity-0 group-hover/ws:opacity-100"
-        style={{ width: 14, height: 14, borderRadius: 4, objectFit: 'cover' }}
+        className={styles.repoAvatar}
       />
     </span>
   )
@@ -260,12 +251,6 @@ function isCwdWithinWorktree(cwd: string, base: string): boolean {
   const lowerLeft = left.toLowerCase()
   const lowerRight = right.toLowerCase()
   return lowerLeft === lowerRight || lowerLeft.startsWith(`${lowerRight}/`)
-}
-
-/** Short workdir suffix for the terminal sub-line: `…/<basename>`. */
-function shortCwd(cwd: string): string {
-  const last = cwd.split(/[/\\]/).filter(Boolean).at(-1)
-  return last ? `…/${last}` : ''
 }
 
 /** Display-only base ref: `origin/main` reads as `main`. */
@@ -312,31 +297,40 @@ function TerminalRow({
   terminal,
   focused,
   onDragStart,
+  onSelect,
 }: {
   terminal: Terminal
   focused: boolean
   onDragStart: (terminal: Terminal, event: React.DragEvent<HTMLDivElement>) => void
+  onSelect: (terminal: Terminal) => void
 }) {
   const { t } = useI18n()
   const presetLabel = terminalPresetLabel(terminal.preset, t)
   const displayName = terminal.name || presetLabel
-  const suffix = shortCwd(terminal.cwd)
   return (
-    <ThemedTooltip label={`${presetLabel} · ${terminal.cwd}`}>
+    <ThemedTooltip label={`${displayName} · ${presetLabel} · ${terminal.cwd}`}>
     <div
       draggable
+      role="button"
+      tabIndex={0}
+      aria-current={focused ? 'true' : undefined}
+      aria-label={displayName}
+      data-sidebar-terminal={terminal.id}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
+        onSelect(terminal)
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        event.stopPropagation()
+        onSelect(terminal)
       }}
       onDragStart={(event) => onDragStart(terminal, event)}
       onDragEnd={() => clearTerminalDragData(terminal.id)}
-      className="group/terminal mb-0.5 grid w-full cursor-grab grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)] active:cursor-grabbing"
-      style={{
-        background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
-        color: focused ? 'var(--shell-text)' : 'var(--shell-muted)',
-      }}
+      className={styles.terminalRow}
     >
       <span
         className="flex h-[18px] w-[18px] items-center justify-center"
@@ -345,14 +339,12 @@ function TerminalRow({
           preset={terminal.preset}
           alt={t('common:workspace.presetIconAlt', { preset: presetLabel })}
           className="h-3.5 w-3.5 shrink-0"
+          style={terminal.preset === 'codex' ? { filter: 'var(--sidebar-codex-filter)' } : undefined}
         />
       </span>
       <span className="min-w-0">
-        <span className="block truncate font-mono text-[11px]">
+        <span className={styles.terminalName}>
           {displayName}
-        </span>
-        <span className="block truncate text-[9px] text-[var(--shell-dim)]">
-          {suffix ? `${presetLabel} · ${suffix}` : presetLabel}
         </span>
       </span>
       <TerminalStatusIndicator status={terminal.status} />
@@ -361,11 +353,15 @@ function TerminalRow({
   )
 }
 
-/** Neutral per-worktree terminal count; severity lives only in the status dots. */
+/** Quiet count; one summary indicator appears only when action is needed. */
 function WorktreeTerminalBadge({ terminals }: { terminals: Terminal[] }) {
   const { t } = useI18n()
   if (terminals.length === 0) return null
   const activity = summarizeTerminalActivity(terminals)
+  const attentionStatus = activity.needsApproval > 0 ? 'needs-approval'
+    : activity.needsInput > 0 ? 'needs-input'
+      : activity.errors > 0 ? 'error'
+        : activity.degraded > 0 ? 'degraded' : null
   return (
     <ThemedTooltip
       label={t('common:workspace.terminalCountTitle', {
@@ -380,28 +376,10 @@ function WorktreeTerminalBadge({ terminals }: { terminals: Terminal[] }) {
       })}
     >
     <span
-      className="inline-flex h-5 shrink-0 items-center gap-1 rounded-[3px] px-1.5 font-mono text-[9px] tabular-nums"
-      style={{ color: 'var(--shell-dim)', background: 'rgba(255,255,255,0.035)' }}
+      className={styles.terminalCount}
     >
-      <TerminalGlyph size={12} strokeWidth={1.6} className="opacity-70" aria-hidden="true" />
       <span>{activity.total}</span>
-      <span className="inline-flex items-center gap-1">
-        {activity.running > 0 && (
-          <span className="h-1.5 w-1.5 rounded-full bg-[#58c98d]" />
-        )}
-        {activity.needsApproval + activity.needsInput > 0 && (
-          <span className="term-status-pulse h-1.5 w-1.5 rounded-full bg-[#f0a35e]" />
-        )}
-        {activity.degraded > 0 && (
-          <span className="h-1.5 w-1.5 rounded-full bg-[#c9a0ff]" />
-        )}
-        {activity.errors > 0 && (
-          <span className="h-1.5 w-1.5 rounded-full bg-[#ff6666]" />
-        )}
-        {activity.running === 0 && activity.needsAction === 0 && activity.errors === 0 && (
-          <span className="h-1.5 w-1.5 rounded-full bg-[#55555b]" />
-        )}
-      </span>
+      {attentionStatus && <TerminalStatusLight status={attentionStatus} compact />}
     </span>
     </ThemedTooltip>
   )
@@ -417,6 +395,7 @@ function WorktreeSubList({
   onDeleteRequest,
   onShipRequest,
   onTerminalDragStart,
+  onTerminalSelect,
 }: {
   workspaceId: string
   workspacePath: string
@@ -427,6 +406,7 @@ function WorktreeSubList({
   onDeleteRequest: (worktree: WorktreeInfo) => void
   onShipRequest: (worktree: WorktreeInfo) => void
   onTerminalDragStart: (terminal: Terminal, event: React.DragEvent<HTMLDivElement>) => void
+  onTerminalSelect: (terminal: Terminal) => void
 }) {
   const { t } = useI18n('terminal')
   const worktrees = useWorktreeStore((s) => s.worktreesByWorkspace[workspaceId] ?? EMPTY_WORKTREE_LIST)
@@ -455,13 +435,14 @@ function WorktreeSubList({
   // non-git workspaces instead of hiding the whole section.
   if (worktrees.length === 0 && pendingCreations.length === 0 && preservedBranches.length === 0 && terminals.length > 0) {
     return (
-      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.055)', paddingBottom: 4, marginBottom: 4 }}>
+      <div>
         {sortTerminalsByAttention(terminals).map((terminal) => (
           <TerminalRow
             key={terminal.id}
             terminal={terminal}
             focused={isActiveWorkspace && terminal.id === activeTerminalId}
             onDragStart={onTerminalDragStart}
+            onSelect={onTerminalSelect}
           />
         ))}
       </div>
@@ -469,7 +450,7 @@ function WorktreeSubList({
   }
   if (worktrees.length === 0 && pendingCreations.length === 0 && preservedBranches.length === 0) {
     return (
-      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.055)', paddingBottom: 4, marginBottom: 4 }}>
+      <div>
         <div className="px-3 py-2 font-mono text-[11px] text-[var(--shell-dim)]">{t('common:workspace.terminal.empty')}</div>
       </div>
     )
@@ -496,7 +477,7 @@ function WorktreeSubList({
   }
 
   return (
-    <div style={{ borderBottom: '1px solid rgba(255,255,255,0.055)', paddingBottom: 4, marginBottom: 4 }}>
+    <div>
       {pendingCreations.map((pending) => (
         <div
           key={pending.id}
@@ -553,11 +534,12 @@ function WorktreeSubList({
         const focused = activePath === worktree.path
         return (
           <div key={worktree.id}>
-            <ThemedTooltip label={worktree.path}>
+            <ThemedTooltip label={`${worktreeDisplayName(worktree.path, worktree.branch)}${worktree.startFrom ? ` → ${displayBaseRef(worktree.startFrom)}` : ''} · ${worktree.path}`}>
             <div
               role="button"
               tabIndex={0}
               aria-label={worktree.path}
+              aria-current={focused && isActiveWorkspace ? 'true' : undefined}
               onClick={(event) => {
                 event.stopPropagation()
                 // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/sessions/worktrees/worktree-file-tree-scope.md
@@ -569,21 +551,14 @@ function WorktreeSubList({
                 event.stopPropagation()
                 void switchActiveWorktree(workspaceId, worktree.path)
               }}
-              className="group/wt mb-0.5 grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-[3px] px-2 py-1.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]"
-              style={{
-                background: focused ? 'rgba(255,120,48,0.055)' : 'transparent',
-                color: focused ? 'var(--shell-text)' : 'var(--shell-muted)',
-              }}
+              className={`group/wt ${styles.worktreeRow}`}
             >
               <span className="flex h-[18px] w-[18px] items-center justify-center">
                 <GitBranch size={14} strokeWidth={1.6} aria-hidden="true" />
               </span>
               <span className="min-w-0">
-                <span className="block truncate font-mono text-[11px]">
+                <span className={styles.worktreeName}>
                   {worktreeDisplayName(worktree.path, worktree.branch)}
-                </span>
-                <span className="block truncate text-[9px] text-[var(--shell-dim)]">
-                  {worktree.path}
                 </span>
               </span>
               <WorktreeTerminalBadge terminals={groupTerminals} />
@@ -596,8 +571,7 @@ function WorktreeSubList({
                     onShipRequest(worktree)
                   }}
                   onKeyDown={(event) => event.stopPropagation()}
-                  className="shrink-0 cursor-pointer rounded-[3px] border-0 opacity-0 transition-opacity duration-150 hover:bg-[var(--shell-hover)] hover:text-[var(--shell-muted)] focus-visible:opacity-100 group-hover/wt:opacity-100"
-                  style={{ color: 'var(--shell-dim)', background: 'transparent', fontSize: 10, padding: '2px 6px' }}
+                  className={styles.worktreeAction}
                 >
                   {t('terminal:worktree.shipAction')}
                 </button>
@@ -613,8 +587,7 @@ function WorktreeSubList({
                     onDeleteRequest(worktree)
                   }}
                   onKeyDown={(event) => event.stopPropagation()}
-                  className="grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 transition-[width,opacity] duration-150 hover:bg-[var(--shell-hover)] hover:text-[var(--shell-muted)] focus-visible:w-5 focus-visible:opacity-100 group-hover/wt:w-5 group-hover/wt:opacity-100"
-                  style={{ color: 'var(--shell-dim)', background: 'transparent' }}
+                  className={styles.worktreeAction}
                 >
                   <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
                 </button>
@@ -623,19 +596,14 @@ function WorktreeSubList({
             </div>
             </ThemedTooltip>
             {groupTerminals.length > 0 && (
-              <div style={{ margin: '0 4px 2px 26px', padding: '4px 0', borderLeft: '1px solid rgba(255,255,255,0.055)' }}>
-                {worktree.branch && (
-                  <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-dim)', padding: '6px 12px 4px' }}>
-                    {t('terminal:worktree.branchLabel')} <b style={{ color: 'var(--shell-muted)', fontWeight: 400 }}>{worktree.branch}</b>
-                    {worktree.startFrom ? ` → ${displayBaseRef(worktree.startFrom)}` : ''}
-                  </div>
-                )}
+              <div className={styles.terminalGroup}>
                 {sortTerminalsByAttention(groupTerminals).map((terminal) => (
                   <TerminalRow
                     key={terminal.id}
                     terminal={terminal}
                     focused={isActiveWorkspace && terminal.id === activeTerminalId}
                     onDragStart={onTerminalDragStart}
+                    onSelect={onTerminalSelect}
                   />
                 ))}
               </div>
@@ -898,6 +866,27 @@ export function Sidebar() {
     )
   }, [])
 
+  const handleTerminalSelect = useCallback((terminal: Terminal) => {
+    const state = useWorkspaceStore.getState()
+    const workspace = state.workspaces.find((item) => item.id === terminal.workspaceId)
+    if (!workspace) return
+    const switchingWorkspace = state.activeWorkspaceId !== workspace.id
+    if (switchingWorkspace) state.setActiveWorkspace(workspace.id)
+    useWorkspaceStore.getState().setActiveTerminal(terminal.id)
+    setLoadState('terminal-active')
+    // Resolve scope exactly as the rendered groups do; cwd may be a subdirectory.
+    const worktrees = useWorktreeStore.getState().worktreesByWorkspace[workspace.id] ?? EMPTY_WORKTREE_LIST
+    const group = groupTerminalsByWorktree(worktrees, [terminal]).find((item) => item.terminals.length > 0)
+    const scopePath = group?.worktree?.path ?? getScopePathForWorkspace(workspace.id, workspace.path)
+    if (switchingWorkspace) {
+      useWorktreeStore.getState().setActivePath(workspace.id, scopePath)
+      invalidateEditorFileCache(scopePath)
+      void loadWorkspaceFileTree(scopePath, () => getActiveScopePath() === scopePath, { visualTransition: true }).catch(() => {})
+    } else {
+      void switchActiveWorktree(workspace.id, scopePath)
+    }
+  }, [setLoadState])
+
   const handleTerminalPreviewDragStart = useCallback(
     (terminal: Terminal, event: React.DragEvent<HTMLDivElement>) => {
       event.stopPropagation()
@@ -1083,6 +1072,7 @@ export function Sidebar() {
   }, [resetWorkspaceDrag])
 
   const handleWorkspaceKeyDown = useCallback((workspace: Workspace, event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return
     if (event.shiftKey && event.key === 'F10') {
       event.preventDefault()
       const rect = event.currentTarget.getBoundingClientRect()
@@ -1166,7 +1156,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="workspace-sidebar flex flex-col overflow-hidden"
+      className={`workspace-sidebar flex flex-col overflow-hidden ${styles.sidebar}`}
       style={{
         background: 'var(--shell-chrome)',
         borderRight: '1px solid var(--shell-border)',
@@ -1177,8 +1167,8 @@ export function Sidebar() {
       {/* 展开态 */}
       <div id="workspace-sidebar-content" className="workspace-sidebar__expanded" aria-hidden={sidebarCollapsed} {...(sidebarCollapsed ? { inert: '' } : {})}>
           <div
-            className="flex h-9 items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.12em]"
-            style={{ color: 'var(--shell-muted)', borderBottom: '1px solid var(--shell-border)' }}
+            data-workspace-sidebar-header=""
+            className={styles.header}
           >
             <span>{t('common:workspace.label')}</span>
             <div className="flex items-center gap-0.5">
@@ -1326,7 +1316,7 @@ export function Sidebar() {
                             onDragOver={(event) => handleWorkspaceDragOver(ws, event)}
                             onDrop={(event) => handleWorkspaceDrop(ws, event)}
                             onDragEnd={() => handleWorkspaceDragEnd(ws.id)}
-                            className="ws group/ws relative flex h-9 cursor-grab items-center gap-2 rounded-[4px] px-2.5 text-[12px] transition-colors active:cursor-grabbing focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.38)]"
+                            className={`ws group/ws ${styles.workspaceRow}`}
                             style={{
                               color: isActive ? 'var(--shell-text)' : 'var(--shell-muted)',
                               background: isGroupTarget
@@ -1334,8 +1324,8 @@ export function Sidebar() {
                                 : isGroupPending
                                   ? 'var(--shell-hover)'
                                   : isActive
-                                    ? 'var(--shell-accent-soft)'
-                                    : 'transparent',
+                                    ? 'var(--shell-active)'
+                                    : undefined,
                               opacity: isDragged ? 0.42 : 1,
                               boxShadow: isGroupTarget
                                 ? 'inset 0 0 0 1px rgba(255,120,48,0.48), 0 0 12px rgba(255,120,48,0.08)'
@@ -1350,10 +1340,6 @@ export function Sidebar() {
                             {isDropAfter && (
                               <div className="pointer-events-none absolute -bottom-px inset-x-1 h-0.5 rounded bg-[#ff7830] shadow-[0_0_7px_rgba(255,120,48,0.7)]" />
                             )}
-                            <div
-                              className="pointer-events-none absolute bottom-1 left-0 top-1 w-0.5 rounded-r-sm transition-colors"
-                              style={{ background: isActive ? 'var(--shell-accent)' : 'transparent' }}
-                            />
                       <ThemedTooltip label={isExpanded ? t('common:workspace.terminalListCollapseShort', { count: terminalCount }) : t('common:workspace.terminalListExpandShort', { count: terminalCount })}>
                       <button
                         type="button"
@@ -1395,11 +1381,7 @@ export function Sidebar() {
                           event.stopPropagation()
                         }}
                         onClick={(event) => handleWorkspaceMenuButtonClick(ws, event)}
-                        className={`grid h-5 w-0 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-[3px] border-0 opacity-0 pointer-events-none transition-[width,margin,opacity,color,background-color] duration-200 ease-out motion-reduce:transition-none group-hover/ws:mr-0 group-hover/ws:w-5 group-hover/ws:opacity-100 group-hover/ws:pointer-events-auto hover:bg-[var(--shell-hover)] hover:text-[var(--shell-muted)] focus-visible:mr-0 focus-visible:w-5 focus-visible:opacity-100 focus-visible:pointer-events-auto focus:outline-none focus-visible:ring-1 focus-visible:ring-[rgba(255,120,48,0.24)] ${
-                          isMenuOpen
-                            ? 'mr-0 w-5 bg-[var(--shell-hover)] text-[var(--shell-text)] opacity-100 pointer-events-auto'
-                            : '-mr-2 bg-transparent text-[var(--shell-dim)]'
-                        }`}
+                        className={styles.menuButton}
                       >
                         <Ellipsis size={14} strokeWidth={1.8} aria-hidden="true" />
                       </button>
@@ -1414,8 +1396,7 @@ export function Sidebar() {
                     >
                       <div className="min-h-0 overflow-hidden">
                         <div
-                          className="ml-5 mr-1 py-1"
-                          style={{ borderLeft: '1px solid rgba(255,255,255,0.055)' }}
+                          className={styles.workspaceChildren}
                         >
                         <WorktreeSubList
                           workspaceId={ws.id}
@@ -1427,6 +1408,7 @@ export function Sidebar() {
                           onDeleteRequest={(worktree) => setWorktreeDeleteTarget({ workspace: ws, worktree })}
                           onShipRequest={(worktree) => setShipTarget({ workspace: ws, worktree })}
                           onTerminalDragStart={handleTerminalPreviewDragStart}
+                          onTerminalSelect={handleTerminalSelect}
                         />
                         </div>
                         </div>
@@ -1513,7 +1495,7 @@ export function Sidebar() {
                     : isGroupPending
                       ? 'var(--shell-hover)'
                       : isActive
-                        ? 'var(--shell-accent-soft)'
+                        ? 'var(--shell-active)'
                         : 'transparent',
                   opacity: isDragged ? 0.42 : 1,
                   boxShadow: isGroupTarget
@@ -1529,13 +1511,9 @@ export function Sidebar() {
                 {isDropAfter && (
                   <div className="pointer-events-none absolute -bottom-px inset-x-0 h-0.5 rounded bg-[#ff7830]" />
                 )}
-                <div
-                  className="pointer-events-none absolute bottom-1.5 left-0 top-1.5 w-0.5 rounded-r-sm"
-                  style={{ background: isActive ? 'var(--shell-accent)' : 'transparent' }}
-                />
                 <span
                   className="font-mono text-[13px] font-semibold"
-                  style={{ color: isActive ? 'var(--shell-accent-strong)' : 'var(--shell-dim)' }}
+                  style={{ color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)' }}
                 >
                   {workspaceInitial(ws.name)}
                 </span>

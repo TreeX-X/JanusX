@@ -160,3 +160,16 @@
 .bp-note-relation-card__reference code { display: block; padding: 6px 0; overflow-wrap: anywhere; }
 .bp-note-related-preview { border-top: 1px solid var(--shell-border); }
 .bp-note-relations__empty { color: var(--shell-muted); padding: 16px 0; }
+
+/* Keep the review summary visible while details and source actions open on demand. */
+.bp-note-wiki .bp-note-review__heading { padding: 8px 10px; }
+.bp-note-wiki .bp-note-wiki__toolbar { gap: 4px; margin-bottom: 6px; padding: 4px 0; border-bottom-color: var(--shell-border-soft); }
+.bp-note-wiki .bp-note-review-shortcut { border-color: transparent; font-weight: 400; }
+.bp-note-wiki .bp-note-wiki__actions { position: relative; margin: 0 0 0 auto; font-size: 11px; color: var(--shell-muted); }
+.bp-note-wiki .bp-note-wiki__actions > summary { padding: 4px 6px; }
+.bp-note-wiki__actions > div { position: absolute; right: 0; top: 100%; z-index: 3; display: flex; flex-direction: column; min-width: 132px; padding: 5px; border: 1px solid var(--shell-border); border-radius: 6px; background: var(--popover-background); box-shadow: var(--popover-shadow); }
+.bp-note-wiki .bp-note-wiki__actions button { min-height: 30px; border-color: transparent; text-align: left; }
+.bp-note-wiki .bp-note-wiki__actions button:is(:hover, :focus-visible, [aria-pressed='true']) { border-color: transparent; background: var(--shell-hover); }
+.bp-note-wiki .bp-note-wiki__provenance { margin: 16px 0 0; padding-top: 8px; border-top: 1px solid var(--shell-border-soft); }
+.bp-note-wiki button:is(:hover, :focus-visible):not(:disabled) { background-color: var(--shell-hover); }
+.bp-note-wiki .bp-note-wiki__tabs button[aria-selected='true'] { border-bottom-color: var(--shell-muted); }

@@ -1,28 +1,34 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './ThemedTooltip.module.css'
 
 interface ThemedTooltipProps {
   /** 提示文本（替代原生 title，原生黑框由系统绘制，主题够不着） */
-  label: string
+  label: ReactNode
   children: ReactNode
   /** 首选方位；空间不足自动翻转 */
-  placement?: 'top' | 'bottom'
+  placement?: 'top' | 'bottom' | 'left'
   /** 悬浮多久后出现（毫秒，对齐原生 tooltip 节奏） */
   delayMs?: number
   disabled?: boolean
+  /**
+   * text：居中纯文本（默认，pre-wrap 保留换行）。
+   * panel：左对齐结构化内容（标签/数值列），供用量卡片等同构浮层。
+   */
+  variant?: 'text' | 'panel'
 }
 
 interface TipGeometry {
   left: number
-  top?: number
-  bottom?: number
+  top: number
 }
 
 /**
  * 主题化悬浮提示：一键配置机制——底座吃语义令牌，纸面走 :global 加法层。
  * 锚点 `display: contents`，不改变原布局；浮层挂 body portal，
- * 上方空间不足 48px 自动翻到下方；滚动/resize/Esc 关闭。
+ * Note: .agents/notes/workbench/right-dock.md — non-blocking tooltip behavior.
+ * 按实测尺寸翻转、避让窗口边缘；按下/点击/滚动/resize/Esc 关闭。
+ * `variant="panel"` 渲染左对齐的结构化内容（标签列+数值列）。
  */
 export function ThemedTooltip({
   label,
@@ -30,9 +36,13 @@ export function ThemedTooltip({
   placement = 'top',
   delayMs = 350,
   disabled = false,
+  variant = 'text',
 }: ThemedTooltipProps) {
   const anchorRef = useRef<HTMLSpanElement | null>(null)
+  const tipRef = useRef<HTMLDivElement | null>(null)
+  const pointerFocusRef = useRef(false)
   const timerRef = useRef<number | null>(null)
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
   const [geometry, setGeometry] = useState<TipGeometry | null>(null)
 
   const clearTimer = () => {
@@ -44,6 +54,7 @@ export function ThemedTooltip({
 
   const hide = useCallback(() => {
     clearTimer()
+    setAnchorRect(null)
     setGeometry(null)
   }, [])
 
@@ -55,30 +66,50 @@ export function ThemedTooltip({
       const target = anchorRef.current?.firstElementChild ?? anchorRef.current
       const rect = target?.getBoundingClientRect()
       if (!rect || (rect.width === 0 && rect.height === 0)) return
-      const left = Math.max(8, Math.min(rect.left + rect.width / 2, window.innerWidth - 8))
-      const below = placement === 'bottom' || (placement === 'top' && rect.top < 48)
-      setGeometry(
-        below
-          ? { left, top: rect.bottom + 8 }
-          : { left, bottom: window.innerHeight - rect.top + 8 },
-      )
+      setAnchorRect(rect)
     }, delayMs)
   }
 
+  useLayoutEffect(() => {
+    const tip = tipRef.current
+    if (!anchorRect || !tip) return
+    const { width, height } = tip.getBoundingClientRect()
+    const centeredLeft = anchorRect.left + (anchorRect.width - width) / 2
+    let left = centeredLeft
+    let top = anchorRect.top - height - 8
+    if (placement === 'left') {
+      left = anchorRect.left - width - 8
+      if (left < 8 && anchorRect.right + width + 16 <= window.innerWidth) left = anchorRect.right + 8
+      top = anchorRect.top + (anchorRect.height - height) / 2
+    } else if (placement === 'bottom') {
+      top = anchorRect.bottom + 8
+      if (top + height > window.innerHeight - 8) top = anchorRect.top - height - 8
+    } else if (top < 8) {
+      top = anchorRect.bottom + 8
+    }
+    setGeometry({
+      left: Math.max(8, Math.min(left, window.innerWidth - width - 8)),
+      top: Math.max(8, Math.min(top, window.innerHeight - height - 8)),
+    })
+  }, [anchorRect, placement, label])
+
   useEffect(() => {
-    if (geometry === null) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') hide()
     }
     window.addEventListener('scroll', hide, true)
     window.addEventListener('resize', hide)
+    document.addEventListener('pointerdown', hide, true)
     document.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('scroll', hide, true)
       window.removeEventListener('resize', hide)
+      document.removeEventListener('pointerdown', hide, true)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [geometry, hide])
+  }, [hide])
+
+  useEffect(() => { if (disabled) hide() }, [disabled, hide])
 
   useEffect(() => clearTimer, [])
 
@@ -89,20 +120,26 @@ export function ThemedTooltip({
         className={styles.anchor}
         onMouseEnter={show}
         onMouseLeave={hide}
-        onFocus={show}
-        onBlur={hide}
+        onPointerDownCapture={() => { pointerFocusRef.current = true; hide() }}
+        onClickCapture={hide}
+        onFocus={(event) => {
+          if (!pointerFocusRef.current && event.target.matches(':focus-visible')) show()
+        }}
+        onBlur={() => { pointerFocusRef.current = false; hide() }}
       >
         {children}
       </span>
-      {geometry !== null &&
+      {anchorRect !== null &&
         typeof document !== 'undefined' &&
         createPortal(
           <div
-            className={styles.tip}
+            ref={tipRef}
+            className={variant === 'panel' ? styles.tipPanel : styles.tip}
             role="tooltip"
             style={{
-              left: geometry.left,
-              ...(geometry.top !== undefined ? { top: geometry.top } : { bottom: geometry.bottom }),
+              left: geometry?.left ?? 0,
+              top: geometry?.top ?? 0,
+              visibility: geometry ? 'visible' : 'hidden',
             }}
           >
             {label}

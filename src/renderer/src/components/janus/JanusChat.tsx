@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronDown, CircleCheck, CircleX, Copy, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Plus, RotateCcw, Send, ShieldX, Trash2, X } from 'lucide-react'
 import type { ChatModelOption, JanusResourceController, Message, UseJanusChatReturn } from './useJanusChat'
 import type { ChatQuestionAnswer, ChatTodoItem, ChatToolTraceEntry } from '../../../../shared/ipc/llm'
@@ -20,6 +21,8 @@ import { formatThinkingDuration, type ReasoningSnapshot } from './janusReasoning
 import type { JanusChatStatus, JanusPendingQuestion } from './janusRuntimeState'
 import { Select } from '../ui/Select'
 import { ChatContextIndicator } from './ChatContextIndicator'
+import { MemoPanel } from '../memo/MemoPanel'
+import { useMemoStore } from '@/stores/memo'
 
 type SelectionMenu = 'provider' | 'model' | 'permission'
 type PermissionOption = { value: AgentApprovalMode; label: string }
@@ -425,6 +428,7 @@ export function JanusChat({
   onAnswerQuestion: onAnswerQuestionProp = null,
 }: JanusChatProps) {
   const { t } = useI18n('janus')
+  const memoTitle = (memoId: string) => useMemoStore.getState().memos.find(memo => memo.id === memoId)?.title
   const [input, setInput] = useState('')
   const [historyPageSize, setHistoryPageSize] = useState(100)
   // Composer auto-grows from content (including soft-wrapped long lines) up to
@@ -841,6 +845,7 @@ export function JanusChat({
   }, [cancelMessageEdit, editingMessageId, messages])
 
   const handleChatKeyDownCapture = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if ((event.target as Element).closest('[data-island-companion]')) return
     const shortcutMenu = resolveChatSelectionShortcut({
       key: event.key,
       altKey: event.altKey,
@@ -862,6 +867,7 @@ export function JanusChat({
   }, [handleMenuKey, openSelectionMenu, selectionMenu])
 
   const handleChatPointerDownCapture = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as Element).closest('[data-island-companion]')) return
     // A user press takes focus ownership: cancel the pending mount-time
     // composer autofocus so typing after clicking message text never lands
     // in the composer.
@@ -945,12 +951,13 @@ export function JanusChat({
       if (!chatRoot) return
 
       const activeElement = document.activeElement
+      if (activeElement?.closest('[data-island-companion]')) return
       const activeChat = activeElement instanceof Element
         ? activeElement.closest('.janus-chat')
         : null
-      // Note reader controls keep native Tab navigation while the workbench chat is open.
+      // Blueprint reader and toolbar controls keep native Tab navigation while Chat is open.
       // See .agents/notes/blueprint/navigation/note-updates-and-suggestion-navigation.md
-      if (event.key === 'Tab' && !activeChat && activeElement instanceof Element && activeElement.closest('.bp-note-wiki')) return
+      if (event.key === 'Tab' && !activeChat && activeElement instanceof Element && activeElement.closest('.bp-note-wiki, .blueprint-toolbar')) return
       // A DOM-focused Chat always owns its shortcuts. Otherwise the workspace
       // focus state chooses the owner, so switching tabs does not depend on a
       // browser focus update landing in exactly the same frame.
@@ -1039,7 +1046,9 @@ export function JanusChat({
     historyDraftRef.current = ''
   }, [onClear])
 
-  if (!visible) return null
+  // The normal Chat keeps its memo editor alive across view changes. Other
+  // presentations have no memo and retain their lightweight hidden behavior.
+  if (!visible && (discussionOnly || minimalComposer || !conversations)) return null
 
   const canClear = messages.length > 0 || !!pendingContent || !!error
   const hasConversation = messages.length > 0 || !!pendingContent || isStreaming || !!error
@@ -1048,10 +1057,11 @@ export function JanusChat({
   return (
       <div
         ref={chatRootRef}
+        hidden={!visible}
         data-compact-navigation={compactNavigation || undefined}
         data-minimal-composer={minimalComposer || undefined}
       tabIndex={-1}
-      className={`janus-chat${docked ? ' janus-chat--docked' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${showConversationSidebar ? ' janus-chat--with-sidebar' : ''}${showConversationSidebar && sidebarCollapsed ? ' janus-chat--sidebar-collapsed' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}`}
+      className={visible ? `janus-chat${docked ? ' janus-chat--docked' : ''}${discussionOnly ? ' janus-chat--discussion-only' : ''}${showConversationSidebar ? ' janus-chat--with-sidebar' : ''}${showConversationSidebar && sidebarCollapsed ? ' janus-chat--sidebar-collapsed' : ''}${hasConversation ? ' janus-chat--active' : ' janus-chat--empty'}${isRestoringScroll ? ' janus-chat--restoring-scroll' : ''}` : undefined}
       onKeyDownCapture={handleChatKeyDownCapture}
       onPointerDownCapture={handleChatPointerDownCapture}
       onDoubleClick={(e) => e.stopPropagation()}
@@ -1143,7 +1153,7 @@ export function JanusChat({
                       {!conversation.isStreaming && conversation.hasError && <CircleX size={11} aria-hidden="true" />}
                       {conversation.title}
                     </strong>
-                    <span>{t('janus:chat.thread.messagesCount', { count: conversation.messageCount })}</span>
+                    <span>{t('janus:chat.thread.messagesCount', { count: conversation.messageCount })}{conversation.memoId ? ` · ${memoTitle(conversation.memoId) ?? t('janus:memo.title')}` : ''}</span>
                   </button>
                 )}
                 <div className="janus-chat-sidebar-actions">
@@ -1282,7 +1292,7 @@ export function JanusChat({
         </div>
       </div>}
 
-      {resourceController && !discussionOnly && !minimalComposer && (
+      {resourceController && (resourceController.resources.length > 0 || attachableWorkspaces.length > 0) && !discussionOnly && !minimalComposer && (
         <div className="janus-resource-scope" aria-label={t('janus:chat.resource.scopeAria')}>
           <div className="janus-resource-list">
             {resourceController.resources.map((resource) => (
@@ -1672,6 +1682,7 @@ export function JanusChat({
             <strong>{activeModelLabel}</strong>
           </button>
           <div className="janus-chat-status-actions">
+            {conversations && <MemoPanel compactTrigger onBindMemo={conversations.bindMemo} />}
             <div className="janus-chat-shortcuts">
               <button
                 type="button"
@@ -1760,8 +1771,11 @@ export function JanusChat({
       </div>
       {modelNotice && !minimalComposer && <div className="janus-chat-model-notice">{modelNotice}</div>}
       </div>
-      <PromptDialog
-        open={pendingDeleteConversation !== null}
+      {/* The portaled confirmation belongs to the island, including its backdrop.
+          Gated like every other createPortal site so SSR-style unit renders never
+          evaluate document.body with the dialog closed. */}
+      {visible && pendingDeleteConversation !== null && createPortal(<div data-island-companion onPointerDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}><PromptDialog
+        open={visible && pendingDeleteConversation !== null}
         title={t('janus:chat.thread.deleteTitle')}
         description={t('janus:chat.thread.deleteConfirm', { title: pendingDeleteConversation?.title ?? '' })}
         confirmOnly
@@ -1775,7 +1789,7 @@ export function JanusChat({
           setPendingDeleteConversation(null)
         }}
         onCancel={() => setPendingDeleteConversation(null)}
-      />
+      /></div>, document.body)}
     </div>
   )
 }

@@ -436,6 +436,11 @@ export function installElectronApiFallback(): void {
       onEditorRefresh: () => () => {},
     },
     system: { getDefaultShell: unavailable, getPlatform: unavailable, openVSCode: unavailable, getRuntimeTelemetry: unavailable, listUsageLedger: unavailable, getLanguage: () => Promise.resolve(null), setLanguage: unavailable, onPrepareQuit: () => () => {} },
+    shellProfiles: {
+      list: unavailable,
+      save: unavailable,
+      detect: () => Promise.resolve([]),
+    },
     desktopToast: { ready: () => {}, action: () => {}, onShow: () => () => {}, onHide: () => () => {} },
     janusPersona: '',
   }

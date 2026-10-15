@@ -13,60 +13,21 @@
     "detecting": "检测模型中"
   },
   "telemetry": {
-    "quality": {
-      "authoritative": "精确",
-      "derived": "推导",
-      "declared": "已声明",
-      "estimated": "估算",
-      "unknown": "未知"
-    },
-    "binding": {
-      "exact": "精确",
-      "pending": "待定"
-    },
-    "contextUnknown": "上下文未知",
-    "sessionSuffix": "会话",
-    "compactionNotReported": "未报告",
-    "sourceUnknown": "未知",
-    "windowSourceRuntime": "运行时遥测"
+    "contextUnknown": "上下文未知"
   },
   "context": {
-    "popoverTitle": "运行时上下文",
-    "openDetailsAria": "打开运行时上下文详情",
-    "updatedAgo": "{{age}}前更新",
-    "section": {
-      "capacity": "上下文容量",
-      "session": "会话 Token",
-      "telemetry": "遥测状态"
-    },
-    "source": {
-      "provider-event": "Provider 事件",
-      "history": "会话历史",
-      "terminal-text": "终端文本",
-      "model-registry": "模型注册表",
-      "configuration": "配置"
-    },
-    "windowSource": {
-      "runtime": "运行时遥测",
-      "model-registry": "模型注册表",
-      "estimated": "估算",
-      "unknown": "未知"
-    },
     "row": {
-      "runtimeWindow": "运行时窗口",
+      "runtimeWindow": "运行窗口",
       "modelCapacity": "模型容量",
-      "remaining": "剩余",
-      "sessionInput": "会话输入",
-      "sessionOutput": "会话输出",
+      "remaining": "剩余上下文",
+      "compactions": "上下文压缩次数",
       "cacheRead": "缓存读取",
       "cacheWrite": "缓存写入",
-      "sessionTotal": "会话合计",
-      "sessionBinding": "会话绑定",
-      "compactions": "上下文压缩次数",
-      "modelChanged": "模型变更",
-      "usageSource": "用量来源",
-      "windowSource": "窗口来源",
-      "updated": "更新时间"
+      "sessionTotal": "Token 总数",
+      "context": "上下文",
+      "recentCacheHitRate": "最近缓存命中率",
+      "inputOutput": "输入/输出",
+      "runtime": "运行时间"
     }
   },
   "error": {
@@ -139,25 +100,78 @@
     "hint": "选择一个类型后自动创建终端。",
     "starting": "启动中…"
   },
+  "shellMenu": {
+    "default": "默认",
+    "pickShell": "选择本次新建终端的 Shell",
+    "shell": "Shell",
+    "cli": "CLI 预设"
+  },
+  "shellSettings": {
+    "nav": "终端管理",
+    "navMeta": "Shell",
+    "title": "终端管理",
+    "subtitle": "Terminal · 自建 Shell 条目与新建入口显隐",
+    "saveError": "保存失败，已回滚到上一次有效配置",
+    "configured": {
+      "title": "已配置 Shell",
+      "help": "选择默认 Shell，管理新建终端中的可见项。点击条目编辑启动配置。",
+      "add": "添加 Shell",
+      "empty": "还没有条目：新建后即可从三处入口选择，或从下方候选区确认添加。",
+      "newName": "新 Shell",
+      "name": "名称",
+      "command": "自由命令",
+      "suffix": "启动后缀",
+      "optional": "可选",
+      "default": "默认",
+      "makeDefault": "设为默认",
+      "visible": "显示",
+      "hidden": "隐藏",
+      "needsCommand": "待填写启动命令",
+      "launchHelp": "启动后缀追加到命令末尾；工作目录沿用当前 worktree。",
+      "remove": "删除条目",
+      "missing": "未检测到 {{executable}}",
+      "redetect": "重新检测",
+      "hide": "隐藏条目"
+    },
+    "externalCli": {
+      "title": "外部 CLI",
+      "help": "检测版本并一键安装或升级；取消「显示」只从新建入口隐藏，已有终端与会话照常运行。"
+    },
+    "candidates": {
+      "title": "检测候选区",
+      "help": "本机检测到的 Shell。默认不进入新建入口，确认后入库并预填命令与建议后缀。",
+      "scan": "检测",
+      "empty": "没有检测到新的 Shell。",
+      "add": "添加",
+      "configured": "已配置",
+      "idle": "尚未检测",
+      "count": "检测到 {{count}} 项"
+    },
+    "visibility": {
+      "visible": "在新建终端入口显示",
+      "hidden": "已从新建终端入口隐藏",
+      "default": "设为默认 Shell"
+    }
+  },
   "tab": {
     "closeTerminal": "关闭终端",
     "killCurrentTerminal": "结束当前终端",
     "collapseLayout": "结束布局",
     "newBrowser": "新建浏览器",
     "closeBrowser": "关闭浏览器",
+    "closeMarkdown": "关闭文稿面板",
     "closeChat": "关闭对话",
     "noActiveTerminal": "无活动终端",
-    "terminalRuntime": "终端运行状态",
-    "noTelemetryData": "暂无终端运行数据",
+    "terminalRuntime": "用量",
+    "noTelemetryData": "暂无用量数据",
     "focusWorkspaceTitle": "焦点终端工作区：{{name}} · {{path}}",
-    "runtimePanelToggle": "切换 Runtime 状态面板",
+    "runtimePanelToggle": "切换用量面板",
     "janusChatFallback": "Janus 对话",
-    "runtimeAria": "运行时遥测",
+    "runtimeAria": "用量",
     "drawerResizeAria": "调整底部面板高度",
-    "tokenSummaryTitle": "输入 {{input}} · 输出 {{output}}",
     "drawerViewAria": "底部面板视图",
     "view": {
-      "runtime": "上下文监控",
+      "runtime": "用量",
       "note": "Markdown"
     }
   },
@@ -165,6 +179,8 @@
     "listAria": "当前终端的笔记",
     "listTitle": "笔记",
     "listEmpty": "还没有笔记",
+    "collapseList": "折叠笔记列表",
+    "expandList": "展开笔记列表",
     "newNote": "新建笔记",
     "untitled": "未命名",
     "emptyExcerpt": "空白",
@@ -211,6 +227,9 @@
     "waitingTerminal": "等待加载终端..."
   },
   "agentSession": {
+    "expand": "展开",
+    "collapse": "收起",
+    "detailReadOnlyHint": "此处查阅对话历史；回到原会话会在终端中打开提供方对话。",
     "title": "会话管理",
     "scopeWorkspace": "工作区",
     "scopeProject": "项目",
@@ -218,12 +237,9 @@
     "scopeArchived": "归档",
     "empty": "暂无会话",
     "loading": "加载中",
-    "checkpoints": "还原点 {{count}}",
     "turns": "{{count}} 轮次",
     "continue": "在新会话中继续",
-    "restoreTo": "恢复到 #{{index}}",
-    "restoreConfirm": "确认恢复",
-    "archivedHint": "还原点已随盘删除，对话仍可查阅。Claude、Codex、Opencode 的原生历史与还原点独立；原工作目录和历史仍存在时，可回到原会话。",
+    "archivedHint": "会话已归档，对话仍可查阅。原工作目录和提供方历史仍存在时，Claude、Codex、Opencode 可回到原会话。",
     "archived": "归档",
     "continueTitle": "在新会话中继续",
     "continueBody": "为同一任务开一个全新的顺序会话，原会话保持不动、仍可查阅。",
@@ -238,8 +254,7 @@
     "copy": "复制",
     "copied": "已复制",
     "detailHint": "共 {{count}} 轮 · 完整内容在详情窗阅读",
-    "noCheckpointExternal": "无还原点（外部会话）",
-    "externalHint": "外部会话来自软件外终端，仅可查阅 transcript，无还原点。",
+    "externalHint": "外部会话来自软件外终端，可只读查阅转录。",
     "resumeCopy": "复制续接命令",
     "resumeUnavailable": "该引擎暂不支持回到原会话。",
     "resume": "回到原会话",
@@ -249,8 +264,7 @@
     "searchPlaceholder": "按标题 / 目录 / 分支 / 模型过滤",
     "copySessionId": "复制 session ID",
     "copyLogPath": "复制 log 路径",
-    "diffCollapse": "收起 diff",
-    "detailExternalBanner": "外部会话 · 无还原点 — 软件外产生的 CLI 会话，详情窗只读落盘 transcript，不提供恢复 / diff。",
+    "detailExternalBanner": "外部会话 · 软件外产生的 CLI 会话，详情窗读取落盘转录。",
     "transcriptTruncated": "transcript 共 {{total}} 轮，仅展示最近 {{shown}} 轮",
     "scopeEmptyCounts": "全部 {{all}} · 归档 {{archived}}，切换标签查看",
     "activeNow": "进行中",
@@ -338,8 +352,18 @@
     "historyLabel": "历史",
     "historyEmpty": "暂无文件变化记录",
     "collapse": "收起文件变更",
-    "kind": { "done": "已完成", "failed": "未完成", "interrupted": "已中断" },
-    "status": { "added": "新增", "deleted": "已删除", "modified": "已修改", "binary": "二进制", "oversized": "大文件" },
+    "kind": {
+      "done": "已完成",
+      "failed": "未完成",
+      "interrupted": "已中断"
+    },
+    "status": {
+      "added": "新增",
+      "deleted": "已删除",
+      "modified": "已修改",
+      "binary": "二进制",
+      "oversized": "大文件"
+    },
     "latestHint": "查看最新一轮",
     "history": "历史 {{count}}",
     "historyHint": "查看历史记录",

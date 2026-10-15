@@ -1,0 +1,26 @@
+/* Match MCP access: brand and status at the left, actions at the right. */
+.client { min-width: 0; padding: 16px 0; }
+.client:first-child { padding-top: 0; }
+.client:last-child { padding-bottom: 0; }
+.client + .client { border-top: 1px solid var(--shell-border-soft); }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; }
+.identity { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.icon { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 0; border: 1px solid var(--shell-border-soft); border-radius: 8px; background: var(--shell-card); cursor: pointer; }
+.icon[data-tool='codex'] { background: var(--cli-logo-light); }
+.icon[data-tool='opencode'], .icon[data-tool='janus'] { background: var(--cli-logo-dark); }
+.icon:hover { outline: 1px solid var(--control-border); outline-offset: 2px; }
+.icon:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 3px; }
+.icon[aria-pressed='false'] { opacity: .45; filter: grayscale(1); }
+.logo { width: 22px; height: 22px; object-fit: contain; }
+.info { display: grid; gap: 5px; min-width: 0; }
+.heading { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-height: 18px; }
+.heading > span:first-child { font-size: 13px; font-weight: 600; color: var(--shell-text); }
+.status { color: var(--shell-muted); font-size: 11px; line-height: 1.5; }
+.status[data-state='broken'] { color: var(--shell-diff-del); }
+.status[data-state='update-available'] { color: var(--so-accent-ink); }
+.meta { color: var(--shell-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.feedback { margin: 8px 0 0 48px; }
+@container general-settings (max-width: 520px) {
+  .main { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .actions { margin-left: 48px; }
+}

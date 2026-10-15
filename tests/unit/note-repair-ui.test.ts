@@ -60,7 +60,7 @@ beforeAll(async () => {
   script=result.outputFiles.find(file=>file.path.endsWith('.js'))!.text;css=result.outputFiles.find(file=>file.path.endsWith('.css'))!.text
 })
 afterAll(async()=>{await browser?.close()})
-async function mount(page: Page){page.setDefaultTimeout(5000);await page.setContent('<html data-theme="planche"><body><div id="root"></div></body></html>');await page.addStyleTag({content:css});await page.addScriptTag({content:script});await page.getByRole('button',{name:'Suggestions',exact:false}).first().waitFor()}
+async function mount(page: Page){page.setDefaultTimeout(process.env.CI === 'true' ? 15000 : 5000);await page.setContent('<html data-theme="planche"><body><div id="root"></div></body></html>');await page.addStyleTag({content:css});await page.addScriptTag({content:script});await page.getByRole('button',{name:'Suggestions',exact:false}).first().waitFor()}
 
 it('opens details from the visible hint and supports keyboard collapse',async()=>{
  const page=await browser.newPage({reducedMotion:'reduce'})

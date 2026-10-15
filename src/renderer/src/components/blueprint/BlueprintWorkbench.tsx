@@ -16,6 +16,7 @@ import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useI18n } from '@/i18n/useI18n'
 import { useAnimatedOpen, useWorkbenchPhase } from '@/components/shared/CardFrame'
 import './blueprint.css'
+import './blueprint-refinement.css'
 
 interface BlueprintWorkbenchProps {
   isOpen: boolean
@@ -53,10 +54,9 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const openRequest = useBlueprintMaintenanceStore((s) => s.openRequest)
   const initializeMaintenance = useBlueprintMaintenanceStore((s) => s.initialize)
   const requestOpen = useBlueprintMaintenanceStore((s) => s.requestOpen)
-  // The workbench opens as a three-column inspection surface. Selection in the
-  // canvas keeps this detail pane synchronized; users can still collapse it
-  // through the existing detail controls.
-  const [maintenanceOpen, setMaintenanceOpen] = useState(true)
+  // Start with reading and the canvas; Janus opens only through an explicit
+  // launcher, draft request or suggestion handoff.
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(true)
   // 工作台专属下拉承载层：z-index 12001，恰好高于遮罩 12000；
   // 零尺寸 + overflow visible，不拦截点击、不裁切子节点。
@@ -66,7 +66,7 @@ export function BlueprintWorkbench({ isOpen, onClose }: BlueprintWorkbenchProps)
   const activeCardPlanRef = useRef<WorkbenchCardPlan>({ detailOpen, janusOpen: maintenanceOpen })
   activeCardPlanRef.current = { detailOpen, janusOpen: maintenanceOpen }
   const [revealReady, setRevealReady] = useState(false)
-  const [closingPlan, setClosingPlan] = useState<WorkbenchCardPlan>({ detailOpen: false, janusOpen: true })
+  const [closingPlan, setClosingPlan] = useState<WorkbenchCardPlan>({ detailOpen: false, janusOpen: false })
   // Shared card-frame lifecycle (§9): phase machine + stuck-animation safety
   // net; the closing card plan snapshot stays blueprint business logic.
   const {

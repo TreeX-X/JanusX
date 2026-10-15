@@ -15,6 +15,13 @@ function turn(partial: Partial<SessionTurnRecord>): SessionTurnRecord {
 }
 
 describe('session turn merge', () => {
+  it('does not attach a stale cached answer to a newly appended unanswered question', () => {
+    const base = [turn({ id: 'prompt-seed', prompt: 'q1' }), turn({ id: 'answer-seed', excerpt: 'old a1' })]
+    const merged = mergeTranscriptTurns(base, [{ prompt: 'q1', excerpt: 'a1' }, { prompt: 'new q2' }], fallback)
+    expect(merged[1]).toMatchObject({ prompt: 'new q2' })
+    expect(merged[1].excerpt).toBeUndefined()
+  })
+
   it('returns registry turns untouched without a transcript', () => {
     const base = [turn({ id: 'a', kind: 'failed', checkpointId: 'cp-1', prompt: 'q', excerpt: 'e' })]
     expect(mergeTranscriptTurns(base, [], fallback)).toEqual(base)

@@ -44,7 +44,7 @@ function CopyButton({ text }: { text: string }) {
           .catch(() => {})
       }}
       style={{
-        background: copied ? 'var(--shell-accent-mid)' : 'var(--shell-hover)',
+        background: copied ? 'var(--accent-mid)' : 'var(--shell-hover)',
         border: '1px solid var(--control-border)',
         borderRadius: 4,
         color: copied ? 'var(--shell-accent-strong)' : 'var(--shell-muted)',

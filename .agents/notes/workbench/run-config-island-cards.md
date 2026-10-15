@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-07",
   "class": "architecture",
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-15T11:06:25Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -20,6 +20,8 @@
 运行配置另有两个缺陷。其一，主题字面量失控：`ProjectSettings.module.css` 约 60 处硬编码色值（`#ececef`、`#d7d7da`、`#76767e` 等 dark 白灰字与 `rgba(255,255,255,…)` 边框），主列（contextBar、tabs、diffList、taskOutput、commandBar）与左栏没有 planche 覆写，纸面主题下白字看不清；planche 加法层只覆盖右助手列和按钮 hover。`QuickConfigForm.module.css` 另有 15 处字面量（含 `rgba(0,0,0,0.28)` 沉底输入框、`#ff6b6b` 必填星号）且完全没有 planche 层。这些颜色不走 `src/shared/theme/definition.ts` → `themes.generated.css` 的令牌管道，游离在主题统一管理机制之外；`tests/unit/planche-theme.test.ts` 现有钉只断言「存在 planche 层」和「无 #151517」，钉不住主列白字。其二，运行配置左侧项目类型 tab（`ProjectTypeSelector.module.css` 的 `typeItem`）的选中/悬停态与设置导航不一致：带可见 1px 边框、hover 用 `rgba(255,255,255,0.02)` 填充、6px 圆角，且无 planche 层；而设置导航（`AppSettingsModal.module.css` 的 `tabButton`）与知识工作台（[assistant-persona-layout](../knowledge/assistant-persona-layout.md)）已确立「透明底 + hover 微亮 + 选中主题底色与左 2px 强调条 + focus 向内 1px 描边 + 160ms 过渡」的同一套状态规则。
 
 ## Decision
+
+设置中心的当前分区与导航由[设置布局](./settings-layout.md)接续维护：通用、通知共用分区及模型配置已改为平铺列表，导航选中保留中性底色并移除强调条。下文保留运行配置的浮岛布局与当时设置内卡对齐的设计依据，运行配置不随该后续调整改变。
 
 分体卡片语言按三层落到设置与运行配置，信息架构不动：运行配置仍是「左类型 / 中表单 / 右助手」三栏，设置仍是主窗口抽屉（见 [settings-workbench-transition](../terminal/settings-workbench-transition.md)）。
 
