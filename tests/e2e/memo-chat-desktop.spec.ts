@@ -125,6 +125,8 @@ test('real Chat UI sends memo tools through HTTP, persists edits and refreshes t
     const buildRoot = resolve('out')
     application = await electron.launch({ args: [join(buildRoot, 'main/index.js'), `--user-data-dir=${join(root, 'user-data')}`], env: { ...createDesktopTestEnv(root), JANUSX_DEV_BUILD_ROOT: buildRoot } })
     const page = await application.firstWindow()
+    await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1400, 800))
+    await expect.poll(async () => Math.abs(await page.evaluate(() => window.innerWidth) - 1400)).toBeLessThanOrEqual(1)
     await page.waitForFunction(() => Boolean(window.electron?.memo))
     await page.evaluate(() => window.electron.system.setLanguage('en'))
     await page.evaluate(() => window.electron.experimental.update({ memo: true }))
