@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-11",
-  "updated": "2026-10-14T01:00:00.000Z",
+  "updated": "2026-10-15T06:10:51.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -52,6 +52,8 @@ shell 的扩展设置与工作区上方的添加控件也要记得适配。工�
 无。原三条已于 2026-10-13 收敛，见 Decisions。
 
 ## Implementation
+
+2026-10-15 「已配置 Shell」改为通栏概览列表：每行显示名称与完整启动行摘要，显式文字按钮管理默认项与显隐；终端字形只承担识别，不再兼任显隐开关。点击名称/命令所在主体展开名称、自由命令与可选启动后缀，字段各占整行，删除位于展开区底部；新建空命令条目自动展开并聚焦名称。默认项唯一、即时保存及失败回滚继续沿用既有 store。取舍是修改既有条目需多一次展开，换取多 Shell 时更紧凑的扫读和长路径编辑空间；外部 CLI 与候选区布局保持原实现。样式独立于共享设置 CSS，沿用设置令牌适配纸面/深色主题；窄容器将操作组换行。验证：`npx playwright test tests/e2e/shell-settings.spec.ts --project=island --workers=2` 9 项通过（双主题、1100/640/390px、键盘展开、默认/显隐、新增/删除、保存失败回滚），`npx vitest run tests/unit/shell-profiles.test.ts tests/unit/shell-profile-launch.test.ts tests/unit/planche-theme.test.ts` 51 项通过，`npm run typecheck`、`npm run i18n:check` 通过。浏览器验证使用隔离 fixture，未对正在运行的 Electron 会话做人工点击。
 
 实现排期见 [Git Bash 与自定义 Shell 终端管理实现](./tasks/gitbash-shell-terminal-management.md)（Task，accepted，P1–P5 分阶段），与 Docker 管理入口任务相互独立，可分开执行。
 

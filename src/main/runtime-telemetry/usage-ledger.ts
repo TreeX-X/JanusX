@@ -12,7 +12,15 @@ function validTokens(value: UsageTokens): boolean {
     && value.inputTokens !== undefined && value.outputTokens !== undefined && value.totalTokens !== undefined
     && value.totalTokens === value.inputTokens + value.outputTokens + (value.cacheReadTokens ?? 0) + (value.cacheWriteTokens ?? 0)
 }
+/** Older Codex mappings folded cache writes into fresh input. */
+function withoutCodexWrites(tokens: UsageTokens): UsageTokens {
+  return { ...tokens, inputTokens: tokens.inputTokens + (tokens.cacheWriteTokens ?? 0), cacheWriteTokens: undefined }
+}
+function sameTokens(left: UsageTokens, right: UsageTokens): boolean {
+  return FIELDS.every(field => left[field] === right[field])
+}
 interface SessionState extends UsageSessionStatus {
+  codexCacheWrites?: true
   counters?: UsageTokens
   model?: string
   sourceIdentity?: string
@@ -40,6 +48,7 @@ export class UsageLedger {
         CREATE TABLE IF NOT EXISTS records (id INTEGER PRIMARY KEY, engine TEXT NOT NULL, at REAL NOT NULL, data TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS records_time ON records(at, id);
         CREATE INDEX IF NOT EXISTS records_engine_time ON records(engine, at, id);
+        CREATE INDEX IF NOT EXISTS records_session ON records(engine, json_extract(data,'$.sessionId'), at, id);
         PRAGMA user_version=1;
       `)
       return database
@@ -84,7 +93,29 @@ export class UsageLedger {
           const prior = findIdentity.get(identity) as { tokens: string } | undefined
           const tokens: UsageTokens = { inputTokens: event.inputTokens, outputTokens: event.outputTokens, cacheReadTokens: event.cacheReadTokens, cacheWriteTokens: event.cacheWriteTokens, totalTokens: event.totalTokens }
           if (prior) {
-            if (prior.tokens !== JSON.stringify(tokens)) state.issue = 'event-changed'
+            const oldTokens = JSON.parse(prior.tokens) as UsageTokens
+            const legacyCodex = observation.engine === 'codex' && oldTokens.cacheWriteTokens === undefined
+              && sameTokens(oldTokens, withoutCodexWrites(tokens))
+            // Preserve already booked history; a newly available breakdown is
+            // not changed consumption and must not pause later event imports.
+            if (!sameTokens(oldTokens, tokens) && !legacyCodex) state.issue = 'event-changed'
+            else if (legacyCodex && tokens.cacheWriteTokens !== undefined) {
+              // Old records predate stored event identities. Locate one matching
+              // booked event, preserve its id/date/model, and only repartition
+              // its input. Identical events are upgraded one record at a time.
+              const row = database.prepare(`SELECT id, data FROM records WHERE engine='codex'
+                AND json_extract(data,'$.sessionId')=? AND json_extract(data,'$.inputTokens')=?
+                AND json_extract(data,'$.outputTokens')=? AND json_extract(data,'$.cacheReadTokens') IS ?
+                AND json_extract(data,'$.cacheWriteTokens') IS NULL AND json_extract(data,'$.totalTokens')=?
+                AND (? IS NULL OR at=?) ORDER BY id LIMIT 1`)
+                .get(key, oldTokens.inputTokens, oldTokens.outputTokens, oldTokens.cacheReadTokens ?? null,
+                  oldTokens.totalTokens, event.at ?? null, event.at ?? null) as { id: number; data: string } | undefined
+              if (row) {
+                database.prepare('UPDATE records SET data=? WHERE id=?')
+                  .run(JSON.stringify({ ...JSON.parse(row.data) as UsageRecord, ...tokens }), row.id)
+                database.prepare('UPDATE identities SET tokens=? WHERE key=?').run(JSON.stringify(tokens), identity)
+              }
+            }
             continue
           }
           insertIdentity.run(identity, JSON.stringify(tokens))
@@ -104,10 +135,14 @@ export class UsageLedger {
         else if (!next || !validTokens(next)) state.issue = 'invalid-counter'
         else if (state.counters) {
           const baseline = state.counters
-          const regressed = FIELDS.some(field => baseline[field] !== undefined && (next[field] === undefined || next[field]! < baseline[field]!))
+          // The first upgraded interval has no historical write baseline.
+          // Keep it unsplit, then use the native write counter from here on.
+          const comparable = observation.engine === 'codex' && baseline.cacheWriteTokens === undefined
+            ? withoutCodexWrites(next) : next
+          const regressed = FIELDS.some(field => baseline[field] !== undefined && (comparable[field] === undefined || comparable[field]! < baseline[field]!))
           if (regressed) state.issue = 'counter-regressed'
           else {
-            const delta = Object.fromEntries(FIELDS.map(field => [field, next[field] === undefined || baseline[field] === undefined ? undefined : next[field]! - baseline[field]!])) as unknown as UsageTokens
+            const delta = Object.fromEntries(FIELDS.map(field => [field, comparable[field] === undefined || baseline[field] === undefined ? undefined : comparable[field]! - baseline[field]!])) as unknown as UsageTokens
             if (!validTokens(delta)) state.issue = 'counter-fields-changed'
             else {
               const changedModel = observation.modelChangedAt !== undefined && observation.modelChangedAt > state.updatedAt
@@ -121,6 +156,7 @@ export class UsageLedger {
         state.sourceSize = observation.sourceSize
         state.sourceHash = observation.sourceHash
       }
+      if (observation.engine === 'codex' && !state.issue) state.codexCacheWrites = true
       state.updatedAt = observation.collectedAt
       database.prepare('INSERT OR REPLACE INTO sessions(key, data) VALUES (?, ?)').run(key, JSON.stringify(state))
       database.exec('COMMIT')
@@ -175,8 +211,9 @@ export class UsageLedger {
     try {
       const row = database.prepare('SELECT data FROM sessions WHERE key=?').get(JSON.stringify([engine, namespace, sessionId])) as { data: string } | undefined
       if (!row) return undefined
-      const { counters, mode, sourceSize } = JSON.parse(row.data) as SessionState
-      return { mode: mode ?? (counters ? 'cumulative' : 'events'), sourceSize }
+      const { counters, mode, sourceSize, codexCacheWrites } = JSON.parse(row.data) as SessionState
+      // Re-read legacy Codex files once even when their byte size is unchanged.
+      return { mode: mode ?? (counters ? 'cumulative' : 'events'), sourceSize: engine === 'codex' && !codexCacheWrites ? undefined : sourceSize }
     } finally { database.close() }
   }
 }

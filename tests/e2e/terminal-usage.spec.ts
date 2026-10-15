@@ -28,7 +28,7 @@ test('one opening exposes usage, live runtime and unknown values without a detai
   await page.getByRole('button', { name: 'Toggle usage panel' }).click()
   const panel = page.getByRole('region', { name: 'Usage', exact: true })
   const card = panel.getByRole('button', { name: /Codex/ })
-  await expect(page.getByRole('tab', { name: 'Usage', exact: true })).toBeVisible()
+  await expect(panel).toBeVisible()
   for (const text of ['Context', 'Recent cache hit rate', 'Cache read', 'Cache write', 'Total tokens', 'Input/output', 'Runtime']) {
     await expect(card).toContainText(text)
   }
@@ -74,7 +74,7 @@ test('Chinese usage labels remain readable at narrow widths', async ({ page }) =
   await page.getByRole('button', { name: '切换用量面板' }).click()
   const panel = page.getByRole('region', { name: '用量', exact: true })
   const card = panel.getByRole('button', { name: /Codex/ })
-  await expect(page.getByRole('tab', { name: '用量', exact: true })).toBeVisible()
+  await expect(panel).toBeVisible()
   for (const text of ['最近缓存命中率', '运行时间', '缓存读取', '缓存写入', 'Token 总数', '输入/输出']) {
     await expect(card).toContainText(text)
   }

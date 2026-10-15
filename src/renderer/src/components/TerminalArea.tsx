@@ -1,14 +1,13 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { ChevronDown, Globe, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Globe, Minimize2, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
 import { useBrowserStore } from '@/stores/browser'
 import { BrowserSurface } from './browser/BrowserSurface'
 import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
-import { QuickNote } from './note/QuickNote'
 import { TerminalContextTooltip, TerminalRuntime, TerminalUsageStats } from './TerminalUsageDetails'
 import { MarkdownPane } from './MarkdownPane'
 import { MarkdownIcon } from './ui/MarkdownIcon'
@@ -78,6 +77,7 @@ import { useThemeStore } from '@/stores/theme'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { TerminalStatusLight } from '@/components/ui/TerminalStatusLight'
 import { TerminalPresetIcon } from '@/components/ui/TerminalPresetIcon'
+import styles from './TerminalArea.module.css'
 import {
   buildWorkspaceTerminalSurfaces,
   GLOBAL_PANE_SCOPE,
@@ -155,6 +155,7 @@ interface PaneTreeViewProps {
   focusedPaneId: string | null
   activeTerminalId: string | null
   showFocusChrome: boolean
+  onCollapseLayout: () => void
   onPaneFocus: (paneId: string) => void
   onTabSelect: (paneId: string, tabId: string) => void
   onKillTerminalFromTab: (terminalId: string, e?: React.MouseEvent) => void
@@ -195,55 +196,66 @@ function PaneTreeView(props: PaneTreeViewProps) {
 
 function SplitPaneNode({ split, onResize, ...props }: PaneTreeViewProps & { split: WorkspacePaneSplit }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [resizing, setResizing] = useState(false)
   const isHorizontal = split.direction === 'horizontal'
 
-  const handlePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-      const container = containerRef.current
-      if (!container) return
+  const resizeFromPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const container = containerRef.current
+    if (!container || !event.currentTarget.hasPointerCapture(event.pointerId)) return
+    const rect = container.getBoundingClientRect()
+    const dividerSize = isHorizontal ? event.currentTarget.offsetWidth : event.currentTarget.offsetHeight
+    onResize(split.id, isHorizontal
+      ? (event.clientX - rect.left - dividerSize / 2) / (rect.width - dividerSize)
+      : (event.clientY - rect.top - dividerSize / 2) / (rect.height - dividerSize))
+  }
 
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        const rect = container.getBoundingClientRect()
-        const rawRatio = isHorizontal
-          ? (moveEvent.clientX - rect.left) / rect.width
-          : (moveEvent.clientY - rect.top) / rect.height
-        onResize(split.id, rawRatio)
-      }
-
-      const handlePointerUp = () => {
-        window.removeEventListener('pointermove', handlePointerMove)
-        window.removeEventListener('pointerup', handlePointerUp)
-      }
-
-      window.addEventListener('pointermove', handlePointerMove)
-      window.addEventListener('pointerup', handlePointerUp)
-    },
-    [isHorizontal, onResize, split.id]
-  )
+  const endResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    setResizing(false)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
 
   return (
     <div
       ref={containerRef}
       className={`flex h-full w-full min-h-0 min-w-0 ${isHorizontal ? 'flex-row' : 'flex-col'}`}
     >
-      <div className="min-h-0 min-w-0" style={{ flexBasis: `${split.ratio * 100}%`, flexGrow: 0, flexShrink: 0 }}>
+      <div className="min-h-0 min-w-0" style={{ flexBasis: `calc((100% - var(--pane-divider-size)) * ${split.ratio})`, flexGrow: 0, flexShrink: 0 }}>
         <PaneTreeView {...props} node={split.first} onResize={onResize} />
       </div>
-      {/* Soft gutter between cards; transparent hit strip keeps resize easy */}
-      <div
-        role="separator"
-        aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
-        onPointerDown={handlePointerDown}
-        className="shrink-0 transition-colors hover:bg-[rgba(255,120,48,0.2)]"
-        style={{
-          width: isHorizontal ? 8 : '100%',
-          height: isHorizontal ? '100%' : 8,
-          cursor: isHorizontal ? 'col-resize' : 'row-resize',
-          background: 'transparent',
-        }}
-      />
+      <div className={styles.divider} data-direction={split.direction}>
+        <div
+          role="separator"
+          aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
+          aria-valuemin={15}
+          aria-valuemax={85}
+          aria-valuenow={Math.round(split.ratio * 100)}
+          tabIndex={0}
+          className={styles.resize}
+          data-resizing={resizing}
+          onPointerDown={(event) => {
+            if (event.button !== 0) return
+            event.preventDefault()
+            event.stopPropagation()
+            event.currentTarget.focus()
+            event.currentTarget.setPointerCapture(event.pointerId)
+            setResizing(true)
+          }}
+          onPointerMove={resizeFromPointer}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          onLostPointerCapture={() => setResizing(false)}
+          onDoubleClick={() => onResize(split.id, 0.5)}
+          onKeyDown={(event) => {
+            const decrease = isHorizontal ? 'ArrowLeft' : 'ArrowUp'
+            const increase = isHorizontal ? 'ArrowRight' : 'ArrowDown'
+            if (![decrease, increase, 'Home', 'End'].includes(event.key)) return
+            event.preventDefault()
+            event.stopPropagation()
+            onResize(split.id, event.key === 'Home' ? 0.15 : event.key === 'End' ? 0.85
+              : split.ratio + (event.key === decrease ? -0.05 : 0.05))
+          }}
+        />
+      </div>
       <div className="min-h-0 min-w-0 flex-1">
         <PaneTreeView {...props} node={split.second} onResize={onResize} />
       </div>
@@ -384,15 +396,10 @@ function TerminalPresetCapsule({
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={onToggle}
-        className={`flex shrink-0 items-center justify-center rounded border focus:outline-none focus-visible:ring-1 hover:bg-[rgba(255,255,255,0.055)] ${plancheMenu ? 'focus-visible:ring-[rgba(212,61,42,0.5)]' : 'focus-visible:ring-[rgba(255,120,48,0.35)]'}`}
+        className={styles.action}
         style={{
           width: TERMINAL_MENU_COLLAPSED_SIZE,
           height: TERMINAL_MENU_COLLAPSED_SIZE,
-          borderColor: open ? (plancheMenu ? 'rgba(212,61,42,0.5)' : 'rgba(255,120,48,0.46)') : 'var(--shell-border)',
-          background: open ? (plancheMenu ? 'var(--shell-chrome-raised)' : 'rgb(36, 27, 21)') : 'var(--shell-chrome-raised)',
-          color: open ? (plancheMenu ? '#D43D2A' : '#ffb27d') : 'var(--shell-muted)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
-          transition: 'color 180ms ease, background-color 150ms ease, border-color 180ms ease',
         }}
       >
         {/* 用两条细条绘制 +,文本字形在行框内偏上,旋转 45° 后偏差会沿对角放大 */}
@@ -608,6 +615,7 @@ function LeafPane({
   terminalsById,
   focusedPaneId,
   showFocusChrome,
+  onCollapseLayout,
   onPaneFocus,
   onTabSelect,
   onKillTerminalFromTab,
@@ -633,7 +641,6 @@ function LeafPane({
   const [tabInsertIndex, setTabInsertIndex] = useState<number | null>(null)
   const tabNodeRefs = useRef(new Map<string, HTMLDivElement>())
   const isFocused = leaf.id === focusedPaneId
-  const showFocus = showFocusChrome && isFocused
   const activeTabId = leaf.activeTabId ?? leaf.tabs[0]?.id ?? null
   const activeTab = activeTabId ? leaf.tabs.find((tab) => tab.id === activeTabId) ?? null : null
   const activeTerminal = activeTab?.type === 'terminal' ? terminalsById.get(activeTab.terminalId) ?? null : null
@@ -772,11 +779,7 @@ function LeafPane({
     onTerminalDrop(terminalId, leaf.id, edge, ratio)
   }, [leaf.id, onTerminalDrop, onBrowserTabDrop])
 
-  /*-- 单个 pane tab：visualIndex 是含占位在内的视觉位置，首位圆角跟随条底。 --*/
-  const renderPaneTab = (
-    tab: WorkspacePaneLeaf['tabs'][number],
-    visualIndex: number,
-  ) => {
+  const renderPaneTab = (tab: WorkspacePaneLeaf['tabs'][number]) => {
     const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
     const isActive = tab.id === activeTabId
     const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
@@ -810,23 +813,9 @@ function LeafPane({
           event.preventDefault()
           onTabSelect(leaf.id, tab.id)
         }}
-        className="pane-tab group/tab relative flex h-8 min-w-0 basis-[144px] shrink-0 grow-0 cursor-pointer select-none items-center gap-1.5 border-0 px-2.5 text-left font-mono text-[11px] leading-none transition-colors"
+        className={`${styles.tab} group/tab font-mono`}
         data-active={isActive ? 'true' : 'false'}
-        style={{
-          touchAction: 'none',
-          color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)',
-          /*-- 选中态与下方内容床同色，让 tab 与画布连成一体；不再是压在浅色条上的黑块。
-               未选中态刻意不写 inline background —— 内联样式会盖过 hover 类，
-               写死 transparent 等于让 hover 失效（Tailwind preflight 已把 button 置为透明）。 --*/
-          background: isActive ? 'var(--shell-canvas)' : undefined,
-          borderRight: '1px solid var(--shell-border-soft)',
-          boxShadow: isActive ? 'inset 0 1px 0 var(--shell-border-soft)' : 'none',
-          fontWeight: isActive ? 600 : 400,
-          /*-- 首个 tab 左上倒角 = 条底圆角（贴边后两者同缘，必须等值才同心）：
-               多 pane 10 / 单 pane 7，与上方 borderTopLeftRadius 呼应。
-               底边不倒角：选中态底边要与内容床连成一体。 --*/
-          borderTopLeftRadius: visualIndex === 0 ? (showFocusChrome ? 10 : 7) : 0,
-        }}
+        aria-pressed={isActive}
       >
         {/*-- tab 左侧状态灯：与左侧工作区同一盏灯（TerminalStatusLight 紧凑环），
              色/形/动效三编码；8px 环比原来 6px 点宽 2px，仍在 144px 预算余量内。 --*/}
@@ -894,86 +883,50 @@ function LeafPane({
   return (
       <section
       data-pane-id={leaf.id}
-      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden transition-[border-color,box-shadow,background,border-radius]"
+      className={styles.pane}
+      data-focused={isFocused}
+      data-split={showFocusChrome}
       onPointerDownCapture={() => onPaneFocus(leaf.id)}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      style={{
-        // Multi-pane: rounded card chrome with gap-friendly silhouette.
-        // Single-pane: lighter radius so it stays intentional without double-framing.
-        borderRadius: showFocusChrome ? 11 : 8,
-        background: showFocus ? 'var(--shell-pane-chrome)' : 'var(--shell-pane)',
-        border: showFocus ? '1px solid rgba(255,120,48,0.28)' : '1px solid var(--shell-border)',
-        boxShadow: showFocus
-          ? '0 0 0 1px rgba(255,120,48,0.08), inset 0 0 0 1px rgba(255,120,48,0.05), 0 6px 18px rgba(0,0,0,0.28)'
-          : showFocusChrome
-            ? '0 1px 0 rgba(255,255,255,0.035), 0 6px 16px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.03)'
-            : 'inset 0 1px 0 rgba(255,255,255,0.025)',
-      }}
     >
       {dragHint && (
         <div
-          className="pointer-events-none absolute z-20 flex items-center justify-center"
+          className={`${styles.dropHint} pointer-events-none absolute z-20`}
           style={{
             /*-- 预览区域 = 松手后新 pane 的真实占比（first/second 语义与 splitPaneTree 一致） --*/
             top: dragHint.zone === 'bottom' ? `${dragHint.ratio * 100}%` : 0,
             right: dragHint.zone === 'left' ? `${(1 - dragHint.ratio) * 100}%` : 0,
             bottom: dragHint.zone === 'top' ? `${(1 - dragHint.ratio) * 100}%` : 0,
             left: dragHint.zone === 'right' ? `${dragHint.ratio * 100}%` : 0,
-            background: dragHint.zone === 'center' ? 'rgba(255,255,255,0.05)' : 'rgba(255,120,48,0.12)',
-            border: dragHint.zone === 'center'
-              ? '1px solid rgba(255,255,255,0.16)'
-              : '1px solid rgba(255,120,48,0.58)',
-            boxShadow: dragHint.zone === 'center' ? 'none' : 'inset 0 0 22px rgba(255,120,48,0.08)',
             transition: 'top 70ms ease-out, right 70ms ease-out, bottom 70ms ease-out, left 70ms ease-out',
             animation: 'pane-drop-hint-in 110ms ease-out',
           }}
         >
           {/*-- 预览语义标签：让落点结果（分屏方向/合并）在松手前自解释 --*/}
           <span
-            className="rounded-full border px-2.5 py-1 font-mono text-[11px] leading-none"
-            style={{
-              color: dragHint.zone === 'center' ? 'rgba(255,255,255,0.82)' : '#ffc6a6',
-              borderColor: dragHint.zone === 'center' ? 'rgba(255,255,255,0.2)' : 'rgba(255,120,48,0.4)',
-              background: 'rgba(10,10,12,0.78)',
-            }}
+            className={styles.dropLabel}
           >
             {paneDropHintLabel(dragHint.zone)}
           </span>
         </div>
       )}
-      <div
-        /*-- 左侧贴边：首 tab 直接顶住条底左缘（只留右侧 pr-1 给动作按钮呼吸），
-             左缘不留 4px chrome 缝，圆角由首 tab 自己的左上倒角一次成型。 --*/
-        className="relative flex h-8 min-w-0 shrink-0 items-stretch gap-0 pl-0 pr-1"
-        style={{
-          /*-- tab 条吃实色 pane-chrome：与下方 canvas 内容床拉开一阶，
-               两主题下选中 tab（canvas 底）与未选中（chrome 底）都有明确明度差；
-               之前半透明白叠加在纸面主题下近乎不可见。focus 不再单独洗色，
-               焦点态由外层 pane 边框统一表达。
-               顶边圆角跟随外层 section（radius - 1px 边框），否则方形条底会顶出圆角容器。 --*/
-          background: 'var(--shell-pane-chrome)',
-          borderBottom: '1px solid var(--shell-border)',
-          borderTopLeftRadius: showFocusChrome ? 10 : 7,
-          borderTopRightRadius: showFocusChrome ? 10 : 7,
-        }}
-      >
+      <div className={styles.header}>
         {/*-- 仅标签滚动，动作区保持为不可收缩的兄弟节点，窄 pane 与多 tab 不会把按钮滚出视口。 --*/}
         <div
           data-tab-strip={leaf.id}
           onDragOver={handleTabStripDragOver}
           onDragLeave={handleTabStripDragLeave}
           onDrop={handleTabStripDrop}
-          className="relative flex min-w-0 flex-1 items-stretch overflow-x-auto"
-          style={{ scrollbarWidth: 'none' }}
+          className={styles.strip}
         >
           {(() => {
             /*-- 排序占位：同 pane 拖拽先摘除源 tab，异 pane 全量保留；
                  占位与 tab 同宽（basis 144px），兄弟 tab 被 flex 自然挤开即让位。
-                 visualIndex 含占位在内，首位圆角只落在一个元素上。 --*/
+                 占位与正式标签使用相同圆角和间隔。 --*/
             if (tabInsertIndex == null) {
-              return leaf.tabs.map((tab, visualIndex) => renderPaneTab(tab, visualIndex))
+              return leaf.tabs.map(renderPaneTab)
             }
             const ordered = stripDraggedIsLocal && stripDraggedTabId
               ? leaf.tabs.filter((tab) => tab.id !== stripDraggedTabId)
@@ -986,39 +939,30 @@ function LeafPane({
                     key={`tab-drop-placeholder-${leaf.id}`}
                     aria-hidden="true"
                     data-tab-placeholder="true"
-                    className="relative flex h-8 min-w-0 basis-[144px] shrink-0 grow-0 items-center justify-center px-2.5"
+                    className={styles.placeholder}
                     style={{
-                      background: 'rgba(255,120,48,0.10)',
-                      borderRight: '1px solid var(--shell-border-soft)',
-                      boxShadow: 'inset 0 0 0 1px rgba(255,120,48,0.55)',
-                      borderTopLeftRadius: slot === 0 ? (showFocusChrome ? 10 : 7) : 0,
                       animation: 'pane-drop-hint-in 110ms ease-out',
                     }}
                   >
-                    <span className="block h-[3px] w-10 rounded-full" style={{ background: 'rgba(255,120,48,0.75)' }} />
+                    <span className="block h-[3px] w-10 rounded-full" style={{ background: 'var(--shell-accent)' }} />
                   </div>
                 )
               }
               if (slot < ordered.length) {
-                slots.push(renderPaneTab(ordered[slot], slot + (slot >= tabInsertIndex ? 1 : 0)))
+                slots.push(renderPaneTab(ordered[slot]))
               }
             }
             return slots
           })()}
           <div data-tab-drag-spacer="" aria-hidden="true" style={{ width: 0, flexShrink: 0 }} />
-          <div data-tab-drag-slot="" aria-hidden="true" style={{
-            display: 'none', position: 'absolute', top: 0, height: '100%', pointerEvents: 'none',
-            background: 'rgba(255,120,48,.10)', boxShadow: 'inset 0 0 0 1px rgba(255,120,48,.4)',
-          }} />
+          <div data-tab-drag-slot="" aria-hidden="true" className={styles.slot} />
         </div>
-        <div className="flex h-8 shrink-0 items-center gap-1 pl-1">
-          <span
-            aria-hidden="true"
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none font-mono"
-            style={{ color: 'var(--shell-muted)', visibility: 'hidden' }}
-          >
-            x
-          </span>
+        <div className={styles.controls}>
+          {showFocusChrome && (
+            <HoldToConfirm label={t('terminal:tab.collapseLayout')} onConfirm={onCollapseLayout} className={styles.action}>
+              <Minimize2 size={13} strokeWidth={1.6} aria-hidden="true" />
+            </HoldToConfirm>
+          )}
           <TerminalPresetCapsule
             open={terminalMenuOpen}
             onToggle={openMenu}
@@ -1029,8 +973,7 @@ function LeafPane({
           <HoldToConfirm
             label={t('terminal:tab.killCurrentTerminal')}
             disabled={!activeTerminal}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded border text-[14px] leading-none transition-colors enabled:hover:bg-[rgba(255,88,88,0.1)] disabled:cursor-not-allowed disabled:opacity-35"
-            style={{ borderColor: 'rgba(255,255,255,0.08)', color: activeTerminal ? '#b86b6b' : '#666' }}
+            className={`${styles.action} ${styles.danger} text-[14px] leading-none`}
             onConfirm={() => activeTerminal && onKillTerminal(activeTerminal.id)}
           >
             -
@@ -1094,7 +1037,7 @@ function LeafPane({
           return (
             <div
               key={tab.id}
-              className="absolute inset-0"
+              className={`${styles.terminalContent} absolute inset-0`}
               style={{
                 visibility: isActive ? 'visible' : 'hidden',
                 pointerEvents: isActive ? 'auto' : 'none',
@@ -1177,8 +1120,6 @@ function LeafPane({
 
 export function TerminalArea() {
   const { t } = useI18n('terminal')
-  // 底部抽屉折叠箭头等纸面点睛走分支（与菜单 plancheMenu 同构，作用域独立）
-  const plancheBottomBar = useThemeStore((s) => s.theme) === 'planche'
   // P5: useShallow 细粒度订阅——整 store 订阅会让任意无关字段变化都重渲染这棵大组件树
   const {
     workspaces,
@@ -1588,46 +1529,9 @@ export function TerminalArea() {
   return (
       <div
         ref={terminalAreaRef}
-        className="flex h-full w-full min-w-0 flex-col relative overflow-hidden"
-        style={{
-          background: 'var(--shell-canvas)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
-      }}
+        className={styles.area}
     >
-      {paneCount > 1 && (
-        <div
-          className="flex h-5 shrink-0 items-center justify-end px-3 pt-1"
-          style={{ background: 'transparent' }}
-        >
-          <HoldToConfirm
-            label={t('terminal:tab.collapseLayout')}
-            onConfirm={collapsePaneLayout}
-            className="flex h-4 w-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent font-mono text-[14px] leading-none opacity-28 transition-[opacity,background,color] hover:bg-[rgba(255,255,255,0.045)] hover:opacity-75 focus:outline-none focus:ring-1 focus:ring-[rgba(255,120,48,0.28)]"
-            style={{ color: 'rgba(255,255,255,0.74)' }}
-          >
-            -
-          </HoldToConfirm>
-        </div>
-      )}
-
-      {/* Pane tree — multi-pane host stays soft so leaf cards read as floating surfaces */}
-      <div
-        className="relative m-2 min-h-0 min-w-0 flex-1 overflow-hidden"
-        style={
-          paneCount > 1
-            ? {
-                background: 'transparent',
-                border: '1px solid transparent',
-                boxShadow: 'none',
-              }
-            : {
-                background: 'var(--shell-pane)',
-                border: '1px solid var(--shell-border)',
-                borderRadius: 10,
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)',
-              }
-        }
-      >
+      <div className={styles.paneHost} data-pane-host="">
         {workspaceSurfaces.map((surface) => {
           // 无项目时活动 surface 的宿主是全局哨兵，可见性按哨兵判；
           // 有项目时仍按真实 workspaceId 判。
@@ -1651,6 +1555,7 @@ export function TerminalArea() {
                 focusedPaneId={surface.focusedPaneId}
                 activeTerminalId={surface.activeTerminalId}
                 showFocusChrome={workspaceVisible && paneCount > 1}
+                onCollapseLayout={collapsePaneLayout}
                 onPaneFocus={setFocusedPane}
                 onTabSelect={setPaneTab}
                 onKillTerminalFromTab={handleKillTerminal}
@@ -1676,10 +1581,10 @@ export function TerminalArea() {
       </div>
 
       <div
-        className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"
+        data-runtime-drawer=""
+        data-open={drawerOpen}
+        className={styles.drawer}
         style={{
-          background: drawerOpen ? 'var(--shell-drawer)' : 'var(--shell-canvas)',
-          borderTop: '1px solid var(--shell-border)',
           height: getDrawerHeight(drawerOpen, drawerHeight),
           maxHeight: `calc(100% - ${DRAWER_MIN_PANE_HEIGHT}px)`,
           transition: drawerResizing ? 'none' : undefined,
@@ -1705,42 +1610,26 @@ export function TerminalArea() {
             onBlur={handleDrawerResizeBlur}
           />
         )}
-        <div
-          className={`flex h-7 w-full cursor-pointer select-none items-center justify-between gap-3 pl-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.018)] ${drawerOpen ? 'pr-52' : 'pr-3'}`}
+        <button
+          type="button"
+          className={styles.drawerBar}
+          aria-expanded={drawerOpen}
+          aria-controls={getDrawerPanelId()}
+          aria-label={t('terminal:tab.runtimePanelToggle')}
           onClick={() => setDrawerOpen((value) => !value)}
         >
-          <div className="flex h-full min-w-0 items-center gap-1.5 text-[11px]">
-            <button
-              type="button"
-              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
-              onClick={(event) => {
-                event.stopPropagation()
-                setDrawerOpen((value) => !value)
-              }}
-              aria-expanded={drawerOpen}
-              aria-label={t('terminal:tab.runtimePanelToggle')}
-            >
-              <span
-                className="h-[7px] w-[7px] transition-transform"
-                style={{
-                  borderRight: plancheBottomBar ? '1.5px solid var(--shell-dim)' : '1.5px solid rgba(255, 255, 255, 0.2)',
-                  borderBottom: plancheBottomBar ? '1.5px solid var(--shell-dim)' : '1.5px solid rgba(255, 255, 255, 0.2)',
-                  transform: drawerOpen ? 'rotate(45deg) translate(-1px, -1px)' : 'rotate(-45deg)',
-                }}
-              />
-            </button>
+          <span className={styles.drawerPrimary}>
+            <span className={styles.drawerToggle}>
+              <ChevronRight size={12} strokeWidth={1.6} aria-hidden="true" className={styles.drawerChevron} />
+              <span>{t('terminal:tab.runtimeAria')}</span>
+            </span>
             {activeTerminal ? (
-              <span className="flex min-w-0 items-center gap-1.5">
+              <span className={styles.drawerDetails}>
                 {/*-- 抽屉左端补一枚 preset 图标：抽屉条本身是"当前终端"的入口，
                      收起时也要能一眼认出是哪个 CLI，展开时与中部 tab / 左侧栏同一套图标语言。 --*/}
                 <ThemedTooltip label={`${providerLabel(activeTerminal.preset, t)} · ${activeTerminal.cwd}`}>
                 <span
-                  className="inline-flex h-5 min-w-0 max-w-[140px] shrink-0 items-center gap-1.5 rounded border px-1.5 font-mono"
-                  style={{
-                    borderColor: 'rgba(255,255,255,0.055)',
-                    background: 'rgba(255,255,255,0.014)',
-                    color: 'var(--shell-muted)',
-                  }}
+                  className={`${styles.metadata} ${styles.drawerProvider} font-mono`}
                 >
                   <TerminalPresetIcon
                     preset={activeTerminal.preset}
@@ -1752,36 +1641,29 @@ export function TerminalArea() {
                 {focusedTerminalWorkspace && (
                   <ThemedTooltip label={t('terminal:tab.focusWorkspaceTitle', { name: focusedTerminalWorkspace.name, path: focusedTerminalWorkspace.path })}>
                   <span
-                    className="hidden min-w-0 max-w-[150px] items-center gap-1.5 border-r pr-2 font-mono text-[10px] sm:inline-flex"
+                    className={`${styles.drawerWorkspace} min-w-0 max-w-[150px] items-center gap-1.5 font-mono text-[10px]`}
                     style={{
-                      borderColor: 'rgba(255,255,255,0.055)',
                       color: 'var(--shell-dim)',
                     }}
                   >
                     <span
                       aria-hidden="true"
                       className="h-1 w-1 shrink-0 rounded-full"
-                      style={{ background: 'rgba(255,255,255,0.24)' }}
+                      style={{ background: 'var(--shell-dim)' }}
                     />
                     <span className="truncate">{focusedTerminalWorkspace.name}</span>
                   </span>
                   </ThemedTooltip>
                 )}
                 <span
-                  className="inline-flex h-5 min-w-0 max-w-[180px] items-center rounded border px-2 font-mono"
-                  style={{
-                    borderColor: 'rgba(255,255,255,0.055)',
-                    background: 'rgba(255,255,255,0.014)',
-                    color: 'var(--shell-muted)',
-                  }}
+                  className={`${styles.metadata} ${styles.drawerModel} font-mono`}
                 >
                   <span className="truncate">{modelLabel(activeTerminal, t)}</span>
                 </span>
                 <TerminalContextTooltip terminal={activeTerminal}>
                 <span
-                  className="group relative inline-flex h-5 shrink-0 items-center rounded border px-2 font-mono"
+                  className={`${styles.contextBadge} group font-mono`}
                   style={{
-                    borderColor: `${contextRatioColor(contextRatio(activeTerminal))}33`,
                     background: `${contextRatioColor(contextRatio(activeTerminal))}12`,
                     color: contextRatioColor(contextRatio(activeTerminal)),
                   }}
@@ -1791,19 +1673,16 @@ export function TerminalArea() {
                 </TerminalContextTooltip>
               </span>
             ) : (
-              <span className="truncate font-mono text-[var(--shell-dim)]">No model or context data</span>
+              <span className="truncate text-[var(--shell-dim)]">{t('terminal:tab.noTelemetryData')}</span>
             )}
-          </div>
-          <div className="flex h-full shrink-0 items-center gap-2 text-[10px]">
-            <div className="hidden h-full items-center gap-1.5 md:flex">
+          </span>
+            <span className={styles.drawerOthers}>
               {otherTerminals.slice(0, 3).map((terminal) => {
                 return (
                 <ThemedTooltip key={terminal.id} label={`${providerLabel(terminal.preset, t)} · ${modelLabel(terminal, t)} · ${contextLabel(terminal, t)}`}>
                 <span
-                  className="inline-flex h-5 max-w-[126px] items-center gap-1.5 overflow-hidden rounded border px-1.5 font-mono"
+                  className={`${styles.metadata} max-w-[126px] overflow-hidden font-mono`}
                   style={{
-                    borderColor: 'rgba(255,255,255,0.055)',
-                    background: 'rgba(255,255,255,0.018)',
                     color: 'var(--shell-dim)',
                   }}
                 >
@@ -1818,13 +1697,12 @@ export function TerminalArea() {
                 )
               })}
               {otherTerminals.length > 3 && (
-                <span className="inline-flex h-5 items-center rounded border border-[rgba(255,255,255,0.055)] px-1.5 font-mono text-[var(--shell-dim)]">
+                <span className="inline-flex h-5 items-center px-1.5 font-mono text-[var(--shell-dim)]">
                   +{otherTerminals.length - 3}
                 </span>
               )}
-            </div>
-          </div>
-        </div>
+            </span>
+        </button>
         {/*-- Markdown 已迁为独立 pane，底部抽屉只留上下文监控 --*/}
         <div
           id={getDrawerPanelId()}
@@ -1834,11 +1712,10 @@ export function TerminalArea() {
         >
           {drawerOpen && (
             <section
-              className="flex h-full min-h-0 flex-col overflow-hidden border"
-              style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+              className="flex h-full min-h-0 flex-col overflow-hidden"
               aria-label={t('terminal:tab.runtimeAria')}
             >
-              <div className="flex h-8 shrink-0 items-center justify-between border-b px-2.5" style={{ borderColor: 'rgba(255,255,255,0.055)' }}>
+              <div className="flex h-8 shrink-0 items-center justify-between px-2.5">
                 <span className="text-[var(--shell-muted)]">{t('terminal:tab.terminalRuntime')}</span>
                 <span className="text-[var(--shell-dim)]">{terminals.length} {t('terminal:sessions.countSuffix')}</span>
               </div>
@@ -1860,16 +1737,12 @@ export function TerminalArea() {
                         <button
                           key={terminal.id}
                           type="button"
-                          className="group relative flex min-w-0 cursor-pointer flex-col gap-2 rounded-md border px-2.5 py-2 text-left transition-colors hover:border-[color-mix(in_srgb,var(--shell-text)_18%,transparent)] focus:outline-none focus:ring-1 focus:ring-[rgba(88,166,255,0.35)]"
-                          style={{
-                            borderColor: isActiveCard ? 'var(--shell-accent-border)' : 'var(--shell-border)',
-                            background: 'transparent',
-                          }}
+                          className={`${styles.runtimeCard} group flex min-w-0 cursor-pointer flex-col gap-2 px-2.5 py-2 text-left`}
                           aria-current={isActiveCard ? 'true' : undefined}
                           aria-label={identityLabel}
                           onClick={() => setActiveTerminal(terminal.id)}
                         >
-                          {/*-- 选中态=文字着色+2px 强调条；卡片保持透明，不做加深填充 --*/}
+                          {/* Current terminal is marked locally; no perimeter outline. */}
                           {isActiveCard && (
                             <span
                               aria-hidden="true"
@@ -1899,7 +1772,7 @@ export function TerminalArea() {
                           </span>
                           <span className="truncate text-[10px] text-[var(--shell-dim)]">{modelLabel(terminal, t)}</span>
                           <TerminalContextTooltip terminal={terminal}>
-                          <span className="flex min-w-0 flex-col gap-1 border-t pt-2" style={{ borderColor: 'var(--shell-border-soft)' }}>
+                          <span className="flex min-w-0 flex-col gap-1 pt-1">
                             <span className="flex items-baseline justify-between gap-2">
                               <span className="text-[10px] text-[var(--shell-muted)]">{t('terminal:context.row.context')}</span>
                               <span className="flex items-baseline gap-1.5">

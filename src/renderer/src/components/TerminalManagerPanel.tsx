@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, RefreshCw, SquareTerminal, Star, Trash2 } from 'lucide-react'
+import { useCallback, useId, useMemo, useState } from 'react'
+import { ChevronDown, Eye, EyeOff, Plus, RefreshCw, SquareTerminal, Star, Trash2 } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import {
   isShellEntryLaunchable,
+  describeShellEntry,
   parseCommandLine,
   quoteCommandToken,
   shellEntryExecutable,
@@ -17,6 +18,7 @@ import {
   type ExternalCliToolId,
 } from '../../../shared/ipc/external-cli'
 import styles from './AppSettingsModal.module.css'
+import shellStyles from './TerminalManagerPanel.module.css'
 
 /** 标红时显示的可执行名：命令首个 token，命令为空时退回整条命令。 */
 function executableOf(entry: ShellProfileEntry): string {
@@ -28,13 +30,12 @@ function executableOf(entry: ShellProfileEntry): string {
 type TerminalSettingsPatch = Partial<Pick<ShellProfilesSettings, 'entries' | 'hiddenCliPresets'>>
 
 /**
- * 设置「终端管理」。布局沿用设置界面的 label + control 两栏（generalRow），
- * 三个区块：用户自建 shell 条目、外部 CLI（检测/安装 + 新建入口显隐）、检测候选区。
+ * 设置「终端管理」：Shell 使用通栏概览与按需展开的编辑区，
+ * 外部 CLI（检测/安装 + 新建入口显隐）与检测候选区沿用设置的两栏布局。
  */
 export function TerminalManagerPanel() {
   const { t } = useI18n('terminal')
   const settings = useShellProfilesStore((s) => s.settings)
-  const load = useShellProfilesStore((s) => s.load)
   const save = useShellProfilesStore((s) => s.save)
   const detect = useShellProfilesStore((s) => s.detect)
   const [candidates, setCandidates] = useState<ShellCandidate[] | null>(null)
@@ -121,44 +122,45 @@ export function TerminalManagerPanel() {
   return (
     <div className={styles.generalPanel}>
       {/* ── 已配置 shell 条目 ── */}
-      <div className={styles.generalRow}>
-        <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>{t('terminal:shellSettings.configured.title')}</div>
-          <div className={styles.generalHelp}>{t('terminal:shellSettings.configured.help')}</div>
-        </div>
-        <div className={styles.generalControlCol}>
-          <div className={styles.lsSection}>
-            {settings.entries.length === 0 && (
-              <div className={styles.lsEmpty}>{t('terminal:shellSettings.configured.empty')}</div>
-            )}
-            {settings.entries.map((entry) => (
-              <ShellEntryCard
-                key={entry.id}
-                entry={entry}
-                missing={
-                  detectedExecutables !== null && !detectedExecutables.has(shellEntryExecutable(entry))
-                }
-                onPatch={patchEntry}
-                onRemove={removeEntry}
-                onMakeDefault={() =>
-                  void persist({
-                    entries: settings.entries.map((item) => ({
-                      ...item,
-                      isDefault: item.id === entry.id,
-                    })),
-                  })
-                }
-                onRedetect={() => void scanCandidates()}
-              />
-            ))}
-            {/* 列表末尾的整宽虚线行：读作"下一张空卡位"，而不是浮在底色上的孤钮 */}
-            <button type="button" className={styles.lsAddRow} onClick={addEntry}>
-              <Plus size={14} strokeWidth={1.8} aria-hidden="true" />
-              {t('terminal:shellSettings.configured.add')}
-            </button>
+      <section className={shellStyles.configured} aria-labelledby="configured-shells-heading">
+        <div className={shellStyles.sectionHeader}>
+          <div className={styles.generalLabelCol}>
+            <h3 id="configured-shells-heading" className={styles.generalLabel}>
+              {t('terminal:shellSettings.configured.title')}
+            </h3>
+            <div className={styles.generalHelp}>{t('terminal:shellSettings.configured.help')}</div>
           </div>
+          <button type="button" className={shellStyles.addButton} onClick={addEntry}>
+            <Plus size={14} strokeWidth={1.8} aria-hidden="true" />
+            {t('terminal:shellSettings.configured.add')}
+          </button>
         </div>
-      </div>
+        <div className={shellStyles.entryList}>
+          {settings.entries.length === 0 && (
+            <div className={styles.lsEmpty}>{t('terminal:shellSettings.configured.empty')}</div>
+          )}
+          {settings.entries.map((entry) => (
+            <ShellEntryCard
+              key={entry.id}
+              entry={entry}
+              missing={
+                detectedExecutables !== null && !detectedExecutables.has(shellEntryExecutable(entry))
+              }
+              onPatch={patchEntry}
+              onRemove={removeEntry}
+              onMakeDefault={() =>
+                void persist({
+                  entries: settings.entries.map((item) => ({
+                    ...item,
+                    isDefault: item.id === entry.id,
+                  })),
+                })
+              }
+              onRedetect={() => void scanCandidates()}
+            />
+          ))}
+        </div>
+      </section>
 
       {/* ── 外部 CLI：检测/安装 + 新建入口显隐（自「通用」移来） ── */}
       <div className={styles.generalRow}>
@@ -252,7 +254,7 @@ export function TerminalManagerPanel() {
   )
 }
 
-/** 单条 shell 条目：就地编辑；图标即显隐开关（置灰 = 不进新建入口）。 */
+/** 概览行保留日常操作，展开后才呈现编辑表单与删除。空命令的新条目直接进入编辑。 */
 function ShellEntryCard({
   entry,
   missing,
@@ -269,63 +271,64 @@ function ShellEntryCard({
   onRedetect: () => void
 }) {
   const { t } = useI18n('terminal')
+  const [expanded, setExpanded] = useState(!entry.command.trim())
+  const detailsId = useId()
 
   return (
-    <div className={styles.lsCard}>
-      <div className={styles.lsCardHeader}>
-        {/* 固定终端字形；点它切换显隐，置灰即不从新建入口显示 */}
+    <div className={shellStyles.entry} data-shell-entry={entry.id}>
+      <div className={shellStyles.entryHeader}>
         <button
           type="button"
-          className={`${styles.lsIconToggle} ${styles.lsIconEntry}${entry.visible ? '' : ` ${styles.lsIconToggleOff}`}`}
-          aria-label={
-            entry.visible
-              ? t('terminal:shellSettings.visibility.visible')
-              : t('terminal:shellSettings.visibility.hidden')
-          }
-          aria-pressed={entry.visible}
-          title={
-            entry.visible
-              ? t('terminal:shellSettings.visibility.visible')
-              : t('terminal:shellSettings.visibility.hidden')
-          }
-          onClick={() => onPatch(entry.id, { visible: !entry.visible })}
+          className={shellStyles.summary}
+          aria-expanded={expanded}
+          aria-controls={detailsId}
+          onClick={() => setExpanded(!expanded)}
         >
-          <SquareTerminal size={16} strokeWidth={1.8} aria-hidden="true" />
+          <SquareTerminal className={shellStyles.entryIcon} size={18} strokeWidth={1.6} aria-hidden="true" />
+          <span className={shellStyles.summaryText}>
+            <span className={shellStyles.name}>{entry.name}</span>
+            <span className={`${shellStyles.command}${missing ? ` ${shellStyles.missing}` : ''}`}>
+              {describeShellEntry(entry) || t('terminal:shellSettings.configured.needsCommand')}
+            </span>
+          </span>
+          <ChevronDown className={shellStyles.chevron} size={14} aria-hidden="true" />
         </button>
-
-        <input
-          className={`${styles.lsInput} ${styles.lsInputName}`}
-          value={entry.name}
-          placeholder={t('terminal:shellSettings.configured.newName')}
-          aria-label={t('terminal:shellSettings.configured.name')}
-          onChange={(event) => onPatch(entry.id, { name: event.target.value })}
-        />
-
-        <div className={styles.lsCardActions}>
-          {/* 实色星 = 默认项；草稿（无命令）不可设为默认 */}
+        <div className={shellStyles.entryActions}>
           <button
             type="button"
-            className={`${styles.lsIconToggle}${entry.isDefault ? ` ${styles.lsIconToggleOn}` : ` ${styles.lsIconToggleOff}`}`}
+            className={shellStyles.stateButton}
             aria-label={t('terminal:shellSettings.visibility.default')}
             aria-pressed={entry.isDefault}
             disabled={!isShellEntryLaunchable(entry)}
-            title={t('terminal:shellSettings.visibility.default')}
             onClick={onMakeDefault}
           >
-            <Star size={14} strokeWidth={1.8} fill={entry.isDefault ? 'currentColor' : 'none'} />
+            <Star size={13} strokeWidth={1.8} fill={entry.isDefault ? 'currentColor' : 'none'} aria-hidden="true" />
+            {t(entry.isDefault ? 'terminal:shellSettings.configured.default' : 'terminal:shellSettings.configured.makeDefault')}
           </button>
           <button
             type="button"
-            className={styles.lsIconButton}
-            aria-label={t('terminal:shellSettings.configured.remove')}
-            onClick={() => onRemove(entry.id)}
+            className={shellStyles.visibilityButton}
+            aria-label={t(entry.visible ? 'terminal:shellSettings.visibility.visible' : 'terminal:shellSettings.visibility.hidden')}
+            aria-pressed={entry.visible}
+            onClick={() => onPatch(entry.id, { visible: !entry.visible })}
           >
-            <Trash2 size={13} strokeWidth={1.8} aria-hidden="true" />
+            {entry.visible ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}
+            {t(entry.visible ? 'terminal:shellSettings.configured.visible' : 'terminal:shellSettings.configured.hidden')}
           </button>
         </div>
       </div>
 
-      <div className={styles.lsFields}>
+      <div id={detailsId} className={shellStyles.editor} hidden={!expanded}>
+        <label className={styles.lsField}>
+          <span className={styles.lsFieldLabel}>{t('terminal:shellSettings.configured.name')}</span>
+          <input
+            className={styles.lsInput}
+            value={entry.name}
+            placeholder={t('terminal:shellSettings.configured.newName')}
+            autoFocus={!entry.command.trim()}
+            onChange={(event) => onPatch(entry.id, { name: event.target.value })}
+          />
+        </label>
         <label className={styles.lsField}>
           <span className={styles.lsFieldLabel}>{t('terminal:shellSettings.configured.command')}</span>
           <input
@@ -337,7 +340,10 @@ function ShellEntryCard({
           />
         </label>
         <label className={styles.lsField}>
-          <span className={styles.lsFieldLabel}>{t('terminal:shellSettings.configured.suffix')}</span>
+          <span className={styles.lsFieldLabel}>
+            {t('terminal:shellSettings.configured.suffix')}
+            <span className={shellStyles.optional}>{t('terminal:shellSettings.configured.optional')}</span>
+          </span>
           <input
             className={`${styles.lsInput}`}
             value={entry.suffix ?? ''}
@@ -346,10 +352,16 @@ function ShellEntryCard({
             onChange={(event) => onPatch(entry.id, { suffix: event.target.value })}
           />
         </label>
+        <div className={shellStyles.editorFooter}>
+          <span className={styles.generalHelp}>{t('terminal:shellSettings.configured.launchHelp')}</span>
+          <button type="button" className={shellStyles.removeButton} onClick={() => onRemove(entry.id)}>
+            <Trash2 size={13} aria-hidden="true" />
+            {t('terminal:shellSettings.configured.remove')}
+          </button>
+        </div>
       </div>
-
       {missing && (
-        <div className={styles.lsMissingRow}>
+        <div className={`${styles.lsMissingRow} ${shellStyles.missingRow}`} role="status">
           <span className={styles.lsMissingText}>
             {t('terminal:shellSettings.configured.missing', { executable: executableOf(entry) })}
           </span>

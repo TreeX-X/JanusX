@@ -370,7 +370,9 @@ export function CLITerminal({
           reportGeometry: (cols, rows) => reportTerminalGeometry(terminalId, cols, rows),
           resizePty: (cols, rows) => window.electron.terminal.resize(terminalId, cols, rows),
         })
-        if (focusedRef.current) {
+        // A layout refit must not steal focus from workspace controls or text fields.
+        const activeElement = document.activeElement
+        if (focusedRef.current && (!activeElement || activeElement === document.body || hostElement.contains(activeElement))) {
           term.focus()
         }
 

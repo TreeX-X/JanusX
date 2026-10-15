@@ -81,11 +81,6 @@ describe('Quick Note view behavior', () => {
     expect(source).toContain('height: getDrawerHeight(drawerOpen, drawerHeight)')
   })
 
-  it('reserves header space for the drawer handle only while the drawer is expanded', () => {
-    const source = readFileSync(new URL('../../../src/renderer/src/components/TerminalArea.tsx', import.meta.url), 'utf8')
-    expect(source).toContain("drawerOpen ? 'pr-52' : 'pr-3'")
-  })
-
   it('keeps the production terminal tree mounted independently from drawer state', () => {
     const source = readFileSync(new URL('../../../src/renderer/src/components/TerminalArea.tsx', import.meta.url), 'utf8')
     const leafStart = source.indexOf('function LeafPane(')
@@ -95,7 +90,7 @@ describe('Quick Note view behavior', () => {
     const liveTreeNodeIndex = terminalAreaSource.indexOf('node={surface.paneTree}')
     const liveTreeIndex = terminalAreaSource.lastIndexOf('<PaneTreeView', liveTreeNodeIndex)
     const workspaceSurfaceIndex = terminalAreaSource.indexOf('workspaceSurfaces.map((surface) => {')
-    const drawerIndex = terminalAreaSource.indexOf('className="relative flex-shrink-0 overflow-hidden transition-[height,background,border-color]"')
+    const drawerIndex = terminalAreaSource.indexOf('data-runtime-drawer=""')
 
     expect(leafStart).toBeGreaterThanOrEqual(0)
     expect(workspaceSurfaceIndex).toBeGreaterThanOrEqual(0)

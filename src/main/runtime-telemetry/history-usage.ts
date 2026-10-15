@@ -64,7 +64,7 @@ export function cumulativeUsage(engine: UsageEngine, namespace: string, sessionI
  * while cumulative deltas always telescope to the session total. Identity is
  * the per-file `ordinal` scoped by session, so ordinals never collide across
  * sessions; time is the event timestamp. Codex counts cache writes inside
- * `input_tokens`, so only cache reads are split out — the same mapping the
+ * `input_tokens`, so cache reads and reported writes are split out — the same mapping the
  * cumulative path uses, keeping both modes numerically identical.
  *
  * Forked/subagent rollouts copy the parent's events up to
@@ -79,7 +79,7 @@ export function collectCodexEvents(namespace: string, sessionId: string, values:
   // A root session's cumulative counters start at zero, so the first event's
   // delta is its own consumption. A forked thread inherits the parent's
   // counters, so its baseline is the last inherited event instead.
-  let previous: RecordValue = { total_tokens: 0, input_tokens: 0, cached_input_tokens: 0, output_tokens: 0 }
+  let previous: RecordValue = { total_tokens: 0, input_tokens: 0, cached_input_tokens: 0, cache_write_input_tokens: 0, output_tokens: 0 }
   if (inheritedFrom !== undefined) {
     for (const value of values) {
       const ordinal = value.ordinal
@@ -103,8 +103,10 @@ export function collectCodexEvents(namespace: string, sessionId: string, values:
     const total = count(cumulative.total_tokens)
     const input = count(cumulative.input_tokens)
     const cached = count(cumulative.cached_input_tokens)
+    const rawWritten = cumulative.cache_write_input_tokens ?? cumulative.cacheWriteInputTokens
+    const written = count(rawWritten)
     const output = count(cumulative.output_tokens)
-    if (total === undefined || input === undefined || cached === undefined || output === undefined) {
+    if (total === undefined || input === undefined || cached === undefined || output === undefined || (rawWritten !== undefined && written === undefined)) {
       issue = 'invalid-event'
       previous = cumulative
       continue
@@ -113,13 +115,17 @@ export function collectCodexEvents(namespace: string, sessionId: string, values:
     const deltaInput = input - count(previous.input_tokens)!
     const deltaCached = cached - count(previous.cached_input_tokens)!
     const deltaOutput = output - count(previous.output_tokens)!
+    const previousWritten = count(previous.cache_write_input_tokens ?? previous.cacheWriteInputTokens)
+    // If an older counter has no write breakdown, the transition interval stays
+    // unsplit; later intervals use the newly established native write baseline.
+    const deltaWritten = written === undefined || previousWritten === undefined ? undefined : written - previousWritten
     // A reset (compaction, /new) is not consumption; pause instead of guessing.
-    if (deltaTotal < 0 || deltaInput < 0 || deltaCached < 0 || deltaOutput < 0) {
+    if (deltaTotal < 0 || deltaInput < 0 || deltaCached < 0 || deltaOutput < 0 || (deltaWritten !== undefined && deltaWritten < 0)) {
       issue = 'counter-regressed'
       previous = cumulative
       continue
     }
-    const tokens = usageTokens(deltaInput - deltaCached, deltaOutput, deltaCached, undefined, deltaTotal)
+    const tokens = usageTokens(deltaInput - deltaCached - (deltaWritten ?? 0), deltaOutput, deltaCached, deltaWritten, deltaTotal)
     if (!tokens) { issue = 'invalid-event'; previous = cumulative; continue }
     const event: UsageEvent = { ...tokens, id, at: time(value.timestamp) }
     const existing = events.get(id)

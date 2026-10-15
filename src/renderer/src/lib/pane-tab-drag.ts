@@ -1,4 +1,5 @@
 import { getPaneDropHint, midpointInsertIndex, paneDropHintLabel, type PaneDropHint } from './pane-drop-hint'
+import styles from '@/components/TerminalArea.module.css'
 
 export type PaneTabDrop =
   | { paneId: string; index: number; zone?: never }
@@ -17,6 +18,7 @@ interface Strip {
   tabs: HTMLElement[]
   slot: HTMLElement
   spacer: HTMLElement
+  gap: number
 }
 
 // Note: pointer previews use untransformed tab geometry and commit only on release — see .agents/notes/workbench/pane-tab-reorder.md
@@ -98,6 +100,7 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
         tabs: Array.from(element.querySelectorAll<HTMLElement>('[data-tab-id]')),
         slot: element.querySelector<HTMLElement>('[data-tab-drag-slot]')!,
         spacer: element.querySelector<HTMLElement>('[data-tab-drag-spacer]')!,
+        gap: Number.parseFloat(getComputedStyle(element).columnGap) || 0,
       }))
     if (!strips.some((strip) => strip.tabs.includes(source)) || strips.some((strip) => !strip.slot || !strip.spacer)) {
       cleanup()
@@ -128,18 +131,19 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
     Object.assign(clone.style, {
       position: 'fixed', left: '0', top: '0', width: `${width}px`, height: `${rect.height}px`,
       margin: '0', zIndex: '10000', pointerEvents: 'none', transition: 'none',
-      background: 'var(--shell-canvas)', boxShadow: '0 6px 20px rgba(0,0,0,.3)', opacity: '.95',
+      background: 'var(--shell-chrome-raised)', borderRadius: '7px', boxShadow: '0 6px 20px rgba(0,0,0,.2)', opacity: '.95',
     })
     overlay.appendChild(clone)
     hint = document.createElement('div')
     hint.setAttribute('data-tab-drag-hint', '')
     hint.setAttribute('aria-hidden', 'true')
+    hint.className = styles.dropHint
     Object.assign(hint.style, {
       position: 'fixed', zIndex: '9999', pointerEvents: 'none', display: 'none',
-      background: 'rgba(255,120,48,.12)', border: '1px solid rgba(255,120,48,.5)',
-      borderRadius: '8px', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--shell-text)', fontSize: '12px',
     })
+    const label = document.createElement('span')
+    label.className = styles.dropLabel
+    hint.appendChild(label)
     overlay.appendChild(hint)
     for (const strip of strips) {
       remember(strip.slot)
@@ -199,7 +203,7 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
           width: `${zone === 'left' || zone === 'right' ? rect.width / 2 : rect.width}px`,
           height: `${zone === 'top' || zone === 'bottom' ? rect.height / 2 : rect.height}px`,
         })
-        hint!.textContent = paneDropHintLabel(zone)
+        hint!.firstElementChild!.textContent = paneDropHintLabel(zone)
         hint!.dataset.zone = zone
       }
     }
@@ -216,10 +220,10 @@ export function startPaneTabDrag({ root, source, event, onActiveChange, onDrop }
         if (tab === source) continue
         if (position === index) {
           slotLeft = left
-          left += width
+          left += width + item.gap
         }
         tab.style.transform = `translateX(${left - tab.offsetLeft}px)`
-        left += tab.offsetWidth
+        left += tab.offsetWidth + item.gap
         position += 1
       }
       if (index === position) slotLeft = left

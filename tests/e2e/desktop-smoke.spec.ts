@@ -177,6 +177,10 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
 
     const workspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace' }).first()
     await expect(workspaceRow).toBeVisible()
+    const sidebarHeader = page.locator('[data-workspace-sidebar-header]')
+    await expect(sidebarHeader).toHaveCSS('border-bottom-width', '0px')
+    await expect(sidebarHeader).toHaveCSS('height', '40px')
+    await page.screenshot({ path: test.info().outputPath('sidebar-heading.png') })
     const secondWorkspaceRow = page.locator('.ws').filter({ hasText: 'Desktop smoke workspace two' }).first()
     await expect(secondWorkspaceRow).toBeVisible()
     const secondWorkspaceRowBox = await secondWorkspaceRow.boundingBox()
@@ -369,7 +373,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.getByRole('button', { name: '收起工作区侧栏', exact: true }).click()
     await expect(rail).toBeVisible()
     expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
-    await page.getByRole('main').getByText('Shell', { exact: true }).click()
+    await page.getByRole('main').getByRole('button', { name: 'PowerShell', exact: true }).click()
     const terminalInput = page.locator('.xterm-helper-textarea').first()
     await expect(terminalInput).toBeAttached({ timeout: 15_000 })
     const terminalScreen = page.locator('.xterm-screen').first()
@@ -384,6 +388,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await terminalInput.pressSequentially('echo JANUSX_DOCK_FIT')
     await terminalInput.press('Enter')
     await expect(page.locator('.xterm-rows')).toContainText('JANUSX_DOCK_FIT', { timeout: 10_000 })
+    await page.screenshot({ path: test.info().outputPath('continuous-workspace.png') })
 
     const terminalTabs = page.locator('main [data-tab-id^="terminal:"]')
     await expect(terminalTabs).toHaveCount(1)
@@ -397,6 +402,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.getByRole('menuitem', { name: 'New PowerShell terminal', exact: true }).click()
     await expect(terminalTabs).toHaveCount(2, { timeout: 15_000 })
     await expect(page.locator('.xterm-screen')).toHaveCount(2, { timeout: 15_000 })
+    await page.screenshot({ path: test.info().outputPath('rounded-workspace-tabs.png') })
     await expect(firstTerminalView).toHaveAttribute('aria-hidden', 'true')
     expect(await firstTerminalElement.evaluate((element) => element.isConnected)).toBe(true)
 

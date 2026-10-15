@@ -544,10 +544,9 @@ describe('planche theme contract', () => {
       expect(source, file).toContain('ThemedTooltip')
       expect(source, file).not.toMatch(/title=\{/)
     }
-    // 终端区同样：菜单/页签/遥测卡/底部抽屉栏提示走 ThemedTooltip，折叠箭头纸面分支
+    // 终端区同样：菜单/页签/遥测卡/底部抽屉栏提示走 ThemedTooltip
     const area = read('components/TerminalArea.tsx')
     expect(area).toContain('ThemedTooltip')
-    expect(area).toContain('plancheBottomBar')
     expect(area).not.toMatch(/title=\{/)
   })
 })

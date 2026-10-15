@@ -1,0 +1,313 @@
+/* The workspace is one continuous surface; only controls have rounded silhouettes. */
+.area {
+  --pane-tab-gap: 4px;
+  --pane-divider-size: 9px;
+  container: workspace-surface / inline-size;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--shell-canvas);
+}
+
+.paneHost {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminalContent { padding: 4px 8px 6px; }
+
+.pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--shell-canvas);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+  height: 40px;
+  padding: 4px 6px;
+  background: var(--shell-canvas);
+}
+
+.strip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  column-gap: var(--pane-tab-gap);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.strip::-webkit-scrollbar { display: none; }
+
+.tab,
+.placeholder {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 144px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+}
+
+.tab {
+  gap: 6px;
+  color: var(--shell-muted);
+  background: transparent;
+  font-size: 11px;
+  line-height: 1;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.tab:hover {
+  color: var(--shell-text);
+  background: color-mix(in srgb, var(--shell-text) 5%, var(--shell-canvas));
+}
+
+.tab[data-active='true'] {
+  color: var(--shell-text);
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+  font-weight: 600;
+}
+
+/* Inactive splits keep a neutral selection; focus lives in the selected control. */
+.pane[data-focused='true'][data-split='true'] .tab[data-active='true'] {
+  background: color-mix(in srgb, var(--shell-accent) 11%, var(--shell-canvas));
+}
+
+.tab:focus-visible,
+.action:focus-visible {
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
+}
+
+.tab:focus-within [data-tab-close],
+.tab:focus-visible [role='button'] { opacity: 0.65; }
+
+.placeholder,
+.slot {
+  background: rgba(128, 128, 128, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.32);
+  border-radius: 7px;
+  pointer-events: none;
+}
+
+.placeholder { justify-content: center; }
+
+/* Both native and pointer drags use the same neutral, translucent destination. */
+.dropHint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  background: rgba(128, 128, 128, 0.18);
+  border: 1px solid rgba(128, 128, 128, 0.32);
+  border-radius: 0;
+}
+
+.dropLabel {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--shell-chrome-raised);
+  color: var(--shell-text);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.slot {
+  display: none;
+  position: absolute;
+  top: 0;
+  height: 32px;
+}
+
+.controls {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding-left: 6px;
+}
+
+.action {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-muted);
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.action:enabled:hover {
+  color: var(--shell-text);
+  background: color-mix(in srgb, var(--shell-text) 7%, transparent);
+}
+
+.action:disabled { opacity: 0.35; cursor: not-allowed; }
+.danger:enabled:hover { color: var(--shell-diff-del); background: color-mix(in srgb, var(--shell-diff-del) 10%, transparent); }
+.action[aria-expanded='true'] { color: var(--shell-accent); background: var(--shell-accent-soft); }
+
+/* Native browser views sit above DOM: reserve the hit target, paint only one pixel. */
+.divider {
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  background: var(--shell-canvas);
+}
+
+.divider[data-direction='horizontal'] { width: var(--pane-divider-size); height: 100%; }
+.divider[data-direction='vertical'] { width: 100%; height: var(--pane-divider-size); }
+
+.resize {
+  position: absolute;
+  z-index: 1;
+  touch-action: none;
+  outline: none;
+}
+
+.divider[data-direction='horizontal'] .resize { inset: 0; cursor: col-resize; }
+.divider[data-direction='vertical'] .resize { inset: 0; cursor: row-resize; }
+.resize::after { content: ''; position: absolute; background: var(--shell-border-soft); transition: background-color 140ms ease; }
+.divider[data-direction='horizontal'] .resize::after { inset: 0 4px; }
+.divider[data-direction='vertical'] .resize::after { inset: 4px 0; }
+.resize:hover::after,
+.resize:focus-visible::after,
+.resize[data-resizing='true']::after { background: var(--shell-accent); }
+
+.drawer {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 0;
+  background: var(--shell-canvas);
+  transition: height 180ms ease, background-color 140ms ease;
+}
+
+.drawer[data-open='true'] {
+  border-top: 1px solid var(--shell-border-soft);
+  background: color-mix(in srgb, var(--shell-text) 3%, var(--shell-canvas));
+}
+
+.drawerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--shell-muted);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.drawerPrimary, .drawerDetails {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.drawerToggle {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px 0 4px;
+  border-radius: 5px;
+  color: var(--shell-muted);
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.drawerBar:hover .drawerToggle {
+  background: color-mix(in srgb, var(--shell-text) 5%, transparent);
+  color: var(--shell-text);
+}
+
+.drawerBar[aria-expanded='true'] .drawerToggle {
+  background: var(--shell-accent-soft);
+  color: var(--shell-accent);
+}
+
+.drawerBar:focus-visible { outline: none; }
+.drawerBar:focus-visible .drawerToggle { outline: 1px solid var(--shell-accent-border); outline-offset: -1px; }
+.drawerChevron { transition: transform 140ms ease; }
+.drawerBar[aria-expanded='true'] .drawerChevron { transform: rotate(90deg); }
+
+.drawerProvider { max-width: 140px; }
+.drawerWorkspace { display: inline-flex; }
+.drawerModel { flex: 0 1 auto; max-width: 180px; }
+.contextBadge { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; flex-shrink: 0; border: 0; border-radius: 5px; }
+.drawerOthers { display: flex; align-items: center; flex-shrink: 0; gap: 6px; font-size: 10px; }
+
+.runtimeCard {
+  position: relative;
+  border: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--shell-text) 3%, var(--shell-canvas));
+  transition: background-color 140ms ease;
+}
+
+.runtimeCard:hover { background: color-mix(in srgb, var(--shell-text) 5%, var(--shell-canvas)); }
+.runtimeCard[aria-current='true'] { background: color-mix(in srgb, var(--shell-text) 6%, var(--shell-canvas)); }
+.runtimeCard:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: -1px; }
+
+@container workspace-surface (max-width: 700px) { .drawerOthers { display: none; } }
+@container workspace-surface (max-width: 480px) { .drawerWorkspace { display: none; } }
+@container workspace-surface (max-width: 300px) { .drawerProvider, .drawerModel { display: none; } }
+
+.metadata {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  min-width: 0;
+  padding: 0 4px;
+  color: var(--shell-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab, .action, .resize::after, .drawer, .drawerToggle, .drawerChevron, .runtimeCard { transition: none; }
+}

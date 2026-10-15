@@ -47,8 +47,8 @@
   height: 36px;
   flex: 0 0 36px;
   align-items: center;
-  padding: 0 6px;
-  border-bottom: 1px solid var(--shell-border);
+  padding: 4px 6px;
+  background: var(--shell-canvas);
 }
 
 .tabsWrap {
@@ -56,6 +56,7 @@
   display: flex;
   min-width: 0;
   flex: 1;
+  height: 26px;
 }
 
 .tabsWrap::before,
@@ -73,12 +74,12 @@
 
 .tabsWrap::before {
   left: 0;
-  background: linear-gradient(to right, var(--shell-chrome), transparent);
+  background: linear-gradient(to right, var(--shell-canvas), transparent);
 }
 
 .tabsWrap::after {
   right: 0;
-  background: linear-gradient(to left, var(--shell-chrome), transparent);
+  background: linear-gradient(to left, var(--shell-canvas), transparent);
 }
 
 .tabsWrap[data-overflow-left='true']::before,
@@ -94,7 +95,6 @@
   gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 2px 0;
   scrollbar-width: none;
 }
 
@@ -111,34 +111,33 @@
   align-items: center;
   gap: 4px;
   height: 26px;
-  margin-top: 0;
   padding: 0 6px 0 10px;
   color: var(--shell-muted);
+  background: transparent;
+  font-family: inherit;
   font-size: 11px;
-  cursor: default;
-  outline: none;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+  line-height: normal;
+  cursor: pointer;
+  user-select: none;
+  border: 0;
+  border-radius: 7px;
+  transition: color 140ms ease, background-color 140ms ease;
 }
 
 .tab:hover:not([data-active='true']) {
   color: var(--shell-text);
-  background: var(--shell-hover);
-}
-
-.tab:active:not([data-active='true']) {
-  background: var(--shell-active);
+  background: color-mix(in srgb, var(--shell-text) 5%, var(--shell-canvas));
 }
 
 .tab[data-active='true'] {
   color: var(--shell-text);
-  background: var(--shell-accent-soft);
-  border-color: var(--shell-accent-border);
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+  font-weight: 600;
 }
 
 .tab:focus-visible {
-  box-shadow: inset 0 0 0 1px var(--shell-accent-border);
+  outline: 1px solid var(--shell-accent-border);
+  outline-offset: -1px;
 }
 
 .tabLabel {
@@ -151,25 +150,29 @@
 
 .tabClose {
   position: relative;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  padding: 0;
+  border: 0;
   border-radius: 4px;
+  background: transparent;
+  color: var(--shell-muted);
   opacity: 0;
-  transition: opacity 140ms ease, background 140ms ease;
+  cursor: pointer;
+  transition: opacity 140ms ease, color 140ms ease, background-color 140ms ease;
 }
 
 .tab:hover .tabClose,
-.tab:focus-visible .tabClose,
-.tabClose:focus-visible {
-  opacity: 1;
+.tab:focus-within .tabClose {
+  opacity: 0.65;
 }
 
 .tabClose::before,
 .tabClose::after {
   position: absolute;
-  top: 8px;
-  left: 5px;
+  top: 9.5px;
+  left: 6px;
   width: 8px;
   height: 1px;
   background: currentColor;
@@ -178,7 +181,14 @@
 
 .tabClose::before { transform: rotate(45deg); }
 .tabClose::after { transform: rotate(-45deg); }
-.tabClose:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.tab .tabClose:hover,
+.tab .tabClose:focus-visible {
+  opacity: 1;
+  color: var(--shell-text);
+  background: color-mix(in srgb, var(--shell-text) 12%, transparent);
+}
+
+.tabClose:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: -1px; }
 
 .host,
 .toolPanel,
@@ -304,6 +314,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .panel,
+  .tab,
+  .tabClose,
+  .tabsWrap::before,
+  .tabsWrap::after,
   .railToggle,
   .railToggle[data-visible='true'],
   .railToggle[data-visible='false'] { transition: none; }

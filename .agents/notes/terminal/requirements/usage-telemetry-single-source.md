@@ -8,7 +8,7 @@
   "class": "feature",
   "tags": ["telemetry","usage-stats","terminal","session-files"],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/61b5d05c-e1ad-4f7a-a3e9-57982fb78c4e",
-  "updated": "2026-10-14T11:49:30.000Z",
+  "updated": "2026-10-15T03:06:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -79,6 +79,16 @@
 | dsh | session.v4.jsonl.zstd，当前只定位不解码 | 解码器加真实样本，并验证用量字段，否则未知 |
 
 Codex 来源目录与启动一致：优先使用主进程为该终端登记的恢复目录，其次取 `CODEX_HOME`，最后回退 `~/.codex`。声明配置、会话扫描、账本 namespace 及 checkpoint 均使用所选目录；Hook 刷新和 renderer 读取不会覆盖启动目录，终端释放前最后采集仍使用原目录。renderer 不提供目录选择。`last_token_usage.total_tokens = 0` 是有效上下文读数，不再当作缺失。对应回归位于 `runtime-telemetry-history.test.ts` 与 `runtime-telemetry-coordinator.test.ts`，连同 renderer 合并测试共三文件 42 项通过。本机近期日志的结构仍包含 `token_count.info.last_token_usage/total_token_usage`；未以目录兼容性修复代替用户当前实例的绑定实测结论。
+
+### 缓存写入字段适配（2026-10-15）
+
+Codex 本机原生 `total_token_usage` 已提供 `cache_write_input_tokens`。终端累计投影与历史事件差分都读取该字段：新鲜输入 = 原生输入 − 缓存读取 − 缓存写入，总 token 保持原值；最近命中率仍为最近缓存读取 / 最近原生输入，写入不另加分母。缺少写入字段的旧日志保持未知，明确零写入保留为 0；继承事件的缓存写入也留在父会话。缓存写入是新建缓存的 token 用量，不是磁盘容量或每轮对话的必有增量。
+
+账本升级保持已有消耗：旧事件会话即使文件大小不变也重新读取一次；只有新旧用量满足“旧输入 = 新鲜输入 + 写入”且读取、输出、总量一致时，才原位补充分项并保留记录 id、日期和模型。缺源或核对不一致不猜测。旧累计基线没有历史写入分量，升级过渡区间保留原有未拆分输入，随后使用新写入基线差分；不回填无法还原的旧采样区间，真实计数回退仍暂停。
+
+Claude 的 `cache_creation_input_tokens` 原已接入，本轮补充正数/零/缺失回归并修正整段缺失被投影成 0 的情况。近期完整日志使用 `mimo-v2.6-pro`、`step-5-preview`，原生写入均缺失或为零，缓存读取为正；不从读取反推写入。
+
+验证：`npx vitest run tests/unit/runtime-telemetry-history.test.ts tests/unit/runtime-telemetry-corpus-scan.test.ts tests/unit/runtime-telemetry-accounting.test.ts tests/unit/usage-ledger.test.ts tests/unit/runtime-telemetry-coordinator.test.ts tests/unit/usage-stats.test.ts --maxWorkers=2 --reporter=dot`，6 文件 81 项通过；遥测三文件定向 ESLint、普通类型检查通过。真实日志只读核验（临时账本）：5 个近期 Codex 会话均满足事件写入之和等于累计写入、事件总量之和等于累计总量，且输入/读/写/输出守恒；3 个近期 Claude 会话解析写入为 0，与源一致。未运行 live Electron 验证。全项目 `typecheck:strict-unused` 被其他文件的 3 个未使用变量错误阻塞（TerminalManagerPanel 的 useEffect/load、workspace 的 getBrowserPaneContent），未改动这些文件。
 
 ### Codex 绑定实证（2026-10-14，用户 dev 实例）
 

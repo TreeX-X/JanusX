@@ -1173,8 +1173,9 @@ export function Sidebar() {
       {/* 展开态 */}
       <div id="workspace-sidebar-content" className="workspace-sidebar__expanded" aria-hidden={sidebarCollapsed} {...(sidebarCollapsed ? { inert: '' } : {})}>
           <div
-            className="flex h-9 items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.12em]"
-            style={{ color: 'var(--shell-muted)', borderBottom: '1px solid var(--shell-border)' }}
+            data-workspace-sidebar-header=""
+            className="flex h-10 items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[0.12em]"
+            style={{ color: 'var(--shell-muted)' }}
           >
             <span>{t('common:workspace.label')}</span>
             <div className="flex items-center gap-0.5">

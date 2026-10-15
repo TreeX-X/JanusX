@@ -1,0 +1,44 @@
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
+import { initI18n, changeLanguage } from '../../../src/renderer/src/i18n'
+import { normalizeShellProfiles } from '../../../src/shared/shellProfiles'
+import styles from '../../../src/renderer/src/components/AppSettingsModal.module.css'
+import '../../../src/renderer/src/styles/globals.css'
+import '../../../src/renderer/src/styles/themes.generated.css'
+
+installElectronApiFallback()
+const params = new URLSearchParams(location.search)
+document.documentElement.dataset.theme = params.get('theme') ?? 'planche'
+Object.assign(window.electron.system, { getLanguage: async () => 'zh-CN', setLanguage: async () => undefined })
+Object.assign(window.electron.externalCli, {
+  detect: async (toolId: string) => ({ toolId, installed: true, runnable: true, version: '1.0.0' }),
+  latest: async (toolId: string) => ({ toolId, latestVersion: '1.0.0' }),
+})
+let settings = normalizeShellProfiles({
+  entries: params.has('empty') ? [] : [
+    { id: 'powershell', name: 'PowerShell', command: 'powershell.exe', visible: true, isDefault: true },
+    { id: 'bash', name: 'Git Bash', command: '"C:\\Program Files\\Git\\bin\\bash.exe"', suffix: '--login -i', visible: true },
+    { id: 'ssh', name: 'Remote development', command: 'ssh developer@development.example.com', visible: false },
+  ],
+  hiddenCliPresets: [],
+})
+Object.assign(window.electron.shellProfiles, {
+  list: async () => settings,
+  save: async (next: unknown) => {
+    if (params.has('fail')) throw new Error('Fixture save failure')
+    settings = normalizeShellProfiles(next)
+    return settings
+  },
+  detect: async () => [],
+})
+await initI18n()
+await changeLanguage(params.has('en') ? 'en' : 'zh-CN')
+const { useShellProfilesStore } = await import('../../../src/renderer/src/stores/shell-profiles')
+await useShellProfilesStore.getState().load()
+const { TerminalManagerPanel } = await import('../../../src/renderer/src/components/TerminalManagerPanel')
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <main className={styles.panel} style={{ display: 'block', width: 'min(800px, calc(100% - 32px))', height: 'auto', margin: '24px auto', padding: 22 }}>
+    <TerminalManagerPanel />
+  </main>,
+)

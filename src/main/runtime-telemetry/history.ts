@@ -150,6 +150,7 @@ export async function parseClaudeSession(file: SessionFileRef, startedAt?: numbe
   let totalOutput = 0
   let totalCacheRead = 0
   let totalCacheWrite = 0
+  let hasCacheWrite = false
   let hasUsage = false
 
   for (const line of lines) {
@@ -170,8 +171,9 @@ export async function parseClaudeSession(file: SessionFileRef, startedAt?: numbe
     const outputTokens = readNonNegativeNumber(usage.output_tokens ?? usage.outputTokens)
     const cacheReadTokens =
       readPositiveNumber(usage.cache_read_input_tokens ?? usage.cache_read_tokens ?? usage.cacheReadTokens) ?? 0
-    const cacheCreationTokens =
-      readPositiveNumber(usage.cache_creation_input_tokens ?? usage.cache_creation_tokens ?? usage.cacheCreationTokens) ?? 0
+    const reportedCacheCreation = readNonNegativeNumber(usage.cache_creation_input_tokens ?? usage.cache_creation_tokens ?? usage.cacheCreationTokens)
+    const cacheCreationTokens = reportedCacheCreation ?? 0
+    hasCacheWrite ||= reportedCacheCreation !== undefined
     const contextTokens = (inputTokens ?? 0) + cacheReadTokens + cacheCreationTokens
     snapshot.recentCacheHitRate = recentCacheHitRate(inputTokens,
       readNonNegativeNumber(usage.cache_read_input_tokens ?? usage.cache_read_tokens ?? usage.cacheReadTokens), cacheCreationTokens)
@@ -188,7 +190,7 @@ export async function parseClaudeSession(file: SessionFileRef, startedAt?: numbe
     snapshot.inputTokens = totalInput
     snapshot.outputTokens = totalOutput
     snapshot.cacheReadTokens = totalCacheRead
-    snapshot.cacheWriteTokens = totalCacheWrite
+    snapshot.cacheWriteTokens = hasCacheWrite ? totalCacheWrite : undefined
     snapshot.totalTokens = totalInput + totalOutput + totalCacheRead + totalCacheWrite
   }
 
@@ -200,6 +202,7 @@ export async function parseClaudeSession(file: SessionFileRef, startedAt?: numbe
     if (!observation.issue && observation.events?.length) {
       const totals = observation.events.reduce((sum, event) => ({ inputTokens: sum.inputTokens + event.inputTokens, outputTokens: sum.outputTokens + event.outputTokens, cacheReadTokens: sum.cacheReadTokens + (event.cacheReadTokens ?? 0), cacheWriteTokens: sum.cacheWriteTokens + (event.cacheWriteTokens ?? 0), totalTokens: sum.totalTokens + event.totalTokens }), { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: 0 })
       Object.assign(snapshot, totals)
+      if (!observation.events.some(event => event.cacheWriteTokens !== undefined)) snapshot.cacheWriteTokens = undefined
     }
   }
 
@@ -311,6 +314,7 @@ export async function parseCodexSession(
     const contextWindowTokens = readPositiveNumber(info.model_context_window ?? info.modelContextWindow)
     const inputTokens = readNonNegativeNumber(totalUsage?.input_tokens ?? totalUsage?.inputTokens)
     const cachedInputTokens = readNonNegativeNumber(totalUsage?.cached_input_tokens ?? totalUsage?.cachedInputTokens)
+    const cacheWriteTokens = readNonNegativeNumber(totalUsage?.cache_write_input_tokens ?? totalUsage?.cacheWriteInputTokens)
     const outputTokens = readNonNegativeNumber(totalUsage?.output_tokens ?? totalUsage?.outputTokens)
     const lastInput = readNonNegativeNumber(lastUsage?.input_tokens ?? lastUsage?.inputTokens)
     const lastCached = readNonNegativeNumber(lastUsage?.cached_input_tokens ?? lastUsage?.cachedInputTokens)
@@ -318,8 +322,9 @@ export async function parseCodexSession(
 
     if (contextTokens !== undefined) snapshot.contextTokens = contextTokens
     if (contextWindowTokens !== undefined) snapshot.contextWindowTokens = contextWindowTokens
-    if (inputTokens !== undefined) snapshot.inputTokens = inputTokens - (cachedInputTokens ?? 0)
+    if (inputTokens !== undefined) snapshot.inputTokens = inputTokens - (cachedInputTokens ?? 0) - (cacheWriteTokens ?? 0)
     snapshot.cacheReadTokens = cachedInputTokens
+    snapshot.cacheWriteTokens = cacheWriteTokens
     if (outputTokens !== undefined) snapshot.outputTokens = outputTokens
     snapshot.totalTokens = readNonNegativeNumber(totalUsage?.total_tokens ?? totalUsage?.totalTokens)
   }
@@ -331,7 +336,7 @@ export async function parseCodexSession(
   }
   if (snapshot.sessionId && snapshot.totalTokens !== undefined) {
     const namespace = codexHome
-    snapshot.usageObservation = cumulativeUsage('codex', namespace, snapshot.sessionId, usageTokens(snapshot.inputTokens, snapshot.outputTokens, snapshot.cacheReadTokens, undefined, snapshot.totalTokens), snapshot.detectedModel)
+    snapshot.usageObservation = cumulativeUsage('codex', namespace, snapshot.sessionId, usageTokens(snapshot.inputTokens, snapshot.outputTokens, snapshot.cacheReadTokens, snapshot.cacheWriteTokens, snapshot.totalTokens), snapshot.detectedModel)
     if (source) {
       const checkpoint = checkpointLookup?.('codex', namespace, snapshot.sessionId)
       snapshot.usageObservation.sourceIdentity = JSON.stringify([source.info.dev, source.info.ino, source.info.birthtimeMs])

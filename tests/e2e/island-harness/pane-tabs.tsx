@@ -6,6 +6,7 @@ import { createBrowserPaneContent, createTerminalPaneContent, getLeafPanes, type
 import { setTerminalDragData, clearTerminalDragData } from '../../../src/renderer/src/lib/terminal-file-reference'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { useBrowserStore } from '../../../src/renderer/src/stores/browser'
+import { useThemeStore } from '../../../src/renderer/src/stores/theme'
 import { changeLanguage, initI18n } from '../../../src/renderer/src/i18n'
 import { DEFAULT_APP_THEME } from '../../../src/shared/ipc/theme'
 import type { BrowserBounds, BrowserSurfaceState } from '../../../src/shared/ipc/browser'
@@ -15,6 +16,8 @@ import '../../../src/renderer/src/styles/themes.generated.css'
 installElectronApiFallback()
 Object.assign(window.electron.system, { getLanguage: async () => 'en', setLanguage: async () => undefined })
 document.documentElement.dataset.theme = DEFAULT_APP_THEME
+const params = new URLSearchParams(location.search)
+useThemeStore.getState().applyExternal(params.get('theme') === 'dark' ? 'dark' : DEFAULT_APP_THEME)
 const bounds: Record<string, BrowserBounds> = {}
 let kills = 0
 let creates = 0
@@ -52,7 +55,9 @@ const right = {
   type: 'leaf' as const, id: 'right', activeTabId: browserOnly ? 'browser:e' : 'browser:d',
   tabs: (browserOnly ? ['e'] : overflow ? ['d', 'e', 'f', 'g', 'h', 'i', 'j'] : ['d', 'e']).map(createBrowserPaneContent),
 }
-const paneTree: WorkspacePaneNode = { type: 'split', id: 'split', direction: 'horizontal', ratio: .5, first: left, second: right }
+const paneTree: WorkspacePaneNode = params.has('single') ? left : {
+  type: 'split', id: 'split', direction: params.has('vertical') ? 'vertical' : 'horizontal', ratio: .5, first: left, second: right,
+}
 useWorkspaceStore.setState({
   workspaces: [workspace], activeWorkspaceId: 'ws', terminals: browserOnly ? [] : terminals, paneTree,
   focusedPaneId: 'left', focusedTabId: left.activeTabId, activeTerminalId: browserOnly ? null : 'a', terminalSnapshots: {},

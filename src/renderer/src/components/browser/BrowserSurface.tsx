@@ -142,7 +142,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   const isEmpty = !surface || surface.tabs.length === 0
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-carrier={carrier}>
       <div className={styles.header}>
         <div className={styles.tabs} role="tablist">
           {surface?.tabs.map((tab) => {

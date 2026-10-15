@@ -145,6 +145,41 @@ describe('runtime telemetry history', () => {
     }
   })
 
+  it('splits Codex cache writes from inclusive input without changing totals or hit rate', async () => {
+    const sessionId = '12345678-1234-1234-1234-123456789abc'
+    for (const written of [400, 0, undefined]) {
+      await writeCodexRollout(sessionId, [
+        JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo' } }),
+        JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: {
+          last_token_usage: { input_tokens: 100, cached_input_tokens: 60, cache_write_input_tokens: written === undefined ? undefined : 30, total_tokens: 120 },
+          total_token_usage: { input_tokens: 1000, cached_input_tokens: 500, cache_write_input_tokens: written, output_tokens: 200, total_tokens: 1200 },
+        } } }),
+      ])
+      const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId })
+      expect(snapshot).toMatchObject({ inputTokens: 500 - (written ?? 0), cacheReadTokens: 500, totalTokens: 1200, recentCacheHitRate: 0.6, contextTokens: 120 })
+      expect(snapshot?.cacheWriteTokens).toBe(written)
+      expect(snapshot?.usageObservation?.counters?.cacheWriteTokens).toBe(written)
+      expect(snapshot?.usageObservation?.issue).toBeUndefined()
+    }
+  })
+
+  it('reads Claude positive writes and distinguishes missing write fields from explicit zero', async () => {
+    const projectDir = join(testContext.homeDir, '.claude', 'projects', 'C--repo')
+    await mkdir(projectDir, { recursive: true })
+    for (const written of [400, 0, undefined]) {
+      await writeFile(join(projectDir, 'session-write.jsonl'), JSON.stringify({
+        sessionId: 'session-write', timestamp: '2026-07-30T10:00:00Z',
+        message: { id: 'response-write', role: 'assistant', stop_reason: 'end_turn', usage: {
+          input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 300, cache_creation_input_tokens: written,
+        } },
+      }))
+      const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'claude', cwd: 'C:/repo', sessionId: 'session-write' })
+      expect(snapshot?.cacheWriteTokens).toBe(written)
+      expect(snapshot?.totalTokens).toBe(420 + (written ?? 0))
+      expect(snapshot?.usageObservation?.events?.[0].cacheWriteTokens).toBe(written)
+    }
+  })
+
   it('reads Codex startup capacity and exact compactions only for a bound session', async () => {
     const sessionId = '12345678-1234-1234-1234-123456789abc'
     await writeCodexRollout(sessionId, [

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, rm, writeFile, stat } from 'fs/promises'
+import { DatabaseSync } from 'node:sqlite'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
@@ -19,7 +20,7 @@ const { UsageLedger } = await import('../../src/main/runtime-telemetry/usage-led
 let ledger: InstanceType<typeof UsageLedger>
 let ledgerPath: string
 
-async function writeCodexRollout(sessionId: string, events: Array<{ at: string; input: number; cached: number; output: number; total: number }>, options: { archived?: boolean; inheritedFromOrdinal?: number } = {}) {
+async function writeCodexRollout(sessionId: string, events: Array<{ at: string; input: number; cached: number; written?: number; output: number; total: number }>, options: { archived?: boolean; inheritedFromOrdinal?: number } = {}) {
   const root = join(testContext.homeDir, '.codex', options.archived ? 'archived_sessions' : 'sessions', '2026', '10', '14')
   await mkdir(root, { recursive: true })
   const lines = [JSON.stringify({
@@ -32,10 +33,11 @@ async function writeCodexRollout(sessionId: string, events: Array<{ at: string; 
   })]
   // Real rollouts accumulate total_token_usage across events while
   // last_token_usage stays per request.
-  const running = { input: 0, cached: 0, output: 0, total: 0 }
+  const running = { input: 0, cached: 0, written: 0, output: 0, total: 0 }
   events.forEach((event, index) => {
     running.input += event.input
     running.cached += event.cached
+    running.written += event.written ?? 0
     running.output += event.output
     running.total += event.total
     lines.push(JSON.stringify({
@@ -48,12 +50,14 @@ async function writeCodexRollout(sessionId: string, events: Array<{ at: string; 
           last_token_usage: {
             input_tokens: event.input,
             cached_input_tokens: event.cached,
+            cache_write_input_tokens: event.written,
             output_tokens: event.output,
             total_tokens: event.total,
           },
           total_token_usage: {
             input_tokens: running.input,
             cached_input_tokens: running.cached,
+            cache_write_input_tokens: event.written === undefined ? undefined : running.written,
             output_tokens: running.output,
             total_tokens: running.total,
           },
@@ -80,6 +84,42 @@ describe('corpus usage scan', () => {
   afterEach(async () => {
     vi.unstubAllEnvs()
     await rm(testContext.homeDir, { recursive: true, force: true })
+  })
+
+  it('accumulates native Codex writes, preserves totals and skips inherited writes', async () => {
+    const events = [
+      { at: '2026-10-14T06:01:00Z', input: 1000, cached: 200, written: 700, output: 100, total: 1100 },
+      { at: '2026-10-14T06:02:00Z', input: 500, cached: 300, written: 150, output: 50, total: 550 },
+    ]
+    await writeCodexRollout('01a88888-8888-4888-8888-888888888888', events)
+    await writeCodexRollout('01a99999-9999-4999-8999-999999999999', events, { inheritedFromOrdinal: 2 })
+    await scanNativeSessionCorpus({ ledger, now: Date.parse('2026-10-14T07:00:00Z') })
+    expect(readRecords().map(row => [row.inputTokens, row.cacheWriteTokens, row.totalTokens])).toEqual([
+      [100, 700, 1100], [50, 150, 550], [50, 150, 550],
+    ])
+    await scanNativeSessionCorpus({ ledger, now: Date.parse('2026-10-14T07:05:00Z') })
+    expect(readRecords()).toHaveLength(3)
+  })
+
+  it('backfills unchanged legacy event history once without changing record ids or dates', async () => {
+    const sessionId = '01a88888-8888-4888-8888-888888888888'
+    const namespace = join(testContext.homeDir, '.codex')
+    const at = Date.parse('2026-10-14T06:01:00Z')
+    await writeCodexRollout(sessionId, [{ at: new Date(at).toISOString(), input: 1000, cached: 200, written: 700, output: 100, total: 1100 }])
+    const file = join(namespace, 'sessions', '2026', '10', '14', `rollout-2026-10-14T06-00-00-${sessionId}.jsonl`)
+    ledger.record({ engine: 'codex', namespace, sessionId, collectedAt: at + 1000, mode: 'events', sourceSize: (await stat(file)).size,
+      events: [{ id: `${sessionId}#1`, at, inputTokens: 800, cacheReadTokens: 200, outputTokens: 100, totalTokens: 1100 }] })
+    const before = readRecords()[0]
+    // Simulate a stored session created before cache-write mapping existed.
+    const database = new DatabaseSync(ledgerPath)
+    database.prepare("UPDATE sessions SET data=json_remove(data,'$.codexCacheWrites') WHERE key=?").run(JSON.stringify(['codex', namespace, sessionId]))
+    database.close()
+    const scan = await scanNativeSessionCorpus({ ledger, now: at + 2000 })
+    expect(scan.recorded).toBe(1)
+    expect(readRecords()).toHaveLength(1)
+    expect(readRecords()[0]).toMatchObject({ id: before.id, at: before.at, inputTokens: 100, cacheWriteTokens: 700, totalTokens: 1100 })
+    expect(ledger.list({ start: at - 1000, end: at + 3000 }).hasIssues).toBe(false)
+    expect((await scanNativeSessionCorpus({ ledger, now: at + 3000 })).skipped).toBe(1)
   })
 
   it('imports a never-opened codex session by event time and dedups re-scans', async () => {

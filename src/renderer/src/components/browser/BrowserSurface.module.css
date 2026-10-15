@@ -60,6 +60,24 @@
   font-weight: 600;
 }
 
+/* Embedded navigation shares the continuous workspace surface. */
+.shell[data-carrier='pane'] .header {
+  background: var(--shell-canvas);
+  border-bottom-color: var(--shell-border-soft);
+}
+
+.shell[data-carrier='pane'] .tab {
+  border-bottom: 0;
+  border-radius: 5px;
+}
+
+.shell[data-carrier='pane'] .tab[data-active='true'] {
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+}
+
+.shell[data-carrier='pane'] .iconBtn { border-color: transparent; background: transparent; }
+.shell[data-carrier='pane'] .iconBtn:hover:not(:disabled) { background: var(--shell-accent-soft); }
+
 .tabTitle {
   min-width: 0;
   overflow: hidden;

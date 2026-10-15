@@ -343,6 +343,7 @@
 }
 
 .generalPanel {
+  container: general-settings / inline-size;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -365,6 +366,11 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+}
+
+.themeRow { grid-template-columns: minmax(140px, .65fr) minmax(300px, 1.35fr); }
+@container general-settings (max-width: 540px) {
+  .themeRow { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 }
 
 .generalLabel {
