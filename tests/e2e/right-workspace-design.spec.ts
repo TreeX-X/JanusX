@@ -1,0 +1,58 @@
+import { expect, test } from '@playwright/test'
+
+for (const theme of ['planche', 'dark']) {
+  for (const width of [340, 520]) {
+  test(`right workspace remains usable and stable in ${theme} at ${width}px`, async ({ page }) => {
+    await page.goto(`/tool-palette.html?theme=${theme}&panel=${width}`)
+    const rail = page.getByRole('toolbar')
+    const filesButton = rail.getByRole('button', { name: /文件/ })
+    const initialY = (await filesButton.boundingBox())!.y
+    await page.locator('#right-tool-tab-sessions').click()
+    const panel = page.getByRole('tabpanel', { name: /会话/ })
+    const row = panel.locator('[data-session-id="session-palette"]')
+    await expect(row).toBeVisible()
+    await expect.poll(() => panel.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0)
+    await expect(row.locator('[class*="cardHeader"]')).toContainText('优化文件管理和工作区菜单的视觉层级')
+    await expect(row.locator('[class*="promptPreview"]')).toHaveCount(0)
+    const fold = row.getByRole('button', { name: '展开', exact: true })
+    await fold.focus()
+    await page.keyboard.press('Enter')
+    await expect(row).toHaveAttribute('data-expanded', 'true')
+    await expect(row.getByRole('button', { name: '收起', exact: true })).toBeVisible()
+    const actions = row.locator('[class*="sessionActions"]')
+    await expect(actions.getByRole('button')).toHaveCount(3)
+    await expect(actions.getByRole('button', { name: '回到原会话', exact: true })).toBeDisabled()
+    await expect.poll(() => actions.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0)
+    await page.mouse.move(400, 20)
+    await page.waitForTimeout(350)
+    await page.screenshot({ path: test.info().outputPath(`session-actions-${theme}-${width}.png`) })
+    await actions.getByRole('button', { name: '在新会话中继续', exact: true }).click()
+    await expect(page.getByRole('button', { name: '取消', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: '取消', exact: true }).click()
+    await row.getByRole('button', { name: '收起', exact: true }).click()
+    const search = panel.getByRole('textbox')
+    await search.fill('不存在的会话')
+    await expect(row).toHaveCount(0)
+    await search.fill('')
+    await expect(row).toBeVisible()
+    await search.blur()
+    await page.mouse.move(400, 20)
+    await page.waitForTimeout(350)
+    await page.screenshot({ path: test.info().outputPath(`right-sessions-${theme}-${width}.png`) })
+    await page.locator('#right-tool-tab-git').click()
+    await expect(page.getByText('src/renderer/RightDock.tsx', { exact: true })).toBeVisible()
+    await page.mouse.move(400, 20)
+    await page.waitForTimeout(350)
+    await page.screenshot({ path: test.info().outputPath(`right-git-${theme}-${width}.png`) })
+    // Closing the last tool keeps the permanent tool entries in place.
+    for (const tool of ['files', 'sessions', 'git']) {
+      await page.locator(`#right-tool-tab-${tool}`).getByRole('button').click()
+    }
+    await expect(page.locator('[aria-controls="right-tool-panel"]')).toHaveCount(0)
+    expect((await filesButton.boundingBox())!.y).toBe(initialY)
+    await filesButton.click()
+    await expect(page.getByRole('tabpanel', { name: /文件/ })).toBeVisible()
+    expect((await filesButton.boundingBox())!.y).toBe(initialY)
+  })
+  }
+}

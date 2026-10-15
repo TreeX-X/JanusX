@@ -6,12 +6,12 @@
   "lifecycle": "implemented",
   "created": "2026-10-06",
   "class": "feature",
-  "updated": "2026-10-14T14:27:41.274Z",
+  "updated": "2026-10-15T08:27:30.635Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
 
-# Session card L1 carries the v6 summary rows
+# Session list summary prioritizes title and freshness
 
 ## Problem
 
@@ -19,7 +19,7 @@ A collapsed session card shows one title line and a chevron. Engine, progress, f
 
 ## Decision
 
-`SessionCard` renders three L1 rows on every card, collapsed or not. The header runs the engine icon, the engine name, an optional external badge, a `「」`-wrapped title derived from the first clause of `firstPrompt` (cut at the first CJK or ASCII punctuation, capped at 24 characters), a mono status tail, and a persistent hairline chevron button that rotates its glyph 180° on the shared 240 ms expand curve. Under it, `firstPrompt` runs one muted ellipsis line, then a mono meta line with turns and relative time; checkpoint counts and no-checkpoint markers have been removed from session management. The L2 region keeps the cwd/branch line and the pale content cards described in [Session surfaces derive from the chrome token](./session-card-surface.md); the meta line L2 used to carry is gone because L1 owns it. The header row and its chevron button share one expand toggle.
+`SessionCard` renders a 13px title beside the engine icon, a secondary status and a persistent chevron. The title derives from the first clause of `firstPrompt` (cut at the first CJK or ASCII punctuation, capped at 24 characters), without decorative quotation marks. A muted one-line prompt preview appears only when the full prompt differs from that title; short prompts no longer repeat. An 11px inherited-font meta row carries engine, optional external-source text and turns, with relative time aligned right. The chevron rotates 180° on the shared 240ms expand curve. The L2 region keeps cwd/branch and detailed prompt/turn content described in [Session list surfaces](./session-card-surface.md); checkpoint counts remain absent. The header row and its keyboard-focusable chevron share one expand toggle.
 
 ## Alternatives considered
 

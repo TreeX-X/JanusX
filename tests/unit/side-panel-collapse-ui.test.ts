@@ -35,7 +35,7 @@ describe('side panel collapse UI', () => {
     expect(rail).toContain('data-visible={toggleAnim.visible')
     expect(rail).not.toContain('{hasOpenTools && panelToggle && (')
 
-    // 高度也参与过渡，下方工具图标跟着滑动而不是跳位。
+    // 底部控件高度参与过渡，顶部工具图标保持固定。
     expect(railStyles).toContain(".railToggle[data-visible='true']")
     expect(railStyles).toContain('height: 40px')
     expect(railStyles).toContain('height: 0')

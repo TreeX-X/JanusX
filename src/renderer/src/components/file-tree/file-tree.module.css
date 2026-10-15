@@ -299,7 +299,7 @@
 .searchInput {
   /* Note: .agents/notes/workbench/right-dock.md — theme-aware search controls. */
   border: 1px solid var(--shell-border);
-  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
+  background: var(--shell-card);
   outline: none;
 }
 
@@ -307,7 +307,7 @@
 .searchInput:hover { border-color: var(--shell-muted); }
 .searchInput:focus {
   border-color: var(--shell-accent);
-  background: var(--shell-accent-soft);
+  box-shadow: 0 0 0 2px var(--shell-accent-soft);
 }
 
 .externalEditorButton {
@@ -317,9 +317,8 @@
 }
 
 .externalEditorButton:hover:not(:disabled) {
-  border-color: var(--shell-accent);
-  background: var(--shell-accent-soft);
-  color: var(--shell-accent);
+  background: var(--shell-hover);
+  color: var(--shell-text);
 }
 
 .externalEditorButton:focus-visible {

@@ -46,8 +46,17 @@
 
 /* 分组头（Staged / Changes / History）：自带 4% 纸深/白底，两主题都可见。 */
 .sectionHeader {
-  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
+  background: transparent;
+  padding-top: 12px;
+  padding-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: normal;
+  text-transform: none;
 }
+
+.sectionHeader button { font-size: 11px; }
+.branchToolbar { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 12px 4px; }
+.statusSummary { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px 12px 8px; font-size: 11px; }
 
 /* 文件行 hover：同上走令牌混色。 */
 .fileRow:hover {

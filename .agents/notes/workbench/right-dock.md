@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-15T05:54:59.168Z",
+  "updated": "2026-10-15T08:27:30.635Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -42,6 +42,8 @@ Panel width now follows the active tool. Sessions and Git start at 360px with a 
 Tabs share the middle workspace's 7px corners, borderless neutral selected fill and theme-aware hover/focus colors. The right header retains its compact 36px height, 26px tabs, inherited 11px type and content-sized 84–160px widths; copying the middle's 32px tab height and 144px fixed width makes this narrow tool surface unnecessarily tall and forces early overflow. The header uses the canvas background without a bottom rule, and overflow fades use that same background. Close controls have a 20px target and visible keyboard focus. Child button keys bypass the tab container's activation handler, so Enter closes the focused tool rather than being consumed as tab activation. Registry order, singleton state and horizontal scrolling retain their existing behavior.
 
 The file search input and adjacent external-editor button use shell tokens for borders, fill, text and focus. The input uses a neutral border at rest and the active theme accent while focused; its border belongs to CSS rather than an inline style so focus can override it. The external-editor button shares the same theme colors while keeping its disabled state.
+
+The right rail now selects tools with neutral fill and foreground contrast, without the accent stripe. Open inactive tools retain their small dot. The panel toggle sits at the bottom of the rail and keeps its enter/exit lifecycle, so opening the first tool or closing the last no longer moves tool entries. Per-tool width preferences remain unchanged. File and session searches share 28px height, 12px horizontal toolbar padding and neutral card fill; focus keeps the accent outline. The session toolbar omits the duplicate current-tool heading. Git uses a neutral branch marker, nonzero-only plain-text change statistics and unfilled section headers with 11px labels. Existing staging, commit, remote operations and history controls retain their behavior.
 
 Search control verification: an isolated browser stylesheet check passes default, hover and focus in planche/dark; screenshots are under artifacts/file-search-theme. The existing file-explorer-delete, file-tree-drag and planche-theme unit files pass 27 cases; typecheck, theme:check and scoped ESLint pass (two existing hook warnings). This does not establish live Electron validation.
 
@@ -65,3 +67,5 @@ Right-rail icon hints prefer the left side and align with their own button, keep
 ## Tab appearance verification, 2026-10-14
 
 The four existing right-dock, state, collapse and planche-theme unit files pass 58 cases. A temporary browser fixture mounts the real `RightToolTabs` and styles beside the middle header. Eight scenarios cover planche/dark at 240, 260, 360 and 520px, checking compact height, inherited font, unclipped text height, borderless rounded tabs, overflow visibility, End/Enter activation and closing the active tool with the keyboard. Screenshots and measured results are under `artifacts/right-tabs-alignment`; the fixture uses browser IPC fallbacks and does not establish live Electron validation.
+
+Verification of the compact right-tool design: 8 browser cases pass across right-workspace-design, tool-palette and right-tool-tooltips, covering planche/dark, 340/520px panels, keyboard expansion, search, stable tool positions after the last close, and tooltip dismissal. Four related unit files pass 58 cases. Typecheck and scoped ESLint pass; FileExplorerTool retains its two existing hook warnings. Browser IPC is seeded, so this does not establish live Electron verification. Preview: artifacts/right-workspace-preview/comparison.png.

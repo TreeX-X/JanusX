@@ -234,69 +234,38 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
 
   return (
     <div className={`flex flex-col h-full overflow-hidden ${styles.panelGround}`}>
-      <div
-        className="px-3 pt-3 shrink-0"
-        style={{ borderBottom: '1px solid var(--border)' }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--shell-text)' }}>
-          {t('terminal:agentSession.title')}
-        </div>
-        <div style={{ marginTop: 8 }}>
+      <div className={styles.toolbar}>
+        <div>
           <input
             className={styles.searchInput}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('terminal:agentSession.searchPlaceholder')}
             aria-label={t('terminal:agentSession.searchPlaceholder')}
-            style={{
-              width: '100%', height: 26, fontSize: 11.5, color: 'var(--shell-text)',
-              background: SURFACE_INSET, border: '1px solid var(--shell-border)',
-              borderRadius: 6, padding: '0 9px', outline: 'none', fontFamily: 'inherit',
-            }}
           />
         </div>
-        <div className="flex" style={{ gap: 16, marginTop: 8, alignItems: 'flex-end' }}>
+        <div className={styles.scopeFilters}>
           {(Object.keys(SCOPE_KEYS) as Scope[]).map((key) => (
             <button
               key={key}
               className={styles.scopeTab}
               aria-current={scope === key ? 'page' : undefined}
               onClick={() => setScope(key)}
-              style={{
-                fontSize: 11.5,
-                color: scope === key ? 'var(--shell-text)' : 'var(--shell-dim)',
-                background: 'none',
-                border: 'none',
-                borderBottom: scope === key ? '1px solid var(--shell-dim)' : '1px solid transparent',
-                marginBottom: -1,
-                padding: '7px 2px',
-                cursor: 'pointer',
-              }}
             >
               {t(SCOPE_KEYS[key])}
             </button>
           ))}
           {scope !== 'all' && activeWorktree && (
-            <span
-              style={{
-                marginLeft: 'auto',
-                marginBottom: 6,
-                fontFamily: "'SF Mono', monospace",
-                fontSize: 10,
-                color: 'var(--shell-dim)',
-                border: '1px solid var(--shell-border)',
-                borderRadius: 4,
-                padding: '2px 8px',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <ThemedTooltip label={activeWorktree.path}>
+            <span className={styles.scopeContext}>
               {activeWorktree.branch ?? activeWorktree.path}
             </span>
+            </ThemedTooltip>
           )}
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col" style={{ gap: 10, padding: 12, overflowY: 'auto' }}>
+      <div className={`flex-1 flex flex-col ${styles.sessionList}`}>
         {/* Loading banner only on a truly empty list: background refreshes
             keep stale cards (stale-while-revalidate), so a banner above the
             list would shift every card per session:event. */}
@@ -585,15 +554,15 @@ function SessionCard({
 
   // Note: expand motion keeps the body mounted and animates grid rows; the
   // closed body is inert — see .agents/notes/workbench/session-card-expand-motion.md
-  // Note: L1 summary rows (header / prompt preview / meta) follow the v6 HiFi
-  // collapsed design — see .agents/notes/workbench/session-card-l1-summary.md
+  // Note: compact list identity and optional prompt preview — see
+  // .agents/notes/workbench/session-card-l1-summary.md
 
   return (
     <div
       className={styles.cardSurface}
       data-session-id={session.id}
+      data-expanded={expanded}
       style={{
-        padding: 10,
         opacity: session.archived ? 0.62 : 1,
       }}
     >
@@ -602,29 +571,12 @@ function SessionCard({
         style={{ gap: 7, cursor: 'pointer' }}
         onClick={onToggle}
       >
-        <TerminalPresetIcon preset={iconPreset} alt={session.engine} style={{ width: 14, height: 14 }} />
-        <span style={{ fontSize: 11, color: 'var(--shell-muted)', flexShrink: 0, textTransform: 'capitalize' }}>
-          {session.engine}
-        </span>
-        {session.external === true && (
-          <span
-            style={{
-              fontSize: 9.5,
-              color: 'var(--shell-accent)',
-              border: '1px solid var(--shell-accent-border)',
-              borderRadius: 3,
-              padding: '0 5px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {t('terminal:agentSession.external')}
-          </span>
-        )}
+        <TerminalPresetIcon preset={iconPreset} alt={session.engine} className={iconPreset === 'codex' ? styles.codexIcon : undefined} style={{ width: 14, height: 14, flexShrink: 0 }} />
         <span
           className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap"
-          style={{ fontSize: 12, color: 'var(--shell-text)', fontWeight: 500 }}
+          style={{ fontSize: 13, color: 'var(--shell-text)', fontWeight: 500 }}
         >
-          {session.firstPrompt ? `「${promptTitle(session.firstPrompt)}」` : session.engine}
+          {session.firstPrompt ? promptTitle(session.firstPrompt) : session.engine}
         </span>
         <span
           style={{
@@ -654,13 +606,16 @@ function SessionCard({
         </ThemedTooltip>
       </div>
 
-      {session.firstPrompt && (
-        <div style={{ marginTop: 5, fontSize: 12, lineHeight: 1.5, color: 'var(--shell-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {session.firstPrompt && session.firstPrompt.trim() !== promptTitle(session.firstPrompt) && (
+        <div className={styles.promptPreview}>
           {session.firstPrompt}
         </div>
       )}
-      <div style={{ marginTop: 4, fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', lineHeight: 1.6 }}>
-        {t('terminal:agentSession.turns', { count: session.turnCount })} · {formatDate(session.updatedAt, t)}
+      <div className={styles.sessionMeta}>
+        <span style={{ textTransform: 'capitalize' }}>{session.engine}</span>
+        {session.external === true && <span>{t('terminal:agentSession.external')}</span>}
+        <span>{t('terminal:agentSession.turns', { count: session.turnCount })}</span>
+        <span style={{ marginLeft: 'auto' }}>{formatDate(session.updatedAt, t)}</span>
       </div>
 
       <div className={styles.expand} data-open={expanded}>
@@ -746,11 +701,10 @@ function SessionCard({
                 })
               )}
             </div>
-            <div className="flex" style={{ gap: 6, marginTop: 9, flexWrap: 'wrap' }}>
+            <div className={styles.sessionActions}>
               <button
                 onClick={onDetail}
-                className={`flex-1 rounded cursor-pointer ${styles.cardAction}`}
-                style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', whiteSpace: 'nowrap' }}
+                className={`${styles.sessionAction} ${styles.detailAction}`}
               >
                 {t('terminal:agentSession.viewDetail')}
               </button>
@@ -765,8 +719,8 @@ function SessionCard({
                           void runContinue(session.id, undefined, 'resume').finally(() => setResuming(false))
                         }}
                         disabled={resuming}
-                        className={`flex-1 rounded cursor-pointer ${styles.cardAction}`}
-                        style={{ height: 24, fontSize: 10.5, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', opacity: resuming ? 0.6 : 1, whiteSpace: 'nowrap' }}
+                        className={`${styles.sessionAction} ${styles.resumeAction}`}
+                        aria-busy={resuming}
                       >
                         {t('terminal:agentSession.resume')}
                       </button>
@@ -774,8 +728,7 @@ function SessionCard({
                       <ThemedTooltip label={t('terminal:agentSession.resumeUnavailable')}>
                       <button
                         disabled
-                        className="flex-1 rounded"
-                        style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, whiteSpace: 'nowrap' }}
+                        className={`${styles.sessionAction} ${styles.resumeAction}`}
                       >
                         {t('terminal:agentSession.resume')}
                       </button>
@@ -784,8 +737,7 @@ function SessionCard({
                   )}
                   {!session.archived && <button
                     onClick={onContinue}
-                    className={`flex-1 rounded cursor-pointer ${styles.cardAction}`}
-                    style={{ height: 24, fontSize: 10.5, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', whiteSpace: 'nowrap' }}
+                    className={styles.sessionAction}
                   >
                     {t('terminal:agentSession.continue')}
                   </button>}
@@ -1125,8 +1077,7 @@ function SessionDetailWindow({
           </span>
           <button
             onClick={onClose}
-            className="rounded cursor-pointer"
-            style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-border-soft)', background: SURFACE_INSET, color: 'var(--shell-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}
+            className={styles.sessionAction}
           >
             {t('common:action.close')}
           </button>
@@ -1136,8 +1087,7 @@ function SessionDetailWindow({
                 resumeCommand ? (
                   <button
                     onClick={onResume}
-                    className="rounded cursor-pointer"
-                    style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--shell-accent-border)', background: 'var(--shell-accent-soft)', color: 'var(--shell-text)', flexShrink: 0, whiteSpace: 'nowrap' }}
+                    className={`${styles.sessionAction} ${styles.resumeAction}`}
                   >
                     {t('terminal:agentSession.resume')}
                   </button>
@@ -1145,8 +1095,7 @@ function SessionDetailWindow({
                   <ThemedTooltip label={t('terminal:agentSession.resumeUnavailable')}>
                   <button
                     disabled
-                    className="rounded"
-                    style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-muted)', opacity: 0.6, flexShrink: 0, whiteSpace: 'nowrap' }}
+                    className={`${styles.sessionAction} ${styles.resumeAction}`}
                   >
                     {t('terminal:agentSession.resume')}
                   </button>
@@ -1155,8 +1104,7 @@ function SessionDetailWindow({
               )}
               {!session.archived && <button
                 onClick={onContinue}
-                className="rounded cursor-pointer"
-                style={{ height: 28, padding: '0 16px', fontSize: 11, border: '1px solid var(--control-border)', background: 'transparent', color: 'var(--shell-text)', flexShrink: 0, whiteSpace: 'nowrap' }}
+                className={styles.sessionAction}
               >
                 {t('terminal:agentSession.continue')}
               </button>}

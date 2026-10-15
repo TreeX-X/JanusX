@@ -198,20 +198,17 @@ export function GitPanel({ active = true }: { active?: boolean }) {
     <>
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden text-xs" aria-busy={loading}>
       {/* Branch bar */}
-      <div
-        className="flex items-center gap-2 px-3 py-2"
-        style={{ borderBottom: '1px solid var(--border)' }}
-      >
+      <div className={styles.branchToolbar}>
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           <div
             className="w-2 h-2 rounded-full shrink-0"
-            style={{ border: '1.5px solid #ff7830' }}
+            style={{ border: '1.5px solid var(--shell-muted)' }}
           />
           <span className="text-[var(--shell-text)] font-medium truncate">
             {status?.branch.name ?? '...'}
           </span>
           {status?.branch.upstream && (
-            <span className="text-[var(--shell-dim)] truncate">
+            <span className="text-[var(--shell-dim)] truncate" title={status.branch.upstream}>
               {status.branch.upstream}
             </span>
           )}
@@ -229,20 +226,17 @@ export function GitPanel({ active = true }: { active?: boolean }) {
       </div>
 
       {/* Status summary */}
-      <div className="flex gap-3 px-3 py-2" style={{ borderBottom: '1px solid var(--border)' }}>
-        <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#e5c07b' }} />
+      {(modifiedCount > 0 || addedCount > 0 || deletedCount > 0) && <div className={styles.statusSummary}>
+        {modifiedCount > 0 && <div>
           <span className="text-[var(--shell-muted)]">{t('git:statusSummary.modified', { count: modifiedCount })}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--shell-diff-add)' }} />
+        </div>}
+        {addedCount > 0 && <div>
           <span className="text-[var(--shell-muted)]">{t('git:statusSummary.added', { count: addedCount })}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--shell-diff-del)' }} />
+        </div>}
+        {deletedCount > 0 && <div>
           <span className="text-[var(--shell-muted)]">{t('git:statusSummary.deleted', { count: deletedCount })}</span>
-        </div>
-      </div>
+        </div>}
+      </div>}
 
       {/* Changed files */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-testid="git-scroll-region">
