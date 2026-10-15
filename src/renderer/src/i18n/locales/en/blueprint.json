@@ -276,6 +276,7 @@
     "closeNodeDetail": "Close node detail"
   },
   "toolbar": {
+    "layoutSaveFailed": "Layout save failed",
     "loading": "Projecting notes…",
     "recent": "Last",
     "times": "commits",
@@ -960,6 +961,7 @@
     "changeSummary": "Body: {{added}} lines added, {{removed}} removed"
   },
   "reader": {
+    "sourceActions": "Source actions",
     "openNote": "Open Note: {{title}}",
     "reviewUnavailable": "Review status unavailable",
     "structureIssue": "Document structure needs attention",

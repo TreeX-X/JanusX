@@ -190,6 +190,7 @@ test('uninitialized workspaces keep chat usable without loading Note change hist
   })
   await select(page, 'Checkout B')
   const chat = page.locator('.blueprint-workbench-janus-slot')
+  await page.locator('.blueprint-janus-capsule').click()
   await expect(chat.locator('textarea')).toBeVisible()
   await chat.locator('textarea').fill('分析这个项目，不要修改文件')
   await chat.locator('textarea').press('Enter')
@@ -217,6 +218,7 @@ test('history failures use compact copy, expandable diagnostics and a working re
   })
   await select(page, 'Empty project')
   const chat = page.locator('.blueprint-workbench-janus-slot')
+  await page.locator('.blueprint-janus-capsule').click()
   const notice = chat.getByText('修改记录暂时无法加载，你仍可继续对话。', { exact: true })
   await expect(notice).toBeVisible()
   expect(await notice.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeLessThanOrEqual(12)
@@ -232,6 +234,7 @@ test('history failures use compact copy, expandable diagnostics and a working re
 })
 
 test('a late history failure cannot follow the user into another workspace', async ({ page }) => {
+  await page.locator('.blueprint-janus-capsule').click()
   await page.evaluate(() => {
     window.electron.harness.noteChatChanges = async () => new Promise((_, reject) => {
       ;(window as any).rejectHistory = () => reject(new Error('Late history failure'))

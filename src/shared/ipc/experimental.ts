@@ -1,9 +1,10 @@
 /**
  * 创新实验功能开关 IPC 契约。
- * 蓝图 / 知识库 / 圆桌 / 个人画像 / 远程协作控制 / 团队协作 / 会话管理七路独立控制，
+ * 蓝图 / 知识库 / 圆桌 / 个人画像 / 远程协作控制 / 团队协作 / 会话管理 / 备忘录独立控制，
  * 默认全部关闭（打包默认隐藏，仅在设置中心开启后可用）。
  * 缺席/非法一律回落默认，兼容旧配置。
  */
+// Note: preview controls and retained data — see .agents/notes/workbench/experimental-preview-features.md
 export const EXPERIMENTAL_CHANNELS = {
   get: 'experimental:get',
   update: 'experimental:update',
@@ -26,6 +27,8 @@ export interface ExperimentalFeatures {
   teamCollab: boolean
   /** 会话管理入口（右坞会话工具：卡片、时间线、详情与续接；关闭仅隐藏入口，会话数据与扫描保留）。 */
   sessions: boolean
+  /** 备忘录预览入口与后续 Chat 工具；关闭保留文件、会话绑定和正在执行的回复。 */
+  memo: boolean
 }
 
 export const DEFAULT_EXPERIMENTAL_FEATURES: ExperimentalFeatures = {
@@ -36,6 +39,7 @@ export const DEFAULT_EXPERIMENTAL_FEATURES: ExperimentalFeatures = {
   remoteControl: false,
   teamCollab: false,
   sessions: false,
+  memo: false,
 }
 
 /** 无 IPC 环境（浏览器预览 / 用例 harness）下的降级：全部可见，避免旧用例误杀。 */
@@ -47,6 +51,7 @@ export const EXPERIMENTAL_ENABLED_ALL: ExperimentalFeatures = {
   remoteControl: true,
   teamCollab: true,
   sessions: true,
+  memo: true,
 }
 
 export function normalizeExperimentalFeatures(value: unknown): ExperimentalFeatures {
@@ -60,6 +65,7 @@ export function normalizeExperimentalFeatures(value: unknown): ExperimentalFeatu
     remoteControl: record.remoteControl === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.remoteControl : record.remoteControl === true,
     teamCollab: record.teamCollab === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.teamCollab : record.teamCollab === true,
     sessions: record.sessions === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.sessions : record.sessions === true,
+    memo: record.memo === undefined ? DEFAULT_EXPERIMENTAL_FEATURES.memo : record.memo === true,
   }
 }
 

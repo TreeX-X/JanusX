@@ -37,6 +37,16 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
   const [notice, setNotice] = useState('')
   const [shortcutHost, setShortcutHost] = useState<HTMLDivElement | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const sourceActions = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => {
+      const actions = sourceActions.current
+      if (actions?.open && !actions.contains(event.target as Node)) actions.open = false
+    }
+    document.addEventListener('pointerdown', dismiss)
+    return () => document.removeEventListener('pointerdown', dismiss)
+  }, [])
+  useEffect(() => { if (sourceActions.current) sourceActions.current.open = false }, [uri, tab])
   const visitSequence = visit?.sequence
   const scrolledVisit = useRef<number | undefined>(undefined)
   const jumpedAnchor = useRef('')
@@ -151,9 +161,9 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
   const identity = <div className="bp-note-wiki__identity"><code title={uri}>{uri}</code><span>{current?.relPath ?? view.entry?.relPath}</span><span>{current ? 'sha256 ' + current.sourceHash.slice(0, 12) : '读取原文…'}</span></div>
   const fields = current && <dl className="bp-note-wiki__metadata"><dt>类型</dt><dd>{current.doc.kind}</dd><dt>生命周期</dt><dd>{current.doc.lifecycle}</dd>{current.doc.moduleState && <><dt>模块状态</dt><dd>{current.doc.moduleState}</dd></>}{current.doc.updated && <><dt>维护时间</dt><dd>{current.doc.updated}</dd></>}{current.doc.kind === 'task' && <><dt>任务执行</dt><dd>{metadata?.execution?.state ?? '无执行记录'}</dd></>}</dl>
   return <section className={`bp-note-wiki${compact ? ' bp-note-wiki--compact' : ''}`} aria-label="工程 wiki">
-    <div className="bp-note-wiki__scope">{!compact && <strong>工程 wiki</strong>}<span title={rootPath}>{snap.coverage.status === 'complete' ? (compact ? '完整索引 · 当前工作区' : '当前 checkout 完整扫描') : '扫描不完整 · 反链覆盖有限'}</span>{!compact && <small title={rootPath}>{rootPath}</small>}</div>
+    {(!compact || snap.coverage.status !== 'complete') && <div className="bp-note-wiki__scope">{!compact && <strong>工程 wiki</strong>}<span title={rootPath}>{snap.coverage.status === 'complete' ? '当前 checkout 完整扫描' : '扫描不完整 · 反链覆盖有限'}</span>{!compact && <small title={rootPath}>{rootPath}</small>}</div>}
     {uri && <>
-      {compact ? <details className="bp-note-wiki__provenance"><summary>来源与字段</summary><small>{rootPath}</small>{identity}{fields}</details> : identity}
+      {!compact && identity}
       {error && <div role="alert" className="bp-note-warning">{error}<button type="button" onClick={() => { if (onRetryNavigation) onRetryNavigation(); else setReload(v => v + 1) }}>重试</button></div>}
       {current && !current.matchesSnapshot && <div role="status" className="bp-note-warning">源文已变化，当前显示新原文；关系仍来自旧快照。<button type="button" onClick={onRefresh}>刷新图谱</button></div>}
       {notice && <div role="status" className="bp-note-warning">{notice}<button type="button" onClick={() => setNotice('')}>关闭</button></div>}
@@ -167,7 +177,19 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
             const index = tabs.indexOf(event.currentTarget), next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
             tabs[next].focus(); tabs[next].click()
           }} onClick={() => { setTab(value); if (value === 'body' && current) void markCurrent() }}>{t(value === 'body' ? 'reader.body' : 'reader.related')}</button>)}
-      </div><div className="bp-note-review-shortcut-host" ref={setShortcutHost} /></div>
+      </div><div className="bp-note-review-shortcut-host" ref={setShortcutHost} />
+      {current && <details ref={sourceActions} className="bp-note-wiki__actions" onKeyDown={event => {
+        if (event.key !== 'Escape' || !event.currentTarget.open) return
+        event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false
+        event.currentTarget.querySelector('summary')?.focus()
+      }} onClick={event => {
+        if (!(event.target as HTMLElement).closest('button')) return
+        event.currentTarget.open = false
+        event.currentTarget.querySelector('summary')?.focus()
+      }}><summary>{t('reader.sourceActions')}</summary><div>
+        <button type="button" aria-pressed={raw} onClick={() => setRaw(!raw)}>{raw ? '预览' : '完整源文'}</button>
+        <button type="button" onClick={() => void navigator.clipboard.writeText(current.raw).then(() => setNotice('已复制原文')).catch((reason) => setNotice(errorText(reason)))}>复制原文</button>
+      </div></details>}</div>
       {!current && !error && <div className="bp-note-loading" role="status" aria-label={t('attention.loadingBody')}><span /><span /><span /><span /></div>}
       {current && (unread || visit && visit.intent !== 'body' && markedHash !== current.sourceHash) && <button type="button" className="bp-note-read-action" disabled={marking} aria-busy={marking} onClick={() => void markCurrent()}>{t(marking ? 'attention.markingRead' : 'attention.readBody')}</button>}
       {current && <div ref={bodyRef} hidden={tab !== 'body'} className="bp-note-wiki__body">
@@ -185,8 +207,8 @@ export function NoteWikiPanel({ snapshot, rootPath, uri, anchor, compact = false
           })
         }} />
         {!compact && fields}
-        <div className="bp-note-wiki__actions"><button type="button" aria-pressed={raw} onClick={() => setRaw(!raw)}>{raw ? '预览' : '完整源文'}</button><button type="button" onClick={() => void navigator.clipboard.writeText(current.raw).then(() => setNotice('已复制原文')).catch((reason) => setNotice(errorText(reason)))}>复制原文</button></div>
         {raw ? <pre className="bp-note-source">{current.raw}</pre> : <NoteMarkdown key={current.uri + current.sourceHash} source={current} link={renderLink(current)} />}
+        {compact && <details className="bp-note-wiki__provenance"><summary>来源与字段</summary><small>{rootPath}</small>{identity}{fields}</details>}
         {!!metadata?.codeRefs?.length && <div className="bp-note-wiki__group"><h4>代码落点</h4>{metadata.codeRefs.map((ref, index) => <div key={index}><button type="button" disabled={ref.repoId !== snap.repoId} onClick={() => void openFile(ref.path)}>{ref.path}</button><small>{ref.repoId === snap.repoId ? ref.role : '外部仓库 · ' + ref.repoId}</small></div>)}</div>}
       </div>}
       {tab === 'links' && <NoteRelations key={rootPath + uri} snapshot={snap} uri={uri} rootPath={rootPath} canNavigate={canNavigate} onOpen={open} renderLink={renderLink} />}

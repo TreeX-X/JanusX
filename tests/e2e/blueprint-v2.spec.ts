@@ -95,8 +95,9 @@ for (const surface of ['', '&workbench']) {
     }
     await expect(card(page, 'Parser submodule').locator('.bp-node-card--module')).toBeVisible()
     await expect(card(page, 'Child note').locator('.bp-node-card--document')).toBeVisible()
-    const outlines = await page.locator('.bp-node-card--module').first().evaluate(el => ({ tab: getComputedStyle(el, '::before').content, paths: el.querySelectorAll('.bp-node-card__module-shape path').length, stroke: getComputedStyle(el.querySelector('.bp-node-card__module-shape')!).strokeWidth, border: getComputedStyle(el).borderTopWidth }))
-    expect(outlines.tab).toBe('none'); expect(outlines.paths).toBe(1); expect(outlines.stroke).toBe('2px'); expect(outlines.border).toBe('2px')
+    await expect(card(page, 'Parser submodule').locator('.bp-node-card')).toHaveCSS('border-radius', '8px')
+    await expect(card(page, 'Child note').locator('.bp-node-card')).toHaveCSS('border-radius', '4px')
+    await expect(card(page, 'Parser submodule').locator('.bp-node-card__enter')).toBeVisible()
     await page.screenshot({ path: test.info().outputPath('module-page-light.png'), fullPage: true })
     await page.evaluate(() => (window as any).architectureFixture.theme('dark'))
     await page.screenshot({ path: test.info().outputPath('module-page-dark.png'), fullPage: true })

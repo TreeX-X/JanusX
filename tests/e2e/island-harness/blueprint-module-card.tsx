@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { ReactFlow, useNodesState, type ReactFlowInstance } from '@xyflow/react'
 import { BlueprintCardActionsContext, BlueprintNodeCard, type BlueprintRFNodeType } from '../../../src/renderer/src/components/blueprint/BlueprintNodeCard'
 import { initI18n } from '../../../src/renderer/src/i18n'
+import { useThemeStore } from '../../../src/renderer/src/stores/theme'
 import '@xyflow/react/dist/style.css'
 import '../../../src/renderer/src/styles/themes.generated.css'
 import '../../../src/renderer/src/components/blueprint/blueprint.css'
@@ -26,7 +27,7 @@ function Fixture() {
       state: (state: string) => setNodes(nodes => nodes.map(node => ({ ...node, selected: state !== 'default',
         className: state === 'focus' ? 'bp-assistant-target' : '', data: { ...node.data, searchMatched: state === 'matched' },
       }))),
-      theme: (theme: string) => { document.documentElement.dataset.theme = theme },
+      theme: (theme: string) => { useThemeStore.getState().applyExternal(theme) },
     }
   }
   return <div className="blueprint-canvas-wrapper" style={{ height: '100vh', background: 'var(--shell-bg)' }}>

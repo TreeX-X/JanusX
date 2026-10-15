@@ -18,6 +18,7 @@ let loadPromise: Promise<void> | null = null
 export const useExperimentalStore = create<ExperimentalStore>()((set, get) => ({
   ...EXPERIMENTAL_ENABLED_ALL,
   knowledge: false,
+  memo: false,
   loaded: false,
   load: () => {
     if (get().loaded) return Promise.resolve()
@@ -31,7 +32,7 @@ export const useExperimentalStore = create<ExperimentalStore>()((set, get) => ({
         }
         set({ ...normalizeExperimentalFeatures(await getExperimentalFeatures()), loaded: true })
       } catch {
-        set({ ...EXPERIMENTAL_ENABLED_ALL, knowledge: false, loaded: true })
+        set({ ...EXPERIMENTAL_ENABLED_ALL, knowledge: false, memo: false, loaded: true })
       }
     })()
     return loadPromise

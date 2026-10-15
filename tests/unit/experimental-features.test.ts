@@ -6,7 +6,12 @@ import {
 } from '../../src/shared/ipc/experimental'
 
 describe('experimental feature flags', () => {
-  it('defaults all seven entries to off (hidden by default)', () => {
+  it('requires explicit opt-in for memo in older configurations and rejects non-booleans', () => {
+    expect(normalizeExperimentalFeatures({ sessions: true }).memo).toBe(false)
+    expect(normalizeExperimentalFeatures({ memo: true })).toEqual({ ...DEFAULT_EXPERIMENTAL_FEATURES, memo: true })
+    for (const memo of [false, 1, 'true', null]) expect(normalizeExperimentalFeatures({ memo }).memo).toBe(false)
+  })
+  it('defaults all entries to off (hidden by default)', () => {
     expect(DEFAULT_EXPERIMENTAL_FEATURES).toEqual({
       blueprint: false,
       knowledge: false,
@@ -15,6 +20,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: false,
       sessions: false,
+      memo: false,
     })
   })
 
@@ -39,6 +45,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: false,
       sessions: false,
+      memo: false,
     })
     expect(normalizeExperimentalFeatures({ knowledge: true })).toEqual({
       blueprint: false,
@@ -48,6 +55,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: false,
       sessions: false,
+      memo: false,
     })
     expect(normalizeExperimentalFeatures({ roundtable: 1, persona: 'true' })).toEqual({
       blueprint: false,
@@ -57,6 +65,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: false,
       sessions: false,
+      memo: false,
     })
     expect(normalizeExperimentalFeatures({ remoteControl: true })).toEqual({
       blueprint: false,
@@ -66,6 +75,7 @@ describe('experimental feature flags', () => {
       remoteControl: true,
       teamCollab: false,
       sessions: false,
+      memo: false,
     })
     expect(normalizeExperimentalFeatures({ remoteControl: 1 })).toEqual({
       blueprint: false,
@@ -75,6 +85,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: false,
       sessions: false,
+      memo: false,
     })
     expect(normalizeExperimentalFeatures({ teamCollab: true })).toEqual({
       blueprint: false,
@@ -84,6 +95,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: true,
       sessions: false,
+      memo: false,
     })
     expect(normalizeExperimentalFeatures({ teamCollab: 1 })).toEqual({
       blueprint: false,
@@ -93,6 +105,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: false,
       sessions: false,
+      memo: false,
     })
   })
 
@@ -105,6 +118,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: false,
       sessions: true,
+      memo: false,
     })
     expect(normalizeExperimentalFeatures({ sessions: 1 })).toEqual({
       blueprint: false,
@@ -114,6 +128,7 @@ describe('experimental feature flags', () => {
       remoteControl: false,
       teamCollab: false,
       sessions: false,
+      memo: false,
     })
   })
 })

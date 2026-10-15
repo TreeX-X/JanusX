@@ -71,6 +71,8 @@ vi.mock('../../../src/main/agent/runtime/shell-runtime', () => ({
 
 import { abortChatStream, answerChatQuestion, gateFromToolAllowlist, handleChatStream, prepareJanusChatRecall, steerChatStream } from '../../../src/main/llm/chat-orchestrator'
 import { llmService } from '../../../src/main/llm/LlmService'
+import { configService } from '../../../src/main/config/service'
+import { DEFAULT_EXPERIMENTAL_FEATURES } from '../../../src/shared/ipc/experimental'
 
 const emptyResult: KnowledgeContextResult = {
   items: [],
@@ -92,6 +94,22 @@ function immediateStream(text: string) {
 }
 
 describe('chat turn guard (S6-a)', () => {
+  it('withholds memo tools when the persisted preview gate is disabled despite a stale binding', async () => {
+    vi.mocked(configService.getExperimentalFeatures).mockResolvedValueOnce({ ...DEFAULT_EXPERIMENTAL_FEATURES })
+    immediateStream('Enable Memo in preview settings')
+    const reply = vi.fn()
+    await handleChatStream({ reply } as never, {
+      requestId: 'memo-disabled', conversationId: 'memo-disabled-chat', providerId: 'p',
+      sourceTag: 'janus-chat', domain: 'project', messages: userMessages,
+      memoMessageId: 'disabled-origin', memoBinding: { memoId: 'stale-memo', messageId: 'disabled-origin', selectedNodeId: null },
+    })
+    const options = streamText.mock.calls[0][0]
+    expect(Object.keys(options.tools ?? {}).filter(name => name.startsWith('memo_'))).toEqual([])
+    expect(JSON.stringify(options.messages)).toContain('Memo preview is disabled')
+    expect(readMemo).not.toHaveBeenCalled()
+    expect(createMemo).not.toHaveBeenCalled()
+    expect(reply.mock.calls.some(([channel]) => channel === 'llm:chat:error')).toBe(false)
+  })
   it('offers unbound memo creation and emits a binding for the originating message', async () => {
     const memo = { id: '00000000-0000-4000-8000-000000000300', title: '工程排期', revision: 0, nodes: [] }
     createMemo.mockResolvedValue(memo)
@@ -208,6 +226,9 @@ describe('chat turn guard (S6-a)', () => {
     expect(steerChatStream({ conversationId: 'project-cancel', entryId: 'late', text: 'late' }).accepted).toBe(false)
   })
   beforeEach(() => {
+    vi.spyOn(configService, 'getExperimentalFeatures').mockResolvedValue({ ...DEFAULT_EXPERIMENTAL_FEATURES, memo: true })
+    readMemo.mockReset()
+    createMemo.mockReset()
     vi.mocked(llmService.getProviderSettings).mockReset().mockResolvedValue({ modelId: 'test-model' } as never)
     vi.mocked(llmService.resolveModelMetadata).mockReset().mockResolvedValue({ effectiveContextWindow: 16384, maxOutputTokens: 4096 } as never)
     search.mockReset().mockResolvedValue(emptyResult)

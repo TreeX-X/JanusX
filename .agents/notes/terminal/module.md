@@ -31,7 +31,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e29da5b4-dc65-40a9-883d-9026e3b280b1"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a976752-d637-40c7-9fa3-bce52ac5dc15"}
   ],
-  "updated": "2026-10-15T03:06:00Z",
+  "updated": "2026-10-15T10:26:11.296Z",
   "moduleState": "partial"
 }
 ---
@@ -42,7 +42,7 @@
 
 管理 PTY 进程、终端输入输出、外部 CLI 的启动与终端界面。终端 IPC 通过会话模块的 AgentSessionRegistry 关联会话与终端事件；终端模块不拥有会话持久化或 Task 验收规则。
 
-下列链接保留已有决策、阶段需求和交付记录的阅读路径；正文及生命周期由原 Note 负责。历史 parent 仅组织文档，跨模块关联由本声明的 related-to 补充。模块声明只在职责、接口、明确依赖或代码入口变化时维护。
+下列链接保留已有决策、阶段需求和交付记录的阅读路径；正文及生命周期由原 Note 负责。当前目录和蓝图归属以最近模块的 module 声明为准；历史 parent 关系保留旧阅读脉络，不参与模块层级，跨模块关联由本声明的 related-to 补充。模块声明只在职责、接口、明确依赖或代码入口变化时维护。
 
 ## Design
 
@@ -56,7 +56,7 @@
 
 设置绑定链（演进关系已由正文 supersede 声明）：[settings-llm](./settings-terminal-llm.md)、[provider-collections](./terminal-provider-collections.md)、[tabs-projectors](./terminal-tabs-per-format-projectors.md)、[settings-todos](./requirements/settings-terminal-llm-todos.md)、[background-image](./requirements/terminal-background-image.md)、[workbench-transition](./settings-workbench-transition.md)。
 
-cc-switch 机制以总纲为父：[port 总纲](./requirements/cc-switch-port.md)为本域直接子，其下 detect-install、cli-matrix、multi-terminal、pi-janus 四篇以总纲为父；profile-switch 与 llm-sync 两篇 archived 历史保持冻结不动。
+cc-switch 机制从[port 总纲](./requirements/cc-switch-port.md)进入，detect-install、cli-matrix、multi-terminal、pi-janus 四篇维护具体能力；总纲与专题都直接归属终端模块，历史 parent 只表示原交付脉络，不形成子模块。profile-switch 与 llm-sync 两篇 archived 历史保留在 history/，不复活或改写。
 
 Shell 语义与外围：[adhoc-parity](./adhoc-shell-parity.md)、[self-heal-parity](./command-error-self-heal-parity.md)、[cold-restore](./shell-cold-restore.md)、[orca-parsing](./orca-terminal-acquisition-parsing.md)、[ime-drift](./ime-candidate-drift.md)、[pane-tree](./pane-tree-subagent.md)、[monaco-diff](./monaco-diff-single-line-number.md)、[turn-history](./terminal-right-island-turn-history.md)。
 

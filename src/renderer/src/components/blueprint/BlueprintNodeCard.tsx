@@ -55,22 +55,8 @@ export interface BlueprintNodeData extends Record<string, unknown> {
 /** Blueprint ????? React Flow Node ?? */
 export type BlueprintRFNodeType = Node<BlueprintNodeData, 'blueprint'>
 
-// Note: one continuous folder contour avoids tab/body seams; the same geometry
-// provides the offset focus ring — see .agents/notes/blueprint/navigation/requirements/module-browsing.md
-function moduleFolderPath(width: number, height: number, minimal: boolean, offset: number) {
-  const tabWidth = minimal ? 50 : 76
-  const tabRise = minimal ? 6 : 9
-  return `M ${-offset} ${6 - tabRise}
-    Q ${-offset} ${-tabRise - offset} 6 ${-tabRise - offset}
-    H ${tabWidth - 20}
-    C ${tabWidth - 10} ${-tabRise - offset} ${tabWidth - 10} ${-offset} ${tabWidth} ${-offset}
-    H ${width - 10} Q ${width + offset} ${-offset} ${width + offset} 10
-    V ${height - 10} Q ${width + offset} ${height + offset} ${width - 10} ${height + offset}
-    H 10 Q ${-offset} ${height + offset} ${-offset} ${height - 10} Z`
-}
-
 // Note: card labels and unread marker — see .agents/notes/blueprint/navigation/note-updates-and-suggestion-navigation.md
-function BlueprintNodeCardImpl({ id, data, selected, width, height }: NodeProps<BlueprintRFNodeType>) {
+function BlueprintNodeCardImpl({ id, data, selected }: NodeProps<BlueprintRFNodeType>) {
   const { t } = useI18n('blueprint')
   const d = data
   const actions = useContext(BlueprintCardActionsContext)
@@ -98,16 +84,6 @@ function BlueprintNodeCardImpl({ id, data, selected, width, height }: NodeProps<
         d.searchDimmed ? 'bp-node-card--dimmed' : ''
       ].filter(Boolean).join(' ')}
     >
-      {architectureRole ? (
-        <>
-          <svg className="bp-node-card__module-shape" width={width ?? 240} height={height ?? 110} aria-hidden="true" focusable="false">
-            <path d={moduleFolderPath(width ?? 240, height ?? 110, minimal, -1)} />
-          </svg>
-          <svg className="bp-node-card__module-focus" width={width ?? 240} height={height ?? 110} aria-hidden="true" focusable="false">
-            <path d={moduleFolderPath(width ?? 240, height ?? 110, minimal, 5)} />
-          </svg>
-        </>
-      ) : null}
       {/* Note: hierarchy edges use Top/Bottom, relation edges may exit Left/Right — see .agents/notes/2026-09-26-blueprint-edge-partial-refresh--edge-refresh.md */}
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
       <Handle type="target" id="left" position={Position.Left} style={{ opacity: 0 }} />

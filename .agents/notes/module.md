@@ -7,7 +7,7 @@
   "created": "2026-10-03",
   "class": "architecture",
   "tags": [],
-  "updated": "2026-10-14T09:38:49.072Z",
+  "updated": "2026-10-15T10:26:11.296Z",
   "moduleState": "partial",
   "role": "project"
 }
@@ -25,9 +25,9 @@
 
 [Note 与蓝图](blueprint/module.md)按文档读取、模块导航、维护对话、工作区组合细分；[会话与工作区](sessions/module.md)按会话记录、检查点、对话线程、工作树细分。其余模块保持现有职责深度，后续出现独立维护边界时再拆分，不要求树形等深。
 
-工程知识、蓝图与个人画像的后续讨论统一从[当前产品方向](blueprint/product-direction.md)和[交付计划](blueprint/evolution-roadmap.md)进入；版本演进与节点排期由[工程排期里程碑备忘录](engineering-milestones.md)维护。这是产品演进与版本节奏对齐凭据，尚未改变下属模块的实际实现状态。
+工程知识、蓝图与个人画像的后续讨论统一从[当前产品方向](blueprint/product-direction.md)和[交付计划](blueprint/evolution-roadmap.md)进入；跨模块版本演进与节点排期统一归[产品规划与版本排期](planning/module.md)，具体事项见[工程排期里程碑备忘录](planning/engineering-milestones.md)。排期记录是产品演进与版本节奏的对齐凭据，下属模块的实际实现状态仍由各自文档与验收维护。
 
-模块层级来自最近上级的 parent，普通 Note 通过 module 归属。单根蓝图首页就是项目模块页，进入子模块后显示它自身和直属内容；未归属文档及读取诊断保留访问入口。文件数量、Task 完成和模块状态分别表达，不据目录位置推断功能已经验收。整理依据与迁移证据见[职责目录整理](blueprint/module-responsibilities.md)。
+Notes 根目录只保留项目 module.md；专题放入最近职责模块目录，模块层级来自最近上级的 parent，普通 Note 通过 module 归属。移动时同时维护路径、归属与活跃链接；仅移动到普通分组文件夹不会改变蓝图中的模块归属。单根蓝图首页就是项目模块页，进入子模块后显示它自身和直属内容；未归属文档及读取诊断保留访问入口。文件数量、Task 完成和模块状态分别表达，不据目录位置推断功能已经验收。整理依据与迁移证据见[职责目录整理](blueprint/module-responsibilities.md)。
 
 ## Acceptance criteria
 

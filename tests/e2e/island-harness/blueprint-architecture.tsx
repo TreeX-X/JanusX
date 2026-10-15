@@ -144,7 +144,7 @@ if (params.has('focus')) {
   finish: () => events.forEach(listener => listener({ type: 'stream_end', requestId: streams.at(-1).requestId, cancelled: false })),
   browser: () => useNoteFocusStore.getState().browser,
   scope: () => useNoteFocusStore.getState().scopes,
-  theme: (theme: string) => { document.documentElement.dataset.theme = theme; useThemeStore.setState({ theme }) },
+  theme: (theme: string) => { useThemeStore.getState().applyExternal(theme) },
   refresh: () => {
     graph.nodes[module.id].title = 'Reader module refreshed'
     graph.contentRevision++

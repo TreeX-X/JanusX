@@ -10,6 +10,8 @@ import { initI18n, changeLanguage } from '../../../src/renderer/src/i18n'
 import { applyMemoOperations, readMemoFile, type Memo } from '../../../src/shared/memo'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { useExperimentalStore } from '../../../src/renderer/src/stores/experimental'
+import { ExperimentalSettingsPanel } from '../../../src/renderer/src/components/ExperimentalSettingsPanel'
+import { DEFAULT_EXPERIMENTAL_FEATURES, normalizeExperimentalFeatures } from '../../../src/shared/ipc/experimental'
 import type { Workspace } from '../../../src/shared/ipc/workspace'
 import type { ChatSteerInput, ChatStreamEvent, ChatStreamRequest } from '../../../src/shared/ipc/llm'
 import { AuthType } from '../../../packages/llm-core/src/core/types'
@@ -23,6 +25,14 @@ Object.assign(window.electron.subAgentRun, { list: async () => [] })
 Object.assign(window.electron.workflowx, { detect: async (workspaceId: string | null) => ({ workspaceId, status: 'unconfigured', sources: [], checkedAt: Date.now() }) })
 Object.assign(window.electron.system, { getLanguage: async () => 'en', setLanguage: async () => undefined })
 const params = new URLSearchParams(window.location.search)
+const withSettings = params.has('settings')
+if (withSettings) {
+  let features = { ...DEFAULT_EXPERIMENTAL_FEATURES }
+  window.electron.experimental = {
+    get: async () => ({ ...features }),
+    update: async partial => { features = normalizeExperimentalFeatures({ ...features, ...partial }); return { ...features } },
+  }
+}
 if (params.has('roundtable')) useExperimentalStore.setState({ roundtable: true })
 const integratedIsland = params.has('island')
 const preview = params.has('preview')
@@ -106,6 +116,7 @@ function Harness() {
   selectedController = controller
   const [stage, setStage] = useState<JanusIslandStage>('expanded')
   const previewOpened = React.useRef(false)
+  const settings = withSettings ? <aside data-testid="experimental-settings" style={{ position: 'fixed', left: 0, top: 0, width: 430, maxHeight: '100vh', overflow: 'auto', zIndex: 11000, background: 'var(--shell-canvas)' }}><ExperimentalSettingsPanel /></aside> : null
   useEffect(() => {
     if (!preview || !integratedIsland || controller.conversationId !== 'memo-chat' || previewOpened.current) return
     previewOpened.current = true
@@ -117,6 +128,7 @@ function Harness() {
     return () => cancelAnimationFrame(frame)
   }, [controller.conversationId])
   if (integratedIsland) return <>
+    {settings}
     <div className="janus-island-cluster" style={{ zIndex: 9999 }}>
       <JanusIsland stage={stage} onSingleActivate={() => setStage('expanded')} onDoubleActivate={() => setStage(value => value === 'expanded' ? 'collapsed' : 'expanded')} onDismiss={() => setStage('collapsed')}
         messages={controller.messages} pendingContent={controller.pendingContent} isStreaming={controller.isStreaming} error={controller.error}
@@ -127,6 +139,7 @@ function Harness() {
     <button data-testid="reopen" hidden={stage === 'expanded'} onClick={() => setStage('expanded')} style={{ position: 'fixed', bottom: 12, right: 12 }}>Reopen</button>
   </>
   return <>
+    {settings}
     {scaledMain && <>
       <div data-testid="chrome-bar" style={{ position: 'fixed', left: 0, right: 0, top: 0, height: 38, zIndex: 9999, background: 'rgba(20,20,24,0.55)', backdropFilter: 'blur(20px)' }} />
       <div data-testid="dropdown-decoy" style={{ position: 'fixed', left: 120, top: 200, width: 200, height: 150, zIndex: 10050, background: '#334' }} />
