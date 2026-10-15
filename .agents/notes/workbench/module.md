@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-14T09:00:04Z",
+  "updated": "2026-10-15T02:46:02.831Z",
   "moduleState": "partial"
 }
 ---
@@ -52,6 +52,8 @@
 组织 Island、右侧工具栏、产物预览与共享编辑器的交互和视觉。RightDock 负责工具承载与布局，ProductWorkspacePanel 负责生成文件的预览，JanusIsland 负责工作状态及通知入口。文件事实由既有读取服务提供，会话耐久、Agent 执行与工程 Note 事务分别由对应模块负责。
 
 ## Design
+
+生成文件面板统一显示“预览”，本地 Markdown／文本及应用状态界面跟随主题，HTML／Office 文档保留自身配色。[预览实现与主题检查](./product-workspace.md)记录统一扫描入口、历史迁移预算和固定色例外；新增主题可集中定位遗留项，verify 拒绝新增扫描问题。
 
 负责布局、预览、导航及可达交互，不承诺所有插件、主题或预览提案均已交付。下面保留历史阅读链，Note 工具的界面承载在本模块，文档身份和蓝图解析见 [Note 与蓝图](../blueprint/module.md)。
 

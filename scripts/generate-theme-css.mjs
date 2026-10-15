@@ -4,7 +4,7 @@
  * 通过 esbuild 将 TS 代码生成入口打包后执行，不污染源码。
  */
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -35,7 +35,11 @@ try {
   if (typeof css !== 'string' || css.length === 0) {
     throw new Error('renderThemeCss() returned empty output')
   }
-  if (!checkOnly) {
+  if (checkOnly) {
+    if (readFileSync(outCss, 'utf8').replace(/\r\n/g, '\n') !== css.replace(/\r\n/g, '\n')) {
+      throw new Error('Theme CSS is out of date. Run npm run theme:css.')
+    }
+  } else {
     writeFileSync(outCss, css)
   }
   console.log(`[theme:css] ${checkOnly ? 'checked' : 'wrote'} ${outCss} (${css.length} bytes)`)

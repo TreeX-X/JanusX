@@ -76,13 +76,13 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
   }, [workspacePath, relPath, kind, revision])
 
   if (error) {
-    return <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-[#aaa]">
+    return <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-xs text-[var(--shell-muted)]">
       <div>{error}</div>
     </div>
   }
   if (kind === 'image') {
     if (image === null) {
-      return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[#777]">
+      return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[var(--shell-dim)]">
         <span className="product-spinner" aria-hidden="true" />
         <span>{t('editor:product.startingPreview')}</span>
       </div>
@@ -90,14 +90,14 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
     return <ImageViewer base64={image.base64} mimeType={image.mimeType} fileName={relPath.split('/').pop() ?? relPath} />
   }
   if (content === null) {
-    return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[#777]">
+    return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[var(--shell-dim)]">
       <span className="product-spinner" aria-hidden="true" />
       <span>{t('editor:product.startingPreview')}</span>
     </div>
   }
   if (kind === 'markdown') {
     return <PreviewScrollArea>
-      <div className="flex-1" style={{ padding: 16, background: '#0a0a0a', color: '#d4d4d4', minHeight: '100%' }}>
+      <div className="flex-1" style={{ padding: 16, background: 'var(--shell-canvas)', color: 'var(--shell-text)', minHeight: '100%' }}>
         <div className="markdown-preview">
           <MarkdownAssetContext.Provider value={assetScope}>
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
@@ -110,8 +110,8 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
     const truncated = content.length > PRODUCT_TEXT_PREVIEW_LIMIT
     const visible = truncated ? content.slice(0, PRODUCT_TEXT_PREVIEW_LIMIT) : content
     return <PreviewScrollArea>
-      <div className="flex-1" style={{ padding: 16, background: '#0a0a0a', color: '#d4d4d4', minHeight: '100%' }}>
-        {truncated && <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>{t('editor:product.truncatedPreview')}</div>}
+      <div className="flex-1" style={{ padding: 16, background: 'var(--shell-canvas)', color: 'var(--shell-text)', minHeight: '100%' }}>
+        {truncated && <div style={{ fontSize: 11, color: 'var(--shell-muted)', marginBottom: 8 }}>{t('editor:product.truncatedPreview')}</div>}
         <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{visible}</pre>
       </div>
     </PreviewScrollArea>

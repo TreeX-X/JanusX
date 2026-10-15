@@ -261,7 +261,7 @@
       "action": {
         "openKnowledge": "Open knowledge",
         "openMemory": "Open persona",
-        "openProduct": "Open products",
+        "openProduct": "Open preview",
         "openBlueprint": "Open blueprint",
         "openMaintenance": "Open maintenance"
       },
@@ -313,7 +313,7 @@
       "statusLabel": "STATUS",
       "engineLabel": "ENGINE",
       "mainIdentity": "MAIN",
-      "productFiles": "Product workspace",
+      "productFiles": "Preview",
       "productAvailable": "{{count}} available",
       "subagentRuntimes": "Subagent runtimes",
       "focusedTerminal": "focused terminal",

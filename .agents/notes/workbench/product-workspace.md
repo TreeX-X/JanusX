@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-15T02:45:34.347Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -35,13 +35,19 @@ JanusX 的生成文件预览是一条只为 Office 写的特例链路。中部�
 
 ## Decision
 
-正交模块“产物工作区”（代码标识 `productWorkspace`）是生成文件唯一的中间展示列，UI 名固定为“产物工作区”。`src/shared/product.ts` 拥有种类映射（`office/markdown/html/unsupported`），`stores/productWorkspace.ts` 拥有 Tab 与工作区级产物列表，`components/product-workspace/` 拥有面板、文件列表、本地渲染与发现逻辑。Office 种类经由 office 引擎租用 `watch` 端口渲染（`OfficePreviewFrame` 复用），`md/html` 经由 `window.electron.file.read` 从磁盘直读渲染，零端口。主进程改动只放开产物索引的扩展名集合（`office-artifact-index.ts` 与 `publicFileEntry`），`startPreview` 的 Office 守卫、`watch` 租约池、安装器、`buildPrompt` 后端保持原样。
+正交模块“产物工作区”（代码标识 `productWorkspace`）是生成文件唯一的中间展示列，UI 名统一为“预览”。`src/shared/product.ts` 拥有种类映射（`office/markdown/html/unsupported`），`stores/productWorkspace.ts` 拥有 Tab 与工作区级产物列表，`components/product-workspace/` 拥有面板、文件列表、本地渲染与发现逻辑。Office 种类经由 office 引擎租用 `watch` 端口渲染（`OfficePreviewFrame` 复用），`md/html` 经由 `window.electron.file.read` 从磁盘直读渲染，零端口。主进程改动只放开产物索引的扩展名集合（`office-artifact-index.ts` 与 `publicFileEntry`），`startPreview` 的 Office 守卫、`watch` 租约池、安装器、`buildPrompt` 后端保持原样。
 
 触发协议以文件落盘为唯一事实源，不解析任何终端输出。索引产出统一事件经由既有 `office:files:changed` 通道，隐式自动上台沿用基线加增量通知语义。记录粒度只到工作区，不做终端级归因。产物工作区打开时中央终端列压缩至下限，`RightDock` 进入强制收起态（`getRightDockLayout` 的 `stageRendered` 条件），列宽 `320~640px` 可拖拽。灵动岛一级展开（`product-notice/product-consume`）单击直接打开产物工作区并触发两侧收缩。监控界面的 Office 分区改名为产物工作区，按工作区列出生成文件，点击加载链路与灵动岛单击一致。
 
 预览面形态（同日同步）：产物目录的唯一展示位是灵动岛一级提醒与监控界面产物分区，预览列顶部不再重复全量文件列表——预览列只承载用户点开过的文件，水平 tab 即开即显，空态提示前往岛/监控打开（`editor:product.emptyStage`）。监控界面与岛通知点击文件即直接加载预览：tab 创建与文件读取和舞台挂载在同一提交内完成，无延迟队列。md/html 直读 iframe 沙箱放开 `allow-forms/allow-modals/allow-popups` 允许页内点击交互，仍禁 `allow-top-navigation` 防劫持主窗口；预览滚动条改走黑灰谱系（thumb 亮灰、track 近黑微透），与岛通知胶囊同调，弃用橙色。
 
 旧 UI 壳（`OfficePreviewPanel`、`OfficeFileList`、`officeDiscovery`、`stores/office`、`officeResize`、`OfficePromptPreview`）随本次删除，不保留兼容分支。`json` 暂不纳入范围。
+
+预览界面的标题、关闭提示、岛入口与监控分区统一显示“预览”（英文 Preview），内部 productWorkspace 标识保留。Markdown／文本底色和文字、加载／错误状态、Office 外层按钮、滚动条与加载圈读取语义主题变量；HTML 与 Office iframe 的页面底板保留白色，生成文档自身的样式不被应用主题覆盖。共享 Markdown 复制反馈使用已定义的 --accent-mid。
+
+主题资源仍由 src/shared/theme/definition.ts 集中管理；npm run theme:audit 输出 renderer 的硬编码颜色、主题专属 CSS 和无法找到静态定义的变量的文件／行／列，历史项按文件、种类和值计数保留为迁移清单，必要固定色登记次数和原因。npm run theme:check 校验生成 CSS 与新增扫描项，已接入 verify。静态扫描不证明变量作用域、每种主题的对比度或外部文档适配，新增主题仍需完整性与实际界面验证；维护说明见 [主题系统](../../../src/shared/theme/README.md)。
+
+验证：`npx vitest run tests/unit/theme-audit.test.ts tests/unit/product/product-workspace.test.ts tests/unit/theme-registry.test.ts tests/unit/planche-theme.test.ts` 49 项通过。`npx playwright test tests/e2e/product-preview.spec.ts --project=island --workers=1 --output=artifacts/product-preview` 3 项通过，使用真实预览组件与替身文件 IPC，覆盖双主题底色和文字、打开文档后切换主题、复制反馈、加载圈、Office 错误按钮及 HTML 自身背景；截图已人工查看。CLI 负向探针验证新增颜色／缺失变量与过期生成 CSS 均被拒绝。`theme:check`、类型、构建、翻译、Note 校验及改动组件 ESLint 通过；未运行完整 verify 或 Electron 实机 Office 渲染，Note 校验保留 17 条既有外部链接诊断。
 
 ## Alternatives considered
 
