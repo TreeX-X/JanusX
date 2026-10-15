@@ -66,6 +66,7 @@ export function AgentSettingsPanel() {
     }
   }
 
+  const isDirty = draft.approvalMode !== settings.approvalMode || draft.agentMaxSteps !== settings.agentMaxSteps || draft.safeCompileAutoAllow !== settings.safeCompileAutoAllow
   const isBusy = status === 'loading' || status === 'saving'
   const statusClass = status === 'error' ? `${styles.status} ${styles.statusError}` : status === 'saved' ? `${styles.status} ${styles.statusSuccess}` : styles.status
   const options = [
@@ -121,10 +122,10 @@ export function AgentSettingsPanel() {
       </div>
     </section>
     <div className={styles.footer}>
-      <div className={statusClass}>{status === 'loading' && t('settings:footer.loading')}{status === 'saving' && t('settings:footer.saving')}{status === 'saved' && t('settings:footer.saved')}{status === 'error' && error}</div>
+      <div className={statusClass} role="status">{status === 'loading' && t('settings:footer.loading')}{status === 'saving' && t('settings:footer.saving')}{status === 'saved' && t('settings:footer.saved')}{status === 'idle' && isDirty && t('settings:footer.unsaved')}{status === 'error' && error}</div>
       <div className={styles.actions}>
-        <button type="button" className={`${styles.button} ${styles.ghostButton}`} onClick={() => { setDraft(settings); setStatus('idle'); setError('') }} disabled={isBusy}>{t('settings:footer.reset')}</button>
-        <button type="button" className={`${styles.button} ${styles.primaryButton}`} onClick={() => void handleSave()} disabled={isBusy}>{t('settings:footer.save')}</button>
+        <button type="button" className={`${styles.button} ${styles.ghostButton}`} onClick={() => { setDraft(settings); setStatus('idle'); setError('') }} disabled={isBusy || !isDirty}>{t('settings:footer.reset')}</button>
+        <button type="button" className={`${styles.button} ${styles.primaryButton}`} onClick={() => void handleSave()} disabled={isBusy || !isDirty}>{t('settings:footer.save')}</button>
       </div>
     </div>
   </div>
@@ -152,6 +153,7 @@ function SettingSwitch({
       <label className={styles.switch}>
         <input
           type="checkbox"
+          aria-label={label}
           checked={checked}
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}

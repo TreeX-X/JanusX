@@ -9,6 +9,7 @@ import {
 import { externalCliService } from '@/services/external-cli'
 import { EXTERNAL_CLI_TOOL_ICONS } from '@/lib/cli-tool-icons'
 import styles from './AppSettingsModal.module.css'
+import cliStyles from './ExternalCliManager.module.css'
 
 type RowState = 'not-installed' | 'broken' | 'ready' | 'update-available'
 
@@ -133,7 +134,7 @@ export function ExternalCliManager({
     </span>
   ) : (
     <img
-      className={styles.lsToolImg}
+      className={cliStyles.logo}
       src={EXTERNAL_CLI_TOOL_ICONS[toolId]}
       alt=""
       draggable={false}
@@ -142,47 +143,38 @@ export function ExternalCliManager({
   )
 
   return (
-    <div className={styles.lsToolRow}>
-      <div className={styles.lsToolRowMain}>
-        <button
-          type="button"
-          className={`${styles.lsIconToggle} ${styles.lsIconEntry}${!visible ? ` ${styles.lsIconToggleOff}` : ''}`}
-          aria-label={visibilityLabel}
-          aria-pressed={visible}
-          title={visibilityLabel}
-          onClick={() => onVisibleChange(!visible)}
-        >
-          {brandIcon}
-        </button>
-        <div className={styles.lsToolRowInfo}>
-          <span className={styles.lsCardName}>{meta.displayName}</span>
-          {loading
-            ? (
-              <span className={styles.lsLoadingRow}>
-                <span className={styles.lsSpinner} aria-hidden="true" />
-                <span className={styles.lsToolRowMeta}>{t('settings:cliTools.loading')}</span>
-              </span>
-            )
-            : versionLine
-              ? <span className={styles.lsToolRowMeta}>{versionLine}</span>
-              : <span className={styles.lsToolRowMeta}>{t(`settings:cliTools.tools.${toolId}.desc`)}</span>}
-        </div>
-        {!loading && (
-          <span
-            className={`${styles.lsStateBadge} ${
-              state === 'ready'
-                ? styles.lsStateReady
-                : state === 'update-available'
-                  ? styles.lsStateUpdate
-                  : state === 'not-installed'
-                    ? styles.lsStateIdle
-                    : styles.lsStateFailed
-            }`}
+    <div className={cliStyles.client} role="group" aria-label={meta.displayName} data-cli-tool={toolId}>
+      <div className={cliStyles.main}>
+        <div className={cliStyles.identity}>
+          <button
+            type="button"
+            className={cliStyles.icon}
+            data-tool={toolId}
+            aria-label={visibilityLabel}
+            aria-pressed={visible}
+            title={visibilityLabel}
+            onClick={() => onVisibleChange(!visible)}
           >
-            {t(STATE_LABEL_KEY[state])}
-          </span>
-        )}
-        <span className={styles.lsToolRowActions}>
+            {brandIcon}
+          </button>
+          <div className={cliStyles.info}>
+            <div className={cliStyles.heading}>
+              <span>{meta.displayName}</span>
+              {!loading && <span className={cliStyles.status} data-state={state}>{t(STATE_LABEL_KEY[state])}</span>}
+            </div>
+            {loading
+              ? (
+                <span className={styles.lsLoadingRow}>
+                  <span className={styles.lsSpinner} aria-hidden="true" />
+                  <span className={cliStyles.meta}>{t('settings:cliTools.loading')}</span>
+                </span>
+              )
+              : versionLine
+                ? <span className={cliStyles.meta}>{versionLine}</span>
+                : <span className={cliStyles.meta}>{t(`settings:cliTools.tools.${toolId}.desc`)}</span>}
+          </div>
+        </div>
+        <span className={`${styles.lsToolRowActions} ${cliStyles.actions}`}>
           {!loading && state === 'not-installed' && !busy && (
             <button
               type="button"
@@ -226,15 +218,15 @@ export function ExternalCliManager({
         </span>
       </div>
 
-      {hint && <div className={styles.lsCardHint}>{hint}</div>}
+      {hint && <div className={`${styles.lsCardHint} ${cliStyles.feedback}`}>{hint}</div>}
       {notice && (
-        <div className={styles.lsCardMeta}>
+        <div className={`${styles.lsCardMeta} ${cliStyles.feedback}`}>
           <span className={styles.lsMetaItem}>{notice}</span>
         </div>
       )}
-      {error && <div className={styles.lsCardError}>{error}</div>}
+      {error && <div className={`${styles.lsCardError} ${cliStyles.feedback}`} role="alert">{error}</div>}
       {justInstalled && state === 'ready' && (
-        <div className={styles.lsCardMeta}>
+        <div className={`${styles.lsCardMeta} ${cliStyles.feedback}`}>
           <span className={styles.lsMetaItem}>{t('settings:cliTools.notice.existingTerminal')}</span>
         </div>
       )}

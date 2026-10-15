@@ -41,67 +41,77 @@ export function GeneralSettingsPanel() {
 
   return (
     <div className={styles.generalPanel}>
-      <div className={`${styles.generalRow} ${styles.themeRow}`}>
-        <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>{t('settings:general.theme.label')}</div>
-          <div className={styles.generalHelp}>{t('settings:general.theme.help')}</div>
-          {themeError && <div className={styles.generalHelp} role="alert">{themeError}</div>}
+      <section className={styles.generalSection}>
+        <h3 className={styles.generalSectionTitle}>{t('settings:general.section.preferences')}</h3>
+        <div className={`${styles.generalRow} ${styles.themeRow}`}>
+          <div className={styles.generalLabelCol}>
+            <div className={styles.generalLabel}>{t('settings:general.theme.label')}</div>
+            <div className={styles.generalHelp}>{t('settings:general.theme.help')}</div>
+            {themeError && <div className={styles.generalHelp} role="alert">{themeError}</div>}
+          </div>
+          <div className={styles.generalControlCol}>
+            <ThemePreviewPicker
+              value={getThemeDefinition(themeLoaded ? theme : DEFAULT_APP_THEME).id}
+              onChange={handleThemeChange}
+              disabled={!themeLoaded || themeSaving}
+              label={t('settings:general.theme.label')}
+              getLabel={(id, fallback) => t(`settings:general.theme.${id}`, { defaultValue: fallback })}
+            />
+          </div>
         </div>
-        <div className={styles.generalControlCol}>
-          <ThemePreviewPicker
-            value={getThemeDefinition(themeLoaded ? theme : DEFAULT_APP_THEME).id}
-            onChange={handleThemeChange}
-            disabled={!themeLoaded || themeSaving}
-            label={t('settings:general.theme.label')}
-            getLabel={(id, fallback) => t(`settings:general.theme.${id}`, { defaultValue: fallback })}
-          />
+        <div className={styles.generalRow}>
+          <div className={styles.generalLabelCol}>
+            <div className={styles.generalLabel}>{t('settings:general.language.label')}</div>
+            <div className={styles.generalHelp}>{t('settings:general.language.help')}</div>
+          </div>
+          <div className={styles.generalControlCol}>
+            <Select
+              value={currentLanguage}
+              onChange={(value) => setLanguage(value as typeof SUPPORTED_LANGUAGES[number])}
+              options={languageOptions}
+              className={styles.generalSelect}
+              ariaLabel={t('settings:general.language.label')}
+            />
+          </div>
         </div>
-      </div>
-      <div className={styles.generalRow}>
-        <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>{t('settings:general.language.label')}</div>
-          <div className={styles.generalHelp}>{t('settings:general.language.help')}</div>
-        </div>
-        <div className={styles.generalControlCol}>
-          <Select
-            value={currentLanguage}
-            onChange={(value) => setLanguage(value as typeof SUPPORTED_LANGUAGES[number])}
-            options={languageOptions}
-            className={styles.generalSelect}
-            ariaLabel={t('settings:general.language.label')}
-          />
-        </div>
-      </div>
+        <div className={styles.generalHelp}>{t('settings:general.autoSave')}</div>
+      </section>
 
-      <div className={styles.generalRow}>
-        <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>{t('settings:languageService.title')}</div>
-          <div className={styles.generalHelp}>{t('settings:languageService.subtitle')}</div>
+      <section className={styles.generalSection}>
+        <h3 className={styles.generalSectionTitle}>{t('settings:general.section.environment')}</h3>
+        <div className={`${styles.generalRow} ${styles.generalRowWide}`}>
+          <div className={styles.generalLabelCol}>
+            <div className={styles.generalLabel}>{t('settings:languageService.title')}</div>
+            <div className={styles.generalHelp}>{t('settings:languageService.subtitle')}</div>
+          </div>
+          <div className={styles.generalControlCol}>
+            <LanguageServiceManager />
+          </div>
         </div>
-        <div className={styles.generalControlCol}>
-          <LanguageServiceManager />
-        </div>
-      </div>
 
-      <div className={styles.generalRow}>
-        <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>WorkflowX</div>
-          <div className={styles.generalHelp}>{t('janus:workflowx.settingsHelp')}</div>
+        <div className={`${styles.generalRow} ${styles.generalRowWide}`}>
+          <div className={styles.generalLabelCol}>
+            <div className={styles.generalLabel}>WorkflowX</div>
+            <div className={styles.generalHelp}>{t('janus:workflowx.settingsHelp')}</div>
+          </div>
+          <div className={styles.generalControlCol}>
+            <WorkflowXStatus surface="settings" />
+          </div>
         </div>
-        <div className={styles.generalControlCol}>
-          <WorkflowXStatus surface="settings" />
-        </div>
-      </div>
+      </section>
 
-      <div className={styles.generalRow}>
-        <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>{t('settings:updater.title')}</div>
-          <div className={styles.generalHelp}>{t('settings:updater.subtitle')}</div>
+      <section className={styles.generalSection}>
+        <h3 className={styles.generalSectionTitle}>{t('settings:general.section.application')}</h3>
+        <div className={`${styles.generalRow} ${styles.generalRowWide}`}>
+          <div className={styles.generalLabelCol}>
+            <div className={styles.generalLabel}>{t('settings:updater.title')}</div>
+            <div className={styles.generalHelp}>{t('settings:updater.subtitle')}</div>
+          </div>
+          <div className={styles.generalControlCol}>
+            <UpdaterSettings />
+          </div>
         </div>
-        <div className={styles.generalControlCol}>
-          <UpdaterSettings />
-        </div>
-      </div>
+      </section>
     </div>
   )
 }

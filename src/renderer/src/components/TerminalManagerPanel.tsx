@@ -31,7 +31,7 @@ type TerminalSettingsPatch = Partial<Pick<ShellProfilesSettings, 'entries' | 'hi
 
 /**
  * 设置「终端管理」：Shell 使用通栏概览与按需展开的编辑区，
- * 外部 CLI（检测/安装 + 新建入口显隐）与检测候选区沿用设置的两栏布局。
+ * 外部 CLI 参考 MCP 接入使用通栏终端列表；检测候选区保留按需扫描。
  */
 export function TerminalManagerPanel() {
   const { t } = useI18n('terminal')
@@ -163,13 +163,13 @@ export function TerminalManagerPanel() {
       </section>
 
       {/* ── 外部 CLI：检测/安装 + 新建入口显隐（自「通用」移来） ── */}
-      <div className={styles.generalRow}>
+      <section className={`${styles.generalRow} ${styles.generalRowWide}`} aria-labelledby="external-cli-heading">
         <div className={styles.generalLabelCol}>
-          <div className={styles.generalLabel}>{t('terminal:shellSettings.externalCli.title')}</div>
+          <h3 id="external-cli-heading" className={styles.generalLabel}>{t('terminal:shellSettings.externalCli.title')}</h3>
           <div className={styles.generalHelp}>{t('terminal:shellSettings.externalCli.help')}</div>
         </div>
         <div className={styles.generalControlCol}>
-          <div className={styles.lsCard}>
+          <div className={`${styles.lsCard} ${shellStyles.externalList}`}>
             {EXTERNAL_CLI_TOOL_ORDER.map((toolId) => (
               <ExternalCliManager
                 key={toolId}
@@ -180,10 +180,10 @@ export function TerminalManagerPanel() {
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* ── 检测候选区：扫描按钮与候选列表同住一张卡 ── */}
-      <div className={styles.generalRow}>
+      <div className={`${styles.generalRow} ${styles.generalRowWide}`}>
         <div className={styles.generalLabelCol}>
           <div className={styles.generalLabel}>{t('terminal:shellSettings.candidates.title')}</div>
           <div className={styles.generalHelp}>{t('terminal:shellSettings.candidates.help')}</div>

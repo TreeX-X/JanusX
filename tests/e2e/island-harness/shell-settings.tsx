@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { initI18n, changeLanguage } from '../../../src/renderer/src/i18n'
 import { normalizeShellProfiles } from '../../../src/shared/shellProfiles'
+import type { ExternalCliToolId } from '../../../src/shared/ipc/external-cli'
 import styles from '../../../src/renderer/src/components/AppSettingsModal.module.css'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/styles/themes.generated.css'
@@ -15,6 +16,22 @@ Object.assign(window.electron.externalCli, {
   detect: async (toolId: string) => ({ toolId, installed: true, runnable: true, version: '1.0.0' }),
   latest: async (toolId: string) => ({ toolId, latestVersion: '1.0.0' }),
 })
+if (params.has('cliStates')) {
+  const installed = new Set<ExternalCliToolId>(['janus', 'claude', 'opencode', 'pi'])
+  const upgraded = new Set<ExternalCliToolId>()
+  Object.assign(window.electron.externalCli, {
+    detect: async (toolId: ExternalCliToolId) => ({
+      toolId, installed: installed.has(toolId), runnable: installed.has(toolId) && toolId !== 'opencode',
+      version: installed.has(toolId) ? upgraded.has(toolId) ? '2.0.0' : '1.0.0' : undefined,
+      source: installed.has(toolId) ? 'path' : undefined,
+    }),
+    latest: async (toolId: ExternalCliToolId) => ({ toolId, latestVersion: toolId === 'claude' || upgraded.has(toolId) ? '2.0.0' : '1.0.0' }),
+    install: async (toolId: ExternalCliToolId) => {
+      installed.add(toolId); upgraded.add(toolId)
+      return { toolId, success: true, version: '2.0.0' }
+    },
+  })
+}
 let settings = normalizeShellProfiles({
   entries: params.has('empty') ? [] : [
     { id: 'powershell', name: 'PowerShell', command: 'powershell.exe', visible: true, isDefault: true },

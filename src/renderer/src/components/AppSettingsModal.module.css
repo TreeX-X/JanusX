@@ -26,10 +26,10 @@
   height: min(760px, calc(100vh - 48px));
   min-height: 0;
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   background: var(--shell-canvas);
   border: 1px solid var(--shell-border);
-  border-radius: 10px;
+  border-radius: 14px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   overflow: hidden;
   color: var(--shell-text);
@@ -53,15 +53,15 @@
   --so-radius: 6px;
   /* Body padding, published as vars so the sticky footers inside each panel can
      bleed to the content edge without hard-coding a number that drifts. */
-  --so-body-pad-x: 22px;
-  --so-body-pad-y: 22px;
+  --so-body-pad-x: 28px;
+  --so-body-pad-y: 24px;
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px 10px;
+  padding: 18px 10px;
   background: var(--shell-chrome);
   border-right: 1px solid var(--shell-border);
   min-height: 0;
@@ -100,9 +100,7 @@
 }
 
 .navGroup + .navGroup {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--shell-border);
+  margin-top: 20px;
 }
 
 .groupTitle {
@@ -155,7 +153,7 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 32px;
+  min-height: 36px;
   border: 0;
   border-radius: 5px;
   background: transparent;
@@ -195,7 +193,7 @@
 }
 
 .tabButtonActive::before {
-  background: var(--shell-accent);
+  display: none;
 }
 
 .tabLabel {
@@ -204,14 +202,14 @@
   gap: 6px;
   min-width: 0;
   color: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 /* 实验性入口只靠一枚强调色文字徽标示意，不做整行渐变/描边色块。 */
 .tabBadge {
   flex-shrink: 0;
-  color: var(--so-accent-ink);
+  color: var(--shell-muted);
   font-size: 10px;
   font-weight: 650;
   letter-spacing: 0.02em;
@@ -221,17 +219,17 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr);
+  grid-template-rows: 76px minmax(0, 1fr);
   background: var(--shell-canvas);
 }
 
 .header {
-  min-height: 64px;
+  min-height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 22px;
+  padding: 0 var(--so-body-pad-x);
   border-bottom: 1px solid var(--shell-border);
 }
 
@@ -242,21 +240,21 @@
 .title {
   margin: 0;
   color: var(--shell-text);
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .subtitle {
-  margin-top: 3px;
-  color: var(--shell-dim);
-  font-size: 11px;
+  margin-top: 4px;
+  color: var(--shell-muted);
+  font-size: 12px;
   line-height: 1.4;
 }
 
 .body {
   min-height: 0;
   overflow-y: auto;
-  padding: 20px var(--so-body-pad-x) var(--so-body-pad-y);
+  padding: 24px var(--so-body-pad-x) var(--so-body-pad-y);
 }
 
 .body::-webkit-scrollbar {
@@ -327,9 +325,12 @@
     display: none;
   }
 
+  .brand, .groupTitle { display: none; }
+
   .tabButton {
     width: auto;
-    min-width: 112px;
+    min-width: auto;
+    white-space: nowrap;
   }
 
   .header {
@@ -346,19 +347,17 @@
   container: general-settings / inline-size;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 4px 0;
+  gap: 28px;
+  padding: 0;
 }
 
 .generalRow {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(200px, 1.2fr);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
   gap: 24px;
   align-items: start;
-  padding: 12px 14px;
-  border: 1px solid var(--shell-border-soft);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
+  padding: 18px 0;
+  border-bottom: 1px solid var(--shell-border-soft);
 }
 
 .generalLabelCol {
@@ -368,21 +367,36 @@
   min-width: 0;
 }
 
-.themeRow { grid-template-columns: minmax(140px, .65fr) minmax(300px, 1.35fr); }
+.generalSection { display: flex; flex-direction: column; min-width: 0; }
+.generalSectionTitle { margin: 0 0 18px; color: var(--shell-muted); font-size: 12px; font-weight: 600; }
+.generalSection > .generalHelp { margin-top: 10px; }
+.generalRowWide { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.generalRowWide:last-child { border-bottom: 0; padding-bottom: 0; }
+.generalRowWide:first-of-type { padding-top: 0; }
+.themeRow .generalControlCol { max-width: 520px; }
+.closeButton { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--shell-muted); cursor: pointer; }
+.closeButton:hover { background: var(--shell-active); color: var(--shell-text); }
+.closeButton:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }
+
+.themeRow { grid-template-columns: minmax(0, 1fr); gap: 14px; padding-top: 0; }
 @container general-settings (max-width: 540px) {
   .themeRow { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 }
+@container general-settings (max-width: 420px) {
+  .generalRow { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+}
 
 .generalLabel {
+  margin: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--shell-text);
 }
 
 .generalHelp {
-  font-size: 11px;
-  color: var(--shell-dim);
-  line-height: 1.5;
+  font-size: 12px;
+  color: var(--shell-muted);
+  line-height: 1.6;
 }
 
 .generalControlCol {
@@ -434,10 +448,8 @@
   gap: 8px;
   width: 100%;
   min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--shell-border-soft);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--shell-chrome-raised) 12%, var(--shell-canvas));
+  padding: 0;
+  background: transparent;
 }
 
 .lsCardHeader {
@@ -699,10 +711,6 @@
 :global([data-theme='planche']) .tabButtonActive,
 :global([data-theme='planche']) .tabButtonActive:hover {
   background: var(--paper-deep, #DCCFA8);
-}
-
-:global([data-theme='planche']) .tabButtonActive::before {
-  background: var(--planche-red, #D43D2A);
 }
 
 :global([data-theme='planche']) .body::-webkit-scrollbar-thumb {

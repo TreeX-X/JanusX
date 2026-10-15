@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-14",
   "class": "feature",
-  "updated": "2026-10-14T17:27:45Z",
+  "updated": "2026-10-15T11:06:25Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -21,7 +21,7 @@ The general settings theme dropdown names the two built-in themes without showin
 
 `GeneralSettingsPanel` uses `ThemePreviewPicker` instead of a theme dropdown. Each registered theme receives a selectable card with a CSS miniature of the titlebar, sidebar, rounded workspace tabs, terminal lines and quiet usage footer. Preview custom properties come from that theme's complete token table and stay scoped to the miniature; changing the surrounding application theme does not recolor the other preview. Labels use existing translations with the registry label as fallback. The selected card has a faint accent fill, weak accent border and check mark. Native radio inputs provide names, checked state and keyboard selection; visible keyboard focus outlines the whole card.
 
-The theme row preserves the settings label/control structure while giving the previews more horizontal room. Below 540px of actual settings-panel width, the description moves above the cards. The card grid wraps to one column when two 140px cards cannot fit. Loading or saving disables the picker; a failed save keeps the previous theme selected and reports the existing localized error through an alert. Unknown saved IDs select the registry default. Theme persistence continues through the existing store and IPC service.
+The theme row places the description above a preview grid with a maximum width of 520px, following the [settings layout](./settings-layout.md). The card grid wraps to one column when two 140px cards cannot fit. Loading or saving disables the picker; a failed save keeps the previous theme selected and reports the existing localized error through an alert. Unknown saved IDs select the registry default. Theme persistence continues through the existing store and IPC service.
 
 ## Alternatives considered
 

@@ -10,19 +10,19 @@
   "tab": {
     "general": {
       "title": "通用",
-      "subtitle": "General · 语言与外观偏好",
+      "subtitle": "外观、语言与应用维护",
       "nav": "通用",
       "navMeta": "Language"
     },
     "experimental": {
       "title": "创新功能",
-      "subtitle": "Experimental · 默认关闭，开启后即时生效",
+      "subtitle": "按需开启预览与开发中的功能",
       "nav": "创新功能",
       "navMeta": "Experimental"
     },
     "notifications": {
       "title": "通知提醒",
-      "subtitle": "Notifications · Agent 终端任务完成与失败提醒策略",
+      "subtitle": "管理任务提醒与远程通知",
       "nav": "通知提醒",
       "navMeta": "System reminders"
     },
@@ -34,30 +34,36 @@
     },
     "agent": {
       "title": "Agent 权限",
-      "subtitle": "Agent Permissions - JanusX Agent 会话默认审批模式",
+      "subtitle": "设置新会话的默认权限与运行限制",
       "nav": "Agent 权限",
       "navMeta": "审批模式"
     },
     "llm": {
       "title": "LLM 引擎",
-      "subtitle": "LLM Engine · Provider 凭证、默认模型与连接检测",
+      "subtitle": "管理各终端的服务、凭证与默认模型",
       "nav": "LLM 引擎",
       "navMeta": "Providers"
     },
     "usage": {
       "title": "用量统计",
-      "subtitle": "Usage · 按终端类型汇总 token 用量",
+      "subtitle": "按终端类型查看模型用量",
       "nav": "用量",
       "navMeta": "Tokens"
     },
     "models": {
       "title": "模型目录",
-      "subtitle": "Model Catalog · 浏览模型能力、价格与上下文信息",
+      "subtitle": "浏览模型能力、价格与上下文信息",
       "nav": "模型目录",
       "navMeta": "Models"
     }
   },
   "general": {
+    "section": {
+      "preferences": "外观与语言",
+      "environment": "开发环境",
+      "application": "应用维护"
+    },
+    "autoSave": "偏好修改后自动保存",
     "language": {
       "label": "界面语言",
       "help": "切换后立即生效，重启后保持上次选择",
@@ -65,7 +71,7 @@
     },
     "theme": {
       "label": "外观主题",
-      "help": "石板色为默认主打，经典黑排第二；切换后已运行的 TUI 应用需重绘或重启 pane 生效。",
+      "help": "选择界面外观。已运行的终端应用可能需要重绘或重启后生效。",
       "dark": "经典黑",
       "planche": "石板色（默认）",
       "saveError": "主题保存失败"
@@ -82,17 +88,17 @@
       "blueprint": {
         "label": "蓝图",
         "hint": "显示蓝图工作台入口。关闭后标题栏切换器与工作台同时隐藏。",
-        "note": "必须使用 WorkflowX Agent 工作才能输出正确的 note 格式"
+        "note": "项目文档需符合 Note 格式，可通过 WorkflowX 或 Note MCP 维护。"
       },
       "knowledge": {
         "label": "知识库",
-        "hint": "启用工程知识的采集、处理、召回与管理。关闭保留已有内容；个人画像独立控制。",
-        "note": "规则与人工审核无需模型；本地模型须在详细设置中单独启用"
+        "hint": "旧工程知识入口已退出，工程文档与审核由蓝图承接。",
+        "note": "不再单独提供此入口；个人画像由独立开关控制。"
       },
       "roundtable": {
         "label": "圆桌",
         "hint": "显示灵动岛二级展开中的圆桌视图。关闭后入口隐藏，进行中的讨论不受影响。",
-        "note": "功能开发中，可能存在不稳定情况"
+        "note": "需要先配置可用的全局默认模型；讨论结果需核对后采用。"
       },
       "persona": {
         "label": "个人画像",
@@ -102,22 +108,22 @@
       "remoteControl": {
         "label": "远程协作控制",
         "hint": "显示状态栏远控入口与远控弹窗（配对、终端尾流、受控提交、被控服务）。关闭后入口隐藏并断开连接、停止被控服务。",
-        "note": "功能开发中，可能存在不稳定情况"
+        "note": "公网连接尚未打通，当前不能保证跨网络远控可用。"
       },
       "teamCollab": {
         "label": "团队协作",
         "hint": "显示侧栏团队行、首屏登录挡板与设置中心团队页。关闭后入口隐藏，登录态与组织数据保留，重开即恢复。",
-        "note": "功能开发中，可能存在不稳定情况"
+        "note": "账号与组织管理已有基础能力，跨设备项目与文档同步尚未完成。"
       },
       "memo": {
         "label": "备忘录",
         "hint": "显示 Chat 备忘录入口、星座里程碑与联动编辑工具。关闭后隐藏入口，后续消息不再提供备忘录工具；文件、会话绑定和正在执行的回复保留。",
-        "note": "预览阶段，备忘录编辑与 Chat 联动仍在完善。"
+        "note": "人工编辑可直接使用；Chat 联动需要支持工具调用的模型。"
       },
       "sessions": {
         "label": "会话管理",
-        "hint": "显示右坞会话入口（卡片、时间线、详情与续接）。关闭后仅隐藏入口，会话数据、转录扫描与检查点保留，重开即恢复。",
-        "note": "预览阶段，会话解析与还原点仍在完善"
+        "hint": "显示右坞会话入口（卡片、时间线、对话详情与续接）。关闭后仅隐藏入口，已有会话记录与转录扫描保留，重开即可查看。",
+        "note": "预览阶段，不同终端的转录解析与原生续接支持仍有差异。"
       }
     },
     "badge": "实验",
@@ -171,16 +177,18 @@
     "loading": "加载中...",
     "saving": "保存中...",
     "saved": "已保存",
-    "reset": "重置",
+    "reset": "撤销修改",
+    "unsaved": "有未保存的修改",
     "save": "保存"
   },
   "notification": {
+    "advanced": "高级设置",
     "section": {
-      "desktop": "桌面通知 Desktop Notifications",
-      "runtime": "运行时长阈值 Runtime",
-      "failure": "失败详情 Failure Details",
-      "remote": "远程提醒 Remote Notify",
-      "feishu": "飞书 Feishu"
+      "desktop": "桌面通知",
+      "runtime": "提醒时机",
+      "failure": "错误详情",
+      "remote": "远程提醒",
+      "feishu": "飞书"
     },
     "toggle": {
       "desktop": {
@@ -303,8 +311,8 @@
       }
     },
     "unit": {
-      "sec": "sec",
-      "chars": "chars",
+      "sec": "秒",
+      "chars": "字符",
       "min": "min",
       "days": "days"
     },

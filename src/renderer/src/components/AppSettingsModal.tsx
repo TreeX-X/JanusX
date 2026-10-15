@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, BookOpen, Brain, ChartNoAxesCombined, Cloud, ListFilter, Settings, ShieldCheck, SlidersHorizontal, Sparkles, SquareTerminal, Users, type LucideIcon } from 'lucide-react'
-import { ModalCloseButton } from './ModalCloseButton'
+import { Bell, BookOpen, Brain, ChartNoAxesCombined, Cloud, ListFilter, Settings, ShieldCheck, SlidersHorizontal, Sparkles, SquareTerminal, Users, X, type LucideIcon } from 'lucide-react'
 import { ModalFrame } from '@/components/shared/ModalFrame'
 import { GeneralSettingsPanel } from './GeneralSettingsPanel'
 import { TerminalManagerPanel } from './TerminalManagerPanel'
@@ -152,7 +151,9 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
                 <h2 className={styles.title}>{meta.title}</h2>
                 <div className={styles.subtitle}>{meta.subtitle}</div>
               </div>
-              <ModalCloseButton onClose={requestClose} />
+              <button type="button" className={styles.closeButton} aria-label={tCommon('common:action.close')} onClick={requestClose}>
+                <X size={18} strokeWidth={1.7} aria-hidden="true" />
+              </button>
             </header>
 
             <main className={styles.body}>
