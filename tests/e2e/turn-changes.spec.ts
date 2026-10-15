@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test'
 
+type TurnFixture = Window & { turnFixture: {
+  configureEditor(cwd: string, workspacePath: string, worktreePath?: string, background?: boolean): void
+  editorOpens: Array<{ filePath: string; workspacePath: string }>
+  embeddedEditorVisible(): boolean
+  emitDeleted(): void
+} }
+
 for (const theme of ['dark', 'planche']) {
   test(`latest clears while history remains reachable in ${theme}`, async ({ page }) => {
     const errors: string[] = []
@@ -45,4 +52,56 @@ test('large counts fit the dock and keyboard access opens the current view', asy
   await island.locator('.turn-change-dock').dblclick()
   await expect(island).toHaveAttribute('data-view', 'history')
   await expect(island.locator('.turn-change-history')).toHaveCount(1)
+})
+
+const editorScenarios: Array<{
+  name: string; cwd: string; root: string; scope: string; worktree?: string; background?: boolean
+}> = [
+  { name: 'workspace subdirectory', cwd: 'c:/project/src', root: 'C:\\Project\\', scope: 'C:\\Project\\' },
+  { name: 'inactive nested worktree', cwd: 'C:/project/.trees/feature/src', root: 'C:/project',
+    worktree: 'C:/project/.trees/feature', scope: 'C:/project/.trees/feature' },
+  { name: 'background workspace snapshot', cwd: 'C:/feature/src', root: 'C:/project',
+    worktree: 'C:/feature', scope: 'C:/feature', background: true },
+  { name: 'directory outside known scopes', cwd: 'C:/external/src', root: 'C:/project', scope: 'C:/external/src' },
+]
+for (const scenario of editorScenarios) {
+  test(`file clicks use the native editor scope for ${scenario.name}`, async ({ page }) => {
+    await page.goto('/turn-changes.html')
+    await page.waitForFunction(() => Boolean((window as TurnFixture).turnFixture))
+    await page.evaluate(({ cwd, root, worktree, background }) => {
+      (window as TurnFixture).turnFixture.configureEditor(cwd, root, worktree, background)
+    }, scenario)
+    await page.getByRole('button', { name: 'Change two files' }).click()
+    const island = page.locator('[data-turn-island][data-terminal-id="a"]')
+    await island.locator('.turn-change-dock').click()
+    await island.locator('.turn-change-file').first().click()
+    await island.getByRole('button', { name: /^History/ }).click()
+    await island.locator('.turn-change-file').nth(1).click()
+    const result = await page.evaluate(() => ({
+      opens: (window as TurnFixture).turnFixture.editorOpens,
+      embedded: (window as TurnFixture).turnFixture.embeddedEditorVisible(),
+    }))
+    expect(result).toEqual({
+      opens: [
+        { filePath: `${scenario.cwd}/src/main/terminal/turn-change-tracker.ts`, workspacePath: scenario.scope },
+        { filePath: `${scenario.cwd}/src/renderer/components/TurnChangeIsland.tsx`, workspacePath: scenario.scope },
+      ],
+      embedded: false,
+    })
+  })
+}
+
+test('deleted files and terminals without a cwd do not open editor windows', async ({ page }) => {
+  await page.goto('/turn-changes.html')
+  await page.waitForFunction(() => Boolean((window as TurnFixture).turnFixture))
+  await page.evaluate(() => (window as TurnFixture).turnFixture.emitDeleted())
+  const island = page.locator('[data-turn-island][data-terminal-id="a"]')
+  await island.locator('.turn-change-dock').click()
+  await expect(island.locator('.turn-change-file').first()).toBeDisabled()
+  await expect(island.locator('.turn-change-file').nth(1)).toBeDisabled()
+  await page.evaluate(() => (window as TurnFixture).turnFixture.configureEditor('', 'C:/project'))
+  await page.getByRole('button', { name: 'Change two files' }).click()
+  await island.locator('.turn-change-dock').click()
+  await expect(island.locator('.turn-change-file').first()).toBeDisabled()
+  expect(await page.evaluate(() => (window as TurnFixture).turnFixture.editorOpens)).toEqual([])
 })
