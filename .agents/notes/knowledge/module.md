@@ -49,7 +49,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/8688b5ab-1f7f-5ff9-ba1b-ef75b7fd5917"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/844bc2f1-3be4-4b47-83ca-0ef792bc5c1d"}
   ],
-  "updated": "2026-10-14T10:26:29Z",
+  "updated": "2026-10-15T03:50:01.619Z",
   "moduleState": "partial"
 }
 ---
@@ -61,6 +61,8 @@
 维护个人记忆的采集、可靠写入、候选确认、纠正、遗忘、来源审计、画像和对话召回，以及应用内持久备忘录的内容组织与 Chat 联动。工程知识以[原始 Note 与蓝图](../blueprint/module.md)为准；旧工程知识提取、Wiki 生成/历史、图谱、检索和独立知识 MCP 已退出。
 
 ## Design
+
+备忘录与展开主岛的外框共用集中主题令牌，纸面主题采用一致墨线与硬偏移影，深色采用一致暗底与弱边框；内部画布取消重复外框。实现与双主题验证见[Chat 联动备忘录](user-todo-janus.md)。
 
 PersonalMemoryWorkbench 保留个人卡片、资料编辑、搜索、来源和审核；右侧助手只消费个人候选。persona 与个人子设置控制采集、处理和召回，关闭功能保留已有个人数据。人工确认不受蓝图模型或工程开关控制；具体策略见[分域控制](memory-domain-controls.md)。工作台扩展和全终端自动 Hook 接入仍按[个人方向](personal-memory-workspace.md)后置。
 

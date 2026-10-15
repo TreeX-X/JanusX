@@ -19,6 +19,7 @@
 - 组件文字/背景/边框只用 `var(--shell-*)` 等语义令牌（CSS）或
   `useThemeTokens()`（JS 动态色，如 Canvas 绘制）。
 - `onMouseEnter` 改色迁到 CSS `:hover`；迁不掉的走 hook，不要写死 hex。
+- 展开主岛与备忘录外壳共用 `island-panel-background/border/radius/shadow` 四个令牌，新增主题一并提供；备忘录内容分隔仍走弱边框，主岛运行态保留状态反馈。
 - 瞬态与语义色（红绿灯、扫描束、状态点）保留原值，只校验新主题下的可见度。
 - 结构性皮肤（如灵动岛眼形、胶囊几何）不进 definition，手写 CSS 覆盖，
   选择器与 DOM 对齐（参考 `13-janus-planche.css`）。

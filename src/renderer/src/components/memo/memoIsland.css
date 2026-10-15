@@ -1,3 +1,4 @@
+/* Note: .agents/notes/knowledge/user-todo-janus.md — shared island frame tokens. */
 /* Joint viewport geometry belongs to the memo's open lifetime. */
 .janus-chat[hidden] { display: none; }
 .memo-trigger[data-compact] { position: relative; display: inline-flex; flex: 0 0 26px; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 5px; color: var(--shell-muted); background: transparent; }
@@ -44,16 +45,16 @@
   border-color: var(--memo-border);
   -webkit-app-region: no-drag;
 }
-.memo-panel { flex-direction: column; gap: 12px; padding: 16px; }
+.memo-panel { flex-direction: column; gap: 12px; padding: 16px; background: var(--island-panel-background); border: 1px solid var(--island-panel-border); border-radius: var(--island-panel-radius); box-shadow: var(--island-panel-shadow); }
 .memo-panel[hidden] { display: none; }
 .memo-panel * { box-sizing: border-box; }
 .memo-shell-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; min-height: 26px; }
 .memo-shell-header > span { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; }
 .memo-shell-header svg { color: var(--memo-muted); }
-.memo-shell-header button { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid var(--memo-border); border-radius: 7px; color: var(--memo-muted); background: transparent; cursor: pointer; }
+.memo-shell-header button { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; color: var(--memo-muted); background: transparent; cursor: pointer; }
 .memo-shell-header button:hover { background: var(--memo-card); color: var(--memo-text); }
-/* A straight-edged working canvas sits inside the rounded island shell. */
-.memo-canvas { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--memo-border); border-radius: 0; background: var(--memo-canvas); }
+/* Content dividers sit inside a single rounded island frame. */
+.memo-canvas { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; border: 0; border-radius: 12px; background: var(--memo-canvas); }
 .memo-rail, .memo-files { border-color: var(--memo-border); background: transparent; }
 .memo-rail { width: 34px; gap: 6px; padding: 10px 0 0; }
 .memo-files { width: 148px; }
@@ -123,7 +124,8 @@
   --memo-muted: var(--shell-muted);
   --memo-border: var(--shell-border-soft);
   --memo-card: color-mix(in srgb, var(--shell-text) 4.5%, transparent);
-  box-shadow: 0 12px 36px rgba(70, 57, 36, .10);
+  border-color: var(--island-panel-border);
+  box-shadow: var(--island-panel-shadow);
 }
 
 .memo-upper { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }

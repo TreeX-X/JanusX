@@ -7,7 +7,7 @@
  * island shell) and the command dropdowns (10050), below true modal surfaces
  * (prompt dialogs 13500) â€?the panel is a top-level float the main interface
  * must never cover. */
-.memo-panel { box-sizing: border-box; position: fixed; z-index: 10052; display: flex; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.11); border-radius: 26px; background: var(--janus-panel-bg, #111114); color: var(--shell-text, #ddd); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 44px rgba(0, 0, 0, 0.62), 0 0 20px rgba(255, 255, 255, 0.035); font-size: 12px; }
+.memo-panel { box-sizing: border-box; position: fixed; z-index: 10052; display: flex; overflow: hidden; font-size: 12px; }
 .memo-panel:focus-within { outline: none; }
 
 /* Left file rail: collapsed keeps expand + new, expanded mirrors the chat

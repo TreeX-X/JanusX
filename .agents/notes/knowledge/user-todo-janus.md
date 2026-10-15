@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-09",
-  "updated": "2026-10-14T10:29:04Z",
+  "updated": "2026-10-15T03:53:39.383Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c1c04881-a2fb-430f-bc26-528027d0e5cf",
   "tags": ["memo","todo","milestone","assistant","workspace"],
   "codeRefs": [
@@ -217,6 +217,14 @@ npm run check:notes：297 篇 harness Notes、0 错误，保留原有 17 条跨�
 - `npx playwright test tests/e2e/memo-editor.spec.ts --project=island --workers=1 --output=artifacts/memo-analysis/controls-tests` 的原有 5 项编辑回归通过。新增双主题用例初次发现伪元素勾号进入选项可访问名称，改为纯边框装饰；随后实际拖动检查揭示 headless 默认隐藏原生滚动条，测试显式移除该启动参数。
 - `npx playwright test tests/e2e/memo-editor.spec.ts --project=island --workers=1 --grep "record scrolling" --output=artifacts/memo-analysis/controls-final`，2 项通过。实际滚轮与拖动滑块、正文宽度稳定、选中标记、Esc 保留岛、键盘与鼠标跨节点移动均验证。共 7 个用例；双主题成品截图 `artifacts/memo-analysis/controls-{dark,planche}.png` 已查看。
 - 类型检查、受影响 TSX 的 ESLint 与构建通过。样式仅位于 memoIsland.css，保留原 memo.css 字节；本轮没有改变备忘录数据格式和会话绑定。
+
+### 主岛与备忘录外框统一
+
+展开主岛与备忘录共用主题定义中的 `island-panel-background/border/radius/shadow`：planche 为纸底、墨线、26px 圆角与 3px 硬偏移影，dark 为同一暗底、弱边框与层次阴影，主岛运行态保留状态反馈。备忘录不再维护独立的柔和投影，旧 memo.css 仅保留壳的结构规则；内容画布取消重复描边并使用 12px 内圆角，保留文件栏、记录与星座的必要分隔，关闭按钮改为无框交互。新增主题通过四个令牌同时适配两岛。
+
+`tests/e2e/memo-frame.spec.ts` 的双主题验证检查两个实际组件的背景、描边、圆角及阴影一致，覆盖文件栏收起不改变外框与 1000×600 紧凑边界，截图在 `artifacts/memo-frame/final`。原有 memo-island 六项中五项通过；正文宽度断言要求大于 175px，当前为 168px，恢复修改前 memo 样式后仍以 166px 失败，属于既有约束缺口，本轮没有调整该断言或改变布局分配。
+
+最终组合 `npx playwright test tests/e2e/memo-frame.spec.ts tests/e2e/memo-editor.spec.ts --project=island --workers=1 --output=artifacts/memo-frame/final` 9 项通过，包含记录编辑、滚动、下拉与双主题外框验证；`theme-registry/planche-theme/theme-audit` 三文件 26 项单元测试、类型、构建、theme:check 与 Note 校验通过。此次未另跑 Electron 或完整 verify。
 
 ## 后置建设
 
