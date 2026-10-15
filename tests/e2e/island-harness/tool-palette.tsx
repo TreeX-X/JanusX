@@ -1,10 +1,13 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Sidebar } from '../../../src/renderer/src/components/Sidebar'
 import { RightDock } from '../../../src/renderer/src/components/right-tools/RightDock'
 import { ThemedTooltip } from '../../../src/renderer/src/components/ui/ThemedTooltip'
 import { useWorkspaceStore } from '../../../src/renderer/src/stores/workspace'
 import { useRightToolStore } from '../../../src/renderer/src/stores/right-tools'
+import { useAppStore } from '../../../src/renderer/src/stores/app'
+import { getRightDockLayout } from '../../../src/renderer/src/components/right-tools/layout'
+import dockStyles from '../../../src/renderer/src/components/right-tools/RightDock.module.css'
 import { useGitStore } from '../../../src/renderer/src/stores/git'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { useThemeStore } from '../../../src/renderer/src/stores/theme'
@@ -15,7 +18,6 @@ import '../../../src/renderer/src/styles/themes.generated.css'
 installElectronApiFallback()
 const theme = new URLSearchParams(location.search).get('theme') ?? 'planche'
 const previewWidth = Number(new URLSearchParams(location.search).get('panel')) || null
-const dockWidth = previewWidth ? previewWidth + 48 : 420
 useThemeStore.getState().applyExternal(theme)
 Object.assign(window.electron.worktree, { list: async () => [] })
 Object.assign(window.electron.git, {
@@ -47,10 +49,20 @@ useWorkspaceStore.setState({
 })
 await useGitStore.getState().fetchStatus('C:/palette')
 useRightToolStore.setState({ openToolIds: ['files', 'sessions', 'git'], activeToolId: 'files', ...(previewWidth ? { panelWidths: { sessions: previewWidth, git: previewWidth } } : {}) })
+useAppStore.setState({ panelCollapsed: false })
 await initI18n()
 await changeLanguage('zh-CN')
-createRoot(document.getElementById('root')!).render(
-  <main style={{ display: 'grid', gridTemplateColumns: `220px minmax(0, 1fr) ${dockWidth}px`, height: '100vh', background: 'var(--shell-canvas)' }}>
+function ToolPalette() {
+  const { panelWidth, panelWidths, activeToolId } = useRightToolStore()
+  const panelCollapsed = useAppStore((state) => state.panelCollapsed)
+  const [resizing, setResizing] = useState(false)
+  const layout = getRightDockLayout({
+    availableWidth: window.innerWidth - 220,
+    panelWidth, panelWidths, activeToolId, panelCollapsed,
+    hasActiveTool: activeToolId !== null,
+  })
+  return (
+  <main className={dockStyles.workbenchGrid} data-resizing={resizing} style={{ display: 'grid', gridTemplateColumns: `220px minmax(0, 1fr) ${layout.dockWidth}px`, height: '100vh', background: 'var(--shell-canvas)' }}>
     <Sidebar />
     <section style={{ padding: 32, color: 'var(--shell-text)', position: 'relative' }}>
       <h1 style={{ fontSize: 20 }}>JanusX</h1><p style={{ marginTop: 12 }}>中央内容保留暖纸色，工具与菜单使用更浅的中性色。</p>
@@ -59,6 +71,8 @@ createRoot(document.getElementById('root')!).render(
         <ThemedTooltip label={'Long edge tooltip '.repeat(30)} placement="bottom"><button id="edge-tooltip">Edge tooltip</button></ThemedTooltip>
       </div>
     </section>
-    <RightDock effectiveCollapsed={false} effectiveMaxWidth={dockWidth} forcedCollapsed={false} onResizingChange={() => {}} />
-  </main>,
-)
+    <RightDock effectiveCollapsed={layout.effectiveCollapsed} effectiveMaxWidth={layout.effectiveMaxWidth} forcedCollapsed={layout.responsiveAutoCollapsed} onResizingChange={setResizing} />
+  </main>
+  )
+}
+createRoot(document.getElementById('root')!).render(<ToolPalette />)

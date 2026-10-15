@@ -1,3 +1,11 @@
+.workbenchGrid {
+  transition: grid-template-columns 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.workbenchGrid[data-resizing='true'] {
+  transition: none;
+}
+
 .dock {
   /* Note: .agents/notes/workbench/right-dock.md — neutral tool surfaces. */
   --shell-canvas: var(--tool-canvas);
@@ -20,6 +28,7 @@
   position: absolute;
   top: 0;
   right: 48px;
+  width: calc(100% - 48px);
   bottom: 0;
   display: flex;
   min-width: 0;
@@ -28,7 +37,15 @@
   overflow: hidden;
   opacity: 1;
   transform: translateX(0);
-  transition: width 240ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 240ms ease, transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity 240ms ease, transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The grid owns geometry; lay content out once at the destination width.
+   Right alignment keeps controls anchored while the shell reveals the left edge. */
+.panelHeader,
+.host {
+  width: var(--right-tool-content-width);
+  align-self: flex-end;
 }
 
 .panel[data-resizing='true'] {
@@ -201,6 +218,12 @@
 .host { flex: 1; overflow: hidden; }
 .toolPanel { overflow: hidden; }
 .toolPanel[hidden] { display: none; }
+.toolPanel:not([hidden]) { animation: toolReveal 160ms ease-out; }
+
+@keyframes toolReveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 .toolError {
   display: flex;
@@ -315,6 +338,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .workbenchGrid,
   .panel,
   .tab,
   .tabClose,
@@ -323,6 +347,7 @@
   .railToggle,
   .railToggle[data-visible='true'],
   .railToggle[data-visible='false'] { transition: none; }
+  .toolPanel:not([hidden]) { animation: none; }
 }
 
 .dock[data-collapsed='true'] .rail { border-left-color: transparent; }

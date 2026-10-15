@@ -66,7 +66,6 @@ type IdleWindow = Window & {
 
 const SIDE_PANEL_WIDTH = 'clamp(252px, 15vw, 288px)'
 const SIDE_PANEL_COLLAPSED_WIDTH = '52px'
-const SIDE_PANEL_TRANSITION_MS = 240
 const PRODUCT_WORKSPACE_WIDTH = 'clamp(320px, 32vw, 1200px)'
 const PRODUCT_CLOSE_DURATION_MS = 200
 const PRODUCT_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
@@ -438,14 +437,12 @@ export default function App() {
       <Titlebar />
       <div
         ref={appGridRef}
-        className="flex-1 grid grid-rows-[1fr_28px] overflow-hidden"
+        className={`flex-1 grid grid-rows-[1fr_28px] overflow-hidden ${dockStyles.workbenchGrid}`}
+        data-resizing={productResizing || rightDockResizing || editorResizing}
         style={{
           gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${
             productRendered ? `${productClosing ? '0px' : productWidth === null ? PRODUCT_WORKSPACE_WIDTH : `${productWidth}px`} ` : ''
           }${isEditorEmbedded ? `${editorColumnWidth}px ` : ''}${rightDockLayout.dockWidth}px`,
-          transition: productResizing || rightDockResizing || editorResizing
-            ? 'none'
-            : `grid-template-columns ${SIDE_PANEL_TRANSITION_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
         }}
       >
         <Sidebar />

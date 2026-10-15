@@ -11,7 +11,8 @@ describe('side panel collapse UI', () => {
       readFile('src/renderer/src/components/right-tools/RightDock.module.css', 'utf8'),
     ])
 
-    expect(app).toContain('grid-template-columns ${SIDE_PANEL_TRANSITION_MS}ms')
+    expect(app).toContain('${dockStyles.workbenchGrid}')
+    expect(rightDockStyles).toContain('transition: grid-template-columns 240ms')
     expect(sidebar).toContain('className="workspace-sidebar__expanded"')
     expect(sidebar).toContain('className="workspace-sidebar__collapsed')
     expect(sidebar).not.toContain('{!sidebarCollapsed && (')
