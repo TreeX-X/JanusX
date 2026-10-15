@@ -13,9 +13,11 @@
 .commitPreview {
   position: fixed;
   z-index: 1100;
-  width: 280px;
-  max-height: 220px;
-  overflow-y: auto;
+  box-sizing: border-box;
+  width: min(280px, calc(100vw - 16px));
+  max-height: min(220px, calc(100vh - 16px));
+  overflow: hidden;
+  pointer-events: none;
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 11px;

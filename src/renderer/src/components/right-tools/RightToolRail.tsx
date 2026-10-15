@@ -59,7 +59,7 @@ export function RightToolRail({
           data-visible={toggleAnim.visible ? 'true' : 'false'}
           aria-hidden={toggleAnim.visible ? undefined : 'true'}
         >
-          <ThemedTooltip label={panelToggleLabel}>
+          <ThemedTooltip label={panelToggleLabel} placement="left">
           <button
             type="button"
             className={styles.railButton}
@@ -85,7 +85,7 @@ export function RightToolRail({
               ? t('common:rightTool.railStateOpen')
               : t('common:rightTool.railStateClosed')
           return (
-            <ThemedTooltip key={tool.id} label={t(tool.titleKey)}>
+            <ThemedTooltip key={tool.id} label={t(tool.titleKey)} placement="left">
             <button
               type="button"
               className={styles.railButton}

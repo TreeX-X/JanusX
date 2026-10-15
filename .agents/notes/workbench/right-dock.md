@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-15T05:29:23.788Z",
+  "updated": "2026-10-15T05:54:59.168Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -44,6 +44,8 @@ The file search input and adjacent external-editor button use shell tokens for b
 Search control verification: an isolated browser stylesheet check passes default, hover and focus in planche/dark; screenshots are under artifacts/file-search-theme. The existing file-explorer-delete, file-tree-drag and planche-theme unit files pass 27 cases; typecheck, theme:check and scoped ESLint pass (two existing hook warnings). This does not establish live Electron validation.
 
 The dock maps its local shell canvas, chrome, card and hover roles to tool-canvas/card/chrome/hover from the central theme definition. Planche keeps the dock ground identical to the central warm paper (#EFE4C5), with slightly lighter cards (#F2E9D2) and popovers (#F3EBD7). Large near-white tool surfaces were rejected because they split the workspace into mismatched color blocks. Workspace, file-tree and terminal-preset menus plus Select dropdowns share popover-background/hover/shadow and control-border, replacing yellow-brown fills and hard offset shadows. New themes supply these roles once rather than branching inside each component. Browser coverage in tests/e2e/tool-palette.spec.ts mounts the real Sidebar and RightDock in planche/dark, checks dock/menu colors, hover and Escape dismissal, and renders session cards; screenshots are under artifacts/tool-palette. IPC uses fallbacks, so this is not live Electron validation.
+
+Right-rail icon hints prefer the left side and align with their own button, keeping the vertical control column clear. ThemedTooltip measures its rendered size before choosing a flipped position and clamping to an 8px viewport margin. Pointer input passes through all hints; pointerdown/click cancels visible and pending hints, while keyboard focus still explains controls. Scroll, resize and Escape also cancel pending timers. Git commit previews now follow the same non-blocking policy: leaving the row dismisses immediately, the preview does not capture pointer input or scroll, and clicking a commit expands its file details in the panel. Changing the active tool or workspace dismisses Git previews. The trade-off is that hover previews are bounded summaries; longer content is read in the expanded row. These behaviors are covered in tests/e2e/right-tool-tooltips.spec.ts with actual rail controls, long edge hints, keyboard focus and a clickable control underneath the Git preview in planche/dark. Verification: 4 browser cases pass across the tooltip and palette files, along with typecheck, scoped ESLint, theme:check, 47 planche/right-tool-state/theme-audit unit cases and check:notes (0 errors; 17 existing external-link diagnostics). Browser IPC uses fallbacks; live Electron behavior was not tested.
 
 ## Alternatives considered
 
