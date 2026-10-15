@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-11T07:48:45Z",
+  "updated": "2026-10-15T04:22:50.100Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -38,6 +38,10 @@ The right side freezes four singleton tabs in a fixed strip while the file tree 
 The right side composes a fixed tool rail, open tool tabs, and a variable-width panel. Tools stay open in multiples with exactly one visible, each tool runs as a singleton, and registry order fixes tab sequence with no drag sorting. Collapse keeps a single source of truth and tool business state follows existing stores per workspace. File icons lead with semantic shape plus low-saturation color inside the monochrome-plus-accent language, and file kind, selection, and version-control states travel three independent visual channels. Icon taxonomy shares one source with the file viewer classification. Office preview stays a transient middle workspace outside the rail.
 
 Panel width now follows the active tool. Sessions and Git start at 360px with a 340px minimum and 520px maximum. The file tree starts at 260px with a 240px minimum and 420px maximum; the assistant retains the 280px default and the same 240–420px range. Dragging records a preference for that tool, so tab switches restore each width. The layout may temporarily constrain the rendered width to preserve the 320px center workspace; it does not persist that responsive constraint. When available width falls below the active tool's minimum, the existing rail-only responsive collapse applies. Tab switches animate panel width on the same 240ms curve as the grid; pointer resizing stays immediate.
+
+The file search input and adjacent external-editor button use shell tokens for borders, fill, text and focus. The input uses a neutral border at rest and the active theme accent while focused; its border belongs to CSS rather than an inline style so focus can override it. The external-editor button shares the same theme colors while keeping its disabled state.
+
+Search control verification: an isolated browser stylesheet check passes default, hover and focus in planche/dark; screenshots are under artifacts/file-search-theme. The existing file-explorer-delete, file-tree-drag and planche-theme unit files pass 27 cases; typecheck, theme:check and scoped ESLint pass (two existing hook warnings). This does not establish live Electron validation.
 
 ## Alternatives considered
 

@@ -306,3 +306,34 @@
 :global([data-theme='planche']) .menuItem:hover {
   background: #DCCFA8;
 }
+
+.searchInput {
+  /* Note: .agents/notes/workbench/right-dock.md — theme-aware search controls. */
+  border: 1px solid var(--shell-border);
+  background: color-mix(in srgb, var(--shell-text) 4%, transparent);
+  outline: none;
+}
+
+.searchInput::placeholder { color: var(--shell-dim); }
+.searchInput:hover { border-color: var(--shell-muted); }
+.searchInput:focus {
+  border-color: var(--shell-accent);
+  background: var(--shell-accent-soft);
+}
+
+.externalEditorButton {
+  border: 1px solid var(--shell-border);
+  background: transparent;
+  color: var(--shell-muted);
+}
+
+.externalEditorButton:hover:not(:disabled) {
+  border-color: var(--shell-accent);
+  background: var(--shell-accent-soft);
+  color: var(--shell-accent);
+}
+
+.externalEditorButton:focus-visible {
+  outline: 1px solid var(--shell-accent);
+  outline-offset: 2px;
+}
