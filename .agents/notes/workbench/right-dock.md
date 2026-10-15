@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-15T04:22:50.100Z",
+  "updated": "2026-10-15T05:29:23.788Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -42,6 +42,8 @@ Panel width now follows the active tool. Sessions and Git start at 360px with a 
 The file search input and adjacent external-editor button use shell tokens for borders, fill, text and focus. The input uses a neutral border at rest and the active theme accent while focused; its border belongs to CSS rather than an inline style so focus can override it. The external-editor button shares the same theme colors while keeping its disabled state.
 
 Search control verification: an isolated browser stylesheet check passes default, hover and focus in planche/dark; screenshots are under artifacts/file-search-theme. The existing file-explorer-delete, file-tree-drag and planche-theme unit files pass 27 cases; typecheck, theme:check and scoped ESLint pass (two existing hook warnings). This does not establish live Electron validation.
+
+The dock maps its local shell canvas, chrome, card and hover roles to tool-canvas/card/chrome/hover from the central theme definition. Planche keeps the dock ground identical to the central warm paper (#EFE4C5), with slightly lighter cards (#F2E9D2) and popovers (#F3EBD7). Large near-white tool surfaces were rejected because they split the workspace into mismatched color blocks. Workspace, file-tree and terminal-preset menus plus Select dropdowns share popover-background/hover/shadow and control-border, replacing yellow-brown fills and hard offset shadows. New themes supply these roles once rather than branching inside each component. Browser coverage in tests/e2e/tool-palette.spec.ts mounts the real Sidebar and RightDock in planche/dark, checks dock/menu colors, hover and Escape dismissal, and renders session cards; screenshots are under artifacts/tool-palette. IPC uses fallbacks, so this is not live Electron validation.
 
 ## Alternatives considered
 

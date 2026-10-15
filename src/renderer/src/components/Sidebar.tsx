@@ -80,8 +80,7 @@ function WorkspaceContextMenu({
   const { t } = useI18n('common')
   const menuRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ x: menu.x, y: menu.y })
-  // 一键主题：底座走语义令牌，纸面点睛（硬偏移影/去毛玻璃）走分支，与终端菜单同构
-  const plancheMenu = useThemeStore((s) => s.theme) === 'planche'
+  // Note: .agents/notes/workbench/right-dock.md — shared neutral popover surface.
 
   useLayoutEffect(() => {
     const element = menuRef.current
@@ -93,7 +92,7 @@ function WorkspaceContextMenu({
     })
   }, [menu.x, menu.y])
 
-  const itemClassName = `block w-full border-0 bg-transparent px-3 py-1.5 text-left text-[12px] text-[var(--shell-text)] transition-colors hover:text-[var(--shell-text)] ${plancheMenu ? 'hover:bg-[#DCCFA8]' : 'hover:bg-[rgba(255,255,255,0.06)]'}`
+  const itemClassName = 'block w-full border-0 bg-transparent px-3 py-1.5 text-left text-[12px] text-[var(--shell-text)] transition-colors hover:bg-[var(--popover-hover)] hover:text-[var(--shell-text)] focus-visible:bg-[var(--popover-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-2 focus-visible:outline-[var(--shell-accent)]'
   const separatorClassName = 'my-1 h-px bg-[var(--shell-border)]'
   const target = menu.target
 
@@ -106,12 +105,9 @@ function WorkspaceContextMenu({
         top: position.y,
         width: MENU_WIDTH,
         zIndex: 1200,
-        background: 'var(--shell-chrome-raised)',
+        background: 'var(--popover-background)',
         border: '1px solid var(--control-border)',
-        boxShadow: plancheMenu
-          ? '3px 3px 0 #E8A08A'
-          : '0 14px 36px rgba(0,0,0,0.55)',
-        backdropFilter: plancheMenu ? 'none' : 'blur(16px)',
+        boxShadow: 'var(--popover-shadow)',
       }}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
@@ -142,7 +138,7 @@ function WorkspaceContextMenu({
           <div className={separatorClassName} />
           <button
             type="button"
-            className={`${itemClassName} !text-[var(--shell-diff-del)] ${plancheMenu ? 'hover:!bg-[var(--shell-accent-soft)]' : 'hover:!bg-[rgba(255,88,88,0.1)]'}`}
+            className={`${itemClassName} !text-[var(--shell-diff-del)] hover:!bg-[var(--shell-accent-soft)]`}
             onClick={() => onDelete(target.workspace)}
           >
             {t('common:workspace.deleteWorkspace')}

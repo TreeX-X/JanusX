@@ -41,7 +41,7 @@
 }
 
 .cardSurface {
-  --session-card-surface: #E2D9BD;
+  --session-card-surface: var(--tool-card);
   background: var(--session-card-surface);
   border: 1px solid var(--shell-border);
   border-radius: 6px;
@@ -97,10 +97,6 @@
 .cardAction:disabled {
   cursor: not-allowed;
   opacity: 0.48;
-}
-
-:global([data-theme='dark']) .cardSurface {
-  --session-card-surface: #1c1c1f;
 }
 
 /* First prompt and recent turns: a small lift from the parent card. */

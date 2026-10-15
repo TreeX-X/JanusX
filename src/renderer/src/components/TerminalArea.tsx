@@ -428,11 +428,9 @@ function TerminalPresetCapsule({
               display: 'flex',
               flexDirection: 'column',
               gap: 4,
-              borderColor: plancheMenu ? '#1C343B' : 'rgba(255,120,48,0.28)',
-              background: 'var(--shell-chrome-raised)',
-              boxShadow: plancheMenu
-                ? '3px 3px 0 #E8A08A'
-                : '0 8px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.08)',
+              borderColor: 'var(--control-border)',
+              background: 'var(--popover-background)',
+              boxShadow: 'var(--popover-shadow)',
               transformOrigin: position.placement === 'above' ? 'bottom right' : 'top right',
               animation: exiting
                 ? `terminal-menu-out ${TERMINAL_MENU_EXIT_MS}ms ease-in forwards`

@@ -264,10 +264,9 @@
   padding: 4px;
   border-radius: 8px;
   font-size: 12px;
-  background: var(--shell-chrome);
+  background: var(--popover-background);
   border: 1px solid var(--control-border);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(18px);
+  box-shadow: var(--popover-shadow);
 }
 
 .menuItem {
@@ -280,7 +279,7 @@
 }
 
 .menuItem:hover {
-  background: rgba(255, 120, 48, 0.18);
+  background: var(--popover-hover);
 }
 
 .menuItemDanger {
@@ -288,23 +287,13 @@
 }
 
 .menuItemDanger:hover {
-  background: rgba(255, 95, 87, 0.18);
+  background: var(--shell-accent-soft);
 }
 
 .menuSeparator {
   height: 1px;
   margin: 4px 6px;
   background: var(--shell-border);
-}
-
-/* ── planche：浮层菜单去黑影，纸面配墨线 ── */
-:global([data-theme='planche']) .menu {
-  box-shadow: 3px 3px 0 #E8A08A;
-  backdrop-filter: none;
-}
-
-:global([data-theme='planche']) .menuItem:hover {
-  background: #DCCFA8;
 }
 
 .searchInput {

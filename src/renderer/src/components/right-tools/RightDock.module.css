@@ -1,4 +1,12 @@
 .dock {
+  /* Note: .agents/notes/workbench/right-dock.md — neutral tool surfaces. */
+  --shell-canvas: var(--tool-canvas);
+  --shell-chrome: var(--tool-canvas);
+  --shell-card: var(--tool-card);
+  --shell-pane-chrome: var(--tool-chrome);
+  --shell-chrome-raised: var(--tool-chrome);
+  --shell-drawer: var(--tool-chrome);
+  --shell-hover: var(--tool-hover);
   position: relative;
   display: flex;
   min-width: 0;
