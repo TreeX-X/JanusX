@@ -1,0 +1,120 @@
+/* Navigation uses neutral surfaces; color is reserved for actionable status. */
+.sidebar { font-family: inherit; --sidebar-codex-filter: none; }
+:global([data-theme='dark']) .sidebar { --sidebar-codex-filter: invert(1); }
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 14px;
+  color: var(--shell-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.workspaceRow {
+  display: flex;
+  position: relative;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--shell-muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.workspaceRow[aria-current='true'] { color: var(--shell-text); }
+.workspaceRow[aria-current='true'] > span { font-weight: 600; }
+.workspaceRow:hover { background: var(--shell-hover); }
+
+.repoIcon { position: relative; display: flex; flex-shrink: 0; width: 14px; height: 14px; }
+.repoFolder,
+.repoAvatar { transition: opacity 150ms ease; }
+.repoAvatar { position: absolute; inset: 0; width: 14px; height: 14px; border-radius: 4px; object-fit: cover; opacity: 0; }
+.workspaceRow:hover .repoFolder,
+.workspaceRow[aria-current='true'] .repoFolder { opacity: 0; }
+.workspaceRow:hover .repoAvatar,
+.workspaceRow[aria-current='true'] .repoAvatar { opacity: 1; }
+
+.menuButton,
+.worktreeAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-dim);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 150ms ease, color 150ms ease;
+}
+
+.menuButton { width: 24px; }
+.workspaceRow:hover .menuButton,
+.workspaceRow:focus-within .menuButton,
+.menuButton[aria-expanded='true'],
+.worktreeRow:hover .worktreeAction,
+.worktreeRow:focus-within .worktreeAction { opacity: 1; }
+.menuButton:hover,
+.worktreeAction:hover { color: var(--shell-text); background: var(--shell-hover); }
+.worktreeAction { font-size: 10px; }
+
+.worktreeRow,
+.terminalRow {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 32px;
+  margin-bottom: 2px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  color: var(--shell-muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.worktreeRow { grid-template-columns: 18px minmax(0, 1fr) auto auto auto; }
+.terminalRow { grid-template-columns: 18px minmax(0, 1fr) auto; }
+.terminalRow:active { cursor: grabbing; }
+.worktreeRow:hover,
+.terminalRow:hover { background: var(--shell-hover); color: var(--shell-text); }
+.terminalRow[aria-current='true'] { background: var(--shell-active); color: var(--shell-text); }
+.worktreeRow[aria-current='true'] .worktreeName { color: var(--shell-text); }
+
+.sidebar [role='button']:focus-visible,
+.sidebar button:focus-visible { outline: 1px solid var(--shell-accent); outline-offset: -1px; }
+
+.terminalName,
+.worktreeName {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.worktreeName { font-size: 11px; }
+.terminalCount { display: inline-flex; align-items: center; gap: 5px; color: var(--shell-dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+.terminalGroup { margin: 0 0 10px 14px; }
+.workspaceChildren { margin: 4px 4px 8px 18px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .workspaceRow,
+  .terminalRow,
+  .worktreeRow,
+  .menuButton,
+  .worktreeAction,
+  .repoFolder,
+  .repoAvatar { transition: none; }
+}
