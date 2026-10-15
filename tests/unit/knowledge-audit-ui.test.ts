@@ -56,7 +56,7 @@ beforeAll(async () => {
 })
 afterAll(async () => { await browser?.close() })
 async function mount(page: Page) {
-  page.setDefaultTimeout(5000)
+  page.setDefaultTimeout(process.env.CI === 'true' ? 15000 : 5000)
   await page.route('http://localhost/audit', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }))
   await page.goto('http://localhost/audit')
   await page.addStyleTag({ content: css + '\nbody{margin:0}*{box-sizing:border-box}' })

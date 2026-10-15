@@ -20,8 +20,7 @@ vi.mock('os', async (importOriginal) => {
 const { TerminalContextCoordinator } = await import('../../src/main/runtime-telemetry/coordinator')
 
 const CWD = 'C:/repo'
-// Real clock: the coordinator stamps terminal start with Date.now(), and the
-// correlation window compares against it, so fixture writes must be current.
+// Keep terminal starts and file timestamps on one clock even on slow runners.
 const NOW = Date.now()
 const SESSION_ID = '01a11111-1111-4111-8111-111111111111'
 
@@ -39,12 +38,14 @@ async function writeCodexSession(cwd: string, mtime: number) {
 
 describe('terminal attribution without hooks', () => {
   beforeEach(async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
     vi.stubEnv('CODEX_HOME', '')
     testContext.homeDir = await mkdtemp(join(tmpdir(), 'janusx-attribution-home-'))
     testContext.userData = await mkdtemp(join(tmpdir(), 'janusx-attribution-data-'))
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     vi.unstubAllEnvs()
     await rm(testContext.homeDir, { recursive: true, force: true })
     await rm(testContext.userData, { recursive: true, force: true })

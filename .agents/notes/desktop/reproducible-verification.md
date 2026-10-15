@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-15T12:49:18.008Z",
+  "updated": "2026-10-15T13:04:22.492Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -29,6 +29,8 @@ On Windows, libuv's short-path directory watcher assertion terminates the worker
 For v0.9.2, both workflows pin janus-agentX `8baa18e5db8ca641871c139a5b76904bedc88dda`, published on its `release/janusx-0.9.2-host-tools` branch. This adds the host-local Chat tool interface required by memo Chat and the hash-bound Note paging/shared-editor API required by the Note MCP server, with their tests. The paging changes are committed from an isolated worktree; 62 paging and Node-host cases pass against this clean source; other uncommitted sibling edits are excluded; CI builds the pinned source rather than using local dist output. Theme release checks now resolve blueprint menu surfaces through existing popover tokens and put sidebar icon inversion, session sheet blending and CLI logo grounds in the shared theme definitions, retaining the existing per-theme values.
 
 Release preflight also fixes test prerequisites: memo desktop fixtures explicitly enable the experimental memo flag; session continuation locates the accessible tool panel and counts session cards independently of expansion; capsule geometry is measured after Chat opens and considers only visible toolbar controls. The blueprint shell uses a `minmax(0, 1fr)` column so toolbar intrinsic width cannot expand the shell beyond a narrow container. User-recall fixture dependencies supply a fixed clock before episode expiry; theme assertions follow the shared blend token while retaining the 84%/96% contract.
+
+Remote preflight found the attribution fixture's module-load timestamp could precede later terminal starts by more than the one-second matching tolerance; its Date.now clock is now pinned to the file timestamp without replacing timers. Audit and Note-repair browser fixtures allow 15 seconds for CI interactions, within the existing 60-second test ceiling. Their three files pass 33 cases in CI mode locally. Windows portable packaging completes at 162.2 MiB; local runtime verification requires elevation because the existing executable manifest requests administrator access.
 
 The v0.9.0 replacement pins both workflows to agentX `df661f5034f2a9e77ffb5a996e45d6e8298a5a43`; verify also pins WorkflowX `efaf5ae7aac24362286251dc931487d5cfd2e2a5`. Both source revisions are pushed before JanusX consumes them. The previous agentX pin `6feb575bab1b067e6e4d8abc54d1f1d11a7bee23` existed only locally, so both remote jobs stopped at checkout with `not our ref`. Moving a dependency pin requires checking its remote availability as well as its local build. This replacement is explicitly authorized to reuse `v0.9.0`; branch protection and review requirements remain intact.
 
