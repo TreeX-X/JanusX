@@ -15,6 +15,7 @@ test('real Titlebar keeps memo usable at native minimum size and renderer zoom',
     const page = await application.firstWindow({ timeout: 30000 })
     await page.waitForFunction(() => Boolean(window.electron?.memo))
     await page.evaluate(() => window.electron.system.setLanguage('en'))
+    await page.evaluate(() => window.electron.experimental.update({ memo: true }))
     await page.reload()
     await page.waitForFunction(() => Boolean(window.electron?.memo))
     await page.evaluate(async () => {

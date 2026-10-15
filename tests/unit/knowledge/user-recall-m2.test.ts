@@ -57,6 +57,7 @@ function depsOf(facts: MemoryFact[], profile: UserProfile = emptyProfile, episod
     listUserFacts: async () => facts,
     loadProfile: async () => profile,
     listActiveEpisodes: async () => episodes,
+    nowMs: () => Date.parse('2026-09-15T00:00:00.000Z'),
   }
 }
 

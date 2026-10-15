@@ -204,9 +204,10 @@ describe('planche theme contract', () => {
     expect(sessionMod).not.toContain('#E8E6E2')
     expect(sessionMod).toContain('--session-card-surface: var(--shell-canvas)')
     expect(sessionMod).toContain('background: var(--session-card-surface)')
-    expect(sessionMod).toContain('color-mix(in srgb, var(--session-card-surface) 84%, white)')
-    expect(sessionMod).toContain(":global([data-theme='dark']) .sheet")
-    expect(sessionMod).toContain('color-mix(in srgb, var(--session-card-surface) 96%, white)')
+    expect(sessionMod).toContain('color-mix(in srgb, var(--session-card-surface) var(--session-sheet-base-weight), white)')
+    expect(sessionMod).not.toContain(":global([data-theme='dark']) .sheet")
+    expect(getThemeDefinition('planche').tokens['session-sheet-base-weight']).toBe('84%')
+    expect(getThemeDefinition('dark').tokens['session-sheet-base-weight']).toBe('96%')
     // 折叠控件为无边框 chevron 按钮（token 化，不吃填充；hover/聚焦走强调色）
     expect(sessionMod).toContain('.foldBtn')
     expect(sessionMod).toMatch(/\.foldBtn \{[^}]*border: none/s)

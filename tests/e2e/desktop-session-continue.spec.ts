@@ -276,21 +276,19 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     await expect(workspaceRow).toBeVisible({ timeout: 10_000 })
     await workspaceRow.click()
     await page.getByRole('button', { name: /打开会话工具/ }).click()
-    await expect(page.getByText('会话管理', { exact: true })).toBeVisible()
+    await expect(page.getByRole('tabpanel', { name: /会话/ })).toBeVisible()
 
-    // Live rows in scope: source, the API-continued card, and the imported
-    // external row — each non-archived card offers 在新会话中继续 behind its
-    // fold (single-card expansion), so expand the first card right before its click.
+    // Count live cards, since actions are only rendered for the expanded card.
+    const sessionCards = page.getByRole('tabpanel', { name: /会话/ }).locator('[data-session-id]')
+    await expect(sessionCards).toHaveCount(3, { timeout: 10_000 })
     const internalCard = page.locator('div[class*="cardSurface"]')
       .filter({ hasText: HANDOFF_MARKER }).first()
     await internalCard.getByRole('button', { name: '展开', exact: true }).click()
-    const continueButtons = page.getByRole('button', { name: '在新会话中继续', exact: true })
-    await expect(continueButtons).toHaveCount(3, { timeout: 10_000 })
     const xtermsBeforeUiContinue = await page.locator('.xterm-rows').count()
     await internalCard.getByRole('button', { name: '在新会话中继续', exact: true }).click()
     await expect(page.getByRole('button', { name: '开始新会话', exact: true })).toBeVisible()
     await page.getByRole('button', { name: '开始新会话', exact: true }).click()
-    await expect(continueButtons).toHaveCount(4, { timeout: 15_000 })
+    await expect(sessionCards).toHaveCount(4, { timeout: 15_000 })
     // The workbench must mount the new terminal view, not just the ledger row:
     // the terminal:created subscription is app-level, so a main-side launch
     // bootstraps even when the pane tree was empty before it.
@@ -303,10 +301,7 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     const external = (await listLive(page)).find((row) => row.external === true)
     expect(external, 'boot backfill imports the fake transcript').toBeTruthy()
     expect(external?.providerSessionId).toBe(PROVIDER_SESSION_ID)
-    const externalCard = page
-      .locator('div[class*="cardSurface"]')
-      .filter({ has: page.getByText('外部', { exact: true }) })
-      .first()
+    const externalCard = page.locator(`[data-session-id="${external!.id}"]`)
     const externalFold = externalCard.getByRole('button', { name: '展开', exact: true })
     if ((await externalFold.count()) > 0) await externalFold.click()
     const resumeButton = externalCard.getByRole('button', { name: '回到原会话', exact: true })

@@ -1685,6 +1685,7 @@
   display: grid;
   /* 顶栏 + 统一操作栏 + 三列机身（复刻 design topbar/toolbar/body） */
   grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   overflow: visible;
   color: #e7e7e8;
