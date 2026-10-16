@@ -1,0 +1,106 @@
+---
+{
+  "schema": "harness-note/2",
+  "id": "be9da2fc-754c-490b-ae77-eddfb4dcd3d2",
+  "kind": "requirement",
+  "lifecycle": "accepted",
+  "created": "2026-10-16",
+  "updated": "2026-10-16T09:22:12.870Z",
+  "class": "feature",
+  "tags": ["chat", "timeline", "agentX-parity", "blueprint", "launch-assistant"],
+  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10",
+  "relations": [
+    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/54b1046a-2c23-4bd0-acc5-7ddcd7f3a343"}
+  ]
+}
+---
+
+# Chat 工作时间线与入口扩展工具展示
+
+## Expected behavior
+
+普通 Chat、蓝图对话、运行配置助手应呈现 agentX 风格的工作过程：工作说明、模型公开返回的推理内容或摘要、工具调用和后续回答按实际发生顺序交错展示。用户可以理解 Agent 正在做什么，以及工具结果如何引出后续行动。没有公开推理内容的模型仍可展示实际输出的工作说明和工具状态，不生成虚假的推理，也不承诺取得模型内部未公开的思维链。
+
+三个入口共享过程顺序、阶段生命周期与基础交互，各自保留独立工具集、权限、结构化结果和专属操作。统一时间线不能把入口扩展工具全部降级为通用的“调用成功”卡片。当前实现已接入三个入口；具体边界、验证命令和结果见下文。
+
+## Interaction target
+
+用户应在同一条助手回复内，边执行边看到过程自然向下延伸。每段工作说明和公开推理紧邻相应工具，后续分析继续追加在工具之后，最后给出回答。例如：“先检查启动入口” → 推理段 A → 读取配置工具 → “发现脚本引用异常，继续查找入口” → 推理段 B → 搜索工具 → 修改草稿的专属结果 → 最终回答。这个次序是示例，不要求模型每次调用工具前都额外生成一段说明，也不推断输入中没有的因果关系。
+
+完成后保留同样的段落顺序，不把全部推理重新聚到顶部、全部工具移到末尾，也不再追加一份合并正文造成重复。工具结果在原位更新，最终回答正常渲染 Markdown。过程应以紧凑的文本段和工具行呈现，不把每个 token、阶段切换或心跳都渲染成独立卡片；“时间线”描述有序过程，不要求时间轴装饰或另开日志面板。
+
+工作说明直接可见。用户已确认采用 agentX 的默认方式：公开推理段默认收起，显示摘要；当前推理段执行中同时显示实时尾行和光标，点击可展开该段全文，也可再次收起。该段结束后停止实时尾行和光标，保留摘要、单段耗时及展开回看入口；后续推理创建独立段。各段始终占据自己的顺序位置，不能只剩字数、计时和加载动画。摘要沿用首个有效行的文本预览，不另行生成模型推理总结。三个入口采用同一默认策略。
+
+思考、写入、执行工具和等待审批按实际阶段切换。推理段 A 在工具开始时已经结束，即使整个轮次仍在运行，也不能继续给它显示“思考中”或增长其耗时。后续推理段 B 独立追加；轮次总耗时与单段耗时分别计算。
+
+## Current implementation
+
+`chat-model-stream.ts` 使用独立的 `ai-chat`（AI SDK 4.3.19）消费端，`withChatStreamCompatibility` 从原始 provider 模型恢复公开推理增量，再转成 agent-core 接受的事件。非 Chat 消费者继续使用原 SDK 及原兼容路径。不能只删除旧兼容层的忽略项：旧消费者不能读取新 reasoning 协议。
+
+`src/shared/chat-timeline.ts` 持有 version 1 展示快照与纯 reducer。相邻文本或推理增量合并；类型切换、工具准备和执行、模型结束、等待提问会结束前一文本段；工具依据 `callId` 原位更新。`chat-tool-events.ts` 用 AsyncLocalStorage 隔离并行调用，把同一身份带入 Note/配置业务事件，并在工具完成时立即发送脱敏 trace。结束后再发送整轮 trace 的旧回填路径已移除，避免 listener 解绑后丢失结果或重复展示。
+
+`useJanusChat` 累计并提交快照，`JanusChat` 按快照渲染；没有快照的旧消息沿用旧展示。`ChatTimeline` 复用 `ThinkingRegion` 与 `ToolCallCard`，推理段各自计时、默认收起，实时尾行仅属于当前未结束段。摘要保存开头预览，即使正文按尾部截断也保留首行。工具行布局与主题颜色由共享 Chat 样式管理，三个入口使用同一紧凑布局。停止、异常和请求结束收敛工具与文本状态；已经进入历史的调用从旧运行时工具列表排除，恢复失败不会重复卡片。
+
+运行配置 service 使用同一 reducer，`ProjectLaunchAssistant` 使用同一 renderer。`config_change` 只在 controller 消费一次以回填表单；展示快照仅投影摘要、校验与应用状态。`launch-config.get/edit/apply` 的安全结果摘要也进入原调用卡，分别显示读取、草稿修改和写盘结果；工具成功不等于配置已应用。
+
+[已有反馈设计](../janus-chat-feedback-parity.md)仍记录状态行、折叠区及主题规则；本文负责后续交错过程。
+
+## Tool extensions
+
+| 入口 | 必须保留的展示与行为 |
+| --- | --- |
+| 普通 Chat | 已接入工程及其他扩展工具的调用状态、参数与结果摘要，支持专属展示和通用卡片兜底。 |
+| 蓝图对话 | Note 读取、定位、修改以及提案、审批、修复进度等已有专属能力；关联文档、变更与业务状态。 |
+| 运行配置助手 | 草稿回填、校验结果、配置差异及应用状态；区分工具执行成功、草稿已修改和配置已落盘。 |
+
+工具生命周期事件与 `note_change`、`config_change` 等业务事件需要可靠关联，避免同一操作出现互不相关的重复卡片。专属交互可以按需保留在入口区域，通过稳定标识与时间线对应；不要求把所有业务面板都搬进工具卡。
+
+展示扩展只决定如何呈现，不决定工具能否调用。controller 负责草稿回填、审批和应用等业务效果；渲染、展开卡片、切换页面和恢复历史不得重新执行操作。历史卡片展示当时结果，操作按钮按当前业务状态检查可用性。参数与结果继续沿用各入口的脱敏边界；含真实配置值的业务载荷只供现有业务处理，不能未经处理直接作为工具摘要展示、归档或加入模型上下文。
+
+实际工具与位置清单如下。工具清单来自共享运行时注册表及各入口的白名单，展示注册不扩大权限。
+
+| 工具或扩展 | 位置与交互 |
+| --- | --- |
+| 普通 Chat 的 workspace、git、command、project 等共享工程工具，以及未知 MCP/扩展 | 调用位置的通用 ToolCallCard；展示脱敏参数键、结果摘要、错误与耗时，支持展开。审批、todo、提问仍由既有 controller 槽处理。 |
+| 普通 Chat 的 Memo 扩展 | 保留 memo_created 的会话绑定和既有 MemoPanel，通用工具卡标识调用；展开和恢复不重建 Memo。 |
+| 普通 Chat/蓝图的共享 Note 读取、写入，以及 note.focus、note.scope | NoteTimelineDetails 在对应调用内复用 FocusNoteList 与 ChangeCard，保留定位、加入关注、差异查看和撤销预检。快照只存变更记录引用，历史按 checkout/conversation 读取既有记录；未带调用身份的旧事件仍走轮次或底部区域。 |
+| 蓝图提案与 Note 修复 | 继续使用既有提案、审批与 NoteRepairCard；不把维护结果或修复状态误认为普通工具结果，不因过程回看触发实施。 |
+| 运行配置 workspace.list/read、project.detect | 原位通用工具卡；仍为只读理解工具。 |
+| 运行配置 launch-config.get/edit/apply | 原位展示读取/草稿/写盘状态及校验错误、警告；完整草稿、差异和写盘审批继续在配置窗口业务区域。 |
+
+## Retention and boundaries
+
+agent-event 是过程增量的唯一来源；legacy delta 仅在未使用 agent-event 时回退。请求身份及 controller generation 隔离迟到事件。运行配置的模型历史显式只投影 role/content，Chat 也不把 timeline 发送给模型。工具上下文 trace 与展示专属回执分开；真实配置值不进入展示快照。
+
+单轮最多 256 块，累计文本保留 200,000 字符；每个推理段保留末尾 4,000 字符和开头 512 字符摘要预览，工具元数据另受约 1,000,000 字符预算。超限淘汰较早块并显示提示。只在阅读位置接近底部时跟随，向上阅读不强制滚动。
+
+普通 Chat 的有序快照随现有消息历史持久化。蓝图沿用[工作区对话生命周期](../../blueprint/maintenance/tasks/blueprint-workspace-dialog.md)：关闭重开保留过程，切换工作区、主动清空和应用重启清除面板历史；本需求没有改为跨重启恢复蓝图会话。运行配置按 checkout 路径与项目相对路径在本地保存最近 40 条，序列化总量最多 1,000,000 字符；恢复只展示历史，不重放表单回填、审批或写盘，关闭时保存并收敛未完成过程。
+
+保留旧 SDK 加独立 Chat 消费端增加一个依赖，但避免整仓 SDK 迁移。若以后所有消费者都支持同一推理协议，应合并 SDK。历史中的 Note 记录若已删除，卡片显示不可用提示；撤销始终重新检查当前事务状态。没有模型公开推理时，仅显示实际文本和工具，不补造内容。
+
+## Acceptance criteria
+
+- [x] AC-1: 三个入口均按实际事件次序展示“工作说明或公开推理 → 工具 → 后续说明或推理 → 回答”，流式与完成后顺序一致，正文无重复。
+- [x] AC-2: 支持公开推理的模型，其内容通过实际模型适配路径到达展示；不返回公开推理时仍正常显示工作说明与工具过程。
+- [x] AC-3: 三个入口各自扩展工具保持专属语义、状态与交互；蓝图文档能力和运行配置草稿、校验、应用能力无退化，工具调用成功不被误标为业务已应用。
+- [x] AC-4: 同一次工具调用的生命周期与业务结果正确关联，卡片原位更新；同名重复调用和并行工具不会串卡或产生重复结果。
+- [x] AC-5: 停止、失败、重试、会话切换均保留已有过程并隔离请求；迟到事件不污染其他轮次或会话。
+- [x] AC-6: 新历史恢复后可回看有序过程；旧历史正常回退。恢复、展开或重渲染不触发工具、草稿回填或应用操作，历史按钮按当前状态判断可用性。
+- [x] AC-7: 展示快照不自动进入模型上下文，工具权限与脱敏边界保持有效；超限截断有明确提示。
+- [x] AC-8: 三个入口覆盖长过程、展开收起、滚动与主题验证；用户向上阅读时不被强制拉回底部。
+- [x] AC-9: 同一轮有两段推理、两段工作说明及多次工具时，执行中和完成后均保持交错顺序；完成不重复追加合并正文，也不将工具全部汇总移至末尾。三个入口的推理段默认收起并显示摘要，当前段执行中显示实时尾行和光标，点击展开全文并可再次收起；该段结束后保留摘要与单段耗时，可展开回看，停止实时尾行和光标。
+- [x] AC-10: 推理段、工具和整轮各自准确结束；工具执行期间前一推理段不继续显示“思考中”，停止或异常后无未收敛的加载状态。
+- [x] AC-11: 实施前完成三个入口实际扩展工具与展示位置清单；验证普通 Chat 的工程操作、蓝图的文档读取与修改或审批、运行配置的读取与草稿修改及校验。至少覆盖一个已有专属业务结果，并验证业务事件早于工具完成时仍只关联到正确调用。
+- [x] AC-12: 新过程数据验证真实模型适配链路，三个入口分别验证完整流式与结束后的界面。仅向 renderer 注入 `reasoning_delta` 的测试不能作为模型事件已打通的证据。
+
+## Verification
+
+本次为 Main 直接 xdo，未创建执行 Task，未声称独立评审。验证使用确定性 provider 数据及本地 HTTP 模型服务，没有调用外部付费模型。
+
+`chat-model-stream.test.ts` 经过实际兼容层与 SDK；`llm/chat-turn-guard.test.ts` 的 provider 用例继续经过真实 agent loop 到 IPC，检查两段推理及两段文本的顺序。`run-config-assistant.spec.ts` 使用本地 HTTP Responses 流与应用实际 OpenAI provider，覆盖三段推理/工作说明、配置读取、修改、审批、写盘、长回复和完成后原序回看。它不是仅向 renderer 注入 reasoning_delta 的证据。
+
+`chat-work-timeline.spec.ts` 分别覆盖三个入口的两段推理、多次同名工具、展开收起、完成后顺序、停止与迟到事件、长过程滚动和主题切换；另覆盖运行配置早到业务事件/恢复不重放，以及蓝图 Note 原位结果与撤销冲突。`janus-chat-theme.spec.ts` 和 `blueprint-chat-recovery.spec.ts` 保留主题与恢复回归；工作台测试先打开当前默认收起的 Copilot。
+
+最终验证：相关 13 个单测文件共 110 项通过；`npm run test:llm-core -- tests/stream-compat.test.ts` 的 6 项兼容回归通过。浏览器命令 `npx playwright test tests/e2e/chat-work-timeline.spec.ts tests/e2e/janus-chat-theme.spec.ts tests/e2e/blueprint-chat-recovery.spec.ts --project=island --workers=2` 共 25 项通过；桌面命令 `npx playwright test tests/e2e/run-config-assistant.spec.ts --project=desktop --workers=1` 对 `artifacts/build-check/main/index.js` 的最新构建有 1 项通过。Windows 本机验证设置 `NO_PROXY=127.0.0.1,localhost`，避免本地夹具经过系统 HTTP 代理。
+
+`npm run typecheck:strict-unused`、`npm run build:check`、`npm run i18n:check` 和 `npm run check:package-boundary` 通过。变更源文件定向 ESLint 为 0 errors，JanusChat 的既有中文文案有 4 warnings。`npm run check:notes` 为 315 篇、0 errors、17 项既有显式链接诊断；这些诊断不是本次需求的未解析引用。未执行全仓 verify、打包发布或外部真实模型请求。

@@ -117,6 +117,7 @@ for (const theme of ['planche', 'dark']) {
 
   test(`${theme}: compact composer uses theme tokens without Blueprint stylesheet rules`, async ({ page }) => {
     await page.goto('/project.html?workbench&manual-stream')
+    await page.locator('.blueprint-janus-capsule').click()
     await setTheme(page, theme)
     const blueprint = page.locator('.blueprint-workbench-janus-slot')
     const input = blueprint.locator('.janus-chat-input')

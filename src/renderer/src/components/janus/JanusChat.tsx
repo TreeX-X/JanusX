@@ -17,6 +17,9 @@ import { useI18n } from '@/i18n/useI18n'
 import { PromptDialog } from '../blueprint/PromptDialog'
 import { ToolCallGroup } from './ToolCallCard'
 import { ThinkingRegion } from './ThinkingRegion'
+import { ChatTimeline, type ChatTimelineProps } from './ChatTimeline'
+import type { ChatTimelineSnapshot } from '../../../../shared/chat-timeline'
+import { NoteTimelineDetails } from '../blueprint/NoteTimelineDetails'
 import { formatThinkingDuration, type ReasoningSnapshot } from './janusReasoning'
 import type { JanusChatStatus, JanusPendingQuestion } from './janusRuntimeState'
 import { Select } from '../ui/Select'
@@ -89,7 +92,8 @@ interface JanusChatProps {
   /** Host-owned empty transcript state; falls back to the JANUSX banner. */
   emptyState?: React.ReactNode
   /** Host-owned evidence attached to an assistant turn; undefined is the live turn. */
-  renderTurnFooter?: (turnId?: string) => React.ReactNode
+  renderTurnFooter?: (turnId?: string, timeline?: ChatTimelineSnapshot) => React.ReactNode
+  renderToolDetails?: ChatTimelineProps['renderToolDetails']
   /**
    * Host-owned actions pinned directly above the composer, outside the message
    * scroll area — for anything that must stay reachable while discussing.
@@ -392,6 +396,7 @@ export function JanusChat({
   discussionFooter,
   emptyState,
   renderTurnFooter,
+  renderToolDetails = block => <NoteTimelineDetails block={block} />,
   aboveComposer,
   messagesHidden = false,
   focused = true,
@@ -476,6 +481,7 @@ export function JanusChat({
   const contextConversations = useOptionalJanusChatController()
   const conversations = controllerOverride ?? contextConversations
   const activeApprovalMode = approvalMode ?? conversations?.approvalMode ?? 'per-action'
+  const activeTimeline = conversations?.pendingTimeline
   const activePendingReasoning = pendingReasoningProp ?? conversations?.pendingReasoning ?? EMPTY_REASONING_SNAPSHOT
   const activeReasoningByTurn = reasoningByTurnProp ?? conversations?.reasoningByTurn ?? EMPTY_REASONING_BY_TURN
   const activeTurnStartedAt = turnStartedAtProp ?? conversations?.turnStartedAt ?? null
@@ -539,8 +545,11 @@ export function JanusChat({
       ]),
   ]
   const lastAssistantMessageId = [...messages].reverse().find((message) => message.role === 'assistant')?.id
+  const committedCalls = new Set(messages.flatMap(message => message.timeline?.blocks.flatMap(block => block.kind === 'tool' ? [block.callId] : []) ?? []))
   const liveToolTraces: ChatToolTraceEntry[] = (resourceController?.activities ?? [])
+    .filter(activity => !committedCalls.has(activity.correlationId))
     .map((activity) => ({
+      callId: activity.correlationId,
       toolName: activity.toolName,
       workspaceId: '',
       status: activity.status,
@@ -602,7 +611,7 @@ export function JanusChat({
   // 重建数组，旧写法会在每次渲染都触发滚动/提示，造成底部持续被拽走或
   // 误弹“新信息”。卡片必须纳入签名，否则圆桌结果到达时既不跟随也不提示。
   const lastMessage = messages[messages.length - 1]
-  const contentSignature = `${messages.length}|${lastMessage?.id ?? ''}|${lastMessage?.timestamp ?? 0}|${pendingContent?.length ?? 0}|${activePendingReasoning.text.length}|s${pendingSteerIds.join(',')}`
+  const contentSignature = `${messages.length}|${lastMessage?.id ?? ''}|${lastMessage?.timestamp ?? 0}|${pendingContent?.length ?? 0}|${activePendingReasoning.text.length}|${activeTimeline?.blocks.map(block => block.kind === 'tool' ? `${block.id}:${block.entry.status}:${block.details?.length}` : `${block.id}:${block.chars}:${block.endedAt}`).join('|') ?? ''}|s${pendingSteerIds.join(',')}`
   const cardsSignature = roundtableCards.map((card) => `${card.id}@${card.updatedAt || card.createdAt}`).join('|')
   const questionsSignature = roundtableQuestions.map((block) => `r${block.roundNumber}@${block.timestamp}#${block.questions.map((item) => item.id).join(',')}`).join('|')
   useLayoutEffect(() => {
@@ -1541,6 +1550,7 @@ export function JanusChat({
               />
             ) : (
               <div className="janus-chat-message-content">
+                {msg.role === 'assistant' && msg.timeline ? <ChatTimeline snapshot={msg.timeline} workspaceNames={workspaceNames} renderToolDetails={renderToolDetails} /> : <>
                 {msg.role === 'assistant' && activeReasoningByTurn[msg.id] && (
                   <ThinkingRegion snapshot={activeReasoningByTurn[msg.id]} streaming={false} />
                 )}
@@ -1552,7 +1562,8 @@ export function JanusChat({
                     collapsible
                   />
                 )}
-                {msg.role === 'assistant' && renderTurnFooter?.(msg.id)}
+                </>}
+                {msg.role === 'assistant' && renderTurnFooter?.(msg.id, msg.timeline)}
               </div>
             )}
           </div>
@@ -1563,6 +1574,7 @@ export function JanusChat({
             <div className="janus-chat-message-author">{t('janus:chat.author.assistant')}</div>
             <div className="janus-chat-message-content">
               {isStreaming && <TurnStatusRow status={activeTurnStatus} startedAt={activeTurnStartedAt} />}
+              {(activeTimeline?.blocks.length || activeTimeline?.truncated) ? <ChatTimeline snapshot={activeTimeline} streaming={isStreaming} workspaceNames={workspaceNames} renderToolDetails={renderToolDetails} /> : <>
               <ThinkingRegion snapshot={activePendingReasoning} streaming={isStreaming} startedAt={activeTurnStartedAt} />
               {pendingContent ? (
                 <StreamingText content={pendingContent} />
@@ -1576,7 +1588,8 @@ export function JanusChat({
                 )
               )}
               <ToolCallGroup entries={liveToolTraces} workspaceNames={workspaceNames} />
-              {renderTurnFooter?.()}
+              </>}
+              {renderTurnFooter?.(undefined, activeTimeline)}
             </div>
           </div>
         )}

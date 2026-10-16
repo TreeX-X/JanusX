@@ -21,7 +21,8 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/350594c4-3e53-4645-aeab-57e4adeffc36"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/f013beaa-bff7-4656-b086-d4816608f905"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/3efc89cf-3aa2-4e1e-829f-a0abc4319691"},
-    {"type":"governed-by","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/11d8826d-52d7-58bb-99bd-49b6ba04dfaf"}
+    {"type":"governed-by","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/11d8826d-52d7-58bb-99bd-49b6ba04dfaf"},
+    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/be9da2fc-754c-490b-ae77-eddfb4dcd3d2"}
   ],
   "codeRefs": [
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/harness/execution-adapter.ts","role":"entry"},
@@ -32,7 +33,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-12T03:38:45.000Z",
+  "updated": "2026-10-16T09:17:14.782Z",
   "moduleState": "partial"
 }
 ---
@@ -62,6 +63,8 @@ S6 维护面五件套：[discussion](./maintenance-discussion-unified-s6.md)、[
 主线与执行器：[repo-identity-S7](../blueprint/workspaces/harness-repo-identity-s7.md)、[execution-adapter-S8](./harness-execution-adapter-s8.md)、[portable-results](./harness-portable-results.md)、[s9-readiness](./harness-s9-readiness.md)、[undo](../blueprint/maintenance/harness-undo.md)、[xdo-executor](./desktop-xdo-executor.md)、[review-repair](./independent-review-repair.md)、[handoff-brief](./handoff-brief.md)、[verify-harden](../desktop/verify-pipeline-harden.md)、[notifications](./agent-notifications.md)。
 
 PI 运行时三篇为反转续接非重复：[context-recognition](../terminal/janus-pi-context-recognition.md)否决 hook 在先，[hook-management](../terminal/janus-pi-hook-management.md)声明理由过时并建 hook 在后，均以本域为父。
+
+[Chat 工作时间线](./requirements/chat-work-timeline.md)已接入普通 Chat、蓝图对话与运行配置助手，按事件顺序交错展示工作说明、公开推理和工具，保留各入口专属业务交互。该文维护调用身份、历史保留、容量限制及实际验证边界。
 
 ## Acceptance criteria
 

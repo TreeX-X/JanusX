@@ -118,9 +118,9 @@ export type ChatAgentEvent =
   | { type: 'memo_created'; requestId: string; conversationId: string; binding: MemoBinding }
   | { type: 'context_state'; requestId: string; state: import('../chat-context').ChatContextStatus }
   | { type: 'note_repair'; requestId: string; update: import('../note-repair').NoteRepairUpdate }
-  | { type: 'note_change'; requestId: string; change: import('../note-chat').NoteChatChange }
-  | { type: 'config_change'; requestId: string; change: import('../launch-config-chat').LaunchConfigChange }
-  | { type: 'note_focus'; requestId: string; focus: import('../note-chat').NoteFocusEvent }
+  | { type: 'note_change'; requestId: string; callId?: string; change: import('../note-chat').NoteChatChange }
+  | { type: 'config_change'; requestId: string; callId?: string; change: import('../launch-config-chat').LaunchConfigChange }
+  | { type: 'note_focus'; requestId: string; callId?: string; focus: import('../note-chat').NoteFocusEvent }
   | { type: 'maintenance_result'; requestId: string; task: BlueprintMaintenanceTask }
   | { type: 'agent_start'; requestId: string }
   | { type: 'text_delta'; requestId: string; delta: string }
@@ -158,6 +158,9 @@ export interface ChatSteerCancelInput {
 
 /** One executed workspace tool call, replayed into the next turn's history so the model keeps its working context. */
 export interface ChatToolTraceEntry {
+  /** Safe display receipt only; excludes the live config payload and model context. */
+  configResult?: { operation: 'read' | 'edit' | 'apply'; summary: string; valid: boolean; errors: string[]; warnings: string[]; applied: boolean }
+  callId?: string
   toolName: string
   workspaceId: string
   status: string

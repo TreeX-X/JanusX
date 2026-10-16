@@ -32,6 +32,7 @@ vi.mock('../../../src/main/llm/LlmService', () => ({
     getLanguageModel: vi.fn(async () => ({})),
   },
 }))
+vi.mock('../../../src/main/llm/chat-model-stream', () => ({ streamChatModel: streamText }))
 vi.mock('../../../src/main/llm/ai-runtime', () => ({
   generateText: vi.fn(),
   streamText,

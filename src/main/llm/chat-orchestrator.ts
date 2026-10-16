@@ -7,7 +7,7 @@
  *              - AbortController 生命周期与重复 requestId 仲裁
  *              - R6 steering 目标注册（端口实例来自 agent-core，壳只管生命周期）
  *              - ChatSessionRuntime LRU（实例来自 chat-core，随请求传入）
- *              - delta 40ms 合批 + reasoning 8k 转发上限（降 IPC 开销）
+ *              - delta 40ms 合批；reasoning 按段由 renderer 有界保留
  *              - 窗口销毁守卫（reply 前检查 isDestroyed）
  *              - IPC 扇出：agentEvent / legacy delta / recallTrace / toolTrace / done / error
  * 偏离说明：recallTrace 通道改为整轮结束后再发（facade 经 result 返回；
@@ -25,7 +25,8 @@ import type { ChatAgentEvent, ChatAnswerQuestionPayload, ChatQuestionAnswer, Cha
 import { attachMemoChatTools, memoSteeringContext } from '../memo/chat-tools'
 import { MEMO_TARGET_PROMPT, mentionsMemoWorkspace } from '../../shared/memo-chat-target'
 import { workspaceAgentRuntime, workflowSessionParents } from '../agent/runtime/shell-runtime'
-import { streamText } from './ai-runtime'
+import { streamChatModel as streamText } from './chat-model-stream'
+import { attachChatToolEvents, currentChatCallId } from './chat-tool-events'
 import {
   runChatTurn,
   resolveWorkflowXMode,
@@ -174,9 +175,6 @@ export function gateFromToolAllowlist(allowlist: string[] | undefined, policy?: 
     return policy?.(call)
   }
 }
-/*-- 推理增量仅 UI 展示：超限后不再转发，省 IPC（渲染端另有 4k 截断） --*/
-const REASONING_FORWARD_CAP_CHARS = 8_000
-
 /** P6：默认 40（P6 前硬编码 20），经 agentMaxSteps 配置可调，仅 janus-chat 通道。 */
 const CHAT_MAX_STEPS = DEFAULT_AGENT_MAX_STEPS
 
@@ -436,7 +434,6 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
   }
 
   const controller = new AbortController()
-  let reasoningChars = 0
   abortControllers.set(requestId, controller)
   // S6 single-turn lock: the steering slot doubles as the turn owner, so a
   // second entry with the same conversationId steers instead of spawning.
@@ -561,8 +558,8 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         attachNoteChatTools(ports, {
           conversationId, signal: controller.signal, resources: workspaceResources ?? [],
           userText: [...messages].reverse().find(message => message.role === 'user')?.content ?? '',
-          onChange: change => sendAgentEvent({ type: 'note_change', requestId, change }),
-          onFocus: focus => sendAgentEvent({ type: 'note_focus', requestId, focus }),
+          onChange: change => sendAgentEvent({ type: 'note_change', requestId, callId: currentChatCallId(), change }),
+          onFocus: focus => sendAgentEvent({ type: 'note_focus', requestId, callId: currentChatCallId(), focus }),
         })
       }
       if (!roots.length) ports.knowledgeCapture = undefined
@@ -592,7 +589,7 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
         workspaceId: workspaceId ?? '',
         resources: workspaceResources ?? [],
         signal: controller.signal,
-        onChange: change => sendAgentEvent({ type: 'config_change', requestId, change }),
+        onChange: change => sendAgentEvent({ type: 'config_change', requestId, callId: currentChatCallId(), change }),
       })
     }
 
@@ -625,6 +622,12 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
       }
       projectContext = (projectContext ?? '') + '\n' + memoContext
     }
+
+    attachChatToolEvents(ports, requestId, entry => {
+      const note = [...chatSession.noteEvidence.values()].find(item => entry.argsDigest === item.path)
+      const trace = note ? { ...entry, summary: `${note.path}; uri=${note.uri}; expectedHash=${note.expectedHash}` } : entry
+      sendEvent(LLM_CHANNELS.toolTrace, { requestId, entries: [trace] })
+    })
 
     if (request.maintenanceTaskId) {
       if (domain !== 'project' || !conversationId) throw new Error('NOT_READY: maintenance requires a project conversation')
@@ -685,10 +688,6 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
           if (controller.signal.aborted) return
           if (request.noteRepairId && agentEvent.type === 'stream_end') return
           if (request.noteRepairId && agentEvent.type === 'stream_error') { repairStreamError = agentEvent.error; return }
-          if (agentEvent.type === 'reasoning_delta') {
-            if (reasoningChars >= REASONING_FORWARD_CAP_CHARS) return
-            reasoningChars += agentEvent.delta.length
-          }
           sendAgentEvent(agentEvent)
           if (agentEvent.type === 'text_delta') queueDelta(agentEvent.delta)
         },
@@ -723,13 +722,6 @@ export async function handleChatStream(event: ChatStreamReplyTarget, request: Ch
 
     if (sourceTag === 'janus-chat' && result.recallTrace) {
       sendEvent(LLM_CHANNELS.recallTrace, result.recallTrace)
-    }
-    if (result.toolTraces.length > 0) {
-      const entries = result.toolTraces.map(trace => {
-        const note = [...chatSession.noteEvidence.values()].find(item => trace.argsDigest === item.path)
-        return note ? { ...trace, summary: `${note.path}; uri=${note.uri}; expectedHash=${note.expectedHash}` } : trace
-      })
-      sendEvent(LLM_CHANNELS.toolTrace, { requestId, entries })
     }
     // User memory closeout: every personal janus-chat turn grows the person timeline.
     // Workspace-attached turns already captured project observations inside

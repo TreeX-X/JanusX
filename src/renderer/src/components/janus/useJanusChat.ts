@@ -26,6 +26,7 @@ import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import { normalizeAgentApprovalMode, type AgentApprovalMode, type AgentSession, type ApprovalRequest } from '../../../../shared/ipc/agent-runtime'
 import { getAgentSettings } from '@/services/agent-settings'
 import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../../../shared/ipc/llm'
+import { emptyChatTimeline, mergeTimelineTrace, reduceChatTimeline, reduceTimelineRuntime, settleChatTimeline, type ChatTimelineSnapshot } from '../../../../shared/chat-timeline'
 import type { ChatQuestionAnswer, ChatTodoItem } from '../../../../shared/ipc/llm'
 import { validChatModelLimits, type ChatModelLimits } from '../../../../shared/chat-model-limits'
 import type { JanusPendingQuestion } from './janusRuntimeState'
@@ -106,6 +107,7 @@ export interface JanusResourceController {
 }
 
 export interface UseJanusChatReturn {
+  pendingTimeline?: ChatTimelineSnapshot
   activeTurnId?: string
   contextStatus?: import('../../../../shared/chat-context').ChatContextStatus
   setModelLimits?: (limits: ChatModelLimits | null) => Promise<void>
@@ -180,6 +182,7 @@ export interface UseJanusChatRegistryReturn {
 }
 
 interface ConversationRuntime {
+  pendingTimeline: ChatTimelineSnapshot
   contextStatus?: import('../../../../shared/chat-context').ChatContextStatus
   pendingContent: string
   pendingReasoning: ReasoningSnapshot
@@ -199,6 +202,8 @@ interface ConversationRuntime {
 }
 
 interface RuntimeHandles {
+  timeline: ChatTimelineSnapshot
+  usingAgentEvents: boolean
   proposalRetry?: { message: Message; taskId: string }
   generation: number
   active: boolean
@@ -214,6 +219,7 @@ interface RuntimeHandles {
 
 function emptyRuntime(approvalMode: AgentApprovalMode = 'per-action'): ConversationRuntime {
   return {
+    pendingTimeline: emptyChatTimeline(),
     pendingContent: '',
     pendingReasoning: emptyReasoning(),
     reasoningByTurn: {},
@@ -231,6 +237,8 @@ function emptyRuntime(approvalMode: AgentApprovalMode = 'per-action'): Conversat
 
 function createRuntimeHandles(): RuntimeHandles {
   return {
+    timeline: emptyChatTimeline(),
+    usingAgentEvents: false,
     generation: 0,
     active: false,
     abort: null,
@@ -329,9 +337,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const handles = getHandles(id)
     clearFlushTimer(handles)
     const content = handles.pendingBuffer
-    setRuntime(id, (current) => current.pendingContent === content
+    setRuntime(id, (current) => current.pendingContent === content && current.pendingTimeline === handles.timeline
       ? current
-      : { ...current, pendingContent: content })
+      : { ...current, pendingContent: content, pendingTimeline: handles.timeline })
     return content
   }, [clearFlushTimer, getHandles, setRuntime])
 
@@ -343,9 +351,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       setRuntime(id, (current) => {
         const pendingContent = handles.pendingBuffer
         const pendingReasoning = handles.reasoning
-        return current.pendingContent === pendingContent && current.pendingReasoning.text === pendingReasoning.text
+        return current.pendingContent === pendingContent && current.pendingReasoning.text === pendingReasoning.text && current.pendingTimeline === handles.timeline
           ? current
-          : { ...current, pendingContent, pendingReasoning }
+          : { ...current, pendingContent, pendingReasoning, pendingTimeline: handles.timeline }
       })
     }, 16)
   }, [getHandles, setRuntime])
@@ -354,6 +362,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     if (!delta) return
     const handles = getHandles(id)
     handles.pendingBuffer += delta
+    if (!handles.usingAgentEvents) handles.timeline = reduceChatTimeline(handles.timeline, {
+      type: 'text_delta', requestId: handles.timeline.requestId || handles.assistantMessageId || 'legacy', delta,
+    })
     scheduleFlush(id)
   }, [getHandles, scheduleFlush])
 
@@ -526,13 +537,18 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     if (!sessionId) return
     for (const [conversationId, handles] of handlesRef.current) {
       if (![...handles.sessions.values()].some((session) => session.id === sessionId)) continue
+      if (handles.active) {
+        handles.timeline = reduceTimelineRuntime(handles.timeline, event)
+        scheduleFlush(conversationId)
+      }
       setRuntime(conversationId, (current) => ({
         ...current,
         agent: reduceJanusRuntimeState(current.agent, event),
+        ...(handles.active && event.type === 'approval-requested' ? { turnStatus: { kind: 'awaiting' as const } } : {}),
       }))
       break
     }
-  }), [setRuntime])
+  }), [scheduleFlush, setRuntime])
 
   useEffect(() => () => {
     for (const handles of handlesRef.current.values()) {
@@ -575,20 +591,22 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     return resolved.filter((resource): resource is ChatWorkspaceResource => resource !== null)
   }, [defaultApprovalMode, getHandles])
 
-  const commitAssistant = useCallback((id: string, content: string, messageId?: string) => {
-    if (!content.trim()) return
+  const commitAssistant = useCallback((id: string, content: string, messageId?: string, cancelled = false) => {
+    const timeline = settleChatTimeline(getHandles(id).timeline, Date.now(), cancelled)
+    if (!content.trim() && !timeline.blocks.length) return
     const assistantMessageId = messageId ?? crypto.randomUUID()
     updateConversation(id, (conversation) => {
       const appended = [...conversation.messages, {
         id: assistantMessageId,
         role: 'assistant' as const,
         content,
+        ...(timeline.blocks.length || timeline.truncated ? { timeline } : {}),
         timestamp: Date.now(),
       }]
       const messages = ephemeralIdsRef.current.has(id) ? appended : capChatMessages(appended)
       return { ...conversation, messages, updatedAt: Date.now() }
     })
-  }, [updateConversation])
+  }, [getHandles, updateConversation])
 
   // Note: bounded recovery preserves evidence and avoids replaying writes — see .agents/notes/blueprint/tasks/blueprint-dialog-separation.md
   const startRequest = useCallback((id: string, history: Message[], userMessage: Message, maintenanceTaskId?: string, recovery?: { startedAt: number; error: string }, compact?: { keepRecentUnits: number }, noteRepairId?: string, boundMemo?: { binding?: MemoBinding }) => {
@@ -609,6 +627,9 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     handles.pendingBuffer = ''
     handles.reasoning = emptyReasoning()
 
+    handles.timeline = emptyChatTimeline()
+    handles.usingAgentEvents = false
+
     // Note: organization produces a review document, not a synthetic chat turn — see .agents/notes/blueprint/maintenance/requirements/blueprint-review-conversation-loop.md
     const nextMessages = maintenanceTaskId || compact ? history : [...history, userMessage]
     if (!recovery) updateConversation(id, (current) => ({
@@ -620,6 +641,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     setRuntime(id, (current) => ({
       ...current,
       pendingContent: '',
+      pendingTimeline: emptyChatTimeline(),
       pendingReasoning: emptyReasoning(),
       isStreaming: true,
       turnStartedAt: recovery?.startedAt ?? Date.now(),
@@ -633,7 +655,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     // Only these host tools are known to be safe to replay. Unknown tools fail closed.
     let replaySafe = true
     const chatMessages: ChatMessage[] = [
-      ...history.map((message) => ({
+      ...history.filter(message => message.role === 'user' || message.content.trim()).map((message) => ({
         role: message.role,
         content: message.content,
       })),
@@ -669,7 +691,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             ? Math.max(0, Date.now() - (runtimesRef.current[id]?.turnStartedAt ?? Date.now()))
             : undefined
           // R6-full：在途 steering badge 清除；文本早已在历史中保留。
-          setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [], error: null,
+          setRuntime(id, (current) => ({ ...current, pendingContent: '', pendingTimeline: emptyChatTimeline(), isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [], error: null,
             ...(maintenanceTaskId && !proposalReceived ? { error: '整理请求已结束，但未收到可审核文件。请重新整理；若持续出现，请重启应用后重试。' } : {}),
           }))
           if (maintenanceTaskId && !proposalReceived) handles.proposalRetry = { message: userMessage, taskId: maintenanceTaskId }
@@ -696,6 +718,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
           setRuntime(id, (current) => ({
             ...current,
             pendingContent: '',
+            pendingTimeline: emptyChatTimeline(),
             isStreaming: false,
             turnStartedAt: null,
             turnStatus: INITIAL_JANUS_CHAT_STATUS,
@@ -738,16 +761,22 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
             if (handles.generation !== generation) return
             const assistantMessageId = handles.assistantMessageId
             if (!assistantMessageId) return
+            for (const entry of entries) handles.timeline = mergeTimelineTrace(handles.timeline, entry)
+            scheduleFlush(id)
             updateConversation(id, (current) => ({
               ...current,
               toolTraces: [
                 ...current.toolTraces,
-                ...entries.map((entry) => ({ ...entry, turnId: assistantMessageId })),
+                ...entries.map(({ configResult: _displayOnly, ...entry }) => ({ ...entry, turnId: assistantMessageId })),
               ].slice(-MAX_TOOL_TRACES),
               updatedAt: Date.now(),
             }))
           },
           onAgentEvent: (agentEvent) => {
+            if (handles.generation !== generation) return
+            handles.usingAgentEvents = true
+            handles.timeline = reduceChatTimeline(handles.timeline, agentEvent)
+            scheduleFlush(id)
             if (agentEvent.type === 'memo_created') {
               if (agentEvent.conversationId !== id || agentEvent.binding.messageId !== userMessage.id) return
               replaySafe = false
@@ -824,7 +853,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
         pendingSteerIds: [],
       }))
     })
-  }, [appendPending, appendReasoning, clearFlushTimer, commitAssistant, ensureAgentSessions, flushPending, getHandles, setRuntime, snapshotReasoning, updateConversation])
+  }, [appendPending, appendReasoning, clearFlushTimer, commitAssistant, ensureAgentSessions, flushPending, getHandles, scheduleFlush, setRuntime, snapshotReasoning, updateConversation])
 
   const stop = useCallback((id: string) => {
     const runtime = runtimesRef.current[id]
@@ -844,8 +873,8 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
     const stopDurationMs = runtimesRef.current[id]?.turnStartedAt
       ? Math.max(0, Date.now() - (runtimesRef.current[id]?.turnStartedAt ?? Date.now()))
       : undefined
-    setRuntime(id, (current) => ({ ...current, pendingContent: '', isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [] }))
-    commitAssistant(id, final, handles.assistantMessageId ?? undefined)
+    setRuntime(id, (current) => ({ ...current, pendingContent: '', pendingTimeline: emptyChatTimeline(), isStreaming: false, turnStartedAt: null, turnStatus: INITIAL_JANUS_CHAT_STATUS, pendingSteerIds: [] }))
+    commitAssistant(id, final, handles.assistantMessageId ?? undefined, true)
     snapshotReasoning(id, handles.assistantMessageId ?? undefined, final.trim().length > 0, stopDurationMs)
     handles.assistantMessageId = null
   }, [commitAssistant, flushPending, setRuntime, snapshotReasoning])
@@ -1259,6 +1288,7 @@ export function useJanusChat(): UseJanusChatRegistryReturn {
       activeTurnId: handlesRef.current.get(id)?.assistantMessageId ?? undefined,
       pendingContent: runtime.pendingContent,
       pendingReasoning: runtime.pendingReasoning,
+      pendingTimeline: runtime.pendingTimeline,
       reasoningByTurn: runtime.reasoningByTurn,
       isStreaming: runtime.isStreaming,
       turnStartedAt: runtime.turnStartedAt,

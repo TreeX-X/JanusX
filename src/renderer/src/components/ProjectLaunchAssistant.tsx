@@ -12,14 +12,13 @@ import {
   type WorkspaceLaunchAnalysis,
 } from '@/services/workspace-launch-assistant'
 import { useStreamingPrinter } from '@/hooks/useStreamingPrinter'
-import { MarkdownContent, StreamingText } from './chat/ChatContent'
-import { ToolCallGroup } from './janus/ToolCallCard'
-import { ThinkingRegion } from './janus/ThinkingRegion'
-import { emptyReasoning, appendReasoningDelta, formatThinkingDuration, type ReasoningSnapshot } from './janus/janusReasoning'
+import { MarkdownContent } from './chat/ChatContent'
+import { ChatTimeline } from './janus/ChatTimeline'
+import { emptyChatTimeline, settleChatTimeline } from '../../../shared/chat-timeline'
+import { normalizeLaunchAssistantHistory, serializeLaunchAssistantHistory, type LaunchAssistantMessage as Message } from '../../../shared/launch-assistant-history'
+import { formatThinkingDuration } from './janus/janusReasoning'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './ProjectSettings.module.css'
-
-type Message = { role: 'user' | 'assistant'; content: string }
 
 interface ProjectLaunchAssistantProps {
   analysis: WorkspaceLaunchAnalysis | null
@@ -34,28 +33,47 @@ interface ProjectLaunchAssistantProps {
   onConfig: (config: LaunchConfig, applied?: boolean) => void
 }
 
-export function ProjectLaunchAssistant({
+export function ProjectLaunchAssistant(props: ProjectLaunchAssistantProps) {
+  const historyKey = `janus-launch-history:${JSON.stringify([props.workspaceResources.map(resource => resource.workspacePath).sort(), props.projectPath])}`
+  return <ProjectLaunchAssistantSession key={historyKey} {...props} historyKey={historyKey} />
+}
+
+function ProjectLaunchAssistantSession({
   analysis, config, projectPath, workspaceResources, busy, runningProjects, style, onAnalyze, onConfig,
-}: ProjectLaunchAssistantProps) {
+  historyKey,
+}: ProjectLaunchAssistantProps & { historyKey: string }) {
   const { t } = useI18n('editor')
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [streaming, setStreaming] = useState(false)
-  const [messages, setMessages] = useState<Message[]>([{
-    role: 'assistant',
-    content: t('editor:launcher.greeting'),
-  }])
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const restored = normalizeLaunchAssistantHistory(JSON.parse(localStorage.getItem(historyKey) ?? 'null'))
+      if (restored.length) return restored
+    } catch { /* Unavailable storage or old data starts a fresh dialog. */ }
+    return [{
+      role: 'assistant',
+      content: t('editor:launcher.greeting'),
+    }]
+  })
   const abortRef = useRef<(() => void) | null>(null)
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
   const streamIdRef = useRef(0)
   const toolTracesRef = useRef<ChatToolTraceEntry[]>([])
   const latestToolsRef = useRef<ChatToolTraceEntry[]>([])
-  const [reasoning, setReasoning] = useState<ReasoningSnapshot>(emptyReasoning())
-  const [liveTools, setLiveTools] = useState<ChatToolTraceEntry[]>([])
+  const [timeline, setTimeline] = useState(emptyChatTimeline)
+  const timelineRef = useRef(timeline)
   const turnStartRef = useRef<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const atBottomRef = useRef(true)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const { output: pendingContent, append, complete, flush, reset } = useStreamingPrinter()
+
+  useEffect(() => {
+    try { localStorage.setItem(historyKey, serializeLaunchAssistantHistory(messages)) } catch { /* Storage quotas do not interrupt a turn. */ }
+  }, [historyKey, messages])
 
   // 加载计时：流式期间每 250ms 刷新 elapsed。
   useEffect(() => {
@@ -66,8 +84,8 @@ export function ProjectLaunchAssistant({
   }, [streaming])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: 'end' })
-  }, [messages, pendingContent])
+    if (atBottomRef.current) messagesEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [messages, pendingContent, timeline])
 
   // 与蓝图 minimalComposer 同呼吸：从 46px 起按内容长到 150px 封顶。
   useEffect(() => {
@@ -79,16 +97,25 @@ export function ProjectLaunchAssistant({
 
   useEffect(() => () => {
     streamIdRef.current += 1
+    if (abortRef.current) {
+      const snapshot = settleChatTimeline(timelineRef.current, Date.now(), true)
+      const content = snapshot.blocks.flatMap(block => block.kind === 'text' ? [block.text] : []).join('')
+      try { localStorage.setItem(historyKey, serializeLaunchAssistantHistory([
+        ...messagesRef.current, { role: 'assistant', content, timeline: snapshot },
+      ])) } catch { /* Closing a dialog must still abort when storage is unavailable. */ }
+    }
     abortRef.current?.()
-  }, [])
+  }, [historyKey])
 
   const stop = () => {
     streamIdRef.current += 1
     abortRef.current?.()
     abortRef.current = null
     const partial = flush().trim()
+    const snapshot = settleChatTimeline(timelineRef.current, Date.now(), true)
     reset()
-    if (partial) setMessages((current) => [...current, { role: 'assistant', content: partial }])
+    if (partial || snapshot.blocks.length) setMessages((current) => [...current, { role: 'assistant', content: partial, timeline: snapshot }])
+    toolTracesRef.current = [...toolTracesRef.current, ...latestToolsRef.current].slice(-40)
     setStreaming(false)
     setSending(false)
   }
@@ -107,8 +134,8 @@ export function ProjectLaunchAssistant({
       if (!workspaceAnalysis) throw new Error(t('editor:project.analysisIncomplete'))
       reset()
       setStreaming(true)
-      setReasoning(emptyReasoning())
-      setLiveTools([])
+      timelineRef.current = emptyChatTimeline()
+      setTimeline(timelineRef.current)
       latestToolsRef.current = []
       turnStartRef.current = Date.now()
       setNow(Date.now())
@@ -125,9 +152,10 @@ export function ProjectLaunchAssistant({
         onDelta: (delta) => {
           if (streamIdRef.current === streamId) append(delta)
         },
-        onReasoningDelta: (delta) => {
+        onTimeline: (snapshot) => {
           if (streamIdRef.current !== streamId) return
-          setReasoning((current) => appendReasoningDelta(current, delta))
+          timelineRef.current = snapshot
+          setTimeline(snapshot)
         },
         onConfigChange: (change: LaunchConfigChange) => {
           if (streamIdRef.current !== streamId) return
@@ -136,7 +164,6 @@ export function ProjectLaunchAssistant({
         onToolTraces: (entries) => {
           if (streamIdRef.current !== streamId) return
           latestToolsRef.current = entries
-          setLiveTools(entries)
         },
         onDone: (message) => {
           if (streamIdRef.current !== streamId) return
@@ -144,7 +171,8 @@ export function ProjectLaunchAssistant({
           void complete().then(() => {
             if (streamIdRef.current !== streamId) return
             toolTracesRef.current = [...toolTracesRef.current, ...latestToolsRef.current].slice(-40)
-            setMessages((current) => [...current, { role: 'assistant', content: message }])
+            const snapshot = settleChatTimeline(timelineRef.current, Date.now())
+            setMessages((current) => [...current, { role: 'assistant', content: message, timeline: snapshot }])
             reset()
             setStreaming(false)
             setSending(false)
@@ -154,10 +182,12 @@ export function ProjectLaunchAssistant({
           if (streamIdRef.current !== streamId) return
           abortRef.current = null
           const partial = flush().trim()
+          const snapshot = settleChatTimeline(timelineRef.current, Date.now())
+          toolTracesRef.current = [...toolTracesRef.current, ...latestToolsRef.current].slice(-40)
           reset()
           setMessages((current) => [
             ...current,
-            ...(partial ? [{ role: 'assistant' as const, content: partial }] : []),
+            ...(partial || snapshot.blocks.length ? [{ role: 'assistant' as const, content: partial, timeline: snapshot }] : []),
             { role: 'assistant', content: error },
           ])
           setStreaming(false)
@@ -189,10 +219,15 @@ export function ProjectLaunchAssistant({
         </div>
         <span className={styles.assistantStatus}>{analysis ? t('editor:launcher.workspaceRead') : t('editor:launcher.waitingAnalysis')}</span>
       </div>
-      <div className={styles.messages}>
+      <div className={styles.messages} onScroll={event => {
+        const element = event.currentTarget
+        atBottomRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80
+      }}>
         {messages.map((message, index) => (
           <div key={index} className={message.role === 'user' ? styles.userMessage : styles.assistantMessage}>
-            {message.role === 'assistant' ? <MarkdownContent content={message.content} /> : message.content}
+            {message.role === 'assistant' ? message.timeline?.blocks.length
+              ? <ChatTimeline snapshot={message.timeline} workspaceNames={workspaceNames} />
+              : <MarkdownContent content={message.content} /> : message.content}
           </div>
         ))}
         {(streaming || pendingContent) && (
@@ -201,9 +236,7 @@ export function ProjectLaunchAssistant({
               {!pendingContent && <LoaderCircle size={11} className={styles.spinIcon} />}
               {elapsed && <span className={styles.turnElapsed} data-turn-elapsed>{elapsed}</span>}
             </div>
-            <ThinkingRegion snapshot={reasoning} streaming={streaming} startedAt={turnStartRef.current} />
-            {liveTools.length > 0 && <ToolCallGroup entries={liveTools} workspaceNames={workspaceNames} />}
-            {pendingContent && <StreamingText content={pendingContent} />}
+            <ChatTimeline snapshot={timeline} streaming={streaming} workspaceNames={workspaceNames} />
           </div>
         )}
         <div ref={messagesEndRef} />

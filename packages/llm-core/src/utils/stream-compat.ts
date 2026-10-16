@@ -1,6 +1,8 @@
 import type { LanguageModelV1 } from '../core/types'
 
 type StreamChunk = Record<string, any>
+const sourceModels = new WeakMap<object, LanguageModelV1>()
+const chatModels = new WeakMap<object, LanguageModelV1>()
 
 function mapTool(tool: Record<string, any>): Record<string, any> {
   if (tool.type === 'provider-defined') {
@@ -198,8 +200,14 @@ function normalizeGenerateResult(result: Record<string, any>): Record<string, an
 function normalizeStreamChunk(
   chunk: StreamChunk,
   toolProviderMetadata?: Map<string, Record<string, any>>,
+  reasoning = false,
 ): StreamChunk | null {
   switch (chunk.type) {
+    case 'reasoning':
+    case 'reasoning-delta':
+      return reasoning ? { type: 'reasoning', textDelta: chunk.textDelta ?? chunk.delta ?? '' } : null
+    case 'tool-input-start':
+      return reasoning ? { type: 'tool-call-delta', toolCallType: 'function', toolCallId: chunk.id, toolName: normalizeToolName(chunk.toolName), argsTextDelta: '' } : null
     case 'text-delta': {
       return {
         type: 'text-delta',
@@ -259,8 +267,23 @@ function normalizeStreamChunk(
 }
 
 export function withAiSdkV1StreamCompatibility(model: LanguageModelV1): LanguageModelV1 {
+  return compatibleModel(model, false)
+}
+
+/** Chat uses a reasoning-capable V1 consumer; legacy SDK callers retain their original stream. */
+export function withChatStreamCompatibility(model: LanguageModelV1): LanguageModelV1 {
+  const source = sourceModels.get(model as object) ?? model
+  let chat = chatModels.get(source as object)
+  if (!chat) {
+    chat = compatibleModel(source, true)
+    chatModels.set(source as object, chat)
+  }
+  return chat
+}
+
+function compatibleModel(model: LanguageModelV1, reasoning: boolean): LanguageModelV1 {
   const source = model as any
-  if (source.__janusxAiSdkV1StreamCompat) return model
+  if (source.__janusxAiSdkV1StreamCompat && !reasoning) return model
   const toolProviderMetadata = new Map<string, Record<string, any>>()
   const callOptions = (options: Record<string, any>) =>
     source.specificationVersion === 'v3' ? toV3CallOptions(options, toolProviderMetadata) : options
@@ -285,7 +308,7 @@ export function withAiSdkV1StreamCompatibility(model: LanguageModelV1): Language
         stream: result.stream.pipeThrough(
           new TransformStream<StreamChunk, StreamChunk>({
             transform(chunk, controller) {
-              const normalized = normalizeStreamChunk(chunk, toolProviderMetadata)
+              const normalized = normalizeStreamChunk(chunk, toolProviderMetadata, reasoning)
               if (normalized) {
                 controller.enqueue(normalized)
               }
@@ -297,5 +320,6 @@ export function withAiSdkV1StreamCompatibility(model: LanguageModelV1): Language
     __janusxAiSdkV1StreamCompat: true
   }
 
+  sourceModels.set(wrapped, model)
   return wrapped as any
 }

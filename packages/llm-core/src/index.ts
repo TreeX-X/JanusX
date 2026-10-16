@@ -115,6 +115,7 @@ export {
    便捷函数（Facade 模式）
    ════════════════════════════════════════════════════════════ */
 
+export { withChatStreamCompatibility } from './utils/stream-compat'
 import { ProviderFactory } from './core/ProviderFactory'
 import type { ProviderSettings, LanguageModelV1, EmbeddingModelV1 } from './core/types'
 

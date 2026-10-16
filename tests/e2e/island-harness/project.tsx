@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { JanusChatProvider, useJanusChatController, useOptionalJanusChatController } from '../../../src/renderer/src/components/janus/JanusChatProvider'
 import { JanusChat } from '../../../src/renderer/src/components/janus/JanusChat'
+import { ProjectLaunchAssistant } from '../../../src/renderer/src/components/ProjectLaunchAssistant'
+import { ProjectType } from '../../../src/shared/ipc/project'
 import { BlueprintMaintenancePanel, BLUEPRINT_PANEL_VIEW_REF } from '../../../src/renderer/src/components/blueprint/BlueprintMaintenancePanel'
 import { BlueprintWorkbench } from '../../../src/renderer/src/components/blueprint/BlueprintWorkbench'
 import { createWorkbenchGraph, installWorkbenchBoundary } from './workbench-fixture'
@@ -328,9 +330,24 @@ function App() {
     </div>
   </main>
 }
+function LaunchFixture() {
+  const [config, setConfig] = useState({ version: '0.1.0', projectType: ProjectType.Custom, projectName: 'Fixture',
+    configurations: [{ name: 'dev', type: ProjectType.Custom, request: 'launch' as const, program: 'start.exe' }] })
+  const analysis = { workspaceId: workspace.id, projectPath: '', relativePath: '',
+    detection: { type: ProjectType.Custom, confidence: 1, evidence: [], candidates: [] }, candidateConfig: config,
+    validation: { valid: true, errors: [], warnings: [] }, files: [], excerpts: [] }
+  return <div data-testid="launch-chat" style={{ height: 600, width: 420, display: 'flex' }}>
+    <ProjectLaunchAssistant analysis={analysis} config={config} projectPath="" workspaceResources={[{
+      workspaceId: workspace.id, workspaceName: workspace.name, workspacePath: workspace.path, agentSessionId: 'session',
+    }]} busy={false} runningProjects={[]} onAnalyze={async () => analysis} onConfig={next => {
+      ;(fixture as any).configChanges = ((fixture as any).configChanges ?? 0) + 1
+      setConfig(next as typeof config)
+    }} />
+  </div>
+}
 async function boot() {
   await initI18n(); await changeLanguage(workbench ? 'zh-CN' : 'en')
-  ReactDOM.createRoot(document.getElementById('root')!).render(<JanusChatProvider>{workbench ? <>
+  ReactDOM.createRoot(document.getElementById('root')!).render(<JanusChatProvider>{new URLSearchParams(location.search).has('launch-assistant') ? <LaunchFixture /> : workbench ? <>
     {switchWorkspaceMode && <button
       style={{ position: 'fixed', bottom: 8, left: 8, zIndex: 13000 }}
       onClick={() => {

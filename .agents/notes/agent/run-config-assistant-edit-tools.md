@@ -29,7 +29,7 @@
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"tests/unit/launch-config-chat.test.ts","role":"test"},
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"tests/e2e/run-config-assistant.spec.ts","role":"test"}
   ],
-  "updated": "2026-10-09T01:29:32Z",
+  "updated": "2026-10-16T09:17:15.532Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -116,6 +116,8 @@
 - 包侧 `resolvesTrustedResources`（`@janus-agent/janus-agent` `chat-turn.js`）只认 `'janus-chat' | 'maintenance' | 'harness'`，`'launch-assistant'` 轮次不解析 trusted resources。**已用等价改法缓解（2026-10-08）**：`chat-orchestrator.ts` 把 `turnSourceTag` 在进 `runChatTurn` 前重映射 `sourceTag === 'launch-assistant' ? 'maintenance' : sourceTag`，借闭名单内标签解析工作区资源；画像三闸仍看请求上的 `sourceTag: 'launch-assistant'`，不受重映射影响（见步骤 1 闸门）。彻底修法仍是包侧认新标签（包升级）。第 4 步已接线：渲染端每轮发 `workspaceResources`（agent 会话）与 `launchDraft`，只读工具族与 `attachLaunchConfigTools` 今已吃到工作区根。
 
 ## Consequences
+
+过程展示现使用[共享 Chat 工作时间线](./requirements/chat-work-timeline.md)：读取、修改与写盘回执按调用原位展示，完整草稿只由 controller 回填表单。按 checkout/project 保存的展示历史不会重放配置变更、审批或写盘；容量与恢复规则由该需求维护。
 
 - **Gains**: 运行配置生成获得与 chat 板块同款的工作区理解能力，文件随聊随读；配置编辑有粒度、有校验闭环、有审批落盘；助手轮次退出个人画像；能力边界以工具面形式可执行、可审计。
 - **Costs and limits**: 专属工具族与事件桥是一套新接缝（照 `attachNoteChatTools` 复制其形）；`toolTraces` 回放成为助手历史自持的必要附件；`ChatStreamRequest` 公共契约扩型三处同步；run/test/stop 的模型触发被移除（除非待确认点 1 改判）；工具循环使单轮时延高于纯流式。

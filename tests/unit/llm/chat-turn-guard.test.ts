@@ -57,6 +57,7 @@ vi.mock('../../../src/main/llm/LlmService', () => ({
     resolveModelMetadata: vi.fn(async () => ({ effectiveContextWindow: 16384, maxOutputTokens: 4096 })),
   },
 }))
+vi.mock('../../../src/main/llm/chat-model-stream', () => ({ streamChatModel: streamText }))
 vi.mock('../../../src/main/llm/ai-runtime', () => ({
   generateText: vi.fn(),
   streamText,
@@ -252,6 +253,34 @@ describe('chat turn guard (S6-a)', () => {
     expect(streamText).toHaveBeenCalledOnce()
     expect(streamText.mock.calls[0][0]).toMatchObject({ maxTokens: 65536 })
     expect(reply).toHaveBeenCalledWith('llm:chat:done', { requestId: 'automatic-output' })
+  })
+
+  it('delivers provider reasoning through the real SDK and agent loop into ordered IPC', async () => {
+    const { streamChatModel } = await vi.importActual<typeof import('../../../src/main/llm/chat-model-stream')>('../../../src/main/llm/chat-model-stream')
+    const provider = { specificationVersion: 'v3', provider: 'fixture', modelId: 'fixture',
+      doStream: async () => ({ stream: new ReadableStream({ start(controller) {
+        for (const chunk of [
+          { type: 'stream-start', warnings: [] },
+          { type: 'reasoning-delta', id: 'r1', delta: 'Inspect the entry.' },
+          { type: 'text-delta', id: 't1', delta: 'Working explanation.' },
+          { type: 'reasoning-delta', id: 'r2', delta: 'Verify the conclusion.' },
+          { type: 'text-delta', id: 't2', delta: 'Final answer.' },
+          { type: 'finish', finishReason: { unified: 'stop' }, usage: { inputTokens: { total: 5 }, outputTokens: { total: 10 } } },
+        ]) controller.enqueue(chunk)
+        controller.close()
+      } }) }) }
+    vi.mocked(llmService.getLanguageModel).mockResolvedValueOnce(provider as never)
+    streamText.mockImplementationOnce(streamChatModel)
+    const reply = vi.fn()
+    await handleChatStream({ reply } as never, { requestId: 'provider-timeline', conversationId: 'provider-timeline', providerId: 'p', domain: 'project', messages: userMessages })
+    const events = reply.mock.calls.filter(([channel]) => channel === 'llm:chat:agent-event').map(([, event]) => event)
+    expect(events.filter(event => ['reasoning_delta', 'text_delta'].includes(event.type))).toEqual([
+      { type: 'reasoning_delta', requestId: 'provider-timeline', delta: 'Inspect the entry.' },
+      { type: 'text_delta', requestId: 'provider-timeline', delta: 'Working explanation.' },
+      { type: 'reasoning_delta', requestId: 'provider-timeline', delta: 'Verify the conclusion.' },
+      { type: 'text_delta', requestId: 'provider-timeline', delta: 'Final answer.' },
+    ])
+    expect(events.at(-1)).toMatchObject({ type: 'stream_end', cancelled: false })
   })
 
   it('rejects a second concurrent turn on the same conversation', async () => {

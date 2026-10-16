@@ -3,6 +3,7 @@ import type { ChatToolTraceEntry, ChatWorkspaceResource } from '../../../shared/
 import { ProjectType, type LaunchConfig, type RunningProjectSummary, type ValidationResult } from '../../../shared/ipc/project'
 import type { LaunchConfigChange } from '../../../shared/launch-config-chat'
 import { chatStream, type ChatMessage } from './llm'
+import { emptyChatTimeline, mergeTimelineTrace, reduceChatTimeline, reduceTimelineRuntime, settleChatTimeline } from '../../../shared/chat-timeline'
 
 // Note: launch-assistant sourceTag keeps this dialog out of persona capture (recall/capture/timeline gates) — see .agents/notes/agent/run-config-assistant-edit-tools.md
 // Note: config exchange runs through the launch-config.* tool surface (get/edit/apply + config_change); the <janus-launch-action> text protocol is retired — see .agents/notes/agent/run-config-assistant-edit-tools.md
@@ -179,7 +180,8 @@ export function buildLaunchAssistantMessages(input: {
       ].join('\n'),
     },
     { role: 'system', content: `Workspace evidence:\n${JSON.stringify(context)}` },
-    ...(input.history ?? []).slice(-8),
+    ...(input.history ?? []).filter(message => message.role === 'user' || message.content.trim()).slice(-8)
+      .map(({ role, content }) => ({ role, content })),
     { role: 'user', content: input.request },
   ]
 }
@@ -194,22 +196,35 @@ export function streamWorkspaceLaunchAssistant(input: {
   runningProjects?: RunningProjectSummary[]
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
   onDelta: (delta: string) => void
-  onReasoningDelta: (delta: string) => void
+  onReasoningDelta?: (delta: string) => void
   onConfigChange: (change: LaunchConfigChange) => void
   onToolTraces: (entries: ChatToolTraceEntry[]) => void
+  onTimeline?: (snapshot: import('../../../shared/chat-timeline').ChatTimelineSnapshot) => void
   onDone: (message: string) => void
   onError: (error: string) => void
 }): { abort: () => void } {
   let raw = ''
+  let timeline = emptyChatTimeline()
+  let usingAgentEvents = false
+  const publish = () => input.onTimeline?.(timeline)
   const liveTools = new Map<string, ChatToolTraceEntry>()
-  return chatStream(
+  const unsubscribe = typeof window === 'undefined' ? undefined : window.electron?.agentRuntime?.onEvent?.(event => {
+    if (event.type !== 'approval-requested' || !input.workspaceResources.some(resource => resource.agentSessionId === event.request.sessionId)) return
+    timeline = reduceTimelineRuntime(timeline, event)
+    publish()
+  })
+  const stream = chatStream(
     buildLaunchAssistantMessages(input),
     (delta) => {
       raw += delta
+      if (!usingAgentEvents) {
+        timeline = reduceChatTimeline(timeline, { type: 'text_delta', requestId: 'legacy', delta })
+        publish()
+      }
       input.onDelta(delta)
     },
-    () => input.onDone(raw),
-    input.onError,
+    () => { unsubscribe?.(); timeline = settleChatTimeline(timeline, Date.now()); publish(); input.onDone(raw) },
+    error => { unsubscribe?.(); timeline = settleChatTimeline(timeline, Date.now()); publish(); input.onError(error) },
     {
       sourceTag: 'launch-assistant',
       workspaceId: input.analysis.workspaceId,
@@ -219,22 +234,31 @@ export function streamWorkspaceLaunchAssistant(input: {
       toolTraces: input.toolTraces,
       launchDraft: { config: input.config, projectPath: input.projectPath },
       onAgentEvent: (event) => {
+        usingAgentEvents = true
+        timeline = reduceChatTimeline(timeline, event)
+        publish()
         if (event.type === 'config_change') {
           input.onConfigChange(event.change)
         } else if (event.type === 'reasoning_delta') {
-          input.onReasoningDelta(event.delta)
+          input.onReasoningDelta?.(event.delta)
         } else if (event.type === 'tool_execution_start') {
-          liveTools.set(event.callId, { toolName: event.toolName, workspaceId: input.analysis.workspaceId, status: 'running', summary: '' })
+          liveTools.set(event.callId, { ...liveTools.get(event.callId), callId: event.callId, toolName: event.toolName, workspaceId: input.analysis.workspaceId, status: 'running', summary: '' })
           input.onToolTraces([...liveTools.values()])
         } else if (event.type === 'tool_execution_end') {
-          liveTools.set(event.callId, { toolName: event.toolName, workspaceId: input.analysis.workspaceId, status: event.status, summary: '' })
+          liveTools.set(event.callId, { ...liveTools.get(event.callId), callId: event.callId, toolName: event.toolName, workspaceId: input.analysis.workspaceId, status: event.status, summary: '' })
           input.onToolTraces([...liveTools.values()])
         }
       },
       onToolTrace: (entries) => {
-        for (const entry of entries) liveTools.set(entry.turnId ?? entry.toolName, entry)
+        for (const entry of entries) {
+          const { configResult: _displayOnly, ...contextTrace } = entry
+          liveTools.set(entry.callId ?? entry.turnId ?? entry.toolName, contextTrace)
+          timeline = mergeTimelineTrace(timeline, entry)
+        }
+        publish()
         input.onToolTraces([...liveTools.values()])
       },
     },
   )
+  return { abort: () => { unsubscribe?.(); stream.abort() } }
 }

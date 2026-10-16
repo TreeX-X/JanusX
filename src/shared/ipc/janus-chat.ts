@@ -1,4 +1,5 @@
 import type { ChatToolTraceEntry } from './llm'
+import { normalizeChatTimeline, type ChatTimelineSnapshot } from '../chat-timeline'
 
 export const JANUS_CHAT_CHANNELS = {
   load: 'janus-chat:load',
@@ -6,6 +7,7 @@ export const JANUS_CHAT_CHANNELS = {
 } as const
 
 export interface JanusChatMessage {
+  timeline?: ChatTimelineSnapshot
   id: string
   role: 'user' | 'assistant'
   content: string
@@ -174,7 +176,8 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
     const timestamp = finiteTimestamp(message.timestamp)
     if (!messageId || content === null || timestamp === null) return []
     if (message.role !== 'user' && message.role !== 'assistant') return []
-    return [{ id: messageId, role: message.role, content, timestamp }]
+    const timeline = message.role === 'assistant' ? normalizeChatTimeline(message.timeline) : undefined
+    return [{ id: messageId, role: message.role, content, timestamp, ...(timeline && (timeline.blocks.length || timeline.truncated) ? { timeline } : {}) }]
   })
 
   const attachedWorkspaceIds = Array.isArray(source.attachedWorkspaceIds)
@@ -193,6 +196,7 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
         const status = boundedString(trace.status, MAX_ID_LENGTH)
         const summary = boundedString(trace.summary, MAX_TRACE_FIELD_LENGTH)
         const turnId = boundedString(trace.turnId, MAX_ID_LENGTH) ?? undefined
+        const callId = boundedString(trace.callId, 256) ?? undefined
         const argsDigest = boundedString(trace.argsDigest, MAX_TRACE_FIELD_LENGTH) ?? undefined
         const resultDigest = boundedString(trace.resultDigest, MAX_TRACE_FIELD_LENGTH) ?? undefined
         const errorDetail = boundedString(trace.errorDetail, MAX_TRACE_FIELD_LENGTH) ?? undefined
@@ -205,6 +209,7 @@ function normalizeConversation(value: unknown): PersistedJanusConversation | nul
               status,
               summary,
               ...(turnId ? { turnId } : {}),
+              ...(callId ? { callId } : {}),
               ...(argsDigest ? { argsDigest } : {}),
               ...(resultDigest ? { resultDigest } : {}),
               ...(errorDetail ? { errorDetail } : {}),

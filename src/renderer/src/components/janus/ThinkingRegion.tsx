@@ -21,6 +21,7 @@ export interface ThinkingRegionProps {
   streaming: boolean
   /** 本轮开始时间（毫秒时间戳；流式中用于实时计时，落库后用 snapshot.durationMs）。 */
   startedAt?: number | null
+  preview?: string
 }
 
 function useNowWhileStreaming(streaming: boolean): number {
@@ -34,7 +35,7 @@ function useNowWhileStreaming(streaming: boolean): number {
   return now
 }
 
-export function ThinkingRegion({ snapshot, streaming, startedAt = null }: ThinkingRegionProps) {
+export function ThinkingRegion({ snapshot, streaming, startedAt = null, preview }: ThinkingRegionProps) {
   const { t } = useI18n('janus')
   const [expanded, setExpanded] = useState(false)
   const now = useNowWhileStreaming(streaming)
@@ -46,7 +47,7 @@ export function ThinkingRegion({ snapshot, streaming, startedAt = null }: Thinki
   const doneDurationMs = !streaming && typeof snapshot.durationMs === 'number' ? snapshot.durationMs : null
   const durationMs = streaming ? liveDurationMs : doneDurationMs
   const durationText = typeof durationMs === 'number' ? formatThinkingDuration(durationMs) : null
-  const gist = extractThinkingGist(snapshot.text)
+  const gist = extractThinkingGist(preview ?? snapshot.text)
   const liveTail = streaming ? extractThinkingLiveTail(snapshot.text) : ''
 
   const baseLabel = streaming

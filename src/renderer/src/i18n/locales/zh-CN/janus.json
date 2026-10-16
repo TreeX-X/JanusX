@@ -32,6 +32,17 @@
     "linkFailed": "无法打开浏览器，请访问 github.com/TreeX-X/WorkFlowX。"
   },
   "chat": {
+    "timeline": {
+      "configRead": "已读取草稿",
+      "configNotApplied": "配置未写盘",
+      "truncated": "部分较早的过程内容已截断。",
+      "configApplied": "配置已写盘",
+      "configDraft": "草稿已修改，尚未写盘",
+      "valid": "校验通过",
+      "invalid": "校验未通过",
+      "changeUnavailable": "变更记录暂不可用",
+      "denied": "已拒绝"
+    },
     "context": {
       "usage": "上下文 ≈ {{used}} / {{limit}} tokens", "configured": "手动配置", "catalog": "模型目录", "registry": "模型资料", "estimated": "窗口为估算值",
       "compacting": "正在压缩早期对话…", "compacted": "已压缩，原始记录保留", "failed": "压缩失败，原始记录保留",

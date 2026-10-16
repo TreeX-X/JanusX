@@ -7,7 +7,7 @@ import type { NoteFocusEvent } from '../../../../shared/note-chat'
 import './note-focus.css'
 
 // Note: every entry has an independent module navigation action — see .agents/notes/blueprint/navigation/requirements/module-focus-navigation.md
-function FocusNoteList({ event, editable = false }: { event: NoteFocusEvent; editable?: boolean }) {
+export function FocusNoteList({ event, editable = false }: { event: NoteFocusEvent; editable?: boolean }) {
   const { t } = useI18n('blueprint')
   const state = useNoteFocusStore()
   const blueprint = useBlueprintStore(store => store.currentBlueprint)

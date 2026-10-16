@@ -205,10 +205,12 @@ export function BlueprintMaintenancePanel({ onClose }: BlueprintMaintenancePanel
     {bound && chat ? <div className="bp-maintenance-task">
       <JanusChat visible docked compactNavigation focused modeColor="#ff7830" messages={chat.messages}
         emptyState={<p className="bp-maintenance-greeting">{t('blueprint:maintenance.greeting')}</p>}
-        renderTurnFooter={turnId => <NoteTurnActivity key={turnId ?? 'live'} conversationId={chat.conversationId}
+        renderTurnFooter={(turnId, timeline) => timeline?.blocks.some(block => block.kind === 'tool' && block.details?.some(detail => detail.kind === 'note-focus')) ? null : <NoteTurnActivity key={turnId ?? 'live'} conversationId={chat.conversationId}
           workspacePath={activeWorkspace.path} turnId={turnId ?? chat.activeTurnId} live={!turnId} />}
         discussionFooter={noteHistoryReady ? <NoteChatActivity key={`${activeWorkspace.id}:${activeWorkspace.path}:${chat.conversationId}`}
-          conversationId={chat.conversationId} workspacePath={activeWorkspace.path} /> : null}
+          conversationId={chat.conversationId} workspacePath={activeWorkspace.path}
+          excludedIds={[...chat.messages.flatMap(message => message.timeline?.blocks ?? []), ...(chat.pendingTimeline?.blocks ?? [])]
+            .flatMap(block => block.kind === 'tool' ? block.details?.flatMap(detail => detail.kind === 'note-change' ? [detail.id] : []) ?? [] : [])} /> : null}
         pendingContent={chat.pendingContent} isStreaming={chat.isStreaming} error={chat.error}
         modelOptions={chat.modelOptions} activeModel={chat.activeModel} modelNotice={chat.modelNotice}
         resourceController={chat.resourceController} toolTraces={chat.toolTraces} conversationController={chat}

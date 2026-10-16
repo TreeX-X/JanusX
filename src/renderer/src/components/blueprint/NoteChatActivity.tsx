@@ -7,7 +7,7 @@ import { reviewDiff } from '@/features/blueprint/review-diff'
 import { sameCheckoutPath } from '@/features/blueprint/resolveNodeWorkspace'
 import styles from './NoteChatActivity.module.css'
 
-function ChangeCard({ change }: { change: NoteChatChange }) {
+export function ChangeCard({ change }: { change: NoteChatChange }) {
   const { t } = useI18n('blueprint')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,7 +43,7 @@ function ChangeCard({ change }: { change: NoteChatChange }) {
   </article>
 }
 
-export function NoteChatActivity({ conversationId, workspacePath }: { conversationId: string; workspacePath: string }) {
+export function NoteChatActivity({ conversationId, workspacePath, excludedIds = [] }: { conversationId: string; workspacePath: string; excludedIds?: string[] }) {
   const { t } = useI18n('blueprint')
   const changes = useNoteChatStore(state => state.changes)
   const [error, setError] = useState<string | null>(null)
@@ -67,7 +67,7 @@ export function NoteChatActivity({ conversationId, workspacePath }: { conversati
   const matching = changes.filter(change => change.conversationId === conversationId && sameCheckoutPath(change.workspacePath, workspacePath))
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   return <div className={styles.activity} aria-live="polite">
-    {matching.map(change => <ChangeCard key={change.id} change={change} />)}
+    {matching.filter(change => !excludedIds.includes(change.id)).map(change => <ChangeCard key={change.id} change={change} />)}
     {error && <div className={styles.notice}>
       <p role="status">{t('blueprint:noteChat.historyLoadFailed')}</p>
       <button type="button" onClick={() => setAttempt(value => value + 1)}>{t('blueprint:noteChat.reloadHistory')}</button>

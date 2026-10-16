@@ -142,6 +142,43 @@ describe('workspace launch assistant', () => {
     expect(onToolTraces).toHaveBeenCalledWith([edited])
   })
 
+  it('merges same-name trace results by call identity without duplicating deltas or business effects', () => {
+    let options: Record<string, any> | undefined
+    let delta!: (delta: string) => void
+    let done!: () => void
+    vi.mocked(chatStream).mockImplementation((_m, d, finish, _e, opts) => {
+      options = opts as Record<string, any>; delta = d; done = finish
+      return { abort: vi.fn() }
+    })
+    const snapshots: any[] = []
+    const onConfigChange = vi.fn()
+    const onToolTraces = vi.fn()
+    streamWorkspaceLaunchAssistant({ request: 'edit', analysis, config, projectPath: '', workspaceResources: resources,
+      onDelta: vi.fn(), onTimeline: snapshot => snapshots.push(snapshot), onConfigChange, onToolTraces, onDone: vi.fn(), onError: vi.fn() })
+    const event = (event: Record<string, unknown>) => options!.onAgentEvent({ requestId: 'r', ...event })
+    event({ type: 'text_delta', delta: 'Working.' }); delta('Working.')
+    for (const callId of ['a', 'b']) event({ type: 'tool_execution_start', callId, toolName: 'launch-config.edit' })
+    event({ type: 'config_change', callId: 'b', change: { id: 'change', config, summary: 'draft modified', validation: analysis.validation } })
+    for (const callId of ['b', 'a']) {
+      options!.onToolTrace([{ callId, toolName: 'launch-config.edit', workspaceId: 'workspace-1', status: 'completed', summary: callId }])
+      event({ type: 'tool_execution_end', callId, toolName: 'launch-config.edit', status: 'completed' })
+    }
+    done()
+    const blocks = snapshots.at(-1).blocks
+    expect(blocks.map((block: any) => block.kind)).toEqual(['text', 'tool', 'tool'])
+    expect(blocks[0].text).toBe('Working.')
+    expect(blocks[2]).toMatchObject({ callId: 'b', details: [{ id: 'change' }] })
+    expect(onToolTraces.mock.calls.at(-1)![0]).toHaveLength(2)
+    expect(onConfigChange).toHaveBeenCalledOnce()
+  })
+
+  it('only forwards role and content from restored display history into model messages', () => {
+    const messages = buildLaunchAssistantMessages({ request: 'continue', analysis,
+      history: [{ role: 'assistant', content: 'Previous answer', timeline: { blocks: [{ text: 'display-only-reasoning' }] } } as any] })
+    expect(messages).toContainEqual({ role: 'assistant', content: 'Previous answer' })
+    expect(JSON.stringify(messages)).not.toContain('display-only-reasoning')
+  })
+
   it('redacts common secrets from workspace excerpts', () => {
     expect(redactWorkspaceExcerpt('API_KEY=abc123\nhttps://user:pass@example.com')).toBe('API_KEY=[REDACTED]\nhttps://[REDACTED]@example.com')
   })

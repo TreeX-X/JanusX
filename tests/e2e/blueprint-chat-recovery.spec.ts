@@ -30,6 +30,7 @@ const elapsed = async (page: Page) => parseFloat((await chat(page).locator('.jan
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', error => { throw error })
   await page.goto('/project.html?workbench&manual-stream')
+  await page.locator('.blueprint-janus-capsule').click()
   await send(page)
 })
 
@@ -120,6 +121,7 @@ test('clear during recovery ignores late events', async ({ page }) => {
 
 test('tools remain visible on terminal failure without any assistant text', async ({ page }) => {
   await page.goto('/project.html?workbench&manual-stream')
+  await page.locator('.blueprint-janus-capsule').click()
   await send(page)
   await tool(page, 'note.read')
   await fail(page)

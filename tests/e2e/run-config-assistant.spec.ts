@@ -46,14 +46,32 @@ test('run-config assistant edits via launch-config tools and applies through the
           response.writeHead(200, { 'Content-Type': 'text/event-stream' })
           const emit = (event: unknown) => response.write(`data: ${JSON.stringify(event)}\n\n`)
 
+          // Use the production provider, compatibility layer, SDK, loop and IPC.
+          // The fixture supplies publicly returned reasoning, never private model state.
+          const emitWork = () => {
+            if (isResponses) {
+              const reasoning = { type: 'reasoning', id: `reason-${turn}`, summary: [], encrypted_content: null }
+              emit({ type: 'response.output_item.added', output_index: 0, item: reasoning })
+              emit({ type: 'response.reasoning_summary_part.added', item_id: `reason-${turn}`, summary_index: 0 })
+              emit({ type: 'response.reasoning_summary_text.delta', item_id: `reason-${turn}`, summary_index: 0, delta: `Reasoning phase ${turn}.` })
+              emit({ type: 'response.reasoning_summary_part.done', item_id: `reason-${turn}`, summary_index: 0 })
+              emit({ type: 'response.output_item.done', output_index: 0, item: { ...reasoning, summary: [{ type: 'summary_text', text: `Reasoning phase ${turn}.` }] } })
+              const item = { type: 'message', id: `work-${turn}` }
+              emit({ type: 'response.output_item.added', output_index: 1, item })
+              emit({ type: 'response.output_text.delta', item_id: item.id, delta: `Working phase ${turn}.` })
+              emit({ type: 'response.output_item.done', output_index: 1, item })
+            }
+          }
+
           const emitToolCall = (name: string, args: Record<string, unknown>) => {
             const json = JSON.stringify(args)
             if (isResponses) {
               const item = { type: 'function_call', id: `item-${turn}`, call_id: `tool-${turn}`, name, arguments: json, status: 'completed' }
               emit({ type: 'response.created', response: { id: `fixture-${turn}`, created_at: 1, model: 'fixture-model' } })
-              emit({ type: 'response.output_item.added', output_index: 0, item: { ...item, arguments: '' } })
-              emit({ type: 'response.function_call_arguments.delta', item_id: item.id, output_index: 0, delta: json })
-              emit({ type: 'response.output_item.done', output_index: 0, item })
+              emitWork()
+              emit({ type: 'response.output_item.added', output_index: 2, item: { ...item, arguments: '' } })
+              emit({ type: 'response.function_call_arguments.delta', item_id: item.id, output_index: 2, delta: json })
+              emit({ type: 'response.output_item.done', output_index: 2, item })
               emit({ type: 'response.completed', response: { usage: { input_tokens: 10, output_tokens: 10 } } })
             } else {
               emit({ id: `fixture-${turn}`, object: 'chat.completion.chunk', choices: [{ index: 0, delta: { role: 'assistant', tool_calls: [{ index: 0, id: `call-${turn}`, type: 'function', function: { name, arguments: json } }] }, finish_reason: null }] })
@@ -80,8 +98,10 @@ test('run-config assistant edits via launch-config tools and applies through the
           }
 
           if (turn === 0) {
-            emitToolCall('launch_config_edit', { ops: [{ op: 'setField', path: 'configurations[0].program', value: 'debug-start.exe' }] })
+            emitToolCall('launch_config_get', {})
           } else if (turn === 1) {
+            emitToolCall('launch_config_edit', { ops: [{ op: 'setField', path: 'configurations[0].program', value: 'debug-start.exe' }] })
+          } else if (turn === 2) {
             emitToolCall('launch_config_apply', {})
           } else {
             // 长回复：复现「输出后右栏被内容撑开、composer 被挤没」的布局回归。
@@ -152,6 +172,10 @@ test('run-config assistant edits via launch-config tools and applies through the
     await expect(composer).toBeVisible()
     await expect(launchModal.locator('[data-turn-elapsed]').first()).toBeVisible()
     await expect(launchModal.locator('.janus-tool-card').first()).toBeVisible()
+    await expect(launchModal.locator('.janus-chat-thinking')).toHaveCount(3)
+    await expect(launchModal.locator('.janus-chat-thinking[data-streaming="true"]')).toHaveCount(0)
+    await expect(launchModal.locator('[data-config-state="draft"]')).toBeVisible()
+    await expect(launchModal.locator('[data-config-state="applied"]')).toHaveCount(0)
     await page.screenshot({ path: test.info().outputPath('run-config-assistant-streaming.png') })
     await launchModal.getByRole('button', { name: '批准' }).click()
 
@@ -165,6 +189,10 @@ test('run-config assistant edits via launch-config tools and applies through the
 
     // 5. 布局回归：长回复落定后 composer 仍完整在弹窗内（未被下沿撑开挤没），消息区内部滚动。
     await expect(launchModal).toContainText('第 39 行：运行配置助手生成的较长回复', { timeout: 20_000 })
+    await expect(launchModal.locator('.janus-tool-card')).toHaveCount(3)
+    await expect(launchModal.locator('[data-config-state="applied"]')).toBeVisible()
+    await expect(launchModal.locator('.janus-chat-timeline-block').evaluateAll(elements => elements.map(element => element.getAttribute('data-kind'))))
+      .resolves.toEqual(['reasoning', 'text', 'tool', 'reasoning', 'text', 'tool', 'reasoning', 'text', 'tool', 'text'])
     await expect(composer).toBeVisible()
     await expect.poll(async () => {
       const modal = await launchModal.boundingBox()

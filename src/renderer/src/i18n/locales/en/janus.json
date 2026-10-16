@@ -32,6 +32,17 @@
     "linkFailed": "Could not open the browser. Visit github.com/TreeX-X/WorkFlowX."
   },
   "chat": {
+    "timeline": {
+      "configRead": "Draft read",
+      "configNotApplied": "Configuration not saved",
+      "truncated": "Some earlier process content was truncated.",
+      "configApplied": "Configuration saved to disk",
+      "configDraft": "Draft modified; not saved to disk",
+      "valid": "Validation passed",
+      "invalid": "Validation failed",
+      "changeUnavailable": "Change record unavailable",
+      "denied": "Denied"
+    },
     "context": {
       "usage": "Context ≈ {{used}} / {{limit}} tokens", "configured": "Configured", "catalog": "Model catalog", "registry": "Model registry", "estimated": "Estimated window",
       "compacting": "Summarizing earlier conversation…", "compacted": "Summarized; original history retained", "failed": "Summary failed; history retained",

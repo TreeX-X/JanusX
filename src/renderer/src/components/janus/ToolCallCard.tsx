@@ -28,6 +28,7 @@ function statusIcon(entry: ChatToolTraceEntry, statusLabels: { requested: string
     case 'completed':
       return <ShieldCheck size={12} className="janus-tool-card-icon janus-tool-card-icon--completed" aria-label={statusLabels.completed} />
     case 'failed':
+    case 'denied':
       return <CircleX size={12} className="janus-tool-card-icon janus-tool-card-icon--failed" aria-label={statusLabels.failed} />
     case 'cancelled':
       return <CircleX size={12} className="janus-tool-card-icon janus-tool-card-icon--cancelled" aria-label={statusLabels.cancelled} />
@@ -54,6 +55,7 @@ export function ToolCallCard({ entry, workspaceNames, defaultExpanded = false }:
     completed: t('janus:chat.tool.status.completed'),
     failed: t('janus:chat.tool.status.failed'),
     cancelled: t('janus:chat.tool.status.cancelled'),
+    denied: t('janus:chat.timeline.denied'),
   }
   const hasDetail = Boolean(entry.argsDigest || entry.resultDigest || entry.errorDetail)
   const duration = formatDuration(entry)
@@ -70,7 +72,7 @@ export function ToolCallCard({ entry, workspaceNames, defaultExpanded = false }:
   }, [entry])
 
   return (
-    <div className={`janus-tool-card janus-tool-card--${entry.status}`} data-turn={entry.turnId ?? ''}>
+    <div className={`janus-tool-card janus-tool-card--${entry.status}`} data-turn={entry.turnId ?? ''} data-call-id={entry.callId}>
       <div className="janus-tool-card-head">
         <button
           type="button"
@@ -105,6 +107,7 @@ export function ToolCallCard({ entry, workspaceNames, defaultExpanded = false }:
           {copied ? t('janus:chat.tool.copied') : ''}
         </button>
       </div>
+      {entry.summary && <p className="janus-tool-card-summary">{entry.summary}</p>}
       {expanded && hasDetail && (
         <div className="janus-tool-card-body">
           {entry.argsDigest && (
@@ -146,7 +149,7 @@ export function summarizeToolCallGroup(entries: ChatToolTraceEntry[]): ToolCallG
   let pending = 0
   let approval = false
   for (const entry of entries) {
-    if (entry.status === 'failed' || entry.status === 'cancelled') failed += 1
+    if (entry.status === 'failed' || entry.status === 'cancelled' || entry.status === 'denied') failed += 1
     else if (entry.status === 'completed') continue
     else {
       pending += 1
