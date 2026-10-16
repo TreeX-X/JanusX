@@ -84,7 +84,7 @@ export class CpaService {
       }
       const oauthBridge = this.oauthBridge
       const result = this.surfaces.createSurface({ surfaceId: CPA_SURFACE_ID, carrier: 'pane', url: managementUrl }, {
-        partition, httpOnly: true,
+        partition, httpOnly: true, externalPopups: true,
         ...(settings.mode === 'managed' ? { openExternalUrl: (url: string) => {
           if (!isCpaOAuthAuthorizationUrl(url)) return false
           oauthBridge?.observeAuthorization(url)

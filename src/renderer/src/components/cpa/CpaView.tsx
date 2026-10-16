@@ -1,7 +1,9 @@
+// Note: .agents/notes/workbench/service-integrations.md — dedicated CPA shell and controls.
 import { useEffect, useState } from 'react'
-import { ExternalLink, Settings } from 'lucide-react'
+import { Check, ExternalLink, KeyRound, Settings } from 'lucide-react'
 import { BrowserSurface } from '@/components/browser/BrowserSurface'
 import { ModalFrame } from '@/components/shared/ModalFrame'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { useCpaStore } from '@/stores/cpa'
 import { useBrowserStore } from '@/stores/browser'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -67,16 +69,27 @@ export function CpaView({ active }: ExtensionViewProps) {
 
   useEffect(() => { if (!active) setConfigure(false) }, [active])
 
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(timer)
+  }, [copied])
+
   return <div className={styles.shell} data-cpa-view>
-    <div className={styles.toolbar}>
-      <span>{t('common:cpa.title')}</span>
-      {settings?.mode === 'managed' && settings.enabled && <button type="button" onClick={() => {
-        void window.electron.cpa.copyManagementKey().then(() => setCopied(true)).catch(() => setError(true))
-      }}>{copied ? t('common:cpa.keyCopied') : t('common:cpa.copyKey')}</button>}
-      <button type="button" onClick={() => { void window.electron.cpa.openExternal().catch(() => setError(true)) }}>
-        <ExternalLink size={13} aria-hidden="true" />{t('common:cpa.openExternal')}
-      </button>
-      <button type="button" onClick={() => setConfigure(true)}><Settings size={13} aria-hidden="true" />{t('common:cpa.configure')}</button>
+    <div className={styles.toolbar} data-cpa-toolbar>
+      {settings?.mode === 'managed' && settings.enabled && <ThemedTooltip label={copied ? t('common:cpa.keyCopied') : t('common:cpa.copyKey')}>
+        <button type="button" aria-label={t('common:cpa.copyKey')} onClick={() => {
+          void window.electron.cpa.copyManagementKey().then(() => setCopied(true)).catch(() => setError(true))
+        }}>{copied ? <Check size={14} aria-hidden="true" /> : <KeyRound size={14} aria-hidden="true" />}</button>
+      </ThemedTooltip>}
+      <ThemedTooltip label={t('common:cpa.openExternal')}>
+        <button type="button" aria-label={t('common:cpa.openExternal')} onClick={() => { void window.electron.cpa.openExternal().catch(() => setError(true)) }}>
+          <ExternalLink size={14} aria-hidden="true" />
+        </button>
+      </ThemedTooltip>
+      <ThemedTooltip label={t('common:cpa.configure')}>
+        <button type="button" aria-label={t('common:cpa.configure')} onClick={() => setConfigure(true)}><Settings size={14} aria-hidden="true" /></button>
+      </ThemedTooltip>
     </div>
     {settings?.mode === 'managed' && shouldOpen && status?.oauthFallback && <div className={styles.oauthNotice} role="status" data-cpa-oauth-fallback>
       <strong>{t('common:cpa.oauthManual', { provider: status.oauthFallback.provider, port: status.oauthFallback.port })}</strong>
@@ -92,7 +105,7 @@ export function CpaView({ active }: ExtensionViewProps) {
       {status?.error === 'cpa-port-in-use' && <p>{t('common:cpa.portInUse')}</p>}
       <button type="button" onClick={() => { setError(false); setRetry((value) => value + 1) }}>{t('common:action.retry')}</button>
     </div> : readyUrl === settings?.managementUrl
-      ? <BrowserSurface surfaceId={CPA_SURFACE_ID} carrier="pane" visible={active} serviceUrl={readyUrl} />
+      ? <BrowserSurface surfaceId={CPA_SURFACE_ID} carrier="pane" visible={active} serviceUrl={readyUrl} showChrome={false} />
       : <div className={styles.message} role="status">{settings?.mode === 'managed' && status ? t(`common:cpa.phase.${status.phase}`) : t('common:status.loading')}{status?.progress !== undefined && ` · ${status.progress}%`}</div>}
     {configure && <ModalFrame label={t('common:cpa.configure')} onClose={() => setConfigure(false)} panelClassName={styles.dialog}>
       {({ requestClose }) => <><CpaSettingsPanel onOpened={requestClose} />

@@ -55,6 +55,29 @@ async function nativeCount(app: ElectronApplication): Promise<number> {
   return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.length)
 }
 
+async function expectCompactCpa(app: ElectronApplication, page: Page, managed = false): Promise<void> {
+  const view = page.locator('[data-cpa-view]')
+  const toolbar = view.locator('[data-cpa-toolbar]')
+  await expect(toolbar.getByRole('button')).toHaveCount(managed ? 3 : 2)
+  await expect(toolbar).toHaveText('')
+  await expect(toolbar.getByRole('button', { name: 'Open in browser', exact: true })).toBeVisible()
+  const settings = toolbar.getByRole('button', { name: 'Connection settings', exact: true })
+  await expect(settings).toBeVisible()
+  await settings.hover()
+  await expect(page.getByRole('tooltip')).toHaveText('Connection settings')
+  await page.mouse.move(0, 0)
+  await expect(view.getByText('CPA account management', { exact: true })).toHaveCount(0)
+  await expect(view.getByRole('tablist')).toHaveCount(0)
+  await expect(view.getByRole('textbox')).toHaveCount(0)
+  const box = await toolbar.boundingBox()
+  expect(box).not.toBeNull()
+  // Verify the actual native view starts directly under the sole host toolbar.
+  await expect.poll(() => app.evaluate(({ BrowserWindow }) => {
+    const children = BrowserWindow.getAllWindows()[0].contentView.children
+    return children.length === 1 ? children[0].getBounds().y : -1
+  })).toBe(Math.round(box!.y + box!.height))
+}
+
 async function freePort(): Promise<number> {
   const server = createTcpServer()
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -211,6 +234,8 @@ test('CPA native page shares a global login, hides for dialogs, releases on clos
     expect(await web.evaluate(() => ({ bridge: typeof (window as any).electron, node: typeof (window as any).require })))
       .toEqual({ bridge: 'undefined', node: 'undefined' })
     await expect.poll(() => nativeCount(app!)).toBe(1)
+    await expectCompactCpa(app, page)
+    await page.screenshot({ path: test.info().outputPath('compact-cpa.png') })
     const originalWeb = web
 
     // A project switch transfers the application contribution with its guest intact.
@@ -238,8 +263,14 @@ test('CPA native page shares a global login, hides for dialogs, releases on clos
     await expect.poll(() => nativeCount(app!)).toBe(0)
     await page.getByRole('dialog', { name: 'Connection settings' }).getByRole('button', { name: 'Close', exact: true }).click()
     await expect.poll(() => nativeCount(app!)).toBe(1)
+    await app.evaluate(({ shell }) => {
+      ;(globalThis as any).__cpaHelpOpened = []
+      shell.openExternal = async (url: string) => { (globalThis as any).__cpaHelpOpened.push(url) }
+    })
     await web.locator('#popup').click()
-    await expect.poll(async () => page.evaluate(() => (window as any).electron.browser.getState('integration:cpa').then((state: any) => state.tabs.length))).toBe(2)
+    await expect.poll(() => app!.evaluate(() => (globalThis as any).__cpaHelpOpened)).toEqual([`${origin}/help`])
+    expect(await page.evaluate(() => (window as any).electron.browser.getState('integration:cpa').then((state: any) => state.tabs.length))).toBe(1)
+    await expect(web.getByRole('heading', { name: 'Account quota fixture' })).toBeVisible()
 
     await page.locator('[data-tab-id*="janusx.cpa"]').hover()
     await page.locator('[data-tab-id*="janusx.cpa"] [data-tab-close]').click()
@@ -401,6 +432,8 @@ test('managed CPA downloads verified components, runs the real Windows service a
     await expect(web.locator('input[name="cpa-management-key"]')).toBeVisible()
     const status = await page.evaluate(() => (window as any).electron.cpa.status())
     expect(status.phase).toBe('running'); expect(status.version).toContain('v8.0.31')
+    await expectCompactCpa(app, page, true)
+    await page.screenshot({ path: test.info().outputPath('compact-managed-cpa.png') })
     let key = await app.evaluate(({ app, safeStorage }) => {
       const fs = process.getBuiltinModule('fs') as typeof import('node:fs')
       const path = process.getBuiltinModule('path') as typeof import('node:path')

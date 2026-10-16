@@ -1,3 +1,4 @@
+// Note: .agents/notes/desktop/browser-surface.md — shared native layout with optional browser chrome.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
@@ -39,13 +40,15 @@ interface BrowserSurfaceProps {
   onRequestEmbed?: () => void
   /** A bundled service page keeps login in its guest, with no Agent controls. */
   serviceUrl?: string
+  /** Service views can supply their own toolbar while retaining native guest lifecycle. */
+  showChrome?: boolean
 }
 
 /**
  * 双载体共用的浏览器 UI：tab 条 + 导航 + 地址栏 + bounds 上报占位层。
  * 网页本体是主进程持有的 WebContentsView，始终盖在 body 占位层上方。
  */
-export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, onRequestEmbed, serviceUrl }: BrowserSurfaceProps) {
+export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, onRequestEmbed, serviceUrl, showChrome = true }: BrowserSurfaceProps) {
   const { t } = useI18n('common')
   const surface = useBrowserStore((s) => s.surfaces[surfaceId])
   /*-- tab 拖拽期间隐藏原生视图：WebContentsView 盖在 DOM 之上会吞掉 dragover，落点区只有先让位才能命中 --*/
@@ -145,7 +148,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
 
   return (
     <div className={styles.shell} data-carrier={carrier}>
-      <div className={styles.header}>
+      {showChrome && <div className={styles.header}>
         <div className={styles.tabs} role="tablist">
           {surface?.tabs.map((tab) => {
             const isActive = tab.tabId === surface.activeTabId
@@ -265,7 +268,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
             <PanelRightOpen size={12} />
           </button>
         )}
-      </div>
+      </div>}
 
       <div ref={bodyRef} className={styles.body}>
         {isEmpty && (

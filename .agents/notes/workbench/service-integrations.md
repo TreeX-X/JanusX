@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-14",
-  "updated": "2026-10-16T12:12:46Z",
+  "updated": "2026-10-16T13:13:55Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -46,9 +46,13 @@ CPA 是官方集成，待市场建立后可作为推荐项。主要用途为查�
 
 默认地址为 `http://127.0.0.1:8317/management.html`，已有实例可配置自定义路径。仅接受 HTTP／HTTPS，拒绝地址中的用户名、密码和查询参数；无协议的回环地址按 HTTP，其余按 HTTPS，根路径自动补管理页。全局 `cpaSettings` 保存模式、启用、端口、自动更新和页面地址，密钥不进入该 JSON。缺少设置时为尚未启用的本地托管，旧版只有地址的配置恢复为已有实例模式，损坏设置回退默认值以便修复。
 
+CPA 使用专用简洁外壳：中部 Tab 已标识 CPA，不再重复显示“CPA 账号管理”；唯一顶栏右侧提供“复制管理密钥、在浏览器打开、连接设置”图标及悬停提示，复制仅在已启用本地托管时出现，成功后短暂显示勾选反馈。隐藏通用浏览器标签、前进／后退和地址栏，页面直接填充顶栏下方；加载失败仍可重试，设置对话框仍让原生视图让位。`BrowserSurface` 的 `showChrome` 默认开启，CPA 单独关闭以复用原生布局和生命周期。
+
+界面收尾验证：`npx vitest run tests/unit/cpa.test.ts tests/unit/browser-surface-manager.test.ts` 的 67 项通过；`tests/e2e/desktop-cpa.spec.ts --project=desktop --workers=1` 覆盖三项桌面流程，新增图标可访问名称、悬停提示、无重复标题／地址栏、原生视图紧接顶栏及帮助链接外开断言。首轮原生页用例的 worker 在执行前异常退出，单独重跑通过，其余两项首轮通过。严格类型检查、局部 ESLint、应用构建和 Notes 检查通过；日志与截图位于 `artifacts/cpa-compact*`，未重新打包 EXE。
+
 中部通过原生 `WebContentsView` 加载既有网页，不使用 iframe 或删除嵌入限制响应头。CPA 按地址 origin 的 SHA-256 前 24 位选择 `persist:janusx-cpa-*` 独立持久分区，与普通浏览器及其他 CPA origin 隔离。同一 origin 的路径共用登录；关闭页面释放视图，保留该分区的网页登录数据。跨项目、重新打开与应用重启可复用页面自己记住的登录。
 
-网页没有 preload、Node 或 JanusX 完整桥，启用 sandbox、contextIsolation 与 webSecurity；固定 CPA IPC 仅允许主窗口主框架调用。一般 HTTP／HTTPS 弹窗转为页面内标签，自定义协议和本地文件导航被拒绝。托管模式将核对过的 OpenAI、Claude 和 Google HTTPS OAuth 授权端点交给系统浏览器，授权弹窗和页面跳转不创建 guest 标签；打开失败显示复制链接提示。已有实例模式不改写其 OAuth 请求或弹窗策略，顶部保留“在浏览器打开”。打开对话框时原生视图让位，关闭和停用释放界面资源。此承载规则不构成第三方插件的权限桥。
+网页没有 preload、Node 或 JanusX 完整桥，启用 sandbox、contextIsolation 与 webSecurity；固定 CPA IPC 仅允许主窗口主框架调用。CPA 没有浏览器标签栏，HTTP／HTTPS 弹窗交给系统浏览器，避免帮助页覆盖管理界面后无法返回；含内嵌凭据的地址、自定义协议和本地文件被拒绝。托管模式将核对过的 OpenAI、Claude 和 Google HTTPS OAuth 授权端点交给系统浏览器，授权弹窗和页面跳转不创建 guest 标签；打开失败显示复制链接提示。已有实例模式不改写其 OAuth 请求，同样将 HTTP／HTTPS 弹窗外开，顶栏保留“在浏览器打开”。打开对话框时原生视图让位，关闭和停用释放界面资源。此承载规则不构成第三方插件的权限桥。
 
 原版前端“记住密码”控制其浏览器分区中的登录保存，该前端的存储不获得宿主安全存储承诺。托管管理密钥另由主进程使用 Electron safeStorage 加密持久化，无系统加密能力时拒绝启动；不注入网页，需显式“复制管理密钥”后粘贴登录。宿主模型凭据不使用这份管理登录。
 

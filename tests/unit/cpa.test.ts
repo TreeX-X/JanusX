@@ -134,7 +134,7 @@ describe('CPA global integration service', () => {
     const profile = surfaces.createSurface.mock.calls[0]
     expect(profile).toEqual([
       { surfaceId: CPA_SURFACE_ID, carrier: 'pane', url: DEFAULT_CPA_MANAGEMENT_URL },
-      { partition: expect.stringMatching(/^persist:janusx-cpa-[a-f0-9]+$/), httpOnly: true },
+      { partition: expect.stringMatching(/^persist:janusx-cpa-[a-f0-9]+$/), httpOnly: true, externalPopups: true },
     ])
     await service.saveSettings({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
     await service.open()

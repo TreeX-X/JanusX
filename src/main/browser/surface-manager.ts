@@ -34,6 +34,8 @@ interface BrowserSurface {
 export interface BrowserSurfaceOptions {
   partition?: string
   httpOnly?: boolean
+  /** Content-only service hosts have no tab strip for popup pages. */
+  externalPopups?: boolean
   openExternalUrl?: (url: string) => boolean
 }
 
@@ -296,10 +298,14 @@ export class BrowserSurfaceManager {
     /*-- 空白 tab 与加载过渡期间保持深色，避免白闪 --*/
     view.setBackgroundColor('#0a0a0a')
 
-    /*-- target=_blank / window.open 转为 surface 内新 tab，不跳出外部浏览器 --*/
+    /*-- 普通浏览器将弹窗转为新 tab；服务宿主可将其交给系统浏览器。 --*/
     view.webContents.setWindowOpenHandler((details) => {
       if (details.url.startsWith('http://') || details.url.startsWith('https://')) {
-        if (!surface.options.openExternalUrl?.(details.url)) this.openTab(surface.surfaceId, details.url)
+        if (surface.options.httpOnly && !isHttpPage(details.url)) return { action: 'deny' }
+        if (!surface.options.openExternalUrl?.(details.url)) {
+          if (surface.options.externalPopups) void shell.openExternal(details.url).catch(() => {})
+          else this.openTab(surface.surfaceId, details.url)
+        }
       } else if (!surface.options.httpOnly) {
         void shell.openExternal(details.url)
       }
