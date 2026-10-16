@@ -16,10 +16,10 @@ export type { ChatToolTraceEntry } from '../../../shared/ipc/llm'
 export type { LlmTerminalConsumer } from '../../../shared/ipc/llm'
 
 /* ════════════════════════════════════════════════════════════
-   IPC 调用封装（各终端拥有独立的 Provider 集合）
+   IPC 调用封装（共享渠道，各终端独立选择模型）
    ════════════════════════════════════════════════════════════ */
 
-/** 获取单终端的 Provider 列表 */
+/** 获取 Agent 可用的共享渠道 */
 export async function getTerminalProviders(terminal: LlmTerminalConsumer): Promise<ProviderSettings[]> {
   return window.electron.llm.getTerminalProviders(terminal)
 }
@@ -28,7 +28,7 @@ export async function getLlmRuntimeStatus(): Promise<LlmRuntimeStatus> {
   return window.electron.llm.getRuntimeStatus()
 }
 
-/** 保存单终端的 Provider 配置 */
+/** 兼容旧调用：保存共享渠道配置 */
 export async function saveTerminalProvider(terminal: LlmTerminalConsumer, settings: ProviderSettings): Promise<{ success: boolean; error?: string }> {
   return window.electron.llm.saveTerminalProvider(terminal, settings)
 }
@@ -38,7 +38,7 @@ export async function testConnection(settings: ProviderSettings & { testModel?: 
   return window.electron.llm.testConnection(settings)
 }
 
-/** 删除单终端的 Provider */
+/** 删除未被引用的共享渠道 */
 export async function removeTerminalProvider(terminal: LlmTerminalConsumer, providerId: string): Promise<{ success: boolean; error?: string }> {
   return window.electron.llm.removeTerminalProvider(terminal, providerId)
 }

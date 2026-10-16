@@ -5,7 +5,7 @@
  *              本文件只做参数解包与 handler 注册。
  */
 
-import { ipcMain } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { UserMemoryDelivery } from '../../shared/memory-strength'
 import { containsMemoryDelivery, recordUserMemoryAccessBestEffort } from '../knowledge/memory-access'
@@ -19,6 +19,8 @@ import { LLM_CHANNELS } from '../../shared/ipc/llm'
 import type { ChatAnswerQuestionPayload, ChatWorkspaceResource, LlmRuntimeStatus } from '../../shared/ipc/llm'
 import { getDevelopmentLlmSyncStatus } from '../llm/development-config-sync'
 import { generateText } from '../llm/ai-runtime'
+import { configurationService } from '../llm/configuration-service'
+import type { AgentModelBinding, LlmConsumer } from '../../shared/llm-configuration'
 import {
   abortChatStream,
   answerChatQuestion,
@@ -77,6 +79,22 @@ export async function refreshLlmRuntimeStatus(): Promise<LlmRuntimeStatus> {
  * 注册 LLM 相关的 IPC handlers
  */
 export function registerLlmHandlers(): void {
+  for (const channel of [LLM_CHANNELS.getConfiguration, LLM_CHANNELS.saveProvider, LLM_CHANNELS.applyBinding]) {
+    ipcMain.handle(channel, async (event, first: unknown, second: unknown) => {
+      const authorized = BrowserWindow.getAllWindows().some(window => !window.isDestroyed() && window.webContents === event.sender)
+        && event.senderFrame === event.sender.mainFrame
+      if (!authorized) throw new Error('Unauthorized')
+      try {
+        if (channel === LLM_CHANNELS.getConfiguration) return await configurationService.get()
+        if (channel === LLM_CHANNELS.saveProvider) return await configurationService.save(first as ProviderSettings)
+        await configurationService.apply(first as LlmConsumer, second as AgentModelBinding)
+        return { success: true }
+      } catch (error) {
+        if (channel === LLM_CHANNELS.getConfiguration) throw error
+        return { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    })
+  }
   ipcMain.handle(LLM_CHANNELS.runtimeStatus, () => refreshLlmRuntimeStatus())
   ipcMain.handle(LLM_CHANNELS.getCatalog, () => getModelCatalogService().getCatalog())
   ipcMain.handle(LLM_CHANNELS.getChatModelBudget, (_event, providerId: string, modelId: string) => llmService.getChatModelBudget(providerId, modelId))

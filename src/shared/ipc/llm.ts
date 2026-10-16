@@ -7,8 +7,10 @@ import type {
 import type { KnowledgeRecallTrace } from '../knowledge'
 import type { BlueprintMaintenanceTask } from '../janus/maintenance-types'
 import type { MemoBinding } from '../memo'
+import type { AgentModelBinding, LlmConfiguration } from '../llm-configuration'
 
 export const LLM_CHANNELS = {
+  getConfiguration: 'llm:configuration:get', saveProvider: 'llm:configuration:save-provider', applyBinding: 'llm:configuration:apply-binding',
   getTerminalProviders: 'llm:get-terminal-providers', saveTerminalProvider: 'llm:save-terminal-provider',
   testConnection: 'llm:test-connection',
   runtimeStatus: 'llm:runtime-status',
@@ -195,10 +197,13 @@ export interface LlmRuntimeStatus {
   }
 }
 
-/** 各终端拥有独立的 Provider 集合；shell 无 LLM，不参与配置。 */
-export type LlmTerminalConsumer = 'janus' | 'claude' | 'codex' | 'opencode' | 'pi'
+/** Agent 独立选择共享渠道和模型；普通 shell 不参与 LLM 配置。 */
+export type LlmTerminalConsumer = import('../llm-configuration').LlmConsumer
 
 export interface LlmAPI {
+  getConfiguration(): Promise<LlmConfiguration>
+  saveProvider(settings: ProviderSettings): Promise<{ success: boolean; error?: string }>
+  applyBinding(terminal: LlmTerminalConsumer, binding: AgentModelBinding): Promise<{ success: boolean; error?: string }>
   getTerminalProviders(terminal: LlmTerminalConsumer): Promise<ProviderSettings[]>
   getRuntimeStatus(): Promise<LlmRuntimeStatus>
   saveTerminalProvider(terminal: LlmTerminalConsumer, settings: ProviderSettings): Promise<{ success: boolean; error?: string }>

@@ -284,6 +284,7 @@ export function installElectronApiFallback(): void {
       rollbackTerminal: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
     },
     llm: {
+      getConfiguration: unavailable, saveProvider: unavailable, applyBinding: unavailable,
       getTerminalProviders: unavailable, getRuntimeStatus: unavailable, saveTerminalProvider: unavailable,
       testConnection: unavailable, removeTerminalProvider: unavailable, setTerminalDefault: unavailable,
       getTerminalDefault: unavailable, listModels: unavailable,

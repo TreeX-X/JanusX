@@ -3,12 +3,13 @@
  * @description 测试 OpenAI Compatible 适配器的核心功能
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { OpenAICompatibleAdapter } from '../src/adapters/openai-compatible'
 import type { ProviderSettings } from '../src/core/types'
 import { AuthType } from '../src/core/types'
 
 describe('OpenAICompatibleAdapter', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
   let adapter: OpenAICompatibleAdapter
   let mockSettings: ProviderSettings
 
@@ -102,6 +103,13 @@ describe('OpenAICompatibleAdapter', () => {
     })
   })
 
+  it('does not send a retained key when a local channel explicitly disables authentication', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetch)
+    await adapter.testConnection({ ...mockSettings, authType: AuthType.NONE, apiKey: 'retained-but-disabled-key' }, 'local-model')
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBeUndefined()
+  })
+
   describe('getDefaultModel()', () => {
     it('应该返回 gpt-4o 作为默认模型', () => {
       const defaultModel = adapter.getDefaultModel(mockSettings)
@@ -147,6 +155,22 @@ describe('OpenAICompatibleAdapter', () => {
   })
 
   describe('createLanguageModel() - Mock 测试', () => {
+    it.each(['openai', 'responses'])('tests the declared %s protocol using the configured model', async protocol => {
+      const fetch = vi.fn().mockResolvedValue({ ok: true })
+      vi.stubGlobal('fetch', fetch)
+      const response = await adapter.testConnection({ ...mockSettings, modelId: 'chosen-model', extra: { protocol } })
+      expect(response.valid).toBe(true)
+      expect(fetch.mock.calls[0][0]).toBe('https://api.openai.com/v1/' + (protocol === 'responses' ? 'responses' : 'chat/completions'))
+      const payload = JSON.parse(fetch.mock.calls[0][1].body)
+      expect(payload.model).toBe('chosen-model')
+      expect(protocol === 'responses' ? payload.input : payload.messages[0].content).toBe('hi')
+    })
+    it('uses Chat Completions for generic relays and Responses only when explicitly selected', async () => {
+      const chat = await adapter.createLanguageModel(mockSettings, 'custom-model')
+      const responses = await adapter.createLanguageModel({ ...mockSettings, extra: { protocol: 'responses' } }, 'custom-model')
+      expect(chat.provider).toBe('openai.chat')
+      expect(responses.provider).toBe('openai.responses')
+    })
     it('应该在缺少依赖时抛出错误', async () => {
       // 这个测试会实际尝试导入 @ai-sdk/openai
       // 如果依赖未安装，会抛出错误

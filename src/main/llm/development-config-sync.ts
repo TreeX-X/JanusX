@@ -34,7 +34,7 @@ function parseConfig(path: string): LlmConfig | null {
 }
 
 function hasProviders(config: LlmConfig): boolean {
-  return LLM_TERMINAL_CONSUMERS.some((consumer) => Object.keys(config.terminals[consumer].providers).length > 0)
+  return Object.keys(config.providers).length > 0
 }
 
 function readMarker(path: string): SyncMarker | null {
@@ -69,6 +69,7 @@ export function synchronizeInstalledLlmConfig(appDataRoot: string): DevelopmentL
     if (!source) return latestStatus = { state: 'source-missing', importedProviderCount: 0 }
 
     const sourceContent = readFileSync(source.path, 'utf-8')
+    const sourceDocument = JSON.parse(sourceContent)
     const sourceConfig = parseConfig(source.path)!
     const sourceFingerprint = fingerprint(sourceContent)
     const marker = readMarker(markerPath)
@@ -84,21 +85,23 @@ export function synchronizeInstalledLlmConfig(appDataRoot: string): DevelopmentL
       ? parseConfig(developmentConfigPath) ?? emptyLlmConfig()
       : emptyLlmConfig()
     const merged: LlmConfig = emptyLlmConfig()
+    merged.providers = { ...developmentConfig.providers, ...sourceConfig.providers }
     for (const consumer of LLM_TERMINAL_CONSUMERS) {
-      const development = developmentConfig.terminals[consumer]
-      const sourceTerminal = sourceConfig.terminals[consumer]
-      const providers = { ...development.providers, ...sourceTerminal.providers }
-      const defaultId = sourceTerminal.defaultId && providers[sourceTerminal.defaultId]
-        ? sourceTerminal.defaultId
-        : development.defaultId
-      merged.terminals[consumer] = {
-        providers,
-        defaultId: defaultId ?? Object.keys(providers)[0] ?? null,
-      }
+      const hasSelection = sourceDocument.version === '3.0.0'
+        ? Object.hasOwn(sourceDocument.bindings ?? {}, consumer)
+        : sourceDocument.terminals
+          ? Object.keys(sourceDocument.terminals[consumer]?.providers ?? {}).length > 0
+          : true
+      // Selection travels; an external write receipt belongs to this profile only.
+      const { appliedFingerprint: _receipt, ...binding } = hasSelection ? sourceConfig.bindings[consumer] : developmentConfig.bindings[consumer]
+      merged.bindings[consumer] = binding
     }
-    merged.version = sourceConfig.version || developmentConfig.version
 
     mkdirSync(dirname(developmentConfigPath), { recursive: true })
+    if (existsSync(developmentConfigPath) && !existsSync(developmentConfigPath + '.pre-v3')) {
+      const previous = readFileSync(developmentConfigPath, 'utf-8')
+      if (JSON.parse(previous).version !== '3.0.0') writeFileSync(developmentConfigPath + '.pre-v3', previous, { encoding: 'utf-8', mode: 0o600 })
+    }
     writeFileSync(developmentConfigPath, JSON.stringify(merged, null, 2), 'utf-8')
     writeFileSync(markerPath, JSON.stringify({
       sourceFingerprint,

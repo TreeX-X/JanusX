@@ -8,12 +8,44 @@ import { normalizeAppTheme } from '../../../src/shared/ipc/theme'
 import { DEFAULT_AGENT_NOTIFICATION_SETTINGS, normalizeAgentNotificationSettings } from '../../../src/shared/notifications'
 import type { AgentNotificationSettingsView } from '../../../src/shared/notifications'
 import type { UpdaterEvent, UpdaterState } from '../../../src/shared/ipc/updater'
+import { LLM_CONSUMERS, authTypeForProtocol, type AgentModelBinding, type LlmConfiguration, type LlmConsumer } from '../../../src/shared/llm-configuration'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/styles/themes.generated.css'
 
 installElectronApiFallback()
 const params = new URLSearchParams(location.search)
 const language = params.has('en') ? 'en' : 'zh-CN'
+if (params.get('tab') === 'llm') {
+  const config: LlmConfiguration = {
+    version: '3.0.0',
+    providers: params.has('empty') ? {} : {
+      relay: { id: 'relay', name: 'CPA Work', authType: authTypeForProtocol('openai'), baseURL: 'http://127.0.0.1:8317/v1', apiKey: 'fixture-key', modelId: 'gpt-4.1', models: ['gpt-4.1', 'gpt-4o'] },
+      official: { id: 'official', name: 'OpenAI Official', authType: authTypeForProtocol('responses'), baseURL: 'https://api.openai.com/v1', apiKey: 'fixture-key', modelId: 'gpt-4.1', models: ['gpt-4.1'], extra: { protocol: 'responses', presetId: 'openai' } },
+    },
+    bindings: { janus: { mode: 'unconfigured' }, claude: { mode: 'native' }, codex: { mode: 'native' }, opencode: { mode: 'native' }, pi: { mode: 'native' } },
+  }
+  Object.assign(window.electron.llm, {
+    getConfiguration: async () => structuredClone(config),
+    getRuntimeStatus: async () => ({ profileSync: { state: 'not-applicable', importedProviderCount: 0 }, connection: { state: 'unconfigured' } }),
+    saveProvider: async (provider: typeof config.providers[string]) => {
+      if (params.has('saveFail')) return { success: false, error: 'Fixture channel save failed' }
+      config.providers[provider.id] = structuredClone(provider)
+      for (const consumer of LLM_CONSUMERS) if (consumer !== 'janus' && config.bindings[consumer].providerId === provider.id) config.bindings[consumer].needsApply = true
+      return { success: true }
+    },
+    testConnection: async () => ({ success: true, latency: 42 }),
+    applyBinding: async (consumer: LlmConsumer, binding: AgentModelBinding) => {
+      if (params.has('applyFail')) return { success: false, error: 'Fixture connection write failed' }
+      config.bindings[consumer] = { ...binding, needsApply: false }
+      return { success: true }
+    },
+    removeTerminalProvider: async (_consumer: LlmConsumer, id: string) => {
+      if (LLM_CONSUMERS.some(consumer => config.bindings[consumer].providerId === id)) return { success: false, error: 'Channel in use' }
+      delete config.providers[id]
+      return { success: true }
+    },
+  })
+}
 if (params.has('updater')) {
   let autoCheck = true
   let listener: ((event: UpdaterEvent) => void) | undefined

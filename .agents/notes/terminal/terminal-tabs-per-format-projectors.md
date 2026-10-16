@@ -27,30 +27,32 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-16T16:49:11.414Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
-# Tabbed per-terminal maintenance with per-format model projectors
-
+# External CLI naming and configuration projectors
 
 ## Problem
 
-The internal domain carries the upstream project's name across channels, types, bridges, and tests, which misattributes ownership of JanusX code. The engine section stacks all five terminals vertically in one shared row shape, so per-terminal file realities have nowhere to live. Only Claude writes live; Codex, OpenCode, and Pi resolve models through a shared pool with no projection control of their own. The cost of staying put is a misnamed domain plus terminals that cannot own their configs.
+The application needs clear ownership of its external CLI code while preserving existing model-only clients during the move to complete shared-channel application.
 
 ## Decision
 
-The internal domain is named `external-cli`: the main package, the shared IPC contract, channels (`external-cli:*`), the preload bridge (`window.electron.externalCli`), the renderer service, the settings row component, and the unit suite all use it, and the sync store persists to `external-cli-sync.json` while adopting the legacy file once on first read. The engine section renders one tab row in registry order with Janus first; each tab owns its provider collection, default, add/edit form, and file block. Per-format lean projectors own exactly one model key each: Codex edits the top-level `model` line in `config.toml` without a TOML dependency, OpenCode merges top-level `model` into `.json` or edits `.jsonc` surgically with comments preserved, Pi merges `defaultModel` into its global settings, Claude keeps the credential triple from its own collection, and Janus stays internal-only with no external file. Every write snapshots a timestamped backup rotated to ten and re-reads before reporting success; rollback restores the newest backup and refuses when none exists. OpenCode follows the existing `.json` when both spellings exist and creates `.json` when neither does; project-level files stay manual. Provider collections replace the earlier binding rows; the store shape lives in [the collections design](./terminal-provider-collections.md), which this note otherwise extends.
+The application-owned domain remains `external-cli`: main modules, shared IPC contracts, preload bridge, renderer service and settings health controls use that name. The legacy sync filename is adopted once and is not written again.
+
+LLM settings now expose Agent selections over shared channels. [The channel design](./terminal-provider-collections.md) owns the v3 catalog, current UI and full connection projector in `src/main/llm/connection-projector.ts`. It projects connection credentials and model selections to Claude, Codex, OpenCode and Pi, with managed-field verification, native restoration and failure recovery. Janus resolves its binding internally. Project-level files remain outside these global writes.
+
+The earlier `TerminalProjectors` API remains available for model-only callers. Codex edits the root `model` in TOML; OpenCode edits root `model` in JSON/JSONC; Pi edits `defaultModel`. It preserves its own ten-backup rotation, reread verification and explicit rollback. OpenCode follows an existing global JSON file first, otherwise JSONC, and creates JSON when neither exists. These legacy APIs do not create full connection receipts; current LLM settings use the new projector instead.
 
 ## Alternatives considered
 
-- Keep the upstream name internally — strongest case is zero churn across 28 files. The driver that rules it out is the explicit directive plus ownership hygiene: the borrow travels as mechanism, the name stays with the upstream project.
-- Project full credentials per terminal now — strongest case is symmetric sync on day one. The driver that rules it out is schema reality: model names travel across CLIs but secret layouts differ per app and only Claude's triple is known, so secrets stay Claude-only while models project everywhere.
-- Add a TOML library for Codex — strongest case is fully general parsing. The driver that rules it out is fit: v1 manages a single top-level key, and the line editor plus read-back verification covers it with no new dependency.
-- Adopt SQLite for the binding store — strongest case is transactional multi-table switches. The driver that rules it out is the standing verdict in [the bindings design](./settings-terminal-llm.md): JSON plus `SerialQueue` plus atomic write already protects a five-row map.
-- Do nothing / reuse the vertical matrix with binding-only rows — staying put costs nothing now. The cost is the gap above: a misnamed domain and bindings that never land in Codex, OpenCode, or Pi files.
+Removing model-only IPC would simplify the surface but break existing callers and their rollback behavior. Keeping those APIs while routing the LLM settings surface through the complete connection projector preserves compatibility and makes drift explicit.
 
 ## Consequences
 
-- **Gains**: No upstream name remains in code (legacy sync file and historical note links excepted); five tabs switch instead of stacking; model writes land per format with backup plus verify; `npm run typecheck` green, `npx vitest run tests/unit/external-cli tests/unit/llm/terminal-bindings.test.ts` reports 59 passed across 9 files, `npm run i18n:check` reports 12 namespaces in sync, and touched `src` files lint with 0 errors.
-- **Costs and limits**: Projections are model-only; OpenCode reads and writes the global file while project-level files stay manual; TOML keys nested inside `[table]` sections are out of scope for both read and write; the legacy sync filename is read once and never written again. Revisit when a terminal needs a second owned key, per-CLI credential mapping, or project-scoped writes.
+Using a legacy model-only API after applying a full channel changes a managed field. The shared settings surface detects that drift and asks for reapplication. Native restoration refuses to erase externally changed managed fields. DSH keeps its in-session `/model` selection.
+
+## Historical validation
+
+The original domain rename and model-only implementation recorded 59 focused tests across nine files, typecheck, locale checks and touched-file lint. Those results belong to the legacy projector; the current full-connection tests are tracked with the shared channel implementation.

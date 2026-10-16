@@ -33,6 +33,9 @@ async function freshHome() {
 
 beforeEach(async () => {
   for (const consumer of ['janus', 'claude', 'codex', 'opencode', 'pi'] as const) {
+    await llmConfigStore.setBinding(consumer, { mode: consumer === 'janus' ? 'unconfigured' : 'native' })
+  }
+  for (const consumer of ['janus', 'claude', 'codex', 'opencode', 'pi'] as const) {
     const existing = await llmConfigStore.getTerminalProviders(consumer)
     for (const provider of existing) {
       await llmConfigStore.removeTerminalProvider(consumer, provider.id)
@@ -205,7 +208,7 @@ describe('ExternalCliService terminal model channels', () => {
     await expect(instance.readTerminalModel('pi')).resolves.toMatchObject({ exists: true, model: 'owner/m' })
   })
 
-  it('syncs credentials from the claude terminal collection only', async () => {
+  it('syncs the chosen shared channel without using another channel', async () => {
     await llmConfigStore.saveTerminalProvider('claude', {
       id: 'relay-1',
       name: 'Relay',
@@ -215,9 +218,9 @@ describe('ExternalCliService terminal model channels', () => {
       modelId: 'claude-model',
       enabled: true,
     })
-    // 同 id 在 janus 集合里是另一条配置，不影响 Claude 同步
+    // Different channels remain distinct even when both are available to Janus.
     await llmConfigStore.saveTerminalProvider('janus', {
-      id: 'relay-1',
+      id: 'other-relay',
       name: 'Other',
       authType: AuthType.API_KEY,
       baseURL: 'https://other.example.com/v1',

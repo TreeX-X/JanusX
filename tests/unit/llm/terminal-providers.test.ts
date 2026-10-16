@@ -1,123 +1,86 @@
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-
-const userDataDir = await mkdtemp(join(tmpdir(), 'janusx-llm-collections-'))
-
-vi.mock('electron', () => ({
-  app: { getPath: vi.fn(() => userDataDir) },
-}))
-
-const { llmConfigStore, LlmConfigStore } = await import('../../../src/main/llm/ConfigStore')
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
+const { LlmConfigStore } = await import('../../../src/main/llm/ConfigStore')
+const { normalizeLlmConfigDocument } = await import('../../../src/main/llm/config-document')
 const { AuthType } = await import('@janusx/llm-core')
-
-const CONSUMERS = ['janus', 'claude', 'codex', 'opencode', 'pi'] as const
-
-function provider(id: string, name: string, modelId = 'm') {
-  return {
-    id,
-    name,
-    authType: AuthType.API_KEY,
-    baseURL: 'https://relay.example.com/v1',
-    apiKey: 'sk-test-1234567890',
-    modelId,
-    enabled: true,
-  }
-}
-
-beforeEach(async () => {
-  for (const consumer of CONSUMERS) {
-    const existing = await llmConfigStore.getTerminalProviders(consumer)
-    for (const entry of existing) {
-      await llmConfigStore.removeTerminalProvider(consumer, entry.id)
-    }
-  }
+let root: string
+let store: InstanceType<typeof LlmConfigStore>
+const provider = (id = 'relay', modelId = 'model-a') => ({
+  id, name: id, authType: AuthType.API_KEY, apiKey: 'sk-test-1234567890', baseURL: 'https://relay.example/v1', modelId,
 })
+beforeEach(async () => { root = await mkdtemp(join(tmpdir(), 'janus-shared-')); store = new LlmConfigStore(root) })
+afterEach(async () => { await rm(root, { recursive: true, force: true }) })
 
-describe('LlmConfigStore per-terminal collections', () => {
-  it('starts empty in every terminal', async () => {
-    for (const consumer of CONSUMERS) {
-      await expect(llmConfigStore.getTerminalProviders(consumer)).resolves.toEqual([])
-      await expect(llmConfigStore.getTerminalDefaultSettings(consumer)).resolves.toBeNull()
+describe('shared channels and independent Agent selections', () => {
+  it('saves once without selecting any Agent, and resolves a model independently', async () => {
+    await store.saveProvider(provider())
+    for (const consumer of ['janus', 'claude', 'codex', 'opencode', 'pi'] as const) {
+      expect(await store.getTerminalProviders(consumer)).toHaveLength(1)
+      expect(await store.getTerminalDefaultSettings(consumer)).toBeNull()
     }
+    await store.setBinding('janus', { mode: 'provider', providerId: 'relay', modelId: 'model-a' })
+    await store.setBinding('pi', { mode: 'provider', providerId: 'relay', modelId: 'model-b' })
+    await store.saveProvider({ ...provider(), apiKey: 'new-shared-key' })
+    expect(await store.getTerminalDefaultSettings('janus')).toMatchObject({ modelId: 'model-a', apiKey: 'new-shared-key' })
+    expect(await store.getTerminalDefaultSettings('pi')).toMatchObject({ modelId: 'model-b', apiKey: 'new-shared-key' })
+    expect(await store.getTerminalProvider('pi', 'relay')).toMatchObject({ modelId: 'model-b' })
+    expect((await store.get()).providers.relay?.modelId).toBe('model-a')
   })
-
-  it('keeps same-id providers independent across terminals', async () => {
-    await llmConfigStore.saveTerminalProvider('janus', provider('shared', 'Janus Relay', 'janus-model'))
-    await llmConfigStore.saveTerminalProvider('claude', provider('shared', 'Claude Relay', 'claude-model'))
-
-    const janus = await llmConfigStore.getTerminalProvider('janus', 'shared')
-    const claude = await llmConfigStore.getTerminalProvider('claude', 'shared')
-    expect(janus?.name).toBe('Janus Relay')
-    expect(claude?.name).toBe('Claude Relay')
-
-    await llmConfigStore.removeTerminalProvider('janus', 'shared')
-    await expect(llmConfigStore.getTerminalProvider('janus', 'shared')).resolves.toBeNull()
-    await expect(llmConfigStore.getTerminalProvider('claude', 'shared')).resolves.toMatchObject({ name: 'Claude Relay' })
+  it('does not delete a referenced channel or silently fall back', async () => {
+    await store.saveProvider(provider())
+    await store.setBinding('pi', { mode: 'provider', providerId: 'relay' })
+    await expect(store.removeTerminalProvider('janus', 'relay')).rejects.toThrow('pi')
+    await store.setBinding('pi', { mode: 'native' })
+    await store.removeTerminalProvider('janus', 'relay')
+    expect((await store.get()).providers).toEqual({})
   })
-
-  it('defaults the first saved provider and falls back on removal', async () => {
-    await llmConfigStore.saveTerminalProvider('codex', provider('a', 'A'))
-    await llmConfigStore.saveTerminalProvider('codex', provider('b', 'B'))
-    await expect(llmConfigStore.getTerminalDefaultSettings('codex')).resolves.toMatchObject({ id: 'a' })
-
-    await llmConfigStore.setTerminalDefault('codex', 'b')
-    await expect(llmConfigStore.getTerminalDefaultSettings('codex')).resolves.toMatchObject({ id: 'b' })
-
-    await llmConfigStore.removeTerminalProvider('codex', 'b')
-    await expect(llmConfigStore.getTerminalDefaultSettings('codex')).resolves.toMatchObject({ id: 'a' })
+  it('preserves concurrent saves and returns isolated snapshots', async () => {
+    await Promise.all([store.saveProvider(provider('a')), store.saveProvider(provider('b'))])
+    const snapshot = await store.get()
+    delete snapshot.providers.a
+    expect(Object.keys((await store.get()).providers)).toEqual(['a', 'b'])
   })
-
-  it('rejects unknown consumers', async () => {
-    await expect(llmConfigStore.getTerminalProviders('shell' as never)).rejects.toThrow()
-    await expect(llmConfigStore.saveTerminalProvider('shell' as never, provider('x', 'X'))).rejects.toThrow()
+  it('rejects unknown Agents and missing channels', async () => {
+    await expect(store.getTerminalProviders('shell' as never)).rejects.toThrow()
+    await expect(store.setTerminalDefault('janus', 'missing')).rejects.toThrow()
+    await expect(store.setBinding('janus', { mode: 'native' })).rejects.toThrow()
   })
-
-  it('migrates a v1 shared pool into every terminal with binding defaults and folded overrides', async () => {
-    const scratch = await mkdtemp(join(tmpdir(), 'janusx-llm-migrate-'))
-    await mkdir(join(scratch, 'janusx'), { recursive: true })
-    await writeFile(join(scratch, 'janusx', 'llm-config.json'), JSON.stringify({
-      version: '1.0.0',
-      providers: {
-        relay: provider('relay', 'Relay', 'provider-model'),
-        other: provider('other', 'Other', 'other-model'),
-      },
-      defaultProvider: 'other',
-      terminalBindings: {
-        claude: { providerId: 'relay', modelId: 'override-model' },
-        codex: { providerId: 'missing', modelId: '' },
-      },
-    }), 'utf8')
-
-    const store = new LlmConfigStore(scratch)
+  it('migrates v1 without folding one Agent model into the shared channel', () => {
+    const result = normalizeLlmConfigDocument({ version: '1.0.0', providers: { relay: provider() }, defaultProvider: 'relay',
+      terminalBindings: { claude: { providerId: 'relay', modelId: 'claude-model' } } })!
+    expect(result.config.providers.relay?.modelId).toBe('model-a')
+    expect(result.config.bindings.claude).toMatchObject({ providerId: 'relay', modelId: 'claude-model' })
+    expect(result.config.bindings.janus).toMatchObject({ providerId: 'relay', modelId: 'model-a' })
+  })
+  it('deduplicates v2 copies with distinct model selections and preserves conflicting connections', async () => {
+    const old = { version: '2.0.0', terminals: {
+      janus: { providers: { relay: provider() }, defaultId: 'relay' },
+      pi: { providers: { relay: provider('relay', 'model-b') }, defaultId: 'relay' },
+      claude: { providers: { relay: { ...provider(), baseURL: 'https://different.example' } }, defaultId: 'relay' },
+    } }
+    await mkdir(join(root, 'janusx'), { recursive: true })
+    await writeFile(join(root, 'janusx', 'llm-config.json'), JSON.stringify(old))
+    const config = await store.load()
+    expect(Object.keys(config.providers)).toEqual(['relay', 'relay--claude'])
+    expect(config.bindings.pi).toMatchObject({ providerId: 'relay', modelId: 'model-b' })
+    expect(config.bindings.claude.providerId).toBe('relay--claude')
+    expect(config.providers.relay?.models).toEqual(['model-a', 'model-b'])
+    expect(JSON.parse(await readFile(join(root, 'janusx', 'llm-config.json'), 'utf8')).version).toBe('3.0.0')
+    expect(normalizeLlmConfigDocument(config)?.migrated).toBe(false)
+  })
+  it('keeps different channel IDs even when both serve the same model', async () => {
+    await store.saveProvider(provider('official'))
+    await store.saveProvider(provider('cpa'))
+    expect(await store.getTerminalProviders('janus')).toHaveLength(2)
+  })
+  it('backs up corrupt documents before resetting', async () => {
+    await mkdir(join(root, 'janusx'), { recursive: true })
+    await writeFile(join(root, 'janusx', 'llm-config.json'), '{broken')
     await store.load()
-
-    // janus 沿用全局默认；claude 沿用绑定并折入模型覆盖；指向缺失 id 的绑定退回全局默认
-    await expect(store.getTerminalDefaultSettings('janus')).resolves.toMatchObject({ id: 'other' })
-    const claudeDefault = await store.getTerminalDefaultSettings('claude')
-    expect(claudeDefault).toMatchObject({ id: 'relay', modelId: 'override-model' })
-    await expect(store.getTerminalDefaultSettings('codex')).resolves.toMatchObject({ id: 'other' })
-    await expect(store.getTerminalProvider('pi', 'other')).resolves.toMatchObject({ name: 'Other' })
-
-    // 落盘已是 v2 形态
-    const rewritten = JSON.parse(await readFile(join(scratch, 'janusx', 'llm-config.json'), 'utf8'))
-    expect(Object.keys(rewritten.terminals)).toEqual(['janus', 'claude', 'codex', 'opencode', 'pi'])
-    expect(rewritten.providers).toBeUndefined()
-    expect(rewritten.terminalBindings).toBeUndefined()
-  })
-
-  it('backs up a corrupt document instead of overwriting it', async () => {
-    const scratch = await mkdtemp(join(tmpdir(), 'janusx-llm-corrupt-'))
-    await mkdir(join(scratch, 'janusx'), { recursive: true })
-    await writeFile(join(scratch, 'janusx', 'llm-config.json'), '{broken json', 'utf8')
-
-    const store = new LlmConfigStore(scratch)
-    await store.load()
-
-    const entries = await readdir(join(scratch, 'janusx'))
-    expect(entries.some((name) => name.startsWith('llm-config.json.corrupt-'))).toBe(true)
-    expect(await readFile(join(scratch, 'janusx', 'llm-config.json'), 'utf8')).not.toContain('{broken json')
-    await expect(store.getTerminalDefaultSettings('janus')).resolves.toBeNull()
+    expect((await readdir(join(root, 'janusx'))).some(name => name.startsWith('llm-config.json.corrupt-'))).toBe(true)
+    expect((await store.get()).providers).toEqual({})
   })
 })

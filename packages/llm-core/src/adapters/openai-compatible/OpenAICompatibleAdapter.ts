@@ -71,12 +71,14 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
       // 创建 OpenAI Provider
       const openai = createOpenAI({
         baseURL: settings.baseURL,
-        apiKey: settings.apiKey!,
+        apiKey: settings.authType === AuthType.NONE ? '' : settings.apiKey!,
         organization: settings.organization,
       })
 
       // 创建语言模型
-      const model = openai(modelId) as any
+      // SDK v3 defaults to Responses. Generic relays still require Chat Completions.
+      // Note: .agents/notes/terminal/terminal-provider-collections.md
+      const model = (settings.extra?.protocol === 'responses' ? openai.responses(modelId) : openai.chat(modelId)) as unknown as LanguageModelV1
 
       return withAiSdkV1StreamCompatibility(model)
     } catch (error) {
@@ -107,12 +109,12 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
 
       const openai = createOpenAI({
         baseURL: settings.baseURL,
-        apiKey: settings.apiKey!,
+        apiKey: settings.authType === AuthType.NONE ? '' : settings.apiKey!,
         organization: settings.organization,
       })
 
       // 创建嵌入模型
-      const model = openai.embedding(modelId) as any
+      const model = openai.embedding(modelId) as unknown as EmbeddingModelV1
 
       return model
     } catch (error) {
@@ -266,7 +268,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
         valid: true,
         warnings: ['配置格式正确，但未测试实际连接']
       }
-    } catch (error) {
+    } catch {
       return {
         valid: false,
         errors: [
@@ -293,18 +295,19 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
     const startTime = Date.now()
 
     try {
-      const modelToTest = testModel || this.getDefaultModel(settings)
+      const modelToTest = testModel || settings.defaultModelId || settings.modelId || this.getDefaultModel(settings)
       const baseURL = settings.baseURL?.replace(/\/+$/, '') || 'https://api.openai.com/v1'
-      const url = `${baseURL}/chat/completions`
+      const responses = settings.extra?.protocol === 'responses'
+      const url = `${baseURL}/${responses ? 'responses' : 'chat/completions'}`
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       }
-      if (settings.apiKey) {
+      if (settings.authType !== AuthType.NONE && settings.apiKey) {
         headers['Authorization'] = `Bearer ${settings.apiKey}`
       }
 
-      const payload = {
+      const payload = responses ? { model: modelToTest, input: 'hi', max_output_tokens: 16, store: false } : {
         model: modelToTest,
         messages: [{ role: 'user', content: 'hi' }],
       }
@@ -319,6 +322,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
       const latency = Date.now() - startTime
 
       if (resp.ok) {
+        await resp.body?.cancel()
         return { valid: true, latency }
       }
 
@@ -327,7 +331,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
       try {
         const json = JSON.parse(text)
         detail = json?.error?.message || text
-      } catch {}
+      } catch { /* Non-JSON errors retain the response text. */ }
 
       if (resp.status === 401) {
         return { valid: false, errors: ['API Key 无效'] }
@@ -341,10 +345,10 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
         errors: [`API 返回错误 (${resp.status}): ${detail.substring(0, 200)}`]
       }
 
-    } catch (error: any) {
-      let errorMessage = error.message || String(error)
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
 
-      if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
         return { valid: false, errors: ['连接超时，请检查网络或 base_url'] }
       }
 
@@ -388,6 +392,7 @@ export class OpenAICompatibleAdapter implements ProviderExtension {
    * 生命周期钩子：初始化
    */
   async initialize(_settings: ProviderSettings): Promise<void> {
+    void _settings
     // OpenAI Compatible 无需特殊初始化
   }
 

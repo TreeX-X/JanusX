@@ -19,6 +19,7 @@ import { AuthType } from '@janusx/llm-core'
 import { getModelCatalogService } from './ModelCatalogService'
 import { detectChatModelBudget } from './chat-model-budget'
 import { app, session } from 'electron'
+import { channelModel, supportsChannel } from '../../shared/llm-configuration'
 
 const AUTH_TYPE_TO_ADAPTER: Record<string, string> = {
   [AuthType.API_KEY]: 'openai-compatible',
@@ -123,7 +124,7 @@ class LlmService {
   }
 
   /**
-   * 获取语言模型实例（在指定终端的自有集合内解析）。
+   * 获取语言模型实例，在共享渠道内解析连接配置。
    */
   async getLanguageModel(terminal: LlmTerminalConsumer, providerId: string, modelId: string): Promise<LanguageModelV1> {
     await this.initialize()
@@ -132,6 +133,8 @@ class LlmService {
     if (!settings) {
       throw new Error(`Provider "${providerId}" 未配置`)
     }
+
+    if (settings.enabled === false) throw new Error('This channel is disabled')
 
     return this.factory.createLanguageModel(settings, modelId)
   }
@@ -143,12 +146,12 @@ class LlmService {
     await this.initialize()
 
     const provider = await llmConfigStore.getTerminalDefaultSettings(terminal)
-    if (!provider) {
+    if (!provider || provider.enabled === false) {
       return null
     }
 
     const adapter = this.getAdapterForProvider(provider)
-    const modelId = adapter.getDefaultModel(provider)
+    const modelId = channelModel(provider) || adapter.getDefaultModel(provider)
 
     return { provider, modelId }
   }
@@ -161,7 +164,7 @@ class LlmService {
   }
 
   /**
-   * 保存单终端的 Provider 配置
+   * 兼容旧终端调用：保存共享渠道，首次配置 Janus 时建立默认选择。
    */
   async saveTerminalProvider(terminal: LlmTerminalConsumer, settings: ProviderSettings): Promise<{ success: boolean; error?: string }> {
     await this.initialize()
@@ -181,6 +184,16 @@ class LlmService {
     // 清除缓存
     this.factory.clearCache(settings.id)
 
+    return { success: true }
+  }
+
+  async saveSharedProvider(settings: ProviderSettings): Promise<{ success: boolean; error?: string }> {
+    await this.initialize()
+    const validation = validateSettings(settings)
+    if (!validation.valid) return { success: false, error: validation.errors?.join(', ') }
+    if (settings.baseURL && !/^https?:\/\//i.test(settings.baseURL)) return { success: false, error: 'Use an HTTP or HTTPS endpoint' }
+    await llmConfigStore.saveProvider(settings)
+    this.factory.clearCache(settings.id)
     return { success: true }
   }
 
@@ -241,14 +254,14 @@ class LlmService {
   }
 
   /**
-   * 获取单终端的 Provider 列表
+   * 获取当前 Agent 可直接使用的共享渠道。
    */
   async getTerminalProviders(terminal: LlmTerminalConsumer): Promise<ProviderSettings[]> {
-    return llmConfigStore.getTerminalProviders(terminal)
+    return (await llmConfigStore.getTerminalProviders(terminal)).filter(provider => supportsChannel(terminal, provider))
   }
 
   /**
-   * 删除单终端的 Provider
+   * 删除未被任何 Agent 引用的共享渠道。
    */
   async removeTerminalProvider(terminal: LlmTerminalConsumer, providerId: string): Promise<void> {
     await llmConfigStore.removeTerminalProvider(terminal, providerId)
@@ -263,7 +276,7 @@ class LlmService {
   }
 
   /**
-   * 获取可用模型列表（在指定终端的自有集合内解析）。
+   * 获取共享渠道的可用模型列表。
    */
   async listModels(terminal: LlmTerminalConsumer, providerId: string): Promise<ModelInfo[]> {
     await this.initialize()

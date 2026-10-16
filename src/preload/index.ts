@@ -355,6 +355,9 @@ const officeAPI: OfficeAPI = {
 }
 
 const llmAPI: LlmAPI = {
+  getConfiguration: () => ipcRenderer.invoke(LLM_CHANNELS.getConfiguration),
+  saveProvider: (settings) => ipcRenderer.invoke(LLM_CHANNELS.saveProvider, settings),
+  applyBinding: (terminal, binding) => ipcRenderer.invoke(LLM_CHANNELS.applyBinding, terminal, binding),
   getTerminalProviders: (terminal) => ipcRenderer.invoke(LLM_CHANNELS.getTerminalProviders, terminal),
   getRuntimeStatus: () => ipcRenderer.invoke(LLM_CHANNELS.runtimeStatus),
   saveTerminalProvider: (terminal, settings) => ipcRenderer.invoke(LLM_CHANNELS.saveTerminalProvider, terminal, settings),

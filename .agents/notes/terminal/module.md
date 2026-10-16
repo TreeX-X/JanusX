@@ -31,7 +31,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e29da5b4-dc65-40a9-883d-9026e3b280b1"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a976752-d637-40c7-9fa3-bce52ac5dc15"}
   ],
-  "updated": "2026-10-15T10:26:11.296Z",
+  "updated": "2026-10-16T16:49:11.414Z",
   "moduleState": "partial"
 }
 ---
@@ -55,6 +55,8 @@
 已接受的架构转向：[hook 解耦决策](./usage-telemetry-hook-decoupling.md)（accepted）决定统计链路完全移除 hook——用量账本改纯会话扫描（覆盖未打开历史，Codex 升级事件模式重放），终端归属改会话诞生/激活时刻的 pty×文件相关性，每终端私有 home 暂缓。**L1、L2 已落地**（2026-10-14）：账本不再依赖 hook 与终端绑定（全语料扫描 + 回游标 + 记账模式锁）；终端归属在无 hook 绑定时按 pty 活跃度×会话文件写入相关性推断（唯一候选才绑定，hook 断言优先），hook 仍是回合状态/通知的来源。L3（每终端私有 home）未实施。
 
 设置绑定链（演进关系已由正文 supersede 声明）：[settings-llm](./settings-terminal-llm.md)、[provider-collections](./terminal-provider-collections.md)、[tabs-projectors](./terminal-tabs-per-format-projectors.md)、[settings-todos](./requirements/settings-terminal-llm-todos.md)、[background-image](./requirements/terminal-background-image.md)、[workbench-transition](./settings-workbench-transition.md)。
+
+LLM 配置以共享渠道目录和各 Agent 独立模型选择为入口，官方 API、CPA、自定义服务共用一份渠道信息。协议兼容检查、旧配置迁移与完整连接写回由 [共享渠道设计](./terminal-provider-collections.md) 维护；原生登录沿用各 Agent 自身状态，路由、故障转移和远程环境留在后续阶段。
 
 cc-switch 机制从[port 总纲](./requirements/cc-switch-port.md)进入，detect-install、cli-matrix、multi-terminal、pi-janus 四篇维护具体能力；总纲与专题都直接归属终端模块，历史 parent 只表示原交付脉络，不形成子模块。profile-switch 与 llm-sync 两篇 archived 历史保留在 history/，不复活或改写。
 
