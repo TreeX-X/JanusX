@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { TerminalArea } from '../../../src/renderer/src/components/TerminalArea'
+import { TitlebarToolGroup } from '../../../src/renderer/src/components/TitlebarToolGroup'
 import { RightDock } from '../../../src/renderer/src/components/right-tools/RightDock'
 import { getRightDockLayout } from '../../../src/renderer/src/components/right-tools/layout'
 import { extensionRegistry, openExtensionView, type ExtensionViewProps } from '../../../src/renderer/src/extensions'
@@ -28,7 +29,7 @@ const unregister = extensionRegistry.register({
   activate: () => { metrics.activations++; return () => { metrics.disposals++ } },
   views: example.views.map((view) => {
     const View = view.component
-    return { ...view, component: function TrackedView(props: ExtensionViewProps) {
+    return { ...view, ...(view.id === 'overview' ? { launcher: 'tool-menu' as const } : {}), component: function TrackedView(props: ExtensionViewProps) {
       useEffect(() => { metrics.mounts++; return () => { metrics.unmounts++ } }, [])
       return <View {...props} />
     } }
@@ -58,6 +59,7 @@ function Workbench() {
     activeToolId, panelCollapsed, hasActiveTool: activeToolId !== null })
   return <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
     <nav style={{ display: 'flex', gap: 12, padding: 8, color: 'var(--shell-text)' }}>
+      <TitlebarToolGroup />
       <button onClick={() => openExtensionView('extension:example.tools/overview')}>Open overview</button>
       <button onClick={() => useWorkspaceStore.getState().setActiveWorkspace('one')}>Project one</button>
       <button onClick={() => useWorkspaceStore.getState().setActiveWorkspace('two')}>Project two</button>

@@ -565,7 +565,7 @@ test('Browser load failure, retry, dialogs and close release native browser view
     await expect.poll(nativeViews).toHaveLength(0)
 
     await page.locator('[data-tab-id]').first().hover()
-    await page.locator('[data-tab-close="true"]').click()
+    await page.locator('[data-tab-close="true"]').click({ delay: 1100 })
     await expect(error).toHaveCount(0)
     await expectBrowserEntryAvailable()
     expect(await page.evaluate((id) => (window as DesktopWindow).electron.browser.getState(id), surfaceId)).toBeNull()
@@ -599,7 +599,7 @@ test('Browser load failure, retry, dialogs and close release native browser view
     await expect.poll(nativeViews).toHaveLength(1)
 
     await page.locator('[data-tab-id]').first().hover()
-    await page.locator('[data-tab-close="true"]').click()
+    await page.locator('[data-tab-close="true"]').click({ delay: 1100 })
     await expect.poll(nativeViews).toHaveLength(0)
     await expectBrowserEntryAvailable()
     expect(await page.evaluate((id) => (window as DesktopWindow).electron.browser.getState(id), surfaceId)).toBeNull()

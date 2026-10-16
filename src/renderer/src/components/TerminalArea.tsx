@@ -870,38 +870,24 @@ function LeafPane({
             {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
           </span>
         )}
-        {tab.type === 'terminal' ? (
-          <HoldToConfirm
-            as="span"
-            label={t('terminal:tab.closeTerminal')}
-            className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
-            style={{ color: 'var(--shell-diff-del)' }}
-            onConfirm={() => {
-              onKillTerminalFromTab(tab.terminalId)
-            }}
-          >
-            <X size={12} strokeWidth={1.8} />
-          </HoldToConfirm>
-        ) : (
-          <ThemedTooltip
-            label={tab.type === 'extension' ? t('common:action.close') : tab.type === 'markdown' ? t('terminal:tab.closeMarkdown') : t('terminal:tab.closeBrowser')}
-          >
-          <span
-            tabIndex={-1}
-            data-tab-close="true"
-            className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
-            style={{ color: 'var(--shell-muted)' }}
-            onClick={(event) => {
-              event.stopPropagation()
-              // 关闭 Markdown 标签只是关闭呈现：文稿另有独立的删除动作。
-              if (tab.type === 'markdown' || tab.type === 'extension') onCloseMarkdownTab(leaf.id, tab.id)
-              else onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
-            }}
-          >
-            <X size={12} strokeWidth={1.8} aria-hidden="true" />
-          </span>
-          </ThemedTooltip>
-        )}
+        {/* Note: .agents/notes/workbench/service-integrations.md — all workspace views share hold-to-close. */}
+        <HoldToConfirm
+          as="span"
+          data-tab-close="true"
+          label={tab.type === 'terminal' ? t('terminal:tab.closeTerminal')
+            : tab.type === 'browser' ? t('terminal:tab.closeBrowser')
+              : tab.type === 'markdown' ? t('terminal:tab.closeMarkdown') : t('common:action.close')}
+          className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
+          style={{ color: tab.type === 'terminal' ? 'var(--shell-diff-del)' : 'var(--shell-muted)' }}
+          onConfirm={() => {
+            if (tab.type === 'terminal') onKillTerminalFromTab(tab.terminalId)
+            else if (tab.type === 'browser') onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
+            // Closing a document or extension only closes its presentation.
+            else onCloseMarkdownTab(leaf.id, tab.id)
+          }}
+        >
+          <X size={12} strokeWidth={1.8} />
+        </HoldToConfirm>
       </div>
       </ThemedTooltip>
     )

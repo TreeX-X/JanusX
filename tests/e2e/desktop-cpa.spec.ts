@@ -53,6 +53,14 @@ async function nativeCount(app: ElectronApplication): Promise<number> {
   return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.length)
 }
 
+async function closeCpa(page: Page): Promise<void> {
+  const tab = page.locator('[data-tab-id*="janusx.cpa"]')
+  await tab.locator('[data-tab-close]').hover()
+  await page.mouse.down()
+  try { await expect(tab).toHaveCount(0) }
+  finally { await page.mouse.up() }
+}
+
 async function setCpaToggle(page: Page, name: string, checked: boolean): Promise<void> {
   const input = page.getByRole('checkbox', { name, exact: true })
   if (await input.isChecked() !== checked) await page.locator('label').filter({ has: input }).click()
@@ -67,6 +75,7 @@ async function expectCompactCpa(app: ElectronApplication, page: Page, managed = 
   await expect(toolbar.getByRole('button', { name: 'Open in browser', exact: true })).toBeVisible()
   const settings = toolbar.getByRole('button', { name: 'Connection settings', exact: true })
   await expect(settings).toBeVisible()
+  await page.mouse.move(0, 0)
   await settings.hover()
   await expect(page.getByRole('tooltip')).toHaveText('Connection settings')
   await page.mouse.move(0, 0)
@@ -290,6 +299,55 @@ test('CPA settings use themed controls, switch modes and retain a usable footer 
   }
 })
 
+for (const tool of ['Browser', 'Markdown']) {
+  test(`${tool} global page requires a full hold to close and can reopen`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'janusx-tool-close-'))
+    let app: ElectronApplication | undefined
+    try {
+      const booted = await boot(root)
+      app = booted.app
+      const page = booted.page
+      const trigger = page.locator('button[data-id="tool-menu"]')
+      const tab = page.locator(`[data-tab-id^="${tool.toLowerCase()}:"]`)
+      const close = tab.locator('[data-tab-close]')
+      const open = async () => {
+        await trigger.click()
+        await page.getByRole('menuitem', { name: tool === 'Browser' ? 'Open the workspace browser' : 'Open a Markdown document', exact: true }).click()
+        await expect(tab).toHaveCount(1)
+      }
+      await open()
+      const tabId = await tab.getAttribute('data-tab-id')
+      await tab.hover()
+      await close.click()
+      await expect(tab).toHaveCount(1)
+      // Leaving midway must cancel the timer, even after its original deadline.
+      await close.hover()
+      await page.mouse.down()
+      await page.waitForTimeout(300)
+      await page.mouse.move(0, 0)
+      await page.mouse.up()
+      await page.waitForTimeout(800)
+      await expect(tab).toHaveCount(1)
+      await close.focus()
+      await close.press('Space')
+      await expect(tab).toHaveCount(1)
+      await close.press('Space', { delay: 1100 })
+      await expect(tab).toHaveCount(0)
+      if (tool === 'Browser') {
+        expect(await page.evaluate((id) => (window as any).electron.browser.getState(id), tabId!.slice('browser:'.length))).toBeNull()
+        await expect.poll(() => nativeCount(app!)).toBe(0)
+      }
+      await open()
+      await tab.hover()
+      await close.click({ delay: 1100 })
+      await expect(tab).toHaveCount(0)
+    } finally {
+      if (app) await app.close()
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    }
+  })
+}
+
 test('CPA native page shares a global login, hides for dialogs, releases on close and reuses login after restart', async () => {
   const root = await mkdtemp(join(tmpdir(), 'janusx-cpa-'))
   const server = createServer((request, response) => {
@@ -362,6 +420,9 @@ test('CPA native page shares a global login, hides for dialogs, releases on clos
 
     await page.locator('[data-tab-id*="janusx.cpa"]').hover()
     await page.locator('[data-tab-id*="janusx.cpa"] [data-tab-close]').click()
+    await expect(page.locator('[data-cpa-view]')).toBeVisible()
+    await expect.poll(() => nativeCount(app!)).toBe(1)
+    await closeCpa(page)
     await expect.poll(() => nativeCount(app!)).toBe(0)
     expect(await page.evaluate((id) => (window as any).electron.browser.getState(id), CPA_SURFACE_ID)).toBeNull()
     await toolTrigger.click()
@@ -547,7 +608,7 @@ test('managed CPA downloads verified components, runs the real Windows service a
     expect(await readFile(join(root, 'profile', 'janusx', 'config.json'), 'utf8')).not.toContain(key)
 
     await page.locator('[data-tab-id*="janusx.cpa"]').hover()
-    await page.locator('[data-tab-id*="janusx.cpa"] [data-tab-close]').click()
+    await closeCpa(page)
     expect(await page.evaluate(() => (window as any).electron.cpa.status().then((value: any) => value.phase))).toBe('running')
     expect(await page.evaluate(() => (window as any).electron.cpa.status().then((value: any) => value.oauthFallback))).toBeUndefined()
     expect((await fetch(`${origin}/management.html`)).status).toBe(200)
@@ -578,7 +639,7 @@ test('managed CPA downloads verified components, runs the real Windows service a
     await rotatedWeb.getByRole('button', { name: /^(Login|登录|连接)$/ }).click()
     await expect(rotatedWeb.getByRole('link', { name: /^(Quota Management|配额管理)$/ })).toBeVisible()
     await page.locator('[data-tab-id*="janusx.cpa"]').hover()
-    await page.locator('[data-tab-id*="janusx.cpa"] [data-tab-close]').click()
+    await closeCpa(page)
     await page.getByTitle('Settings', { exact: true }).click()
     await page.locator('[data-tab="integrations"]').click()
     const changedPort = await freePort()

@@ -127,6 +127,8 @@ test('click threshold, unchanged drop, close control and Escape have distinct ou
   expect((await state(page)).panes[0].tabs).toEqual(['terminal:a', 'terminal:b', 'terminal:c'])
   const close = page.locator('[data-tab-id="browser:e"] [data-tab-close]')
   await close.click()
+  expect((await state(page)).panes[1].tabs).toEqual(['browser:d', 'browser:e'])
+  await close.click({ delay: 1100 })
   expect((await state(page)).panes[1].tabs).toEqual(['browser:d'])
   await clean(page)
 })

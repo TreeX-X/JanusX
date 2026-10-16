@@ -29,7 +29,7 @@ for (const theme of ['planche', 'dark']) {
   })
 }
 
-test('opens registered workspace views from the existing menu and closes without disabling', async ({ page }) => {
+test('opens registered workspace views from the existing menu and holds to close without disabling', async ({ page }) => {
   await page.goto('/extensions.html')
   await page.getByRole('button', { name: 'New Terminal', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Example project', exact: true }).click()
@@ -37,7 +37,28 @@ test('opens registered workspace views from the existing menu and closes without
   const tab = page.locator('[data-tab-id*="/project:"]')
   await tab.hover()
   await tab.locator('[data-tab-close]').click()
+  await expect(tab).toHaveCount(1)
+  await tab.locator('[data-tab-close]').click({ delay: 1100 })
   await expect(example(page, 'workspace')).toContainText('Application · 0')
+  expect((await state(page)).activations).toBe(1)
+  expect((await state(page)).disposals).toBe(0)
+})
+
+test('tool-menu extensions inherit hold-to-close and can reopen without reactivation', async ({ page }) => {
+  await page.goto('/extensions.html')
+  const tab = page.locator('[data-tab-id*="/overview:"]')
+  const close = tab.locator('[data-tab-close]')
+  await close.focus()
+  await close.press('Enter')
+  await expect(tab).toHaveCount(1)
+  await close.press('Enter', { delay: 1100 })
+  await expect(tab).toHaveCount(0)
+  await page.locator('button[data-id="tool-menu"]').click()
+  await page.getByRole('menuitem', { name: 'Example overview', exact: true }).click()
+  await expect(tab).toHaveCount(1)
+  await tab.hover()
+  await close.click({ delay: 1100 })
+  await expect(tab).toHaveCount(0)
   expect((await state(page)).activations).toBe(1)
   expect((await state(page)).disposals).toBe(0)
 })

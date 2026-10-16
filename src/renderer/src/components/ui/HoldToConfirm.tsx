@@ -13,11 +13,12 @@ interface HoldToConfirmProps {
   label: string
   onConfirm: () => void
   style?: CSSProperties
+  'data-tab-close'?: string
 }
 
 export function HoldToConfirm({
   as = 'button', children, className = '', disabled = false, label,
-  onConfirm, style,
+  onConfirm, style, ...attributes
 }: HoldToConfirmProps) {
   const { t } = useI18n('common')
   const [holding, setHolding] = useState(false)
@@ -44,6 +45,7 @@ export function HoldToConfirm({
   }
   const cancel = () => controllerRef.current?.cancel()
   const sharedProps = {
+    ...attributes,
     'aria-label': t('common:holdToConfirm.aria', { label }),
     title: t('common:holdToConfirm.title', { label }),
     className: `${styles.control} ${holding ? styles.holding : ''} ${className}`,

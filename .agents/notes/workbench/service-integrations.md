@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-14",
-  "updated": "2026-10-16T13:40:07Z",
+  "updated": "2026-10-16T13:56:45Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -45,6 +45,10 @@ CPA 设置沿用设置中心的表单样式与主题下拉组件，按连接配�
 CPA 是官方集成，待市场建立后可作为推荐项。主要用途为查看管理前端提供的额度及重置次数、时间等信息，转 API 按需使用。`janusx.cpa` 贡献应用级中部视图 `extension:janusx.cpa/management`，通过右上角工具箱菜单的 CPA 项打开，设置中的保存打开仍保留；中部终端新增列表不再显示 CPA。切换项目转移同一页面身份，原生网页会话复用。S3 后补充本地组件托管，仍无原生右侧额度摘要。
 
 工作区扩展可声明 `launcher: 'tool-menu'`，宿主据此将入口放入顶栏工具箱，默认仍为中部新增菜单；该字段不改变页面的中部承载位置。顶栏按注册状态及作用域生成入口，打开后显示“已打开”并置灰，关闭后恢复，未选项目或尚无终端时仍可打开应用级 CPA。打开走全局工具的回到工作区正面逻辑；展开工具箱时暂时隐藏原生网页，关闭菜单后恢复，避免网页遮住菜单。禁用或注销扩展后入口随注册快照移除。
+
+中部标签栏的关闭由宿主统一使用 `HoldToConfirm`：终端、浏览器、Markdown、CPA 及所有工作区扩展均需连续按住一秒，支持鼠标与 Enter／空格键并显示进度。短按、提前松开、移出控件或失去焦点取消本次确认，不开始标签拖拽；关闭控件可通过键盘聚焦。入口来自工具箱或中部新增菜单均遵循同一规则，后续导入的工作区视图沿用宿主控件，无需插件逐个实现。浏览器仍释放对应网页，Markdown 只关闭呈现，扩展不因此停用，托管 CPA 服务及账号保留。禁用、注销或应用退出的生命周期清理不要求用户长按。
+
+统一关闭验证：`npx vitest run tests/unit/hold-to-confirm.test.ts tests/unit/extensions.test.ts tests/unit/global-tool-entry.test.ts` 通过 38 项；`npx playwright test tests/e2e/extensions.spec.ts tests/e2e/pane-tab-drag.spec.ts --project=island --workers=1` 通过 27 项。桌面 `desktop-cpa.spec.ts` 的 Browser／Markdown 关闭重开与 `desktop-smoke.spec.ts` 的原生浏览器释放通过；CPA 登录保留用例最终以 `--grep 'CPA native page' --repeat-each=2` 连续两次通过，验证短按保留原生网页、长按释放、跨项目及重启登录复用。桌面 CPA 关闭测试持续按住直至标签移除再松手，避免固定松手时间与原生事件调度竞争。严格类型检查、局部 ESLint、应用构建及 Notes 检查通过。日志和桌面截图位于 `artifacts/tool-close*`；本轮未重跑真实托管 OAuth／供应商查询，未打包 exe。
 
 入口迁移验证：`npx vitest run tests/unit/extensions.test.ts tests/unit/global-tool-entry.test.ts` 通过 34 项，严格类型检查、局部 ESLint 与 `npm run build:app` 通过。`npx playwright test tests/e2e/desktop-cpa.spec.ts --project=desktop --workers=1 --grep 'CPA native page' --output=artifacts/cpa-launcher/desktop` 通过 1 项桌面用例，覆盖无项目时打开、已打开禁用、工具箱遮挡及恢复、中部新增菜单移除入口、关闭后恢复入口，以及跨项目与重启登录保留；日志和菜单截图位于 `artifacts/cpa-launcher*`。未打包 exe。
 
