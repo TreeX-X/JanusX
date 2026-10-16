@@ -5,10 +5,13 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'yaml'
-import { CpaRuntime, assertCpaPortFree, managedCpaConfig } from '../../src/main/cpa/runtime'
+import { CpaRuntime, assertCpaPortFree, cpaProxyEnvironment, managedCpaConfig } from '../../src/main/cpa/runtime'
 import type { CpaInstallation, CpaInstaller } from '../../src/main/cpa/installer'
 
-const h = vi.hoisted(() => ({ spawn: vi.fn(), encrypted: true, encrypt: vi.fn(), clipboard: vi.fn(), openPath: vi.fn(async () => '') }))
+const h = vi.hoisted(() => ({ spawn: vi.fn(), encrypted: true, encrypt: vi.fn(), clipboard: vi.fn(), openPath: vi.fn(async () => ''),
+  proxy: vi.fn<() => string | null>(), systemProxy: vi.fn<() => string | null>(),
+}))
+vi.mock('@janusx/llm-core', () => ({ getProxyManager: () => ({ getProxyUrl: h.proxy }), getSystemProxy: h.systemProxy }))
 vi.mock('electron', () => ({
   app: { getPath: () => '' }, clipboard: { writeText: h.clipboard }, shell: { openPath: h.openPath },
   safeStorage: { isEncryptionAvailable: () => h.encrypted, getSelectedStorageBackend: () => 'keyring',
@@ -28,6 +31,7 @@ class Child extends EventEmitter {
 const roots: string[] = [], runtimes: CpaRuntime[] = []
 beforeEach(() => {
   vi.clearAllMocks(); h.encrypted = true
+  h.proxy.mockReturnValue(null); h.systemProxy.mockReturnValue(null)
   h.encrypt.mockImplementation((value: string) => Buffer.from('encrypted:' + Buffer.from(value).toString('base64')))
   h.spawn.mockImplementation(() => new Child())
   vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })))
@@ -36,6 +40,7 @@ afterEach(async () => {
   for (const runtime of runtimes.splice(0)) await runtime.dispose()
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 3 })
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 async function fixture(installed = true) {
@@ -54,6 +59,43 @@ async function fixture(installed = true) {
 }
 
 describe('managed CPA runtime ownership', () => {
+  it('passes the effective JanusX proxy to the child, keeps loopback direct, and refreshes it on restart without saving it', async () => {
+    const { runtime, root } = await fixture()
+    h.proxy.mockReturnValue('http://fixture-user:fixture-password@127.0.0.1:7897')
+    h.systemProxy.mockReturnValue('http://127.0.0.1:9999')
+    vi.stubEnv('NO_PROXY', 'example.test, localhost')
+    vi.stubEnv('no_proxy', 'internal.test,example.test')
+    vi.stubEnv('UNRELATED_SECRET', 'must-not-inherit')
+    const originalBypass = process.env.NO_PROXY
+    const settings = { managementUrl: '', port: 18317, autoUpdate: false }
+    await runtime.start(settings)
+    const calls = () => h.spawn.mock.calls.filter(([file]) => file !== 'powershell.exe')
+    const env = calls()[0][2].env
+    expect(env.HTTPS_PROXY).toBe(h.proxy())
+    expect(env.HTTP_PROXY).toBe(env.HTTPS_PROXY)
+    expect(env.http_proxy).toBe(env.HTTPS_PROXY)
+    expect(env.https_proxy).toBe(env.HTTPS_PROXY)
+    expect(env.NO_PROXY.split(',')).toEqual(expect.arrayContaining(['example.test', 'internal.test', 'localhost', '127.0.0.1', '::1']))
+    expect(env.no_proxy).toBe(env.NO_PROXY)
+    expect(env.UNRELATED_SECRET).toBeUndefined()
+    expect(process.env.NO_PROXY).toBe(originalBypass)
+    expect(await readFile(join(root, 'config.yaml'), 'utf8')).not.toContain('fixture-password')
+    expect(JSON.stringify(await runtime.status())).not.toContain('fixture-password')
+    await runtime.stop()
+    h.proxy.mockReturnValue('http://127.0.0.1:7898')
+    await runtime.start(settings)
+    expect(calls()[1][2].env.HTTPS_PROXY).toBe('http://127.0.0.1:7898')
+  })
+
+  it('uses shared system detection before LLM initialization and leaves no stale proxy when absent', () => {
+    h.systemProxy.mockReturnValue('socks5://127.0.0.1:1080')
+    expect(cpaProxyEnvironment()).toMatchObject({ HTTP_PROXY: 'socks5://127.0.0.1:1080', HTTPS_PROXY: 'socks5://127.0.0.1:1080' })
+    expect(h.systemProxy).toHaveBeenCalledOnce()
+    h.systemProxy.mockReturnValue(null)
+    expect(cpaProxyEnvironment().HTTPS_PROXY).toBeUndefined()
+    expect(cpaProxyEnvironment().HTTP_PROXY).toBeUndefined()
+  })
+
   it('persists custom keys encrypted, rotates only while stopped and reuses the new key across runtime recreation', async () => {
     const { runtime, root, installer } = await fixture()
     const settings = { managementUrl: '', port: 18317, autoUpdate: false }
@@ -212,9 +254,11 @@ describe('managed CPA runtime ownership', () => {
   })
 
   it('enforces managed listener rules over legacy settings while preserving user API configuration', () => {
-    const result = parse(managedCpaConfig('host: 0.0.0.0\nport: 99\naccess:\n  api-keys: [keep-me]\n', { managementUrl: '', port: 18417 }, '/accounts'))
+    const result = parse(managedCpaConfig('host: 0.0.0.0\nport: 99\nproxy-url: http://legacy:9999\nrequests:\n  proxy-url: direct\n  custom-header: keep\naccess:\n  api-keys: [keep-me]\n', { managementUrl: '', port: 18417 }, '/accounts'))
     expect(result.host).toBeUndefined(); expect(result.port).toBeUndefined()
     expect(result.server.host).toBe('127.0.0.1')
     expect(result.access['api-keys']).toEqual(['keep-me'])
+    expect(result['proxy-url']).toBeUndefined()
+    expect(result.requests).toEqual({ 'proxy-url': '', 'custom-header': 'keep' })
   })
 })

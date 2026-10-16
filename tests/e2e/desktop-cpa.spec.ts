@@ -24,8 +24,8 @@ async function listen(server: Server): Promise<string> {
   return `http://127.0.0.1:${address.port}`
 }
 
-async function boot(root: string): Promise<{ app: ElectronApplication; page: Page }> {
-  const app = await electron.launch({ args: [resolve('out/main/index.js'), `--user-data-dir=${join(root, 'profile')}`], env: createDesktopTestEnv(root) })
+async function boot(root: string, env: NodeJS.ProcessEnv = {}): Promise<{ app: ElectronApplication; page: Page }> {
+  const app = await electron.launch({ args: [resolve('out/main/index.js'), `--user-data-dir=${join(root, 'profile')}`], env: { ...createDesktopTestEnv(root), ...env } })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   await page.evaluate(() => (window as any).electron.system.setLanguage('en'))
@@ -63,7 +63,7 @@ async function freePort(): Promise<number> {
   return port
 }
 
-async function verifyManagedOAuth(app: ElectronApplication, page: Page, web: Page, origin: string, key: string): Promise<void> {
+async function verifyManagedOAuth(app: ElectronApplication, page: Page, web: Page, origin: string, key: string, proxyTargets: string[]): Promise<void> {
   // Keep authorization outside the test: record the system-browser handoff without opening a provider.
   await app.evaluate(({ shell }) => {
     ;(globalThis as any).__cpaOAuthOpened = []
@@ -115,6 +115,23 @@ async function verifyManagedOAuth(app: ElectronApplication, page: Page, web: Pag
     return response.json()
   }, { key })
   expect(cancelled.cancelled).toBe(true)
+  // A synthetic code exercises the real backend's token transport. The local proxy rejects
+  // CONNECT without opening an upstream socket, so no provider is contacted or token obtained.
+  const proxyState = await web.evaluate(async ({ key }) => {
+    const headers = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
+    const result = await fetch('/v8/management/oauth/auth-url?provider=codex&is_webui=true', { headers })
+    const auth = await result.json()
+    const submitted = await fetch('/v8/management/oauth/callback', {
+      method: 'POST', headers, body: JSON.stringify({ provider: 'codex', state: auth.state, code: 'janusx-proxy-test-code' }),
+    })
+    if (!submitted.ok) throw new Error('Fixture callback rejected')
+    return auth.state as string
+  }, { key })
+  await expect.poll(() => proxyTargets.includes('auth.openai.com:443')).toBe(true)
+  await expect.poll(async () => {
+    const result = await fetch(`${origin}/v8/management/oauth/status?state=${encodeURIComponent(proxyState)}`, { headers: { Authorization: `Bearer ${key}` } })
+    return (await result.json() as { status: string }).status
+  }).toBe('error')
 }
 
 async function cleanup(app: ElectronApplication | undefined, server: Server, root: string) {
@@ -250,6 +267,12 @@ test('managed CPA downloads verified components, runs the real Windows service a
   let app: ElectronApplication | undefined
   const occupied = createTcpServer()
   const callbackBlocker = createTcpServer()
+  const proxyTargets: string[] = []
+  const proxy = createServer((_request, response) => { response.writeHead(502); response.end() })
+  proxy.on('connect', (request, socket) => {
+    proxyTargets.push(request.url ?? '')
+    socket.end('HTTP/1.1 502 Fixture proxy blocked upstream\r\nContent-Length: 0\r\nConnection: close\r\n\r\n', () => socket.destroy())
+  })
   try {
     // Deterministically exercise fallback, including machines where Windows has not excluded 1455.
     await new Promise<void>((resolve, reject) => {
@@ -259,7 +282,10 @@ test('managed CPA downloads verified components, runs the real Windows service a
       })
       callbackBlocker.listen(1455, '0.0.0.0', resolve)
     })
-    const booted = await boot(root); app = booted.app
+    const proxyOrigin = await listen(proxy)
+    const proxyEnv = { HTTP_PROXY: proxyOrigin, HTTPS_PROXY: proxyOrigin, http_proxy: proxyOrigin, https_proxy: proxyOrigin,
+      NO_PROXY: 'localhost,127.0.0.1,::1', no_proxy: 'localhost,127.0.0.1,::1' }
+    const booted = await boot(root, proxyEnv); app = booted.app
     const { page } = booted
     // Only transport is replaced. The production installer, checksums, extraction,
     // encrypted storage and official CPA executable run unchanged.
@@ -331,7 +357,7 @@ test('managed CPA downloads verified components, runs the real Windows service a
     await expect(quota).toBeVisible()
     await quota.click()
     await expect.poll(() => web.url()).toContain('quota')
-    await verifyManagedOAuth(app, page, web, origin, key)
+    await verifyManagedOAuth(app, page, web, origin, key, proxyTargets)
     const configPath = join(root, 'profile', 'janusx', 'components', 'cpa', 'config.yaml')
     const accountSentinel = join(root, 'profile', 'janusx', 'components', 'cpa', 'accounts', '.preservation-test')
     await writeFile(accountSentinel, 'keep-across-restarts')
@@ -396,7 +422,7 @@ test('managed CPA downloads verified components, runs the real Windows service a
     await app.close(); app = undefined
     await expect.poll(async () => { try { await fetch(`${finalOrigin}/management.html`); return false } catch { return true } }).toBe(true)
     expect(await readFile(configPath, 'utf8')).not.toContain(key)
-    const rebooted = await boot(root); app = rebooted.app
+    const rebooted = await boot(root, proxyEnv); app = rebooted.app
     await rebooted.page.getByTitle('Settings', { exact: true }).click()
     await rebooted.page.locator('[data-tab="integrations"]').click()
     await rebooted.page.getByRole('button', { name: 'Save and open CPA', exact: true }).click()
@@ -409,6 +435,7 @@ test('managed CPA downloads verified components, runs the real Windows service a
     if (app) await app.close()
     if (occupied.listening) await new Promise<void>((resolve) => occupied.close(() => resolve()))
     if (callbackBlocker.listening) await new Promise<void>((resolve) => callbackBlocker.close(() => resolve()))
+    if (proxy.listening) await new Promise<void>((resolve) => proxy.close(() => resolve()))
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 })

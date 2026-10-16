@@ -6,6 +6,7 @@ import { createServer } from 'node:net'
 import { appendFile, mkdir, readFile, rename, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse, stringify } from 'yaml'
+import { getProxyManager, getSystemProxy } from '@janusx/llm-core'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type { CpaSettings, CpaStatus } from '../../shared/ipc/cpa'
 import { validateCpaManagementKey } from '../../shared/ipc/cpa'
@@ -30,6 +31,19 @@ export async function assertCpaPortFree(port: number): Promise<void> {
   })
 }
 
+/** Reuse JanusX's effective proxy without changing the host environment or persisting credentials. */
+export function cpaProxyEnvironment(): NodeJS.ProcessEnv {
+  const proxy = getProxyManager().getProxyUrl() ?? getSystemProxy()
+  const bypass = [...new Set([
+    ...(process.env.NO_PROXY ?? '').split(','), ...(process.env.no_proxy ?? '').split(','),
+    'localhost', '127.0.0.1', '::1',
+  ].map((entry) => entry.trim()).filter(Boolean))].join(',')
+  return {
+    ...(proxy ? { HTTP_PROXY: proxy, HTTPS_PROXY: proxy, http_proxy: proxy, https_proxy: proxy } : {}),
+    NO_PROXY: bypass, no_proxy: bypass,
+  }
+}
+
 export function managedCpaConfig(existing: string, settings: CpaSettings, accounts: string): string {
   const parsed: unknown = existing ? parse(existing) : {}
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('cpa-invalid-config')
@@ -40,6 +54,9 @@ export function managedCpaConfig(existing: string, settings: CpaSettings, accoun
   value.management = { ...value.management, 'allow-remote': false, 'secret-key': '',
     'disable-control-panel': false, 'disable-auto-update-panel': true }
   value.oauth = { ...value.oauth, 'auth-dir': accounts }
+  // Empty selects Go's environment proxy; a saved CPA override must not diverge from JanusX.
+  value.requests = { ...value.requests, 'proxy-url': '' }
+  delete value['proxy-url']
   value.access = { ...value.access, 'api-keys': value.access?.['api-keys']?.length ? value.access['api-keys'] : [randomBytes(32).toString('hex')] }
   // Host-owned keys override legacy spellings too: never accidentally expose a listener.
   delete value.host; delete value.port; delete value['remote-management']; delete value['auth-dir']
@@ -229,7 +246,7 @@ export class CpaRuntime implements CpaRuntimeControl {
   private async launch(value: CpaInstallation, settings: CpaSettings): Promise<void> {
     if (this.abort.signal.aborted || this.disposed) throw new Error('cpa-stopped')
     this.state.phase = 'starting'
-    const env: NodeJS.ProcessEnv = {}
+    const env: NodeJS.ProcessEnv = cpaProxyEnvironment()
     for (const name of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SSL_CERT_FILE', 'SSL_CERT_DIR']) {
       if (process.env[name]) env[name] = process.env[name]
     }
