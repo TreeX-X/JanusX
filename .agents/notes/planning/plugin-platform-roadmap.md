@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "draft",
   "created": "2026-10-16",
-  "updated": "2026-10-16T03:30:37Z",
+  "updated": "2026-10-16T04:02:11Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/1aef97e6-77fe-4bae-af51-ff560a737282",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -21,11 +21,11 @@
 
 已确认先建设扩展架构，将现有右侧文件树、Git 和会话管理按内置扩展管理，再开放第三方插件和市场。中部工作区与右侧工作区都提供通用贡献入口；插件可单独提供一种视图，也可同时提供两种。维护目标是让插件作者使用公开接口独立开发，接入已有能力时无需逐插件修改宿主容器。
 
-本计划按依赖安排 S1 至 S5，尚未指定版本或工期，不挤占既有版本事项；统一列入[工程排期的未归入节点](engineering-milestones.md)。2026-10-16 按 xdo 开始并交付 S1 的可信渲染器扩展基础；S2 至 S5 待实施。阶段通过以所属需求的验收与实际证据为准，普通 xdo 不创建执行 Task。
+本计划按依赖安排 S1 至 S5，尚未指定版本或工期，不挤占既有版本事项；统一列入[工程排期的未归入节点](engineering-milestones.md)。2026-10-16 按 xdo 交付 S1 可信渲染器扩展基础和 S2 内置工具迁移；S3 至 S5 待实施。阶段通过以所属需求的验收与实际证据为准，普通 xdo 不创建执行 Task。
 
 ## 当前基础与实施边界
 
-S1 已在 `src/renderer/src/extensions/` 提供注册／注销、启用／停用、同步激活与清理、稳定视图 ID、React 订阅和视图宿主。右侧既有注册表与状态管理可合并动态贡献，中部增加通用 extension pane 和已有 `+` 菜单入口。文件树、Git、会话等原内置内容仍保留原渲染分支，迁移归 S2；当前接口不加载第三方包。
+S1 已在 `src/renderer/src/extensions/` 提供注册／注销、启用／停用、同步激活与清理、稳定视图 ID、React 订阅和视图宿主。右侧注册表与状态管理合并动态贡献，中部通过通用 extension pane 和已有 `+` 菜单承载。S2 已将文件树、Git、会话管理注册为内置扩展，移除它们在右侧容器中的专属渲染与图标分支；兼容适配保留旧 ID、入口和宽度偏好。当前接口不加载第三方包。
 
 内置扩展随应用发布，保留可信 React 运行方式，通过宿主服务访问文件、Git 与会话能力；第三方插件使用隔离容器与按权限开放的通信桥。两者共享贡献语义，不共享全部权限。外部管理网页使用独立承载规则，不因嵌入而获得插件桥。文件系统、Git 操作、会话执行与持久化继续由原宿主模块负责，本轮不重写底层服务。
 
@@ -75,3 +75,17 @@ Figma 保留为后续服务集成候选，围绕项目设计链接、所选 CLI 
 验证：`npx vitest run tests/unit/extensions.test.ts tests/unit/right-tool-state.test.ts tests/unit/right-tool-dock.test.ts tests/unit/workspace-pane.test.ts tests/unit/workspace-front-surface.test.ts tests/unit/workspace-remote-terminal-sync.test.ts tests/unit/workspace-sidebar.test.ts tests/unit/side-panel-collapse-ui.test.ts` 共 121 项通过。浏览器真实组件测试 `tests/e2e/extensions.spec.ts` 5 项通过，覆盖纸面／深色主题、双区域状态、项目隔离和恢复、菜单与关闭、停用／注销清理及错误隔离；原有 `pane-tab-drag` 与 `right-dock-motion` 25 项通过。曾复现全局页面插入抢走项目 Tab 的选中态，已修复并补回归用例。浏览器使用 IPC fallback，不作为真实 Electron 集成结论。
 
 严格类型检查、变更范围 ESLint、`npm run build:app`、包边界、i18n 与 Notes 检查通过。真实 Electron 回归 `npx playwright test tests/e2e/desktop-smoke.spec.ts --project=desktop --workers=1 --grep 'built desktop' --output=artifacts/extensions-s1/desktop` 1 项通过，覆盖既有工作区、终端及右侧工具关键路径；新扩展本身的双视图验证仍为前述浏览器组件测试。主题 CSS 生成检查通过；全仓主题审计在本轮未改的 `AboutSettingsPanel.module.css:132` 和 `:133` 报两处固定颜色，未修改其他功能来消除此失败。第三方隔离、清单权限校验、独立发布的 SDK 包与脚手架仍待后续阶段，不能据此宣称完整插件平台已完成。
+
+## S2 交付与验证
+
+S2a 文件树、S2b Git、S2c 会话管理统一在 `extensions/builtins.tsx` 声明：扩展身份为 `janusx.files`、`janusx.git`、`janusx.sessions`，各贡献一个右侧 `panel`。适配层将命名空间视图映射回 `files`、`git`、`sessions`，避免重复面板并保留调用入口、快捷键及 `janusx:right-tools:v1` 宽度偏好。顺序、图标、翻译键、宽度配置与会话实验开关跟随定义。停用卸载视图并移除入口，重新启用保持关闭，宽度仍保留；应用重启仍默认启用内置扩展，本阶段未增加插件管理页或停用状态持久化。
+
+元数据在偏好恢复前注册，业务组件按需加载，避免注册表、组件与 store 的循环初始化。三个内置外壳使用应用级挂载身份，继续通过既有 store 读取项目／worktree；这样保留原来的空项目界面与切换项目时的局部 UI 状态。宿主服务及其后台监听继续运行，视图自身订阅、定时器和 DOM 监听随原组件卸载清理。右侧所有贡献共用原有重试／关闭错误边界；关闭或停用会话视图不终止 PTY，也不修改会话记录。
+
+单元验证：`npx vitest run tests/unit/builtin-extensions.test.ts tests/unit/extensions.test.ts tests/unit/right-tool-state.test.ts tests/unit/right-tool-dock.test.ts tests/unit/workspace-pane.test.ts tests/unit/workspace-front-surface.test.ts tests/unit/workspace-remote-terminal-sync.test.ts tests/unit/workspace-sidebar.test.ts tests/unit/side-panel-collapse-ui.test.ts tests/unit/file-tree-utils.test.ts tests/unit/file-tree-drag.test.ts tests/unit/file-tree-move.test.ts tests/unit/file-tree-refresh-pressure.test.ts tests/unit/git-store.test.ts tests/unit/session-continue-resume.test.ts tests/unit/external-session-sync.test.ts` 共 176 项通过。覆盖三种工具的兼容 ID、重复打开、停用／启用、宽度保留、会话开关，以及既有文件、Git 和会话逻辑。
+
+浏览器验证：`npx playwright test tests/e2e/builtin-extensions.spec.ts tests/e2e/extensions.spec.ts tests/e2e/right-workspace-design.spec.ts tests/e2e/right-dock-motion.spec.ts tests/e2e/right-tool-tooltips.spec.ts --project=island --workers=1 --output=artifacts/extensions-s2/browser` 首轮 16 项通过、1 项因按钮定位器失败；修正定位器及补齐语言设置 IPC 测试桩后，重跑 `builtin-extensions.spec.ts` 的 2 项通过，结果在 `artifacts/extensions-s2/browser-fixed`，合计 17 项不同用例通过。覆盖文件搜索保留、Git 暂存调用、三个扩展停用及重开、两套主题与窄宽面板、双区域示例、错误隔离，以及会话失活／关闭／开关／停用时订阅归零、重开不累积和项目归属。随后增强 `extensions.spec.ts` 的错误用例，实际点击重试恢复视图，单项通过，证据在 `artifacts/extensions-s2/retry`。浏览器使用 IPC fallback。
+
+桌面验证：构建后运行 `npx playwright test tests/e2e/desktop-smoke.spec.ts tests/e2e/desktop-session-continue.spec.ts --project=desktop --workers=1 --grep 'built desktop|Continue in New Session mints' --output=artifacts/extensions-s2/desktop`，2 项通过。真实 Electron 覆盖文件树、Git、工作区与终端关键路径，以及会话继续／恢复。新增检查关闭会话面板后向已有 PTY 发送标记，测试 CLI 收到输入且会话记录保留，重开恢复列表。CLI 为隔离的测试进程，不访问真实供应商账号；本轮未对真实远端执行 push／pull。
+
+严格类型检查、生产变更范围 ESLint、应用构建、包边界、i18n 与 Notes 检查通过；Notes 为 315 份、0 错误，另有 17 条显式外部链接诊断。主题生成检查通过，全仓主题审计仍被未改动的 `AboutSettingsPanel.module.css:132`、`:133` 两处固定颜色阻断。AC-6 按以上迁移和回归证据完成；CPA 内嵌、第三方加载与市场继续归 S3 至 S5。

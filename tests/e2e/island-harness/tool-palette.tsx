@@ -11,11 +11,20 @@ import dockStyles from '../../../src/renderer/src/components/right-tools/RightDo
 import { useGitStore } from '../../../src/renderer/src/stores/git'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { useThemeStore } from '../../../src/renderer/src/stores/theme'
+import { extensionRegistry, openExtensionView } from '../../../src/renderer/src/extensions'
+import { useExperimentalStore } from '../../../src/renderer/src/stores/experimental'
 import { initI18n, changeLanguage } from '../../../src/renderer/src/i18n'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/styles/themes.generated.css'
 
 installElectronApiFallback()
+Object.assign(window.electron.system, { getLanguage: async () => 'zh-CN', setLanguage: async () => undefined })
+const sessionListeners = new Set<unknown>()
+const sessionFilters: unknown[] = []
+const stagedPaths: string[][] = []
+let terminalKills = 0
+const killTerminal = window.electron.terminal.kill
+window.electron.terminal.kill = async (...args) => { terminalKills++; return killTerminal(...args) }
 const theme = new URLSearchParams(location.search).get('theme') ?? 'planche'
 const previewWidth = Number(new URLSearchParams(location.search).get('panel')) || null
 useThemeStore.getState().applyExternal(theme)
@@ -27,8 +36,11 @@ Object.assign(window.electron.git, {
   ] }),
   log: async () => [{ hash: 'palette-commit', shortHash: 'abc1234', message: 'Tooltip preview commit', author: 'JanusX', date: new Date().toISOString() }],
   commitChanges: async () => [{ path: 'tooltip-preview.txt', status: 'M', additions: 2, deletions: 1 }],
+  stage: async (cwd: string, paths: string[]) => { stagedPaths.push(paths); return window.electron.git.status(cwd) },
 })
-Object.assign(window.electron.session, { list: async () => [{
+Object.assign(window.electron.session, {
+  onEvent: (listener: unknown) => { sessionListeners.add(listener); return () => { sessionListeners.delete(listener) } },
+  list: async (filter: unknown) => { sessionFilters.push(filter); return [{
   id: 'session-palette', workspaceId: 'palette', engine: 'codex', cwd: 'C:/palette',
   firstPrompt: '优化文件管理和工作区菜单的视觉层级', turnCount: 3, checkpointCount: 0,
   status: 'completed', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), archived: false,
@@ -40,7 +52,7 @@ Object.assign(window.electron.session, { list: async () => [{
   id: 'session-worktree', workspaceId: 'palette', engine: 'codex', cwd: 'C:/palette',
   firstPrompt: '修复工作树切换后的文件列表刷新', turnCount: 5, checkpointCount: 0,
   status: 'completed', createdAt: new Date().toISOString(), updatedAt: new Date(Date.now() - 7200000).toISOString(), archived: false,
-}], get: async (id: string) => ({ id, engine: 'codex', cwd: 'C:/palette', firstPrompt: '优化文件管理和工作区菜单的视觉层级', turns: [], status: 'completed', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }) })
+}] }, get: async (id: string) => ({ id, engine: 'codex', cwd: 'C:/palette', firstPrompt: '优化文件管理和工作区菜单的视觉层级', turns: [], status: 'completed', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }) })
 useWorkspaceStore.setState({
   workspaces: [{ id: 'palette', name: 'JanusX', path: 'C:/palette', clis: [], layout: { mode: 'tabs', positions: [] }, createdAt: '', updatedAt: '' }],
   activeWorkspaceId: 'palette', terminals: [],
@@ -50,6 +62,18 @@ useWorkspaceStore.setState({
 await useGitStore.getState().fetchStatus('C:/palette')
 useRightToolStore.setState({ openToolIds: ['files', 'sessions', 'git'], activeToolId: 'files', ...(previewWidth ? { panelWidths: { sessions: previewWidth, git: previewWidth } } : {}) })
 useAppStore.setState({ panelCollapsed: false })
+Object.assign(window, { builtinExtensionFixture: {
+  disable: (id: string) => extensionRegistry.disable(`janusx.${id}`),
+  enable: (id: string) => extensionRegistry.enable(`janusx.${id}`),
+  open: (id: string) => openExtensionView(`extension:janusx.${id}/panel`),
+  sessionsEnabled: (sessions: boolean) => useExperimentalStore.setState({ sessions }),
+  selectProject: (id: string) => useWorkspaceStore.setState({ activeWorkspaceId: id,
+    workspaces: ['palette', 'other'].map((projectId) => ({ id: projectId, name: projectId, path: `C:/${projectId}`,
+      clis: [], layout: { mode: 'tabs', positions: [] }, createdAt: '' })),
+  }),
+  state: () => ({ listeners: sessionListeners.size, sessionFilters, terminalKills, stagedPaths,
+    open: useRightToolStore.getState().openToolIds, widths: useRightToolStore.getState().panelWidths }),
+} })
 await initI18n()
 await changeLanguage('zh-CN')
 function ToolPalette() {

@@ -1,10 +1,12 @@
-import { getRightToolDefinitions, isRightToolId } from './registry'
+import { canonicalRightToolId, getRightToolDefinitions, isRightToolId, RIGHT_TOOL_REGISTRY } from './registry'
 import type {
   PanelCollapseCommand,
   RightToolId,
   RightToolPreferencesV1,
   RightToolTransition,
 } from './types'
+
+export { canonicalRightToolId } from './registry'
 
 export const RIGHT_TOOL_SCHEMA_VERSION = 1 as const
 export const RIGHT_TOOL_PANEL_MIN_WIDTH = 240
@@ -44,17 +46,15 @@ export function clampRightToolPanelWidth(
 }
 
 export function rightToolPanelMinWidth(toolId?: RightToolId | null): number {
-  return toolId === 'sessions' || toolId === 'git' ? SESSION_PANEL_MIN_WIDTH : RIGHT_TOOL_PANEL_MIN_WIDTH
+  return panelWidthDefinition(toolId)?.min ?? RIGHT_TOOL_PANEL_MIN_WIDTH
 }
 
 export function rightToolPanelMaxWidth(toolId?: RightToolId | null): number {
-  return toolId === 'sessions' || toolId === 'git' ? SESSION_PANEL_MAX_WIDTH : RIGHT_TOOL_PANEL_MAX_WIDTH
+  return panelWidthDefinition(toolId)?.max ?? RIGHT_TOOL_PANEL_MAX_WIDTH
 }
 
 export function rightToolPanelDefaultWidth(toolId?: RightToolId | null): number {
-  if (toolId === 'sessions' || toolId === 'git') return SESSION_PANEL_DEFAULT_WIDTH
-  if (toolId === 'files') return FILES_PANEL_DEFAULT_WIDTH
-  return RIGHT_TOOL_PANEL_DEFAULT_WIDTH
+  return panelWidthDefinition(toolId)?.default ?? RIGHT_TOOL_PANEL_DEFAULT_WIDTH
 }
 
 export function preferredRightToolPanelWidth(
@@ -62,16 +62,14 @@ export function preferredRightToolPanelWidth(
   panelWidths: RightToolPreferencesV1['panelWidths'],
   toolId?: RightToolId | null,
 ): number {
-  const defaultWidth = toolId === 'sessions' || toolId === 'git' || toolId === 'files'
-    ? rightToolPanelDefaultWidth(toolId)
-    : baseWidth
+  const defaultWidth = panelWidthDefinition(toolId)?.default ?? baseWidth
   return clampRightToolPanelWidth(toolId ? panelWidths?.[toolId] ?? defaultWidth : defaultWidth, undefined, toolId)
 }
 
 function normalizePanelWidths(value: unknown): RightToolPreferencesV1['panelWidths'] {
   if (!isRecord(value)) return undefined
   const widths: NonNullable<RightToolPreferencesV1['panelWidths']> = {}
-  for (const { id } of getRightToolDefinitions()) {
+  for (const { id } of [...RIGHT_TOOL_REGISTRY, ...getRightToolDefinitions()]) {
     if (typeof value[id] === 'number' && Number.isFinite(value[id])) {
       widths[id] = clampRightToolPanelWidth(value[id], undefined, id)
     }
@@ -79,8 +77,8 @@ function normalizePanelWidths(value: unknown): RightToolPreferencesV1['panelWidt
   return Object.keys(widths).length ? widths : undefined
 }
 
-export function canonicalRightToolId(id: unknown): unknown {
-  return id === 'persona' || id === 'review' ? 'assist' : id
+function panelWidthDefinition(toolId?: RightToolId | null) {
+  return RIGHT_TOOL_REGISTRY.find(({ id }) => id === canonicalRightToolId(toolId))?.panelWidth
 }
 
 export function normalizeRightToolIds(value: unknown): RightToolId[] {

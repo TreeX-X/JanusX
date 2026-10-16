@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-14",
-  "updated": "2026-10-16T03:24:59Z",
+  "updated": "2026-10-16T04:02:11Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -18,7 +18,7 @@
 
 ## Intent
 
-探索在 JanusX 接入账号服务、CLIProxyAPI（CPA）和 Figma。通用扩展基础已按 S1 开始实施，服务集成本身仍处于方案阶段。方向是增强工具连接、配置和工作台入口，保留原 CLI 的会话管理、交互和执行逻辑；不以统一聊天界面覆盖各 Harness 的原生能力。
+探索在 JanusX 接入账号服务、CLIProxyAPI（CPA）和 Figma。通用扩展基础与内置工具迁移已交付 S1、S2，服务集成本身仍处于方案阶段。方向是增强工具连接、配置和工作台入口，保留原 CLI 的会话管理、交互和执行逻辑；不以统一聊天界面覆盖各 Harness 的原生能力。
 
 优先考虑复用 CPA 的账号管理、OAuth 登录、路由与其管理界面提供的查询能力，暂缓自建完整账号面板。JanusX 第一批候选职责为配置 CPA 实例地址与访问凭据、检查连接状态、连接兼容模型 API，以及打开既有管理页。若后续需要额度摘要，优先从已连接 CPA 的可用管理接口读取，不重新维护同一批账号及刷新令牌。模型调用凭据和管理凭据分别保存、分别使用。
 
@@ -28,7 +28,7 @@ Figma 作为独立服务集成候选：工作台承担连接状态、设计文�
 
 先以内部集成接口验证实际需求，再评估第三方插件开放。不同集成按实际能力声明配置、状态查询、操作入口及工具接入，不要求全部实现 Harness 会话协议。此探索关联既有 [插件架构提案](./requirements/plugin-architecture-forms.md) 与 [插件导入和调试提案](./requirements/plugin-import-debug.md)，不改写其未完成验收或授权边界。
 
-交付顺序归[插件平台分阶段计划](../planning/plugin-platform-roadmap.md)：S1 可信扩展核心已实现，后续迁移文件树、Git 与会话管理为内置扩展，再验证 CPA 内嵌，最后开放第三方导入和市场。内置扩展共享贡献协议并保留可信运行方式；文件、Git 和会话底层服务继续由宿主维护。本记录维护服务集成范围，CPA、Figma 本身均尚未接入。
+交付顺序归[插件平台分阶段计划](../planning/plugin-platform-roadmap.md)：S1 可信扩展核心和 S2 文件树、Git、会话管理内置扩展已实现，下一阶段验证 CPA 内嵌，之后开放第三方导入和市场。`extensions/builtins.tsx` 管理三个内置定义，右侧适配保留原 ID、图标、翻译、开关和宽度偏好；应用级外壳继续跟随原 store 的项目／worktree 上下文。停用卸载界面但保留宿主文件、Git、会话服务，关闭会话视图不终止 PTY 或修改记录。当前生命周期由可信代码控制，尚无管理页与跨启动停用偏好。本记录维护服务集成范围，CPA、Figma 本身均尚未接入。
 
 ## Proposed surfaces
 

@@ -34,11 +34,16 @@ const unregister = extensionRegistry.register({
     } }
   }),
 })
+let brokenViewFails = true
 extensionRegistry.register({ id: 'broken.tools', views: [{ id: 'page', title: 'Broken view', location: 'right', scope: 'application',
-  component: () => { throw new Error('Intentional extension failure') },
+  component: () => {
+    if (brokenViewFails) throw new Error('Intentional extension failure')
+    return <div>Recovered view</div>
+  },
 }] })
 openExtensionView('extension:example.tools/overview')
 Object.assign(window, { extensionFixture: {
+  recoverBrokenView: () => { brokenViewFails = false },
   state: () => ({ ...metrics, tabs: getLeafPanes(useWorkspaceStore.getState().paneTree).flatMap((leaf) => leaf.tabs),
     right: useRightToolStore.getState().openToolIds, snapshots: useWorkspaceStore.getState().terminalSnapshots }),
 } })

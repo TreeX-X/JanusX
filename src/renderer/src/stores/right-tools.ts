@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import type { PersistStorage, StateStorage } from 'zustand/middleware'
 import { useAppStore } from './app'
 import { useExperimentalStore } from './experimental'
-import { isRightToolEnabled } from '../right-tools/registry'
+import { canonicalRightToolId, getRightToolView, isRightToolEnabled } from '../right-tools/registry'
 import { extensionRegistry } from '@/extensions/registry'
 import { useWorkspaceStore } from './workspace'
 import {
@@ -79,11 +79,11 @@ export const useRightToolStore = create<RightToolStore>()(
       }
       const route = (toolId: RightToolId, transition: typeof openRightTool): void => {
         if (!isRightToolEnabled(toolId, useExperimentalStore.getState())) return
-        if (extensionRegistry.getView(toolId)?.scope === 'project' && !useWorkspaceStore.getState().activeWorkspaceId) return
+        if (getRightToolView(toolId)?.scope === 'project' && !useWorkspaceStore.getState().activeWorkspaceId) return
         if (toolId === 'persona' || toolId === 'review') {
           useAssistantStore.getState().setSection(toolId === 'persona' ? 'personal' : 'review')
         }
-        applyTransition(transition(get(), toolId))
+        applyTransition(transition(get(), canonicalRightToolId(toolId) as RightToolId))
       }
 
       return {
@@ -92,9 +92,12 @@ export const useRightToolStore = create<RightToolStore>()(
         activateTool: (toolId) => route(toolId, activateRightTool),
         closeTool: (toolId) => applyTransition(closeRightTool(get(), toolId)),
         toggleFromRail: (toolId) => route(toolId, toggleRightToolFromRail),
-        setPanelWidth: (panelWidth, toolId) => set((state) => toolId
-          ? { panelWidths: { ...state.panelWidths, [toolId]: clampRightToolPanelWidth(panelWidth, undefined, toolId) } }
-          : { panelWidth: clampRightToolPanelWidth(panelWidth) }),
+        setPanelWidth: (panelWidth, toolId) => {
+          const id = canonicalRightToolId(toolId) as RightToolId | null | undefined
+          set((state) => id
+            ? { panelWidths: { ...state.panelWidths, [id]: clampRightToolPanelWidth(panelWidth, undefined, id) } }
+            : { panelWidth: clampRightToolPanelWidth(panelWidth) })
+        },
         reconcile: () => set(reconcileRightToolPreferences(get())),
       }
     },

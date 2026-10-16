@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-15T11:56:42Z",
+  "updated": "2026-10-16T04:02:11Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -34,6 +34,8 @@
 The right side freezes four singleton tabs in a fixed strip while the file tree speaks no visual language. Adding a tool squeezes the tab row, tool state drifts across stores, and file kinds, selection, and version-control states collide in one channel.
 
 ## Decision
+
+Files, Git and sessions now register as trusted bundled extensions through `extensions/builtins.tsx`. The adapter keeps their original tool IDs, translated labels, icons, order, gates and saved widths; the rail and content host no longer branch on these three tools. Disabling removes an entry and unmounts its view, while re-enabling retains its width and leaves it closed. Application-scoped shells preserve existing local state across project switches while the original stores own project/worktree context. Host services remain independent of the view lifecycle. The container supplies the same retry/close boundary for every right-hand contribution. Migration verification and limits are recorded in the [plugin delivery plan](../planning/plugin-platform-roadmap.md).
 
 The right side composes a fixed tool rail, open tool tabs, and a variable-width panel. Tools stay open in multiples with exactly one visible, each tool runs as a singleton, and registry order fixes tab sequence with no drag sorting. Collapse keeps a single source of truth and tool business state follows existing stores per workspace. File icons lead with semantic shape plus low-saturation color inside the monochrome-plus-accent language, and file kind, selection, and version-control states travel three independent visual channels. Icon taxonomy shares one source with the file viewer classification. Office preview stays a transient middle workspace outside the rail.
 

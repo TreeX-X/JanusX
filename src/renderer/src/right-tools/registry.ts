@@ -1,77 +1,58 @@
 // Note: rail plus singleton tools with shared icon taxonomy — see .agents/notes/workbench/right-dock.md
 import type { RightToolDefinition, RightToolId } from './types'
 import type { ExperimentalFeatures } from '../../../shared/ipc/experimental'
-import { extensionRegistry, isExtensionViewId } from '@/extensions/registry'
+import { extensionRegistry } from '@/extensions/registry'
+import { BUILTIN_RIGHT_EXTENSIONS, builtinRightViewId } from '@/extensions/builtins'
 import type { TypedI18nKey } from '@/i18n/types'
+import { Sparkles } from 'lucide-react'
 
-// Note: either enabled domain can use its review queue — see .agents/notes/knowledge/memory-domain-controls.md
-export function isRightToolEnabled(toolId: RightToolId, features: Pick<ExperimentalFeatures, 'knowledge' | 'persona' | 'sessions'>): boolean {
-  if (isExtensionViewId(toolId)) return extensionRegistry.getView(toolId)?.location === 'right'
-  if (toolId === 'assist' || toolId === 'review') return features.persona
-  if (toolId === 'persona') return features.persona
-  if (toolId === 'sessions') return features.sessions
-  return true
-}
+// Built-ins register before preference hydration; components load only on mount.
+for (const { definition } of BUILTIN_RIGHT_EXTENSIONS) extensionRegistry.register(definition)
 
-export const RIGHT_TOOL_REGISTRY = [
-  {
-    id: 'files',
-    titleKey: 'common:rightTool.tool.files.title',
-    shortTitleKey: 'common:rightTool.tool.files.shortTitle',
-    ariaLabelKey: 'common:rightTool.tool.files.ariaLabel',
-    icon: 'files',
-    order: 0,
-    instancePolicy: 'single',
-    mountPolicy: 'while-open',
-  },
-  {
-    id: 'git',
-    titleKey: 'common:rightTool.tool.git.title',
-    shortTitleKey: 'common:rightTool.tool.git.shortTitle',
-    ariaLabelKey: 'common:rightTool.tool.git.ariaLabel',
-    icon: 'git',
-    order: 1,
-    instancePolicy: 'single',
-    mountPolicy: 'while-open',
-  },
-  {
-    id: 'assist',
-    titleKey: 'common:rightTool.tool.assist.title',
-    shortTitleKey: 'common:rightTool.tool.assist.shortTitle',
-    ariaLabelKey: 'common:rightTool.tool.assist.ariaLabel',
-    icon: 'assist',
-    order: 3,
-    instancePolicy: 'single',
-    mountPolicy: 'while-open',
-  },
-  {
-    id: 'sessions',
-    titleKey: 'common:rightTool.tool.sessions.title',
-    shortTitleKey: 'common:rightTool.tool.sessions.shortTitle',
-    ariaLabelKey: 'common:rightTool.tool.sessions.ariaLabel',
-    icon: 'sessions',
-    order: 5,
-    instancePolicy: 'single',
-    mountPolicy: 'while-open',
-  },
-] as const satisfies readonly RightToolDefinition[]
+const ASSISTANT_TOOL = {
+  id: 'assist',
+  titleKey: 'common:rightTool.tool.assist.title',
+  shortTitleKey: 'common:rightTool.tool.assist.shortTitle',
+  ariaLabelKey: 'common:rightTool.tool.assist.ariaLabel',
+  iconComponent: Sparkles, order: 3, instancePolicy: 'single', mountPolicy: 'while-open', feature: 'persona',
+} as const satisfies RightToolDefinition
 
+// Compatibility catalog also retains widths while a built-in is disabled.
+export const RIGHT_TOOL_REGISTRY: readonly RightToolDefinition[] = [
+  ASSISTANT_TOOL, ...BUILTIN_RIGHT_EXTENSIONS.map(({ tool }) => tool),
+].sort((a, b) => a.order - b.order)
 export const RIGHT_TOOL_IDS: readonly RightToolId[] = RIGHT_TOOL_REGISTRY.map(({ id }) => id)
 
-const RIGHT_TOOL_ID_SET = new Set<RightToolId>(RIGHT_TOOL_IDS)
+export function canonicalRightToolId(id: unknown): unknown {
+  if (id === 'persona' || id === 'review') return 'assist'
+  return BUILTIN_RIGHT_EXTENSIONS.find((extension) => builtinRightViewId(extension) === id)?.tool.id ?? id
+}
+
+export function getRightToolView(toolId: RightToolId) {
+  const builtin = BUILTIN_RIGHT_EXTENSIONS.find(({ tool }) => tool.id === toolId)
+  return extensionRegistry.getView(builtin ? builtinRightViewId(builtin) : toolId)
+}
+
+export function isRightToolEnabled(toolId: RightToolId, features: Pick<ExperimentalFeatures, 'knowledge' | 'persona' | 'sessions'>): boolean {
+  const id = canonicalRightToolId(toolId)
+  const tool = getRightToolDefinitions().find((item) => item.id === id)
+  return Boolean(tool && (!tool.feature || features[tool.feature]))
+}
 
 export function isRightToolId(value: unknown): value is RightToolId {
-  return typeof value === 'string' && (RIGHT_TOOL_ID_SET.has(value as RightToolId)
-    || (isExtensionViewId(value) && extensionRegistry.getView(value)?.location === 'right'))
+  return typeof value === 'string' && getRightToolDefinitions().some(({ id }) => id === value)
 }
 
 export function getRightToolDefinitions(): readonly RightToolDefinition[] {
-  return [...RIGHT_TOOL_REGISTRY, ...extensionRegistry.getSnapshot()
+  return [ASSISTANT_TOOL, ...extensionRegistry.getSnapshot()
     .filter((view) => view.location === 'right')
-    .map((view): RightToolDefinition => ({
-      id: view.id, title: view.title, iconComponent: view.icon, order: view.order ?? 100,
-      instancePolicy: 'single', mountPolicy: 'while-open',
-    }))].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+    .map((view): RightToolDefinition => {
+      const builtin = BUILTIN_RIGHT_EXTENSIONS.find((extension) => builtinRightViewId(extension) === view.id)
+      return builtin?.tool ?? {
+        id: view.id, title: view.title, iconComponent: view.icon, order: view.order ?? 100,
+        instancePolicy: 'single', mountPolicy: 'while-open',
+      }
+    })].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
 }
 
 export function rightToolLabel(

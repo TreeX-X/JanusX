@@ -296,6 +296,19 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
       .poll(async () => page.locator('.xterm-rows').count(), { timeout: 15_000 })
       .toBeGreaterThan(xtermsBeforeUiContinue)
 
+    // Note: closing an extension view must leave its host-owned PTY alive — see
+    // .agents/notes/workbench/requirements/plugin-architecture-forms.md (AC-6).
+    await page.getByRole('button', { name: '关闭 会话', exact: true }).click()
+    await expect(page.locator('#right-tool-panel-sessions')).toHaveCount(0)
+    const liveMarker = 'extension-panel-closed-still-running'
+    await page.evaluate(({ terminalId, marker }) => {
+      (window as DesktopWindow).electron.terminal.input(terminalId, `${marker}\r`)
+    }, { terminalId: continued.terminalId, marker: liveMarker })
+    await expect.poll(async () => (await readFakeAgentState(binDir)).inputs, { timeout: 10_000 }).toContain(liveMarker)
+    expect((await listLive(page)).some((row) => row.id === continued.sessionId)).toBe(true)
+    await page.getByRole('button', { name: /打开会话工具/ }).click()
+    await expect(sessionCards).toHaveCount(4, { timeout: 10_000 })
+
     // AC-8 machine side: an external row keeps Resume and 在新会话中继续 side by
     // side, and Resume re-enters the provider session id in a fresh terminal.
     const external = (await listLive(page)).find((row) => row.external === true)

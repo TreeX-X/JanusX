@@ -1,11 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { SessionPanel } from '@/components/SessionPanel'
-import { FileExplorerTool } from '@/components/FileExplorerTool'
-import { GitPanel } from '@/components/GitPanel'
 import { AssistantTool } from '@/components/knowledge/AssistantTool'
 import type { RightToolId } from '@/right-tools/types'
-import { isExtensionViewId } from '@/extensions/registry'
-import { ExtensionViewHost } from '@/extensions/ExtensionViewHost'
+import { getRightToolView } from '@/right-tools/registry'
+import { useExtensionViews } from '@/extensions/react'
+import { ExtensionViewContent } from '@/extensions/ExtensionViewHost'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './RightDock.module.css'
 
@@ -26,10 +24,12 @@ export function RightToolHost({
   dockVisible,
   onClose,
 }: RightToolHostProps) {
+  useExtensionViews()
   return (
     <div className={styles.host}>
       {openToolIds.map((toolId) => {
         const active = dockVisible && activeToolId === toolId
+        const view = getRightToolView(toolId)
         return (
           <section
             key={toolId}
@@ -41,7 +41,8 @@ export function RightToolHost({
             {...(!active ? { inert: '' } : {})}
             className={styles.toolPanel}
           >
-            <ToolErrorBoundary toolId={toolId} onClose={() => onClose(toolId)}>
+            <ToolErrorBoundary key={`${view?.activationId ?? 0}:${view?.scope === 'project' ? workspaceId : 'application'}`}
+              toolId={toolId} onClose={() => onClose(toolId)}>
               <ToolContent
                 toolId={toolId}
                 workspaceId={workspaceId}
@@ -67,12 +68,11 @@ function ToolContent({
   workspacePath: string | null
   active: boolean
 }) {
-  if (isExtensionViewId(toolId)) return <ExtensionViewHost viewId={toolId} location="right"
+  const view = getRightToolView(toolId)
+  if (view) return <ExtensionViewContent view={view} viewId={view.id} location="right"
     active={active} workspaceId={workspaceId} workspacePath={workspacePath} />
-  if (toolId === 'files') return <FileExplorerTool active={active} />
-  if (toolId === 'git') return <GitPanel active={active} />
-  if (toolId === 'sessions') return <SessionPanel active={active} />
-  return <AssistantTool active={active} workspaceId={workspaceId} workspacePath={workspacePath} />
+  if (toolId === 'assist') return <AssistantTool active={active} workspaceId={workspaceId} workspacePath={workspacePath} />
+  return null
 }
 
 interface ToolErrorBoundaryProps {

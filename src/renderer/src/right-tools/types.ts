@@ -5,19 +5,18 @@ import type { LucideIcon } from 'lucide-react'
 export type BuiltinRightToolId = 'files' | 'git' | 'assist' | 'persona' | 'review' | 'sessions'
 export type RightToolId = BuiltinRightToolId | ExtensionViewId
 
-export type RightToolIconKind = BuiltinRightToolId
-
 export interface RightToolDefinition {
   id: RightToolId
   titleKey?: TypedI18nKey
   shortTitleKey?: TypedI18nKey
   ariaLabelKey?: TypedI18nKey
   title?: string
-  icon?: RightToolIconKind
   iconComponent?: LucideIcon
   order: number
   instancePolicy: 'single'
   mountPolicy: 'while-open'
+  feature?: 'persona' | 'sessions'
+  panelWidth?: { min: number; default: number; max: number }
 }
 
 export interface RightToolPreferencesV1 {

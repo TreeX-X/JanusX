@@ -1,9 +1,9 @@
 import { useAssistantPendingCount } from '@/components/knowledge/useAssistantPendingCount'
 import { useAnimatedOpen } from '@/components/shared/CardFrame'
 // Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/workbench/right-dock-empty-collapse.md
-import { ListChecks, Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Puzzle, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
+import { PanelRightClose, PanelRightOpen, Puzzle } from 'lucide-react'
 import { getRightToolDefinitions, isRightToolEnabled, rightToolLabel } from '@/right-tools/registry'
-import type { BuiltinRightToolId, RightToolDefinition, RightToolId } from '@/right-tools/types'
+import type { RightToolDefinition, RightToolId } from '@/right-tools/types'
 import { useExtensionViews } from '@/extensions/react'
 import { extensionRegistry } from '@/extensions/registry'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -112,16 +112,7 @@ export function RightToolRail({
   )
 }
 
-const TOOL_ICONS: Record<BuiltinRightToolId, LucideIcon> = {
-  files: Files,
-  git: GitBranch,
-  assist: Sparkles,
-  persona: UserRound,
-  review: ListChecks,
-  sessions: MessagesSquare,
-}
-
 function ToolIcon({ tool }: { tool: RightToolDefinition }) {
-  const Icon = tool.iconComponent ?? (tool.icon ? TOOL_ICONS[tool.icon] : Puzzle)
+  const Icon = tool.iconComponent ?? Puzzle
   return <Icon className={styles.railIcon} size={16} strokeWidth={1.6} aria-hidden="true" />
 }
