@@ -1,4 +1,22 @@
 {
+  "cpa": {
+    "settingsNav": "Service integrations",
+    "settingsSubtitle": "Connect external management tools and reuse them across projects.",
+    "title": "CPA account management",
+    "description": "Open your existing CLIProxyAPI management page to view account quotas and reset information. API routing remains optional.",
+    "managementUrl": "Management page address",
+    "addressHelp": "Connect an existing instance. A server address opens /management.html; you can also specify a custom management page. JanusX does not install or start CPA.",
+    "loginHelp": "Enter the management key in CPA's login page. Its remember-login option controls persistence in an isolated session shared across projects; it does not configure JanusX model credentials.",
+    "quotaHelp": "Available quota and reset fields depend on your CPA backend, provider and management frontend. Request totals are not remaining subscription quota.",
+    "invalidUrl": "Enter an HTTP or HTTPS management page address without embedded credentials or query parameters.",
+    "settingsFailed": "Could not load or save the CPA connection. Check the address and try again.",
+    "saveAndOpen": "Save and open CPA",
+    "saved": "Connection saved for all projects.",
+    "configure": "Connection settings",
+    "openExternal": "Open in browser",
+    "openManagement": "Open management page",
+    "openFailed": "Could not open CPA. Check the connection settings, retry, or use your system browser."
+  },
   "action": {
     "confirm": "Confirm",
     "cancel": "Cancel",

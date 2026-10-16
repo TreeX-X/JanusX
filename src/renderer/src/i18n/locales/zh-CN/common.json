@@ -1,4 +1,22 @@
 {
+  "cpa": {
+    "settingsNav": "服务集成",
+    "settingsSubtitle": "连接外部管理工具，在各项目间复用。",
+    "title": "CPA 账号管理",
+    "description": "打开已有的 CLIProxyAPI 管理页，查看账号额度与重置信息；转 API 按需使用。",
+    "managementUrl": "管理页地址",
+    "addressHelp": "连接已有实例。填写服务地址时默认打开 /management.html，也可填写自定义管理页地址。JanusX 不负责安装或启动 CPA。",
+    "loginHelp": "请在 CPA 登录页填写管理密钥。勾选原页面的记住登录后，登录信息保存在跨项目共用的独立会话中，不会用于配置 JanusX 模型凭据。",
+    "quotaHelp": "额度与重置字段取决于 CPA 后端、供应商及管理前端版本。调用统计不等于剩余订阅额度。",
+    "invalidUrl": "请填写 HTTP 或 HTTPS 管理页地址，不要在地址中包含账号密码或查询参数。",
+    "settingsFailed": "无法读取或保存 CPA 连接，请检查地址后重试。",
+    "saveAndOpen": "保存并打开 CPA",
+    "saved": "已保存，所有项目共用此连接。",
+    "configure": "连接设置",
+    "openExternal": "在浏览器打开",
+    "openManagement": "打开管理页",
+    "openFailed": "无法打开 CPA，请检查连接设置后重试，或使用系统浏览器打开。"
+  },
   "action": {
     "confirm": "确认",
     "cancel": "取消",

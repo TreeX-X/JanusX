@@ -8,6 +8,7 @@ import type { ManagedBinaryInstaller } from '../language-service/installer'
 import type { LanguageServiceId } from '../../shared/ipc/language-service'
 import { registerAgentHandlers } from './janus-runner-handlers'
 import { registerBrowserHandlers } from './browser-handlers'
+import { registerCpaHandlers } from './cpa-handlers'
 import { registerCheckpointHandlers } from './checkpoint-handlers'
 import { registerSessionHandlers } from './session-handlers'
 import { disposeWorktreeWatchers, registerWorktreeHandlers } from './worktree-handlers'
@@ -112,6 +113,7 @@ export function registerApplicationIpc(options: RegisterApplicationIpcOptions): 
   })
   registerTerminalHandlers(getCurrentMainWindow)
   registerBrowserHandlers(getCurrentMainWindow, options.browserSurfaces)
+  registerCpaHandlers(getCurrentMainWindow, options.browserSurfaces)
   registerGitHandlers()
   registerAgentHandlers(getCurrentMainWindow)
   registerCheckpointHandlers()

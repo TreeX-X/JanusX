@@ -3,6 +3,7 @@ import type { LanguageServiceAPI } from '../../../shared/ipc/language-service'
 import type { TerminalAPI } from '../../../shared/ipc/terminal'
 import type { ProjectAPI } from '../../../shared/ipc/project'
 import type { BrowserAPI } from '../../../shared/ipc/browser'
+import type { CpaAPI } from '../../../shared/ipc/cpa'
 import type { KnowledgeAPI } from '../../../shared/ipc/knowledge'
 import type { JanusAPI } from '../../../shared/ipc/janus'
 import type { HarnessAPI } from '../../../shared/ipc/harness'
@@ -41,6 +42,7 @@ interface ElectronAPI {
   terminal: TerminalAPI
   project: ProjectAPI
   browser: BrowserAPI
+  cpa: CpaAPI
   knowledge: KnowledgeAPI
   janus: JanusAPI
   harness: HarnessAPI

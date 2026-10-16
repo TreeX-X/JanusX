@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "draft",
   "created": "2026-10-16",
-  "updated": "2026-10-16T04:02:11Z",
+  "updated": "2026-10-16T04:28:31Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/1aef97e6-77fe-4bae-af51-ff560a737282",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -21,7 +21,7 @@
 
 已确认先建设扩展架构，将现有右侧文件树、Git 和会话管理按内置扩展管理，再开放第三方插件和市场。中部工作区与右侧工作区都提供通用贡献入口；插件可单独提供一种视图，也可同时提供两种。维护目标是让插件作者使用公开接口独立开发，接入已有能力时无需逐插件修改宿主容器。
 
-本计划按依赖安排 S1 至 S5，尚未指定版本或工期，不挤占既有版本事项；统一列入[工程排期的未归入节点](engineering-milestones.md)。2026-10-16 按 xdo 交付 S1 可信渲染器扩展基础和 S2 内置工具迁移；S3 至 S5 待实施。阶段通过以所属需求的验收与实际证据为准，普通 xdo 不创建执行 Task。
+本计划按依赖安排 S1 至 S5，尚未指定版本或工期，不挤占既有版本事项；统一列入[工程排期的未归入节点](engineering-milestones.md)。2026-10-16 按 xdo 交付 S1 可信渲染器扩展基础、S2 内置工具迁移与 S3 CPA 内嵌及双区域验证；S4、S5 待实施。阶段通过以所属需求的验收与实际证据为准，普通 xdo 不创建执行 Task。
 
 ## 当前基础与实施边界
 
@@ -89,3 +89,17 @@ S2a 文件树、S2b Git、S2c 会话管理统一在 `extensions/builtins.tsx` �
 桌面验证：构建后运行 `npx playwright test tests/e2e/desktop-smoke.spec.ts tests/e2e/desktop-session-continue.spec.ts --project=desktop --workers=1 --grep 'built desktop|Continue in New Session mints' --output=artifacts/extensions-s2/desktop`，2 项通过。真实 Electron 覆盖文件树、Git、工作区与终端关键路径，以及会话继续／恢复。新增检查关闭会话面板后向已有 PTY 发送标记，测试 CLI 收到输入且会话记录保留，重开恢复列表。CLI 为隔离的测试进程，不访问真实供应商账号；本轮未对真实远端执行 push／pull。
 
 严格类型检查、生产变更范围 ESLint、应用构建、包边界、i18n 与 Notes 检查通过；Notes 为 315 份、0 错误，另有 17 条显式外部链接诊断。主题生成检查通过，全仓主题审计仍被未改动的 `AboutSettingsPanel.module.css:132`、`:133` 两处固定颜色阻断。AC-6 按以上迁移和回归证据完成；CPA 内嵌、第三方加载与市场继续归 S3 至 S5。
+
+## S3 交付与验证
+
+CPA 通过 `janusx.cpa` 注册应用级中部页面，设置的“应用设置 → 服务集成”保存已有实例的管理页地址并打开页面，中部 `+` 菜单也提供入口。使用原生网页承载原版管理前端，复用原浏览器的加载错误、重试与对话框遮挡机制；保留系统浏览器入口。CPA 后端由用户提供，本阶段不托管实例、不新增模型 API 配置或原生额度摘要。
+
+全局配置仅存地址。管理密钥由原前端处理，按 origin 隔离的持久分区保留其登录；跨项目复用同一原生页面，关闭释放视图，重启可恢复前端自己记住的登录。页面无 preload、Node 或宿主桥，原生浏览器仅通过内部选项配置独立分区及 HTTP(S) 导航限制。详细边界及版本限制归[服务集成](../workbench/service-integrations.md)，不据此完成第三方权限验收 AC-8。
+
+单元验证：`npx vitest run tests/unit/cpa.test.ts tests/unit/browser-surface-manager.test.ts tests/unit/browser-ipc-contract.test.ts tests/unit/browser-occlusion.test.ts tests/unit/builtin-extensions.test.ts tests/unit/extensions.test.ts` 共 80 项通过，覆盖地址和 IPC 边界、只保存地址、并发打开、重复保存、关闭重开、分区变化、系统浏览器调用和受限导航，日志为 `artifacts/cpa-s3-unit.log`。
+
+浏览器验证：`npx playwright test tests/e2e/extensions.spec.ts tests/e2e/builtin-extensions.spec.ts --project=island --workers=1 --output=artifacts/cpa-s3/browser` 共 7 项通过。复用 S1 双区域示例，覆盖中部／右侧共享状态、项目隔离与恢复、主题、停用／注销清理和错误恢复；内置工具回归通过。此组使用 IPC fallback。
+
+真实 Electron：`tests/e2e/desktop-cpa.spec.ts` 的本地页面用例验证跨项目同一 guest、独立网页登录、无宿主桥、对话框遮挡、HTTP 弹窗标签、关闭释放和应用重启后登录恢复。原版 CPAMC v1.26.5 用例验证渲染、登录、配额页导航及刷新恢复，使用校验 SHA-256 的上游单文件前端与本地模拟管理 API；没有真实供应商账号或 OAuth 证据。原有 `desktop-smoke.spec.ts` 的 `Browser load failure` 用例通过。原版前端和浏览器回归结果位于 `artifacts/cpa-s3/desktop-final`，生命周期最终结果位于 `artifacts/cpa-s3/desktop-lifecycle`。运行原版用例需设置 `JANUSX_E2E_CPA_HTML` 与 `JANUSX_E2E_CPA_SHA256`；默认无资源时显式跳过，不联网下载。最初失败的预期及定位器已修正，不作为通过证据。
+
+严格类型检查、生产变更范围 ESLint、`npm run build:app`、包边界、i18n 和 Notes 检查通过；Notes 为 315 份、0 错误、17 条显式外部链接诊断。主题生成检查通过，全仓主题审计仍在未改动的 About 页报上述两处固定颜色。S3 出口限定为管理前端与通用宿主验证，实际后端及供应商额度兼容性需连接部署实例再核对；S4 进入前仍须解决本计划所列开发目录与正式发布信任规则。

@@ -27,6 +27,13 @@ interface BrowserSurface {
   bounds: BrowserBounds | null
   standaloneWindow: BrowserWindow | null
   agentControlled: boolean
+  options: BrowserSurfaceOptions
+}
+
+/** Host-owned profile, never accepted from the browser IPC request. */
+export interface BrowserSurfaceOptions {
+  partition?: string
+  httpOnly?: boolean
 }
 
 export interface BrowserSurfaceManagerDeps {
@@ -62,9 +69,10 @@ export class BrowserSurfaceManager {
     return () => this.agentControlListeners.delete(listener)
   }
 
-  createSurface(request: CreateBrowserSurfaceRequest): BrowserResult<{ surfaceId: string }> {
+  createSurface(request: CreateBrowserSurfaceRequest, options: BrowserSurfaceOptions = {}): BrowserResult<{ surfaceId: string }> {
     if (!request.surfaceId) return { success: false, error: 'Missing surfaceId' }
     if (this.surfaces.has(request.surfaceId)) return { success: false, error: 'Surface already exists' }
+    if (options.httpOnly && !isHttpPage(request.url)) return { success: false, error: 'Unsupported page URL' }
 
     const surface: BrowserSurface = {
       surfaceId: request.surfaceId,
@@ -74,6 +82,7 @@ export class BrowserSurfaceManager {
       bounds: null,
       standaloneWindow: null,
       agentControlled: false,
+      options,
     }
     this.surfaces.set(surface.surfaceId, surface)
 
@@ -171,6 +180,7 @@ export class BrowserSurfaceManager {
   openTab(surfaceId: string, url?: string): BrowserResult<{ tabId: string }> {
     const surface = this.surfaces.get(surfaceId)
     if (!surface) return { success: false, error: 'Surface not found' }
+    if (surface.options.httpOnly && !isHttpPage(url)) return { success: false, error: 'Unsupported page URL' }
     const tab = this.createTab(surface, url)
     surface.tabs.set(tab.tabId, tab)
     surface.activeTabId = tab.tabId
@@ -207,6 +217,7 @@ export class BrowserSurfaceManager {
   }
 
   navigate(surfaceId: string, tabId: string, url: string): void {
+    if (this.surfaces.get(surfaceId)?.options.httpOnly && !isHttpPage(url)) return
     const tab = this.getTab(surfaceId, tabId)
     if (!tab) return
     tab.requestedUrl = normalizeBrowserUrl(url)
@@ -272,7 +283,8 @@ export class BrowserSurfaceManager {
     const view = new WebContentsView({
       webPreferences: {
         /*-- 独立持久会话：网页 cookie/登录态与 JanusX 自身 UI 隔离 --*/
-        partition: 'persist:janusx-browser',
+        partition: surface.options.partition ?? 'persist:janusx-browser',
+        nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
         webSecurity: true,
@@ -287,11 +299,20 @@ export class BrowserSurfaceManager {
     view.webContents.setWindowOpenHandler((details) => {
       if (details.url.startsWith('http://') || details.url.startsWith('https://')) {
         this.openTab(surface.surfaceId, details.url)
-      } else {
+      } else if (!surface.options.httpOnly) {
         void shell.openExternal(details.url)
       }
       return { action: 'deny' }
     })
+
+    if (surface.options.httpOnly) {
+      // Service pages cannot navigate into local files or launch custom schemes.
+      const guardNavigation = (event: Electron.Event, targetUrl: string): void => {
+        if (!isHttpPage(targetUrl)) event.preventDefault()
+      }
+      view.webContents.on('will-navigate', guardNavigation)
+      view.webContents.on('will-redirect', guardNavigation)
+    }
 
     const emit = (): void => {
       if (this.surfaces.has(surface.surfaceId)) this.emitState(surface)
@@ -392,4 +413,12 @@ export class BrowserSurfaceManager {
   private notifyState(surfaceId: string, state: BrowserSurfaceState): void {
     for (const listener of this.stateListeners) listener(surfaceId, state)
   }
+}
+
+function isHttpPage(input?: string): boolean {
+  if (!input || input === 'about:blank') return true
+  try {
+    const url = new URL(normalizeBrowserUrl(input))
+    return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password
+  } catch { return false }
 }

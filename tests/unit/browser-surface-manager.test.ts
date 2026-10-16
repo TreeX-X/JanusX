@@ -32,7 +32,7 @@ const h = vi.hoisted(() => {
     webContents = new MockWebContents()
     setBounds = vi.fn()
     setBackgroundColor = vi.fn()
-    constructor() {
+    constructor(readonly options?: unknown) {
       MockWebContentsView.instances.push(this)
     }
   }
@@ -141,6 +141,39 @@ describe('BrowserSurfaceManager', () => {
   it('rejects duplicate surface ids', () => {
     manager.createSurface({ surfaceId: 's1', carrier: 'pane' })
     expect(manager.createSurface({ surfaceId: 's1', carrier: 'pane' }).success).toBe(false)
+  })
+
+  it('uses a host-owned service partition without a preload or Node bridge', () => {
+    manager.createSurface({ surfaceId: 'cpa', carrier: 'pane', url: 'http://localhost:8317/management.html' }, {
+      partition: 'persist:janusx-cpa-test', httpOnly: true,
+    })
+    expect(h.MockWebContentsView.instances[0].options).toEqual({ webPreferences: {
+      partition: 'persist:janusx-cpa-test', nodeIntegration: false,
+      contextIsolation: true, sandbox: true, webSecurity: true,
+    } })
+  })
+
+  it('restricts service navigation and popups to web pages without changing ordinary browser behavior', () => {
+    manager.createSurface({ surfaceId: 'cpa', carrier: 'pane', url: 'http://localhost:8317/management.html' }, { httpOnly: true })
+    const view = h.MockWebContentsView.instances[0]
+    const tabId = manager.getState('cpa')!.activeTabId!
+    for (const url of ['file:///C:/secret', 'javascript:alert(1)', 'custom://launch', 'https://user:secret@example.com']) {
+      expect(manager.openTab('cpa', url).success).toBe(false)
+      manager.navigate('cpa', tabId, url)
+      const preventDefault = vi.fn()
+      view.webContents.emit('will-navigate', { preventDefault }, url)
+      expect(preventDefault).toHaveBeenCalledOnce()
+      view.webContents.emit('will-redirect', { preventDefault }, url)
+      expect(preventDefault).toHaveBeenCalledTimes(2)
+    }
+    expect(view.webContents.loadURL).toHaveBeenCalledTimes(1)
+    const popup = view.webContents.setWindowOpenHandler.mock.calls[0][0] as (details: { url: string }) => unknown
+    const externalCalls = h.openExternal.mock.calls.length
+    expect(popup({ url: 'custom://launch' })).toEqual({ action: 'deny' })
+    expect(h.openExternal.mock.calls).toHaveLength(externalCalls)
+    popup({ url: 'https://accounts.example.com/login' })
+    expect(manager.getState('cpa')!.tabs).toHaveLength(2)
+    expect(manager.createSurface({ surfaceId: 'invalid-cpa', carrier: 'pane', url: 'file:///C:/local' }, { httpOnly: true }).success).toBe(false)
   })
 
   it('attaches only the active tab and keeps others detached', () => {

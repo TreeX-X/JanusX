@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, BookOpen, Brain, ChartNoAxesCombined, Cloud, Info, ListFilter, Settings, ShieldCheck, SlidersHorizontal, Sparkles, SquareTerminal, Users, X, type LucideIcon } from 'lucide-react'
+import { Bell, BookOpen, Brain, ChartNoAxesCombined, Cloud, Info, ListFilter, Plug, Settings, ShieldCheck, SlidersHorizontal, Sparkles, SquareTerminal, Users, X, type LucideIcon } from 'lucide-react'
 import { ModalFrame } from '@/components/shared/ModalFrame'
 import { GeneralSettingsPanel } from './GeneralSettingsPanel'
 import { AboutSettingsPanel } from './AboutSettingsPanel'
@@ -14,11 +14,12 @@ import { AgentSettingsPanel } from './AgentSettingsPanel'
 import { UsageStatsPanel } from './UsageStatsPanel'
 import { HostedSettingsPanel } from './HostedSettingsPanel'
 import { TeamSettingsPanel } from './team/TeamSettingsPanel'
+import { CpaSettingsPanel } from './cpa/CpaSettingsPanel'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
 
-export type SettingsTab = 'general' | 'terminal' | 'experimental' | 'notifications' | 'personal' | 'knowledge' | 'agent' | 'llm' | 'usage' | 'models' | 'team' | 'hosted' | 'about'
+export type SettingsTab = 'general' | 'terminal' | 'integrations' | 'experimental' | 'notifications' | 'personal' | 'knowledge' | 'agent' | 'llm' | 'usage' | 'models' | 'team' | 'hosted' | 'about'
 
 interface AppSettingsModalProps {
   isOpen: boolean
@@ -28,7 +29,7 @@ interface AppSettingsModalProps {
 
 // Note: grouped navigation preserves independent feature gates — see .agents/notes/knowledge/assistant-persona-layout.md
 const TAB_GROUPS: { id: string; tabs: SettingsTab[] }[] = [
-  { id: 'application', tabs: ['general', 'terminal', 'notifications', 'experimental'] },
+  { id: 'application', tabs: ['general', 'terminal', 'integrations', 'notifications', 'experimental'] },
   { id: 'memory', tabs: ['knowledge', 'personal'] },
   { id: 'models', tabs: ['llm', 'models', 'usage'] },
   { id: 'collaboration', tabs: ['agent', 'team', 'hosted'] },
@@ -39,6 +40,7 @@ const TAB_ICONS: Record<SettingsTab, LucideIcon> = {
   knowledge: BookOpen, personal: Brain, llm: SlidersHorizontal,
   models: ListFilter, usage: ChartNoAxesCombined, agent: ShieldCheck,
   team: Users, hosted: Cloud, about: Info,
+  integrations: Plug,
 }
 
 // Note: the modal mounts only while open, so ModalFrame owns the whole
@@ -86,14 +88,14 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
   // team 页文案走 team 命名空间（settings.json 存在历史编码损坏，不再追加 key）。
   // hosted 页同理走 common 命名空间。
   const tabNav = (tab: SettingsTab) =>
-    tab === 'knowledge' ? tBlueprint('blueprint:review.settingsTitle') : tab === 'personal' ? tKnowledge('knowledge:memorySettings.title') : tab === 'team'
+    tab === 'integrations' ? tCommon('common:cpa.settingsNav') : tab === 'knowledge' ? tBlueprint('blueprint:review.settingsTitle') : tab === 'personal' ? tKnowledge('knowledge:memorySettings.title') : tab === 'team'
       ? tTeam('team:settingsTab.nav')
       : tab === 'terminal'
         ? tTerminal('terminal:shellSettings.nav')
         : tab === 'hosted'
         ? tCommon('common:hosted.nav')
         : t(`settings:tab.${tab}.nav`)
-  const meta = activeTab === 'knowledge' ? { title: tBlueprint('blueprint:review.settingsTitle'), subtitle: tBlueprint('blueprint:review.settingsSubtitle') } : activeTab === 'personal' ? { title: tKnowledge('knowledge:memorySettings.title'), subtitle: tKnowledge('knowledge:memorySettings.navMeta') } : activeTab === 'team'
+  const meta = activeTab === 'integrations' ? { title: tCommon('common:cpa.settingsNav'), subtitle: tCommon('common:cpa.settingsSubtitle') } : activeTab === 'knowledge' ? { title: tBlueprint('blueprint:review.settingsTitle'), subtitle: tBlueprint('blueprint:review.settingsSubtitle') } : activeTab === 'personal' ? { title: tKnowledge('knowledge:memorySettings.title'), subtitle: tKnowledge('knowledge:memorySettings.navMeta') } : activeTab === 'team'
     ? { title: tTeam('team:settingsTab.title'), subtitle: tTeam('team:settingsTab.subtitle') }
     : activeTab === 'terminal'
       ? { title: tTerminal('terminal:shellSettings.title'), subtitle: tTerminal('terminal:shellSettings.subtitle') }
@@ -162,6 +164,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
               {activeTab === 'general' && <GeneralSettingsPanel />}
               {activeTab === 'about' && <AboutSettingsPanel />}
               {activeTab === 'terminal' && <TerminalManagerPanel />}
+              {activeTab === 'integrations' && <CpaSettingsPanel onOpened={requestClose} />}
               {activeTab === 'experimental' && <ExperimentalSettingsPanel />}
               {activeTab === 'notifications' && <NotificationSettingsPanel />}
               {activeTab === 'personal' && <PersonalMemorySettingsPanel />}

@@ -20,6 +20,7 @@ import {
 } from '../shared/ipc/terminal'
 import { PROJECT_CHANNELS, type ProjectAPI } from '../shared/ipc/project'
 import { BROWSER_EVENT_CHANNELS, BROWSER_INVOKE_CHANNELS, type BrowserAPI } from '../shared/ipc/browser'
+import { CPA_CHANNELS, type CpaAPI } from '../shared/ipc/cpa'
 import { KNOWLEDGE_CHANNELS, type KnowledgeAPI } from '../shared/ipc/knowledge'
 import {
   JANUS_COMMAND_CHANNELS,
@@ -645,6 +646,14 @@ const desktopToastAPI: DesktopToastAPI = {
   onHide: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.toastHide, callback),
 }
 
+const cpaAPI: CpaAPI = {
+  getSettings: () => ipcRenderer.invoke(CPA_CHANNELS.get),
+  saveSettings: (settings) => ipcRenderer.invoke(CPA_CHANNELS.save, settings),
+  open: () => ipcRenderer.invoke(CPA_CHANNELS.open),
+  close: () => ipcRenderer.invoke(CPA_CHANNELS.close),
+  openExternal: () => ipcRenderer.invoke(CPA_CHANNELS.openExternal),
+}
+
 contextBridge.exposeInMainWorld('electron', {
   /*-- 同步暴露平台与 Windows build 号，供渲染端构造 xterm windowsPty 用 --*/
   /*-- preload 在 Node 环境，可同步读取；os.release() 形如 "10.0.22621"，第三段为 build 号 --*/
@@ -661,6 +670,7 @@ contextBridge.exposeInMainWorld('electron', {
   terminal: terminalAPI,
   project: projectAPI,
   browser: browserAPI,
+  cpa: cpaAPI,
   knowledge: knowledgeAPI,
   janus: janusAPI,
   harness: harnessAPI,

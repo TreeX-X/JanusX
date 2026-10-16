@@ -1,0 +1,106 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { CPA_CHANNELS, CPA_SURFACE_ID, DEFAULT_CPA_MANAGEMENT_URL, normalizeCpaManagementUrl } from '../../src/shared/ipc/cpa'
+import { CpaService } from '../../src/main/cpa/service'
+import type { BrowserSurfaceManager } from '../../src/main/browser/surface-manager'
+import { registerCpaHandlers } from '../../src/main/ipc/cpa-handlers'
+
+const h = vi.hoisted(() => ({
+  config: {} as Record<string, unknown>,
+  update: vi.fn(),
+  external: vi.fn(),
+  handle: vi.fn(),
+}))
+vi.mock('electron', () => ({ shell: { openExternal: h.external }, ipcMain: { handle: h.handle } }))
+vi.mock('../../src/main/config/service', () => ({ configService: {
+  get: async () => h.config,
+  update: async (partial: object) => { h.update(partial); h.config = { ...h.config, ...partial } },
+} }))
+
+beforeEach(() => { h.config = {}; vi.clearAllMocks() })
+
+function fixture() {
+  let open = false
+  const surfaces = {
+    getState: vi.fn(() => open ? {} : null),
+    createSurface: vi.fn(() => { open = true; return { success: true } }),
+    destroySurface: vi.fn(() => { open = false }),
+  }
+  return { surfaces, service: new CpaService(surfaces as unknown as BrowserSurfaceManager) }
+}
+
+describe('CPA page addresses', () => {
+  it.each([
+    ['localhost:8317', 'http://localhost:8317/management.html'],
+    ['127.0.0.1:8317/', DEFAULT_CPA_MANAGEMENT_URL],
+    ['[::1]:8317', 'http://[::1]:8317/management.html'],
+    ['example.com', 'https://example.com/management.html'],
+    [' https://example.com/panel/#/quota ', 'https://example.com/panel/#/quota'],
+  ])('normalizes %s', (input, expected) => { expect(normalizeCpaManagementUrl(input)).toBe(expected) })
+
+  it.each(['', 'file:///C:/secret', 'javascript:alert(1)', 'data:text/html,content', 'https://user:secret@example.com',
+    'http://localhost:8317/?key=secret', 'https://', null, 42])('rejects non-page and credential-bearing input %j', (input) => {
+    expect(() => normalizeCpaManagementUrl(input)).toThrow('invalid-cpa-url')
+  })
+})
+
+describe('CPA global integration service', () => {
+  it('defaults without a configured instance and persists only a validated page address', async () => {
+    const { service } = fixture()
+    expect(await service.getSettings()).toEqual({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
+    await service.saveSettings({ managementUrl: 'localhost:9000', managementKey: 'never-store-me' })
+    expect(h.update).toHaveBeenCalledWith({ cpaSettings: { managementUrl: 'http://localhost:9000/management.html' } })
+    expect(JSON.stringify(h.config)).not.toContain('never-store-me')
+    await expect(service.saveSettings({ managementUrl: 'file:///secret' })).rejects.toThrow()
+    expect(h.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('reuses one surface concurrently and keeps login storage across close/reopen', async () => {
+    const { service, surfaces } = fixture()
+    await Promise.all([service.open(), service.open()])
+    expect(surfaces.createSurface).toHaveBeenCalledTimes(1)
+    const profile = surfaces.createSurface.mock.calls[0]
+    expect(profile).toEqual([
+      { surfaceId: CPA_SURFACE_ID, carrier: 'pane', url: DEFAULT_CPA_MANAGEMENT_URL },
+      { partition: expect.stringMatching(/^persist:janusx-cpa-[a-f0-9]+$/), httpOnly: true },
+    ])
+    await service.saveSettings({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
+    await service.open()
+    expect(surfaces.createSurface).toHaveBeenCalledTimes(1)
+    await service.close()
+    await service.open()
+    expect(surfaces.createSurface.mock.calls[1]).toEqual(profile)
+    await service.saveSettings({ managementUrl: 'http://localhost:9000' })
+    await service.open()
+    expect(surfaces.createSurface.mock.calls[2][1]).not.toEqual(profile[1])
+  })
+
+  it('recovers an invalid persisted address so settings can repair it', async () => {
+    h.config = { cpaSettings: { managementUrl: 'file:///secret' } }
+    const { service } = fixture()
+    expect(await service.getSettings()).toEqual({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
+    await service.saveSettings({ managementUrl: 'localhost:9000' })
+    expect(await service.getSettings()).toEqual({ managementUrl: 'http://localhost:9000/management.html' })
+  })
+
+  it('opens the validated configured address in the system browser', async () => {
+    const { service } = fixture()
+    await service.saveSettings({ managementUrl: 'https://cpa.example.com/custom/' })
+    await service.openExternal()
+    expect(h.external).toHaveBeenCalledWith('https://cpa.example.com/custom/')
+  })
+
+  it('allows only the trusted main frame to use the fixed CPA IPC methods', async () => {
+    const { surfaces } = fixture()
+    const mainFrame = {}
+    const sender = { mainFrame }
+    registerCpaHandlers(() => ({ isDestroyed: () => false, webContents: sender }) as never, surfaces as unknown as BrowserSurfaceManager)
+    const handlers = new Map(h.handle.mock.calls)
+    expect([...handlers.keys()]).toEqual(Object.values(CPA_CHANNELS))
+    const get = handlers.get(CPA_CHANNELS.get)!
+    await expect(get({ sender, senderFrame: mainFrame })).resolves.toEqual({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
+    for (const handler of handlers.values()) {
+      expect(() => handler({ sender: {}, senderFrame: mainFrame })).toThrow('unauthorized')
+      expect(() => handler({ sender, senderFrame: {} })).toThrow('unauthorized')
+    }
+  })
+})

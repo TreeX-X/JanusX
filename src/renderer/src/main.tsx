@@ -2,6 +2,7 @@ import React, { lazy, Suspense, type ErrorInfo, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { installElectronApiFallback } from './lib/electron-api-fallback'
 import { initBrowserEventSubscriptions } from './stores/browser'
+import { registerCpaExtension } from './extensions/cpa'
 import { initI18n } from './i18n'
 import './styles/globals.css'
 import './styles/themes.generated.css'
@@ -23,6 +24,7 @@ const StandaloneBrowser = lazy(() =>
 )
 
 installElectronApiFallback()
+registerCpaExtension()
 
 /*-- browser 事件订阅：主窗口与独立浏览器窗口共用此入口，各窗口各自订阅一份 --*/
 initBrowserEventSubscriptions()

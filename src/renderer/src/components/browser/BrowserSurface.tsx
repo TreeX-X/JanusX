@@ -37,13 +37,15 @@ interface BrowserSurfaceProps {
   visible: boolean
   onRequestPopOut?: () => void
   onRequestEmbed?: () => void
+  /** A bundled service page keeps login in its guest, with no Agent controls. */
+  serviceUrl?: string
 }
 
 /**
  * 双载体共用的浏览器 UI：tab 条 + 导航 + 地址栏 + bounds 上报占位层。
  * 网页本体是主进程持有的 WebContentsView，始终盖在 body 占位层上方。
  */
-export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, onRequestEmbed }: BrowserSurfaceProps) {
+export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, onRequestEmbed, serviceUrl }: BrowserSurfaceProps) {
   const { t } = useI18n('common')
   const surface = useBrowserStore((s) => s.surfaces[surfaceId])
   /*-- tab 拖拽期间隐藏原生视图：WebContentsView 盖在 DOM 之上会吞掉 dragover，落点区只有先让位才能命中 --*/
@@ -173,7 +175,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
               </button>
             )
           })}
-          <button
+          {!serviceUrl && <button
             type="button"
             className={styles.iconBtn}
             title={t('common:browser.openNewTab')}
@@ -181,7 +183,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
             onClick={() => void openBrowserTab(surfaceId)}
           >
             <Plus size={12} />
-          </button>
+          </button>}
         </div>
 
         <button
@@ -221,6 +223,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
           placeholder={t('common:browser.addressPlaceholder')}
           aria-label={t('common:browser.addressAria')}
           spellCheck={false}
+          readOnly={Boolean(serviceUrl)}
           onChange={(event) => setAddressDraft(event.target.value)}
           onFocus={() => setAddressFocused(true)}
           onBlur={() => setAddressFocused(false)}
@@ -232,13 +235,13 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
           }}
         />
 
-        <span
+        {!serviceUrl && <span
           className={styles.agentDot}
           data-active={surface?.agentControlled ?? false}
           title={surface?.agentControlled ? t('common:browser.agentActive') : t('common:browser.agentIdle')}
         >
           Agent
-        </span>
+        </span>}
 
         {carrier === 'pane' && onRequestPopOut && (
           <button
@@ -268,8 +271,8 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
         {isEmpty && (
           <div className={styles.empty}>
             <span>{t('common:browser.noTabs')}</span>
-            <button type="button" onClick={() => void openBrowserTab(surfaceId)}>
-              {t('common:browser.openNewTab')}
+            <button type="button" onClick={() => void openBrowserTab(surfaceId, serviceUrl)}>
+              {serviceUrl ? t('common:cpa.openManagement') : t('common:browser.openNewTab')}
             </button>
           </div>
         )}
