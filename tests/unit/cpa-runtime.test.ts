@@ -54,6 +54,48 @@ async function fixture(installed = true) {
 }
 
 describe('managed CPA runtime ownership', () => {
+  it('persists custom keys encrypted, rotates only while stopped and reuses the new key across runtime recreation', async () => {
+    const { runtime, root, installer } = await fixture()
+    const settings = { managementUrl: '', port: 18317, autoUpdate: false }
+    await runtime.setManagementKey('first-custom-key')
+    await runtime.start(settings)
+    expect(h.spawn.mock.calls[0][2].env.MANAGEMENT_PASSWORD).toBe('first-custom-key')
+    await expect(runtime.setManagementKey('second-custom-key')).rejects.toThrow('cpa-key-change-requires-stop')
+    await runtime.stop()
+    await runtime.setManagementKey('second-custom-key')
+    expect((await readFile(join(root, 'management-key.enc'))).toString()).not.toContain('second-custom-key')
+    await runtime.dispose()
+    const recreated = new CpaRuntime(root, installer as unknown as CpaInstaller); runtimes.push(recreated)
+    await recreated.start(settings)
+    await recreated.copyKey()
+    expect(h.clipboard).toHaveBeenLastCalledWith('second-custom-key')
+    const calls = h.spawn.mock.calls.filter(([file]) => file !== 'powershell.exe')
+    expect(calls.at(-1)![2].env.MANAGEMENT_PASSWORD).toBe('second-custom-key')
+    expect(await readFile(join(root, 'config.yaml'), 'utf8')).not.toContain('second-custom-key')
+  })
+
+  it('retains the prior cached and encrypted key when a replacement cannot be saved', async () => {
+    const { runtime, root } = await fixture()
+    await runtime.setManagementKey('retained-key')
+    const before = await readFile(join(root, 'management-key.enc'))
+    h.encrypt.mockImplementationOnce(() => { throw new Error('storage failed') })
+    await expect(runtime.setManagementKey('replacement-key')).rejects.toThrow('cpa-key-save-failed')
+    expect(await readFile(join(root, 'management-key.enc'))).toEqual(before)
+    await runtime.copyKey()
+    expect(h.clipboard).toHaveBeenLastCalledWith('retained-key')
+    h.encrypted = false
+    await expect(runtime.setManagementKey('replacement-key')).rejects.toThrow('cpa-encryption-unavailable')
+    expect(await readFile(join(root, 'management-key.enc'))).toEqual(before)
+  })
+
+  it('does not cache an unpersisted generated key after encryption failure', async () => {
+    const { runtime } = await fixture()
+    h.encrypt.mockImplementationOnce(() => { throw new Error('storage failed') })
+    await expect(runtime.copyKey()).rejects.toThrow('cpa-key-save-failed')
+    await runtime.copyKey()
+    expect(h.encrypt).toHaveBeenCalledTimes(2)
+    expect(h.clipboard).toHaveBeenCalledOnce()
+  })
   it('uses a protected key, local-only config and a single process, retaining account data across restart', async () => {
     const { root, runtime } = await fixture()
     const settings = { managementUrl: '', port: 18317, autoUpdate: false }

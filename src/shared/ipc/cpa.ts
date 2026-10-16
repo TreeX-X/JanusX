@@ -35,7 +35,7 @@ export interface CpaStatus {
 }
 export interface CpaAPI {
   getSettings(): Promise<CpaSettings>
-  saveSettings(settings: CpaSettings): Promise<CpaSettings>
+  saveSettings(settings: CpaSettings, managementKey?: string): Promise<CpaSettings>
   open(): Promise<void>
   close(): Promise<void>
   openExternal(): Promise<void>
@@ -46,6 +46,12 @@ export interface CpaAPI {
   update(): Promise<void>
   openLogs(): Promise<void>
   copyManagementKey(): Promise<void>
+}
+
+/** An optional write-only credential, never part of persisted settings or status. */
+export function validateCpaManagementKey(input: unknown): string {
+  if (typeof input !== 'string' || !/^[\x21-\x7e]{8,128}$/.test(input)) throw new Error('cpa-invalid-management-key')
+  return input
 }
 
 export function normalizeCpaSettings(input: unknown): CpaSettings {

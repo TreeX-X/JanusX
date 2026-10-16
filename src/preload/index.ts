@@ -648,7 +648,7 @@ const desktopToastAPI: DesktopToastAPI = {
 
 const cpaAPI: CpaAPI = {
   getSettings: () => ipcRenderer.invoke(CPA_CHANNELS.get),
-  saveSettings: (settings) => ipcRenderer.invoke(CPA_CHANNELS.save, settings),
+  saveSettings: (settings, managementKey) => ipcRenderer.invoke(CPA_CHANNELS.save, settings, managementKey),
   open: () => ipcRenderer.invoke(CPA_CHANNELS.open),
   close: () => ipcRenderer.invoke(CPA_CHANNELS.close),
   openExternal: () => ipcRenderer.invoke(CPA_CHANNELS.openExternal),

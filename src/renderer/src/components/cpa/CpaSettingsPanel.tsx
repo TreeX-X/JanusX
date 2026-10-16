@@ -3,7 +3,7 @@ import { useCpaStore } from '@/stores/cpa'
 import { openExtensionView } from '@/extensions/workbench'
 import { CPA_VIEW_ID } from '@/extensions/cpa'
 import { useI18n } from '@/i18n/useI18n'
-import { normalizeCpaSettings } from '../../../../shared/ipc/cpa'
+import { normalizeCpaSettings, validateCpaManagementKey } from '../../../../shared/ipc/cpa'
 import styles from './Cpa.module.css'
 
 export function CpaSettingsPanel({ onOpened }: { onOpened?: () => void }) {
@@ -15,6 +15,9 @@ export function CpaSettingsPanel({ onOpened }: { onOpened?: () => void }) {
   const [enabled, setEnabled] = useState(settings?.enabled ?? false)
   const [port, setPort] = useState(String(settings?.port ?? 8317))
   const [autoUpdate, setAutoUpdate] = useState(settings?.autoUpdate ?? true)
+  const [managementKey, setManagementKey] = useState('')
+  const [showKey, setShowKey] = useState(false)
+  const [keySaved, setKeySaved] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -41,12 +44,17 @@ export function CpaSettingsPanel({ onOpened }: { onOpened?: () => void }) {
   const save = async (open: boolean) => {
     setError(null)
     setSaved(false)
+    setKeySaved(false)
     let next
     try { next = normalizeCpaSettings({ mode, enabled, port: Number(port), autoUpdate, managementUrl: draft }) }
     catch { setError(mode === 'managed' ? t('common:cpa.invalidPort') : t('common:cpa.invalidUrl')); return }
+    const key = mode === 'managed' && managementKey !== '' ? managementKey : undefined
+    try { if (key !== undefined) validateCpaManagementKey(key) }
+    catch { setError(t('common:cpa.invalidKey')); return }
     setBusy(true)
     try {
-      await useCpaStore.getState().save(next)
+      await useCpaStore.getState().save(next, key)
+      setManagementKey(''); setShowKey(false); setKeySaved(key !== undefined)
       setSaved(true)
       if (open) {
         if (!openExtensionView(CPA_VIEW_ID)) throw new Error('cpa-unavailable')
@@ -61,6 +69,8 @@ export function CpaSettingsPanel({ onOpened }: { onOpened?: () => void }) {
     if (message.includes('cpa-port-in-use')) return t('common:cpa.portInUse')
     if (message.includes('cpa-encryption-unavailable')) return t('common:cpa.encryptionUnavailable')
     if (message.includes('cpa-checksum-mismatch')) return t('common:cpa.checksumFailed')
+    if (message.includes('cpa-invalid-management-key')) return t('common:cpa.invalidKey')
+    if (message.includes('cpa-key-save-failed')) return t('common:cpa.keySaveFailed')
     return t('common:cpa.operationFailed')
   }
   const operate = async (action: 'start' | 'stop' | 'restart' | 'update' | 'copyManagementKey' | 'openLogs') => {
@@ -79,7 +89,9 @@ export function CpaSettingsPanel({ onOpened }: { onOpened?: () => void }) {
     <p>{t('common:cpa.description')}</p>
     <label className={styles.field}>
       <span>{t('common:cpa.mode')}</span>
-      <select value={mode} disabled={busy} onChange={(event) => setMode(event.target.value as 'managed' | 'external')}>
+      <select value={mode} disabled={busy} onChange={(event) => {
+        setMode(event.target.value as 'managed' | 'external'); setManagementKey(''); setShowKey(false)
+      }}>
         <option value="managed">{t('common:cpa.managed')}</option>
         <option value="external">{t('common:cpa.external')}</option>
       </select>
@@ -91,6 +103,20 @@ export function CpaSettingsPanel({ onOpened }: { onOpened?: () => void }) {
         <input type="number" min={1024} max={65535} value={port} disabled={busy} onChange={(event) => setPort(event.target.value)} />
       </label>
       <p>{t('common:cpa.portHelp')}</p>
+      <label className={styles.field}><span>{t('common:cpa.managementKey')}</span>
+        <input type={showKey ? 'text' : 'password'} value={managementKey} disabled={busy} autoComplete="new-password" spellCheck={false}
+          maxLength={128} placeholder={t('common:cpa.keyPlaceholder')}
+          onChange={(event) => { setManagementKey(event.target.value); setKeySaved(false); setSaved(false) }} />
+      </label>
+      <div className={styles.actions}>
+        <button type="button" disabled={busy} onClick={() => setShowKey((value) => !value)}>{showKey ? t('common:cpa.hideKey') : t('common:cpa.showKey')}</button>
+        <button type="button" disabled={busy} onClick={() => {
+          const bytes = crypto.getRandomValues(new Uint8Array(32))
+          setManagementKey(Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join(''))
+          setKeySaved(false); setSaved(false)
+        }}>{t('common:cpa.generateKey')}</button>
+      </div>
+      <p>{t('common:cpa.keyHelp')}</p>
       <label className={styles.check}><input type="checkbox" checked={autoUpdate} disabled={busy} onChange={(event) => setAutoUpdate(event.target.checked)} />{t('common:cpa.autoUpdate')}</label>
       <p>{t('common:cpa.updateHelp')}</p>
       {status && <p role="status">{t('common:cpa.runtimeStatus')}: {t(`common:cpa.phase.${status.phase}`)}{status.progress !== undefined && ` · ${status.progress}%`}{status.version && ` · ${status.version}`}</p>}
@@ -116,10 +142,11 @@ export function CpaSettingsPanel({ onOpened }: { onOpened?: () => void }) {
     </>}
     <p>{t('common:cpa.quotaHelp')}</p>
     <div className={styles.actions}>
-      <button type="button" disabled={busy || !settings} onClick={() => void save(false)}>{settings?.mode === 'managed' && status?.phase === 'running' && (Number(port) !== settings.port || mode !== settings.mode || !enabled) ? t('common:cpa.saveRestart') : t('common:action.save')}</button>
+      <button type="button" disabled={busy || !settings} onClick={() => void save(false)}>{settings?.mode === 'managed' && status?.phase === 'running' && (Number(port) !== settings.port || mode !== settings.mode || !enabled || managementKey !== '') ? t('common:cpa.saveRestart') : t('common:action.save')}</button>
       <button type="button" disabled={busy || !settings || mode === 'managed' && !enabled} onClick={() => void save(true)}>{t('common:cpa.saveAndOpen')}</button>
     </div>
     {saved && <p role="status">{t('common:cpa.saved')}</p>}
+    {keySaved && <p role="status">{t('common:cpa.keySaved')}</p>}
     {notice && <p role="status">{notice}</p>}
     {error && <p role="alert">{error}</p>}
   </section>

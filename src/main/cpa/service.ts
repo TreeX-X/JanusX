@@ -4,7 +4,7 @@ import { shell } from 'electron'
 import type { BrowserSurfaceManager } from '../browser/surface-manager'
 import { configService } from '../config/service'
 import { SerialQueue } from '../lib/atomic-file'
-import { CPA_SURFACE_ID, normalizeCpaSettings, type CpaSettings, type CpaStatus } from '../../shared/ipc/cpa'
+import { CPA_SURFACE_ID, normalizeCpaSettings, validateCpaManagementKey, type CpaSettings, type CpaStatus } from '../../shared/ipc/cpa'
 import { CpaRuntime, type CpaRuntimeControl } from './runtime'
 
 export class CpaService {
@@ -28,15 +28,23 @@ export class CpaService {
     }
   }
 
-  saveSettings(input: unknown): Promise<CpaSettings> {
+  saveSettings(input: unknown, managementKey?: unknown): Promise<CpaSettings> {
     const generation = this.generation
     return this.queue.run(async () => {
       this.assertActive(generation)
       if (!input || typeof input !== 'object') throw new Error('cpa-invalid-settings')
       const settings = normalizeCpaSettings(input)
+      const key = managementKey === undefined ? undefined : validateCpaManagementKey(managementKey)
+      if (key !== undefined && settings.mode !== 'managed') throw new Error('cpa-not-managed')
       const previous = await this.getSettings()
-      const restart = previous.mode === 'managed' && (settings.mode !== 'managed' || !settings.enabled || previous.port !== settings.port)
+      const restart = key !== undefined || previous.mode === 'managed' && (settings.mode !== 'managed' || !settings.enabled || previous.port !== settings.port)
       if (restart) await this.runtime.stop()
+      this.assertActive(generation)
+      if (key !== undefined) {
+        await this.runtime.setManagementKey(key)
+        this.closeSurface()
+      }
+      this.assertActive(generation)
       await configService.update({ cpaSettings: settings })
       if (previous.managementUrl !== settings.managementUrl || previous.mode !== settings.mode || !settings.enabled && settings.mode === 'managed') this.closeSurface()
       this.assertActive(generation)

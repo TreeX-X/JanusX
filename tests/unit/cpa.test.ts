@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { CPA_CHANNELS, CPA_SURFACE_ID, DEFAULT_CPA_MANAGEMENT_URL, normalizeCpaManagementUrl, normalizeCpaSettings } from '../../src/shared/ipc/cpa'
+import { CPA_CHANNELS, CPA_SURFACE_ID, DEFAULT_CPA_MANAGEMENT_URL, normalizeCpaManagementUrl, normalizeCpaSettings, validateCpaManagementKey } from '../../src/shared/ipc/cpa'
 import { CpaService } from '../../src/main/cpa/service'
 import type { BrowserSurfaceManager } from '../../src/main/browser/surface-manager'
 import { registerCpaHandlers } from '../../src/main/ipc/cpa-handlers'
@@ -9,11 +9,12 @@ const h = vi.hoisted(() => ({
   update: vi.fn(),
   external: vi.fn(),
   handle: vi.fn(),
-  runtime: { start: vi.fn(), stop: vi.fn(), status: vi.fn(), dispose: vi.fn(), stageUpdate: vi.fn(), copyKey: vi.fn(), openLogs: vi.fn() },
+  runtime: { start: vi.fn(), stop: vi.fn(), status: vi.fn(), dispose: vi.fn(), stageUpdate: vi.fn(), copyKey: vi.fn(), setManagementKey: vi.fn(), openLogs: vi.fn() },
 }))
 vi.mock('../../src/main/cpa/runtime', () => ({ CpaRuntime: class {
   start = h.runtime.start; stop = h.runtime.stop; status = h.runtime.status; dispose = h.runtime.dispose
   stageUpdate = h.runtime.stageUpdate; copyKey = h.runtime.copyKey; openLogs = h.runtime.openLogs
+  setManagementKey = h.runtime.setManagementKey
 } }))
 vi.mock('electron', () => ({ shell: { openExternal: h.external }, ipcMain: { handle: h.handle } }))
 vi.mock('../../src/main/config/service', () => ({ configService: {
@@ -49,6 +50,43 @@ describe('CPA page addresses', () => {
 })
 
 describe('CPA global integration service', () => {
+  it('applies a write-only custom key between stopping and restarting without returning or persisting plaintext settings', async () => {
+    const { service, surfaces } = fixture()
+    const settings = { mode: 'managed', enabled: true, port: 18317, autoUpdate: false }
+    h.config = { cpaSettings: settings }
+    await service.open()
+    vi.clearAllMocks()
+    const result = await service.saveSettings(settings, 'custom-management-key')
+    expect(h.runtime.stop).toHaveBeenCalledOnce()
+    expect(h.runtime.setManagementKey).toHaveBeenCalledWith('custom-management-key')
+    expect(h.runtime.start).toHaveBeenCalledWith(normalizeCpaSettings(settings))
+    expect(h.runtime.stop.mock.invocationCallOrder[0]).toBeLessThan(h.runtime.setManagementKey.mock.invocationCallOrder[0])
+    expect(h.runtime.setManagementKey.mock.invocationCallOrder[0]).toBeLessThan(h.runtime.start.mock.invocationCallOrder[0])
+    expect(surfaces.destroySurface).toHaveBeenCalledOnce()
+    expect(JSON.stringify([h.config, result, h.update.mock.calls])).not.toContain('custom-management-key')
+    vi.clearAllMocks()
+    await service.saveSettings(settings)
+    expect(h.runtime.setManagementKey).not.toHaveBeenCalled()
+    expect(h.runtime.stop).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid keys and external key changes before stopping or writing configuration', async () => {
+    const { service } = fixture()
+    await expect(service.saveSettings({ mode: 'managed' }, 'short')).rejects.toThrow('cpa-invalid-management-key')
+    await expect(service.saveSettings({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL }, 'custom-key')).rejects.toThrow('cpa-not-managed')
+    expect(h.runtime.stop).not.toHaveBeenCalled()
+    expect(h.update).not.toHaveBeenCalled()
+  })
+
+  it('does not restart or claim settings were saved when encrypted key storage fails', async () => {
+    const { service } = fixture()
+    const settings = { mode: 'managed', enabled: true, port: 18317 }
+    h.config = { cpaSettings: settings }
+    h.runtime.setManagementKey.mockRejectedValueOnce(new Error('cpa-key-save-failed'))
+    await expect(service.saveSettings(settings, 'custom-key')).rejects.toThrow('cpa-key-save-failed')
+    expect(h.runtime.start).not.toHaveBeenCalled()
+    expect(h.update).not.toHaveBeenCalled()
+  })
   it('defaults without a configured instance and persists only a validated page address', async () => {
     const { service } = fixture()
     expect(await service.getSettings()).toEqual(normalizeCpaSettings(null))
@@ -143,5 +181,15 @@ describe('CPA global integration service', () => {
     expect(surfaces.createSurface).not.toHaveBeenCalled()
     await service.dispose()
     await expect(service.open()).rejects.toThrow('cpa-stopped')
+  })
+})
+
+describe('CPA management key validation', () => {
+  it.each(['', 'short', ' leading', 'trailing ', 'a\r\nbcdefgh', '中文管理密钥123', 'x'.repeat(129), null])('rejects unusable header credentials without echoing them', (input) => {
+    expect(() => validateCpaManagementKey(input)).toThrow(/^cpa-invalid-management-key$/)
+  })
+  it('accepts bounded printable credentials without modifying them', () => {
+    expect(validateCpaManagementKey('My-Key_2026!')).toBe('My-Key_2026!')
+    expect(validateCpaManagementKey('a'.repeat(128))).toHaveLength(128)
   })
 })

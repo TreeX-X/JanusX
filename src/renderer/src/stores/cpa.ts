@@ -7,7 +7,7 @@ interface CpaStore {
   shouldOpen: boolean
   revision: number
   load: () => Promise<void>
-  save: (settings: CpaSettings) => Promise<void>
+  save: (settings: CpaSettings, managementKey?: string) => Promise<void>
   refreshStatus: () => Promise<void>
   operate: (action: 'start' | 'stop' | 'restart' | 'update') => Promise<void>
 }
@@ -18,8 +18,8 @@ export const useCpaStore = create<CpaStore>((set) => ({
   shouldOpen: true,
   revision: 0,
   load: async () => { set({ settings: await window.electron.cpa.getSettings() }) },
-  save: async (settings) => {
-    try { set({ settings: await window.electron.cpa.saveSettings(settings), shouldOpen: true }) }
+  save: async (settings, managementKey) => {
+    try { set({ settings: await window.electron.cpa.saveSettings(settings, managementKey), shouldOpen: true }) }
     catch (error) {
       // The configuration may have persisted before a download or restart failed.
       set({ settings: await window.electron.cpa.getSettings() })

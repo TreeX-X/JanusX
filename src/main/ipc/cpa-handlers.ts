@@ -11,7 +11,7 @@ export function registerCpaHandlers(getMainWindow: () => BrowserWindow | null, s
       || event.senderFrame !== mainWindow.webContents.mainFrame) throw new Error('unauthorized-cpa-request')
   }
   ipcMain.handle(CPA_CHANNELS.get, (event) => { authorize(event); return service.getSettings() })
-  ipcMain.handle(CPA_CHANNELS.save, (event, input: unknown) => { authorize(event); return service.saveSettings(input) })
+  ipcMain.handle(CPA_CHANNELS.save, (event, input: unknown, managementKey: unknown) => { authorize(event); return service.saveSettings(input, managementKey) })
   ipcMain.handle(CPA_CHANNELS.open, (event) => { authorize(event); return service.open() })
   ipcMain.handle(CPA_CHANNELS.close, (event) => { authorize(event); return service.close() })
   ipcMain.handle(CPA_CHANNELS.openExternal, (event) => { authorize(event); return service.openExternal() })

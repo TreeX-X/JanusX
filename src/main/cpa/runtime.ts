@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { parse, stringify } from 'yaml'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type { CpaSettings, CpaStatus } from '../../shared/ipc/cpa'
+import { validateCpaManagementKey } from '../../shared/ipc/cpa'
 import { CpaInstaller, type CpaInstallation } from './installer'
 
 export interface CpaRuntimeControl {
@@ -16,6 +17,7 @@ export interface CpaRuntimeControl {
   stop(): Promise<void>
   stageUpdate(): Promise<void>
   copyKey(): Promise<void>
+  setManagementKey(key: string): Promise<void>
   openLogs(): Promise<void>
   dispose(): Promise<void>
 }
@@ -174,7 +176,18 @@ export class CpaRuntime implements CpaRuntimeControl {
     this.updateTimer.unref()
   }
 
-  async copyKey(): Promise<void> { clipboard.writeText(await this.key()) }
+  copyKey(): Promise<void> { return this.queue.run(async () => { clipboard.writeText(await this.key()) }) }
+
+  setManagementKey(input: string): Promise<void> {
+    const key = validateCpaManagementKey(input)
+    return this.queue.run(async () => {
+      if (this.disposed) throw new Error('cpa-stopped')
+      if (this.child) throw new Error('cpa-key-change-requires-stop')
+      await this.keyFlight?.catch(() => {})
+      await this.saveKey(key)
+      this.keyFlight = Promise.resolve(key)
+    })
+  }
   async openLogs(): Promise<void> {
     await mkdir(this.root, { recursive: true })
     await appendFile(join(this.root, 'cpa.log'), '')
@@ -189,17 +202,28 @@ export class CpaRuntime implements CpaRuntimeControl {
 
   private async loadKey(): Promise<string> {
     if (this.managementKey) return this.managementKey
-    if (!safeStorage.isEncryptionAvailable() || (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) {
-      throw new Error('cpa-encryption-unavailable')
-    }
+    this.assertEncryption()
     const path = join(this.root, 'management-key.enc')
     try { this.managementKey = safeStorage.decryptString(await readFile(path)) } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('cpa-key-unavailable')
-      this.managementKey = randomBytes(32).toString('hex')
-      await mkdir(this.root, { recursive: true, mode: 0o700 })
-      await writeFileAtomic(path, safeStorage.encryptString(this.managementKey))
+      await this.saveKey(randomBytes(32).toString('hex'))
     }
-    return this.managementKey
+    return this.managementKey!
+  }
+
+  private assertEncryption(): void {
+    if (!safeStorage.isEncryptionAvailable() || (process.platform === 'linux' && safeStorage.getSelectedStorageBackend() === 'basic_text')) {
+      throw new Error('cpa-encryption-unavailable')
+    }
+  }
+
+  private async saveKey(key: string): Promise<void> {
+    this.assertEncryption()
+    try {
+      await mkdir(this.root, { recursive: true, mode: 0o700 })
+      await writeFileAtomic(join(this.root, 'management-key.enc'), safeStorage.encryptString(key))
+    } catch { throw new Error('cpa-key-save-failed') }
+    this.managementKey = key
   }
 
   private async launch(value: CpaInstallation, settings: CpaSettings): Promise<void> {

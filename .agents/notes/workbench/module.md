@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-16T05:56:00Z",
+  "updated": "2026-10-16T07:31:23Z",
   "moduleState": "partial"
 }
 ---
@@ -91,7 +91,7 @@ Note 工具链三件各司其职：[drawer-toolbar](./note-drawer-markdown-toolb
 
 外部工作流工具探索：[Grok Bot 衔接](./grok-bot-workflow-integration.md)仍在讨论；[Docker 面板入口](./docker-management-entry.md)于 2026-10-14 放弃 Portainer 接入、改为自研首版七项基本能力（连接状态、容器列表与启停、实时日志、容器终端、访问服务、Compose 分组），承载为新的 pane 内容类型；配套的[HTTP 请求 pane](./http-request-pane.md)同批设计。两者均未实现。
 
-服务集成：[CPA 账号管理复用与 Figma 接入](./service-integrations.md)维护中部与右侧扩展入口及服务边界。S1 提供可信注册与两处宿主，S2 将文件树、Git、会话管理迁移为内置扩展并保留原偏好及服务。S3 内嵌原版 CPA 管理页并跨项目复用；“设置 → 服务集成”现支持已有实例与本地托管，首次启用下载、自定义回环端口、启停／重启、加密管理密钥复制、日志和自动更新，关闭页面保持服务，退出应用停止自有实例。真实 Windows 后端与前端登录已验证，供应商额度、OAuth 和其他平台托管未验收。公开类型、内置定义及双区域示例位于 `src/renderer/src/extensions/`；第三方导入、市场与 Figma 接入仍待实施。
+服务集成：[CPA 账号管理复用与 Figma 接入](./service-integrations.md)维护中部与右侧扩展入口及服务边界。S1 提供可信注册与两处宿主，S2 将文件树、Git、会话管理迁移为内置扩展并保留原偏好及服务。S3 内嵌原版 CPA 管理页并跨项目复用；“设置 → 服务集成”现支持已有实例与本地托管，首次启用下载、自定义回环端口、启停／重启、自定义或随机管理密钥及加密保存、密钥复制、日志和自动更新，关闭页面保持服务，退出应用停止自有实例。真实 Windows 后端与前端登录已验证，供应商额度、OAuth 和其他平台托管未验收。公开类型、内置定义及双区域示例位于 `src/renderer/src/extensions/`；第三方导入、市场与 Figma 接入仍待实施。
 
 插件交付按[分阶段计划](../planning/plugin-platform-roadmap.md)先建立扩展核心，再将文件树、Git、会话管理依次迁移为内置扩展，通过 CPA 和双区域示例验证后开放第三方导入与市场。内置与第三方扩展共享贡献协议、按信任等级运行；工作台需求维护验收，规划模块维护顺序，版本及日期尚未指定。
 
