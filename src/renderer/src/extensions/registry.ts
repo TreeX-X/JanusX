@@ -35,6 +35,7 @@ export class ExtensionRegistry {
       if (!ID_PATTERN.test(view.id) || ids.has(view.id)) throw new Error(`Invalid or duplicate view: ${view.id}`)
       if (!view.title.trim() || !['workspace', 'right'].includes(view.location)
         || !['application', 'project'].includes(view.scope)
+        || (view.launcher !== undefined && (view.location !== 'workspace' || !['workspace-menu', 'tool-menu'].includes(view.launcher)))
         || (view.order !== undefined && !Number.isFinite(view.order))) throw new Error(`Invalid view: ${view.id}`)
       ids.add(view.id)
       return Object.freeze({ ...view, id: `extension:${definition.id}/${view.id}`, extensionId: definition.id, activationId: 0 })

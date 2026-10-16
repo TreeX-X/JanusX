@@ -19,6 +19,8 @@ export interface ExtensionView {
   title: string
   location: ExtensionViewLocation
   scope: ExtensionViewScope
+  /** Workspace launcher; defaults to the pane's add menu. */
+  launcher?: 'workspace-menu' | 'tool-menu'
   icon?: LucideIcon
   order?: number
   component: ComponentType<ExtensionViewProps>

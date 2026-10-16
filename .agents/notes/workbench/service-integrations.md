@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-14",
-  "updated": "2026-10-16T13:32:50Z",
+  "updated": "2026-10-16T13:40:07Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -42,7 +42,11 @@ CPA 设置沿用设置中心的表单样式与主题下拉组件，按连接配�
 
 插件包自带页面与外部服务网页分别采用受限的承载及权限规则，共用视图注册机制；外部网页不因此获得 JanusX 插件桥或被作为远程插件代码加载。同一插件同时提供中部与右侧视图时，可通过宿主提供的受限接口共享业务状态；自动搬移视图、跨容器拖拽及双视图并行保活不由本次方向确认自动承诺。
 
-CPA 是官方集成，待市场建立后可作为推荐项。主要用途为查看管理前端提供的额度及重置次数、时间等信息，转 API 按需使用。`janusx.cpa` 贡献应用级中部视图 `extension:janusx.cpa/management`，通过设置或中部 `+` 菜单打开；切换项目转移同一页面身份，原生网页会话复用。S3 后补充本地组件托管，仍无原生右侧额度摘要。
+CPA 是官方集成，待市场建立后可作为推荐项。主要用途为查看管理前端提供的额度及重置次数、时间等信息，转 API 按需使用。`janusx.cpa` 贡献应用级中部视图 `extension:janusx.cpa/management`，通过右上角工具箱菜单的 CPA 项打开，设置中的保存打开仍保留；中部终端新增列表不再显示 CPA。切换项目转移同一页面身份，原生网页会话复用。S3 后补充本地组件托管，仍无原生右侧额度摘要。
+
+工作区扩展可声明 `launcher: 'tool-menu'`，宿主据此将入口放入顶栏工具箱，默认仍为中部新增菜单；该字段不改变页面的中部承载位置。顶栏按注册状态及作用域生成入口，打开后显示“已打开”并置灰，关闭后恢复，未选项目或尚无终端时仍可打开应用级 CPA。打开走全局工具的回到工作区正面逻辑；展开工具箱时暂时隐藏原生网页，关闭菜单后恢复，避免网页遮住菜单。禁用或注销扩展后入口随注册快照移除。
+
+入口迁移验证：`npx vitest run tests/unit/extensions.test.ts tests/unit/global-tool-entry.test.ts` 通过 34 项，严格类型检查、局部 ESLint 与 `npm run build:app` 通过。`npx playwright test tests/e2e/desktop-cpa.spec.ts --project=desktop --workers=1 --grep 'CPA native page' --output=artifacts/cpa-launcher/desktop` 通过 1 项桌面用例，覆盖无项目时打开、已打开禁用、工具箱遮挡及恢复、中部新增菜单移除入口、关闭后恢复入口，以及跨项目与重启登录保留；日志和菜单截图位于 `artifacts/cpa-launcher*`。未打包 exe。
 
 ## CPA connection and session
 

@@ -37,11 +37,9 @@ async function openCpa(page: Page, url: string): Promise<void> {
   await page.evaluate(async (managementUrl) => {
     await ((window as any).electron.cpa as CpaAPI).saveSettings({ managementUrl })
   }, url)
-  // The settings entry works before any project or pane exists.
-  await page.getByTitle('Settings', { exact: true }).click()
-  await page.locator('[data-tab="integrations"]').click()
-  await expect(page.getByRole('textbox', { name: 'Management page address' })).toHaveValue(url)
-  await page.getByRole('button', { name: 'Save and open CPA', exact: true }).click()
+  // The titlebar launcher works before any project, terminal or pane exists.
+  await page.locator('button[data-id="tool-menu"]').click()
+  await page.getByRole('menuitem', { name: 'CPA', exact: true }).click()
   await expect(page.locator('[data-cpa-view]')).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)
 }
@@ -313,6 +311,18 @@ test('CPA native page shares a global login, hides for dialogs, releases on clos
       .toEqual({ bridge: 'undefined', node: 'undefined' })
     await expect.poll(() => nativeCount(app!)).toBe(1)
     await expectCompactCpa(app, page)
+    const toolTrigger = page.locator('button[data-id="tool-menu"]')
+    await toolTrigger.click()
+    await expect(page.getByRole('menuitem', { name: 'CPA', exact: true })).toBeDisabled()
+    await expect(page.getByRole('menuitem', { name: 'CPA', exact: true })).toContainText('Open')
+    await expect.poll(() => nativeCount(app!)).toBe(0)
+    await page.screenshot({ path: test.info().outputPath('cpa-titlebar-entry.png') })
+    await page.keyboard.press('Escape')
+    await expect.poll(() => nativeCount(app!)).toBe(1)
+    await page.getByRole('button', { name: 'New Terminal', exact: true }).click()
+    await expect(page.getByRole('menu', { name: 'New terminal', exact: true })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'CPA', exact: true })).toHaveCount(0)
+    await page.keyboard.press('Escape')
     await page.screenshot({ path: test.info().outputPath('compact-cpa.png') })
     const originalWeb = web
 
@@ -354,6 +364,9 @@ test('CPA native page shares a global login, hides for dialogs, releases on clos
     await page.locator('[data-tab-id*="janusx.cpa"] [data-tab-close]').click()
     await expect.poll(() => nativeCount(app!)).toBe(0)
     expect(await page.evaluate((id) => (window as any).electron.browser.getState(id), CPA_SURFACE_ID)).toBeNull()
+    await toolTrigger.click()
+    await expect(page.getByRole('menuitem', { name: 'CPA', exact: true })).toBeEnabled()
+    await page.keyboard.press('Escape')
 
     await app.close()
     app = undefined

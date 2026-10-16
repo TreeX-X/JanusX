@@ -284,6 +284,7 @@ function TerminalPresetCapsule({
   const extensionViews = useExtensionViews()
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const workspaceViews = extensionViews.filter((view) => view.location === 'workspace'
+    && view.launcher !== 'tool-menu'
     && (view.scope === 'application' || workspaceId))
   const panelRef = useRef<HTMLDivElement | null>(null)
   const exitTimerRef = useRef<number | null>(null)

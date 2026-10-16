@@ -56,6 +56,7 @@ describe('trusted extension registry', () => {
   it.each([
     { id: 'bad/id' }, { title: ' ' }, { order: NaN },
     { location: 'bad' as 'workspace' }, { scope: 'bad' as 'project' },
+    { launcher: 'bad' as 'tool-menu' }, { location: 'right' as const, launcher: 'tool-menu' as const },
   ])('rejects malformed view metadata %j', (overrides) => {
     expect(() => new ExtensionRegistry().register(definition({ views: [view(overrides)] }))).toThrow()
   })

@@ -14,7 +14,7 @@ function View(props: ExtensionViewProps) {
 export function registerCpaExtension(): () => void {
   return extensionRegistry.register({
     id: 'janusx.cpa',
-    views: [{ id: 'management', title: 'CPA', icon: Gauge, location: 'workspace', scope: 'application', component: View }],
+    views: [{ id: 'management', title: 'CPA', icon: Gauge, location: 'workspace', scope: 'application', launcher: 'tool-menu', component: View }],
     activate: () => () => { void window.electron.cpa.stop().catch(() => {}) },
   })
 }

@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, Globe } from 'lucide-react'
+// Note: .agents/notes/workbench/service-integrations.md — declared CPA launcher in the global tools menu.
+import { ChevronDown, Globe, Puzzle } from 'lucide-react'
 import { ThemedTooltip } from './ui/ThemedTooltip'
 import { MarkdownIcon } from './ui/MarkdownIcon'
 import { ToolboxIcon } from './ui/ToolboxIcon'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useExperimentalStore } from '@/stores/experimental'
+import { useExtensionViews } from '@/extensions/react'
+import { openExtensionView } from '@/extensions/workbench'
+import { getLeafPanes } from '@/lib/workspace-pane'
+import { useBrowserOcclusion } from '@/hooks/useBrowserOcclusion'
 import { openGlobalTool, resolveGlobalToolOpenState } from '@/lib/global-tool-entry'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './TitlebarToolGroup.module.css'
@@ -13,8 +18,8 @@ import styles from './TitlebarToolGroup.module.css'
  * 顶栏全局工具入口：一个可展开的工具菜单。
  *
  * 触发器只有一枚通用工具图标（工具箱=一个控件装多件工具），
- * 展开后是工具列表——现在是浏览器 / Markdown，后续 Docker、HTTP 工具
- * 各加一条条目即可，触发器外形不再随工具数量变化。
+ * 展开后是浏览器 / Markdown 与声明 tool-menu 入口的扩展视图，
+ * 触发器外形不再随工具数量变化。
  *
  * 每个工具的目标都是"打开中央内容"，与终端流程解耦——没有终端、没有项目时
  * 同样可达。主操作一律走 {@link openGlobalTool}：先翻回工作区正面并收起遮挡的
@@ -30,7 +35,10 @@ export function TitlebarToolGroup() {
   const openBrowserInWorkspace = useWorkspaceStore((s) => s.openBrowserInWorkspace)
   const openMarkdownInWorkspace = useWorkspaceStore((s) => s.openMarkdownInWorkspace)
   const paneTree = useWorkspaceStore((s) => s.paneTree)
+  const workspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
+  const extensionViews = useExtensionViews()
   const [menuOpen, setMenuOpen] = useState(false)
+  useBrowserOcclusion(menuOpen)
   const comboRef = useRef<HTMLDivElement | null>(null)
 
   // 顶层 paneTree 就是当前屏幕上的那棵树：有项目时是该项目的工作区，无项目时是全局那棵。
@@ -53,7 +61,7 @@ export function TitlebarToolGroup() {
     }
   }, [menuOpen])
 
-  // 工具清单：后续 Docker、HTTP 工具在这里各加一条（图标/文案/打开逻辑/开合状态）。
+  // Built-in tools and declared extension launchers share the same opening and disabled semantics.
   const tools: Array<{
     id: string
     icon: ReactNode
@@ -78,6 +86,18 @@ export function TitlebarToolGroup() {
       opened: openState.markdown,
       open: () => openMarkdownInWorkspace(),
     },
+    ...extensionViews.filter((view) => view.location === 'workspace' && view.launcher === 'tool-menu'
+      && (view.scope === 'application' || workspaceId)).map((view) => {
+      const Icon = view.icon ?? Puzzle
+      return {
+        id: view.id,
+        icon: <Icon className={styles.menuIcon} size={14} strokeWidth={1.5} aria-hidden="true" />,
+        label: view.title,
+        actionLabel: view.title,
+        opened: getLeafPanes(paneTree).some((leaf) => leaf.tabs.some((tab) => tab.type === 'extension' && tab.viewId === view.id)),
+        open: () => { openExtensionView(view.id) },
+      }
+    }),
   ]
 
   const pick = (open: () => void | Promise<void>) => {
