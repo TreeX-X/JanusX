@@ -9,7 +9,7 @@ const h = vi.hoisted(() => ({
   update: vi.fn(),
   external: vi.fn(),
   handle: vi.fn(),
-  onBeforeRequest: vi.fn(),
+  onBeforeRequest: vi.fn(), onCompleted: vi.fn(), onErrorOccurred: vi.fn(),
   runtime: { start: vi.fn(), stop: vi.fn(), status: vi.fn(), dispose: vi.fn(), stageUpdate: vi.fn(), copyKey: vi.fn(), setManagementKey: vi.fn(), openLogs: vi.fn() },
 }))
 vi.mock('../../src/main/cpa/runtime', () => ({ CpaRuntime: class {
@@ -18,7 +18,7 @@ vi.mock('../../src/main/cpa/runtime', () => ({ CpaRuntime: class {
   setManagementKey = h.runtime.setManagementKey
 } }))
 vi.mock('electron', () => ({ shell: { openExternal: h.external }, ipcMain: { handle: h.handle },
-  session: { fromPartition: () => ({ webRequest: { onBeforeRequest: h.onBeforeRequest } }) },
+  session: { fromPartition: () => ({ setProxy: vi.fn(async () => {}), webRequest: { onBeforeRequest: h.onBeforeRequest, onCompleted: h.onCompleted, onErrorOccurred: h.onErrorOccurred } }) },
 }))
 vi.mock('../../src/main/config/service', () => ({ configService: {
   get: async () => h.config,

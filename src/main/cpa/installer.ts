@@ -5,6 +5,8 @@ import { chmod, mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { gunzipSync, inflateRawSync } from 'node:zlib'
 import { writeFileAtomic } from '../lib/atomic-file'
+import { ProxyAgent } from 'undici'
+import { CpaProxy } from './proxy'
 
 const BACKEND = 'CLIProxyAPI'
 const FRONTEND = 'Cli-Proxy-API-Management-Center'
@@ -22,7 +24,24 @@ export interface CpaInstallation {
 export type Download = (url: string, limit: number, signal: AbortSignal, progress?: (value: number) => void) => Promise<Buffer>
 
 export const downloadCpaAsset: Download = async (url, limit, signal, progress) => {
-  const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]), headers: { 'User-Agent': 'JanusX-CPA' } })
+  // First-enable downloads can run before the LLM service initializes global proxy hooks.
+  const relay = new CpaProxy()
+  let dispatcher: ProxyAgent | undefined
+  try {
+    signal.throwIfAborted()
+    dispatcher = new ProxyAgent(await relay.start())
+    return await readDownload(url, limit, signal, dispatcher, progress)
+  } finally {
+    await dispatcher?.destroy()
+    await relay.close()
+  }
+}
+
+async function readDownload(url: string, limit: number, signal: AbortSignal, dispatcher: ProxyAgent, progress?: (value: number) => void): Promise<Buffer> {
+  const options: RequestInit & { dispatcher: ProxyAgent } = {
+    dispatcher, signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]), headers: { 'User-Agent': 'JanusX-CPA' },
+  }
+  const response = await fetch(url, options)
   if (!response.ok || !response.body) throw new Error('cpa-download-failed')
   const declared = Number(response.headers.get('content-length'))
   if (declared > limit) { await response.body.cancel(); throw new Error('cpa-download-oversized') }

@@ -6,11 +6,13 @@ import { createServer } from 'node:net'
 import { appendFile, mkdir, readFile, rename, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse, stringify } from 'yaml'
-import { getProxyManager, getSystemProxy } from '@janusx/llm-core'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
 import type { CpaSettings, CpaStatus } from '../../shared/ipc/cpa'
 import { validateCpaManagementKey } from '../../shared/ipc/cpa'
 import { CpaInstaller, type CpaInstallation } from './installer'
+import { CpaProxy, cpaProxyEnvironment } from './proxy'
+import { cpaLocalRequest } from './local-request'
+export { cpaProxyEnvironment } from './proxy'
 
 export interface CpaRuntimeControl {
   status(): Promise<CpaStatus>
@@ -21,6 +23,7 @@ export interface CpaRuntimeControl {
   setManagementKey(key: string): Promise<void>
   openLogs(): Promise<void>
   dispose(): Promise<void>
+  oauthStatus?(state: string, signal: AbortSignal): Promise<string | undefined>
 }
 
 export async function assertCpaPortFree(port: number): Promise<void> {
@@ -31,20 +34,7 @@ export async function assertCpaPortFree(port: number): Promise<void> {
   })
 }
 
-/** Reuse JanusX's effective proxy without changing the host environment or persisting credentials. */
-export function cpaProxyEnvironment(): NodeJS.ProcessEnv {
-  const proxy = getProxyManager().getProxyUrl() ?? getSystemProxy()
-  const bypass = [...new Set([
-    ...(process.env.NO_PROXY ?? '').split(','), ...(process.env.no_proxy ?? '').split(','),
-    'localhost', '127.0.0.1', '::1',
-  ].map((entry) => entry.trim()).filter(Boolean))].join(',')
-  return {
-    ...(proxy ? { HTTP_PROXY: proxy, HTTPS_PROXY: proxy, http_proxy: proxy, https_proxy: proxy } : {}),
-    NO_PROXY: bypass, no_proxy: bypass,
-  }
-}
-
-export function managedCpaConfig(existing: string, settings: CpaSettings, accounts: string): string {
+export function managedCpaConfig(existing: string, settings: CpaSettings, accounts: string, proxy = ''): string {
   const parsed: unknown = existing ? parse(existing) : {}
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('cpa-invalid-config')
   const value = parsed as Record<string, any>
@@ -54,8 +44,8 @@ export function managedCpaConfig(existing: string, settings: CpaSettings, accoun
   value.management = { ...value.management, 'allow-remote': false, 'secret-key': '',
     'disable-control-panel': false, 'disable-auto-update-panel': true }
   value.oauth = { ...value.oauth, 'auth-dir': accounts }
-  // Empty selects Go's environment proxy; a saved CPA override must not diverge from JanusX.
-  value.requests = { ...value.requests, 'proxy-url': '' }
+  // Management api-call ignores environment proxies; the explicit relay also covers executors.
+  value.requests = { ...value.requests, 'proxy-url': proxy }
   delete value['proxy-url']
   value.access = { ...value.access, 'api-keys': value.access?.['api-keys']?.length ? value.access['api-keys'] : [randomBytes(32).toString('hex')] }
   // Host-owned keys override legacy spellings too: never accidentally expose a listener.
@@ -80,6 +70,8 @@ export class CpaRuntime implements CpaRuntimeControl {
   private updateTimer?: ReturnType<typeof setInterval>
   private logQueue = new SerialQueue()
   private logTail = ''
+  private proxy?: CpaProxy
+  private origin?: string
 
   constructor(readonly root = join(app.getPath('userData'), 'janusx', 'components', 'cpa'),
     private readonly installer = new CpaInstaller(root)) {}
@@ -121,14 +113,12 @@ export class CpaRuntime implements CpaRuntimeControl {
         try { original = await readFile(configPath, 'utf8') } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
         }
-        await writeFileAtomic(configPath, managedCpaConfig(original, settings, join(this.root, 'accounts')))
         try {
-          await this.launch(target, settings)
+          await this.launch(target, settings, original)
         } catch (error) {
           await this.terminate()
           if (!current || current.id === target.id) throw error
-          await writeFileAtomic(configPath, managedCpaConfig(original, settings, join(this.root, 'accounts')))
-          await this.launch(current, settings)
+          await this.launch(current, settings, original)
           target = current
           this.state.updateError = 'cpa-update-rolled-back'
         }
@@ -243,15 +233,29 @@ export class CpaRuntime implements CpaRuntimeControl {
     this.managementKey = key
   }
 
-  private async launch(value: CpaInstallation, settings: CpaSettings): Promise<void> {
+  async oauthStatus(state: string, signal: AbortSignal): Promise<string | undefined> {
+    if (!this.origin || !this.child || !/^[a-zA-Z0-9_.-]{1,128}$/.test(state)) return undefined
+    const response = await cpaLocalRequest(`${this.origin}/v8/management/oauth/status?state=${encodeURIComponent(state)}`,
+      AbortSignal.any([signal, AbortSignal.timeout(3000)]), await this.key(), true)
+    return response.ok ? response.status : undefined
+  }
+
+  private async launch(value: CpaInstallation, settings: CpaSettings, original: string): Promise<void> {
     if (this.abort.signal.aborted || this.disposed) throw new Error('cpa-stopped')
     this.state.phase = 'starting'
     const env: NodeJS.ProcessEnv = cpaProxyEnvironment()
+    this.proxy = new CpaProxy()
+    const proxy = await this.proxy.start()
+    await writeFileAtomic(join(this.root, 'config.yaml'), managedCpaConfig(original, settings, join(this.root, 'accounts'), proxy))
+    // Even code paths that only understand environment variables use the same relay.
+    Object.assign(env, { HTTP_PROXY: proxy, HTTPS_PROXY: proxy, http_proxy: proxy, https_proxy: proxy })
+    this.origin = `http://127.0.0.1:${settings.port ?? 8317}`
     for (const name of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SSL_CERT_FILE', 'SSL_CERT_DIR']) {
       if (process.env[name]) env[name] = process.env[name]
     }
     env.MANAGEMENT_PASSWORD = await this.key()
     env.MANAGEMENT_STATIC_PATH = join(this.installer.directory(value), 'management.html')
+    this.abort.signal.throwIfAborted()
     const child = spawn(join(this.installer.directory(value), this.installer.binaryName), ['-config', join(this.root, 'config.yaml'), '-local-model'], {
       cwd: this.root, shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env,
     })
@@ -261,6 +265,7 @@ export class CpaRuntime implements CpaRuntimeControl {
     child.once('exit', () => {
       if (this.child !== child) return
       this.child = null
+      void this.proxy?.close(); this.proxy = undefined; this.origin = undefined
       this.state = { ...this.state, phase: 'failed', pid: undefined, error: 'cpa-process-exited' }
     })
     const output = (data: Buffer) => this.log(data.toString())
@@ -285,15 +290,11 @@ export class CpaRuntime implements CpaRuntimeControl {
       this.abort.signal.throwIfAborted()
       if (launchError || child.exitCode !== null || this.child !== child) throw new Error('cpa-process-exited')
       try {
-        const response = await fetch(`http://127.0.0.1:${settings.port ?? 8317}/v8/management/config`, {
-          headers: { Authorization: `Bearer ${await this.key()}` }, signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(1000)]),
-        })
-        await response.body?.cancel()
+        const response = await cpaLocalRequest(`${this.origin}/v8/management/config`,
+          AbortSignal.any([this.abort.signal, AbortSignal.timeout(1000)]), await this.key())
         if (response.ok && this.child === child && child.exitCode === null) {
-          const page = await fetch(`http://127.0.0.1:${settings.port ?? 8317}/management.html`, {
-            signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(1500)]),
-          })
-          await page.body?.cancel()
+          const page = await cpaLocalRequest(`${this.origin}/management.html`,
+            AbortSignal.any([this.abort.signal, AbortSignal.timeout(1500)]))
           if (page.ok) return
         }
       } catch { /* Retry only while this owned child is starting. */ }
@@ -307,6 +308,10 @@ export class CpaRuntime implements CpaRuntimeControl {
     this.updateTimer = undefined
     const child = this.child
     this.child = null
+    this.origin = undefined
+    const proxy = this.proxy
+    this.proxy = undefined
+    await proxy?.close()
     if (!child || child.exitCode !== null) return
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => { child.kill('SIGKILL'); resolve() }, 1500)

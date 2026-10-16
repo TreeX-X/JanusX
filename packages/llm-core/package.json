@@ -38,7 +38,7 @@
     "@ai-sdk/openai": "^3.0.71",
     "google-auth-library": "^10.7.0",
     "proxy-agent": "^8.0.2",
-    "undici": "^8.5.0"
+    "undici": "^7.30.1"
   },
   "peerDependencies": {
     "ai": "3.4.33"

@@ -74,14 +74,20 @@ export class CpaService {
       const instance = createHash('sha256').update(new URL(managementUrl).origin).digest('hex').slice(0, 24)
       const partition = `persist:janusx-cpa-${instance}`
       if (settings.mode === 'managed') {
-        this.oauthBridge = new CpaOAuthBridge(session.fromPartition(partition), new URL(managementUrl).origin,
-          (fallback) => { this.oauthFallback = fallback })
+        const cpaSession = session.fromPartition(partition)
+        // The local control page must not inherit Chromium's system proxy/PAC rules.
+        await cpaSession.setProxy({ mode: 'direct' })
+        this.assertActive(generation)
+        this.oauthBridge = new CpaOAuthBridge(cpaSession, new URL(managementUrl).origin,
+          (fallback) => { this.oauthFallback = fallback; if (!fallback) this.oauthBrowserError = false }, undefined,
+          (state, signal) => this.runtime.oauthStatus?.(state, signal) ?? Promise.resolve(undefined))
       }
       const oauthBridge = this.oauthBridge
       const result = this.surfaces.createSurface({ surfaceId: CPA_SURFACE_ID, carrier: 'pane', url: managementUrl }, {
         partition, httpOnly: true,
         ...(settings.mode === 'managed' ? { openExternalUrl: (url: string) => {
           if (!isCpaOAuthAuthorizationUrl(url)) return false
+          oauthBridge?.observeAuthorization(url)
           this.oauthBrowserError = false
           void shell.openExternal(url).catch(() => { if (this.oauthBridge === oauthBridge) this.oauthBrowserError = true })
           return true

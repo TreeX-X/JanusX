@@ -4,6 +4,7 @@
  * @module @janusx/llm-core/proxy
  */
 
+// Note: fetch compatibility and explicit routing — see .agents/notes/workbench/service-integrations.md
 import http from 'node:http'
 import https from 'node:https'
 import { HttpsProxyAgent } from 'https-proxy-agent'
@@ -237,7 +238,9 @@ export class ProxyManager {
       }
 
       // 设置代理 Agent
-      options.agent = agent
+      // Explicit agents own their routing (e.g. a local proxy's selected upstream).
+      // Overwriting them can proxy the proxy connection a second time.
+      if (options.agent === undefined) options.agent = agent
 
       if (url) {
         return originalMethod(url, options, callback)

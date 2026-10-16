@@ -19,6 +19,7 @@ vi.mock('electron', () => ({
     decryptString: (value: Buffer) => Buffer.from(value.toString().slice(10), 'base64').toString() },
 }))
 vi.mock('node:child_process', () => ({ spawn: (...args: unknown[]) => h.spawn(...args) }))
+vi.mock('../../src/main/cpa/local-request', () => ({ cpaLocalRequest: vi.fn(async () => ({ ok: true })) }))
 
 class Child extends EventEmitter {
   pid = 424242
@@ -59,7 +60,7 @@ async function fixture(installed = true) {
 }
 
 describe('managed CPA runtime ownership', () => {
-  it('passes the effective JanusX proxy to the child, keeps loopback direct, and refreshes it on restart without saving it', async () => {
+  it('uses an explicit local relay for config and environment without persisting upstream credentials', async () => {
     const { runtime, root } = await fixture()
     h.proxy.mockReturnValue('http://fixture-user:fixture-password@127.0.0.1:7897')
     h.systemProxy.mockReturnValue('http://127.0.0.1:9999')
@@ -71,7 +72,7 @@ describe('managed CPA runtime ownership', () => {
     await runtime.start(settings)
     const calls = () => h.spawn.mock.calls.filter(([file]) => file !== 'powershell.exe')
     const env = calls()[0][2].env
-    expect(env.HTTPS_PROXY).toBe(h.proxy())
+    expect(env.HTTPS_PROXY).toMatch(/^http:\/\/janusx:[a-f0-9]+@127\.0\.0\.1:\d+$/)
     expect(env.HTTP_PROXY).toBe(env.HTTPS_PROXY)
     expect(env.http_proxy).toBe(env.HTTPS_PROXY)
     expect(env.https_proxy).toBe(env.HTTPS_PROXY)
@@ -80,11 +81,12 @@ describe('managed CPA runtime ownership', () => {
     expect(env.UNRELATED_SECRET).toBeUndefined()
     expect(process.env.NO_PROXY).toBe(originalBypass)
     expect(await readFile(join(root, 'config.yaml'), 'utf8')).not.toContain('fixture-password')
+    expect(parse(await readFile(join(root, 'config.yaml'), 'utf8')).requests['proxy-url']).toBe(env.HTTPS_PROXY)
     expect(JSON.stringify(await runtime.status())).not.toContain('fixture-password')
     await runtime.stop()
     h.proxy.mockReturnValue('http://127.0.0.1:7898')
     await runtime.start(settings)
-    expect(calls()[1][2].env.HTTPS_PROXY).toBe('http://127.0.0.1:7898')
+    expect(calls()[1][2].env.HTTPS_PROXY).not.toBe(env.HTTPS_PROXY)
   })
 
   it('uses shared system detection before LLM initialization and leaves no stale proxy when absent', () => {

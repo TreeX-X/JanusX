@@ -1,17 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createServer } from 'node:net'
 import type { Session } from 'electron'
 import { CpaOAuthBridge, isCpaOAuthAuthorizationUrl, probeCpaOAuthPort } from '../../src/main/cpa/oauth'
 
+const bridges: CpaOAuthBridge[] = []
+afterEach(() => { bridges.splice(0).forEach((bridge) => bridge.dispose()); vi.useRealTimers() })
 function fixture(reason: 'restricted' | 'occupied' | 'unavailable' | undefined = 'restricted') {
   const onBeforeRequest = vi.fn()
+  const onCompleted = vi.fn(), onErrorOccurred = vi.fn()
   const report = vi.fn()
+  const status = vi.fn(async (_state: string, _signal: AbortSignal): Promise<string | undefined> => 'wait')
   const probe = vi.fn(async () => reason)
-  const bridge = new CpaOAuthBridge({ webRequest: { onBeforeRequest } } as unknown as Session,
-    'http://127.0.0.1:8317', report, probe)
+  const bridge = new CpaOAuthBridge({ webRequest: { onBeforeRequest, onCompleted, onErrorOccurred } } as unknown as Session,
+    'http://127.0.0.1:8317', report, probe, status)
+  bridges.push(bridge)
   const handler = onBeforeRequest.mock.calls[0][1] as (details: unknown, callback: (response: unknown) => void) => void
-  const request = (url: string, method = 'GET') => new Promise<any>((resolve) => handler({ url, method }, resolve))
-  return { bridge, request, report, probe, onBeforeRequest }
+  const request = (url: string, method = 'GET', id = 1) => new Promise<any>((resolve) => handler({ url, method, id }, resolve))
+  const complete = (url: string, method = 'GET', id = 1, statusCode = 200) => onCompleted.mock.calls[0][1]({ url, method, id, statusCode })
+  return { bridge, request, complete, report, status, probe, onBeforeRequest, onCompleted, onErrorOccurred }
 }
 
 describe('CPA OAuth callback fallback', () => {
@@ -55,8 +61,55 @@ describe('CPA OAuth callback fallback', () => {
     const result = f.request('http://127.0.0.1:8317/v8/management/oauth/auth-url?provider=codex&is_webui=true')
     f.bridge.dispose(); finish('restricted')
     expect(await result).toEqual({ cancel: true })
-    expect(f.report).not.toHaveBeenCalled()
+    expect(f.report).toHaveBeenLastCalledWith(undefined)
     expect(f.onBeforeRequest).toHaveBeenLastCalledWith(null)
+    expect(f.onCompleted).toHaveBeenLastCalledWith(null)
+    expect(f.onErrorOccurred).toHaveBeenLastCalledWith(null)
+  })
+
+  it.each(['ok', 'error'])('clears only after the matching session reaches %s, not callback acceptance', async (terminal) => {
+    const f = fixture()
+    const auth = 'http://127.0.0.1:8317/v8/management/oauth/auth-url?provider=codex&is_webui=true'
+    await f.request(auth); f.complete(auth)
+    await f.request('http://127.0.0.1:8317/v8/management/oauth/status?state=first')
+    await vi.waitFor(() => expect(f.status).toHaveBeenCalledOnce())
+    expect(f.report.mock.calls.at(-1)?.[0]?.provider).toBe('codex')
+    await f.request('http://127.0.0.1:8317/v8/management/oauth/callback', 'POST')
+    expect(f.report.mock.calls.at(-1)?.[0]?.provider).toBe('codex')
+    f.status.mockResolvedValue(terminal)
+    await f.request('http://127.0.0.1:8317/v8/management/oauth/status?state=first')
+    await vi.waitFor(() => expect(f.report).toHaveBeenLastCalledWith(undefined))
+  })
+
+  it('ignores old polls and delayed results after a newer flow begins', async () => {
+    const f = fixture()
+    const auth = 'http://127.0.0.1:8317/v8/management/oauth/auth-url?provider=codex&is_webui=true'
+    let finish!: (value: string) => void
+    f.status.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    await f.request(auth); f.complete(auth)
+    await f.request('http://127.0.0.1:8317/v8/management/oauth/status?state=old')
+    await f.request(auth, 'GET', 2); f.complete(auth, 'GET', 2)
+    finish('ok')
+    await f.request('http://127.0.0.1:8317/v8/management/oauth/status?state=old')
+    expect(f.status).toHaveBeenCalledOnce()
+    expect(f.report.mock.calls.at(-1)?.[0]?.provider).toBe('codex')
+    await f.request('http://127.0.0.1:8317/v8/management/oauth/status?state=new')
+    expect(f.status).toHaveBeenCalledTimes(2)
+  })
+
+  it('clears confirmed cancellation and expires abandoned notices', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    const auth = 'http://127.0.0.1:8317/v8/management/oauth/auth-url?provider=codex&is_webui=true'
+    await f.request(auth); f.complete(auth)
+    f.bridge.observeAuthorization('https://auth.openai.com/oauth/authorize?state=cancel-me')
+    f.complete('http://127.0.0.1:8317/v8/management/oauth/session?state=other', 'DELETE', 3)
+    expect(f.report.mock.calls.at(-1)?.[0]?.provider).toBe('codex')
+    f.complete('http://127.0.0.1:8317/v8/management/oauth/session?state=cancel-me', 'DELETE', 4)
+    expect(f.report).toHaveBeenLastCalledWith(undefined)
+    await f.request(auth, 'GET', 2); f.complete(auth, 'GET', 2)
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    expect(f.report).toHaveBeenLastCalledWith(undefined)
   })
 
   it('probes an occupied real listener without terminating or replacing it', async () => {
@@ -68,6 +121,23 @@ describe('CPA OAuth callback fallback', () => {
       expect(server.listening).toBe(true)
     } finally { await new Promise<void>((resolve) => server.close(() => resolve())) }
     expect(await probeCpaOAuthPort(port)).toBeUndefined()
+  })
+
+  it('clears failed link generation and ignores status results after disposal', async () => {
+    const f = fixture()
+    const auth = 'http://127.0.0.1:8317/v8/management/oauth/auth-url?provider=codex&is_webui=true'
+    await f.request(auth); f.complete(auth, 'GET', 1, 500)
+    expect(f.report).toHaveBeenLastCalledWith(undefined)
+    let finish!: (value: string) => void
+    f.status.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    await f.request(auth, 'GET', 2); f.complete(auth, 'GET', 2)
+    await f.request('http://127.0.0.1:8317/v8/management/oauth/status?state=dispose-me')
+    const signal = f.status.mock.calls[0][1]
+    const calls = f.report.mock.calls.length
+    f.bridge.dispose(); finish('ok')
+    await Promise.resolve()
+    expect(signal.aborted).toBe(true)
+    expect(f.report).toHaveBeenCalledTimes(calls)
   })
 })
 

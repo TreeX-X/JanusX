@@ -106,6 +106,7 @@ async function verifyManagedOAuth(app: ElectronApplication, page: Page, web: Pag
     const result = await fetch(`${origin}/v8/management/oauth/status?state=${encodeURIComponent(auth.state)}`, { headers: { Authorization: `Bearer ${key}` } })
     return (await result.json() as { status: string }).status
   }).toBe('error')
+  await expect(page.locator('[data-cpa-oauth-fallback]')).toHaveCount(0)
   // A fresh pending flow remains cancellable through the unchanged backend contract.
   const cancelled = await web.evaluate(async ({ key }) => {
     const headers = { Authorization: `Bearer ${key}` }
@@ -115,6 +116,7 @@ async function verifyManagedOAuth(app: ElectronApplication, page: Page, web: Pag
     return response.json()
   }, { key })
   expect(cancelled.cancelled).toBe(true)
+  await expect(page.locator('[data-cpa-oauth-fallback]')).toHaveCount(0)
   // A synthetic code exercises the real backend's token transport. The local proxy rejects
   // CONNECT without opening an upstream socket, so no provider is contacted or token obtained.
   const proxyState = await web.evaluate(async ({ key }) => {
@@ -127,11 +129,60 @@ async function verifyManagedOAuth(app: ElectronApplication, page: Page, web: Pag
     if (!submitted.ok) throw new Error('Fixture callback rejected')
     return auth.state as string
   }, { key })
-  await expect.poll(() => proxyTargets.includes('auth.openai.com:443')).toBe(true)
+  try { await expect.poll(() => proxyTargets.includes('auth.openai.com:443')).toBe(true) } catch {
+    const response = await fetch(`${origin}/v8/management/oauth/status?state=${encodeURIComponent(proxyState)}`, { headers: { Authorization: `Bearer ${key}` } })
+    throw new Error(`Fixture token transport: ${JSON.stringify(await response.json())}; proxy targets: ${JSON.stringify(proxyTargets)}`)
+  }
   await expect.poll(async () => {
     const result = await fetch(`${origin}/v8/management/oauth/status?state=${encodeURIComponent(proxyState)}`, { headers: { Authorization: `Bearer ${key}` } })
     return (await result.json() as { status: string }).status
   }).toBe('error')
+  // Observe status through the guest, just as the original page does.
+  await web.evaluate(async ({ key, state }) => {
+    await fetch(`/v8/management/oauth/status?state=${state}`, { headers: { Authorization: `Bearer ${key}` } })
+  }, { key, state: proxyState })
+  await expect(page.locator('[data-cpa-oauth-fallback]')).toHaveCount(0)
+
+  // Windows CPA uses the system certificate store. Keep TLS verification intact:
+  // use an isolated synthetic credential and HTTP target for full response assertions,
+  // and separately verify HTTPS CONNECT below. No real account or upstream is contacted.
+  const credential = await web.evaluate(async ({ key }) => {
+    const data = new FormData()
+    data.append('file', new Blob([JSON.stringify({ type: 'codex', email: 'cpa-fixture@example.test',
+      access_token: 'fixture-access', refresh_token: 'fixture-refresh', account_id: 'fixture-account', expired: '2099-01-01T00:00:00Z',
+    })], { type: 'application/json' }), 'codex-fixture.json')
+    const uploaded = await fetch('/v8/management/credentials', { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: data })
+    if (!uploaded.ok) throw new Error(`Fixture credential upload: ${uploaded.status}`)
+    const response = await fetch('/v8/management/credentials', { headers: { Authorization: `Bearer ${key}` } })
+    const { files } = await response.json()
+    const file = files.find((file: any) => file.provider === 'codex' || file.type === 'codex')
+    return { authIndex: file?.auth_index as string | undefined, name: file?.name as string | undefined }
+  }, { key })
+  const { authIndex } = credential
+  expect(authIndex).toBeTruthy()
+  // The exact management channel used by quota, subscriptions and reset credits must proxy too.
+  for (const path of ['/wham/usage', '/subscriptions', '/wham/rate-limit-reset-credits', '/wham/rate-limit-reset-credits/consume']) {
+    const response = await web.evaluate(async ({ key, path, authIndex }) => {
+      const result = await fetch('/v8/management/requests/api-call', {
+        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authIndex, method: path.endsWith('/consume') ? 'POST' : 'GET', url: `http://quota-fixture.invalid/backend-api${path}`,
+          header: { Authorization: 'Bearer $TOKEN$' } }),
+      })
+      return { status: result.status, result: await result.json() }
+    }, { key, path, authIndex })
+    expect(response.status).toBe(200)
+    expect(response.result.status_code).toBe(200)
+    expect(JSON.parse(response.result.body).fixturePath).toBe(`/backend-api${path}`)
+  }
+  const https = await web.evaluate(async ({ key }) => {
+    const response = await fetch('/v8/management/requests/api-call', { method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method: 'GET', url: 'https://chatgpt.com/backend-api/wham/usage' }),
+    })
+    return response.status
+  }, { key })
+  expect(https).toBe(502)
+  expect(proxyTargets).toContain('chatgpt.com:443')
 }
 
 async function cleanup(app: ElectronApplication | undefined, server: Server, root: string) {
@@ -268,7 +319,14 @@ test('managed CPA downloads verified components, runs the real Windows service a
   const occupied = createTcpServer()
   const callbackBlocker = createTcpServer()
   const proxyTargets: string[] = []
-  const proxy = createServer((_request, response) => { response.writeHead(502); response.end() })
+  const proxy = createServer((request, response) => {
+    const url = new URL(request.url!)
+    if (url.hostname !== 'quota-fixture.invalid' || request.headers.authorization !== 'Bearer fixture-access') {
+      response.writeHead(401); response.end('{}'); return
+    }
+    response.setHeader('Content-Type', 'application/json')
+    response.end(JSON.stringify({ fixturePath: url.pathname, rate_limit: { primary_window: { used_percent: 10 } } }))
+  })
   proxy.on('connect', (request, socket) => {
     proxyTargets.push(request.url ?? '')
     socket.end('HTTP/1.1 502 Fixture proxy blocked upstream\r\nContent-Length: 0\r\nConnection: close\r\n\r\n', () => socket.destroy())
@@ -433,6 +491,9 @@ test('managed CPA downloads verified components, runs the real Windows service a
     expect(await readFile(accountSentinel, 'utf8')).toBe('keep-across-restarts')
   } finally {
     if (app) await app.close()
+    const log = await readFile(join(root, 'profile', 'janusx', 'components', 'cpa', 'cpa.log')).catch(() => Buffer.from('no CPA log'))
+    await test.info().attach('managed-cpa-log', { body: log, contentType: 'text/plain' })
+    await test.info().attach('proxy-targets', { body: JSON.stringify(proxyTargets), contentType: 'application/json' })
     if (occupied.listening) await new Promise<void>((resolve) => occupied.close(() => resolve()))
     if (callbackBlocker.listening) await new Promise<void>((resolve) => callbackBlocker.close(() => resolve()))
     if (proxy.listening) await new Promise<void>((resolve) => proxy.close(() => resolve()))

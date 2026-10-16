@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "draft",
   "created": "2026-10-16",
-  "updated": "2026-10-16T10:09:00Z",
+  "updated": "2026-10-16T12:12:46Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/1aef97e6-77fe-4bae-af51-ff560a737282",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -133,3 +133,11 @@ Codex、Claude、Antigravity 在托管页面发起授权前预检固定回调端
 `npx vitest run tests/unit/cpa-runtime.test.ts tests/unit/cpa.test.ts tests/unit/cpa-oauth.test.ts tests/unit/llm-proxy-refresh.test.ts` 共 78 项通过，日志 `artifacts/cpa-proxy-unit.log`。覆盖有效代理优先、共享系统检测、重启读取变化、无代理不携带旧值、保留并合并 NO_PROXY、补齐回环直连、父环境不变、无关秘密不继承、代理认证不进入配置或状态，以及 CPA 原全局代理覆盖清理。严格类型、范围 ESLint、应用构建及包边界检查通过，对应日志 `artifacts/cpa-proxy-{typecheck,eslint,build,boundary}.log`。
 
 设置上述官方 ZIP、HTML 和摘要环境变量后，`npx playwright test tests/e2e/desktop-cpa.spec.ts --project=desktop --workers=1 --output=artifacts/cpa-proxy/desktop` 共 3 项通过，日志 `artifacts/cpa-proxy-desktop.log`。Electron 测试进程携带本地测试代理环境，真实 CPA 8.0.31 用新建会话及合成授权码进入令牌交换，测试代理收到 `CONNECT auth.openai.com:443` 并主动返回 502，CPA 随后发布认证失败状态；代理不连接上游，未访问真实账号或换取令牌。管理登录、原页手动回调、已有实例、密钥轮换、端口修改及应用重启回归通过。此证据确认环境代理实际参与令牌交换，不能保证真实网络出口被供应商接受。本轮未重新打包 exe。
+
+## CPA 统一代理与授权提示生命周期
+
+已修复仅环境代理导致管理 `requests/api-call` 直连的遗漏：托管全局配置和子进程环境指向本地认证转发入口，额度、订阅、重置次数、HTTP／WebSocket 执行及授权共用 JanusX 有效出口，既有显式请求／账号覆盖遵循 CPA 优先级。首次下载与自动更新也使用相同转发方式。回环管理页和本地控制请求固定直连；共享 HTTP 钩子保留显式 agent，Undici 调整为与内置 fetch 兼容的 7.x。授权提示绑定当前会话，成功／失败／取消／超时后清除；详细边界与取舍归[服务集成](../workbench/service-integrations.md)。
+
+`npx vitest run tests/unit/cpa-proxy.test.ts tests/unit/cpa-runtime.test.ts tests/unit/cpa-oauth.test.ts tests/unit/cpa.test.ts tests/unit/cpa-installer.test.ts tests/unit/llm-proxy-refresh.test.ts` 共 110 项通过，日志 `artifacts/cpa-routing-unit-final2.log`。`npm run test --workspace=@janusx/llm-core -- --run` 共 76 项通过，日志 `artifacts/cpa-routing-core-final.log`。新增证据包括代理认证、新连接切换出口、NO_PROXY 域名／端口／IPv4／IPv6 网段、回环直连、启动与停止竞争、完整 HTTPS 响应和证书校验、真实内置 fetch、首次下载取消与体积限制，以及授权成功／失败／取消／超时／迟到结果。主项目严格类型、llm-core 类型与构建、范围 ESLint、应用构建和包边界检查通过，日志 `artifacts/cpa-routing-{typecheck-final2,core-typecheck,core-build,eslint-final2,build-final4,boundary-final}.log`。llm-core 老文件直接套根 ESLint 有既有 any／require 规则错误，本次未清理这些历史写法；范围 ESLint 限 `src/main/cpa`。
+
+设置前述官方资源变量，`npx playwright test tests/e2e/desktop-cpa.spec.ts --project=desktop --workers=1 --output=artifacts/cpa-routing/desktop-complete` 共 3 项通过，日志 `artifacts/cpa-routing-desktop-complete.log`。真实 CPA 8.0.31／CPAMC 1.26.5 验证原回调失败与取消后提示清除、同一代理收到令牌和 HTTPS 额度 CONNECT；向隔离账号目录上传合成 Codex 凭据，再由真实管理接口解析 authIndex 与 `$TOKEN$`，四条额度／订阅／重置查询与消费请求经本地 HTTP 模拟出口返回 200。已有实例、网页登录持久化、自定义密钥、端口变更、账号目录保留与退出释放回归通过。此证据不等于真实供应商额度或消费验收。尝试隔离 TLS 供应商时被 Windows Go 的系统证书校验拒绝，未改系统信任或关闭 TLS；成功状态清除有单测，真实 CPA 成功令牌交换／刷新未自动验收。初次构建产物竞争及后续诊断失败不计入通过证据。本轮未重新打包 exe。

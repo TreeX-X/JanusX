@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-16T09:17:17Z",
+  "updated": "2026-10-16T12:12:46Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -50,7 +50,7 @@ The workspace embeds a real browsing panel on isolated per-tab views with a pers
 
 ## Native view visibility and load failures
 
-Host-owned service surfaces can select a separate persistent partition and restrict navigation to HTTP(S) through internal `BrowserSurfaceOptions`. These options are not part of the browser IPC request. CPA uses a partition derived from its configured origin; ordinary browsing retains `persist:janusx-browser`. Each guest explicitly disables Node integration, has no preload, and keeps sandbox, contextIsolation and webSecurity enabled. Restricted surfaces reject local files, credential-bearing URLs and custom schemes in creation, navigation, redirects and popups; allowed HTTP(S) popups become tabs. An internal `openExternalUrl` handler can consume selected HTTP(S) popups, navigation and redirects without creating a guest tab; managed CPA uses it for vetted OAuth authorization endpoints. Ordinary surfaces keep their existing behavior. They do not remove CSP or frame headers. CPA configuration, login persistence and known compatibility limits belong to [service integrations](../workbench/service-integrations.md).
+Host-owned service surfaces can select a separate persistent partition and restrict navigation to HTTP(S) through internal `BrowserSurfaceOptions`. These options are not part of the browser IPC request. CPA uses a partition derived from its configured origin; its managed local control page explicitly uses direct networking so system proxy/PAC settings cannot capture management traffic. Provider traffic leaves through the managed backend's shared proxy relay, while the system browser handles authorization pages. Ordinary browsing retains `persist:janusx-browser`. Each guest explicitly disables Node integration, has no preload, and keeps sandbox, contextIsolation and webSecurity enabled. Restricted surfaces reject local files, credential-bearing URLs and custom schemes in creation, navigation, redirects and popups; allowed HTTP(S) popups become tabs. An internal `openExternalUrl` handler can consume selected HTTP(S) popups, navigation and redirects without creating a guest tab; managed CPA uses it for vetted OAuth authorization endpoints. Ordinary surfaces keep their existing behavior. They do not remove CSP or frame headers. CPA configuration, login persistence and known compatibility limits belong to [service integrations](../workbench/service-integrations.md).
 
 Electron WebContentsView children render above the shell DOM. CSS z-index cannot put an error panel or quit confirmation above them. The main process attaches an active tab only after receiving positive layout bounds and while that tab has no main-frame load error. Zero bounds detach the view without closing its session; load and tab events respect that hidden state. Closing a tab removes it from the surface before closing its webContents, so close events cannot publish a destroyed tab.
 

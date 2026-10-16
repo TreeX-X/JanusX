@@ -5,7 +5,7 @@ import { resolve } from 'path'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin({
-      exclude: ['@janusx/llm-core', '@janusx/llm-core/model-registry']
+      exclude: ['@janusx/llm-core', '@janusx/llm-core/model-registry', 'proxy-chain']
     })],
     build: {
       rollupOptions: {
