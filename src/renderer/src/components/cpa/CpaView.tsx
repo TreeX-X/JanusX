@@ -78,6 +78,11 @@ export function CpaView({ active }: ExtensionViewProps) {
       </button>
       <button type="button" onClick={() => setConfigure(true)}><Settings size={13} aria-hidden="true" />{t('common:cpa.configure')}</button>
     </div>
+    {settings?.mode === 'managed' && shouldOpen && status?.oauthFallback && <div className={styles.oauthNotice} role="status" data-cpa-oauth-fallback>
+      <strong>{t('common:cpa.oauthManual', { provider: status.oauthFallback.provider, port: status.oauthFallback.port })}</strong>
+      <p>{t(`common:cpa.oauthReason.${status.oauthFallback.reason}`)} {t('common:cpa.oauthManualHelp')}</p>
+    </div>}
+    {settings?.mode === 'managed' && status?.oauthBrowserError && <p className={styles.oauthNotice} role="alert">{t('common:cpa.oauthBrowserFailed')}</p>}
     {settings?.mode === 'managed' && !settings.enabled ? <div className={styles.setup}><CpaSettingsPanel /></div>
       : !shouldOpen ? <div className={styles.message}>
         <p>{t('common:cpa.phase.stopped')}</p>

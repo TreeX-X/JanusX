@@ -2,6 +2,8 @@
 .shell > [data-carrier] { flex: 1; height: auto; min-height: 0; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--shell-border); font-size: 11px; }
 .toolbar > span { flex: 1; }
+.oauthNotice { padding: 10px 12px; border-bottom: 1px solid var(--shell-border); color: var(--shell-text); font-size: 12px; line-height: 1.6; }
+.oauthNotice p { margin: 4px 0 0; color: var(--shell-muted); }
 .toolbar button, .actions button, .message button, .dialogFooter button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--shell-border); border-radius: 5px; background: var(--shell-card); color: var(--shell-text); font-size: 11px; cursor: pointer; }
 .shell button:hover, .settings button:hover, .dialogFooter button:hover { background: var(--shell-hover); }
 .shell button:focus-visible, .settings button:focus-visible, .settings input:focus-visible, .dialogFooter button:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 2px; }

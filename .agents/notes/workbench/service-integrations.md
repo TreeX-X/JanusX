@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-14",
-  "updated": "2026-10-16T08:45:24Z",
+  "updated": "2026-10-16T09:17:17Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -48,7 +48,7 @@ CPA 是官方集成，待市场建立后可作为推荐项。主要用途为查�
 
 中部通过原生 `WebContentsView` 加载既有网页，不使用 iframe 或删除嵌入限制响应头。CPA 按地址 origin 的 SHA-256 前 24 位选择 `persist:janusx-cpa-*` 独立持久分区，与普通浏览器及其他 CPA origin 隔离。同一 origin 的路径共用登录；关闭页面释放视图，保留该分区的网页登录数据。跨项目、重新打开与应用重启可复用页面自己记住的登录。
 
-网页没有 preload、Node 或 JanusX 完整桥，启用 sandbox、contextIsolation 与 webSecurity；固定 CPA IPC 仅允许主窗口主框架调用。HTTP／HTTPS 弹窗转为页面内标签，自定义协议和本地文件导航被拒绝；OAuth 等需要系统窗口的流程尚未验证，顶部保留“在浏览器打开”。打开对话框时原生视图让位，关闭和停用释放界面资源。此承载规则不构成第三方插件的权限桥。
+网页没有 preload、Node 或 JanusX 完整桥，启用 sandbox、contextIsolation 与 webSecurity；固定 CPA IPC 仅允许主窗口主框架调用。一般 HTTP／HTTPS 弹窗转为页面内标签，自定义协议和本地文件导航被拒绝。托管模式将核对过的 OpenAI、Claude 和 Google HTTPS OAuth 授权端点交给系统浏览器，授权弹窗和页面跳转不创建 guest 标签；打开失败显示复制链接提示。已有实例模式不改写其 OAuth 请求或弹窗策略，顶部保留“在浏览器打开”。打开对话框时原生视图让位，关闭和停用释放界面资源。此承载规则不构成第三方插件的权限桥。
 
 原版前端“记住密码”控制其浏览器分区中的登录保存，该前端的存储不获得宿主安全存储承诺。托管管理密钥另由主进程使用 Electron safeStorage 加密持久化，无系统加密能力时拒绝启动；不注入网页，需显式“复制管理密钥”后粘贴登录。宿主模型凭据不使用这份管理登录。
 
@@ -68,7 +68,11 @@ CPA 是官方集成，待市场建立后可作为推荐项。主要用途为查�
 
 本地设置提供只写的新管理密钥输入框、显示／隐藏和随机生成，保存时单独传递给可信主进程，不进入 settings、状态或响应。允许 8–128 位可打印 ASCII 字符且不含空格，避免 HTTP 请求头不支持的内容；前端与主进程均校验，非法输入在停止进程或持久化前被拒绝。留空保留现有密钥，首次未设置仍自动生成；随机按钮仅修改待保存值。保存后清空输入，原密钥不回填。运行中先停止自有实例，加密原子保存成功后更新内存并启动，关闭旧页面；账号和 API Key 保留。加密或文件写入失败保留原密钥，此时服务可能已停止，可再次启动。修改后原版前端记住的旧密钥失效，用户需使用新密钥重新登录；不会注入或改写原页面的登录存储。
 
-Windows OAuth 已发现独立于管理登录的端口限制。2026-10-16 本机 CPA 日志显示 Codex 网页请求 `oauth/auth-url?provider=codex&is_webui=true` 因绑定 `0.0.0.0:1455` 被系统拒绝而返回 500 `failed to start callback server`；`netsh interface ipv4 show excludedportrange protocol=tcp` 与 IPv6 查询均含 `1426–1525`，Node 实测在 `127.0.0.1`、`0.0.0.0`、`::1` 绑定 1455 全部返回 `EACCES`，当时无该端口监听。上游 v8.0.31 的 `auth_files_oauth_callback.go` 固定 `codexCallbackPort = 1455`，管理页登录流程不读取 CLI 的 `--oauth-callback-port`；修改 JanusX 的 8317 服务端口无效。后端非 WebUI 流程可不启动转发器，并接受原页面已有的手动提交回调地址能力，但 JanusX 尚未实现端口预检或该流程兜底，不能宣称 OAuth 已验收。来源为同版本 `auth_files_provider_oauth.go`、`oauth_callback.go` 和 CPAMC 1.26.5；未修改系统排除范围或虚拟化服务，未发起实际供应商授权。
+Windows OAuth 回调端口独立于管理端口。2026-10-16 本机 Codex 请求因绑定 `0.0.0.0:1455` 返回 500 `failed to start callback server`；IPv4／IPv6 排除范围均含 `1426–1525`，在回环、全 IPv4 和 IPv6 回环地址实测绑定 1455 全部为 `EACCES`，当时无该端口监听。上游 v8.0.31 固定 Codex 1455、Claude 54545、Antigravity 51121；管理页登录不读取 CLI 的 `--oauth-callback-port`，修改 8317 无效。来源为同版本 `auth_files_oauth_callback.go`、`auth_files_provider_oauth.go`、`oauth_callback.go` 及供应商常量，未改系统排除范围或虚拟化服务。
+
+`src/main/cpa/oauth.ts` 在托管 CPA 的独立分区中，仅对同 origin、精确 `/v8/management/oauth/auth-url` 路径的 GET WebUI 请求预检上述固定端口，按上游相同的全 IPv4 地址绑定后立即释放。可用时保留自动回调；被系统限制、被占用或探测失败时，将同源请求重定向为 `is_webui=false`，由 CPA 生成不启动固定端口转发器的授权会话。宿主显示供应商、端口、原因和操作说明；用户在系统浏览器授权后，即使 localhost 无法访问，也复制最终完整地址至原页面“回调 URL”提交。PKCE、state、五分钟有效期、取消、回调校验与令牌交换仍由原前后端负责；宿主不读取请求密钥、授权码或令牌，不注入页面。设备码和其他供应商流程不套用这些端口。
+
+关闭页面、停止服务或退出时移除请求监听并清空提示，未完成的端口探测不再更新已关闭页面。探测释放至 CPA 实际绑定间仍有竞争窗口，不能保证探测成功后不会发生上游绑定失败；已有实例和独立系统浏览器打开的管理页不经过此分区拦截。兼容边界以 CPA 8.0.31／CPAMC 1.26.5 为准，上游改变路由或固定端口需重新核对。实际供应商登录与令牌交换仍需账号验收，不能从生成链接和提交回调推导为成功获得令牌；完整验证证据归阶段计划。
 
 自动更新默认开启，运行时至多每日检查一次并暂存官方稳定前后端，下一次 CPA 启动应用。“更新并重启 CPA”立即检查、下载和重启。更新下载失败保留运行版本；新版本未就绪时恢复启动前配置并尝试当前版本，就绪后才切换 current 指针，账号目录始终保留。前后端主版本过滤及启动探测不是对未来全部小版本的兼容承诺；若供应商查询或 OAuth 后续才出现问题，仍需单独诊断。
 
@@ -92,7 +96,7 @@ Figma 候选方案分为服务连接、项目关联和 Agent 工具三部分：�
 
 只读查看 CPA 提交 `0d18d3b365be000eeaee7de4615f9da596b2059d` 的 [项目说明](https://github.com/router-for-me/CLIProxyAPI/blob/0d18d3b365be000eeaee7de4615f9da596b2059d/README_CN.md)，其中提供 [管理 API 文档入口](https://help.router-for.me/cn/management/api)。S3 兼容性验证使用 [CLI Proxy API Management Center v1.26.5](https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/tag/v1.26.5) 的原版 `management.html`，SHA-256 为 `57558cd023475674634a114824b014d3e5ac161f6f3791e3d86b6adab962a700`。该版本要求 CPA 8.0.0 及以上，调用 `/v8/management`；这不是 JanusX 对所有前端版本的兼容承诺。
 
-S3 原前端验证使用模拟管理 API；后续托管验证使用校验后的真实 Windows CPA 8.0.31 与 CPAMC 1.26.5，确认本地启动、管理登录和配额页导航。未使用真实供应商账号，未验证供应商额度、OAuth 或重置操作。前端重置字段因供应商而异，不能承诺每个账号均支持重置次数；调用统计不等于供应商剩余订阅额度。完整命令与证据范围见阶段计划。
+S3 原前端验证使用模拟管理 API；后续托管验证使用校验后的真实 Windows CPA 8.0.31 与 CPAMC 1.26.5，确认本地启动、管理登录和配额页导航。OAuth 验证限定为端口兜底、授权链接交接、原页回调提交与后端状态／取消处理；未使用真实供应商账号，未验证成功换取令牌、供应商额度或重置操作。前端重置字段因供应商而异，不能承诺每个账号均支持重置次数；调用统计不等于供应商剩余订阅额度。完整命令与证据范围见阶段计划。
 
 ## Open questions
 

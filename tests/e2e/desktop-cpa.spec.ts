@@ -63,6 +63,60 @@ async function freePort(): Promise<number> {
   return port
 }
 
+async function verifyManagedOAuth(app: ElectronApplication, page: Page, web: Page, origin: string, key: string): Promise<void> {
+  // Keep authorization outside the test: record the system-browser handoff without opening a provider.
+  await app.evaluate(({ shell }) => {
+    ;(globalThis as any).__cpaOAuthOpened = []
+    shell.openExternal = async (url: string) => { (globalThis as any).__cpaOAuthOpened.push(url) }
+  })
+  await web.getByRole('link', { name: /^(OAuth Login|OAuth 登录)$/ }).click()
+  await web.getByRole('button', { name: 'Codex', exact: true }).click()
+  await expect(page.locator('[data-cpa-oauth-fallback]')).toContainText('1455')
+  const callback = web.getByPlaceholder('http://localhost:1455/auth/callback?code=...&state=...').first()
+  await expect(callback).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('oauth-manual-fallback.png') })
+  await web.screenshot({ path: test.info().outputPath('oauth-original-callback-form.png') })
+  const tabsBefore = await page.evaluate(() => (window as any).electron.browser.getState('integration:cpa').then((state: any) => state.tabs.length))
+  await web.getByRole('button', { name: /^(Open Link|打开链接)$/i }).first().click()
+  await expect.poll(() => app.evaluate(() => (globalThis as any).__cpaOAuthOpened.length)).toBe(1)
+  const auth = await app.evaluate(() => {
+    const url = (globalThis as any).__cpaOAuthOpened[0] as string
+    return { url, state: new URL(url).searchParams.get('state')! }
+  })
+  // Rendering this server-generated link also verifies the redirected request kept management authentication.
+  expect(new URL(auth.url).origin === 'https://auth.openai.com').toBe(true)
+  expect(Boolean(auth.state)).toBe(true)
+  expect(await page.evaluate(() => (window as any).electron.browser.getState('integration:cpa').then((state: any) => state.tabs.length))).toBe(tabsBefore)
+
+  const wrongState = await fetch(`${origin}/v8/management/oauth/callback`, {
+    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider: 'codex', redirect_url: 'http://localhost:1455/auth/callback?error=access_denied&state=unknown-test-state' }),
+  })
+  expect(wrongState.status).toBe(404)
+  await wrongState.body?.cancel()
+  const wrongProvider = await fetch(`${origin}/v8/management/oauth/callback`, {
+    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider: 'claude', state: auth.state, error: 'access_denied' }),
+  })
+  expect(wrongProvider.status).toBe(400)
+  await wrongProvider.body?.cancel()
+  await callback.fill(`http://localhost:1455/auth/callback?error=access_denied&state=${encodeURIComponent(auth.state)}`)
+  await web.getByRole('button', { name: /^(Submit Callback URL|提交回调 URL)$/i }).first().click()
+  await expect.poll(async () => {
+    const result = await fetch(`${origin}/v8/management/oauth/status?state=${encodeURIComponent(auth.state)}`, { headers: { Authorization: `Bearer ${key}` } })
+    return (await result.json() as { status: string }).status
+  }).toBe('error')
+  // A fresh pending flow remains cancellable through the unchanged backend contract.
+  const cancelled = await web.evaluate(async ({ key }) => {
+    const headers = { Authorization: `Bearer ${key}` }
+    const result = await fetch('/v8/management/oauth/auth-url?provider=codex&is_webui=true', { headers })
+    const auth = await result.json()
+    const response = await fetch(`/v8/management/oauth/session?state=${encodeURIComponent(auth.state)}`, { method: 'DELETE', headers })
+    return response.json()
+  }, { key })
+  expect(cancelled.cancelled).toBe(true)
+}
+
 async function cleanup(app: ElectronApplication | undefined, server: Server, root: string) {
   if (app) await app.close()
   await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -195,7 +249,16 @@ test('managed CPA downloads verified components, runs the real Windows service a
   const root = await mkdtemp(join(tmpdir(), 'janusx-cpa-managed-'))
   let app: ElectronApplication | undefined
   const occupied = createTcpServer()
+  const callbackBlocker = createTcpServer()
   try {
+    // Deterministically exercise fallback, including machines where Windows has not excluded 1455.
+    await new Promise<void>((resolve, reject) => {
+      callbackBlocker.once('error', (error: NodeJS.ErrnoException) => {
+        if (error.code === 'EACCES' || error.code === 'EADDRINUSE') resolve()
+        else reject(error)
+      })
+      callbackBlocker.listen(1455, '0.0.0.0', resolve)
+    })
     const booted = await boot(root); app = booted.app
     const { page } = booted
     // Only transport is replaced. The production installer, checksums, extraction,
@@ -268,6 +331,7 @@ test('managed CPA downloads verified components, runs the real Windows service a
     await expect(quota).toBeVisible()
     await quota.click()
     await expect.poll(() => web.url()).toContain('quota')
+    await verifyManagedOAuth(app, page, web, origin, key)
     const configPath = join(root, 'profile', 'janusx', 'components', 'cpa', 'config.yaml')
     const accountSentinel = join(root, 'profile', 'janusx', 'components', 'cpa', 'accounts', '.preservation-test')
     await writeFile(accountSentinel, 'keep-across-restarts')
@@ -277,6 +341,7 @@ test('managed CPA downloads verified components, runs the real Windows service a
     await page.locator('[data-tab-id*="janusx.cpa"]').hover()
     await page.locator('[data-tab-id*="janusx.cpa"] [data-tab-close]').click()
     expect(await page.evaluate(() => (window as any).electron.cpa.status().then((value: any) => value.phase))).toBe('running')
+    expect(await page.evaluate(() => (window as any).electron.cpa.status().then((value: any) => value.oauthFallback))).toBeUndefined()
     expect((await fetch(`${origin}/management.html`)).status).toBe(200)
 
     await page.getByTitle('Settings', { exact: true }).click()
@@ -343,6 +408,7 @@ test('managed CPA downloads verified components, runs the real Windows service a
   } finally {
     if (app) await app.close()
     if (occupied.listening) await new Promise<void>((resolve) => occupied.close(() => resolve()))
+    if (callbackBlocker.listening) await new Promise<void>((resolve) => callbackBlocker.close(() => resolve()))
     await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
 })

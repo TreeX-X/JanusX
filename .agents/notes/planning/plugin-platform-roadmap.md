@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "draft",
   "created": "2026-10-16",
-  "updated": "2026-10-16T07:36:56Z",
+  "updated": "2026-10-16T09:23:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/1aef97e6-77fe-4bae-af51-ff560a737282",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -117,3 +117,11 @@ CPA 通过 `janusx.cpa` 注册应用级中部页面，设置的“应用设置 �
 浏览器回归 `extensions.spec.ts` 与 `builtin-extensions.spec.ts` 7 项通过，结果在 `artifacts/cpa-managed/browser`。严格类型检查、生产变更范围 ESLint、构建、i18n、包边界和 Notes 检查通过；全仓主题检查仍被未改动的 About 页两处固定颜色阻断。Windows 子进程仍继承父进程权限，未实现降权；macOS／Linux 下载分支未作真实启动验收，不能从 Windows 结果推导跨平台完成。
 
 本地管理密钥现支持自定义、显示／隐藏及随机生成草稿，留空保留原值；具体约束和持久化边界归[服务集成](../workbench/service-integrations.md)。`npx vitest run tests/unit/cpa.test.ts tests/unit/cpa-runtime.test.ts tests/unit/cpa-installer.test.ts tests/unit/browser-ipc-contract.test.ts` 共 62 项通过，日志 `artifacts/cpa-custom-key-unit.log`，覆盖密钥校验、停止后修改、加密失败保留原值、生成失败可重试及重建运行时复用。设置上述三个资源环境变量后，`npx playwright test tests/e2e/desktop-cpa.spec.ts --project=desktop --workers=1 --output=artifacts/cpa-custom-key/desktop` 共 3 项通过，日志 `artifacts/cpa-custom-key-desktop.log`。真实 Windows 托管用例新增首次自定义、随机生成／显示切换、同端口修改后旧密钥 401／新密钥 200、新密钥原版前端登录、输入清空及整应用重启后复用，账号目录测试文件保留，设置 JSON 与 CPA YAML 均无明文管理密钥。设置页截图已检查；网络仍用本地校验资源，不含真实供应商账号。最终构建、严格类型检查、生产变更范围 ESLint、i18n、包边界和 Notes 检查通过，本轮未重新打包 exe。
+
+## 托管 OAuth 回调兼容
+
+Codex、Claude、Antigravity 在托管页面发起授权前预检固定回调端口，不可用时复用原前端的手动回调；核对过的授权端点交给系统浏览器。实现与竞争窗口、已有实例边界归[服务集成](../workbench/service-integrations.md)。不改系统端口排除、不终止用户进程、不改上游二进制，也不接管账号令牌。
+
+`npx vitest run tests/unit/cpa-oauth.test.ts tests/unit/cpa.test.ts tests/unit/cpa-runtime.test.ts tests/unit/browser-surface-manager.test.ts tests/unit/browser-ipc-contract.test.ts` 共 107 项通过，日志 `artifacts/cpa-oauth-unit.log`。覆盖三种供应商端口、可用时保留自动流程、限制／占用／探测失败、无关请求不改写、关闭中探测取消、真实监听探测、授权端点边界、系统浏览器失败与关闭后迟到失败不污染状态。严格类型、生产变更范围 ESLint、应用构建、i18n 和包边界通过，对应 `artifacts/cpa-oauth-*.log`；Notes 检查 315 份、0 错误、17 条已有外部链接诊断。
+
+设置本节前述三个官方资源环境变量，`npx playwright test tests/e2e/desktop-cpa.spec.ts --project=desktop --workers=1 --output=artifacts/cpa-oauth/desktop-final` 共 3 项通过，日志 `artifacts/cpa-oauth-desktop-final.log`。真实 Windows CPA 8.0.31 和原版 CPAMC 1.26.5 在 1455 系统限制下成功生成授权链接，证明同源请求改写后仍通过管理认证；实际点击原页面链接，主进程替换的 shell 记录外部交接且 guest 标签不增加。原页面提交测试用 `access_denied` 回调后后端进入失败状态，不匹配 state 和供应商被拒绝，新的待授权会话可取消；关闭后兜底提示清空，原密钥轮换、修改端口、重启、账号目录保留及已有实例两项回归通过。已检查宿主提示与原页回调表单两张截图。此测试没有打开真实供应商登录页或成功换取令牌，不能作为真实供应商登录／额度验收。最初的定位器错误和一次测试 worker 异常不作通过证据。本轮未重新打包 exe。

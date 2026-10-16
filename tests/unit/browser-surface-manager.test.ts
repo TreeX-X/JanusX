@@ -176,6 +176,26 @@ describe('BrowserSurfaceManager', () => {
     expect(manager.createSurface({ surfaceId: 'invalid-cpa', carrier: 'pane', url: 'file:///C:/local' }, { httpOnly: true }).success).toBe(false)
   })
 
+  it('hands selected service authorization popups and redirects to its host without creating guest tabs', () => {
+    const authUrl = 'https://auth.openai.com/oauth/authorize?state=fixture'
+    const openExternalUrl = vi.fn((url: string) => url === authUrl)
+    manager.createSurface({ surfaceId: 'cpa', carrier: 'pane', url: 'http://localhost:8317/management.html' }, { httpOnly: true, openExternalUrl })
+    const view = h.MockWebContentsView.instances[0]
+    const popup = view.webContents.setWindowOpenHandler.mock.calls[0][0] as (details: { url: string }) => unknown
+    expect(popup({ url: authUrl })).toEqual({ action: 'deny' })
+    expect(manager.getState('cpa')!.tabs).toHaveLength(1)
+    for (const event of ['will-navigate', 'will-redirect']) {
+      const preventDefault = vi.fn()
+      view.webContents.emit(event, { preventDefault }, authUrl)
+      expect(preventDefault).toHaveBeenCalledOnce()
+      preventDefault.mockClear()
+      view.webContents.emit(event, { preventDefault }, 'http://localhost:8317/management.html#/quota')
+      expect(preventDefault).not.toHaveBeenCalled()
+    }
+    popup({ url: 'https://example.com/help' })
+    expect(manager.getState('cpa')!.tabs).toHaveLength(2)
+  })
+
   it('attaches only the active tab and keeps others detached', () => {
     manager.createSurface({ surfaceId: 's1', carrier: 'pane' })
     manager.setBounds('s1', { x: 10, y: 20, width: 300, height: 200 })

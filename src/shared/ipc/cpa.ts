@@ -24,6 +24,11 @@ export interface CpaSettings {
   port?: number
   autoUpdate?: boolean
 }
+export interface CpaOAuthFallback {
+  provider: 'codex' | 'claude' | 'antigravity'
+  port: number
+  reason: 'restricted' | 'occupied' | 'unavailable'
+}
 export interface CpaStatus {
   phase: 'not-installed' | 'stopped' | 'downloading' | 'starting' | 'running' | 'failed'
   version?: string
@@ -32,6 +37,8 @@ export interface CpaStatus {
   error?: string
   updateError?: string
   pid?: number
+  oauthFallback?: CpaOAuthFallback
+  oauthBrowserError?: boolean
 }
 export interface CpaAPI {
   getSettings(): Promise<CpaSettings>

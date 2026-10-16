@@ -34,6 +34,7 @@ interface BrowserSurface {
 export interface BrowserSurfaceOptions {
   partition?: string
   httpOnly?: boolean
+  openExternalUrl?: (url: string) => boolean
 }
 
 export interface BrowserSurfaceManagerDeps {
@@ -298,7 +299,7 @@ export class BrowserSurfaceManager {
     /*-- target=_blank / window.open 转为 surface 内新 tab，不跳出外部浏览器 --*/
     view.webContents.setWindowOpenHandler((details) => {
       if (details.url.startsWith('http://') || details.url.startsWith('https://')) {
-        this.openTab(surface.surfaceId, details.url)
+        if (!surface.options.openExternalUrl?.(details.url)) this.openTab(surface.surfaceId, details.url)
       } else if (!surface.options.httpOnly) {
         void shell.openExternal(details.url)
       }
@@ -308,7 +309,7 @@ export class BrowserSurfaceManager {
     if (surface.options.httpOnly) {
       // Service pages cannot navigate into local files or launch custom schemes.
       const guardNavigation = (event: Electron.Event, targetUrl: string): void => {
-        if (!isHttpPage(targetUrl)) event.preventDefault()
+        if (!isHttpPage(targetUrl) || surface.options.openExternalUrl?.(targetUrl)) event.preventDefault()
       }
       view.webContents.on('will-navigate', guardNavigation)
       view.webContents.on('will-redirect', guardNavigation)

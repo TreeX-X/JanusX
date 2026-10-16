@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   update: vi.fn(),
   external: vi.fn(),
   handle: vi.fn(),
+  onBeforeRequest: vi.fn(),
   runtime: { start: vi.fn(), stop: vi.fn(), status: vi.fn(), dispose: vi.fn(), stageUpdate: vi.fn(), copyKey: vi.fn(), setManagementKey: vi.fn(), openLogs: vi.fn() },
 }))
 vi.mock('../../src/main/cpa/runtime', () => ({ CpaRuntime: class {
@@ -16,7 +17,9 @@ vi.mock('../../src/main/cpa/runtime', () => ({ CpaRuntime: class {
   stageUpdate = h.runtime.stageUpdate; copyKey = h.runtime.copyKey; openLogs = h.runtime.openLogs
   setManagementKey = h.runtime.setManagementKey
 } }))
-vi.mock('electron', () => ({ shell: { openExternal: h.external }, ipcMain: { handle: h.handle } }))
+vi.mock('electron', () => ({ shell: { openExternal: h.external }, ipcMain: { handle: h.handle },
+  session: { fromPartition: () => ({ webRequest: { onBeforeRequest: h.onBeforeRequest } }) },
+}))
 vi.mock('../../src/main/config/service', () => ({ configService: {
   get: async () => h.config,
   update: async (partial: object) => { h.update(partial); h.config = { ...h.config, ...partial } },
@@ -50,6 +53,32 @@ describe('CPA page addresses', () => {
 })
 
 describe('CPA global integration service', () => {
+  it('limits external OAuth handoff to managed services and clears hooks and late browser failures on close', async () => {
+    const { service, surfaces } = fixture()
+    h.config = { cpaSettings: { mode: 'managed', enabled: true } }
+    await service.open()
+    expect(h.onBeforeRequest).toHaveBeenLastCalledWith(expect.objectContaining({ urls: expect.any(Array) }), expect.any(Function))
+    const options = (surfaces.createSurface.mock.calls[0] as unknown as [unknown, { openExternalUrl: (url: string) => boolean }])[1]
+    expect(options.openExternalUrl('https://example.com/help')).toBe(false)
+    expect(h.external).not.toHaveBeenCalled()
+    h.external.mockRejectedValueOnce(new Error('no browser'))
+    expect(options.openExternalUrl('https://auth.openai.com/oauth/authorize?state=fixture')).toBe(true)
+    await Promise.resolve()
+    expect((await service.status()).oauthBrowserError).toBe(true)
+    let rejectBrowser!: (error: Error) => void
+    h.external.mockReturnValueOnce(new Promise<void>((_resolve, reject) => { rejectBrowser = reject }))
+    options.openExternalUrl('https://claude.ai/oauth/authorize?state=fixture')
+    await service.close()
+    expect(h.onBeforeRequest).toHaveBeenLastCalledWith(null)
+    rejectBrowser(new Error('late browser failure'))
+    await Promise.resolve()
+    expect(await service.status()).toMatchObject({ oauthBrowserError: false, oauthFallback: undefined })
+    await service.saveSettings({ mode: 'external', managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
+    await service.open()
+    const externalOptions = (surfaces.createSurface.mock.calls[1] as unknown as [unknown, { openExternalUrl?: unknown }])[1]
+    expect(externalOptions.openExternalUrl).toBeUndefined()
+  })
+
   it('applies a write-only custom key between stopping and restarting without returning or persisting plaintext settings', async () => {
     const { service, surfaces } = fixture()
     const settings = { mode: 'managed', enabled: true, port: 18317, autoUpdate: false }
