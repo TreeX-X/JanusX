@@ -9,6 +9,7 @@ import {
 } from 'react'
 import type { RightToolId } from '@/right-tools/types'
 import { isRightToolEnabled } from '@/right-tools/registry'
+import { useExtensionViews } from '@/extensions/react'
 import { useAppStore } from '@/stores/app'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useRightToolStore } from '@/stores/right-tools'
@@ -45,6 +46,7 @@ export function RightDock({
   onResizingChange,
 }: RightDockProps) {
   const { t } = useI18n('common')
+  const extensionViews = useExtensionViews()
   const storedOpenToolIds = useRightToolStore((state) => state.openToolIds)
   const storedActiveToolId = useRightToolStore((state) => state.activeToolId)
   const panelWidth = useRightToolStore((state) => state.panelWidth)
@@ -109,7 +111,7 @@ export function RightDock({
     for (const toolId of storedOpenToolIds) {
       if (!isRightToolEnabled(toolId, { persona: personaEnabled, knowledge: knowledgeEnabled, sessions: sessionsEnabled })) closeTool(toolId)
     }
-  }, [personaEnabled, knowledgeEnabled, sessionsEnabled, storedOpenToolIds, closeTool])
+  }, [personaEnabled, knowledgeEnabled, sessionsEnabled, storedOpenToolIds, closeTool, extensionViews])
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return

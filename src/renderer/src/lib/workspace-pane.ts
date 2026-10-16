@@ -1,4 +1,7 @@
 // Note: pane tree focus with island as sole subagent surface — see .agents/notes/terminal/pane-tree-subagent.md
+// Note: extension views use the same pane lifecycle — see .agents/notes/workbench/requirements/plugin-architecture-forms.md
+import { extensionRegistry } from '@/extensions/registry'
+import type { ExtensionViewId, ExtensionViewScope } from '@/extensions/types'
 
 export type PaneSplitDirection = 'horizontal' | 'vertical'
 export type PaneSplitPlacement = 'before' | 'after'
@@ -29,7 +32,17 @@ export type MarkdownPaneContent = {
   workspaceId?: never
 }
 
-export type PaneContent = TerminalPaneContent | BrowserPaneContent | MarkdownPaneContent
+export type ExtensionPaneContent = {
+  type: 'extension'
+  id: `extension-pane:${string}`
+  viewId: ExtensionViewId
+  scope: ExtensionViewScope
+  projectId: string | null
+  terminalId?: never
+  workspaceId?: never
+}
+
+export type PaneContent = TerminalPaneContent | BrowserPaneContent | MarkdownPaneContent | ExtensionPaneContent
 
 export type WorkspacePaneLeaf = {
   type: 'leaf'
@@ -70,6 +83,22 @@ export function createBrowserPaneContent(surfaceId: string): BrowserPaneContent 
 
 export function createMarkdownPaneContent(panelId: string): MarkdownPaneContent {
   return { type: 'markdown', id: `markdown:${panelId}`, panelId }
+}
+
+export function createExtensionPaneContent(viewId: ExtensionViewId, projectId: string | null): ExtensionPaneContent | null {
+  const view = extensionRegistry.getView(viewId)
+  if (!view || view.location !== 'workspace' || (view.scope === 'project' && !projectId)) return null
+  const scopeId = view.scope === 'project' ? projectId : null
+  return {
+    type: 'extension', id: `extension-pane:${viewId}:${scopeId === null ? 'application' : `project:${encodeURIComponent(scopeId)}`}`,
+    viewId, scope: view.scope, projectId: scopeId,
+  }
+}
+
+export function isAvailableExtensionPane(tab: ExtensionPaneContent): boolean {
+  const view = extensionRegistry.getView(tab.viewId)
+  return view?.location === 'workspace' && view.scope === tab.scope
+    && (tab.scope === 'application' ? tab.projectId === null : typeof tab.projectId === 'string' && tab.projectId.length > 0)
 }
 
 /*-- 找到 pane 树中第一个 Markdown 面板（顶栏入口的"已有则激活"语义） --*/
@@ -401,6 +430,8 @@ export function retainWorkspacePaneContent(
       const tabs = current.tabs.filter((item) =>
         item.type === 'browser'
         || item.type === 'markdown'
+        || (item.type === 'extension' && isAvailableExtensionPane(item)
+          && (item.scope === 'application' || item.projectId === workspaceId))
         || (item.type === 'terminal'
           && item.workspaceId === workspaceId
           && (!terminalIds || terminalIds.has(item.terminalId)))

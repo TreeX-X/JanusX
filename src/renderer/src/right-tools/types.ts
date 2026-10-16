@@ -1,15 +1,20 @@
 import type { TypedI18nKey } from '@/i18n/types'
+import type { ExtensionViewId } from '@/extensions/types'
+import type { LucideIcon } from 'lucide-react'
 
-export type RightToolId = 'files' | 'git' | 'assist' | 'persona' | 'review' | 'sessions'
+export type BuiltinRightToolId = 'files' | 'git' | 'assist' | 'persona' | 'review' | 'sessions'
+export type RightToolId = BuiltinRightToolId | ExtensionViewId
 
-export type RightToolIconKind = RightToolId
+export type RightToolIconKind = BuiltinRightToolId
 
 export interface RightToolDefinition {
   id: RightToolId
-  titleKey: TypedI18nKey
-  shortTitleKey: TypedI18nKey
-  ariaLabelKey: TypedI18nKey
-  icon: RightToolIconKind
+  titleKey?: TypedI18nKey
+  shortTitleKey?: TypedI18nKey
+  ariaLabelKey?: TypedI18nKey
+  title?: string
+  icon?: RightToolIconKind
+  iconComponent?: LucideIcon
   order: number
   instancePolicy: 'single'
   mountPolicy: 'while-open'

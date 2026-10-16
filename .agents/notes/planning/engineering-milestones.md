@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "draft",
   "created": "2026-10-14",
-  "updated": "2026-10-15T10:26:11.296Z",
+  "updated": "2026-10-16T03:00:24Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/1aef97e6-77fe-4bae-af51-ff560a737282",
   "tags": ["milestone","memo","roadmap","schedule"]
 }
@@ -31,7 +31,7 @@
 
 ## 未归入节点
 
-- （暂无未归入点；对话中讨论的零散需求或临时想法可先记于此处）
+- **插件平台**：按[插件平台分阶段交付计划](plugin-platform-roadmap.md)推进扩展核心 → 文件树、Git、会话管理内置扩展迁移 → CPA 内嵌与中部／右侧双区域验证 → 第三方本地导入与调试 → 市场分发。尚未指定版本或日期，先交付扩展基础，不以市场页面作为完成标志。
 
 ## Intent
 

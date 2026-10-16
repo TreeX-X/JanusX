@@ -8,6 +8,8 @@ import {
   collapsePaneTree,
   createBrowserPaneContent,
   createMarkdownPaneContent,
+  createExtensionPaneContent,
+  isAvailableExtensionPane,
   createTerminalPaneContent,
   findFirstMarkdownPaneContent,
   findFirstBrowserPaneContent,
@@ -26,11 +28,14 @@ import {
   splitPaneTree,
   unsplitPaneTree,
   type PaneDropEdge,
+  type ExtensionPaneContent,
   type PaneSplitDirection,
   type WorkspacePaneNode,
 } from '@/lib/workspace-pane'
 import { createBrowserSurface, openBrowserTab } from '@/services/browser'
 import { activePaneScopeId } from '@/lib/workspace-front-surface'
+import { extensionRegistry } from '@/extensions/registry'
+import type { ExtensionViewId } from '@/extensions/types'
 
 type TerminalSnapshot = {
   terminals: Terminal[]
@@ -73,6 +78,7 @@ interface WorkspaceStore {
   addBrowserSurfaceToTree: (surfaceId: string) => void
   openBrowserInWorkspace: (url?: string) => Promise<void>
   openMarkdownInWorkspace: () => void
+  openExtensionView: (viewId: ExtensionViewId) => void
   splitPane: (paneId: string | null, direction: PaneSplitDirection) => void
   unsplitPane: (paneId: string | null) => void
   collapsePaneLayout: () => void
@@ -139,6 +145,18 @@ function sanitizeWorkspaceSnapshot(snapshot: TerminalSnapshot, workspaceId: stri
     focusedPaneId: focus.paneId,
     focusedTabId: focus.tabId,
   }
+}
+
+function filterExtensionPanes(
+  tree: WorkspacePaneNode | null,
+  keep: (tab: ExtensionPaneContent) => boolean,
+): WorkspacePaneNode | null {
+  for (const leaf of getLeafPanes(tree)) {
+    for (const tab of leaf.tabs) {
+      if (tab.type === 'extension' && !keep(tab)) tree = removePaneContentFromTree(tree, tab.id)
+    }
+  }
+  return tree
 }
 
 function allowsTerminalPresentation(
@@ -248,12 +266,14 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const s = get()
     if (s.activeWorkspaceId === id) return
     // 保存当前工作区的终端快照
+    const globalViews = getLeafPanes(s.paneTree).flatMap((leaf) => leaf.tabs)
+      .filter((tab) => tab.type === 'extension' && tab.scope === 'application' && isAvailableExtensionPane(tab))
     const snapshots = { ...s.terminalSnapshots }
     if (s.activeWorkspaceId) {
       snapshots[s.activeWorkspaceId] = sanitizeWorkspaceSnapshot({
         terminals: s.terminals,
         activeTerminalId: s.activeTerminalId,
-        paneTree: s.paneTree,
+        paneTree: filterExtensionPanes(s.paneTree, (tab) => tab.scope !== 'application'),
         focusedPaneId: s.focusedPaneId,
         focusedTabId: s.focusedTabId,
       }, s.activeWorkspaceId)
@@ -261,15 +281,22 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     // 恢复目标工作区的终端快照;文件树属于旧工作区,立即清空避免串台
     const saved = snapshots[id] ? sanitizeWorkspaceSnapshot(snapshots[id], id) : null
     if (saved) snapshots[id] = saved
+    let paneTree = saved?.paneTree ?? null
+    for (const content of globalViews) {
+      paneTree = addPaneContentToTree(paneTree, saved?.focusedPaneId ?? null, content, createPaneId()).tree
+    }
+    const focus = resolvePaneFocus(paneTree, saved?.focusedPaneId ?? null, saved?.focusedTabId ?? null)
+    // Adding a global view activates its tab; restore the destination's focus.
+    if (focus.paneId) paneTree = activatePaneTab(paneTree, focus.paneId, focus.tabId)
     set({
       activeWorkspaceId: id,
       fileTree: [],
       activeFilePath: null,
       terminals: saved?.terminals ?? [],
-      activeTerminalId: saved?.activeTerminalId ?? null,
-      paneTree: saved?.paneTree ?? null,
-      focusedPaneId: saved?.focusedPaneId ?? null,
-      focusedTabId: saved?.focusedTabId ?? null,
+      activeTerminalId: focus.terminalId,
+      paneTree,
+      focusedPaneId: focus.paneId,
+      focusedTabId: focus.tabId,
       terminalSnapshots: snapshots,
     })
   },
@@ -485,6 +512,17 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       }
     })
   },
+  openExtensionView: (viewId) => {
+    const content = createExtensionPaneContent(viewId, get().activeWorkspaceId)
+    if (!content) return
+    set((state) => {
+      const result = addPaneContentToTree(state.paneTree, state.focusedPaneId, content, createPaneId())
+      return {
+        paneTree: result.tree, focusedPaneId: result.focus.paneId,
+        focusedTabId: result.focus.tabId, activeTerminalId: result.focus.terminalId,
+      }
+    })
+  },
   splitPane: (paneId, direction) =>
     set((s) => {
       const result = splitPaneTree(s.paneTree, paneId ?? s.focusedPaneId, direction, createPaneId('split'), createPaneId())
@@ -694,3 +732,22 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   updateFileTree: (fileTree) => set({ fileTree }),
   setActiveFilePath: (path) => set({ activeFilePath: path }),
 }))
+
+// Unregistration clears both the visible tree and inactive project snapshots.
+extensionRegistry.subscribe(() => {
+  const state = useWorkspaceStore.getState()
+  const clean = (snapshot: TerminalSnapshot): TerminalSnapshot => {
+    const paneTree = filterExtensionPanes(snapshot.paneTree, isAvailableExtensionPane)
+    if (paneTree === snapshot.paneTree) return snapshot
+    const focus = resolvePaneFocus(paneTree, snapshot.focusedPaneId, snapshot.focusedTabId)
+    return { ...snapshot, paneTree, focusedPaneId: focus.paneId, focusedTabId: focus.tabId, activeTerminalId: focus.terminalId }
+  }
+  const current = clean(state)
+  const terminalSnapshots = Object.fromEntries(Object.entries(state.terminalSnapshots).map(([id, snapshot]) => [id, clean(snapshot)]))
+  if (current === state && Object.entries(terminalSnapshots).every(([id, snapshot]) => snapshot === state.terminalSnapshots[id])) return
+  useWorkspaceStore.setState({
+    paneTree: current.paneTree, focusedPaneId: current.focusedPaneId,
+    focusedTabId: current.focusedTabId, activeTerminalId: current.activeTerminalId,
+    terminalSnapshots,
+  })
+})

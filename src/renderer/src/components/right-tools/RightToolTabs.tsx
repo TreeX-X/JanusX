@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from 'react'
-import { RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
+import { getRightToolDefinitions, rightToolLabel } from '@/right-tools/registry'
+import { useExtensionViews } from '@/extensions/react'
 import type { RightToolId } from '@/right-tools/types'
 import { useI18n } from '@/i18n/useI18n'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
@@ -14,11 +15,12 @@ interface RightToolTabsProps {
 
 export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }: RightToolTabsProps) {
   const { t } = useI18n('common')
+  useExtensionViews()
   const [focusedToolId, setFocusedToolId] = useState<RightToolId | null>(activeToolId)
   const tabRefs = useRef(new Map<RightToolId, HTMLDivElement>())
   const tablistRef = useRef<HTMLDivElement>(null)
   const [overflow, setOverflow] = useState({ left: false, right: false })
-  const tools = RIGHT_TOOL_REGISTRY.filter(({ id }) => openToolIds.includes(id))
+  const tools = getRightToolDefinitions().filter(({ id }) => openToolIds.includes(id))
 
   const updateOverflow = () => {
     const tablist = tablistRef.current
@@ -110,12 +112,12 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
             onFocus={() => setFocusedToolId(tool.id)}
             onKeyDown={(event) => handleKeyDown(event, tool.id)}
           >
-            <span className={styles.tabLabel}>{t(tool.shortTitleKey)}</span>
-            <ThemedTooltip label={t('common:rightTool.closeTitle', { title: t(tool.titleKey) })}>
+            <span className={styles.tabLabel}>{rightToolLabel(tool, t, 'shortTitle')}</span>
+            <ThemedTooltip label={t('common:rightTool.closeTitle', { title: rightToolLabel(tool, t) })}>
             <button
               type="button"
               className={styles.tabClose}
-              aria-label={t('common:rightTool.closeAria', { title: t(tool.titleKey) })}
+              aria-label={t('common:rightTool.closeAria', { title: rightToolLabel(tool, t) })}
               onClick={(event) => {
                 event.stopPropagation()
                 onClose(tool.id)

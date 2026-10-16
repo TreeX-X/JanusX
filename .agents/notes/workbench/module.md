@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-15T18:00:40.305Z",
+  "updated": "2026-10-16T03:24:59Z",
   "moduleState": "partial"
 }
 ---
@@ -91,7 +91,9 @@ Note 工具链三件各司其职：[drawer-toolbar](./note-drawer-markdown-toolb
 
 外部工作流工具探索：[Grok Bot 衔接](./grok-bot-workflow-integration.md)仍在讨论；[Docker 面板入口](./docker-management-entry.md)于 2026-10-14 放弃 Portainer 接入、改为自研首版七项基本能力（连接状态、容器列表与启停、实时日志、容器终端、访问服务、Compose 分组），承载为新的 pane 内容类型；配套的[HTTP 请求 pane](./http-request-pane.md)同批设计。两者均未实现。
 
-服务集成探索：[CPA 账号管理复用与 Figma 接入](./service-integrations.md)记录插件管理、服务连接、中部完整页面与右侧辅助信息的候选分工，以及本地文件夹导入优先于市场分发的方向。CPA 优先复用既有管理前端并保留全局实例状态，Figma 区分授权、项目设计关联及 API/MCP 工具接入，保留原 CLI 会话与执行逻辑；当前仅记录想法，具体接口、内嵌兼容性与插件开放范围待核对。
+服务集成探索：[CPA 账号管理复用与 Figma 接入](./service-integrations.md)记录中部与右侧插件入口及服务集成边界。S1 已实现可信渲染器扩展注册、两处视图宿主、应用／项目作用域、停用与注销清理和内存快照恢复，公开类型及最小示例位于 `src/renderer/src/extensions/`；内置工具业务迁移与第三方隔离仍未完成。CPA 以账号额度和重置信息为主，计划内嵌管理前端并保留全局实例状态，转 API 按需使用；Figma 区分授权、项目设计关联及 API/MCP 工具，两项服务尚未接入。
+
+插件交付按[分阶段计划](../planning/plugin-platform-roadmap.md)先建立扩展核心，再将文件树、Git、会话管理依次迁移为内置扩展，通过 CPA 和双区域示例验证后开放第三方导入与市场。内置与第三方扩展共享贡献协议、按信任等级运行；工作台需求维护验收，规划模块维护顺序，版本及日期尚未指定。
 
 运行与测试目标探索：[按当前 worktree 运行与测试项目](./worktree-run-test-target.md)记录现有快捷启动使用工作区根目录的限制，以及目标跟随、进程归属和测试结果标识的建议，作为 0.9.2 候选，尚未实现。
 

@@ -1,4 +1,4 @@
-import { isRightToolId, RIGHT_TOOL_IDS } from './registry'
+import { getRightToolDefinitions, isRightToolId } from './registry'
 import type {
   PanelCollapseCommand,
   RightToolId,
@@ -14,8 +14,6 @@ export const FILES_PANEL_DEFAULT_WIDTH = 260
 export const SESSION_PANEL_MIN_WIDTH = 340
 export const SESSION_PANEL_DEFAULT_WIDTH = 360
 export const SESSION_PANEL_MAX_WIDTH = 520
-
-const TOOL_ORDER = new Map(RIGHT_TOOL_IDS.map((id, index) => [id, index]))
 
 export function createDefaultRightToolPreferences(): RightToolPreferencesV1 {
   return {
@@ -73,7 +71,7 @@ export function preferredRightToolPanelWidth(
 function normalizePanelWidths(value: unknown): RightToolPreferencesV1['panelWidths'] {
   if (!isRecord(value)) return undefined
   const widths: NonNullable<RightToolPreferencesV1['panelWidths']> = {}
-  for (const id of RIGHT_TOOL_IDS) {
+  for (const { id } of getRightToolDefinitions()) {
     if (typeof value[id] === 'number' && Number.isFinite(value[id])) {
       widths[id] = clampRightToolPanelWidth(value[id], undefined, id)
     }
@@ -87,9 +85,10 @@ export function canonicalRightToolId(id: unknown): unknown {
 
 export function normalizeRightToolIds(value: unknown): RightToolId[] {
   if (!Array.isArray(value)) return []
+  const order = new Map(getRightToolDefinitions().map(({ id }, index) => [id, index]))
 
   return [...new Set(value.map(canonicalRightToolId).filter(isRightToolId))].sort(
-    (left, right) => TOOL_ORDER.get(left)! - TOOL_ORDER.get(right)!,
+    (left, right) => order.get(left)! - order.get(right)!,
   )
 }
 
@@ -124,6 +123,7 @@ export function openRightTool(
 ): RightToolTransition {
   toolId = canonicalRightToolId(toolId) as RightToolId
   const current = reconcileRightToolPreferences(preferences)
+  if (!isRightToolId(toolId)) return transition(current)
   const openToolIds = normalizeRightToolIds([...current.openToolIds, toolId])
 
   return transition({ ...current, openToolIds, activeToolId: toolId }, 'expand')

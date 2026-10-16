@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { ChevronDown, ChevronRight, Globe, Minimize2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Globe, Minimize2, Puzzle, X } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
@@ -10,6 +10,10 @@ import { BrowserSurface } from './browser/BrowserSurface'
 import { destroyBrowserSurface, popOutBrowserSurface } from '@/services/browser'
 import { TerminalContextTooltip, TerminalRuntime, TerminalUsageStats } from './TerminalUsageDetails'
 import { MarkdownPane } from './MarkdownPane'
+import { ExtensionViewHost } from '@/extensions/ExtensionViewHost'
+import { useExtensionViews } from '@/extensions/react'
+import { extensionRegistry } from '@/extensions/registry'
+import { openExtensionView } from '@/extensions/workbench'
 import { MarkdownIcon } from './ui/MarkdownIcon'
 import {
   applyTerminalDraftLifecycle,
@@ -277,6 +281,10 @@ function TerminalPresetCapsule({
   items: TerminalPresetOption[]
 }) {
   const toggleRef = useRef<HTMLDivElement | null>(null)
+  const extensionViews = useExtensionViews()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
+  const workspaceViews = extensionViews.filter((view) => view.location === 'workspace'
+    && (view.scope === 'application' || workspaceId))
   const panelRef = useRef<HTMLDivElement | null>(null)
   const exitTimerRef = useRef<number | null>(null)
   const wasOpenRef = useRef(open)
@@ -602,6 +610,17 @@ function TerminalPresetCapsule({
                 </div>
               </>
             )}
+            {workspaceViews.map((view) => {
+              const Icon = view.icon ?? Puzzle
+              return (
+                <button key={view.id} type="button" role="menuitem"
+                  className="terminal-preset-item flex items-center gap-2 rounded-md px-2 py-[7px] text-left text-xs"
+                  style={{ color: 'var(--shell-text)' }}
+                  onClick={() => { openExtensionView(view.id); onClose() }}>
+                  <Icon size={16} aria-hidden="true" /><span className="truncate">{view.title}</span>
+                </button>
+              )
+            })}
           </div>,
           document.body,
         )}
@@ -635,6 +654,7 @@ function LeafPane({
   terminalMenuItems,
 }: PaneTreeViewProps & { leaf: WorkspacePaneLeaf }) {
   const { t } = useI18n('terminal')
+  useExtensionViews()
   const plancheEmpty = useThemeStore((s) => s.theme) === 'planche'
   const [dragHint, setDragHint] = useState<{ zone: PaneDropHint; ratio: number } | null>(null)
   /*-- tab 条排序占位：插入位是摘除拖拽 tab 后的数组下标，与 reorderPaneTab 语义一致 --*/
@@ -794,7 +814,9 @@ function LeafPane({
               ? 'Browser'
               : tab.type === 'markdown'
                 ? t('terminal:tab.view.note')
-                : tab.terminalId
+                : tab.type === 'extension'
+                  ? extensionRegistry.getView(tab.viewId)?.title ?? tab.viewId
+                  : tab.terminalId
         }
       >
       <div
@@ -838,6 +860,10 @@ function LeafPane({
               {t('terminal:tab.view.note')}
             </span>
           </span>
+        ) : tab.type === 'extension' ? (
+          <span className="min-w-0 flex-1 truncate">
+            {extensionRegistry.getView(tab.viewId)?.title ?? tab.viewId}
+          </span>
         ) : (
           <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
             {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
@@ -857,7 +883,7 @@ function LeafPane({
           </HoldToConfirm>
         ) : (
           <ThemedTooltip
-            label={tab.type === 'markdown' ? t('terminal:tab.closeMarkdown') : t('terminal:tab.closeBrowser')}
+            label={tab.type === 'extension' ? t('common:action.close') : tab.type === 'markdown' ? t('terminal:tab.closeMarkdown') : t('terminal:tab.closeBrowser')}
           >
           <span
             tabIndex={-1}
@@ -867,7 +893,7 @@ function LeafPane({
             onClick={(event) => {
               event.stopPropagation()
               // 关闭 Markdown 标签只是关闭呈现：文稿另有独立的删除动作。
-              if (tab.type === 'markdown') onCloseMarkdownTab(leaf.id, tab.id)
+              if (tab.type === 'markdown' || tab.type === 'extension') onCloseMarkdownTab(leaf.id, tab.id)
               else onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
             }}
           >
@@ -1025,6 +1051,18 @@ function LeafPane({
                 aria-hidden={!isActive}
               >
                 <MarkdownPane panelId={tab.panelId} />
+              </div>
+            )
+          }
+
+          if (tab.type === 'extension') {
+            const isActive = tab.id === activeTabId
+            const workspace = useWorkspaceStore.getState().workspaces.find((item) => item.id === tab.projectId)
+            return (
+              <div key={tab.id} className="absolute inset-0" hidden={!isActive}
+                aria-hidden={!isActive} {...(!isActive ? { inert: '' } : {})}>
+                <ExtensionViewHost viewId={tab.viewId} location="workspace" active={workspaceVisible && isActive}
+                  workspaceId={tab.projectId} workspacePath={workspace?.path ?? null} />
               </div>
             )
           }

@@ -4,6 +4,8 @@ import { FileExplorerTool } from '@/components/FileExplorerTool'
 import { GitPanel } from '@/components/GitPanel'
 import { AssistantTool } from '@/components/knowledge/AssistantTool'
 import type { RightToolId } from '@/right-tools/types'
+import { isExtensionViewId } from '@/extensions/registry'
+import { ExtensionViewHost } from '@/extensions/ExtensionViewHost'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './RightDock.module.css'
 
@@ -65,6 +67,8 @@ function ToolContent({
   workspacePath: string | null
   active: boolean
 }) {
+  if (isExtensionViewId(toolId)) return <ExtensionViewHost viewId={toolId} location="right"
+    active={active} workspaceId={workspaceId} workspacePath={workspacePath} />
   if (toolId === 'files') return <FileExplorerTool active={active} />
   if (toolId === 'git') return <GitPanel active={active} />
   if (toolId === 'sessions') return <SessionPanel active={active} />

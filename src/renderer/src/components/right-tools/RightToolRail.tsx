@@ -1,9 +1,12 @@
 import { useAssistantPendingCount } from '@/components/knowledge/useAssistantPendingCount'
 import { useAnimatedOpen } from '@/components/shared/CardFrame'
 // Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/workbench/right-dock-empty-collapse.md
-import { ListChecks, Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
-import { isRightToolEnabled, RIGHT_TOOL_REGISTRY } from '@/right-tools/registry'
-import type { RightToolId } from '@/right-tools/types'
+import { ListChecks, Files, GitBranch, MessagesSquare, PanelRightClose, PanelRightOpen, Puzzle, Sparkles, UserRound, type LucideIcon } from 'lucide-react'
+import { getRightToolDefinitions, isRightToolEnabled, rightToolLabel } from '@/right-tools/registry'
+import type { BuiltinRightToolId, RightToolDefinition, RightToolId } from '@/right-tools/types'
+import { useExtensionViews } from '@/extensions/react'
+import { extensionRegistry } from '@/extensions/registry'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
@@ -37,12 +40,15 @@ export function RightToolRail({
   onTogglePanel,
 }: RightToolRailProps) {
   const { t } = useI18n('common')
+  useExtensionViews()
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId)
   const personaEnabled = useExperimentalStore((s) => s.persona)
   const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
   const sessionsEnabled = useExperimentalStore((s) => s.sessions)
   const pending = useAssistantPendingCount()
   const panelToggle = onTogglePanel ?? onExpandPanel
-  const visibleTools = RIGHT_TOOL_REGISTRY.filter((tool) => isRightToolEnabled(tool.id, { persona: personaEnabled, knowledge: knowledgeEnabled, sessions: sessionsEnabled }))
+  const visibleTools = getRightToolDefinitions().filter((tool) => isRightToolEnabled(tool.id, { persona: personaEnabled, knowledge: knowledgeEnabled, sessions: sessionsEnabled })
+    && (extensionRegistry.getView(tool.id)?.scope !== 'project' || workspaceId))
   const hasOpenTools = openToolIds.length > 0
   // 首次开 tab 时淡入展开、关掉最后一个 tab 时淡出收起，避免控件突然闪现/消失。
   // useAnimatedOpen 在退出动画播完后再卸载，空栏仍然不渲染该控件。
@@ -62,16 +68,16 @@ export function RightToolRail({
               ? t('common:rightTool.railStateOpen')
               : t('common:rightTool.railStateClosed')
           return (
-            <ThemedTooltip key={tool.id} label={t(tool.titleKey)} placement="left">
+            <ThemedTooltip key={tool.id} label={rightToolLabel(tool, t)} placement="left">
             <button
               type="button"
               className={styles.railButton}
               data-state={state}
-              aria-label={t('common:rightTool.railButtonAria', { label: t(tool.ariaLabelKey), state: stateLabel })}
+              aria-label={t('common:rightTool.railButtonAria', { label: rightToolLabel(tool, t, 'ariaLabel'), state: stateLabel })}
               aria-pressed={state === 'active'}
               onClick={() => onToggleTool(tool.id)}
             >
-              <ToolIcon toolId={tool.id} />
+              <ToolIcon tool={tool} />
               {tool.id === 'assist' && pending !== null && pending > 0 && <span className={styles.railBadge}>{pending > 99 ? '99+' : pending}</span>}
               <span className={styles.railState} aria-hidden="true" />
             </button>
@@ -106,7 +112,7 @@ export function RightToolRail({
   )
 }
 
-const TOOL_ICONS: Record<RightToolId, LucideIcon> = {
+const TOOL_ICONS: Record<BuiltinRightToolId, LucideIcon> = {
   files: Files,
   git: GitBranch,
   assist: Sparkles,
@@ -115,7 +121,7 @@ const TOOL_ICONS: Record<RightToolId, LucideIcon> = {
   sessions: MessagesSquare,
 }
 
-function ToolIcon({ toolId }: { toolId: RightToolId }) {
-  const Icon = TOOL_ICONS[toolId]
+function ToolIcon({ tool }: { tool: RightToolDefinition }) {
+  const Icon = tool.iconComponent ?? (tool.icon ? TOOL_ICONS[tool.icon] : Puzzle)
   return <Icon className={styles.railIcon} size={16} strokeWidth={1.6} aria-hidden="true" />
 }

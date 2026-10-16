@@ -5,6 +5,8 @@ import type { PersistStorage, StateStorage } from 'zustand/middleware'
 import { useAppStore } from './app'
 import { useExperimentalStore } from './experimental'
 import { isRightToolEnabled } from '../right-tools/registry'
+import { extensionRegistry } from '@/extensions/registry'
+import { useWorkspaceStore } from './workspace'
 import {
   activateRightTool,
   clampRightToolPanelWidth,
@@ -77,6 +79,7 @@ export const useRightToolStore = create<RightToolStore>()(
       }
       const route = (toolId: RightToolId, transition: typeof openRightTool): void => {
         if (!isRightToolEnabled(toolId, useExperimentalStore.getState())) return
+        if (extensionRegistry.getView(toolId)?.scope === 'project' && !useWorkspaceStore.getState().activeWorkspaceId) return
         if (toolId === 'persona' || toolId === 'review') {
           useAssistantStore.getState().setSection(toolId === 'persona' ? 'personal' : 'review')
         }
@@ -119,3 +122,5 @@ function applyPanelCollapseCommand(command: PanelCollapseCommand): void {
   if (command === 'collapse') appStore.setPanelCollapsed(true)
   if (command === 'toggle') appStore.togglePanel()
 }
+
+extensionRegistry.subscribe(() => useRightToolStore.getState().reconcile())
