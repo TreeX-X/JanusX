@@ -4,6 +4,7 @@ import { getUpdaterSettings, updateUpdaterSettings } from '@/services/updater-se
 import { DEFAULT_UPDATER_SETTINGS, type UpdaterState } from '../../../shared/ipc/updater'
 import { applyUpdaterEvent } from '@/lib/updater-badge'
 import styles from './NotificationSettingsPanel.module.css'
+import aboutStyles from './AboutSettingsPanel.module.css'
 
 const UNSUPPORTED_KEY: Record<string, string> = {
   'non-windows-p0': 'settings:updater.unsupportedWin',
@@ -104,7 +105,7 @@ export function UpdaterSettings() {
     : null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', fontSize: 12 }}>
+    <div className={aboutStyles.updaterContent}>
       <div className={styles.status}>
         {t('settings:updater.currentVersion', { version: state?.currentVersion || '—' })}
       </div>
@@ -119,7 +120,7 @@ export function UpdaterSettings() {
         ? (
           <>
             <div className={styles.status}>{t(unsupportedKey)}</div>
-            <div className={styles.testRow}>
+            <div className={`${styles.testRow} ${aboutStyles.updaterActions}`}>
               <button
                 type="button"
                 className={`${styles.button} ${styles.ghostButton}`}
@@ -133,7 +134,7 @@ export function UpdaterSettings() {
         : (
           <>
             <StatusLine state={state} />
-            <div className={styles.testRow}>
+            <div className={`${styles.testRow} ${aboutStyles.updaterActions}`}>
               <button
                 type="button"
                 className={`${styles.button} ${styles.ghostButton}`}
@@ -213,7 +214,7 @@ function SettingSwitch({ label,
   onChange: (checked: boolean) => void
 }) {
   return (
-    <div className={styles.row}>
+    <div className={aboutStyles.updaterSwitch}>
       <div className={styles.label}>
         <span className={styles.labelText}>{label}</span>
         <span className={styles.hint}>{hint}</span>

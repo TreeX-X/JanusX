@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowUpRight, Star } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { UpdaterSettings } from './UpdaterSettings'
+import appIcon from '../../../../resources/icon.png'
 import styles from './AboutSettingsPanel.module.css'
 
 // Note: product identity, updates and support share one page — see .agents/notes/workbench/settings-layout.md
@@ -26,6 +27,7 @@ export function AboutSettingsPanel() {
   return (
     <div className={styles.panel}>
       <section className={styles.identity} aria-label="JanusX">
+        <img className={styles.productIcon} src={appIcon} alt="" width={80} height={80} />
         <h3 className={styles.productName}>JanusX</h3>
         <p className={styles.description}>{t('settings:about.description')}</p>
       </section>
@@ -41,7 +43,7 @@ export function AboutSettingsPanel() {
           <p className={styles.description}>{t('settings:about.support.description')}</p>
         </div>
         <button type="button" className={styles.supportButton} disabled={opening} onClick={() => void openRepository()}>
-          <Star size={14} strokeWidth={1.7} aria-hidden="true" />
+          <Star className={styles.starIcon} size={17} strokeWidth={1.7} aria-hidden="true" />
           {t('settings:about.support.action')}
           <ArrowUpRight size={13} strokeWidth={1.7} aria-hidden="true" />
         </button>
