@@ -55,6 +55,12 @@ async function nativeCount(app: ElectronApplication): Promise<number> {
   return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.length)
 }
 
+async function setCpaToggle(page: Page, name: string, checked: boolean): Promise<void> {
+  const input = page.getByRole('checkbox', { name, exact: true })
+  if (await input.isChecked() !== checked) await page.locator('label').filter({ has: input }).click()
+  await expect(input).toBeChecked({ checked })
+}
+
 async function expectCompactCpa(app: ElectronApplication, page: Page, managed = false): Promise<void> {
   const view = page.locator('[data-cpa-view]')
   const toolbar = view.locator('[data-cpa-toolbar]')
@@ -213,6 +219,78 @@ async function cleanup(app: ElectronApplication | undefined, server: Server, roo
   await new Promise<void>((resolve) => server.close(() => resolve()))
   await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 }
+
+test('CPA settings use themed controls, switch modes and retain a usable footer at narrow widths', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'janusx-cpa-settings-'))
+  let app: ElectronApplication | undefined
+  try {
+    const booted = await boot(root); app = booted.app
+    const { page } = booted
+    await page.getByTitle('Settings', { exact: true }).click()
+    await page.locator('[data-tab="integrations"]').click()
+    const panel = page.locator('[data-cpa-settings]')
+    const mode = panel.getByRole('combobox', { name: 'Connection mode' })
+    await expect(mode).toHaveText('Local CPA managed by JanusX')
+    await expect(panel.locator('select')).toHaveCount(0)
+    await expect(panel.getByRole('button', { name: 'Save and open CPA', exact: true })).toBeDisabled()
+    await setCpaToggle(page, 'Enable local CPA', true)
+    await expect(panel.getByRole('button', { name: 'Save and open CPA', exact: true })).toBeEnabled()
+    const key = panel.getByLabel('Management key', { exact: true })
+    await panel.getByRole('button', { name: 'Generate random key', exact: true }).click()
+    await expect(key).toHaveValue(/^[a-f0-9]{64}$/)
+    await panel.getByRole('button', { name: 'Show new key', exact: true }).click()
+    await expect(key).toHaveAttribute('type', 'text')
+    await panel.getByRole('button', { name: 'Hide new key', exact: true }).click()
+    await expect(key).toHaveAttribute('type', 'password')
+    await page.mouse.move(0, 0)
+    for (const theme of ['planche', 'dark']) {
+      await page.evaluate(async (theme) => { await (window as any).electron.theme.update(theme) }, theme)
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await page.screenshot({ path: test.info().outputPath(`settings-managed-${theme}.png`) })
+    }
+    // A padding strip below a sticky footer would expose the covered runtime controls.
+    await expect.poll(async () => {
+      const footer = await panel.locator('footer').boundingBox()
+      const scroller = await page.getByRole('dialog').locator('main').boundingBox()
+      return footer && scroller ? Math.abs(footer.y + footer.height - scroller.y - scroller.height) : Infinity
+    }).toBeLessThanOrEqual(1)
+    // The shared select must remain keyboard-operable inside the settings modal.
+    await mode.focus()
+    await mode.press('ArrowDown')
+    await mode.press('End')
+    await mode.press('Enter')
+    await expect(mode).toHaveText('Connect an existing instance')
+    await expect(panel.getByLabel('Management key', { exact: true })).toHaveCount(0)
+    const address = panel.getByRole('textbox', { name: 'Management page address' })
+    await address.fill('file:///C:/invalid')
+    await panel.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(panel.getByRole('alert')).toContainText('HTTP or HTTPS')
+    await address.fill('https://cpa.example.test/management.html')
+    await expect(panel.getByRole('alert')).toHaveCount(0)
+    await panel.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(panel.getByRole('status')).toContainText('Connection saved for all projects.')
+    await page.evaluate(async () => { await (window as any).electron.theme.update('planche') })
+    await page.screenshot({ path: test.info().outputPath('settings-external.png') })
+    await mode.click()
+    await page.getByRole('option', { name: 'Local CPA managed by JanusX', exact: true }).click()
+    await expect(key).toHaveValue('')
+    // Exercise container reflow below the desktop's ordinary minimum window size.
+    await app.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows()[0]
+      window.setMinimumSize(600, 600); window.setSize(680, 760)
+    })
+    await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(680)
+    await expect.poll(() => panel.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true)
+    await expect(panel.getByRole('button', { name: 'Save', exact: true })).toBeInViewport()
+    await mode.click()
+    await expect(page.getByRole('option', { name: 'Connect an existing instance', exact: true })).toBeVisible()
+    await page.getByRole('option', { name: 'Connect an existing instance', exact: true }).click()
+    await page.screenshot({ path: test.info().outputPath('settings-narrow.png') })
+  } finally {
+    if (app) await app.close()
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  }
+})
 
 test('CPA native page shares a global login, hides for dialogs, releases on close and reuses login after restart', async () => {
   const root = await mkdtemp(join(tmpdir(), 'janusx-cpa-'))
@@ -409,9 +487,9 @@ test('managed CPA downloads verified components, runs the real Windows service a
 
     await page.getByTitle('Settings', { exact: true }).click()
     await page.locator('[data-tab="integrations"]').click()
-    await expect(page.getByRole('combobox', { name: 'Connection mode' })).toHaveValue('managed')
-    await page.getByRole('checkbox', { name: 'Enable local CPA', exact: true }).check()
-    await page.getByRole('checkbox', { name: 'Automatically check and download updates' }).uncheck()
+    await expect(page.getByRole('combobox', { name: 'Connection mode' })).toHaveText('Local CPA managed by JanusX')
+    await setCpaToggle(page, 'Enable local CPA', true)
+    await setCpaToggle(page, 'Automatically check and download updates', false)
     const port = await freePort()
     await page.getByRole('spinbutton', { name: 'Local port', exact: true }).fill(String(port))
     const keyField = page.getByLabel('Management key', { exact: true })
