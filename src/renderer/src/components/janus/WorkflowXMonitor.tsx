@@ -3,6 +3,7 @@ import { ChevronDown, ExternalLink, RotateCw } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import { useWorkflowXStore } from '@/stores/workflowx'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { ThemedTooltip } from '../ui/ThemedTooltip'
 import styles from './WorkflowXMonitor.module.css'
 
 export function WorkflowXMonitor() {
@@ -23,8 +24,6 @@ export function WorkflowXStatus({ surface = 'island' }: { surface?: 'island' | '
   const isSettings = surface === 'settings'
   const sourceSummary = [...new Set(current?.sources.filter(source => source.status === 'detected')
     .map(source => `${t(`workflowx.${source.scope}`)} · ${source.format === 'claude' ? 'Claude' : 'Codex'}`) ?? [])].join(' / ')
-  // 设置面始终给一行可读解释：检测到就列来源，未检测到/待确认就给下一步提示，
-  // 不留一片没有信息的灰字。检测中是瞬时态，不占位。
   const hint = sourceSummary ? null
     : current?.unavailable ? t('workflowx.unavailable')
       : status === 'missing' ? t('workflowx.missingHint')
@@ -33,31 +32,38 @@ export function WorkflowXStatus({ surface = 'island' }: { surface?: 'island' | '
     <i aria-hidden="true" />{t(`workflowx.status.${status}`)}
   </span>
   const actions = <div className={styles.actions}>
-    {isSettings && <button type="button" aria-expanded={open} aria-controls={detailsId} onClick={() => setOpen(value => !value)}>
-      <ChevronDown size={12} aria-hidden="true" />{t('workflowx.sources')}
-    </button>}
-    <button type="button" disabled={checking} onClick={() => void check(workspaceId, true)}>
-      <RotateCw size={12} aria-hidden="true" />{t(checking ? 'workflowx.status.checking' : 'workflowx.refresh')}
-    </button>
-    <button type="button" onClick={() => {
-      setLinkFailed(false)
-      void window.electron.workflowx.openRepository().then(ok => setLinkFailed(!ok)).catch(() => setLinkFailed(true))
-    }}><ExternalLink size={12} aria-hidden="true" />{t('workflowx.repository')}</button>
+    {isSettings && <ThemedTooltip label={t('workflowx.sources')}>
+      <button type="button" aria-label={t('workflowx.sources')} aria-expanded={open} aria-controls={open ? detailsId : undefined} onClick={() => setOpen(value => !value)}>
+        <ChevronDown size={16} aria-hidden="true" />
+      </button>
+    </ThemedTooltip>}
+    <ThemedTooltip label={t(checking ? 'workflowx.status.checking' : 'workflowx.refresh')} disabled={!isSettings}>
+      <button type="button" aria-label={t('workflowx.refresh')} disabled={checking} onClick={() => void check(workspaceId, true)}>
+        <RotateCw size={isSettings ? 16 : 12} aria-hidden="true" />{!isSettings && t(checking ? 'workflowx.status.checking' : 'workflowx.refresh')}
+      </button>
+    </ThemedTooltip>
+    <ThemedTooltip label={t('workflowx.repository')} disabled={!isSettings}>
+      <button type="button" aria-label={t('workflowx.repository')} onClick={() => {
+        setLinkFailed(false)
+        void window.electron.workflowx.openRepository().then(ok => setLinkFailed(!ok)).catch(() => setLinkFailed(true))
+      }}><ExternalLink size={isSettings ? 16 : 12} aria-hidden="true" />{!isSettings && t('workflowx.repository')}</button>
+    </ThemedTooltip>
   </div>
   return (
     <div className={`${styles.root} ${isSettings ? styles.settings : ''}`} data-testid={isSettings ? 'workflowx-settings' : 'workflowx-monitor'} onKeyDown={event => { if (event.key === 'Escape' && open) { event.stopPropagation(); setOpen(false) } }}>
       {isSettings ? <>
-        <div className={styles.summary}>
-          <span className={styles.target}>{workspaceId ? t('workflowx.currentWorkspace', { name: workspaceName ?? t('workflowx.workspace') }) : t('workflowx.globalEnvironment')}</span>
-          {statusLabel}
+        <div className={styles.header}>
+          <div className={styles.heading}><span className={styles.title}>WorkflowX</span>{statusLabel}</div>
+          {actions}
         </div>
+        <p className={styles.help}>{t('workflowx.settingsHelp')}</p>
+        <p className={styles.target}>{workspaceId ? t('workflowx.currentWorkspace', { name: workspaceName ?? t('workflowx.workspace') }) : t('workflowx.globalEnvironment')}</p>
         {sourceSummary && <p className={styles.sourceSummary}>
           <span className={styles.summaryKey}>{t('workflowx.sourcesLabel')}</span>
           <span className={styles.summaryValue} data-testid="workflowx-sources">{sourceSummary}</span>
         </p>}
         {hint && <p className={styles.sourceSummary}><span className={styles.summaryValue}>{hint}</span></p>}
-        {actions}
-        {linkFailed && <p className={styles.feedback}><span className={styles.summaryValue}>{t('workflowx.linkFailed')}</span></p>}
+        {linkFailed && <p className={styles.feedback} role="alert">{t('workflowx.linkFailed')}</p>}
       </> : <button type="button" className={styles.summary} aria-expanded={open} aria-controls={detailsId}
         aria-label={t('workflowx.sources')} onClick={() => setOpen(value => !value)}>
         <span>WorkflowX</span>

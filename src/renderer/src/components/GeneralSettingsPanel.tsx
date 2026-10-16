@@ -89,13 +89,7 @@ export function GeneralSettingsPanel() {
         </div>
 
         <div className={`${styles.generalRow} ${styles.generalRowWide}`}>
-          <div className={styles.generalLabelCol}>
-            <div className={styles.generalLabel}>WorkflowX</div>
-            <div className={styles.generalHelp}>{t('janus:workflowx.settingsHelp')}</div>
-          </div>
-          <div className={styles.generalControlCol}>
-            <WorkflowXStatus surface="settings" />
-          </div>
+          <WorkflowXStatus surface="settings" />
         </div>
       </section>
     </div>
