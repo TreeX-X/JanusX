@@ -498,6 +498,40 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
   }
 })
 
+test('Browser start page stays visible in an independent window', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'janusx-browser-start-'))
+  let application: ElectronApplication | undefined
+  try {
+    application = await electron.launch({
+      args: [resolve('out/main/index.js'), `--user-data-dir=${join(root, 'user-data')}`],
+      env: createDesktopTestEnv(root),
+    })
+    const page = await application.firstWindow()
+    await page.waitForLoadState('domcontentloaded')
+    await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('en'))
+    await page.reload()
+    await page.locator('button[data-id="tool-menu"]').click()
+    await page.locator('button[data-id="browser"]').click()
+    await expect(page.locator('[data-browser-start-page]')).toBeVisible()
+    const [standalone] = await Promise.all([
+      application.waitForEvent('window'),
+      page.getByRole('button', { name: 'Pop out to standalone window', exact: true }).click(),
+    ])
+    await standalone.waitForLoadState('domcontentloaded')
+    await expect(standalone.locator('[data-browser-start-page]')).toBeVisible()
+    await expect(standalone.getByRole('button', { name: 'Close tab, hold to confirm', exact: true })).toBeInViewport()
+    await expect.poll(() => application!.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows().map((window) => window.contentView.children.length),
+    )).toEqual([0, 0])
+    await standalone.getByRole('button', { name: 'Enter a URL', exact: true }).click()
+    await expect(standalone.getByRole('textbox', { name: 'Address bar', exact: true })).toBeFocused()
+    await standalone.screenshot({ path: test.info().outputPath('browser-standalone-start.png') })
+  } finally {
+    await closeApplication(application)
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  }
+})
+
 test('Browser load failure, retry, dialogs and close release native browser views', async () => {
   const entry = resolve(process.env.JANUSX_E2E_ENTRY || 'out/main/index.js')
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-browser-smoke-'))
@@ -551,6 +585,10 @@ test('Browser load failure, retry, dialogs and close release native browser view
       await expectBrowserEntryAvailable()
       await toolTrigger.click()
       await browserItem.click()
+      await expect(page.locator('[data-browser-start-page]')).toBeVisible()
+      await expect.poll(nativeViews).toHaveLength(0)
+      await page.getByRole('button', { name: 'Enter a URL', exact: true }).click()
+      await expect(addressBar).toBeFocused()
       await addressBar.fill(url)
       await addressBar.press('Enter')
       const tabId = await page.locator('[data-tab-id]').first().getAttribute('data-tab-id')
@@ -579,6 +617,15 @@ test('Browser load failure, retry, dialogs and close release native browser view
     await expect.poll(() => application!.evaluate(({ webContents }) =>
       webContents.getAllWebContents().some((contents) => contents.getTitle() === 'Browser fixture'),
     )).toBe(true)
+
+    // Blank tabs must detach the native page, then restore it on activation.
+    await page.getByRole('button', { name: 'New tab', exact: true }).click()
+    await expect(page.locator('[data-browser-start-page]')).toBeVisible()
+    await expect(addressBar).toHaveValue('')
+    await expect.poll(nativeViews).toHaveLength(0)
+    await page.getByRole('tab', { name: 'Browser fixture', exact: true }).click()
+    await expect(page.locator('[data-browser-start-page]')).toHaveCount(0)
+    await expect.poll(nativeViews).toHaveLength(1)
 
     // A DOM visibility assertion alone cannot detect a WebContentsView covering a dialog.
     // Check Electron's native child tree as well, then click the real cancel button.

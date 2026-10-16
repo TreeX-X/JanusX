@@ -4,6 +4,7 @@ import { BrowserSurface } from './BrowserSurface'
 import { embedBrowserSurface } from '@/services/browser'
 import { useThemeStore } from '@/stores/theme'
 import { useI18n } from '@/i18n/useI18n'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import styles from './StandaloneBrowser.module.css'
 
 /**
@@ -52,10 +53,11 @@ export function StandaloneBrowser() {
           />
         </div>
         <span className={styles.title}>{t('common:browser.title')}</span>
-        <button type="button" className={styles.embedBtn} onClick={handleEmbed} title={t('common:browser.embedToMain')}>
-          <PanelRightOpen size={12} />
-          {t('common:browser.embedToMain')}
-        </button>
+        <ThemedTooltip label={t('common:browser.embedToMain')}>
+          <button type="button" className={styles.embedBtn} onClick={handleEmbed} aria-label={t('common:browser.embedToMain')}>
+            <PanelRightOpen size={15} aria-hidden="true" />
+          </button>
+        </ThemedTooltip>
       </div>
       <div className={styles.body}>
         <BrowserSurface surfaceId={surfaceId} carrier="window" visible />

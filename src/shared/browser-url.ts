@@ -12,3 +12,8 @@ export function normalizeBrowserUrl(input: string): string {
   if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/|$)/i.test(trimmed)) return `http://${trimmed}`
   return `https://${trimmed}`
 }
+
+/** Blank tabs use the host start page instead of an empty native guest. */
+export function isBrowserStartPageUrl(url: string | undefined): boolean {
+  return !url || /^about:blank(?:[?#].*)?$/i.test(url)
+}

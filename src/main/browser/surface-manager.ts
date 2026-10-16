@@ -46,7 +46,7 @@ export interface BrowserSurfaceManagerDeps {
 type StateListener = (surfaceId: string, state: BrowserSurfaceState) => void
 type AgentControlListener = (surfaceId: string, event: BrowserAgentControlEvent) => void
 
-import { normalizeBrowserUrl } from '../../shared/browser-url'
+import { isBrowserStartPageUrl, normalizeBrowserUrl } from '../../shared/browser-url'
 /*-- URL 归一化规则住在 shared（浏览器 surface 与渲染层地址管理共用），此处再导出保持既有 import 不变 --*/
 export { normalizeBrowserUrl }
 
@@ -381,7 +381,9 @@ export class BrowserSurfaceManager {
     if (!host || host.isDestroyed()) return
     const active = surface.activeTabId ? surface.tabs.get(surface.activeTabId) ?? null : null
     const bounds = surface.bounds
-    const showActive = active && !active.loadError && bounds && bounds.width > 0 && bounds.height > 0
+    const showActive = active && !active.loadError
+      && !isBrowserStartPageUrl(active.view.webContents.getURL() || active.requestedUrl)
+      && bounds && bounds.width > 0 && bounds.height > 0
 
     for (const tab of surface.tabs.values()) {
       if (showActive && tab.tabId === active.tabId) continue

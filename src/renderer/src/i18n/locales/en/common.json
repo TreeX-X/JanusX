@@ -135,7 +135,13 @@
     "agentIdle": "Agent not in control",
     "popOut": "Pop out to standalone window",
     "noTabs": "No open tabs",
-    "retry": "Retry"
+    "retry": "Retry",
+    "tabsAria": "Web tabs",
+    "openAddress": "Open address",
+    "startTitle": "Browse in your workspace",
+    "startHint": "Open a local app, preview a page or read documentation. Start with a URL.",
+    "enterAddress": "Enter a URL",
+    "loadFailed": "This page couldn't be opened"
   },
   "chat": {
     "copy": "Copy"

@@ -1,8 +1,10 @@
 // Note: .agents/notes/desktop/browser-surface.md — shared native layout with optional browser chrome.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
+  CircleAlert,
   ExternalLink,
   Globe,
   Loader2,
@@ -16,6 +18,9 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { useBrowserOcclusionStore } from '@/stores/browser-occlusion'
 import { useI18n } from '@/i18n/useI18n'
+import { HoldToConfirm } from '@/components/ui/HoldToConfirm'
+import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
+import { isBrowserStartPageUrl } from '../../../../shared/browser-url'
 import {
   activateBrowserTab,
   closeBrowserTab,
@@ -30,6 +35,12 @@ import {
 import styles from './BrowserSurface.module.css'
 
 const ZERO_BOUNDS = { x: 0, y: 0, width: 0, height: 0 }
+
+function BrowserAction({ label, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string }) {
+  return <ThemedTooltip label={label}>
+    <button type="button" {...props} className={styles.iconBtn} aria-label={label}>{children}</button>
+  </ThemedTooltip>
+}
 
 interface BrowserSurfaceProps {
   surfaceId: string
@@ -46,7 +57,7 @@ interface BrowserSurfaceProps {
 
 /**
  * 双载体共用的浏览器 UI：tab 条 + 导航 + 地址栏 + bounds 上报占位层。
- * 网页本体是主进程持有的 WebContentsView，始终盖在 body 占位层上方。
+ * 网页本体是主进程持有的 WebContentsView；空白标签由宿主起始页呈现。
  */
 export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, onRequestEmbed, serviceUrl, showChrome = true }: BrowserSurfaceProps) {
   const { t } = useI18n('common')
@@ -59,13 +70,16 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   const [addressDraft, setAddressDraft] = useState('')
   const [addressFocused, setAddressFocused] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const addressRef = useRef<HTMLInputElement>(null)
+  const addressTabRef = useRef<string | undefined>(undefined)
   const frameRef = useRef(0)
 
   const activeTab = useMemo(
     () => surface?.tabs.find((tab) => tab.tabId === surface.activeTabId) ?? null,
     [surface],
   )
-  const effectiveVisible = visible && !tabDragInFlight && !dialogOpen
+  const showStartPage = showChrome && !serviceUrl && (!activeTab || isBrowserStartPageUrl(activeTab.url))
+  const effectiveVisible = visible && !tabDragInFlight && !dialogOpen && !showStartPage
     && !(carrier === 'pane' && workbenchCovered) && !activeTab?.loadError
 
   /*-- 挂载时拉取一次最新状态：独立窗口首载、工作区切换回挂都靠它对齐 --*/
@@ -130,8 +144,11 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
 
   /*-- 地址栏草稿：未聚焦时跟随活动 tab 的 URL --*/
   useEffect(() => {
-    if (!addressFocused) setAddressDraft(activeTab?.url ?? '')
-  }, [activeTab?.url, addressFocused])
+    if (!addressFocused || addressTabRef.current !== activeTab?.tabId) {
+      setAddressDraft(isBrowserStartPageUrl(activeTab?.url) ? '' : activeTab?.url ?? '')
+    }
+    addressTabRef.current = activeTab?.tabId
+  }, [activeTab?.tabId, activeTab?.url, addressFocused])
 
   const submitAddress = useCallback(() => {
     const url = addressDraft.trim()
@@ -147,150 +164,100 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   const isEmpty = !surface || surface.tabs.length === 0
 
   return (
-    <div className={styles.shell} data-carrier={carrier}>
+    <div className={styles.shell} data-carrier={carrier} data-browser-surface={surfaceId}>
       {showChrome && <div className={styles.header}>
-        <div className={styles.tabs} role="tablist">
-          {surface?.tabs.map((tab) => {
-            const isActive = tab.tabId === surface.activeTabId
-            return (
-              <button
-                key={tab.tabId}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                data-active={isActive}
-                className={styles.tab}
-                title={tab.title || tab.url || t('common:browser.newTab')}
-                onClick={() => void activateBrowserTab(surfaceId, tab.tabId)}
-              >
-                {tab.isLoading ? <Loader2 size={11} className={styles.spin} /> : <Globe size={11} />}
-                <span className={styles.tabTitle}>{tab.title || tab.url || t('common:browser.newTab')}</span>
-                <span
-                  className={styles.tabClose}
-                  title={t('common:browser.closeTab')}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    void closeBrowserTab(surfaceId, tab.tabId)
-                  }}
-                >
-                  <X size={10} />
-                </span>
-              </button>
-            )
-          })}
-          {!serviceUrl && <button
-            type="button"
-            className={styles.iconBtn}
-            title={t('common:browser.openNewTab')}
-            aria-label={t('common:browser.openNewTab')}
-            onClick={() => void openBrowserTab(surfaceId)}
-          >
-            <Plus size={12} />
-          </button>}
+        <div className={styles.tabRow}>
+          <div className={styles.tabs} role="tablist" aria-label={t('common:browser.tabsAria')}>
+            {surface?.tabs.map((tab) => {
+              const isActive = tab.tabId === surface.activeTabId
+              const title = isBrowserStartPageUrl(tab.url) ? t('common:browser.newTab') : tab.title || tab.url
+              return (
+                <div key={tab.tabId} className={styles.tabItem} data-active={isActive} data-browser-tab={tab.tabId}>
+                  <button type="button" role="tab" aria-selected={isActive}
+                    className={styles.tab} title={title}
+                    onClick={() => void activateBrowserTab(surfaceId, tab.tabId)}>
+                    {tab.isLoading ? <Loader2 size={13} className={styles.spin} aria-hidden="true" /> : <Globe size={13} aria-hidden="true" />}
+                    <span className={styles.tabTitle}>{title}</span>
+                  </button>
+                  <HoldToConfirm label={t('common:browser.closeTab')} className={styles.tabClose}
+                    onConfirm={() => void closeBrowserTab(surfaceId, tab.tabId)}>
+                    <X size={12} aria-hidden="true" />
+                  </HoldToConfirm>
+                </div>
+              )
+            })}
+          </div>
+          {!serviceUrl && <BrowserAction label={t('common:browser.openNewTab')}
+            onClick={() => void openBrowserTab(surfaceId)}><Plus size={15} aria-hidden="true" /></BrowserAction>}
         </div>
 
-        <button
-          type="button"
-          className={styles.iconBtn}
-          title={t('common:browser.back')}
-          aria-label={t('common:browser.back')}
-          disabled={!activeTab?.canGoBack}
-          onClick={() => activeTab && void browserTabGoBack(surfaceId, activeTab.tabId)}
-        >
-          <ArrowLeft size={12} />
-        </button>
-        <button
-          type="button"
-          className={styles.iconBtn}
-          title={t('common:browser.forward')}
-          aria-label={t('common:browser.forward')}
-          disabled={!activeTab?.canGoForward}
-          onClick={() => activeTab && void browserTabGoForward(surfaceId, activeTab.tabId)}
-        >
-          <ArrowRight size={12} />
-        </button>
-        <button
-          type="button"
-          className={styles.iconBtn}
-          title={t('common:browser.reload')}
-          aria-label={t('common:browser.reload')}
-          disabled={!activeTab}
-          onClick={() => activeTab && void reloadBrowserTab(surfaceId, activeTab.tabId)}
-        >
-          <RotateCw size={12} />
-        </button>
+        <div className={styles.toolbar}>
+          <div className={styles.navigation}>
+            <BrowserAction label={t('common:browser.back')} disabled={!activeTab?.canGoBack}
+              onClick={() => activeTab && void browserTabGoBack(surfaceId, activeTab.tabId)}>
+              <ArrowLeft size={15} aria-hidden="true" />
+            </BrowserAction>
+            <BrowserAction label={t('common:browser.forward')} disabled={!activeTab?.canGoForward}
+              onClick={() => activeTab && void browserTabGoForward(surfaceId, activeTab.tabId)}>
+              <ArrowRight size={15} aria-hidden="true" />
+            </BrowserAction>
+            <BrowserAction label={t('common:browser.reload')} disabled={!activeTab || showStartPage}
+              onClick={() => activeTab && void reloadBrowserTab(surfaceId, activeTab.tabId)}>
+              {activeTab?.isLoading ? <Loader2 size={14} className={styles.spin} aria-hidden="true" /> : <RotateCw size={14} aria-hidden="true" />}
+            </BrowserAction>
+          </div>
 
-        <input
-          className={styles.address}
-          value={addressDraft}
-          placeholder={t('common:browser.addressPlaceholder')}
-          aria-label={t('common:browser.addressAria')}
-          spellCheck={false}
-          readOnly={Boolean(serviceUrl)}
-          onChange={(event) => setAddressDraft(event.target.value)}
-          onFocus={() => setAddressFocused(true)}
-          onBlur={() => setAddressFocused(false)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault()
-              submitAddress()
-            }
-          }}
-        />
+          <form className={styles.addressField} onSubmit={(event) => { event.preventDefault(); submitAddress() }}>
+            <Globe size={13} className={styles.addressIcon} aria-hidden="true" />
+            <input ref={addressRef} className={styles.address} value={addressDraft}
+              placeholder={t('common:browser.addressPlaceholder')} aria-label={t('common:browser.addressAria')}
+              spellCheck={false} autoComplete="off" autoCapitalize="off" readOnly={Boolean(serviceUrl)}
+              onChange={(event) => setAddressDraft(event.target.value)}
+              onFocus={() => setAddressFocused(true)} onBlur={() => setAddressFocused(false)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setAddressDraft(isBrowserStartPageUrl(activeTab?.url) ? '' : activeTab?.url ?? '')
+                  event.currentTarget.blur()
+                }
+              }} />
+            {!serviceUrl && <BrowserAction type="submit" label={t('common:browser.openAddress')}
+              disabled={!addressDraft.trim()}><ArrowRight size={14} aria-hidden="true" /></BrowserAction>}
+          </form>
 
-        {!serviceUrl && <span
-          className={styles.agentDot}
-          data-active={surface?.agentControlled ?? false}
-          title={surface?.agentControlled ? t('common:browser.agentActive') : t('common:browser.agentIdle')}
-        >
-          Agent
-        </span>}
-
-        {carrier === 'pane' && onRequestPopOut && (
-          <button
-            type="button"
-            className={styles.iconBtn}
-            title={t('common:browser.popOut')}
-            aria-label={t('common:browser.popOut')}
-            onClick={onRequestPopOut}
-          >
-            <ExternalLink size={12} />
-          </button>
-        )}
-        {carrier === 'window' && onRequestEmbed && (
-          <button
-            type="button"
-            className={styles.iconBtn}
-            title={t('common:browser.embedToMain')}
-            aria-label={t('common:browser.embedToMain')}
-            onClick={onRequestEmbed}
-          >
-            <PanelRightOpen size={12} />
-          </button>
-        )}
+          {!serviceUrl && surface?.agentControlled && <span className={styles.agentStatus}
+            role="status" aria-label={t('common:browser.agentActive')} title={t('common:browser.agentActive')}>Agent</span>}
+          {carrier === 'pane' && onRequestPopOut && <BrowserAction label={t('common:browser.popOut')}
+            onClick={onRequestPopOut}><ExternalLink size={14} aria-hidden="true" /></BrowserAction>}
+          {carrier === 'window' && onRequestEmbed && <BrowserAction label={t('common:browser.embedToMain')}
+            onClick={onRequestEmbed}><PanelRightOpen size={14} aria-hidden="true" /></BrowserAction>}
+        </div>
       </div>}
 
       <div ref={bodyRef} className={styles.body}>
-        {isEmpty && (
-          <div className={styles.empty}>
-            <span>{t('common:browser.noTabs')}</span>
-            <button type="button" onClick={() => void openBrowserTab(surfaceId, serviceUrl)}>
-              {serviceUrl ? t('common:cpa.openManagement') : t('common:browser.openNewTab')}
-            </button>
-          </div>
-        )}
-        {/*-- 加载失败兜底：没有它的时候自签证书被中止、端口没开这类失败完全静默，
-             只能看到一块黑——用户无法区分"在加载"和"加载失败了"。 --*/}
-        {!isEmpty && activeTab?.loadError && (
-          <div className={styles.loadError} role="alert">
-            <span className={styles.loadErrorUrl}>{activeTab.url}</span>
-            <span className={styles.loadErrorText}>{activeTab.loadError}</span>
-            <button type="button" onClick={() => void reloadBrowserTab(surfaceId, activeTab.tabId)}>
-              <RotateCw size={12} aria-hidden="true" />
-              {t('common:browser.retry')}
-            </button>
-          </div>
-        )}
+        {showStartPage && <div className={styles.empty} data-browser-start-page="true">
+          <Globe size={32} strokeWidth={1.2} className={styles.emptyIcon} aria-hidden="true" />
+          <h2>{t('common:browser.startTitle')}</h2>
+          <p>{t('common:browser.startHint')}</p>
+          <button type="button" className={styles.primaryAction} onClick={() => { addressRef.current?.focus(); addressRef.current?.select() }}>
+            {t('common:browser.enterAddress')}<ArrowUpRight size={14} aria-hidden="true" />
+          </button>
+        </div>}
+        {isEmpty && !showStartPage && <div className={styles.empty}>
+          <Globe size={28} strokeWidth={1.2} className={styles.emptyIcon} aria-hidden="true" />
+          <p>{t('common:browser.noTabs')}</p>
+          <button type="button" className={styles.primaryAction} onClick={() => void openBrowserTab(surfaceId, serviceUrl)}>
+            {serviceUrl ? t('common:cpa.openManagement') : t('common:browser.openNewTab')}
+          </button>
+        </div>}
+        {!isEmpty && activeTab?.loadError && <div className={styles.loadError} role="alert">
+          <CircleAlert size={28} strokeWidth={1.3} className={styles.emptyIcon} aria-hidden="true" />
+          <h2>{t('common:browser.loadFailed')}</h2>
+          <span className={styles.loadErrorUrl}>{activeTab.url}</span>
+          <span className={styles.loadErrorText}>{activeTab.loadError}</span>
+          <button type="button" className={styles.primaryAction} onClick={() => void reloadBrowserTab(surfaceId, activeTab.tabId)}>
+            <RotateCw size={13} aria-hidden="true" />{t('common:browser.retry')}
+          </button>
+        </div>}
       </div>
     </div>
   )

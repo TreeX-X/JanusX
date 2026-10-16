@@ -16,8 +16,8 @@
   padding: 0 12px;
   user-select: none;
   -webkit-app-region: drag;
-  background: var(--shell-pane-chrome);
-  border-bottom: 1px solid var(--shell-border);
+  background: var(--shell-canvas);
+  border-bottom: 1px solid var(--shell-border-soft);
 }
 
 .traffic {
@@ -59,7 +59,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono, monospace);
+  font-family: inherit;
   font-size: 12px;
   color: var(--shell-muted);
 }
@@ -67,10 +67,11 @@
 .embedBtn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--control-border);
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--shell-muted);
@@ -82,10 +83,11 @@
 }
 
 .embedBtn:hover {
-  background: var(--shell-accent-soft);
-  border-color: var(--shell-accent-border);
-  color: var(--shell-accent-strong);
+  background: color-mix(in srgb, var(--shell-text) 8%, transparent);
+  color: var(--shell-text);
 }
+
+.embedBtn:focus-visible { outline: 2px solid var(--shell-muted); outline-offset: 2px; }
 
 .body {
   flex: 1 1 auto;

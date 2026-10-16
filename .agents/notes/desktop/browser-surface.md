@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-16T13:13:55Z",
+  "updated": "2026-10-16T14:20:08Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -47,6 +47,16 @@ The workspace embeds a real browsing panel on isolated per-tab views with a pers
 
 - **Gains**: Dev servers, local previews, and documentation resolve inside the workspace beside the code that serves them.
 - **Costs and limits**: Each tab carries a full view process, so tab count needs bounding; agent-driven operation awaits its own protocol, switch, and audit pass.
+
+## Browser chrome and start page
+
+Embedded and standalone browsers share two compact rows: a horizontally scrolling web-tab strip with a fixed new-tab action, followed by navigation, address input and the carrier action. Selected tabs use a quiet neutral fill with rounded corners; controls use borderless icons and theme-aware tooltips. Focus, hover and address input use neutral feedback rather than orange fills or underlines. The browser inherits the shell font and theme colors; standalone re-embedding uses the same icon treatment. Agent status appears only while control is active. Two rows reserve more vertical space than the former compressed toolbar, keeping tab titles and navigation usable as tab count grows or pane width shrinks.
+
+New blank tabs and surfaces with all tabs closed show a host-rendered start page with a concise explanation and an action that focuses the address bar. The address bar accepts the next URL even when no tab exists. Blank URLs (empty or `about:blank`, including its query/fragment) share one predicate in `src/shared/browser-url.ts`; both renderer bounds and main-process attachment keep those native guests detached so they cannot cover the start page. Switching to a loaded tab restores its existing guest. Changing tabs resets stale address drafts; Escape restores the current address. Web-tab close controls use the same one-second pointer or keyboard hold as workspace tabs, with early release cancelling. Errors keep the failed URL, reason and retry action on the same quiet surface. Content-only service views such as CPA retain their own toolbar and guest lifecycle.
+
+Verification: `npx vitest run tests/unit/browser-surface-manager.test.ts tests/unit/browser-ipc-contract.test.ts tests/unit/browser-occlusion.test.ts tests/unit/hold-to-confirm.test.ts` passes 40 cases. `npx playwright test tests/e2e/browser-surface.spec.ts tests/e2e/pane-tab-drag.spec.ts --project=island --workers=1` passes 31 cases, covering both themes and carriers at 480/1280 px, blank and zero-tab states, hold closing, failure display and tab dragging; the empty-tab case passes again after making the fixture honor submitted URLs. `npx playwright test tests/e2e/desktop-smoke.spec.ts tests/e2e/desktop-cpa.spec.ts --project=desktop --workers=1 --grep 'Browser start page|Browser load failure|Browser global page|CPA native page'` passes four real Electron cases, including detached native children on blank pages, standalone start-page interaction, restored loaded tabs, error retry, workspace closing and preserved CPA login. Strict-unused typecheck, scoped ESLint, i18n validation, `npm run build:app` and Notes checks pass. Screenshots were inspected for both themes, narrow panes and the real standalone window; evidence lives under `artifacts/browser-refresh*`. No exe was packaged.
+
+The final tab-width refinement sets both intrinsic width and flex basis to 160 px so the standalone strip cannot clip its close control. After this refinement, `browser-surface.spec.ts` passes all ten cases again, and the rebuilt desktop `--grep 'Browser start page'` case passes with an explicit close-control visibility assertion. Final screenshots are under `artifacts/browser-refresh/visual-final` and `artifacts/browser-refresh/standalone-final`.
 
 ## Native view visibility and load failures
 

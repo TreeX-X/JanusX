@@ -135,7 +135,13 @@
     "agentIdle": "Agent 未接管",
     "popOut": "弹出为独立窗口",
     "noTabs": "没有打开的标签页",
-    "retry": "重试"
+    "retry": "重试",
+    "tabsAria": "网页标签",
+    "openAddress": "打开网址",
+    "startTitle": "在工作区浏览网页",
+    "startHint": "打开本地应用、预览页面或阅读文档，从一个网址开始。",
+    "enterAddress": "输入网址",
+    "loadFailed": "暂时无法打开网页"
   },
   "chat": {
     "copy": "复制"

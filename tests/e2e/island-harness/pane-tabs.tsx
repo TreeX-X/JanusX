@@ -32,7 +32,9 @@ const terminals = ['a', 'b', 'c', 'sidebar'].map((id) => ({
   } : {}),
 }))
 const surfaces: Record<string, BrowserSurfaceState> = Object.fromEntries(['d', 'e', 'f', 'g', 'h', 'i', 'j'].map((surfaceId) => [surfaceId, {
-  surfaceId, carrier: 'pane', tabs: [], activeTabId: null, agentControlled: false,
+  surfaceId, carrier: 'pane', tabs: [{ tabId: `page-${surfaceId}`, url: `https://example.com/${surfaceId}`,
+    title: `Page ${surfaceId}`, isLoading: false, canGoBack: false, canGoForward: false }],
+  activeTabId: `page-${surfaceId}`, agentControlled: false,
 }]))
 Object.assign(window.electron.browser, {
   getState: async (id: string) => surfaces[id] ?? null,

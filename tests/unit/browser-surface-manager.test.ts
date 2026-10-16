@@ -143,6 +143,29 @@ describe('BrowserSurfaceManager', () => {
     expect(manager.createSurface({ surfaceId: 's1', carrier: 'pane' }).success).toBe(false)
   })
 
+  it('keeps blank native tabs detached so the host start page remains usable', () => {
+    manager.createSurface({ surfaceId: 'start', carrier: 'pane' })
+    const view = h.MockWebContentsView.instances[0]
+    view.webContents.getURL.mockReturnValue('')
+    const tabId = manager.getState('start')!.activeTabId!
+    manager.setBounds('start', { x: 10, y: 80, width: 900, height: 600 })
+    expect(mainWindow.contentView.children).toHaveLength(0)
+
+    manager.navigate('start', tabId, 'localhost:3000')
+    view.webContents.getURL.mockReturnValue('http://localhost:3000')
+    view.webContents.emit('did-navigate', {}, 'http://localhost:3000')
+    expect(mainWindow.contentView.children).toEqual([view])
+
+    view.webContents.getURL.mockReturnValue('about:blank')
+    view.webContents.emit('did-navigate', {}, 'about:blank')
+    expect(mainWindow.contentView.children).toHaveLength(0)
+    manager.popOut('start')
+    const standalone = h.MockBrowserWindow.instances[1]
+    manager.setBounds('start', { x: 0, y: 80, width: 900, height: 600 })
+    expect(standalone.contentView.children).toHaveLength(0)
+    expect(view.webContents.close).not.toHaveBeenCalled()
+  })
+
   it('uses a host-owned service partition without a preload or Node bridge', () => {
     manager.createSurface({ surfaceId: 'cpa', carrier: 'pane', url: 'http://localhost:8317/management.html' }, {
       partition: 'persist:janusx-cpa-test', httpOnly: true,
