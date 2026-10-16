@@ -21,10 +21,14 @@ function isViewOpen(): boolean {
 export function CpaView({ active }: ExtensionViewProps) {
   const { t } = useI18n('common')
   const settings = useCpaStore((state) => state.settings)
+  const status = useCpaStore((state) => state.status)
+  const shouldOpen = useCpaStore((state) => state.shouldOpen)
+  const revision = useCpaStore((state) => state.revision)
   const [readyUrl, setReadyUrl] = useState<string | null>(null)
   const [error, setError] = useState(false)
   const [retry, setRetry] = useState(0)
   const [configure, setConfigure] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let disposed = false
@@ -33,7 +37,7 @@ export function CpaView({ active }: ExtensionViewProps) {
   }, [retry])
 
   useEffect(() => {
-    if (!settings) return
+    if (!settings || !shouldOpen || settings.mode === 'managed' && !settings.enabled) return
     let disposed = false
     setError(false)
     setReadyUrl(null)
@@ -45,7 +49,15 @@ export function CpaView({ active }: ExtensionViewProps) {
       setReadyUrl(settings.managementUrl)
     }).catch(() => { if (!disposed) setError(true) })
     return () => { disposed = true }
-  }, [settings, retry])
+  }, [settings, retry, revision, shouldOpen])
+
+  useEffect(() => {
+    if (!active || settings?.mode !== 'managed') return
+    const poll = () => { void useCpaStore.getState().refreshStatus().catch(() => {}) }
+    poll()
+    const timer = setInterval(poll, 1000)
+    return () => clearInterval(timer)
+  }, [active, settings?.mode])
 
   useEffect(() => () => {
     // Application tabs transfer between projects: keep the same live guest.
@@ -58,17 +70,25 @@ export function CpaView({ active }: ExtensionViewProps) {
   return <div className={styles.shell} data-cpa-view>
     <div className={styles.toolbar}>
       <span>{t('common:cpa.title')}</span>
+      {settings?.mode === 'managed' && settings.enabled && <button type="button" onClick={() => {
+        void window.electron.cpa.copyManagementKey().then(() => setCopied(true)).catch(() => setError(true))
+      }}>{copied ? t('common:cpa.keyCopied') : t('common:cpa.copyKey')}</button>}
       <button type="button" onClick={() => { void window.electron.cpa.openExternal().catch(() => setError(true)) }}>
         <ExternalLink size={13} aria-hidden="true" />{t('common:cpa.openExternal')}
       </button>
       <button type="button" onClick={() => setConfigure(true)}><Settings size={13} aria-hidden="true" />{t('common:cpa.configure')}</button>
     </div>
-    {error ? <div className={styles.message} role="alert">
+    {settings?.mode === 'managed' && !settings.enabled ? <div className={styles.setup}><CpaSettingsPanel /></div>
+      : !shouldOpen ? <div className={styles.message}>
+        <p>{t('common:cpa.phase.stopped')}</p>
+        <button type="button" onClick={() => { void useCpaStore.getState().operate('start').catch(() => setError(true)) }}>{t('common:cpa.start')}</button>
+      </div> : error ? <div className={styles.message} role="alert">
       <p>{t('common:cpa.openFailed')}</p>
+      {status?.error === 'cpa-port-in-use' && <p>{t('common:cpa.portInUse')}</p>}
       <button type="button" onClick={() => { setError(false); setRetry((value) => value + 1) }}>{t('common:action.retry')}</button>
     </div> : readyUrl === settings?.managementUrl
       ? <BrowserSurface surfaceId={CPA_SURFACE_ID} carrier="pane" visible={active} serviceUrl={readyUrl} />
-      : <div className={styles.message} role="status">{t('common:status.loading')}</div>}
+      : <div className={styles.message} role="status">{settings?.mode === 'managed' && status ? t(`common:cpa.phase.${status.phase}`) : t('common:status.loading')}{status?.progress !== undefined && ` · ${status.progress}%`}</div>}
     {configure && <ModalFrame label={t('common:cpa.configure')} onClose={() => setConfigure(false)} panelClassName={styles.dialog}>
       {({ requestClose }) => <><CpaSettingsPanel onOpened={requestClose} />
         <div className={styles.dialogFooter}><button type="button" onClick={requestClose}>{t('common:action.close')}</button></div></>}

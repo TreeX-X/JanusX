@@ -5,6 +5,7 @@ export type ShutdownStep = () => void | Promise<void>
 export interface AppShutdownDeps {
   stopNoteReview?: ShutdownStep
   stopKnowledge?: ShutdownStep
+  stopCpa?: ShutdownStep
   abortChatStreams?: ShutdownStep
   cancelAnalyzer?: ShutdownStep
   cancelBlueprintMaintenance?: ShutdownStep
@@ -97,6 +98,7 @@ export class AppShutdown {
     const ordered: Array<[keyof AppShutdownDeps, ShutdownStep | undefined]> = [
       ['stopNoteReview', this.deps.stopNoteReview],
       ['stopKnowledge', this.deps.stopKnowledge],
+      ['stopCpa', this.deps.stopCpa],
       ['destroyToast', this.deps.destroyToast],
       ['closeEditors', this.deps.closeEditors],
       ['destroyBrowserSurfaces', this.deps.destroyBrowserSurfaces],

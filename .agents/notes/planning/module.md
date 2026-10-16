@@ -5,7 +5,7 @@
   "kind": "module",
   "lifecycle": "accepted",
   "created": "2026-10-15",
-  "updated": "2026-10-16T04:28:31Z",
+  "updated": "2026-10-16T05:56:00Z",
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a",
   "moduleState": "partial"
 }
@@ -21,7 +21,7 @@
 
 [工程排期里程碑备忘录](engineering-milestones.md)集中保存版本节点与散点，按讨论结果持续调整。它属于当前规划资料，保留 draft 生命周期；版本号或经过时间不构成完成、失效或归档依据。
 
-[插件平台分阶段交付计划](plugin-platform-roadmap.md)维护扩展核心、文件树／Git／会话管理内置扩展迁移、CPA 与双区域验证、第三方导入和市场分发的依赖顺序及阶段出口，尚未归入版本。S1 可信扩展核心、S2 内置工具迁移与 S3 CPA 内嵌及双区域验证已交付，S4、S5 待实施；CPA 的真实供应商额度及 OAuth 仍待部署实例核对，功能设计与验收归工作台需求。
+[插件平台分阶段交付计划](plugin-platform-roadmap.md)维护扩展核心、文件树／Git／会话管理内置扩展迁移、CPA 与双区域验证、第三方导入和市场分发的依赖顺序及阶段出口，尚未归入版本。S1 可信扩展核心、S2 内置迁移与 S3 CPA 内嵌／双区域验证已交付，并已补齐首次启用下载的本地 CPA 托管、自定义端口及自动更新。S4、S5 待实施；真实供应商额度、OAuth 与跨平台托管仍待核对，功能设计与验收归工作台需求。
 
 蓝图专项的[产品方向](../blueprint/product-direction.md)与[交付计划](../blueprint/evolution-roadmap.md)继续归蓝图维护，本模块引用专项计划而不复制其正文。应用内备忘录和星座里程碑的产品能力归[个人记忆与共享来源](../knowledge/module.md)，与这里的仓库排期资料分别维护。
 

@@ -15,6 +15,6 @@ export function registerCpaExtension(): () => void {
   return extensionRegistry.register({
     id: 'janusx.cpa',
     views: [{ id: 'management', title: 'CPA', icon: Gauge, location: 'workspace', scope: 'application', component: View }],
-    activate: () => () => { void window.electron.cpa.close().catch(() => {}) },
+    activate: () => () => { void window.electron.cpa.stop().catch(() => {}) },
   })
 }

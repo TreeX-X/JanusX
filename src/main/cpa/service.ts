@@ -4,39 +4,58 @@ import { shell } from 'electron'
 import type { BrowserSurfaceManager } from '../browser/surface-manager'
 import { configService } from '../config/service'
 import { SerialQueue } from '../lib/atomic-file'
-import { CPA_SURFACE_ID, DEFAULT_CPA_MANAGEMENT_URL, normalizeCpaManagementUrl, type CpaSettings } from '../../shared/ipc/cpa'
+import { CPA_SURFACE_ID, normalizeCpaSettings, type CpaSettings, type CpaStatus } from '../../shared/ipc/cpa'
+import { CpaRuntime, type CpaRuntimeControl } from './runtime'
 
 export class CpaService {
   private queue = new SerialQueue()
   private surfaceUrl: string | null = null
+  private generation = 0
+  private disposed = false
 
-  constructor(private surfaces: BrowserSurfaceManager) {}
+  private runtimeValue?: CpaRuntimeControl
+  private get runtime(): CpaRuntimeControl { return this.runtimeValue ??= new CpaRuntime() }
+
+  constructor(private surfaces: BrowserSurfaceManager, runtime?: CpaRuntimeControl) { this.runtimeValue = runtime }
 
   async getSettings(): Promise<CpaSettings> {
     const config = await configService.get()
     try {
-      return { managementUrl: normalizeCpaManagementUrl(config.cpaSettings?.managementUrl ?? DEFAULT_CPA_MANAGEMENT_URL) }
+      return normalizeCpaSettings(config.cpaSettings)
     } catch {
       // A manually edited/stale address must not prevent repairing it in settings.
-      return { managementUrl: DEFAULT_CPA_MANAGEMENT_URL }
+      return normalizeCpaSettings(null)
     }
   }
 
   saveSettings(input: unknown): Promise<CpaSettings> {
+    const generation = this.generation
     return this.queue.run(async () => {
-      const managementUrl = normalizeCpaManagementUrl(
-        typeof input === 'object' && input !== null && 'managementUrl' in input ? input.managementUrl : undefined,
-      )
+      this.assertActive(generation)
+      if (!input || typeof input !== 'object') throw new Error('cpa-invalid-settings')
+      const settings = normalizeCpaSettings(input)
       const previous = await this.getSettings()
-      await configService.update({ cpaSettings: { managementUrl } })
-      if (previous.managementUrl !== managementUrl) this.closeSurface()
-      return { managementUrl }
+      const restart = previous.mode === 'managed' && (settings.mode !== 'managed' || !settings.enabled || previous.port !== settings.port)
+      if (restart) await this.runtime.stop()
+      await configService.update({ cpaSettings: settings })
+      if (previous.managementUrl !== settings.managementUrl || previous.mode !== settings.mode || !settings.enabled && settings.mode === 'managed') this.closeSurface()
+      this.assertActive(generation)
+      if (settings.mode === 'managed' && settings.enabled) await this.runtime.start(settings)
+      return settings
     })
   }
 
   open(): Promise<void> {
+    const generation = this.generation
     return this.queue.run(async () => {
-      const { managementUrl } = await this.getSettings()
+      const settings = await this.getSettings()
+      this.assertActive(generation)
+      if (settings.mode === 'managed') {
+        if (!settings.enabled) throw new Error('cpa-not-enabled')
+        await this.runtime.start(settings)
+      }
+      this.assertActive(generation)
+      const { managementUrl } = settings
       if (this.surfaceUrl === managementUrl && this.surfaces.getState(CPA_SURFACE_ID)) return
       this.closeSurface()
       // Separate from the ordinary browser and from other CPA instances.
@@ -54,7 +73,46 @@ export class CpaService {
   }
 
   async openExternal(): Promise<void> {
+    await this.start()
     await shell.openExternal((await this.getSettings()).managementUrl)
+  }
+
+  async status(): Promise<CpaStatus> { return this.runtime.status() }
+  start(): Promise<void> {
+    const generation = this.generation
+    return this.queue.run(async () => {
+      const settings = await this.getSettings()
+      this.assertActive(generation)
+      if (settings.mode !== 'managed') return
+      if (!settings.enabled) throw new Error('cpa-not-enabled')
+      await this.runtime.start(settings)
+    })
+  }
+  async stop(): Promise<void> {
+    this.generation++
+    // Abort immediately, even if an open operation is downloading.
+    const stopped = this.runtime.stop()
+    await this.queue.run(async () => { await stopped; this.closeSurface() })
+  }
+  async restart(): Promise<void> { await this.stop(); await this.start() }
+  async update(): Promise<void> {
+    const settings = await this.getSettings()
+    if (settings.mode !== 'managed' || !settings.enabled) throw new Error('cpa-not-enabled')
+    await this.runtime.stageUpdate()
+    await this.restart()
+  }
+  async copyManagementKey(): Promise<void> {
+    if ((await this.getSettings()).mode !== 'managed') throw new Error('cpa-not-managed')
+    await this.runtime.copyKey()
+  }
+  async openLogs(): Promise<void> { await this.runtime.openLogs() }
+  async dispose(): Promise<void> {
+    this.disposed = true; this.generation++
+    await this.runtimeValue?.dispose(); this.closeSurface()
+  }
+
+  private assertActive(generation: number): void {
+    if (this.disposed || this.generation !== generation) throw new Error('cpa-stopped')
   }
 
   private closeSurface(): void {

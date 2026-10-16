@@ -1,9 +1,10 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
+import { createServer as createTcpServer } from 'node:net'
 import { createDesktopTestEnv } from './desktop-test-env'
 import { CPA_SURFACE_ID, type CpaAPI } from '../../src/shared/ipc/cpa'
 
@@ -52,6 +53,14 @@ async function guest(app: ElectronApplication, origin: string): Promise<Page> {
 
 async function nativeCount(app: ElectronApplication): Promise<number> {
   return app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].contentView.children.length)
+}
+
+async function freePort(): Promise<number> {
+  const server = createTcpServer()
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as { port: number }).port
+  await new Promise<void>((resolve) => server.close(() => resolve()))
+  return port
 }
 
 async function cleanup(app: ElectronApplication | undefined, server: Server, root: string) {
@@ -173,4 +182,128 @@ test('official CPAMC v1.26.5 renders, logs in, navigates to quotas and restores 
     expect(await web.evaluate(() => typeof (window as any).electron)).toBe('undefined')
     await booted.page.screenshot({ path: test.info().outputPath('official-cpa-in-workspace.png') })
   } finally { await cleanup(app, server, root) }
+})
+
+test('managed CPA downloads verified components, runs the real Windows service and preserves accounts on restart and quit', async () => {
+  const zipPath = process.env.JANUSX_E2E_CPA_ZIP, htmlPath = process.env.JANUSX_E2E_CPA_HTML
+  test.skip(process.platform !== 'win32' || !zipPath || !htmlPath, 'Supply pinned official Windows ZIP and management HTML assets.')
+  test.setTimeout(120_000)
+  const archiveHash = '28bde34eb33a1b03884bac1e8c1a402a25ae4eadd3c60df7ae0df53f8b281318'
+  const htmlHash = '57558cd023475674634a114824b014d3e5ac161f6f3791e3d86b6adab962a700'
+  expect(createHash('sha256').update(await readFile(zipPath!)).digest('hex')).toBe(archiveHash)
+  expect(createHash('sha256').update(await readFile(htmlPath!)).digest('hex')).toBe(htmlHash)
+  const root = await mkdtemp(join(tmpdir(), 'janusx-cpa-managed-'))
+  let app: ElectronApplication | undefined
+  const occupied = createTcpServer()
+  try {
+    const booted = await boot(root); app = booted.app
+    const { page } = booted
+    // Only transport is replaced. The production installer, checksums, extraction,
+    // encrypted storage and official CPA executable run unchanged.
+    await app.evaluate(async (_electron, input) => {
+      const fs = process.getBuiltinModule('fs/promises') as typeof import('node:fs/promises')
+      const original = globalThis.fetch
+      globalThis.fetch = async (url, options) => {
+        const address = String(url)
+        const backend = 'https://api.github.com/repos/router-for-me/CLIProxyAPI/releases/latest'
+        const frontend = 'https://api.github.com/repos/router-for-me/Cli-Proxy-API-Management-Center/releases/latest'
+        if (address === backend || address === frontend) {
+          const isBackend = address === backend
+          const repo = isBackend ? 'CLIProxyAPI' : 'Cli-Proxy-API-Management-Center'
+          const tag = isBackend ? 'v8.0.31' : 'v1.26.5'
+          const name = isBackend ? 'CLIProxyAPI_8.0.31_windows_amd64.zip' : 'management.html'
+          const size = (await fs.stat(isBackend ? input.zipPath : input.htmlPath)).size
+          return new Response(JSON.stringify({ tag_name: tag, draft: false, prerelease: false, assets: [{
+            name, size, browser_download_url: `https://github.com/router-for-me/${repo}/releases/download/${tag}/${name}`,
+            digest: 'sha256:' + (isBackend ? input.archiveHash : input.htmlHash),
+          }] }), { status: 200 })
+        }
+        if (address.startsWith('https://github.com/router-for-me/CLIProxyAPI/releases/download/')) {
+          return new Response(new Uint8Array(await fs.readFile(input.zipPath)), { headers: { 'content-length': '23699580' } })
+        }
+        if (address.startsWith('https://github.com/router-for-me/Cli-Proxy-API-Management-Center/releases/download/')) {
+          return new Response(new Uint8Array(await fs.readFile(input.htmlPath)), { headers: { 'content-length': '3312180' } })
+        }
+        if (address.endsWith('/v1.26.5/LICENSE')) return new Response('MIT fixture license; full upstream asset is verified separately')
+        return original(url, options)
+      }
+    }, { zipPath: zipPath!, htmlPath: htmlPath!, archiveHash, htmlHash })
+
+    await page.getByTitle('Settings', { exact: true }).click()
+    await page.locator('[data-tab="integrations"]').click()
+    await expect(page.getByRole('combobox', { name: 'Connection mode' })).toHaveValue('managed')
+    await page.getByRole('checkbox', { name: 'Enable local CPA', exact: true }).check()
+    await page.getByRole('checkbox', { name: 'Automatically check and download updates' }).uncheck()
+    const port = await freePort()
+    await page.getByRole('spinbutton', { name: 'Local port', exact: true }).fill(String(port))
+    await page.getByRole('button', { name: 'Save and open CPA', exact: true }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 40_000 })
+    const origin = `http://127.0.0.1:${port}`
+    const web = await guest(app, origin)
+    await expect(web.locator('input[name="cpa-management-key"]')).toBeVisible()
+    const status = await page.evaluate(() => (window as any).electron.cpa.status())
+    expect(status.phase).toBe('running'); expect(status.version).toContain('v8.0.31')
+    const key = await app.evaluate(({ app, safeStorage }) => {
+      const fs = process.getBuiltinModule('fs') as typeof import('node:fs')
+      const path = process.getBuiltinModule('path') as typeof import('node:path')
+      return safeStorage.decryptString(fs.readFileSync(path.join(app.getPath('userData'), 'janusx', 'components', 'cpa', 'management-key.enc')))
+    })
+    await page.getByRole('button', { name: 'Copy management key', exact: true }).click()
+    expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe(key)
+    await web.locator('input[name="cpa-management-key"]').fill(key)
+    await web.getByRole('button', { name: /^(Login|登录|连接)$/ }).click()
+    const quota = web.getByRole('link', { name: /^(Quota Management|配额管理)$/ })
+    await expect(quota).toBeVisible()
+    await quota.click()
+    await expect.poll(() => web.url()).toContain('quota')
+    const configPath = join(root, 'profile', 'janusx', 'components', 'cpa', 'config.yaml')
+    const accountSentinel = join(root, 'profile', 'janusx', 'components', 'cpa', 'accounts', '.preservation-test')
+    await writeFile(accountSentinel, 'keep-across-restarts')
+    expect(await readFile(configPath, 'utf8')).not.toContain(key)
+    expect(await readFile(join(root, 'profile', 'janusx', 'config.json'), 'utf8')).not.toContain(key)
+
+    await page.locator('[data-tab-id*="janusx.cpa"]').hover()
+    await page.locator('[data-tab-id*="janusx.cpa"] [data-tab-close]').click()
+    expect(await page.evaluate(() => (window as any).electron.cpa.status().then((value: any) => value.phase))).toBe('running')
+    expect((await fetch(`${origin}/management.html`)).status).toBe(200)
+
+    await page.getByTitle('Settings', { exact: true }).click()
+    await page.locator('[data-tab="integrations"]').click()
+    const changedPort = await freePort()
+    await page.getByRole('spinbutton', { name: 'Local port', exact: true }).fill(String(changedPort))
+    await page.getByRole('button', { name: 'Save and restart CPA', exact: true }).click()
+    await expect(page.getByText('Connection saved for all projects.', { exact: true })).toBeVisible({ timeout: 25_000 })
+    await expect.poll(async () => { try { await fetch(`${origin}/management.html`); return false } catch { return true } }).toBe(true)
+    expect((await fetch(`http://127.0.0.1:${changedPort}/management.html`)).status).toBe(200)
+    expect(await readFile(accountSentinel, 'utf8')).toBe('keep-across-restarts')
+
+    await occupied.listen(0, '127.0.0.1')
+    await new Promise<void>((resolve) => occupied.listening ? resolve() : occupied.once('listening', resolve))
+    const occupiedPort = (occupied.address() as { port: number }).port
+    await page.getByRole('spinbutton', { name: 'Local port', exact: true }).fill(String(occupiedPort))
+    await page.getByRole('button', { name: 'Save and restart CPA', exact: true }).click()
+    await expect(page.getByRole('alert').filter({ hasText: 'occupied' }).first()).toBeVisible()
+    expect(occupied.listening).toBe(true)
+    await page.getByRole('spinbutton', { name: 'Local port', exact: true }).fill(String(changedPort))
+    await page.getByRole('button', { name: 'Save and open CPA', exact: true }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 25_000 })
+    const finalOrigin = `http://127.0.0.1:${changedPort}`
+    expect((await fetch(`${finalOrigin}/management.html`)).status).toBe(200)
+    await app.close(); app = undefined
+    await expect.poll(async () => { try { await fetch(`${finalOrigin}/management.html`); return false } catch { return true } }).toBe(true)
+    expect(await readFile(configPath, 'utf8')).not.toContain(key)
+    const rebooted = await boot(root); app = rebooted.app
+    await rebooted.page.getByTitle('Settings', { exact: true }).click()
+    await rebooted.page.locator('[data-tab="integrations"]').click()
+    await rebooted.page.getByRole('button', { name: 'Save and open CPA', exact: true }).click()
+    await expect(rebooted.page.getByRole('dialog')).toHaveCount(0, { timeout: 25_000 })
+    expect((await fetch(`${finalOrigin}/management.html`)).status).toBe(200)
+    await rebooted.page.getByRole('button', { name: 'Copy management key', exact: true }).click()
+    expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe(key)
+    expect(await readFile(accountSentinel, 'utf8')).toBe('keep-across-restarts')
+  } finally {
+    if (app) await app.close()
+    if (occupied.listening) await new Promise<void>((resolve) => occupied.close(() => resolve()))
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  }
 })

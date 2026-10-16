@@ -41,6 +41,13 @@ export function installElectronApiFallback(): void {
       open: unavailable,
       close: () => Promise.resolve(),
       openExternal: unavailable,
+      status: () => Promise.resolve({ phase: 'not-installed' }),
+      start: unavailable,
+      stop: unavailable,
+      restart: unavailable,
+      update: unavailable,
+      openLogs: unavailable,
+      copyManagementKey: unavailable,
     },
     workspace: {
       initialize: () => Promise.resolve({ loadState: 'no-workspace', workspaces: [], activeWorkspaceId: null }),

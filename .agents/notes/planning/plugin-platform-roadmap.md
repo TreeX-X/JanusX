@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "draft",
   "created": "2026-10-16",
-  "updated": "2026-10-16T04:28:31Z",
+  "updated": "2026-10-16T06:05:23Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/1aef97e6-77fe-4bae-af51-ff560a737282",
   "relations": [
     { "type": "related-to", "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/96a2f5cd-166e-4982-a444-7640858f0a5f" },
@@ -21,7 +21,7 @@
 
 已确认先建设扩展架构，将现有右侧文件树、Git 和会话管理按内置扩展管理，再开放第三方插件和市场。中部工作区与右侧工作区都提供通用贡献入口；插件可单独提供一种视图，也可同时提供两种。维护目标是让插件作者使用公开接口独立开发，接入已有能力时无需逐插件修改宿主容器。
 
-本计划按依赖安排 S1 至 S5，尚未指定版本或工期，不挤占既有版本事项；统一列入[工程排期的未归入节点](engineering-milestones.md)。2026-10-16 按 xdo 交付 S1 可信渲染器扩展基础、S2 内置工具迁移与 S3 CPA 内嵌及双区域验证；S4、S5 待实施。阶段通过以所属需求的验收与实际证据为准，普通 xdo 不创建执行 Task。
+本计划按依赖安排 S1 至 S5，尚未指定版本或工期，不挤占既有版本事项；统一列入[工程排期的未归入节点](engineering-milestones.md)。2026-10-16 按 xdo 交付 S1 可信渲染器扩展基础、S2 内置工具迁移与 S3 CPA 内嵌及双区域验证，并补充用户确认的本地 CPA 托管；S4、S5 待实施。阶段通过以所属需求的验收与实际证据为准，普通 xdo 不创建执行 Task。
 
 ## 当前基础与实施边界
 
@@ -54,7 +54,7 @@ S1、S2 优先形成可独立验收的内置扩展基础，不等待市场完成
 
 CPA 作为官方推荐集成候选，主要用于账号额度及重置次数、时间等信息查看；转 API 按需配置。优先复用现有管理界面，不重建完整原生账号面板。具体前端和各供应商字段覆盖需核实，调用统计不能替代供应商剩余额度。
 
-双区域示例用于验证宿主能力，不要求 CPA 首版实现原生右侧额度摘要。托管下载与升级 CPA、本地进程管理、完整额度摘要均不作为本阶段默认交付。若所选管理前端无法内嵌，需先明确调整 CPA 交付范围；浏览器回退不能作为“内嵌已验收”的证据。
+双区域示例用于验证宿主能力，不要求 CPA 首版实现原生右侧额度摘要。初始 S3 未包含托管下载、升级与进程管理；用户后续明确选择首次启用下载，已按末节补充交付。完整原生额度摘要仍不在范围内。若所选管理前端无法内嵌，需先明确调整 CPA 交付范围；浏览器回退不能作为“内嵌已验收”的证据。
 
 ### S4 与 S5 的进入条件
 
@@ -92,9 +92,9 @@ S2a 文件树、S2b Git、S2c 会话管理统一在 `extensions/builtins.tsx` �
 
 ## S3 交付与验证
 
-CPA 通过 `janusx.cpa` 注册应用级中部页面，设置的“应用设置 → 服务集成”保存已有实例的管理页地址并打开页面，中部 `+` 菜单也提供入口。使用原生网页承载原版管理前端，复用原浏览器的加载错误、重试与对话框遮挡机制；保留系统浏览器入口。CPA 后端由用户提供，本阶段不托管实例、不新增模型 API 配置或原生额度摘要。
+CPA 通过 `janusx.cpa` 注册应用级中部页面，设置的“应用设置 → 服务集成”保存已有实例的管理页地址并打开页面，中部 `+` 菜单也提供入口。使用原生网页承载原版管理前端，复用原浏览器的加载错误、重试与对话框遮挡机制；保留系统浏览器入口。S3 初始交付连接已有实例，后续按用户确认补充下节本地托管；仍不新增 JanusX 模型 API 配置或原生额度摘要。
 
-全局配置仅存地址。管理密钥由原前端处理，按 origin 隔离的持久分区保留其登录；跨项目复用同一原生页面，关闭释放视图，重启可恢复前端自己记住的登录。页面无 preload、Node 或宿主桥，原生浏览器仅通过内部选项配置独立分区及 HTTP(S) 导航限制。详细边界及版本限制归[服务集成](../workbench/service-integrations.md)，不据此完成第三方权限验收 AC-8。
+初始交付的已有实例模式全局配置只存地址，管理密钥由原前端处理，按 origin 隔离的持久分区保留其登录；跨项目复用同一原生页面，关闭释放视图，重启可恢复前端自己记住的登录。页面无 preload、Node 或宿主桥，原生浏览器仅通过内部选项配置独立分区及 HTTP(S) 导航限制。后续托管增加的配置与密钥职责见末节及[服务集成](../workbench/service-integrations.md)，不据此完成第三方权限验收 AC-8。
 
 单元验证：`npx vitest run tests/unit/cpa.test.ts tests/unit/browser-surface-manager.test.ts tests/unit/browser-ipc-contract.test.ts tests/unit/browser-occlusion.test.ts tests/unit/builtin-extensions.test.ts tests/unit/extensions.test.ts` 共 80 项通过，覆盖地址和 IPC 边界、只保存地址、并发打开、重复保存、关闭重开、分区变化、系统浏览器调用和受限导航，日志为 `artifacts/cpa-s3-unit.log`。
 
@@ -103,3 +103,15 @@ CPA 通过 `janusx.cpa` 注册应用级中部页面，设置的“应用设置 �
 真实 Electron：`tests/e2e/desktop-cpa.spec.ts` 的本地页面用例验证跨项目同一 guest、独立网页登录、无宿主桥、对话框遮挡、HTTP 弹窗标签、关闭释放和应用重启后登录恢复。原版 CPAMC v1.26.5 用例验证渲染、登录、配额页导航及刷新恢复，使用校验 SHA-256 的上游单文件前端与本地模拟管理 API；没有真实供应商账号或 OAuth 证据。原有 `desktop-smoke.spec.ts` 的 `Browser load failure` 用例通过。原版前端和浏览器回归结果位于 `artifacts/cpa-s3/desktop-final`，生命周期最终结果位于 `artifacts/cpa-s3/desktop-lifecycle`。运行原版用例需设置 `JANUSX_E2E_CPA_HTML` 与 `JANUSX_E2E_CPA_SHA256`；默认无资源时显式跳过，不联网下载。最初失败的预期及定位器已修正，不作为通过证据。
 
 严格类型检查、生产变更范围 ESLint、`npm run build:app`、包边界、i18n 和 Notes 检查通过；Notes 为 315 份、0 错误、17 条显式外部链接诊断。主题生成检查通过，全仓主题审计仍在未改动的 About 页报上述两处固定颜色。S3 出口限定为管理前端与通用宿主验证，实际后端及供应商额度兼容性需连接部署实例再核对；S4 进入前仍须解决本计划所列开发目录与正式发布信任规则。
+
+## S3 补充：本地 CPA 托管
+
+用户已选择首次启用下载、自定义端口、自动更新，并认可 CPA 随 JanusX 运行。本地托管与已有实例两种模式已交付，旧地址配置继续归已有实例。托管初始未启用，启用保存或按需打开时准备组件并启动，关闭页面保持服务，停用或应用退出停止自有进程。支持端口校验、占用提示、运行状态、停止／重启、立即更新、日志及加密管理密钥的显式复制。配置、账号目录与版本文件分开，主安装包不包含 CPA 二进制。产品边界和平台限制归[服务集成](../workbench/service-integrations.md)。
+
+组件从固定官方仓库选择支持主版本的稳定资源并校验 GitHub SHA-256 digest，限制解压文件，保留许可证。自动更新每日检查并暂存，下一次 CPA 启动时应用；立即更新会重启。新版本启动失败尝试保留的当前版本，恢复启动前配置，账号不参与覆盖。受控托管不提供第三方本机执行权限，AC-8 保持未完成，S4 的信任规则仍须独立确定。
+
+单元验证：`npx vitest run tests/unit/cpa.test.ts tests/unit/cpa-installer.test.ts tests/unit/cpa-runtime.test.ts tests/unit/app-shutdown.test.ts tests/unit/browser-surface-manager.test.ts tests/unit/browser-ipc-contract.test.ts tests/unit/extensions.test.ts` 共 101 项通过，日志 `artifacts/cpa-managed-unit.log`。覆盖摘要与来源、归档过滤、取消、组件篡改、版本保留／清理、端口冲突、加密存储不可用、幂等启动、密钥复用及并发生成、退出竞态、更新暂存、失败回退及原浏览器和扩展回归。更新跨版本与下载失败为单元替身证据，不等于真实未来版本升级兼容性。
+
+桌面验证：构建后设置 `JANUSX_E2E_CPA_ZIP`、`JANUSX_E2E_CPA_HTML` 与 `JANUSX_E2E_CPA_SHA256`，运行 `npx playwright test tests/e2e/desktop-cpa.spec.ts tests/e2e/desktop-smoke.spec.ts --project=desktop --workers=1 --grep 'CPA|CPAMC|Browser load failure' --output=artifacts/cpa-managed/desktop-final`，4 项通过。密钥并发生成修复后，以 `--grep 'managed CPA' --output=artifacts/cpa-managed/desktop-key-final` 重跑托管用例，1 项通过。新托管用例替换网络传输为本地校验资源，但生产安装器、提取、safeStorage、真实 Windows CPA 8.0.31、CPAMC 1.26.5 与进程托管原样执行；验证设置页首次启用、原前端登录／配额导航、关闭页继续运行、修改端口、冲突不结束外部监听、应用退出后端口释放及整应用重启后的密钥与账号目录测试文件保留。未接入真实供应商账号，未验证 OAuth、额度、强杀全部进程或已签名安装包；网络资源曾实际下载并校验，但桌面用例不衡量 GitHub 可达性。
+
+浏览器回归 `extensions.spec.ts` 与 `builtin-extensions.spec.ts` 7 项通过，结果在 `artifacts/cpa-managed/browser`。严格类型检查、生产变更范围 ESLint、构建、i18n、包边界和 Notes 检查通过；全仓主题检查仍被未改动的 About 页两处固定颜色阻断。Windows 子进程仍继承父进程权限，未实现降权；macOS／Linux 下载分支未作真实启动验收，不能从 Windows 结果推导跨平台完成。

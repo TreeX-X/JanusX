@@ -652,6 +652,13 @@ const cpaAPI: CpaAPI = {
   open: () => ipcRenderer.invoke(CPA_CHANNELS.open),
   close: () => ipcRenderer.invoke(CPA_CHANNELS.close),
   openExternal: () => ipcRenderer.invoke(CPA_CHANNELS.openExternal),
+  status: () => ipcRenderer.invoke(CPA_CHANNELS.status),
+  start: () => ipcRenderer.invoke(CPA_CHANNELS.start),
+  stop: () => ipcRenderer.invoke(CPA_CHANNELS.stop),
+  restart: () => ipcRenderer.invoke(CPA_CHANNELS.restart),
+  update: () => ipcRenderer.invoke(CPA_CHANNELS.update),
+  openLogs: () => ipcRenderer.invoke(CPA_CHANNELS.logs),
+  copyManagementKey: () => ipcRenderer.invoke(CPA_CHANNELS.copyKey),
 }
 
 contextBridge.exposeInMainWorld('electron', {

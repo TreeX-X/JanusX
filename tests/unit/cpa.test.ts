@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { CPA_CHANNELS, CPA_SURFACE_ID, DEFAULT_CPA_MANAGEMENT_URL, normalizeCpaManagementUrl } from '../../src/shared/ipc/cpa'
+import { CPA_CHANNELS, CPA_SURFACE_ID, DEFAULT_CPA_MANAGEMENT_URL, normalizeCpaManagementUrl, normalizeCpaSettings } from '../../src/shared/ipc/cpa'
 import { CpaService } from '../../src/main/cpa/service'
 import type { BrowserSurfaceManager } from '../../src/main/browser/surface-manager'
 import { registerCpaHandlers } from '../../src/main/ipc/cpa-handlers'
@@ -9,7 +9,12 @@ const h = vi.hoisted(() => ({
   update: vi.fn(),
   external: vi.fn(),
   handle: vi.fn(),
+  runtime: { start: vi.fn(), stop: vi.fn(), status: vi.fn(), dispose: vi.fn(), stageUpdate: vi.fn(), copyKey: vi.fn(), openLogs: vi.fn() },
 }))
+vi.mock('../../src/main/cpa/runtime', () => ({ CpaRuntime: class {
+  start = h.runtime.start; stop = h.runtime.stop; status = h.runtime.status; dispose = h.runtime.dispose
+  stageUpdate = h.runtime.stageUpdate; copyKey = h.runtime.copyKey; openLogs = h.runtime.openLogs
+} }))
 vi.mock('electron', () => ({ shell: { openExternal: h.external }, ipcMain: { handle: h.handle } }))
 vi.mock('../../src/main/config/service', () => ({ configService: {
   get: async () => h.config,
@@ -46,9 +51,9 @@ describe('CPA page addresses', () => {
 describe('CPA global integration service', () => {
   it('defaults without a configured instance and persists only a validated page address', async () => {
     const { service } = fixture()
-    expect(await service.getSettings()).toEqual({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
+    expect(await service.getSettings()).toEqual(normalizeCpaSettings(null))
     await service.saveSettings({ managementUrl: 'localhost:9000', managementKey: 'never-store-me' })
-    expect(h.update).toHaveBeenCalledWith({ cpaSettings: { managementUrl: 'http://localhost:9000/management.html' } })
+    expect(h.update).toHaveBeenCalledWith({ cpaSettings: normalizeCpaSettings({ managementUrl: 'localhost:9000' }) })
     expect(JSON.stringify(h.config)).not.toContain('never-store-me')
     await expect(service.saveSettings({ managementUrl: 'file:///secret' })).rejects.toThrow()
     expect(h.update).toHaveBeenCalledTimes(1)
@@ -56,6 +61,7 @@ describe('CPA global integration service', () => {
 
   it('reuses one surface concurrently and keeps login storage across close/reopen', async () => {
     const { service, surfaces } = fixture()
+    h.config = { cpaSettings: { managementUrl: DEFAULT_CPA_MANAGEMENT_URL } }
     await Promise.all([service.open(), service.open()])
     expect(surfaces.createSurface).toHaveBeenCalledTimes(1)
     const profile = surfaces.createSurface.mock.calls[0]
@@ -77,9 +83,9 @@ describe('CPA global integration service', () => {
   it('recovers an invalid persisted address so settings can repair it', async () => {
     h.config = { cpaSettings: { managementUrl: 'file:///secret' } }
     const { service } = fixture()
-    expect(await service.getSettings()).toEqual({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
+    expect(await service.getSettings()).toEqual(normalizeCpaSettings(null))
     await service.saveSettings({ managementUrl: 'localhost:9000' })
-    expect(await service.getSettings()).toEqual({ managementUrl: 'http://localhost:9000/management.html' })
+    expect(await service.getSettings()).toEqual(normalizeCpaSettings({ managementUrl: 'localhost:9000' }))
   })
 
   it('opens the validated configured address in the system browser', async () => {
@@ -97,10 +103,45 @@ describe('CPA global integration service', () => {
     const handlers = new Map(h.handle.mock.calls)
     expect([...handlers.keys()]).toEqual(Object.values(CPA_CHANNELS))
     const get = handlers.get(CPA_CHANNELS.get)!
-    await expect(get({ sender, senderFrame: mainFrame })).resolves.toEqual({ managementUrl: DEFAULT_CPA_MANAGEMENT_URL })
+    await expect(get({ sender, senderFrame: mainFrame })).resolves.toEqual(normalizeCpaSettings(null))
     for (const handler of handlers.values()) {
       expect(() => handler({ sender: {}, senderFrame: mainFrame })).toThrow('unauthorized')
       expect(() => handler({ sender, senderFrame: {} })).toThrow('unauthorized')
     }
+  })
+
+  it('starts on enable, restarts for a new port, preserves the service when closing UI, and stops on disable', async () => {
+    const { service } = fixture()
+    const settings = { mode: 'managed', enabled: true, port: 18317, autoUpdate: true }
+    await service.saveSettings(settings)
+    expect(h.runtime.start).toHaveBeenLastCalledWith(normalizeCpaSettings(settings))
+    await service.open()
+    await service.close()
+    expect(h.runtime.stop).toHaveBeenCalledTimes(1)
+    await service.saveSettings({ ...settings, port: 18318 })
+    expect(h.runtime.start).toHaveBeenLastCalledWith(expect.objectContaining({ port: 18318 }))
+    await service.saveSettings({ ...settings, enabled: false })
+    await expect(service.open()).rejects.toThrow('cpa-not-enabled')
+    await service.dispose()
+    expect(h.runtime.dispose).toHaveBeenCalledOnce()
+  })
+
+  it.each([0, 1023, 65536, 1.5, NaN])('rejects invalid managed port %j', async (port) => {
+    const { service } = fixture()
+    await expect(service.saveSettings({ mode: 'managed', enabled: true, port })).rejects.toThrow('cpa-invalid-port')
+    expect(h.update).not.toHaveBeenCalled()
+    expect(h.runtime.start).not.toHaveBeenCalled()
+  })
+
+  it('does not create a late native surface after a concurrent stop or application disposal', async () => {
+    const { service, surfaces } = fixture()
+    h.config = { cpaSettings: { mode: 'managed', enabled: true, port: 8317 } }
+    const opening = service.open()
+    const result = expect(opening).rejects.toThrow('cpa-stopped')
+    await service.stop()
+    await result
+    expect(surfaces.createSurface).not.toHaveBeenCalled()
+    await service.dispose()
+    await expect(service.open()).rejects.toThrow('cpa-stopped')
   })
 })
