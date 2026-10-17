@@ -49,13 +49,10 @@ import { TeamSetupGate } from '@/components/team/TeamSetupGate'
 import { FolderOpen } from 'lucide-react'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
+import { IslandBlackboard } from '@/components/blackboard/IslandBlackboard'
 import styles from './App.module.css'
 
-/*-- P4: 重量级面板按需分包。蓝图画布（@xyflow）与产物工作区不进首屏 bundle，
-     Suspense fallback 为 null（蓝图在翻转卡背面、产物工作区有显隐门控，无感加载）。 --*/
-const BlueprintFocusView = lazy(() =>
-  import('@/components/blueprint/BlueprintFocusView').then((m) => ({ default: m.BlueprintFocusView }))
-)
+/*-- P4: 重量级面板按需分包。产物工作区不进首屏 bundle，Suspense fallback 为 null。 --*/
 const ProductWorkspacePanel = lazy(() =>
   import('@/components/product-workspace/ProductWorkspacePanel').then((m) => ({ default: m.ProductWorkspacePanel }))
 )
@@ -102,10 +99,6 @@ export default function App() {
   // P5: 细粒度 selector——App 是整树根组件，任意 store 字段变化都不应带动整树
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
-  const blueprintMode = useAppStore((s) => s.blueprintMode)
-  const isIslandDragging = useAppStore((s) => s.isIslandDragging)
-  const flipDuration = useAppStore((s) => s.flipDuration)
-  const dragFlipProgress = useAppStore((s) => s.dragFlipProgress)
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
@@ -393,7 +386,6 @@ export default function App() {
   }, [finishEditorResize, finishProductResize])
 
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
-  const flipperElRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     return subscribeToCheckpointEvents()
@@ -448,84 +440,31 @@ export default function App() {
       >
         <Sidebar />
 
-        {/*-- 中心区域：3D 翻转容器（正面=终端，背面=蓝图） --*/}
-        <main ref={centerWorkspaceRef} className="min-w-0 min-h-0 overflow-hidden relative" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
-          <div
-            ref={flipperElRef}
-            style={{
-              width: '100%',
-              height: '100%',
-              position: 'relative',
-              transformStyle: 'preserve-3d',
-              /*-- P0: 拖拽时 transition: none（通过 store isIslandDragging 控制） --*/
-              /*-- P2: 翻转动量感知 — 使用 flipDuration --*/
-              transition: isIslandDragging
-                ? 'none'
-                : `transform ${flipDuration}ms cubic-bezier(0.25, 1, 0.25, 1)`,
-              /*-- P0: 拖拽期间由 dragFlipProgress 实时计算旋转角度 --*/
-              transform: (() => {
-                const base = blueprintMode ? -180 : 0
-                if (isIslandDragging) {
-                  const dragRotation = dragFlipProgress * -15
-                  return `rotateX(${base + dragRotation}deg)`
-                }
-                return `rotateX(${base}deg)`
-              })(),
-            }}
-          >
-            {/*-- 正面：终端视图 --*/}
-            <div
-              className="absolute inset-0 min-w-0"
-              style={{
-                backfaceVisibility: 'hidden',
-                background: 'var(--bg-deep)',
-                pointerEvents: blueprintMode ? 'none' : 'auto',
-                opacity: blueprintMode ? 0 : 1,
-                transition: isIslandDragging ? 'none' : `opacity ${flipDuration}ms ease-in-out`,
-              }}
-              {...(blueprintMode ? { inert: '' } : {})}
-              aria-hidden={blueprintMode}
-            >
-              {mountWorkspacePane && (
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    display: showWorkspacePane ? 'block' : 'none',
-                  }}
-                  {...(!showWorkspacePane ? { inert: '' } : {})}
-                  aria-hidden={!showWorkspacePane}
-                >
-                  <WorkbenchErrorBoundary>
-                    <TerminalArea />
-                  </WorkbenchErrorBoundary>
-                </div>
-              )}
-              {!showWorkspacePane && (
-                <>
-                  {activeWorkspaceId === null && <EmptyWorkspace />}
-                  {activeWorkspaceId !== null && <TerminalSelector />}
-                </>
-              )}
-            </div>
-
-            {/*-- 背面：蓝图视图（P2 画布） --*/}
-            <div
-              className="absolute inset-0 overflow-hidden"
-              style={{
-                backfaceVisibility: 'hidden',
-                transform: 'rotateX(180deg)',
-                background: 'radial-gradient(circle at center, #1d1d21 0%, var(--bg-deep) 100%)',
-                pointerEvents: blueprintMode ? 'auto' : 'none',
-                opacity: blueprintMode ? 1 : 0,
-                transition: isIslandDragging ? 'none' : `opacity ${flipDuration}ms ease-in-out`,
-              }}
-              {...(!blueprintMode ? { inert: '' } : {})}
-              aria-hidden={!blueprintMode}
-            >
-              <Suspense fallback={null}>
-                <BlueprintFocusView />
-              </Suspense>
-            </div>
+        {/*-- 中心区域：副黑板（上带）+ 工作区（下带）。下拉手势让工作区下滑让位；
+             perspective 保留给 pane 拖拽预览的 fixed 包含块语义。 --*/}
+        <main ref={centerWorkspaceRef} className="min-w-0 min-h-0 overflow-hidden relative flex flex-col" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
+          <IslandBlackboard />
+          <div className="flex-1 min-h-0 relative">
+            {mountWorkspacePane && (
+              <div
+                className="absolute inset-0"
+                style={{
+                  display: showWorkspacePane ? 'block' : 'none',
+                }}
+                {...(!showWorkspacePane ? { inert: '' } : {})}
+                aria-hidden={!showWorkspacePane}
+              >
+                <WorkbenchErrorBoundary>
+                  <TerminalArea />
+                </WorkbenchErrorBoundary>
+              </div>
+            )}
+            {!showWorkspacePane && (
+              <>
+                {activeWorkspaceId === null && <EmptyWorkspace />}
+                {activeWorkspaceId !== null && <TerminalSelector />}
+              </>
+            )}
           </div>
         </main>
 

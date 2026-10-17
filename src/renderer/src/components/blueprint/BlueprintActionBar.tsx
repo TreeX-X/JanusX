@@ -233,7 +233,6 @@ export function BlueprintActionBar(props: BlueprintActionBarProps) {
       if (existing) {
         window.electron.terminal.input(existing.id, brief.text)
         useWorkspaceStore.getState().setActiveTerminal(existing.id)
-        useAppStore.getState().setBlueprintMode(false)
         useAppStore.getState().setLoadState('terminal-active')
       } else {
         const launched = await launchTerminalPreset({

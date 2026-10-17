@@ -3,21 +3,33 @@ import type { AppLoadState } from '@/types'
 
 export type ActiveWorkbench = 'blueprint' | 'knowledge' | null
 
+/** 副黑板默认/最小高度（px）：下拉落板落点与下缘拖高的下限。 */
+export const BLACKBOARD_DEFAULT_HEIGHT = 420
+export const BLACKBOARD_MIN_HEIGHT = 220
+
+const BLACKBOARD_HEIGHT_KEY = 'janus:blackboard-height'
+
+export function loadBlackboardHeight(): number {
+  try {
+    const raw = Number(window.localStorage.getItem(BLACKBOARD_HEIGHT_KEY))
+    if (Number.isFinite(raw) && raw >= BLACKBOARD_MIN_HEIGHT) return raw
+  } catch { /* persistence is best-effort */ }
+  return BLACKBOARD_DEFAULT_HEIGHT
+}
+
+export function saveBlackboardHeight(height: number): void {
+  try { window.localStorage.setItem(BLACKBOARD_HEIGHT_KEY, String(Math.round(height))) } catch { /* best-effort */ }
+}
+
 interface AppStore {
   loadState: AppLoadState
   sidebarCollapsed: boolean
   panelCollapsed: boolean
-  blueprintMode: boolean
   activeWorkbench: ActiveWorkbench
-  /** 岛下拉副黑板：展开中的卷帘板与其下缘的视口 Y（原生浏览器视图按此让出顶带）。 */
-  blackboardOpen: boolean
-  blackboardBottom: number
-  /** 翻转动画时长（ms），快甩 350 / 慢拖 650 */
-  flipDuration: number
-  /** 灵动岛是否正在拖拽中（App.tsx 据此禁用 transition） */
-  isIslandDragging: boolean
-  /** 拖拽翻转进度 0~1，用于实时预览旋转角度 */
-  dragFlipProgress: number
+  /** 岛下拉副黑板：settled 高度（0=收起）。中央工作区按此高度下滑让位。 */
+  blackboardHeight: number
+  /** 拖拽过程中的实时预览高度（null=非拖拽中，用 settled 值）。 */
+  blackboardDrag: number | null
   /** Janus 运行态 */
   janusRunning: boolean
   /** 运行中的项目列表 */
@@ -26,16 +38,11 @@ interface AppStore {
   toggleSidebar: () => void
   togglePanel: () => void
   setPanelCollapsed: (collapsed: boolean) => void
-  toggleBlueprint: () => void
-  setBlueprintMode: (enabled: boolean) => void
   setActiveWorkbench: (workbench: ActiveWorkbench) => void
   toggleWorkbench: (workbench: Exclude<ActiveWorkbench, null>) => void
-  setBlackboardOpen: (open: boolean) => void
+  setBlackboardHeight: (height: number) => void
+  setBlackboardDrag: (height: number | null) => void
   toggleBlackboard: () => void
-  setBlackboardBottom: (bottom: number) => void
-  setFlipDuration: (ms: number) => void
-  setIsIslandDragging: (v: boolean) => void
-  setDragFlipProgress: (v: number) => void
   setJanusRunning: (running: boolean) => void
   setRunningProjects: (projects: any[]) => void
 }
@@ -46,35 +53,23 @@ export const useAppStore = create<AppStore>((set) => ({
   // Start with the tool rail visible and the content panel folded. A tool
   // opened from the rail expands it through the right-tool transition.
   panelCollapsed: true,
-  blueprintMode: false,
   activeWorkbench: null,
-  blackboardOpen: false,
-  blackboardBottom: 0,
-  flipDuration: 650,
-  isIslandDragging: false,
-  dragFlipProgress: 0,
+  blackboardHeight: 0,
+  blackboardDrag: null,
   janusRunning: false,
   runningProjects: [],
   setLoadState: (loadState) => set({ loadState }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   togglePanel: () => set((s) => ({ panelCollapsed: !s.panelCollapsed })),
   setPanelCollapsed: (panelCollapsed) => set({ panelCollapsed }),
-  toggleBlueprint: () => set((s) => ({ blueprintMode: !s.blueprintMode })),
-  setBlueprintMode: (blueprintMode) => set({ blueprintMode }),
   setActiveWorkbench: (activeWorkbench) => set({ activeWorkbench }),
   toggleWorkbench: (workbench) => set((s) => ({ activeWorkbench: s.activeWorkbench === workbench ? null : workbench })),
-  setBlackboardOpen: (blackboardOpen) => set((s) => ({
-    blackboardOpen,
-    blackboardBottom: blackboardOpen ? s.blackboardBottom : 0,
-  })),
+  setBlackboardHeight: (blackboardHeight) => set({ blackboardHeight: Math.max(0, blackboardHeight) }),
+  setBlackboardDrag: (blackboardDrag) => set({ blackboardDrag }),
   toggleBlackboard: () => set((s) => ({
-    blackboardOpen: !s.blackboardOpen,
-    blackboardBottom: !s.blackboardOpen ? s.blackboardBottom : 0,
+    blackboardHeight: s.blackboardHeight > 0 ? 0 : loadBlackboardHeight(),
+    blackboardDrag: null,
   })),
-  setBlackboardBottom: (blackboardBottom) => set({ blackboardBottom }),
-  setFlipDuration: (ms) => set({ flipDuration: ms }),
-  setIsIslandDragging: (v) => set({ isIslandDragging: v }),
-  setDragFlipProgress: (v) => set({ dragFlipProgress: v }),
-  setJanusRunning: (running) => set({ janusRunning: running }),
-  setRunningProjects: (projects) => set({ runningProjects: projects }),
+  setJanusRunning: (janusRunning) => set({ janusRunning }),
+  setRunningProjects: (runningProjects) => set({ runningProjects }),
 }))

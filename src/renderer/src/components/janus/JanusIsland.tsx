@@ -208,7 +208,6 @@ export function JanusIsland({
   const cancelMaintenance = useBlueprintMaintenanceStore((state) => state.cancel)
   const loadBlueprint = useBlueprintStore((state) => state.loadBlueprint)
 
-  const toggleBlackboard = useAppStore((s) => s.toggleBlackboard)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
   const roundtableEnabled = useExperimentalStore((s) => s.roundtable)
   const personaEnabled = useExperimentalStore((s) => s.persona)
@@ -284,16 +283,27 @@ export function JanusIsland({
   }, [handleSingleTap])
 
   const handleSwipeBoard = useCallback(() => {
-    // 下拉 ≥60px 放下副黑板（取代蓝图翻牌）：Note island-blackboard.md
-    toggleBlackboard()
-  }, [toggleBlackboard])
+    // 下拉 ≥60px 放下副黑板（工作区下滑让位）：Note island-blackboard.md
+    // 只负责"开"；收板归板下缘上推 / 收起按钮 / Esc。
+    const app = useAppStore.getState()
+    if (app.blackboardHeight > 0) return
+    app.setBlackboardDrag(null)
+    app.toggleBlackboard()
+  }, [])
 
   const handleOpenBlueprintWorkbench = useCallback(() => {
     setActiveWorkbench('blueprint')
   }, [setActiveWorkbench])
 
-  const handleDragProgress = useCallback((_deltaY: number, progress: number) => {
-    useAppStore.getState().setDragFlipProgress(progress)
+  const handleDragProgress = useCallback((deltaY: number) => {
+    // 预览高度跟手（工作区随之下滑）；板已开时下缘拖高拥有尺寸权。
+    const app = useAppStore.getState()
+    if (app.blackboardHeight > 0) return
+    app.setBlackboardDrag(deltaY > 0 ? Math.min(deltaY, window.innerHeight * 0.7) : null)
+  }, [])
+
+  const handleSwipeCancel = useCallback(() => {
+    useAppStore.getState().setBlackboardDrag(null)
   }, [])
 
   const {
@@ -308,6 +318,7 @@ export function JanusIsland({
   } = useIslandGesture({
     onLongPress: handleLongPress,
     onSwipeFlip: handleSwipeBoard,
+    onSwipeCancel: handleSwipeCancel,
     onDoubleTap: handleDoubleTap,
     onSingleTap: handleSingleTap,
     onDragProgress: handleDragProgress,

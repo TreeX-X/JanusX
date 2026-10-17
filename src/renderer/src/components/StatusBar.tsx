@@ -13,7 +13,6 @@ export function StatusBar() {
   const terminals = useWorkspaceStore((s) => s.terminals)
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
   const loadState = useAppStore((s) => s.loadState)
-  const blueprintMode = useAppStore((s) => s.blueprintMode)
 
   const focusedTerminal = activeTerminalId ? terminals.find((terminal) => terminal.id === activeTerminalId) ?? null : null
   const remoteStatus = useRemoteStore((s) => s.status)
@@ -75,7 +74,7 @@ export function StatusBar() {
             boxShadow: '0 0 6px rgba(255, 120, 48, 0.6)',
           }}
         />
-        <span>{blueprintMode ? t('common:statusBar.blueprintRunning') : (statusText[loadState] ?? t('common:statusBar.ready'))}</span>
+        <span>{statusText[loadState] ?? t('common:statusBar.ready')}</span>
       </div>
       {/* 远控入口：创新开关 remoteControl 关闭时隐藏；搬离侧栏左下角后这是唯一的常驻入口。 */}
       {remoteControlEnabled && (

@@ -1,33 +1,27 @@
-/* IslandBlackboard —— 岛下拉副黑板（卷帘）。
+/* IslandBlackboard —— 岛下拉副黑板。
    材质纪律：透明面板 + 1px 发丝线、无色块填充；选中 = 文字提亮 + 2px 强调条。
-   板面不透明（原生视图无法被 DOM 半透明遮盖），下缘发丝线即天际线。 */
+   形态：中部工作区列内的上带（flex 首子），主工作区下滑让位；
+   不是整窗宽卷帘，不碰左右栏架。下缘发丝线即天际线。 */
 
 .island-blackboard {
-  position: fixed;
-  left: 0;
-  right: 0;
-  z-index: 1500;
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--shell-chrome);
   border-bottom: 1px solid var(--shell-border);
-  animation: bb-drop 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: height 220ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes bb-drop {
-  from {
-    transform: translateY(-12px);
-    opacity: 0.6;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+.island-blackboard[data-dragging] {
+  transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .island-blackboard {
-    animation: none;
+    transition: none;
   }
 }
 
@@ -225,12 +219,12 @@
   border: 1px solid var(--shell-border);
 }
 
-/*-- 下缘拖高命中区（9px，与工作区分隔线同语言） --*/
+/*-- 下缘拖高/上推收板命中区（9px，与工作区分隔线同语言） --*/
 .bb-edge {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: -4px;
+  bottom: 0;
   height: 9px;
   cursor: ns-resize;
 }

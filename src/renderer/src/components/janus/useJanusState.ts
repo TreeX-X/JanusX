@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { useAppStore } from '@/stores/app'
 import { useRunningStore } from '@/stores/running'
 import { useWorkspaceStore } from '@/stores/workspace'
 import type { JanusMode } from './JanusEye'
@@ -32,18 +31,13 @@ export function useJanusState(): JanusState {
   const lastWsIdRef = useRef<string | null>(null)
   const seenFirstRef = useRef(false)
 
-  const blueprintMode = useAppStore((s) => s.blueprintMode)
   const runningCount = useRunningStore((s) => Object.keys(s.runningByWorkspace).length)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId)
 
-  /*-- mode 推导 — 运转外移到运行球，本体仅：休眠 > 解析 > 秩序 --*/
-  const mode: JanusMode = !activeWorkspace
-    ? 'sleep'
-    : blueprintMode
-      ? 'analytics'
-      : 'order'
+  /*-- mode 推导 — 运转外移到运行球，本体仅：休眠 / 秩序 --*/
+  const mode: JanusMode = !activeWorkspace ? 'sleep' : 'order'
 
   /*-- 工作区切换：眼睛渐隐再现 --*/
   useEffect(() => {

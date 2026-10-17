@@ -1,5 +1,4 @@
 import { useRef, useCallback, useEffect } from 'react'
-import { useAppStore } from '@/stores/app'
 import {
   isDoubleTapWithinTolerance,
   isInteractiveIslandDescendant,
@@ -13,17 +12,18 @@ import {
    识别：长�?(Focus & Snap) / 下拉拖拽 (弹性阻�? / 双击
    ════════════════════════════════════════════════════════════ */
 
-const SWIPE_THRESHOLD = 60          // 翻转阈�?px
-const VELOCITY_THRESHOLD = 0.5      // 快甩阈�?px/ms
+const SWIPE_THRESHOLD = 60          // 副黑板开合阈值 px
 const LONG_PRESS_DURATION = 550     // 长按时长 ms（设计原型值）
 const PRESS_DELAY = 100             // 按压延迟 ms
 
 interface IslandGestureOptions {
   onLongPress: () => void           // 长按完成回调
-  onSwipeFlip: () => void           // 下拉翻转回调
+  onSwipeFlip: () => void           // 下拉达阈值回调（放下/收起副黑板）
+  /** 未达阈值的拖拽释放：预览归位 */
+  onSwipeCancel?: () => void
   onDoubleTap: () => void           // 双击回调
-  /** 拖拽过程中实时回调，用于翻转容器预览旋转 */
   onSingleTap?: () => void
+  /** 拖拽过程中实时回调：副黑板预览高度跟手 */
   onDragProgress?: (deltaY: number, progress: number) => void
   isRunning: boolean
   enableComplexGestures?: boolean
@@ -34,6 +34,7 @@ interface IslandGestureOptions {
 export function useIslandGesture({
   onLongPress,
   onSwipeFlip,
+  onSwipeCancel,
   onDoubleTap,
   onSingleTap,
   onDragProgress,
@@ -61,11 +62,6 @@ export function useIslandGesture({
   const longPressFrame = useRef<number>(0)
   const pressStartTime = useRef(0)
 
-  /*-- 动量感知 --*/
-  const velocityHistory = useRef<Array<{ y: number; t: number }>>([])
-  const flipRequestRef = useRef(0)
-  const flipFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   /*-- 双击检�?--*/
   const lastTapTime = useRef(0)
   const lastTapPoint = useRef<TapPoint | null>(null)
@@ -82,7 +78,6 @@ export function useIslandGesture({
   useEffect(() => {
     return () => {
       if (pressDelayTimer.current) clearTimeout(pressDelayTimer.current)
-      if (flipFallbackTimerRef.current) clearTimeout(flipFallbackTimerRef.current)
       if (pendingSingleTapTimer.current) clearTimeout(pendingSingleTapTimer.current)
       cancelAnimationFrame(longPressFrame.current)
     }
@@ -204,7 +199,6 @@ export function useIslandGesture({
       startX.current = e.clientX
       startY.current = e.clientY
       currentDragY.current = 0
-      velocityHistory.current = []
 
       if (!enableComplexGestures) return
 
@@ -218,13 +212,6 @@ export function useIslandGesture({
       pressDelayTimer.current = setTimeout(() => {
         if (!isDragging.current) startLongPressProgress()
       }, PRESS_DELAY)
-
-      // 拖拽取消长按
-      flipRequestRef.current += 1
-      if (flipFallbackTimerRef.current) {
-        clearTimeout(flipFallbackTimerRef.current)
-        flipFallbackTimerRef.current = null
-      }
     },
     [enableComplexGestures, onDoubleTap, startLongPressProgress],
   )
@@ -251,42 +238,25 @@ export function useIslandGesture({
         if (island) {
           island.classList.remove('pressing')
           island.classList.add('is-dragging')
-          island.style.transform = 'translateY(0)'
         }
       }
 
       if (isDragging.current && deltaY > 0) {
         currentDragY.current = deltaY
-        useAppStore.getState().setIsIslandDragging(true)
 
-        // 动量记录（最�?5 帧）
-        const now = performance.now()
-        const history = velocityHistory.current
-        history.push({ y: deltaY, t: now })
-        if (history.length > 5) history.shift()
-
-        // 弹性过阻尼
-        const T = SWIPE_THRESHOLD
-        const offset =
-          deltaY < T ? deltaY * 0.4 : T * 0.4 + (deltaY - T) * 0.15
-
-        const island = islandRef.current
-        if (island) island.style.transform = `translateY(${offset}px)`
-
-        // 拖拽进度 �?翻转容器实时旋转预览
+        // Board preview follows the pull; the island itself stays put.
         if (onDragProgress) {
           const progress = Math.min(deltaY / SWIPE_THRESHOLD, 1)
           onDragProgress(deltaY, progress)
         }
 
-        // 下拉引导提示 �?跟随岛屿移动，避免遮�?
+        // Pull hint stays anchored to the island (no drag offset).
         const hint = pullHintRef.current
         if (hint) {
           if (deltaY > 20 && !isRunning) {
             hint.style.opacity = String(Math.min(deltaY / 30, 1))
-            hint.style.transform = `translate(-50%, ${offset}px)` // 跟随岛屿向下移动
             const labels = pullHintLabelsRef.current
-            if (deltaY >= T) {
+            if (deltaY >= SWIPE_THRESHOLD) {
               hint.textContent = labels?.release ?? 'Release to flip'
               hint.style.color = '#fff'
             } else {
@@ -325,67 +295,19 @@ export function useIslandGesture({
 
       if (isDragging.current) {
         isDragging.current = false
-        useAppStore.getState().setIsIslandDragging(false)
-        // 重置拖拽翻转进度
+        // Preview reset; settle/cancel callbacks own the board height.
         if (onDragProgress) onDragProgress(0, 0)
 
-        // 隐藏提示
         const hint = pullHintRef.current
         if (hint) {
           hint.style.opacity = '0'
-          hint.style.transform = 'translateX(-50%)' // 重置位置
+          hint.style.transform = 'translateX(-50%)'
         }
 
-        // 计算释放速度
-        const history = velocityHistory.current
-        let velocity = 0
-        if (history.length >= 2) {
-          const first = history[0]
-          const last = history[history.length - 1]
-          const dt = last.t - first.t
-          if (dt > 0) velocity = (last.y - first.y) / dt
-        }
-        useAppStore
-          .getState()
-          .setFlipDuration(velocity > VELOCITY_THRESHOLD ? 350 : 650)
-
-        // 回弹动画
-        if (island) {
-          island.style.transition =
-            'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-          island.style.transform = 'translateY(0)'
-        }
-
-        // 达到翻转阈�?�?切换蓝图
-        if (currentDragY.current >= SWIPE_THRESHOLD) {
-          const requestId = ++flipRequestRef.current
-          let flipApplied = false
-
-          const applyFlipOnce = () => {
-            if (flipApplied || requestId !== flipRequestRef.current) return
-            flipApplied = true
-            if (flipFallbackTimerRef.current) {
-              clearTimeout(flipFallbackTimerRef.current)
-              flipFallbackTimerRef.current = null
-            }
-            onSwipeFlip()
-          }
-
-          if (island) {
-            const onEnd = (ev: TransitionEvent) => {
-              if (ev.propertyName !== 'transform') return
-              island.removeEventListener('transitionend', onEnd)
-              applyFlipOnce()
-            }
-            island.addEventListener('transitionend', onEnd)
-            flipFallbackTimerRef.current = setTimeout(applyFlipOnce, 450)
-          } else {
-            applyFlipOnce()
-          }
-        }
-
+        const flipped = currentDragY.current >= SWIPE_THRESHOLD
         currentDragY.current = 0
-        velocityHistory.current = []
+        if (flipped) onSwipeFlip()
+        else onSwipeCancel?.()
       } else {
         // 非拖�?�?检查双�?
         if (enableComplexGestures && !hasTriggeredLongPress.current && Math.hypot(e.clientX - startX.current, e.clientY - startY.current) <= 12) {
@@ -423,7 +345,7 @@ export function useIslandGesture({
         }
       }
     },
-    [enableComplexGestures, onSwipeFlip, onDoubleTap, onSingleTap, cancelLongPressProgress, onDragProgress],
+    [enableComplexGestures, onSwipeFlip, onSwipeCancel, onDoubleTap, onSingleTap, cancelLongPressProgress, onDragProgress],
   )
 
   const handlePointerCancel = useCallback(() => {
@@ -432,14 +354,9 @@ export function useIslandGesture({
     lastTapTime.current = 0
     lastTapPoint.current = null
     if (pressDelayTimer.current) clearTimeout(pressDelayTimer.current)
-    if (flipFallbackTimerRef.current) {
-      clearTimeout(flipFallbackTimerRef.current)
-      flipFallbackTimerRef.current = null
-    }
     isPointerDown.current = false
     isDragging.current = false
     cancelLongPressProgress()
-    useAppStore.getState().setIsIslandDragging(false)
     if (onDragProgress) onDragProgress(0, 0)
 
     const island = islandRef.current
@@ -455,7 +372,6 @@ export function useIslandGesture({
     if (hint) hint.style.transform = 'translateX(-50%)' // 重置位置
 
     currentDragY.current = 0
-    velocityHistory.current = []
   }, [cancelLongPressProgress, onDragProgress])
 
   return {

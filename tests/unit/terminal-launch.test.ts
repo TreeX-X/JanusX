@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { addTerminal, updateTerminal, setBlueprintMode, setLoadState, workspaceTerminals } = vi.hoisted(() => ({
+const { addTerminal, updateTerminal, setLoadState, workspaceTerminals } = vi.hoisted(() => ({
   addTerminal: vi.fn(),
   updateTerminal: vi.fn(),
-  setBlueprintMode: vi.fn(),
   setLoadState: vi.fn(),
   workspaceTerminals: [] as Array<Record<string, unknown>>,
 }))
@@ -24,7 +23,6 @@ vi.mock('@/stores/workspace', () => ({
 vi.mock('@/stores/app', () => ({
   useAppStore: {
     getState: () => ({
-      setBlueprintMode,
       setLoadState,
     }),
   },
@@ -52,7 +50,6 @@ describe('terminal-launch', () => {
     vi.resetModules()
     addTerminal.mockReset()
     updateTerminal.mockReset()
-    setBlueprintMode.mockReset()
     setLoadState.mockReset()
     waitForTerminalGeometry.mockReset()
     waitForTerminalGeometry.mockResolvedValue({ cols: 120, rows: 40 })
@@ -157,7 +154,6 @@ describe('terminal-launch', () => {
     expect(terminal.preset).toBe('claude')
     expect(terminal.shell).toBe('powershell.exe')
     expect(terminal.contextWindowTokens).toBeUndefined()
-    expect(setBlueprintMode).toHaveBeenCalledWith(false)
     expect(setLoadState).toHaveBeenCalledWith('terminal-active')
     expect(terminalBootLabel('claude')).toBe('Starting Claude Code…')
 

@@ -226,7 +226,6 @@ export async function launchTerminalPreset(
   useWorkspaceStore.getState().addTerminal(terminal)
 
   if (enterTerminalUi) {
-    useAppStore.getState().setBlueprintMode(false)
     useAppStore.getState().setLoadState('terminal-active')
   }
 

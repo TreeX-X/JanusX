@@ -66,7 +66,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   /*-- tab 拖拽期间隐藏原生视图：WebContentsView 盖在 DOM 之上会吞掉 dragover，落点区只有先让位才能命中 --*/
   const tabDragInFlight = useWorkspaceStore((s) => s.tabDragInFlight)
   const dialogOpen = useBrowserOcclusionStore((s) => s.count > 0)
-  const workbenchCovered = useAppStore((s) => s.activeWorkbench !== null || s.blueprintMode || s.isIslandDragging)
+  const workbenchCovered = useAppStore((s) => s.activeWorkbench !== null)
   const [missing, setMissing] = useState(false)
   const [frozenFrame, setFrozenFrame] = useState<string | null>(null)
   const [addressDraft, setAddressDraft] = useState('')
@@ -114,15 +114,11 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
           return
         }
         const rect = node.getBoundingClientRect()
-        /*-- 副黑板顶带让位：原生视图浮于 DOM 之上，卷帘板盖不住它，
-            只能按板下缘把被盖住的顶带裁掉（island-blackboard.md） --*/
-        const boardBottom = useAppStore.getState().blackboardBottom
-        const top = Math.max(rect.top, boardBottom)
         void setBrowserSurfaceBounds(surfaceId, {
           x: Math.round(rect.left),
-          y: Math.round(top),
+          y: Math.round(rect.top),
           width: Math.round(rect.width),
-          height: Math.round(Math.max(0, rect.bottom - top)),
+          height: Math.round(rect.height),
         })
       })
     }
@@ -132,20 +128,12 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
     window.addEventListener('resize', report)
     window.addEventListener('scroll', report, true)
     document.addEventListener('transitionend', report)
-    /*-- 卷帘板开合/拖高不触发本元素的 resize：订阅板下缘变化重报 bounds --*/
-    let lastBoardBottom = useAppStore.getState().blackboardBottom
-    const unsubscribeBoard = useAppStore.subscribe((state) => {
-      if (state.blackboardBottom === lastBoardBottom) return
-      lastBoardBottom = state.blackboardBottom
-      report()
-    })
     report()
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', report)
       window.removeEventListener('scroll', report, true)
       document.removeEventListener('transitionend', report)
-      unsubscribeBoard()
       if (frameRef.current) cancelAnimationFrame(frameRef.current)
       frameRef.current = 0
       /*-- 卸载隐藏：仅 pane 宿主组件且 store 载体仍为 pane（工作区切换等）时归零；

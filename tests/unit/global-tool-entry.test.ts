@@ -15,25 +15,25 @@ function seedTerminalTree() {
 
 describe('global tool entry', () => {
   beforeEach(() => {
-    useAppStore.setState({ blueprintMode: false, activeWorkbench: null })
+    useAppStore.setState({ activeWorkbench: null })
   })
 
-  it('flips the blueprint back to the workspace front before opening', () => {
-    useAppStore.setState({ blueprintMode: true, activeWorkbench: 'blueprint' })
+  it('collapses a covering workbench before opening the tool', () => {
+    useAppStore.setState({ activeWorkbench: 'blueprint' })
     const order: string[] = []
 
     openGlobalTool(() => {
       order.push('open')
-      order.push(`blueprintMode=${useAppStore.getState().blueprintMode}`)
+      order.push(`activeWorkbench=${useAppStore.getState().activeWorkbench}`)
     })
 
-    // 先翻回正面再打开：在背面上创建内容会让用户看不到结果。
-    expect(order).toEqual(['open', 'blueprintMode=false'])
-    expect(useAppStore.getState().blueprintMode).toBe(false)
+    // 先收起工作台再打开：在遮盖面上创建内容会让用户看不到结果。
+    expect(order).toEqual(['open', 'activeWorkbench=null'])
+    expect(useAppStore.getState().activeWorkbench).toBeNull()
   })
 
-  it('collapses a workbench that covers the central area', () => {
-    useAppStore.setState({ blueprintMode: false, activeWorkbench: 'knowledge' })
+  it('collapses a knowledge workbench that covers the central area', () => {
+    useAppStore.setState({ activeWorkbench: 'knowledge' })
 
     openGlobalTool(() => {})
 
@@ -41,11 +41,11 @@ describe('global tool entry', () => {
   })
 
   it('leaves an already-front workspace untouched', () => {
-    useAppStore.setState({ blueprintMode: false, activeWorkbench: null })
+    useAppStore.setState({ activeWorkbench: null })
 
     openGlobalTool(() => {})
 
-    expect(useAppStore.getState()).toMatchObject({ blueprintMode: false, activeWorkbench: null })
+    expect(useAppStore.getState()).toMatchObject({ activeWorkbench: null })
   })
 
   it('tolerates an async open without blocking the caller', () => {
@@ -55,7 +55,7 @@ describe('global tool entry', () => {
       opened = true
     })
 
-    expect(useAppStore.getState().blueprintMode).toBe(false)
+    expect(useAppStore.getState().activeWorkbench).toBeNull()
     expect(opened).toBe(false)
   })
 })

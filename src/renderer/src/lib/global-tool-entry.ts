@@ -9,12 +9,11 @@ import {
  * 全局工具入口的公共前置：把界面切回工作区正面。
  *
  * 顶栏两个工具（浏览器 / Markdown）与快捷键都经过这里，因此打开语义
- * 与终端流程解耦——不依赖 `TerminalArea` 已挂载，蓝图背面或空白页同样可达。
- * 顺序固定为先翻回正面再打开目标 pane，避免在背面上创建内容。
+ * 与终端流程解耦——不依赖 `TerminalArea` 已挂载，工作台遮盖或空白页同样可达。
+ * 顺序固定为先收起工作台再打开目标 pane，避免在遮盖面上创建内容。
  */
 export function focusWorkspaceFront(): void {
   const app = useAppStore.getState()
-  if (app.blueprintMode) app.setBlueprintMode(false)
   if (app.activeWorkbench !== null) app.setActiveWorkbench(null)
 }
 
