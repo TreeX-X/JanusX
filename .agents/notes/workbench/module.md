@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-16T12:12:46Z",
+  "updated": "2026-10-17T06:52:36Z",
   "moduleState": "partial"
 }
 ---
@@ -53,7 +53,7 @@
 
 ## Design
 
-[长时间使用性能分析](./long-session-performance.md)记录 0.9.2 便携版进程风暴、应用数据自监听、审查注册、遥测与界面更新风险，区分实测证据、已有修复和待验证方向。
+[长时间使用性能分析](./long-session-performance.md)对照 0.9.1 与 0.9.2 的源码及本地包，区分既有刷新放大机制和新增账本、历史扫描、隐藏 Chat 负载。已实施实际应用数据路径过滤、账本连接复用、128 份/30 秒遥测缓存、审查注册合并、可取消扫描与退出最终采集，以及 Tooltip 按需全局监听；记录压力对比和正确性回归。变化中的大文件仍完整解析，隐藏 Chat 与新版便携包长时输入延迟仍待实测。
 
 生成文件面板统一显示“预览”，本地 Markdown／文本及应用状态界面跟随主题，HTML／Office 文档保留自身配色。[预览实现与主题检查](./product-workspace.md)记录统一扫描入口、历史迁移预算和固定色例外；新增主题可集中定位遗留项，verify 拒绝新增扫描问题。
 
@@ -64,6 +64,10 @@
 [设置布局](./settings-layout.md)以平铺分区、按需展开和一致的操作区组织配置。通用页管理偏好与开发环境，关于页集中版本、更新与 GitHub 求赞入口；通知关闭时收起关联字段，通知与 Agent 权限显示未保存状态；模型测试与保存位于底部。外部 CLI 参考 MCP 接入采用品牌、状态与操作组成的通栏列表，保留安装、检测及入口显隐语义。
 
 分屏落点与 Tab 插入占位统一使用灰色半透明底色和弱灰描边；侧栏原生拖入与 Tab 指针拖动共用预览及圆角提示样式，避免拖动时出现大面积强调色。浮动 Tab 保留清晰的主题底色，排序和分屏在松手后提交。
+
+无工作区时，左侧提示、标题和操作图标，以及中央开始页的图标、文字与选择文件夹按钮均读取主题令牌，不叠加整体透明度。空状态沿用工作台网格：主行可收缩，侧栏标题固定高度、列表独立滚动；中央内容按可用区域居中、换行，矮窗中在自身区域滚动，侧栏折叠后随中央列重新排布。选择文件夹按钮的背景、边框、悬浮与键盘焦点采用主题中的中性色，不使用红色强调。2026-10-15 使用真实 App 与浏览器 IPC fallback 检查纸面／深色主题的 1280×720、800×480、800×240 六种组合，覆盖按钮边界、焦点、侧栏不透明与折叠后的重新排布。
+
+文件夹选择对话框绑定发起操作的窗口。Windows 原生对话框没有 Electron 位置参数，由 `src/main/windows/center-native-dialog.ts` 启动隐藏的临时 PowerShell 进程，仅识别该父窗口拥有的原生对话框，按当前父窗口中心定位一次，并限制在所在显示器的可用区域，不改变窗口尺寸或焦点。对话框结束即清理，查找最多 10 秒、进程最多 15 秒；启动失败仍保留系统原生选择行为。代价是每次打开目录选择器增加一个短期系统进程，首次定位可能在对话框显示后发生。其它平台保留系统定位。独立 Electron 验证先将真实目录对话框移到 (10,10)，再运行生产定位函数，确认它回到父窗口中心 (223,163)，取消后正常关闭；未验证多显示器实机组合。
 
 左侧“工作区”标题行不保留下方横线，40px 高度与中央 Tab 栏对齐，通过标题和列表留白区分导航层级；侧栏与内容之间的竖向边界保留。[底部用量栏](./runtime-drawer-cards-resize.md)收起时无贯穿横线，整行为支持键盘的展开按钮，圆角反馈集中到“用量”入口。展开时保留弱分隔与高度调整，卡片以浅底色和当前终端标记分组，避免重复描边；摘要布局按中部实际宽度收拢。
 
@@ -82,6 +86,8 @@ Chat 会话删除确认框虽通过 portal 挂到 body，仍属于 island 的交
 2026-10-14 回归：修复前真实组件测试复现点击删除确认后 data-stage 变为 collapsed；修复后 `npx playwright test tests/e2e/chat-conversation-delete.spec.ts --project=island --workers=1 --output=artifacts/chat-delete/verified` 5 项通过，覆盖置顶／未置顶、取消／Esc／遮罩、Enter 删除末会话、删除进行中回复与保留另一会话回复。使用真实组件和会话控制器，持久化与流式 IPC 为测试替身；未另跑桌面删除持久化。`npm run typecheck` 与 `npm run build:app` 通过；JanusChat 范围 ESLint 为 0 错误、4 条既有中文字符串警告。
 
 槽位演进链（非重复，保留先后）：[island-slots](./requirements/island-rightdock-slots.md)、[right-dock](./right-dock.md)、[empty-collapse](./right-dock-empty-collapse.md)、[toggle-motion](./right-rail-toggle-motion.md)、[drawer-resize](./runtime-drawer-cards-resize.md)、[run-orb](./run-orb-budding.md)、[hifi-alignment](./island-hifi-optimized-alignment.md)、[capsule](./island-notification-capsule.md)；turn 双件[island](./turn-change-island.md)与[card](./turn-change-card-external-cli.md)同属本域。
+
+下拉副黑板（draft）：岛胶囊下拉 ≥60px 将改绑卷帘式副黑板，取代蓝图翻牌（`blueprintMode` 路径待收敛）；上板下工覆盖格局、中断代价判据与投影/借调两类钉见[下拉副黑板决策](./island-blackboard.md)。
 
 产物语义：[workspace 重构](./product-workspace.md)、[notice-matrix](./product-notice-matrix.md)、[peek-race](./product-peek-width-and-close-race.md)、[preview-p0](./product-preview-p0.md)、[tour](./product-tour.md)、[landing](../desktop/landing-page.md)。
 

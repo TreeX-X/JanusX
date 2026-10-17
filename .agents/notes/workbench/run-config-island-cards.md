@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-07",
   "class": "architecture",
-  "updated": "2026-10-15T11:06:25Z",
+  "updated": "2026-10-16T01:48:05Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -53,4 +53,4 @@
 
 设置卡片验证：`npx vitest run tests/unit/planche-theme.test.ts tests/unit/laya-settings-ui.test.ts tests/unit/feishu-settings-ui-contract.test.ts --maxWorkers=2` 为 21 项通过、1 项跳过。浏览器加载真实通用设置组件，1280×900 下目检 planche 与 dark；分组框分别计算为 `rgba(28,52,59,0.14)` 与 `rgba(255,255,255,0.043)`。截图位于本地 `artifacts/settings-cards/`，不作为分发资源。浏览器夹具报告 `Electron API is unavailable`，因此目检不证明桌面接口功能；桌面端全量验证未运行。
 - **Costs and limits**: 浮岛卡的 12px 缝隙与内边距吃掉小窗口的表单空间，≤980px 只保留了「隐藏助手列」单条兜底，更窄窗口未实测；dark 浮岛卡仍引用 `--shell-card` 阶（`#1c1c1f`）而非全透明，因为透明 + 发丝线框在深色底上分界不足，这是卡阶的既有授权，不是新增填充色块。导航状态规则第三处复写（设置、知识工作台、类型 tab），分组卡内卡规则在六个模块各自复写（AppSettingsModal、KnowledgeSettingsPanel、LlmConfigModal、NotificationSettingsPanel、QuickConfigForm、ProjectSettings），后续调整交互规范或内卡观感需逐处同步，出现第四个同类导航或第七处内卡复写应提取共享样式。`cardIndexStyle` 的返回类型从字面量对象改为 `CSSProperties` 以便直接挂到 `style`，未改变取值。
-- **Verification**: `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` 退出干净；`npx eslint src/renderer/src/components/ProjectSettings.tsx src/renderer/src/components/ProjectLaunchAssistant.tsx src/renderer/src/components/Sidebar.tsx src/renderer/src/components/shared/CardFrame.tsx` 零 error；`npx vitest run tests/unit/planche-theme.test.ts tests/unit/assistant-ui.test.ts tests/unit/knowledge/workbench-selection.test.ts --maxWorkers=2` 三文件 30 项通过，含钉点：壳透明无窗面、顶栏独立浮岛卡、内层容器不垫地色、五表无色值字面量、浮岛错峰入场、类型 tab 选中态、configTab 无填充块、中部组卡吃设置内卡规则（`color-mix` 钉在 QuickConfigForm/ProjectSettings）。浏览器/桌面端双主题目检与窄窗实测未做；变更文件 `git diff --check` 通过。
+- **Verification**: 原实施时 `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` 退出干净；`npx eslint src/renderer/src/components/ProjectSettings.tsx src/renderer/src/components/ProjectLaunchAssistant.tsx src/renderer/src/components/Sidebar.tsx src/renderer/src/components/shared/CardFrame.tsx` 零 error，三文件单元测试 30 项通过。该历史批次包含旧知识工作台选中态测试，已随知识模块退出于提交 c376a8d 删除，不能作为当前文件引用。2026-10-16 对仍维护本决策的 `npx vitest run tests/unit/planche-theme.test.ts tests/unit/assistant-ui.test.ts --maxWorkers=2` 重新执行，两文件 20 项通过，覆盖壳透明无窗面、顶栏独立浮岛卡、内层容器不垫地色、五表无色值字面量、浮岛错峰入场、类型 tab 选中态、configTab 无填充块、中部组卡吃设置内卡规则（`color-mix` 钉在 QuickConfigForm/ProjectSettings）。日志为本地 `artifacts/review-recheck/spot-note-reference-regression.log`。浏览器/桌面端双主题目检与窄窗实测未做；原实施的变更文件 `git diff --check` 通过。

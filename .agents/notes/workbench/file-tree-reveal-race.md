@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-15T17:45:52.708Z",
+  "updated": "2026-10-16T01:49:51Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -56,6 +56,8 @@ File watcher refreshes run one active pass and keep at most one merged trailing 
 `src/main/ipc/file-tree-ignore.ts` batches queued directory candidates by workspace root and runs at most two Git ignore checks across roots. Each check has a three-second timeout; Windows cleanup targets the process tree because Git may launch a second executable. Failed checks leave ignore decoration unavailable for that pass and retry on the next refresh. There is no persistent ignore cache to invalidate after `.gitignore` changes.
 
 Raw watcher subscribers continue receiving all events. Renderer broadcasts omit Git lock/object/log churn and hidden `.janusX` state, while index, HEAD and refs changes remain visible. Git service commands use `GIT_OPTIONAL_LOCKS=0` so read-only status refreshes do not rewrite the index and feed their own watcher. A three-second timeout can temporarily remove ignore dimming on unusually slow disks; directory contents still load. The bounds reduce competing work; they do not establish a measured end-to-end input latency guarantee or replace testing an updated packaged application.
+
+Renderer broadcasts also exclude actual application userData/sessionData and explicit disk-cache-dir subtrees within the watched workspace, resolving absolute paths and junction aliases once at registration. Ordinary directories named data, adjacent prefixes and external/ancestor application paths remain visible; unknown filenames still refresh conservatively. Raw subscribers retain these events. Same-root review registration coalesces pending context reads; children loads do not rescan an already registered root, while root reloads retain branch checks and retries. `workspace-event-filter.test.ts`, `blueprint-review-registration.test.ts` and the watcher coordinator tests cover boundaries, aliases, 1,000-event delivery/filtering, late close results and retries. Current implementation and isolated performance evidence are maintained in [long-session performance](./long-session-performance.md).
 
 Regression coverage: `file-tree-ignore-pressure.test.ts` checks batching, concurrent roots and timeout cleanup; `file-tree-refresh-pressure.test.ts` checks 1,000 overlapping events, scope changes and failure recovery; `file-tree-load-pressure.test.ts` checks directory concurrency and stale scans; `office/workspace-watcher-coordinator.test.ts` checks raw subscriber delivery, Git event filtering and merged editor invalidation.
 
