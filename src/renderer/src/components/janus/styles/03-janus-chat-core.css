@@ -18,6 +18,15 @@
   outline: none;
 }
 
+/* Conversation text stays selectable inside non-selectable island/drag shells. */
+.janus-chat-messages,
+.janus-chat textarea,
+.janus-chat input {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-app-region: no-drag;
+}
+
 /* 鍋滈潬鎬侊細浣滀负鍙虫爮 flex 瀛愬厓绱狅紝瑕嗙洊缁濆瀹氫綅娴眰銆?
    鐢?relative 鑰岄潪 static锛屼繚鐣欏唴閮ㄧ粷瀵瑰畾浣嶅厓绱狅紙濡傛柊娑堟伅寰芥爣 z:40锛夌殑閿氱偣銆?
    闈犳簮搴忕敓鏁堬紙docked 浣嶄簬鍩虹嚎 .janus-chat 涔嬪悗锛屽悓绛夌壒寮傛€?0,1,0 鍚庡畾涔夎鐩栧厛瀹氫箟锛夛紝鏃犻渶 !important銆?
@@ -500,7 +509,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 思维链收纳区：只活在对话加载效果区内，默认收起为单行进度 */
+/* 公开推理默认可见；以较浅的主题文字区分过程与回答。 */
 .janus-chat-thinking {
   display: flex;
   flex-direction: column;
@@ -528,7 +537,7 @@
 }
 
 .janus-chat-thinking-body {
-  max-height: 120px;
+  max-height: 240px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--shell-border) transparent;
@@ -540,8 +549,8 @@
   overflow-wrap: break-word;
   word-break: break-word;
   color: var(--shell-muted);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.6;
   font-family: inherit;
 }
 
@@ -1085,6 +1094,11 @@
 /* Note: compact ordered process is shared by all three entries — see .agents/notes/agent/requirements/chat-work-timeline.md */
 .janus-chat-timeline { min-width: 0; color: var(--shell-text); }
 .janus-chat-timeline-block + .janus-chat-timeline-block { margin-top: 8px; }
+.janus-chat-timeline-block[data-phase="process"],
+.janus-chat-timeline-block[data-phase="process"] .markdown-preview,
+.janus-chat-timeline-block[data-phase="process"] .markdown-preview :is(p, li, strong, em, h1, h2, h3, h4, h5, h6) {
+  color: var(--shell-muted);
+}
 .janus-chat-tool-result { padding: 6px 10px; border-left: 1px solid var(--shell-border); color: var(--shell-muted); font-size: 12px; }
 .janus-chat-tool-result p { margin: 4px 0; }
 .janus-tool-card-summary { margin: 2px 10px 6px; color: var(--shell-muted); font-size: 11px; overflow-wrap: anywhere; }

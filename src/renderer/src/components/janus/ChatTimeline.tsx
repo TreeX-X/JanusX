@@ -15,11 +15,14 @@ export interface ChatTimelineProps {
 
 export function ChatTimeline({ snapshot, streaming = false, workspaceNames, renderToolDetails }: ChatTimelineProps) {
   const { t } = useI18n('janus')
+  // Only text followed by an actual tool call is known to be a work update.
+  // Keep the trailing answer in the normal palette, without guessing from its words.
+  const lastToolIndex = snapshot.blocks.reduce((last, block, index) => block.kind === 'tool' ? index : last, -1)
   return <div className="janus-chat-timeline">
     {snapshot.truncated && <p role="status">{t('janus:chat.timeline.truncated')}</p>}
-    {snapshot.blocks.map(block => {
+    {snapshot.blocks.map((block, index) => {
       const active = streaming && block.endedAt === undefined
-      return <div key={block.id} className="janus-chat-timeline-block" data-kind={block.kind} data-call-id={block.kind === 'tool' ? block.callId : undefined}>
+      return <div key={block.id} className="janus-chat-timeline-block" data-kind={block.kind} data-phase={block.kind === 'text' ? index < lastToolIndex ? 'process' : 'answer' : undefined} data-call-id={block.kind === 'tool' ? block.callId : undefined}>
         {block.kind === 'reasoning' ? <ThinkingRegion streaming={active} startedAt={block.startedAt} preview={block.preview}
           snapshot={{ text: block.text, chars: block.chars, truncated: !!block.truncated,
             ...(block.endedAt === undefined ? {} : { durationMs: Math.max(0, block.endedAt - block.startedAt) }) }} />

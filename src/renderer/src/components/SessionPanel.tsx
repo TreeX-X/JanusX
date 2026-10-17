@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
+import { memo, useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { useSessionStore, type AgentSessionDetail, type AgentSessionSummary } from '@/stores/session'
@@ -27,12 +27,10 @@ type Scope = 'workspace' | 'project' | 'all' | 'archived'
 const PROMPT_CLAMP_LINES = 4
 /** Prompts above this budget get the expand-to-full affordance. */
 const PROMPT_CLAMP_CHARS = 160
-/** Progressive card mount: one commit of every card froze the dock until the
- * whole batch painted (stall, then everything at once). Cards land in chunks
- * so each commit stays small and the list streams in.
+/** Mount one page, then append only when the reader scrolls near the bottom.
  * See .agents/notes/sessions/records/session-open-stall.md */
 const CARD_CHUNK = 20
-const CARD_CHUNK_DELAY_MS = 40
+const CARD_LOAD_THRESHOLD_PX = 120
 
 const SCOPE_KEYS = {
   workspace: 'terminal:agentSession.scopeWorkspace',
@@ -194,21 +192,15 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
     )
   }, [sessions, scope, query])
 
-  // Progressive mount: chunked commits keep panel open off the stall-then-
-  // pop-in path. Re-stream on list identity change (scope key) or search;
-  // silent same-scope refreshes keep the streamed length as-is.
+  // Search still covers every summary, but only one page mounts initially.
+  // Background refreshes retain the reader's loaded pages and scroll position.
   // See .agents/notes/sessions/records/session-open-stall.md
+  const listRef = useRef<HTMLDivElement>(null)
   const [shownCount, setShownCount] = useState(CARD_CHUNK)
   useEffect(() => {
     setShownCount(CARD_CHUNK)
-  }, [scopeKey, query])
-  useEffect(() => {
-    if (shownCount >= visible.length) return
-    const timer = setTimeout(() => {
-      setShownCount((count) => Math.min(count + CARD_CHUNK, visible.length))
-    }, CARD_CHUNK_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [shownCount, visible.length])
+    if (listRef.current) listRef.current.scrollTop = 0
+  }, [scopeKey, scopePath, scope, query])
   const shown = useMemo(() => visible.slice(0, shownCount), [visible, shownCount])
 
   // An empty scope tab is ambiguous with no data at all: one unfiltered fetch
@@ -265,7 +257,18 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
         </div>
       </div>
 
-      <div className={`flex-1 flex flex-col ${styles.sessionList}`}>
+      <div
+        ref={listRef}
+        className={`flex-1 flex flex-col ${styles.sessionList}`}
+        onScroll={(event) => {
+          const list = event.currentTarget
+          if (!active || shownCount >= visible.length || list.scrollTop <= 0) return
+          if (list.scrollHeight - list.scrollTop - list.clientHeight > CARD_LOAD_THRESHOLD_PX) return
+          // Use this render's page boundary so events in the same batch cannot
+          // queue multiple pages before the newly appended cards are laid out.
+          setShownCount(Math.min(shownCount + CARD_CHUNK, visible.length))
+        }}
+      >
         {/* Loading banner only on a truly empty list: background refreshes
             keep stale cards (stale-while-revalidate), so a banner above the
             list would shift every card per session:event. */}
@@ -290,10 +293,10 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
             key={session.id}
             session={session}
             expanded={expandedId === session.id}
-            timelineTick={timelineTick}
-            onToggle={() => handleToggle(session.id)}
-            onContinue={() => setContinueTarget(session)}
-            onDetail={() => setDetailTarget(session)}
+            timelineTick={expandedId === session.id ? timelineTick : 0}
+            onToggle={handleToggle}
+            onContinue={setContinueTarget}
+            onDetail={setDetailTarget}
           />
         ))}
       </div>
@@ -490,7 +493,7 @@ function TrafficBar({ heading, onClose }: { heading: ReactNode; onClose: () => v
   )
 }
 
-function SessionCard({
+const SessionCard = memo(function SessionCard({
   session,
   expanded,
   timelineTick,
@@ -501,9 +504,9 @@ function SessionCard({
   session: AgentSessionSummary
   expanded: boolean
   timelineTick: number
-  onToggle: () => void
-  onContinue: () => void
-  onDetail: () => void
+  onToggle: (sessionId: string) => void
+  onContinue: (session: AgentSessionSummary) => void
+  onDetail: (session: AgentSessionSummary) => void
 }) {
   const { t } = useI18n('terminal')
   const [detail, setDetail] = useState<AgentSessionDetail | null>(null)
@@ -513,33 +516,44 @@ function SessionCard({
   // L2 first-prompt display cap (AC-10): clamped until the reader asks for full text.
   const [promptFull, setPromptFull] = useState(false)
   const runContinue = useSessionStore((s) => s.continueSession)
-  // Stale-while-revalidate marker: the card instance is keyed by session.id,
-  // so one flag covers first-load vs background refresh.
-  const loadedRef = useRef(false)
+  // Do not build every collapsed card's controls and prompt sheets at startup.
+  // Retain a visited body so closing and reversing still animate continuously.
+  const [visited, setVisited] = useState(expanded)
+  const previewRequest = useRef<{
+    version: string
+    promise: Promise<AgentSessionDetail | null>
+  } | null>(null)
+  const previewVersion = JSON.stringify([
+    session.id, session.updatedAt, session.turnCount, session.status,
+    session.transcriptPath, timelineTick,
+  ])
 
   useEffect(() => {
     if (!expanded) return
+    setVisited(true)
     let alive = true
-    // L2 previews reload on every debounced session:event so the first prompt
-    // and recent turns arrive mid-conversation.
-    // Refreshes keep the previous preview visible; only the first load shows
-    // the loading line, otherwise every background event flashes the card.
-    if (!loadedRef.current) setDetailLoading(true)
-    window.electron.session
-      .get(session.id)
-      .catch(() => null)
-      .then((fetched) => {
-        if (!alive) return
-        if (fetched) {
-          loadedRef.current = true
-          setDetail(fetched)
-        }
-        setDetailLoading(false)
+    // Reuse both pending and completed reads on rapid close/reopen. A changed
+    // summary or live-event tick invalidates this one-entry, per-card cache.
+    if (previewRequest.current?.version !== previewVersion) {
+      const request = {
+        version: previewVersion,
+        promise: window.electron.session.get(session.id).catch(() => null),
+      }
+      previewRequest.current = request
+      void request.promise.then((fetched) => {
+        if (!fetched && previewRequest.current === request) previewRequest.current = null
       })
+    }
+    setDetailLoading(true)
+    void previewRequest.current.promise.then((fetched) => {
+      if (!alive) return
+      if (fetched) setDetail(fetched)
+      setDetailLoading(false)
+    })
     return () => {
       alive = false
     }
-  }, [expanded, session.id, timelineTick])
+  }, [expanded, session.id, previewVersion])
 
   const recentTurns = useMemo(() => {
     const turns = detail?.turns ?? []
@@ -552,7 +566,7 @@ function SessionCard({
   const resumeCommand = useMemo(() => buildResumeCommand(session), [session])
   const iconPreset = sessionEnginePreset(session.engine)
 
-  // Note: expand motion keeps the body mounted and animates grid rows; the
+  // Note: expand motion retains visited bodies and animates grid rows; the
   // closed body is inert — see .agents/notes/workbench/session-card-expand-motion.md
   // Note: compact list identity and optional prompt preview — see
   // .agents/notes/workbench/session-card-l1-summary.md
@@ -569,7 +583,7 @@ function SessionCard({
       <div
         className={`flex items-center ${styles.cardHeader}`}
         style={{ gap: 7, cursor: 'pointer' }}
-        onClick={onToggle}
+        onClick={() => onToggle(session.id)}
       >
         <TerminalPresetIcon preset={iconPreset} alt={session.engine} className={iconPreset === 'codex' ? styles.codexIcon : undefined} style={{ width: 14, height: 14, flexShrink: 0 }} />
         <span
@@ -598,7 +612,7 @@ function SessionCard({
           aria-label={expanded ? t('terminal:agentSession.collapse') : t('terminal:agentSession.expand')}
           onClick={(event) => {
             event.stopPropagation()
-            onToggle()
+            onToggle(session.id)
           }}
         >
           <ChevronDown size={13} strokeWidth={2} aria-hidden="true" />
@@ -620,7 +634,7 @@ function SessionCard({
 
       <div className={styles.expand} data-open={expanded}>
         <div className={styles.expandInner} {...(!expanded ? { inert: '' } : {})}>
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: CARD_BORDER_SOFT }}>
+          {(expanded || visited) && <div style={{ marginTop: 10, paddingTop: 10, borderTop: CARD_BORDER_SOFT }}>
             <div style={{ fontFamily: "'SF Mono', monospace", fontSize: 10, color: 'var(--shell-muted)', lineHeight: 1.8 }}>
               <div>…/{baseNameOf(session.cwd)}{session.branch ? ` · ${session.branch}` : ''}</div>
             </div>
@@ -703,7 +717,7 @@ function SessionCard({
             </div>
             <div className={styles.sessionActions}>
               <button
-                onClick={onDetail}
+                onClick={() => onDetail(session)}
                 className={`${styles.sessionAction} ${styles.detailAction}`}
               >
                 {t('terminal:agentSession.viewDetail')}
@@ -736,7 +750,7 @@ function SessionCard({
                     )
                   )}
                   {!session.archived && <button
-                    onClick={onContinue}
+                    onClick={() => onContinue(session)}
                     className={styles.sessionAction}
                   >
                     {t('terminal:agentSession.continue')}
@@ -794,12 +808,12 @@ function SessionCard({
                 {t('terminal:agentSession.externalHint')}
               </div>
             )}
-          </div>
+          </div>}
         </div>
       </div>
     </div>
   )
-}
+})
 
 function SessionDetailWindow({
   session,

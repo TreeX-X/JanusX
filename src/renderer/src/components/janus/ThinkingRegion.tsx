@@ -1,8 +1,7 @@
 /**
- * @file 思维链收纳区 —— 只活在对话加载效果区内，默认收起。
- * @description 流式中显示“思考中…N字”进度行，结束后收起为“已思考 N 字”一行；
- *              点击才展开限定高度的滚动区。无 reasoning 时渲染 null，
- *              与现状视图完全一致。推理永不计入正文，仅 UI 展示。
+ * @file 公开推理展示区 —— 默认展开，完成后仍保留过程正文。
+ * @description 有界滚动区可手动折叠；无公开 reasoning 时不生成内容。
+ *              推理永不计入回答正文，仅 UI 展示。
  */
 
 import { useEffect, useState } from 'react'
@@ -37,7 +36,7 @@ function useNowWhileStreaming(streaming: boolean): number {
 
 export function ThinkingRegion({ snapshot, streaming, startedAt = null, preview }: ThinkingRegionProps) {
   const { t } = useI18n('janus')
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const now = useNowWhileStreaming(streaming)
   if (snapshot.chars === 0) return null
 
@@ -80,7 +79,7 @@ export function ThinkingRegion({ snapshot, streaming, startedAt = null, preview 
       )}
       {expanded && (
         <div className="janus-chat-thinking-body" role="note" aria-label={t('janus:chat.thinking.label')}>
-          <pre>{snapshot.text}{snapshot.truncated ? t('janus:chat.thinking.truncated') : ''}</pre>
+          <pre>{snapshot.text}{snapshot.truncated ? t('janus:chat.thinking.truncated') : ''}{streaming && <span className="janus-chat-streaming-cursor" aria-hidden="true" />}</pre>
         </div>
       )}
     </div>

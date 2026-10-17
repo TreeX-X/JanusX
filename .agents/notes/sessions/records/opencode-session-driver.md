@@ -48,7 +48,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-17T01:51:20.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/0cb931e1-e33c-4e38-a9d9-9d652796d935"
 }
 ---
@@ -72,6 +72,8 @@
 - Do nothing / keep claude-plus-codex backfill — no churn. The cost is the reported symptom: the engine hosting the current work stays invisible to session management.
 
 ## Consequences
+
+The database location is shared with telemetry, recovery and knowledge transcript fallback through `opencode-store-path.ts`: `OPENCODE_DB` selects an absolute database or a path relative to the OpenCode data directory; `XDG_DATA_HOME` overrides its default `~/.local/share` parent. Usage accounting now reads native v1/v2 messages into the existing ledger, described in [native usage accounting](../../terminal/requirements/usage-telemetry-single-source.md). This does not extend the transcript-detail driver to OpenCode v2.
 
 - **Gains**: opencode sessions list with correct directory, first question, tail answer, and counts; detail windows read full pairs; resume runs the verified provider command in a hook-wired terminal; hook-owned opencode rows keep their live behavior untouched.
 - **Costs and limits**: scans cap at 200 newest sessions per pass with per-session message windows of 500; sides above 2000 characters and lists above 100 pairs truncate with counts disclosed; turn-end excerpts stay status-only for opencode; per-session provider environment is inherited, not tracked. Revisit when opencode changes its sqlite schema or a live opencode feed becomes ownable.

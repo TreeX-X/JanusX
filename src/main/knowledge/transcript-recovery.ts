@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { resolveOpencodeDbPath } from '../sessions/opencode-store-path'
 import { redactHighConfidenceSecrets } from '@janus-agent/agent-core'
 import { z } from 'zod'
 import { SerialQueue, writeFileAtomic } from '../lib/atomic-file'
@@ -103,7 +103,7 @@ export const knowledgeTranscriptRecovery = new TranscriptRecovery()
 export async function recoverObservationTranscript(observation: Observation, enabled: () => Promise<boolean>): Promise<Observation | undefined> {
   const engine = observation.agentId
   const path = typeof observation.metadata?.transcriptPath === 'string' ? observation.metadata.transcriptPath
-    : engine === 'opencode' && observation.sessionId ? join(homedir(), '.local', 'share', 'opencode', 'opencode.db') : undefined
+    : engine === 'opencode' && observation.sessionId ? resolveOpencodeDbPath() : undefined
   if (!engine || !path || !observation.sessionId || !observation.correlationId) return undefined
   const rows = await knowledgeTranscriptRecovery.submit({ path, engine,
     prompt: typeof observation.metadata?.prompt === 'string' ? observation.metadata.prompt : undefined,

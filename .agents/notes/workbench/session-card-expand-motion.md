@@ -6,20 +6,22 @@
   "lifecycle": "implemented",
   "created": "2026-10-06",
   "class": "bug-fix",
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-16T15:30:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
 
-# Session card expand animates as mounted grid rows
+# Session card expansion and responsive toggles
 
 ## Problem
 
-The right-dock session card toggle swaps its body with a conditional render, so the body appears and vanishes in one frame while only the chevron rotates. The rows below the card snap to their new positions mid-read, and nothing in the panel shows a card opening or closing as a process. Without a height transition the affordance animates alone against a body that does not move.
+Session cards need continuous open/close motion without making each toggle render the entire list. Keeping every unopened body mounted adds prompt layout, copy controls and action buttons to large lists. Reopening also used to request the full detail again, including when the prior request was still pending. These costs can delay a toggle independently of the animation duration.
 
 ## Decision
 
-`SessionCard` in `src/renderer/src/components/SessionPanel.tsx` keeps the expand region mounted in both states. `.expand` in `SessionPanel.module.css` is a grid whose row runs `0fr → 1fr` over `grid-template-rows` in 240 ms with `cubic-bezier(0.2, 0.8, 0.2, 1)` — the curve the app grid columns and the right-dock panel slide already share — while `.expandInner` clips the body with `overflow: hidden; min-height: 0` and fades opacity with a -4 px translate so content settles with the height. The header chevron rotates on the same curve. The `expanded` flag reaches CSS as `data-open` on `.expand`. While closed the inner is `inert`, keeping clipped controls out of the tab order and the accessibility tree; the L2 preview fetch still gates on `expanded`, so closed cards request nothing and never flash their loading line. `prefers-reduced-motion: reduce` disables both transitions and the toggle becomes instant. The stylesheet owns motion only; surface fills stay the inline constants owned by [Session surfaces derive from the chrome token instead of hand-written literals](./session-card-surface.md).
+`SessionCard` in `src/renderer/src/components/SessionPanel.tsx` uses React memoization with stable parent callbacks; toggling changes props only for the cards opening and closing. Collapsed cards receive no changing live-event tick. The grid wrapper stays mounted, but its body mounts on first expansion and is retained thereafter for reversible exit motion. `.expand` in `SessionPanel.module.css` animates `0fr → 1fr` in 160 ms with `cubic-bezier(0.2, 0.8, 0.2, 1)`; opacity takes 120 ms and the -4 px translation and chevron take 160 ms. Closed bodies remain inert. Reduced motion disables these transitions.
+
+Each card retains one detail-request promise, including its successful result. Reopening reuses pending or completed reads when session identity, updated time, turn count, status, transcript path and the panel event tick are unchanged. Changed summaries or debounced live events trigger another read; the prior preview remains visible during refresh. Null or rejected results clear the cache for a subsequent retry. Effect cleanup prevents superseded results from replacing the current preview. Fetch completion never controls the expanded flag. Surface styling remains owned by [Session surfaces derive from the chrome token instead of hand-written literals](./session-card-surface.md).
 
 ## Alternatives considered
 
@@ -31,5 +33,5 @@ The right-dock session card toggle swaps its body with a conditional render, so 
 ## Consequences
 
 - **Gains**: open and close each run as one continuous height, fade, and chevron motion on the shared panel curve, so the cards below glide to their new positions instead of snapping and a toggle mid-scroll keeps the list's place.
-- **Costs and limits**: every card body stays in the DOM for the panel's lifetime — clipped to zero height and inert while closed, so visible layout is unchanged, but locators that match by text can still resolve closed bodies and must gate on visibility. `grid-template-rows` transitions carry the same Chromium baseline `color-mix` already requires. Reduced motion turns the toggle instant, chevron included.
-- **Verification**: `npx tsc --noEmit --noUnusedLocals --noUnusedParameters` and `npx eslint src/renderer/src/components/SessionPanel.tsx` exit clean, and `npx vitest run tests/unit/planche-theme.test.ts` passes 14 of 14 with the expand region mounted in both states.
+- **Costs and limits**: visited bodies and one request result per visited card remain until unmount. This reduces unopened DOM cost but is not list virtualization. Background summary replacements can still rerender cards, and a first detail read still transfers the full ledger through IPC. No claim is made about native Electron latency under real main-process load; the browser fixture isolates renderer behavior.
+- **Verification (2026-10-16)**: `npm run typecheck` and `npx eslint src/renderer/src/components/SessionPanel.tsx` pass. `npx vitest run tests/unit/worktree-store.test.ts tests/unit/planche-theme.test.ts tests/unit/session-turn-merge.test.ts tests/unit/external-session-sync.test.ts --maxWorkers=2` passes 24 tests. The browser fixture contains 200 long-prompt summaries; [scroll pagination](../sessions/records/session-open-stall.md) now mounts the first 20 only. `tests/e2e/session-card-performance.spec.ts` covers unresolved reads permitting close/reopen with one IPC, completed-result reuse, live refresh retaining prose, failed-read retry and single-card expansion, alongside scroll pagination.

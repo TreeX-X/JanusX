@@ -20,6 +20,64 @@ async function openEntry(page: Page, query: string) {
 const order = (host: Locator) => host.locator('.janus-chat-timeline-block').evaluateAll(elements => elements.map(element => element.getAttribute('data-kind')))
 
 for (const entry of entries) {
+  test(`${entry.name}: input, user messages and process output support native selection and copy`, async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await openEntry(page, entry.query)
+    const host = page.locator(entry.selector)
+    // The island and draggable panels can disable selection on an ancestor.
+    await host.evaluate(element => { element.style.userSelect = 'none' })
+    const input = host.locator('textarea')
+    await input.fill('Copy this prompt')
+    await expect(input).toHaveCSS('user-select', 'text')
+    await input.click()
+    const inputBounds = await input.evaluate(element => {
+      const style = getComputedStyle(element)
+      const rect = element.getBoundingClientRect()
+      const canvas = document.createElement('canvas').getContext('2d')!
+      canvas.font = style.font
+      return {
+        x: rect.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
+        y: rect.top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + parseFloat(style.lineHeight) / 2,
+        width: canvas.measureText(element.value).width,
+      }
+    })
+    await page.mouse.move(inputBounds.x + 1, inputBounds.y)
+    await page.mouse.down()
+    await page.mouse.move(inputBounds.x + inputBounds.width, inputBounds.y, { steps: 12 })
+    await page.mouse.up()
+    await expect.poll(() => input.evaluate(element => element.value.slice(element.selectionStart, element.selectionEnd))).toBe('Copy this prompt')
+    await input.press('Control+c')
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Copy this prompt')
+    await input.press('End')
+    await input.press('Enter')
+    await expect.poll(() => page.evaluate(() => (window as any).projectFixture.streams.length)).toBe(1)
+    await emit(page, { type: 'reasoning_delta', delta: 'Visible reasoning to copy' })
+    await emit(page, { type: 'text_delta', delta: 'Visible answer to copy' })
+    await emit(page, { type: 'stream_end', cancelled: false })
+
+    for (const text of ['Copy this prompt', 'Visible reasoning to copy', 'Visible answer to copy']) {
+      const target = host.getByText(text, { exact: true }).last()
+      await target.scrollIntoViewIfNeeded()
+      await target.click({ trial: true }) // Wait for message/host entrance animations to settle.
+      await page.evaluate(() => window.getSelection()?.removeAllRanges())
+      const bounds = await target.evaluate(element => {
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+        const node = walker.nextNode()!
+        const range = document.createRange()
+        range.selectNodeContents(node)
+        const rect = range.getBoundingClientRect()
+        return { left: rect.left, right: rect.right, y: rect.top + rect.height / 2 }
+      })
+      await page.mouse.move(bounds.left + 1, bounds.y)
+      await page.mouse.down()
+      await page.mouse.move(bounds.right - 1, bounds.y, { steps: 12 })
+      await page.mouse.up()
+      await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe(text)
+      await page.keyboard.press('Control+c')
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(text)
+    }
+  })
+
   test(`${entry.name}: ordered segments survive completion and reopening without replay`, async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', error => errors.push(error.message))
@@ -30,11 +88,12 @@ for (const entry of entries) {
     await expect.poll(() => page.evaluate(() => (window as any).projectFixture.streams.length)).toBe(1)
     await emit(page, { type: 'reasoning_delta', delta: 'First reasoning summary.\nChecking the entry.' })
     const thinking = host.locator('.janus-chat-thinking-toggle').first()
-    await expect(thinking).toHaveAttribute('aria-expanded', 'false')
+    await expect(thinking).toHaveAttribute('aria-expanded', 'true')
+    await expect(host.locator('.janus-chat-thinking-body')).toContainText('Checking the entry.')
+    await thinking.click()
     await expect(host.locator('.janus-chat-thinking-live')).toContainText('Checking the entry.')
     await thinking.click()
     await expect(host.locator('.janus-chat-thinking-body')).toContainText('First reasoning summary.')
-    await thinking.click()
     await emit(page, { type: 'text_delta', delta: 'I will read the entry.' })
     await emit(page, { type: 'tool_execution_start', callId: 'read-1', toolName: 'workspace.read' })
     await expect(host.locator('.janus-chat-thinking[data-streaming="true"]')).toHaveCount(0)
@@ -47,15 +106,29 @@ for (const entry of entries) {
     await emit(page, { type: 'text_delta', delta: '**Final answer.**' })
     const expected = ['reasoning', 'text', 'tool', 'reasoning', 'text', 'tool', 'text']
     await expect.poll(() => order(host)).toEqual(expected)
+    await expect(host.locator('.janus-chat-thinking-body')).toHaveCount(2)
+    await expect(host.locator('[data-phase="process"]')).toHaveCount(2)
+    await expect(host.locator('[data-phase="answer"]')).toContainText('Final answer.')
     await expect(thinking).toHaveText(settledHeader)
     await expect(host.locator('.janus-tool-card')).toHaveCount(2)
     for (const theme of ['planche', 'dark']) {
       await page.evaluate(theme => { document.documentElement.dataset.theme = theme }, theme)
       await expect(thinking).toBeVisible()
+      const colors = await host.evaluate(element => {
+        const color = (selector: string) => getComputedStyle(element.querySelector(selector)!).color
+        return {
+          reasoning: color('.janus-chat-thinking-body pre'),
+          process: color('[data-phase="process"] .markdown-preview'),
+          answer: color('[data-phase="answer"]'),
+        }
+      })
+      expect(colors.process).toBe(colors.reasoning)
+      expect(colors.answer).not.toBe(colors.process)
     }
     await emit(page, { type: 'stream_end', cancelled: false })
     await expect.poll(() => order(host)).toEqual(expected)
     await expect(host.locator('.janus-chat-thinking[data-streaming="true"]')).toHaveCount(0)
+    await expect(host.locator('.janus-chat-thinking-body')).toHaveCount(2)
     await expect(host.locator('.janus-tool-card--running')).toHaveCount(0)
     await expect(host.getByText('I will read the entry.', { exact: true })).toHaveCount(1)
     await expect(host.locator('strong').filter({ hasText: 'Final answer.' })).toHaveCount(1)
@@ -66,7 +139,7 @@ for (const entry of entries) {
     } else await page.reload()
     await expect.poll(() => order(host)).toEqual(expected)
     await expect.poll(() => page.evaluate(() => (window as any).projectFixture.streams.length)).toBe(entry.name === 'Blueprint' ? 1 : 0)
-    await host.locator('.janus-chat-thinking-toggle').first().click()
+    await expect(host.locator('.janus-chat-thinking-toggle').first()).toHaveAttribute('aria-expanded', 'true')
     await expect(host.locator('.janus-chat-thinking-body').first()).toContainText('First reasoning summary.')
     expect(errors).toEqual([])
   })
@@ -170,7 +243,6 @@ for (const entry of entries) {
     await emit(page, { type: 'tool_execution_start', callId: 'last', toolName: 'workspace.read' })
     await expect(host.locator('.janus-chat-thinking-toggle')).toContainText('Later reasoning.')
     expect(await container.evaluate(element => element!.scrollTop)).toBeLessThan(5)
-    await host.locator('.janus-chat-thinking-toggle').click()
     await expect(host.locator('.janus-chat-thinking-body')).toContainText(/截断|truncat|latest|最新|保留/i)
     await emit(page, { type: 'stream_end', cancelled: true })
   })

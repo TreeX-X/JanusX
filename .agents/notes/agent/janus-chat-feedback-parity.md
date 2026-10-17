@@ -10,7 +10,7 @@
   "relations": [
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/6813a52b-249b-556e-a0eb-55acc6930922"}
   ],
-  "updated": "2026-10-16T09:17:14.782Z",
+  "updated": "2026-10-16T14:38:00.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -22,6 +22,8 @@
 Janus chat and the janus-agentX TUI share the `runChatTurn` event contract. A reasoning-heavy turn needs a visible phase, elapsed time and reasoning summary before the first answer token; a three-dot loader alone cannot explain the wait. Island and Blueprint host the same `JanusChat` renderer with separate conversation controllers. If light-theme feedback colors depend on an Island ancestor, Blueprint falls back to white text on paper. Keeping shared composer rules inside Blueprint CSS also makes ordinary chat depend on an unrelated host's stylesheet.
 
 ## Decision
+
+2026-10-16 visibility update: the user requested directly visible process content. This supersedes the collapsed default described below: public reasoning now defaults to expanded, including completed and restored turns, with a 240px scroll limit and manual collapse. Tool-preceding work updates use `--shell-muted`; the trailing answer uses the normal palette. The linked Chat timeline requirement owns current behavior and validation; earlier evidence below records the original design.
 
 The renderer derives the same status row from the same `ChatAgentEvent` union and times the turn from request start. `chatStatusForEvent` in `janusRuntimeState.ts` maps `agent_start` / `reasoning_delta` to thinking, `text_delta` to writing, `tool_call_start` / `tool_call_ready` to preparing, `tool_execution_start` / `update` to running with the tool name, `model_finish(tool_calls)` to running and other finishes to finishing, and `question_requested` to awaiting; all other events preserve the prior status. `useJanusChat.ts` holds `turnStartedAt` plus `turnStatus` per conversation, sets both on `startRequest`, advances status on every agent event, and clears the start on done, error, stop, and session failure. The done path settles `durationMs` into the stored reasoning snapshot.
 
