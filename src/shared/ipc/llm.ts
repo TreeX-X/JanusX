@@ -8,9 +8,12 @@ import type { KnowledgeRecallTrace } from '../knowledge'
 import type { BlueprintMaintenanceTask } from '../janus/maintenance-types'
 import type { MemoBinding } from '../memo'
 import type { AgentModelBinding, LlmConfiguration } from '../llm-configuration'
+import type { NativeLoginState } from '../native-login'
 
 export const LLM_CHANNELS = {
   getConfiguration: 'llm:configuration:get', saveProvider: 'llm:configuration:save-provider', applyBinding: 'llm:configuration:apply-binding',
+  getNativeLoginStatus: 'llm:native-login-status',
+  startNativeLogin: 'llm:native-login:start', stopNativeLogin: 'llm:native-login:stop',
   getTerminalProviders: 'llm:get-terminal-providers', saveTerminalProvider: 'llm:save-terminal-provider',
   testConnection: 'llm:test-connection',
   runtimeStatus: 'llm:runtime-status',
@@ -204,6 +207,9 @@ export interface LlmAPI {
   getConfiguration(): Promise<LlmConfiguration>
   saveProvider(settings: ProviderSettings): Promise<{ success: boolean; error?: string }>
   applyBinding(terminal: LlmTerminalConsumer, binding: AgentModelBinding): Promise<{ success: boolean; error?: string }>
+  getNativeLoginStatus(terminal: LlmTerminalConsumer): Promise<NativeLoginState>
+  startNativeLogin(terminal: LlmTerminalConsumer): Promise<{ success: boolean; error?: string }>
+  stopNativeLogin(terminal: LlmTerminalConsumer): Promise<void>
   getTerminalProviders(terminal: LlmTerminalConsumer): Promise<ProviderSettings[]>
   getRuntimeStatus(): Promise<LlmRuntimeStatus>
   saveTerminalProvider(terminal: LlmTerminalConsumer, settings: ProviderSettings): Promise<{ success: boolean; error?: string }>

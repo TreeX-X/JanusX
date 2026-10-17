@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'path'
 
 const electronApp = vi.hoisted(() => ({
@@ -19,6 +19,8 @@ describe('application profile', () => {
     electronApp.setPath.mockClear()
   })
 
+  afterEach(() => { vi.unstubAllEnvs() })
+
   it('uses a separate userData directory for the development app', () => {
     configureApplicationProfile(false)
 
@@ -34,13 +36,13 @@ describe('application profile', () => {
     expect(electronApp.setPath).not.toHaveBeenCalled()
   })
 
-  it('isolates a portable build under the portable executable directory', () => {
+  it('isolates a no-install build in the user directory', () => {
     electronApp.isPackaged = true
-    process.env.PORTABLE_EXECUTABLE_DIR = join('portable-root')
+    vi.stubEnv('PORTABLE_EXECUTABLE_DIR', join('portable-root'))
 
     configureApplicationProfile(false)
 
-    expect(electronApp.setPath).toHaveBeenCalledWith('userData', join('portable-root', 'data'))
+    expect(electronApp.setPath).toHaveBeenCalledWith('userData', join('test-root', 'app-data', 'JanusX-Portable'))
   })
 
   it('leaves hook-client profile isolation to the hook bootstrap', () => {
@@ -53,6 +55,8 @@ describe('application profile', () => {
     ['equals form', ['electron', 'app.js', '--user-data-dir=test-profile']],
     ['split form', ['electron', 'app.js', '--user-data-dir', 'test-profile']],
   ])('preserves an explicit userData directory in %s', (_, argv) => {
+    electronApp.isPackaged = true
+    vi.stubEnv('PORTABLE_EXECUTABLE_DIR', 'portable-root')
     configureApplicationProfile(false, argv)
 
     expect(electronApp.getPath).not.toHaveBeenCalled()

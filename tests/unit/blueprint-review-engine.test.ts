@@ -91,6 +91,50 @@ it('retries a transient Note index lock when loading current suggestions', async
   expect(read.mock.calls.length).toBeGreaterThan(1)
 })
 
+it('waits for a foreground cold scan longer than the old four-retry lock budget', async () => {
+  const f = await setup()
+  const read = vi.spyOn(f.source.notes, 'readSnapshot')
+  for (let i = 0; i < 5; i++) read.mockRejectedValueOnce(Object.assign(new Error('notes busy: lock held'), { code: 'BUSY' }))
+  expect((await f.workspace.read(f.context)).items.some(item => item.noteId === f.noteId)).toBe(true)
+  expect(read.mock.calls.length).toBeGreaterThan(5)
+})
+
+it('cancels a wait for the Note lock without reconciling a late source observation', async () => {
+  const f = await setup(), controller = new AbortController()
+  const before = f.workspace.saved(f.context)
+  const read = vi.spyOn(f.source.notes, 'readSnapshot').mockRejectedValue(Object.assign(new Error('notes busy: lock held'), { code: 'BUSY' }))
+  const pending = f.workspace.read(f.context, controller.signal)
+  const failed = expect(pending).rejects.toThrow('cancelled')
+  await vi.waitFor(() => expect(read).toHaveBeenCalled())
+  controller.abort(Error('cancelled'))
+  await failed
+  expect(f.workspace.saved(f.context)).toEqual(before)
+})
+
+it('publishes exact multiline citations across CRLF and overlapping pages read out of order', async () => {
+  const f = await setup()
+  await writeFile(join(f.root, 'src/queue.ts'), 'first\r\nsecond\r\nthird\r\n')
+  f.generate.mockImplementationOnce(async (_settings, _input, evidence) => {
+    await evidence.read('.agents/notes/requirement.md')
+    await evidence.read('src/queue.ts', 2, 2)
+    await evidence.read('src/queue.ts', 1, 2)
+    return { findings: [{ ...f.finding, citations: [{ path: 'src/queue.ts', quote: 'first\nsecond\nthird' }] }], coverage: 'complete', limitations: [], resolvedFindings: [] }
+  })
+  expect((await f.review()).report?.findings[0].citations[0].quote).toBe('first\nsecond\nthird')
+})
+
+it('rejects a citation that bridges unread source lines', async () => {
+  const f = await setup()
+  await writeFile(join(f.root, 'src/queue.ts'), 'first\nUNREAD\nthird\n')
+  f.generate.mockImplementationOnce(async (_settings, _input, evidence) => {
+    await evidence.read('.agents/notes/requirement.md')
+    await evidence.read('src/queue.ts', 1, 1)
+    await evidence.read('src/queue.ts', 3, 1)
+    return { findings: [{ ...f.finding, citations: [{ path: 'src/queue.ts', quote: 'first\nthird' }] }], coverage: 'complete', limitations: [], resolvedFindings: [] }
+  })
+  await expect(f.review()).rejects.toThrow('Citation quote does not match')
+})
+
 it('rejects a complete verdict that skips the implementation referenced by the target Note', async () => {
   const f = await setup()
   f.generate.mockImplementationOnce(async (_settings, _input, evidence) => {
@@ -207,8 +251,11 @@ it('generation failure and malformed/fabricated evidence preserve earlier issues
   f.generate.mockResolvedValueOnce({ findings: [] })
   await expect(f.review()).rejects.toMatchObject({ code: 'TRANSIENT' })
   expect((await f.workspace.read(f.context)).items.find(item => item.noteId === f.noteId)?.report?.findings).toHaveLength(1)
-  f.generate.mockResolvedValueOnce({ findings: [{ ...f.finding, citations: [{ path: 'src/queue.ts', quote: 'Invented code' }] }], coverage: 'complete', limitations: [], resolvedFindings: [] })
-  await expect(f.review()).rejects.toThrow('not read')
+  f.generate.mockImplementationOnce(async (_settings, _input, evidence) => {
+    await evidence.read('.agents/notes/requirement.md'); await evidence.read('src/queue.ts')
+    return { findings: [{ ...f.finding, citations: [{ path: 'src/queue.ts', quote: 'Invented code' }] }], coverage: 'complete', limitations: [], resolvedFindings: [] }
+  })
+  await expect(f.review()).rejects.toThrow('Citation quote does not match')
   expect((await f.workspace.read(f.context)).items.find(item => item.noteId === f.noteId)?.report?.findings).toHaveLength(1)
 })
 

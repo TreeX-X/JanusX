@@ -22,5 +22,19 @@ if (new URLSearchParams(location.search).get('mix') === 'all') records.push(
   { id: '3', engine: 'opencode', sessionId: 'opencode', at: now.getTime(), timeBasis: 'sample', totalTokens: 6000, inputTokens: 2000, outputTokens: 1000, cacheReadTokens: 3000, model: 'glm-5.2' },
   { id: '4', engine: 'pi', sessionId: 'pi', at: now.getTime(), timeBasis: 'event', totalTokens: 3000, inputTokens: 1000, outputTokens: 500, cacheReadTokens: 1500, model: 'gemini-3.1-pro' },
 )
-window.electron.system.listUsageLedger = async () => ({ records, sessions: [], throughId: 2 })
+if (new URLSearchParams(location.search).get('history') === 'yes') {
+  const historical = new Date(now)
+  historical.setDate(historical.getDate() - 180)
+  records.push(
+    { id: 'history-codex', engine: 'codex', sessionId: 'history-codex', at: historical.getTime(), timeBasis: 'event', totalTokens: 100000, inputTokens: 90000, outputTokens: 10000 },
+    { id: 'history-claude', engine: 'claude', sessionId: 'history-claude', at: historical.getTime(), timeBasis: 'event', totalTokens: 60000, inputTokens: 50000, outputTokens: 10000 },
+  )
+}
+window.electron.system.listUsageLedger = async query => ({ records: records.filter(record => record.at >= query.start && record.at <= query.end && (!query.engine || record.engine === query.engine)), sessions: [], throughId: 2 })
+const priceCatalog = {
+  source: 'cache' as const, updatedAt: now.toISOString(), isStale: false,
+  models: [{ id: 'openai/gpt-5.4', name: 'GPT 5.4', source: 'openrouter' as const, aliases: ['gpt-5.4'], normalizedKeys: ['gpt54', 'gpt 5 4'], pricing: { prompt: '0.000002', completion: '0.00001', input_cache_read: '0.0000002', input_cache_write: '0.0000025' } }],
+}
+window.electron.llm.getModelCatalog = async () => priceCatalog
+window.electron.llm.refreshModelCatalog = async () => ({ success: true, catalog: priceCatalog })
 createRoot(document.getElementById('root')!).render(<main style={{ maxWidth: 800, padding: 24, margin: 'auto' }}><UsageStatsPanel /></main>)

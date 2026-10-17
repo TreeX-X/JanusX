@@ -124,6 +124,7 @@ describe('AppShutdown', () => {
     const finalizePendingCheckpoints = track('finalizePendingCheckpoints')
     const stopOfficeWatches = track('stopOfficeWatches')
     const killTerminals = track('killTerminals')
+    const stopRuntimeTelemetry = track('stopRuntimeTelemetry')
     const disposeOfficeArtifactIndexes = track('disposeOfficeArtifactIndexes')
     const disposeTerminalSession = track('disposeTerminalSession')
     const abortChatStreams = track('abortChatStreams')
@@ -136,6 +137,7 @@ describe('AppShutdown', () => {
       finalizePendingCheckpoints,
       stopOfficeWatches,
       killTerminals,
+      stopRuntimeTelemetry,
       disposeOfficeArtifactIndexes,
       disposeTerminalSession,
     })
@@ -147,6 +149,8 @@ describe('AppShutdown', () => {
     // AC9: kill terminals before finalizing checkpoints so no native pty
     // callback can fire sendToRenderer into a torn-down window during finalize.
     expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('finalizePendingCheckpoints'))
+    expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('stopRuntimeTelemetry'))
+    expect(order.indexOf('stopRuntimeTelemetry')).toBeLessThan(order.indexOf('finalizePendingCheckpoints'))
     expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('stopOfficeWatches'))
     expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('disposeOfficeArtifactIndexes'))
     expect(order.indexOf('killTerminals')).toBeLessThan(order.indexOf('disposeTerminalSession'))

@@ -132,6 +132,7 @@ it('uses the full workbench for searchable memory cards, readable details and na
 it('shares the workbench shell across domains, isolates review queues and shows real loading feedback', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   try {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
     await mount(page, 'board')
     await page.getByRole('searchbox').waitFor()
     await page.evaluate(() => { (window as any).seedReview(); document.documentElement.dataset.theme = 'dark' })

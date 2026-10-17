@@ -68,6 +68,36 @@ export function startOfDay(ts: number): number {
   return cursor.getTime()
 }
 
+/** Rolling 365 local days, within the ledger's 367-day query limit. */
+export function usageHeatmapStart(now: number): number {
+  const date = new Date(startOfDay(now))
+  date.setDate(date.getDate() - 364)
+  return date.getTime()
+}
+
+export function aggregateUsageHeatmap(records: readonly UsageRecord[], now: number, engine?: TerminalPreset) {
+  const start = usageHeatmapStart(now)
+  const totals = new Map<string, number>()
+  const seen = new Set<string>()
+  for (const record of records) {
+    if (seen.has(record.id) || record.at < start || record.at > now || (engine && record.engine !== engine)) continue
+    seen.add(record.id)
+    const key = toDateInputValue(record.at)
+    totals.set(key, (totals.get(key) ?? 0) + record.totalTokens)
+  }
+  const cursor = new Date(start)
+  cursor.setDate(cursor.getDate() - cursor.getDay())
+  const today = toDateInputValue(now)
+  const days = Array.from({ length: 53 * 7 }, () => {
+    const key = toDateInputValue(cursor.getTime())
+    const day = { key, at: cursor.getTime(), totalTokens: totals.get(key) ?? 0, future: key > today || cursor.getTime() < start }
+    cursor.setDate(cursor.getDate() + 1)
+    return day
+  })
+  const max = Math.max(0, ...days.map(day => day.totalTokens))
+  return days.map(day => ({ ...day, level: day.totalTokens <= 0 ? 0 : Math.min(4, Math.ceil(day.totalTokens / max * 4)) }))
+}
+
 export function endOfDay(ts: number): number {
   const cursor = new Date(ts)
   cursor.setHours(23, 59, 59, 999)

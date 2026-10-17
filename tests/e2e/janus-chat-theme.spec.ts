@@ -79,8 +79,8 @@ for (const theme of ['planche', 'dark']) {
     for (const activeTheme of [theme, theme === 'planche' ? 'dark' : 'planche']) {
       await setTheme(page, activeTheme)
       for (const host of hosts) {
-        await expect(host.locator('.janus-chat-thinking-live')).toContainText('read-only')
-        for (const selector of ['.janus-chat-turn-status', '.janus-chat-thinking-toggle', '.janus-chat-thinking-live']) {
+        await expect(host.locator('.janus-chat-thinking-body')).toContainText('read-only')
+        for (const selector of ['.janus-chat-turn-status', '.janus-chat-thinking-toggle', '.janus-chat-thinking-body pre']) {
           await expectToken(host.locator(selector), 'color', 'shell-muted')
         }
         await expectToken(host.locator('.janus-chat-turn-elapsed'), 'color', 'shell-dim')
@@ -94,8 +94,8 @@ for (const theme of ['planche', 'dark']) {
         await toggle.hover()
         await expectToken(toggle, 'color', 'shell-accent')
         await toggle.click()
-        await expect(host.locator('.janus-chat-thinking-body')).toBeVisible()
-        await expectToken(host.locator('.janus-chat-thinking-body pre'), 'color', 'shell-muted')
+        await expect(host.locator('.janus-chat-thinking-live')).toBeVisible()
+        await expectToken(host.locator('.janus-chat-thinking-live'), 'color', 'shell-muted')
         await toggle.click()
         await page.mouse.move(0, 0)
       }

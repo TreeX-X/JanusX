@@ -1,5 +1,32 @@
 import { test, expect } from '@playwright/test'
 
+test('annual activity follows terminal filters independently of summary dates', async ({ page }) => {
+  await page.goto('/usage.html?history=yes')
+  const heatmap = page.getByTestId('usage-heatmap')
+  await expect(page.getByTestId('usage-total')).toHaveText('16ktokens')
+  await expect(page.getByTestId('usage-heatmap-total')).toHaveText('176,000 tokens')
+  await expect(heatmap.locator('button:not(:disabled)')).toHaveCount(365)
+  await page.getByRole('button', { name: 'Codex', exact: true }).click()
+  await expect(page.getByTestId('usage-heatmap-total')).toHaveText('112,000 tokens')
+  await expect(page.getByTestId('usage-total')).toHaveText('12ktokens')
+  await page.getByRole('button', { name: '本月', exact: true }).click()
+  await expect(page.getByTestId('usage-heatmap-total')).toHaveText('112,000 tokens')
+  const today = heatmap.locator('button[tabindex="0"]')
+  await today.focus()
+  await expect(page.getByTestId('usage-heatmap-detail')).toContainText('12,000 tokens')
+  await page.keyboard.press('ArrowLeft')
+  await expect(page.getByTestId('usage-heatmap-detail')).toContainText('0 tokens')
+  await expect(heatmap.locator('button[tabindex="0"]')).toBeFocused()
+  await page.getByRole('button', { name: 'Claude Code', exact: true }).click()
+  await expect(page.getByTestId('usage-heatmap-total')).toHaveText('64,000 tokens')
+  await page.getByRole('button', { name: 'OpenCode', exact: true }).click()
+  await expect(page.getByTestId('usage-heatmap-total')).toHaveText('0 tokens')
+  await expect(heatmap.locator('button[data-level="4"]')).toHaveCount(0)
+  await page.getByRole('button', { name: '全部', exact: true }).click()
+  await expect(page.getByTestId('usage-heatmap-total')).toHaveText('176,000 tokens')
+  await page.screenshot({ path: 'artifacts/usage-activity-year.png', fullPage: true })
+})
+
 test('usage filters update both donuts, curves and model groups', async ({ page }) => {
   await page.goto('/usage.html')
   await expect(page.getByTestId('usage-total')).toHaveText('16ktokens')
@@ -11,7 +38,7 @@ test('usage filters update both donuts, curves and model groups', async ({ page 
   await expect(page.getByText('claude-sonnet-4-6')).toHaveCount(0)
   await expect(page.getByText('gpt-5.4')).toBeVisible()
   await page.locator('svg rect').nth(8).focus()
-  await expect(page.locator('[aria-live="polite"]')).toContainText('08:00')
+  await expect(page.locator('div[aria-live="polite"]')).toContainText('08:00')
   await page.getByRole('button', { name: '本月', exact: true }).click()
   await expect(page.getByRole('button', { name: '本月', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('[data-series]')).toHaveCount(2)
@@ -47,6 +74,7 @@ test('usage filters update both donuts, curves and model groups', async ({ page 
   await page.getByRole('button', { name: 'DeepSeek Harness', exact: true }).click()
   await expect(page.getByTestId('usage-total')).toHaveText('–tokens')
   await expect(page.getByTestId('usage-output')).toHaveText('–')
+  await expect(page.getByTestId('usage-heatmap-total')).toHaveText('– tokens')
 })
 
 test('usage layout fits a narrow settings pane', async ({ page }) => {

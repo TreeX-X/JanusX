@@ -58,6 +58,12 @@ describe('agent engine capabilities', () => {
     expect(resolveSessionStorePath('opencode', { XDG_DATA_HOME: '/custom-data' }, home)).toBe(
       join('/custom-data', 'opencode', 'opencode.db'),
     )
+    expect(resolveSessionStorePath('opencode', { XDG_DATA_HOME: '/custom-data', OPENCODE_DB: 'alternate.db' }, home)).toBe(
+      join('/custom-data', 'opencode', 'alternate.db'),
+    )
+    expect(resolveSessionStorePath('opencode', { OPENCODE_DB: join(process.cwd(), 'alternate.db') }, home)).toBe(
+      join(process.cwd(), 'alternate.db'),
+    )
     expect(resolveSessionStorePath('pi', {}, home)).toBe(join(home, '.pi', 'agent', 'sessions'))
   })
 

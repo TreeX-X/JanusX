@@ -31,6 +31,8 @@ export interface UsageObservation {
 }
 export interface UsageRecord extends UsageTokens {
   id: string
+  /** Native event identity for precise metadata enrichment on future replays. */
+  eventId?: string
   engine: UsageEngine
   sessionId: string
   at: number
@@ -64,6 +66,7 @@ export interface UsageLedgerPage {
   hasIssues?: boolean
 }
 export interface UsageSourceCheckpoint {
+  mode?: 'events' | 'cumulative'
   sourceSize?: number
   sourceHash?: string
   updatedAt: number

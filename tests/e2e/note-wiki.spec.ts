@@ -1,5 +1,26 @@
 import { expect, test } from '@playwright/test'
 
+test('contents stays anchored above its trigger after expanding review', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 520 })
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/note-wiki.html?chapters')
+  const trigger = page.locator('.bp-note-toc-trigger')
+  const menu = page.getByRole('dialog', { name: '章节目录' })
+  await page.locator('.bp-note-review__toggle').click()
+  await expect(page.locator('.bp-note-review__toggle')).toHaveAttribute('aria-expanded', 'true')
+  for (const theme of ['dark', 'planche']) {
+    await page.evaluate(value => { document.documentElement.dataset.theme = value }, theme)
+    await trigger.click()
+    await expect(menu).toBeVisible()
+    const button = (await trigger.boundingBox())!, popup = (await menu.boundingBox())!
+    expect(popup.y).toBeGreaterThanOrEqual(12)
+    expect(popup.y + popup.height).toBeCloseTo(button.y - 6, 0)
+    expect(popup.x + popup.width).toBeLessThanOrEqual(390 - 12)
+    await page.keyboard.press('Escape')
+    await expect(trigger).toBeFocused()
+  }
+})
+
 test('contents overlay fits narrow readers, preserves reading layout and dismisses with keyboard or outside click', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 })
   await page.emulateMedia({ reducedMotion: 'reduce' })

@@ -12,7 +12,7 @@ export const DEFAULT_BLUEPRINT_REVIEW_SETTINGS: BlueprintReviewSettings = {
   jev: { enabled: false, endpoint: 'https://api.typesafe.ai/v1/systemone', model: 'jev-1.13.0' },
   automatic: { enabled: false, commits: 5 },
 }
-export type ReviewConnectionFailure = 'not-configured' | 'provider-unavailable' | 'authentication' | 'forbidden' | 'model-not-found' | 'rate-limit' | 'provider-error' | 'invalid-request' | 'timeout' | 'network' | 'truncated' | 'empty-response' | 'blocked' | 'model-setup' | 'unknown'
+export type ReviewConnectionFailure = 'not-configured' | 'provider-unavailable' | 'authentication' | 'forbidden' | 'model-not-found' | 'rate-limit' | 'provider-error' | 'invalid-request' | 'timeout' | 'network' | 'truncated' | 'empty-response' | 'blocked' | 'model-setup' | 'model-capacity' | 'context-limit' | 'unknown'
 export interface ReviewConfigurationStatus {
   generation: { status: 'ready' | 'missing' | 'failed'; message?: string; reason?: ReviewConnectionFailure; httpStatus?: number }
   jev: { status: 'ready' | 'disabled' | 'missing' | 'failed'; message?: string }
