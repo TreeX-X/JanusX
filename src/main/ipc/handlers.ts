@@ -19,7 +19,9 @@ import { SHELL_PROFILE_CHANNELS } from '../../shared/ipc/shell-profiles'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/shell-runtime'
 import { resolveCLIPath } from '../janus-runner/cli-resolver'
 import { buildVSCodeLaunchArgs } from '../ide-launch'
+import { watchNativeDialogPosition } from '../windows/center-native-dialog'
 import { trackBlueprintReviewWorkspace } from '../blueprint/review/runtime'
+import { createApplicationDataEventFilter } from './workspace-event-filter'
 import {
   detectShellCandidates,
   getDefaultShellCommand,
@@ -30,6 +32,7 @@ import {
 const WORKSPACES_DIR = join(app.getPath('userData'), 'janusx', 'workspaces')
 const HIDDEN_FILETREE_ENTRIES = new Set(['.git', '.janusX'])
 const watcherRegistry = new Map<string, FSWatcher>()
+const applicationDataEventFilters = new Map<string, ReturnType<typeof createApplicationDataEventFilter>>()
 /** 根层非递归降级时,为已加载子目录额外挂的非递归 watcher */
 const nestedWatcherRegistry = new Map<string, Map<string, FSWatcher>>()
 const nonRecursiveWatchWorkspaces = new Set<string>()
@@ -167,6 +170,7 @@ function closeNestedWatchers(workspacePath: string): void {
 function closeWorkspaceWatcher(workspacePath: string): void {
   watcherRegistry.get(workspacePath)?.close()
   watcherRegistry.delete(workspacePath)
+  applicationDataEventFilters.delete(workspacePath)
   closeNestedWatchers(workspacePath)
   nonRecursiveWatchWorkspaces.delete(workspacePath)
   const timer = watcherTimers.get(workspacePath)
@@ -186,6 +190,8 @@ function emitWorkspaceFsChange(
   for (const subscriber of watcherSubscribers.get(workspacePath) ?? []) {
     subscriber(eventType, filename)
   }
+
+  if (applicationDataEventFilters.get(workspacePath)?.(filename)) return
 
   // Subscribers still receive raw events. Lock/object/log churn must not
   // trigger whole-tree refreshes; retain index/HEAD/refs for external Git edits.
@@ -272,6 +278,14 @@ function ensureNestedDirectoryWatcher(workspacePath: string, absoluteDir: string
 function ensureWorkspaceWatcher(workspacePath: string): void {
   if (watcherRegistry.has(workspacePath)) return
 
+  const dataPaths: string[] = []
+  for (const key of ['userData', 'sessionData'] as const) {
+    try { dataPaths.push(app.getPath(key)) } catch { /* Unsupported host path: retain normal events. */ }
+  }
+  const diskCache = app.commandLine?.getSwitchValue('disk-cache-dir')
+  if (diskCache) dataPaths.push(diskCache)
+  applicationDataEventFilters.set(workspacePath, createApplicationDataEventFilter(workspacePath, dataPaths))
+
   try {
     const { watcher, recursive } = createWorkspaceFsWatcher(
       workspacePath,
@@ -304,8 +318,8 @@ function ensureWorkspaceWatcher(workspacePath: string): void {
   }
 }
 
-function registerWorkspaceWatcher(mainWindow: BrowserWindow | null, workspacePath: string): void {
-  trackBlueprintReviewWorkspace(workspacePath, true)
+function registerWorkspaceWatcher(mainWindow: BrowserWindow | null, workspacePath: string, refreshReview = true): void {
+  if (refreshReview || !watcherWindows.has(workspacePath)) trackBlueprintReviewWorkspace(workspacePath, true)
   const windows = watcherWindows.get(workspacePath) ?? new Set<BrowserWindow>()
   if (mainWindow) windows.add(mainWindow)
   watcherWindows.set(workspacePath, windows)
@@ -334,6 +348,7 @@ export function disposeWorkspaceWatcher(workspacePath: string): void {
   closeWorkspaceWatcher(workspacePath)
   watcherWindows.delete(workspacePath)
   watcherSubscribers.delete(workspacePath)
+  applicationDataEventFilters.delete(workspacePath)
 }
 
 export function disposeWorkspaceWatchers(): void {
@@ -437,10 +452,16 @@ export function registerWorkspaceHandlers(
     }
   })
 
-  ipcMain.handle(SYSTEM_CHANNELS.openDirectory, async () => {
-    const mainWindow = getMainWindow()
+  ipcMain.handle(SYSTEM_CHANNELS.openDirectory, async (event) => {
+    const mainWindow = BrowserWindow.fromWebContents(event.sender) ?? getMainWindow()
     const dialogOptions = { properties: ['openDirectory'] as Array<'openDirectory'> }
-    return mainWindow ? dialog.showOpenDialog(mainWindow, dialogOptions) : dialog.showOpenDialog(dialogOptions)
+    if (!mainWindow || mainWindow.isDestroyed()) return dialog.showOpenDialog(dialogOptions)
+    const stopPositioning = watchNativeDialogPosition(mainWindow)
+    try {
+      return await dialog.showOpenDialog(mainWindow, dialogOptions)
+    } finally {
+      stopPositioning()
+    }
   })
 
   ipcMain.handle(SYSTEM_CHANNELS.saveFile, async (_event, options: unknown) => {
@@ -515,7 +536,7 @@ export function registerWorkspaceHandlers(
       return []
     }
 
-    registerWorkspaceWatcher(getMainWindow(), rootPath)
+    registerWorkspaceWatcher(getMainWindow(), rootPath, false)
     // Linux 非递归降级:children 成功后为该绝对目录补 watcher,才能收到深层变更
     ensureNestedDirectoryWatcher(rootPath, targetDir)
     return readDirectoryNodes(rootPath, targetDir)

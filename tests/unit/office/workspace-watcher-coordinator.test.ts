@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('fs', async (importOriginal) => ({ ...(await importOriginal()), watch: mocks.watch }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => tmpdir() },
+  app: { getPath: vi.fn(() => join(tmpdir(), 'janusx-watcher-profile')) },
   ipcMain: {
     handle: (channel: string, handler: (...args: any[]) => any) => mocks.handlers.set(channel, handler),
   },
@@ -46,6 +46,7 @@ import {
   registerWorkspaceHandlers,
   subscribeWorkspaceWatcher,
 } from '../../../src/main/ipc/handlers'
+import { app } from 'electron'
 
 let temporaryRoot: string
 
@@ -55,6 +56,7 @@ describe('workspace watcher coordinator', () => {
     mocks.handlers.clear()
     mocks.watch.mockClear()
     mocks.watchers.length = 0
+    vi.mocked(app.getPath).mockImplementation(() => join(tmpdir(), 'janusx-watcher-profile'))
     temporaryRoot = await mkdtemp(join(tmpdir(), 'janusx-watcher-coordinator-'))
   })
 
@@ -145,5 +147,23 @@ describe('workspace watcher coordinator', () => {
     expect(mocks.watchers[1].close).toHaveBeenCalledTimes(1)
     await vi.runAllTimersAsync()
     expect(mocks.watch).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps profile churn for raw subscribers while suppressing renderer reloads', async () => {
+    vi.mocked(app.getPath).mockImplementation(() => join(temporaryRoot, 'release', 'data'))
+    const raw = vi.fn()
+    subscribeWorkspaceWatcher(temporaryRoot, raw)
+    const send = vi.fn()
+    const mainWindow = { on: vi.fn(), isDestroyed: () => false,
+      webContents: { isDestroyed: () => false, send } } as any
+    registerWorkspaceHandlers(() => mainWindow)
+    await mocks.handlers.get('filetree:load')!({}, temporaryRoot)
+    for (let i = 0; i < 1000; i++) mocks.watchers[0].callback('change', 'release/data/usage-ledger.sqlite-wal')
+    await vi.advanceTimersByTimeAsync(200)
+    expect(raw).toHaveBeenCalledTimes(1000)
+    expect(send).not.toHaveBeenCalled()
+    mocks.watchers[0].callback('change', 'data/source.json')
+    await vi.advanceTimersByTimeAsync(200)
+    expect(send).toHaveBeenCalledWith('filetree:changed', { workspacePath: temporaryRoot, changedFilePath: join(temporaryRoot, 'data/source.json') })
   })
 })
