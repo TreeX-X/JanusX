@@ -5,7 +5,7 @@
   "kind": "module",
   "lifecycle": "accepted",
   "created": "2026-10-08",
-  "updated": "2026-10-15T10:26:11.296Z",
+  "updated": "2026-10-15T16:49:05Z",
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
   "moduleState": "partial",
   "codeRefs": [
@@ -46,7 +46,7 @@
 
 阅读区优先呈现正文：紧凑模式不重复完整扫描说明，来源与字段移至正文下方。完整源文与复制收进页签右侧“原文操作”，选择操作、点击外部或 Escape 关闭；键盘关闭及执行后焦点返回入口。审核摘要常驻正文之前，显示折叠入口、建议数量、状态和审核动作；收起只隐藏详细内容，摘要不会消失。吸顶状态入口仍能展开并定位详情，建议直达自动展开，审核状态持续接收更新。
 
-预览使用单棵 Markdown 语法树组织章节，保留跨章节引用定义、代码围栏、表格和原文行号；主要章节可分别折叠、全部展开/折叠，目录跳转会展开目标所在章节。章节目录使用原生 Popover 浮层，不推挤正文，可滚动并适配窗口边界；选择章节、点击外部、Escape、外部滚动或窗口尺寸变化时关闭，键盘关闭后焦点返回入口。全部展开/折叠使用紧邻目录的图标按钮并保留可访问名称。标题按层级呈现，原文、关联预览和审核引用继续使用实际来源与 hash。代码块保留自身横向滚动，正文不再套一层固定高度的纵向源文滚动框。
+预览使用单棵 Markdown 语法树组织章节，保留跨章节引用定义、代码围栏、表格和原文行号；主要章节可分别折叠、全部展开/折叠，目录跳转会展开目标所在章节。章节目录使用原生 Popover 浮层，不推挤正文，可滚动并适配窗口边界；向上展开时在显示后测量实际高度，以 6px 间距贴近入口，不以最大高度代替实际高度，避免审核记录展开后短目录向上偏移。选择章节、点击外部、Escape、外部滚动或窗口尺寸变化时关闭，键盘关闭后焦点返回入口。全部展开/折叠使用紧邻目录的图标按钮并保留可访问名称。标题按层级呈现，原文、关联预览和审核引用继续使用实际来源与 hash。代码块保留自身横向滚动，正文不再套一层固定高度的纵向源文滚动框。
 
 “关联笔记”分别展示所属模块、依赖、实现、约束、来源、替代和正文引用的双向关系，以标题和完整方向说明呈现，保留验收项、范围和理由。UUID/URI 收进引用详情；缺失、不可读取、多重身份和无效引用明确说明。harness-note/2 的 module 归属同时生成所属模块和下属笔记入口。关联页不批量读取全文；展开单篇预览时才读取原始 Note，失败可重试，预览中的内部链接仍按被预览笔记解析。原“上下文”独立页签已合并为章节阅读和关联预览，不把有界上下文摘录当成全文。Agent 使用的有界上下文接口保持原职责。
 
@@ -55,6 +55,8 @@
 卡片采用固定标题及关闭按钮、独立内容滚动区；内容稳定预留滚动条宽度。只有页签和紧凑审核状态入口吸顶，完整审核面板随正文滚动。审核状态区分未审核、进行中、待复审、覆盖不足、失败、过期、有建议和通过，点击入口只定位并展开详情。建议直达、已读规则、引用定位和返回阅读位置沿用导航流程，返回时同时恢复章节折叠。详细状态规则见[更新与建议导航](../navigation/note-updates-and-suggestion-navigation.md)。
 
 ## Verification
+
+2026-10-16 目录定位回归：新增 `contents stays anchored above its trigger after expanding review` 在旧实现中复现 155px 的多余空隙，修复后通过。`npx playwright test tests/e2e/note-wiki.spec.ts tests/e2e/blueprint-reader.spec.ts --project=island --workers=1` 共 12 项通过，环境设置 `JANUS_E2E_PORT=57823`、`NO_PROXY=127.0.0.1,localhost`。覆盖审核展开后的向上定位、两种主题、窄窗边界、键盘关闭与焦点返回，以及既有章节跳转和阅读位置恢复；正常动画下两主题实测目录与入口均相隔 6px。类型检查与 `NoteMarkdown.tsx` 的 ESLint 通过。使用浏览器与 IPC fixture，未验证安装包。
 
 2026-10-15 收起行为修正：首次进入不再自动展开 Janus，左侧审核面板收起后保留摘要。修复前 `blueprint-workbench.spec.ts` 的 fresh launch 与 `blueprint-attention.spec.ts` 的 suggestion summary 在两种尺寸/入口的 4 项场景均复现失败；修复后连同建议交接共 6 项通过。扩展回归使用 `NO_PROXY=127.0.0.1,localhost`、`JANUS_E2E_PORT=52689`，执行 `npx playwright test tests/e2e/blueprint-workbench.spec.ts tests/e2e/blueprint-attention.spec.ts tests/e2e/blueprint-reader.spec.ts tests/e2e/blueprint-module-focus.spec.ts tests/e2e/blueprint-workspace-init.spec.ts --project=island --workers=2 --output=artifacts/blueprint-collapse-regression`：57 项通过，1 项在新打开 Janus 的初始适应动画完成前捕获视口。该测试补充等待图谱就绪及入场动画完成后，`JANUS_E2E_PORT=52690` 单独重跑 module-focus 的 2 项均通过，共覆盖 58 个场景。类型检查、应用构建和两个变更组件 ESLint 通过；亮暗截图人工检查摘要及建议数量可见、右侧关闭，位于本地 `artifacts/blueprint-collapse-fixed/summary-{planche,dark}.png`。未运行 Electron 桌面验收。
 

@@ -60,7 +60,7 @@
   backdrop-filter: none;
   font-family: inherit;
 }
-.blueprint-workbench-shell .blueprint-janus-capsule:hover { background: var(--shell-hover); box-shadow: none; border-color: var(--shell-muted); }
+.blueprint-workbench-shell .blueprint-janus-capsule:is(:hover, :focus-visible, [aria-expanded='true']) { background: var(--shell-hover); box-shadow: none; border-color: var(--shell-muted); }
 .blueprint-workbench-shell .blueprint-janus-capsule__name { color: var(--shell-text); letter-spacing: normal; }
 .blueprint-workbench-shell .blueprint-janus-capsule .blueprint-janus-capsule__identity { width: 20px; height: 20px; min-width: 20px; min-height: 20px; }
 .blueprint-workbench-shell .blueprint-janus-capsule__status { background: transparent; color: var(--shell-muted); font-family: inherit; letter-spacing: normal; }

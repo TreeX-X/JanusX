@@ -43,6 +43,25 @@ it('broadcasts persisted configuration before scheduler work and versions delaye
   expect(stale.automaticSettings?.enabled).toBe(false)
 })
 
+it('publishes a real review independently of a foreground index timeout', async () => {
+  const repoId = '00000000-0000-4000-8000-000000000001', noteId = '00000000-0000-4000-8000-000000000002'
+  await mkdir(join(directory, '.agents/notes'), { recursive: true })
+  await writeFile(join(directory, '.agents/harness.json'), JSON.stringify({ schemaVersion: 1, repoId, name: 'Publication isolation fixture', profile: SUPPORTED_HARNESS_PROFILE }))
+  await writeFile(join(directory, '.agents/notes/module.md'), '---\n' + JSON.stringify({ schema: 'harness-note/2', id: noteId, kind: 'module', role: 'project', moduleState: 'partial', lifecycle: 'accepted', created: '2026-10-10', updated: '2026-10-10T00:00:00Z' }) + '\n---\n# Module\n\n## Responsibility\n\nTest review publication.\n')
+  await runtime.shutdown()
+  const foreground = new WorkspaceSuggestionSources()
+  const timeout = vi.spyOn(foreground, 'snapshot').mockRejectedValue(Error('BLUEPRINT_SYNC_TIMEOUT'))
+  runtime = new BlueprintReviewRuntime(directory, {
+    generate: async (_settings, input, evidence) => { await evidence.read(input.target.path); return { findings: [], coverage: 'complete', limitations: [] } },
+    verify: vi.fn(),
+  }, foreground)
+  await runtime.settings.update({ ...DEFAULT_BLUEPRINT_REVIEW_SETTINGS, generation: { providerId: 'fixture', modelId: 'fixture' } })
+  const result = await runtime.run(directory, noteId)
+  expect(result.report?.coverage).toBe('complete')
+  expect(result.pending).toBeNull()
+  expect(timeout).not.toHaveBeenCalled()
+})
+
 
 it('restores legacy failures before source synchronization clears their report error', async () => {
   const context = { repoId: '00000000-0000-4000-8000-000000000001', workspacePath: directory, branch: 'no-git' }

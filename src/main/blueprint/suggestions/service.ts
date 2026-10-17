@@ -27,6 +27,16 @@ function invalidate(item: StoredReviewItem): void {
   item.error = null
 }
 
+/** A stale report cannot accept a score; do not leave its annotation pending forever. */
+function settleStaleScores(item: StoredReviewItem): void {
+  if (!item.report?.stale) return
+  for (const finding of item.report.findings) {
+    if (finding.verification !== 'pending') continue
+    finding.verification = 'failed'
+    finding.verificationDetail = undefined
+  }
+}
+
 function clear(item: StoredReviewItem, availability: 'deleted' | 'excluded'): void {
   invalidate(item)
   item.report = null
@@ -74,6 +84,7 @@ export class SuggestionService {
             item.availability = 'unavailable'
             item.missingSince = confirmedReadable ? item.missingSince ?? this.now() : null
             if (item.report) { item.report.stale = true; item.report.findings.forEach(finding => { finding.stale = true }) }
+            settleStaleScores(item)
           }
           continue
         }
@@ -101,6 +112,7 @@ export class SuggestionService {
           if (finding.source.path !== source.path || finding.source.hash !== source.hash ||
             !evidenceMatches(finding.evidence, snapshot)) { finding.stale = true; item.report!.stale = true }
         }
+        settleStaleScores(item)
         if ((evidenceChanged || item.pending && !item.pending.snapshotCommit && !evidenceMatches(item.pending.evidence, snapshot)) && item.reportRevision === originalRevision) invalidate(item)
       }
       for (const source of notes) {
@@ -173,6 +185,7 @@ export class SuggestionService {
       // Resolution explanations are transient validation inputs, never a history of cleared issues.
       item.report = { coverage: parsed.coverage, limitations: parsed.limitations, provenance: parsed.provenance, findings, id: ticket.id,
         source: ticket.source, evidence: ticket.evidence, stale: stale || findings.some(finding => finding.stale), createdAt: new Date(this.now()).toISOString() }
+      settleStaleScores(item)
       const latest = { ...item.observedEvidence, ...Object.fromEntries(ticket.evidence.map(source => [source.path, source.hash])) }
       item.observedEvidence = Object.fromEntries(reportEvidence(item).map(source => [source.path, source.path in latest ? latest[source.path] : source.hash]))
       item.reportRevision++

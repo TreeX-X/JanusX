@@ -19,6 +19,7 @@ import { collectReviewEvidence, type ReviewInput } from './evidence'
 import { NoteReadingService } from '../note-reading'
 import type { GitReviewSources } from './git-snapshot'
 import { harnessNoteService } from '../../harness/service'
+import { ReviewWorkspaceTracker } from './workspace-tracker'
 import type { NoteUpdatesView } from '../../../shared/blueprint-attention'
 
 export class BlueprintReviewRuntime {
@@ -44,7 +45,10 @@ export class BlueprintReviewRuntime {
     this.store = new ReviewStore(join(root, 'current-suggestions.sqlite'))
     this.suggestions = new WorkspaceSuggestions(new SuggestionService(this.store), this.sources)
     this.settings = new ReviewSettingsStore(join(root, 'review-settings.json'))
-    this.engine = new NoteReviewEngine(this.suggestions, this.sources, models, context => { if (!this.stopping) this.resultsChanged(context) })
+    // Review publication has its own source reader: a foreground index deadline must not discard a generated report.
+    const reviewSources = new WorkspaceSuggestionSources()
+    this.engine = new NoteReviewEngine(new WorkspaceSuggestions(new SuggestionService(this.store), reviewSources), reviewSources, models,
+      context => { if (!this.stopping) this.resultsChanged(context) })
     this.repairs = new NoteRepairService(join(root, 'note-repair'), { context: path => this.sources.context(path),
       notes: this.sources.notes, suggestions: this.suggestions, review: (path, noteId, signal) => this.run(path, noteId, undefined, signal),
       changed: context => this.resultsChanged(context),
@@ -176,9 +180,16 @@ let instance: BlueprintReviewRuntime | undefined
 export function blueprintReviewRuntime(): BlueprintReviewRuntime {
   return instance ??= new BlueprintReviewRuntime(join(app.getPath('userData'), 'janusx', 'blueprint'), blueprintReviewModels, new WorkspaceSuggestionSources(harnessNoteService))
 }
-export async function shutdownBlueprintReview(): Promise<void> { await instance?.shutdown() }
+export async function shutdownBlueprintReview(): Promise<void> { workspaceTracker.stop(); await instance?.shutdown() }
+const workspaceTracker = new ReviewWorkspaceTracker<ReviewContext>(
+  root => blueprintReviewRuntime().sources.context(root),
+  async context => {
+    const runtime = blueprintReviewRuntime()
+    runtime.automatic.watch(context.workspacePath)
+    await runtime.reading.read(context)
+  },
+  root => instance?.automatic.unwatch(root),
+)
 export function trackBlueprintReviewWorkspace(root: string, active: boolean): void {
-  if (!active) { instance?.automatic.unwatch(root); return }
-  const runtime = blueprintReviewRuntime()
-  void runtime.sources.context(root).then(async context => { runtime.automatic.watch(context.workspacePath); await runtime.reading.read(context) }).catch(() => { /* A workspace without Notes has nothing to review. */ })
+  workspaceTracker.track(root, active)
 }

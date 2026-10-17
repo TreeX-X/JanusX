@@ -40,6 +40,7 @@ export async function collectReviewEvidence(sources: Sources, context: ReviewCon
 export class ReviewEvidenceSession {
   private targetTotalLines = 0
   private readonly targetPages: Array<[number, number]> = []
+  private readonly readLines = new Map<string, Map<number, string>>()
   constructor(readonly sources: Sources, readonly input: ReviewInput) {}
 
   private targetCoveredLines(): number {
@@ -145,14 +146,27 @@ export class ReviewEvidenceSession {
     const content = lines.slice(startLine - 1, startLine - 1 + lineCount).join('\n')
     const previous = this.input.materials.find(material => material.path === path)
     if (previous && previous.hash !== hash) throw Object.assign(new Error('Review source changed during reading'), { code: 'CONFLICT' })
-    if (previous) previous.content += '\n' + content
-    else this.input.materials.push({ path, hash, content, totalChars: full.length, kind: path.startsWith('.agents/notes/') ? 'note' : 'code' })
+    const read = this.readLines.get(path) ?? new Map<number, string>()
+    lines.slice(startLine - 1, startLine - 1 + lineCount).forEach((line, index) => read.set(startLine + index, line))
+    this.readLines.set(path, read)
+    // Sort and merge overlapping pages. A NUL prevents a quote from bridging unread lines.
+    let combined = '', last = 0
+    for (const [number, line] of [...read].sort((a, b) => a[0] - b[0])) {
+      combined += (last ? number === last + 1 ? '\n' : '\0' : '') + line
+      last = number
+    }
+    if (previous) previous.content = combined
+    else this.input.materials.push({ path, hash, content: combined, totalChars: full.length, kind: path.startsWith('.agents/notes/') ? 'note' : 'code' })
     return { path, hash, startLine, totalLines: lines.length, content, hasMore: startLine - 1 + lineCount < lines.length }
   }
 
-  async validate(): Promise<void> {
+  validateTargetRead(): void {
     if (!this.input.materials.some(item => item.path === this.input.target.path)) throw new Error('Agent did not read the target Note')
     if (this.targetCoveredLines() < this.targetTotalLines) throw new Error('Agent did not finish reading the target Note')
+  }
+
+  async validate(): Promise<void> {
+    this.validateTargetRead()
     const stable = await this.sources.capture(this.input.context, this.input.materials.map(item => item.path))
     if (stable.notes.find(note => note.noteId === this.input.target.noteId)?.hash !== this.input.target.hash ||
       this.input.materials.some(item => stable.evidence[item.path] !== item.hash)) throw Object.assign(new Error('Review evidence changed; retry with current sources'), { code: 'CONFLICT' })

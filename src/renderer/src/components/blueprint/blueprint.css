@@ -1755,19 +1755,29 @@
   align-items: center;
 }
 
-.blueprint-workbench-switch__select {
+.blueprint-workbench-topbar .blueprint-workbench-switch .blueprint-workbench-switch__select {
   width: auto;
   max-width: 100%;
   min-height: 26px;
-  background: transparent;
-  border-color: transparent;
-  color: #f0f0f1;
+  background: var(--shell-chrome);
+  border-color: var(--shell-border);
+  color: var(--shell-text);
+  box-shadow: none;
   font-weight: 600;
 }
 
-.blueprint-workbench-switch__select:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.08);
+.blueprint-workbench-topbar .blueprint-workbench-switch .blueprint-workbench-switch__select:hover:not(:disabled),
+.blueprint-workbench-topbar .blueprint-workbench-switch .blueprint-workbench-switch__select[aria-expanded='true'] {
+  background: var(--shell-hover);
+  border-color: var(--shell-muted);
+  box-shadow: none;
+}
+
+.blueprint-workbench-topbar .blueprint-workbench-switch .blueprint-workbench-switch__select:focus-visible {
+  border-color: var(--shell-muted);
+  outline: 2px solid var(--shell-muted);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 /* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/2026-09-21-workbench-close-hit-slop--8688b5ab.md */
@@ -1818,11 +1828,10 @@
 .blueprint-review-activity {
   box-sizing: border-box;
   height: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--shell-border);
   border-radius: 4px;
-  background: rgba(10, 14, 20, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--shell-chrome);
+  box-shadow: none;
   transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
@@ -1839,15 +1848,18 @@
 }
 
 .blueprint-janus-capsule:hover,
-.blueprint-review-activity:hover {
-  border-color: rgba(0, 240, 255, 0.35);
-  background: rgba(16, 22, 32, 0.9);
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.12);
+.blueprint-review-activity:hover,
+.blueprint-janus-capsule[aria-expanded='true'],
+.blueprint-janus-capsule:focus-visible,
+.blueprint-review-activity:focus-visible {
+  border-color: var(--shell-muted);
+  background: var(--shell-hover);
+  box-shadow: none;
 }
 
 .blueprint-janus-capsule:active { transform: translateY(1px); }
 .blueprint-janus-capsule:focus-visible,
-.blueprint-review-activity:focus-visible { outline: 2px solid rgba(0, 240, 255, 0.55); outline-offset: 2px; }
+.blueprint-review-activity:focus-visible { outline: 2px solid var(--shell-muted); outline-offset: 2px; }
 .blueprint-janus-capsule:disabled { opacity: 0.42; cursor: default; }
 
 .blueprint-janus-capsule .blueprint-janus-capsule__identity {
@@ -4071,15 +4083,6 @@
   color: var(--ink, #1C343B);
 }
 
-[data-theme='planche'] .blueprint-workbench-switch__select {
-  color: var(--ink, #1C343B);
-}
-
-[data-theme='planche'] .blueprint-workbench-switch__select:hover:not(:disabled) {
-  background: var(--paper-deep, #DCCFA8);
-  border-color: var(--line-soft, rgba(28, 52, 59, 0.22));
-}
-
 [data-theme='planche'] .blueprint-toolbar__scope {
   background: var(--paper-deep, #DCCFA8);
   color: var(--ink-soft, rgba(28, 52, 59, 0.62));
@@ -4090,22 +4093,10 @@
   border: 1px solid var(--shell-accent-border);
 }
 
-/* 工作台 Janus 胶囊：纸面 + 墨线，去霓虹 */
+/* Topbar shells use shared neutral theme tokens; status colors stay inside. */
 [data-theme='planche'] .blueprint-janus-capsule,
 [data-theme='planche'] .blueprint-review-activity {
-  background: var(--paper, #EFE4C5);
-  border: 1px solid var(--line, #1C343B);
   color: var(--ink, #1C343B);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: none;
-}
-
-[data-theme='planche'] .blueprint-janus-capsule:hover,
-[data-theme='planche'] .blueprint-review-activity:hover {
-  border-color: var(--planche-red, #D43D2A);
-  background: var(--paper-deep, #DCCFA8);
-  box-shadow: none;
 }
 
 [data-theme='planche'] .blueprint-janus-capsule__name {

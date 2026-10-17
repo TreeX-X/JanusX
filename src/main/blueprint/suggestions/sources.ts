@@ -9,16 +9,19 @@ import { NoteService, readHarnessIdentity } from '@janus-agent/harness-node'
 import { reviewPathSchema, type ReviewContext, type ReviewSourceSnapshot } from '../../../shared/blueprint-review'
 import { reviewContextKey } from './store'
 import { reviewStructure } from '../review/structure'
+import { abortableRead } from '../read-task'
 
 const exec = promisify(execFile)
 const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
 const conflict = (): Error => Object.assign(new Error('Review sources changed; read the current workspace'), { code: 'CONFLICT' })
-async function retryBusy<T>(read: () => Promise<T>): Promise<T> {
+async function retryBusy<T>(read: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  const deadline = Date.now() + 60_000
   for (let attempt = 0; ; attempt++) {
-    try { return await read() }
+    signal?.throwIfAborted()
+    try { return await abortableRead(read(), signal) }
     catch (error) {
-      if ((error as { code?: string }).code !== 'BUSY' || attempt >= 4) throw error
-      await delay(50 * (attempt + 1))
+      if ((error as { code?: string }).code !== 'BUSY' || Date.now() >= deadline) throw error
+      await delay(Math.min(100 * (attempt + 1), 1000, deadline - Date.now()), undefined, { signal })
     }
   }
 }
@@ -31,7 +34,7 @@ export interface SuggestionSources {
 export class WorkspaceSuggestionSources implements SuggestionSources {
   constructor(readonly notes: NoteService = new NoteService()) {}
 
-  snapshot(context: ReviewContext) { return retryBusy(() => this.notes.readSnapshot(context.workspacePath)) }
+  snapshot(context: ReviewContext, signal?: AbortSignal) { return retryBusy(() => this.notes.readSnapshot(context.workspacePath), signal) }
 
   private async branch(root: string): Promise<string> {
     const git = async (...args: string[]): Promise<string> => (await exec('git', args, {
@@ -66,7 +69,7 @@ export class WorkspaceSuggestionSources implements SuggestionSources {
   async capture(context: ReviewContext, evidencePaths: string[], signal?: AbortSignal): Promise<ReviewSourceSnapshot> {
     if (reviewContextKey(await this.context(context.workspacePath)) !== reviewContextKey(context)) throw conflict()
     signal?.throwIfAborted()
-    const first = await this.snapshot(context)
+    const first = await this.snapshot(context, signal)
     signal?.throwIfAborted()
     const notes = first.entries.flatMap(entry => entry.classification === 'valid' && entry.doc && entry.sourceHash ? [{
       noteId: entry.doc.id, path: entry.relPath, hash: entry.sourceHash, kind: entry.doc.kind,
@@ -81,7 +84,7 @@ export class WorkspaceSuggestionSources implements SuggestionSources {
       try { evidence[path] = digest(await this.bytes(context, path)) } catch { evidence[path] = null }
     }
     signal?.throwIfAborted()
-    const second = await this.snapshot(context)
+    const second = await this.snapshot(context, signal)
     signal?.throwIfAborted()
     if (first.coverage.snapshotHash !== second.coverage.snapshotHash || second.repoId !== context.repoId) throw conflict()
     for (const [path, hash] of Object.entries(evidence)) {

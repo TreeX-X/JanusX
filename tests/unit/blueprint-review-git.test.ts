@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { SUPPORTED_HARNESS_PROFILE } from '@janus-agent/harness-node'
+import { NoteService } from '@janus-agent/harness-node'
 import { DEFAULT_BLUEPRINT_REVIEW_SETTINGS } from '../../src/shared/blueprint-review-settings'
 import { WorkspaceSuggestionSources } from '../../src/main/blueprint/suggestions/sources'
 import { WorkspaceSuggestions } from '../../src/main/blueprint/suggestions/workspace-service'
@@ -147,6 +148,15 @@ it('reads Note and code from one immutable commit without switching or modifying
   } finally { await pinned.close() }
 })
 
+it('waits for the Note lock before opening an immutable review snapshot', async () => {
+  const context = await sources.context(workspace), commitId = (await gitHead(workspace))!
+  const readSnapshot = vi.spyOn(NoteService.prototype, 'readSnapshot')
+  readSnapshot.mockImplementationOnce(() => { throw Object.assign(new Error('notes busy: lock held'), { code: 'BUSY' }) })
+  const pinned = await GitReviewSources.open(context, commitId)
+  await pinned.close()
+  expect(readSnapshot).toHaveBeenCalledTimes(2)
+})
+
 it('publishes a finding from a committed Note while the checkout has newer uncommitted content', async () => {
   await commit('The implementation uses version 2 today.')
   const context = await sources.context(workspace)
@@ -260,6 +270,37 @@ it('resumes one interrupted job after shutdown without replaying its commit coun
   expect(review).toHaveBeenCalledTimes(2)
   expect(scheduler.activity(workspace)).toMatchObject({ commits: 0, phase: 'waiting' })
   await scheduler.tick(workspace); expect(review).toHaveBeenCalledTimes(2)
+})
+
+it('does not exhaust the failure budget when two shutdowns interrupt the same Note', async () => {
+  settings.automatic.commits = 1; await scheduler.tick(workspace); await commit('Repeated restart')
+  for (let i = 0; i < 2; i++) {
+    let started!: () => void
+    const ready = new Promise<void>(resolve => { started = resolve })
+    review.mockImplementationOnce(async (...args: unknown[]) => {
+      started()
+      await new Promise((_resolve, reject) => (args[3] as AbortSignal).addEventListener('abort', () => reject(Error('shutdown')), { once: true }))
+    })
+    const pending = scheduler.tick(workspace); await ready; await scheduler.shutdown(); await pending
+    const branch = Object.values(JSON.parse(await readFile(join(root, 'git-state.json'), 'utf8')).branches)[0] as { jobs: Array<{ attempts: number }> }
+    expect(branch.jobs[0].attempts).toBe(0)
+    scheduler = createScheduler()
+  }
+  await scheduler.tick(workspace)
+  expect(review).toHaveBeenCalledTimes(3)
+  expect(scheduler.activity(workspace)?.targets).toMatchObject([{ state: 'reviewed' }])
+})
+
+it('keeps an immutable Note snapshot after its temporary materialization disappears', async () => {
+  const context = await sources.context(workspace)
+  const source = await GitReviewSources.open(context, (await gitHead(workspace))!)
+  const snapshot = await source.snapshot(context)
+  const bytes = await source.bytes(context, '.agents/notes/module.md')
+  try {
+    await source.close()
+    expect(await source.snapshot(context)).toBe(snapshot)
+    expect(await source.bytes(context, '.agents/notes/module.md')).toEqual(bytes)
+  } finally { await source.close() }
 })
 
 it('publishes current Note and completed counts, preserves one summary on restart, and replaces it on a no-change round', async () => {

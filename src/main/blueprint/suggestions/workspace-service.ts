@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { reviewResultSchema, type ReviewContext, type ReviewEvidence, type ReviewFinding, type ReviewResult, type ReviewTicket } from '../../../shared/blueprint-review'
 import { SuggestionService } from './service'
 import { WorkspaceSuggestionSources, type SuggestionSources } from './sources'
+import { containsReviewQuote } from '../review/citations'
 
 /** Hosts resolve a context explicitly; switching the UI project never redirects a bound caller. */
 export class WorkspaceSuggestions {
@@ -34,8 +35,8 @@ export class WorkspaceSuggestions {
     throw new Error('Workspace changed repeatedly')
   }
 
-  async read(context: ReviewContext) {
-    const { snapshot: _snapshot, ...view } = await this.readWithSnapshot(context)
+  async read(context: ReviewContext, signal?: AbortSignal) {
+    const { snapshot: _snapshot, ...view } = await this.readWithSnapshot(context, signal)
     return view
   }
 
@@ -51,26 +52,28 @@ export class WorkspaceSuggestions {
     return { ...synchronized, sourceComplete: synchronized.snapshot.complete }
   }
 
-  async begin(context: ReviewContext, noteId: string, evidence: ReviewEvidence[] = [], expectedHash?: string): Promise<ReviewTicket> {
-    const { revision, snapshot: live } = await this.synchronize(context, this.snapshotCommit ? [] : evidence.map(source => source.path))
+  async begin(context: ReviewContext, noteId: string, evidence: ReviewEvidence[] = [], expectedHash?: string, signal?: AbortSignal): Promise<ReviewTicket> {
+    const { revision, snapshot: live } = await this.synchronize(context, this.snapshotCommit ? [] : evidence.map(source => source.path), signal)
     const snapshot = this.snapshotCommit ? await this.reviewSources.capture(context, evidence.map(source => source.path)) : live
     if (evidence.some(source => snapshot.evidence[source.path] !== source.hash)) throw new Error('Review evidence changed')
     const target = snapshot.notes.find(note => note.noteId === noteId)
     if (this.snapshotCommit && !target) throw new Error('Review target changed')
     if (expectedHash && target?.hash !== expectedHash) throw new Error('Review target changed')
+    signal?.throwIfAborted()
     return this.service.begin(context, noteId, revision, evidence, this.snapshotCommit ? target : undefined, this.snapshotCommit)
   }
 
-  async extendEvidence(context: ReviewContext, noteId: string, ticketId: string, evidence: ReviewEvidence[]): Promise<void> {
-    const { revision, snapshot: live } = await this.synchronize(context, this.snapshotCommit ? [] : evidence.map(source => source.path))
+  async extendEvidence(context: ReviewContext, noteId: string, ticketId: string, evidence: ReviewEvidence[], signal?: AbortSignal): Promise<void> {
+    const { revision, snapshot: live } = await this.synchronize(context, this.snapshotCommit ? [] : evidence.map(source => source.path), signal)
     const snapshot = this.snapshotCommit ? await this.reviewSources.capture(context, evidence.map(source => source.path)) : live
     if (evidence.some(source => snapshot.evidence[source.path] !== source.hash)) throw new Error('Review evidence changed')
+    signal?.throwIfAborted()
     this.service.extendEvidence(context, noteId, ticketId, revision, evidence)
   }
 
   async publish(context: ReviewContext, noteId: string, ticketId: string, result: ReviewResult, signal?: AbortSignal): Promise<void> {
     const parsed = reviewResultSchema.parse(result)
-    await this.synchronize(context)
+    signal?.throwIfAborted()
     const ticket = this.service.read(context).items.find(item => item.noteId === noteId)?.pending
     if (!ticket || ticket.id !== ticketId) throw new Error('Review input is no longer current')
     const pinned = await this.reviewSources.capture(context, [ticket.source.path, ...ticket.evidence.map(source => source.path)])
@@ -80,9 +83,9 @@ export class WorkspaceSuggestions {
     const bytes = new Map<string, string>()
     for (const path of paths) bytes.set(path, (await this.reviewSources.bytes(context, path)).toString('utf8'))
     for (const finding of [...parsed.findings, ...parsed.resolvedFindings]) {
-      if (finding.citations.some(citation => !bytes.get(citation.path)?.includes(citation.quote))) throw new Error('Review citation is not present in its source')
+      if (finding.citations.some(citation => !bytes.has(citation.path) || !containsReviewQuote(bytes.get(citation.path)!, citation.quote))) throw new Error('Review citation is not present in its source')
     }
-    const live = await this.synchronize(context)
+    const live = await this.synchronize(context, [], signal)
     signal?.throwIfAborted()
     this.service.publish(context, ticketId, noteId, parsed, live.snapshot.evidence)
   }

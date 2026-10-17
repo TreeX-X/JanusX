@@ -762,6 +762,8 @@
       "empty-response": "The model returned no text.",
       "blocked": "The model did not complete the connection-test reply.",
       "model-setup": "The model could not be created. Check the provider configuration.",
+      "model-capacity": "Model capacity is unavailable. Refresh the model catalog or configure context and output limits.",
+      "context-limit": "Review evidence exceeds model capacity. Narrow the evidence or configure a larger context window.",
       "unknown": "The model request failed. Check the provider configuration and try again."
     },
     "modelRoles": "The suggestion model reviews current sources. JEV adds numeric scores after publication; scores do not decide findings or review completion. Both are independent of the conversation model.",

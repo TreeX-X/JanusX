@@ -71,8 +71,11 @@ export function NoteMarkdown({ source, link }: { source: NoteSourceRead; link?: 
     menu.style.width = width + 'px'
     menu.style.maxHeight = height + 'px'
     menu.style.left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)) + 'px'
-    menu.style.top = (useBelow ? rect.bottom + 6 : Math.max(12, rect.top - height - 6)) + 'px'
+    menu.style.top = (useBelow ? rect.bottom + 6 : 12) + 'px'
     menu.showPopover()
+    // maxHeight is only a limit; a short menu must still meet its trigger
+    // when review expansion leaves room only above the button.
+    if (!useBelow) menu.style.top = Math.max(12, rect.top - menu.offsetHeight - 6) + 'px'
     menu.querySelector<HTMLButtonElement>('nav button')?.focus({ preventScroll: true })
   }
   const components = useMemo(() => {

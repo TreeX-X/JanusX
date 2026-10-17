@@ -1,5 +1,6 @@
 // Note: checkpoints are separate from failed review jobs — see .agents/notes/blueprint/maintenance/note-content-review.md
 import { readFile } from 'node:fs/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
 import { SerialQueue, writeFileAtomic } from '../../lib/atomic-file'
 import { REVIEW_NOTE_KINDS, reviewContextSchema, type ReviewContext, type ReviewItem } from '../../../shared/blueprint-review'
@@ -291,10 +292,10 @@ export class GitReviewScheduler {
     if (checked) {
       activity.phase = 'checking'
       this.changed(root)
-      const sources = await GitReviewSources.open(context, head)
+      const sources = await GitReviewSources.open(context, head, signal)
       try {
         const changed = new Set((await git(root, ['diff', '--relative', '--name-only', '--no-renames', '-z', branch.checkpoint, head, '--', '.agents/notes'])).split('\0').filter(Boolean))
-        const snapshot = await sources.snapshot(context)
+        const snapshot = await sources.snapshot(context, signal)
         const targets = snapshot.entries.filter(entry => entry.doc && REVIEW_NOTE_KINDS.has(entry.doc.kind) && changed.has(entry.relPath))
         // A valid snapshot retires unavailable completed targets; unresolved records survive until successful recovery.
         const interruptedRounds = new Set(branch.jobs.filter(job => job.state === 'pending').map(job => job.round))
@@ -329,8 +330,8 @@ export class GitReviewScheduler {
       activity.phase = 'reviewing'
       let sources: GitReviewSources | undefined
       try {
-        sources = await GitReviewSources.open(context, job.commit)
-        const entry = (await sources.snapshot(context)).entries.find(entry => entry.doc?.id === job.noteId)
+        sources = await GitReviewSources.open(context, job.commit, signal)
+        const entry = (await sources.snapshot(context, signal)).entries.find(entry => entry.doc?.id === job.noteId)
         activity.currentNote = { id: job.noteId, title: entry?.doc?.title ?? entry?.relPath ?? job.noteId, path: entry?.relPath ?? '' }
         const target = activity.targets?.find(target => target.noteId === job.noteId)
         if (target) { target.state = 'reviewing'; target.stage = 'reading' }
@@ -349,8 +350,13 @@ export class GitReviewScheduler {
             branch.retries = branch.retries.filter(retry => retry.noteId !== job.noteId)
             branch.jobs = branch.jobs.filter(item => item !== job); await this.save(state); break
           } catch (error) {
-            if (signal.aborted) { await this.save(state); break }
-            if ((error as { code?: string }).code === 'TRANSIENT' && job.attempts < 2) continue
+            // Shutdown/settings cancellation is a pause, not a failed provider attempt.
+            if (signal.aborted) { job.attempts--; await this.save(state); break }
+            if ((error as { code?: string }).code === 'TRANSIENT' && job.attempts < 2) {
+              try { await delay(2000, undefined, { signal }) }
+              catch { await this.save(state); break }
+              continue
+            }
             job.state = 'failed'; job.stage = target?.stage ?? 'reading'
             job.error = error instanceof z.ZodError ? 'Review output did not match the required structure' : (error instanceof Error ? error.message : String(error)).slice(0, 600)
             await this.save(state); break

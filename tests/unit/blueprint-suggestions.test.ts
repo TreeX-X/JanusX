@@ -9,7 +9,7 @@ import { ReviewStore } from '../../src/main/blueprint/suggestions/store'
 import { SuggestionService } from '../../src/main/blueprint/suggestions/service'
 import { WorkspaceSuggestionSources } from '../../src/main/blueprint/suggestions/sources'
 import { WorkspaceSuggestions } from '../../src/main/blueprint/suggestions/workspace-service'
-import { reviewResultSchema, type ReviewContext, type ReviewSource, type ReviewSourceSnapshot } from '../../src/shared/blueprint-review'
+import { reviewResultSchema, type ReviewContext, type ReviewFinding, type ReviewSource, type ReviewSourceSnapshot } from '../../src/shared/blueprint-review'
 
 const repoId = '972afef3-2fc7-49de-a3ee-7e041225d28c'
 const noteId = '00000000-0000-4000-8000-000000000001'
@@ -39,7 +39,7 @@ async function setup() {
   const finding = (summary = 'Required condition is missing') => ({ id: randomUUID(), category: 'omission' as const,
     summary, explanation: 'A required condition is not covered.', suggestion: 'Document the condition.',
     citations: [{ path, quote: 'original' }], verification: 'not-configured' as const })
-  const publish = (findings = [finding()]) => {
+  const publish = (findings: ReviewFinding[] = [finding()]) => {
     const ticket = service.begin(context, noteId, service.read(context).revision, [])
     service.publish(context, ticket.id, noteId, reviewResultSchema.parse({ findings, coverage: 'complete', limitations: [] }))
     return service.read(context).items.find(item => item.noteId === noteId)!
@@ -49,6 +49,20 @@ async function setup() {
 }
 
 describe('current suggestion lifecycle', () => {
+  it('settles pending scores when publishing an old Git snapshot or invalidating current evidence', async () => {
+    const f = await setup()
+    const finding = { ...f.finding(), verification: 'pending' as const }
+    const ticket = f.service.begin(f.context, noteId, f.service.read(f.context).revision, [{ path: 'src/code.ts', hash: hash('old code') }], f.note, 'a'.repeat(40))
+    f.service.publish(f.context, ticket.id, noteId, reviewResultSchema.parse({ findings: [finding], coverage: 'complete', limitations: [] }), { 'src/code.ts': hash('new code') })
+    expect(f.service.read(f.context).items[0].report).toMatchObject({ stale: true, findings: [{ verification: 'failed' }] })
+    f.publish([finding])
+    expect(f.service.read(f.context).items[0].report?.findings[0].verification).toBe('pending')
+    f.scan([{ ...f.note, hash: hash('changed Note') }])
+    expect(f.service.read(f.context).items[0].report).toMatchObject({ stale: true, findings: [{ verification: 'failed' }] })
+    const report = f.service.read(f.context).items[0].report!
+    expect(f.service.score(f.context, noteId, report.id, f.note.hash, { ...finding, verification: 'scored' })).toBe(false)
+  })
+
   it('marks a complete Git snapshot report stale immediately when only its code evidence differs from the workspace', async () => {
     const f = await setup(); f.publish(); f.service.retire(f.context, noteId, f.note.hash)
     const ticket = f.service.begin(f.context, noteId, f.service.read(f.context).revision, [{ path: 'src/code.ts', hash: hash('committed code') }], f.note, 'a'.repeat(40))
