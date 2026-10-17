@@ -82,20 +82,6 @@ export async function stopScopeProjects(scopePath: string): Promise<boolean> {
   }
 }
 
-/** 按路径启动工作区默认配置（dev 优先），供停止后的重新启动使用 */
-export async function startWorkspacePath(workspacePath: string): Promise<boolean> {
-  try {
-    const config = await projectService.readConfig(workspacePath)
-    const defaultConfig = config?.configurations.find((item) => item.name === 'dev')
-      ?? config?.configurations[0]
-    if (!defaultConfig) return false
-    return await projectService.start(workspacePath, defaultConfig.name)
-  } catch (error) {
-    console.error('Failed to start workspace project:', error)
-    return false
-  }
-}
-
 /**
  * useProjectRunning — 当前工作区的运行派生 + 启停 API
  *
