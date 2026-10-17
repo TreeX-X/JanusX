@@ -529,6 +529,9 @@ nsis:
 
 portable:
   artifactName: ${productName}-${version}-${arch}-portable.${ext}
+  # The stub uses ExecWait, which cannot elevate the requireAdministrator app.
+  # Request elevation before extraction so standard-user launches also work.
+  requestExecutionLevel: admin
 
 mac:
   target:

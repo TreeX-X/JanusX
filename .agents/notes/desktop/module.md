@@ -16,7 +16,7 @@
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/index.ts","role":"entry"},
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/ipc/register.ts","role":"implementation"}
   ],
-  "updated": "2026-10-14T06:18:06.205Z",
+  "updated": "2026-10-16T03:22:03Z",
   "moduleState": "partial"
 }
 ---
@@ -30,6 +30,8 @@
 下列链接保留已有决策、阶段需求和交付记录的阅读路径；正文及生命周期由原 Note 负责。历史 parent 仅组织文档，跨模块关联由本声明的 related-to 补充。模块声明只在职责、接口、明确依赖或代码入口变化时维护。
 
 ## Design
+
+免安装版配置使用用户目录下独立的 `JanusX-Portable`，不提供随身模式；旧同级 `data` 在应用数据服务打开前完成校验迁移，并清理已迁移文件及明确可重建的缓存。路径隔离、失败保护和重试语义见 [application-profile](./application-profile.md)。
 
 桌面执行史：[implementation-history](../agent/desktop-implementation-history.md)、[delegated-modes](../agent/desktop-delegated-modes.md)、[task-implementation](../agent/desktop-task-implementation.md)、[ade-survey](./desktop-ade-mit-survey.md)。
 

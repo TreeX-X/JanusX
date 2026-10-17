@@ -1,6 +1,8 @@
-import { app, BrowserWindow, crashReporter, ipcMain } from 'electron'
+import { app, BrowserWindow, crashReporter, dialog, ipcMain } from 'electron'
 import { isAgentHookClientInvocation, runAgentHookClient } from './notifications/agent-hook-client'
 import { configureApplicationProfile, configureChromiumSessionPaths } from './bootstrap/session'
+import { migrateLegacyPortableProfile } from './bootstrap/profile-migration'
+import { join } from 'node:path'
 
 const isHookClient = isAgentHookClientInvocation()
 const isLlmRuntimeSmoke = process.argv.includes('--smoke-test=llm-runtime')
@@ -86,6 +88,7 @@ if (isHookClient) {
     bootstrapComplete = true
   }).catch((err) => {
     console.error('[main] bootstrapApp failed:', err)
+    dialog.showErrorBox('JanusX 启动失败 / Startup failed', String(err))
     if (!bootstrapComplete) process.exit(1)
   })
 }
@@ -166,6 +169,20 @@ async function runModuleGraphSmoke(): Promise<void> {
 }
 
 async function bootstrapApp(): Promise<void> {
+  // Lock before migration and before importing modules that open profile stores.
+  if (!app.requestSingleInstanceLock()) {
+    app.quit()
+    return
+  }
+  const portableRoot = process.env.PORTABLE_EXECUTABLE_DIR?.trim()
+  const explicitProfile = process.argv.some(arg => arg === '--user-data-dir' || arg.startsWith('--user-data-dir='))
+  if (app.isPackaged && portableRoot && !explicitProfile && app.getPath('userData') === join(app.getPath('appData'), 'JanusX-Portable')) {
+    try {
+      migrateLegacyPortableProfile(portableRoot, app.getPath('userData'))
+    } catch (error) {
+      throw new Error(`旧数据迁移未完成，请关闭旧版 JanusX 后重试。原数据已保留；如有冲突，请备份并处理后重启。\nLegacy profile migration failed; close older JanusX instances and resolve conflicts before retrying.\n${join(portableRoot, 'data')} → ${app.getPath('userData')}\n${String(error)}`)
+    }
+  }
   const [
     { disposeWorkspaceWatchers },
     { stopAllProjects },
@@ -259,13 +276,6 @@ async function bootstrapApp(): Promise<void> {
     void import('./web-test-gateway/starter').then(({ startWebTestGateway }) => startWebTestGateway()).catch((err) => {
       console.error('[web-test] gateway failed:', err)
     })
-  }
-
-  const hasSingleInstanceLock = app.requestSingleInstanceLock()
-
-  if (!hasSingleInstanceLock) {
-    app.quit()
-    return
   }
 
   app.on('second-instance', () => {

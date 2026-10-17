@@ -25,6 +25,20 @@ const unpackedExecutable = join(releaseDirectory, 'win-unpacked', 'JanusX.exe')
 const portableExecutable = join(releaseDirectory, `JanusX-${packageJson.version}-x64-portable.exe`)
 const verifyPortable = process.argv.includes('--portable')
 
+// An elevated verifier can launch a user-level stub whose elevated payload would
+// fail with ERROR_ELEVATION_REQUIRED from Explorer. Check the shipped manifests,
+// not just a successful process launch under the verifier's current token.
+if (verifyPortable && existsSync(portableExecutable) && existsSync(unpackedExecutable)) {
+  const executionLevel = (file) => {
+    const match = readFileSync(file).toString('utf8').match(/<requestedExecutionLevel\b[^>]*\blevel="([^"]+)"/)
+    if (!match) throw new Error(`Executable execution-level manifest missing: ${file}`)
+    return match[1]
+  }
+  if (executionLevel(unpackedExecutable) === 'requireAdministrator' && executionLevel(portableExecutable) !== 'requireAdministrator') {
+    throw new Error('Portable launcher cannot elevate its requireAdministrator payload: set portable.requestExecutionLevel to admin and repackage.')
+  }
+}
+
 // Every symlink in the archive must resolve inside it, otherwise a workspace
 // dependency such as @janusx/llm-core is packaged as a dangling link and the app
 // cannot resolve it at runtime.
