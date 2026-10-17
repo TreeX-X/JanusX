@@ -35,6 +35,7 @@ if (params.get('tab') === 'llm') {
       return { success: true }
     },
     testConnection: async () => ({ success: true, latency: 42 }),
+    discoverModels: async () => ['gpt-4.1', 'gpt-4o'],
     applyBinding: async (consumer: LlmConsumer, binding: AgentModelBinding) => {
       if (params.has('applyFail')) return { success: false, error: 'Fixture connection write failed' }
       config.bindings[consumer] = { ...binding, needsApply: false }

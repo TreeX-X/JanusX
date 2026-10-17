@@ -366,6 +366,7 @@ const llmAPI: LlmAPI = {
   getRuntimeStatus: () => ipcRenderer.invoke(LLM_CHANNELS.runtimeStatus),
   saveTerminalProvider: (terminal, settings) => ipcRenderer.invoke(LLM_CHANNELS.saveTerminalProvider, terminal, settings),
   testConnection: (settings) => ipcRenderer.invoke(LLM_CHANNELS.testConnection, settings),
+  discoverModels: (settings) => ipcRenderer.invoke(LLM_CHANNELS.discoverModels, settings),
   removeTerminalProvider: (terminal, providerId) => ipcRenderer.invoke(LLM_CHANNELS.removeTerminalProvider, terminal, providerId),
   setTerminalDefault: (terminal, providerId) => ipcRenderer.invoke(LLM_CHANNELS.setTerminalDefault, terminal, providerId),
   getTerminalDefault: (terminal) => ipcRenderer.invoke(LLM_CHANNELS.getTerminalDefault, terminal),

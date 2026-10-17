@@ -27,7 +27,7 @@
       }
     }
   },
-  "updated": "2026-10-17T05:49:57.042Z",
+  "updated": "2026-10-17T16:01:21Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -41,7 +41,7 @@ Maintaining five independent provider collections duplicates endpoint, credentia
 
 The first phase stores one channel catalog in `llm-config.json` v3 under `providers`, with independent `bindings` for Janus, Claude, Codex, OpenCode and Pi. A binding selects a channel ID and model ID, or uses the external Agent's native configuration. Janus resolves its chosen model for chat and background features before adapter defaults. Channel IDs remain distinct even when they offer the same model.
 
-The settings surface has Agent and Channel pages. Agent rows show “model · channel”; selecting an Agent exposes its source and model controls. The channel editor supplies official API presets, CPA and custom endpoints, multiple model IDs, a default model, masked credentials, connection testing and existing Vertex authentication options. Editing drafts survive page switches. A referenced channel cannot be deleted until its Agents switch sources. The surface uses existing shell/settings tokens in light and dark themes.
+The settings surface has Agent and Channel pages. Agent rows show “model · channel”; selecting an Agent exposes its source and model controls. A new channel starts from the OpenAI preset, and preset buttons fill its endpoint, protocol and name. The editor keeps multiple model IDs, a visible default-model choice when needed, masked credentials, connection testing and Vertex authentication options. OpenAI-compatible and Anthropic channels can request the provider's live `/models` list through Electron's network stack; users can still enter IDs manually, and Vertex remains manual. Model discovery does not prove that a particular model accepts the user's key, so connection testing still uses the selected default model. Agent model choices are shown directly for short lists and in a bounded menu for long lists. Editing drafts survive page switches. A referenced channel cannot be deleted until its Agents switch sources. The surface uses existing shell/settings tokens in light and dark themes.
 
 Channels declare their actual protocol. Janus supports Chat Completions, Responses, Anthropic and Vertex; Claude requires Anthropic Messages, Codex requires Responses, and OpenCode/Pi accept the first three. Incompatible or disabled channels cannot be applied. The OpenAI adapter explicitly selects `chat()` or `responses()`; SDK v3's default Responses behavior must not redirect generic Chat Completions relays. Tests send a small request to the declared endpoint using the configured model.
 

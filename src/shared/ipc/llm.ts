@@ -15,7 +15,7 @@ export const LLM_CHANNELS = {
   getNativeLoginStatus: 'llm:native-login-status',
   startNativeLogin: 'llm:native-login:start', stopNativeLogin: 'llm:native-login:stop',
   getTerminalProviders: 'llm:get-terminal-providers', saveTerminalProvider: 'llm:save-terminal-provider',
-  testConnection: 'llm:test-connection',
+  testConnection: 'llm:test-connection', discoverModels: 'llm:discover-models',
   runtimeStatus: 'llm:runtime-status',
   removeTerminalProvider: 'llm:remove-terminal-provider', setTerminalDefault: 'llm:set-terminal-default',
   getTerminalDefault: 'llm:get-terminal-default', listModels: 'llm:list-models',
@@ -214,6 +214,7 @@ export interface LlmAPI {
   getRuntimeStatus(): Promise<LlmRuntimeStatus>
   saveTerminalProvider(terminal: LlmTerminalConsumer, settings: ProviderSettings): Promise<{ success: boolean; error?: string }>
   testConnection(settings: ProviderSettings & { testModel?: string }): Promise<{ success: boolean; latency?: number; error?: string }>
+  discoverModels(settings: ProviderSettings): Promise<string[]>
   removeTerminalProvider(terminal: LlmTerminalConsumer, providerId: string): Promise<{ success: boolean; error?: string }>
   setTerminalDefault(terminal: LlmTerminalConsumer, providerId: string): Promise<{ success: boolean }>
   getTerminalDefault(terminal: LlmTerminalConsumer): Promise<{ provider: ProviderSettings; modelId: string } | null>

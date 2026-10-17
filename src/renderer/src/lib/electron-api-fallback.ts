@@ -290,7 +290,7 @@ export function installElectronApiFallback(): void {
       startNativeLogin: () => Promise.resolve({ success: false, error: 'Electron API is unavailable' }),
       stopNativeLogin: () => Promise.resolve(),
       getTerminalProviders: unavailable, getRuntimeStatus: unavailable, saveTerminalProvider: unavailable,
-      testConnection: unavailable, removeTerminalProvider: unavailable, setTerminalDefault: unavailable,
+      testConnection: unavailable, discoverModels: unavailable, removeTerminalProvider: unavailable, setTerminalDefault: unavailable,
       getTerminalDefault: unavailable, listModels: unavailable,
       getModelCatalog: unavailable, getChatModelBudget: unavailable, refreshModelCatalog: unavailable, getAdapters: unavailable,
       chat: unavailable, startChatStream: () => {}, abortChat: unavailable,

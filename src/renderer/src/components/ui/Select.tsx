@@ -1,4 +1,4 @@
-﻿import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+﻿import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useId } from 'react'
 import { useI18n } from '@/i18n/useI18n'
@@ -39,6 +39,7 @@ interface DropdownPos {
   top: number
   left: number
   width: number
+  maxHeight: number
   openUp: boolean
 }
 
@@ -70,41 +71,53 @@ export function Select({
   }
 
   useEffect(() => {
-    if (open && pos) listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
+    const list = listRef.current
+    const active = list?.querySelector<HTMLElement>('[data-active="true"]')
+    if (!open || !pos || !list || !active) return
+    const above = active.offsetTop - list.scrollTop
+    const below = above + active.offsetHeight - list.clientHeight
+    if (above < 0) list.scrollTop += above
+    else if (below > 0) list.scrollTop += below
   }, [activeIndex, open, pos])
 
   const selected = options.find((o) => o.value === value)
-  // 计算浮层位置：向下展开，空间不够则向上
-  useIsomorphicLayoutEffect(() => {
-    if (!open || !triggerRef.current) return
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return
     const rect = triggerRef.current.getBoundingClientRect()
-    const viewportH = window.innerHeight
-    const estListH = Math.min(options.length * 28 + 16, 240)
-    const spaceBelow = viewportH - rect.bottom
-    const openUp = spaceBelow < estListH + 8 && rect.top > estListH + 8
-    const top = openUp ? rect.top - estListH : rect.bottom
+    const edge = 8
+    const gap = 4
+    const desiredHeight = Math.min(options.length * 28 + 16, 240)
+    const spaceBelow = window.innerHeight - rect.bottom - edge - gap
+    const spaceAbove = rect.top - edge - gap
+    const openUp = spaceBelow < desiredHeight && spaceAbove > spaceBelow
+    const maxHeight = Math.max(32, Math.min(desiredHeight, openUp ? spaceAbove : spaceBelow))
+    const width = Math.min(Math.max(rect.width, 180), window.innerWidth - edge * 2)
     setPos({
-      top,
-      left: rect.left,
-      width: rect.width,
+      top: openUp ? rect.top - gap - maxHeight : rect.bottom + gap,
+      left: Math.max(edge, Math.min(rect.left, window.innerWidth - width - edge)),
+      width,
+      maxHeight,
       openUp
     })
-  }, [open, options.length])
+  }, [options.length])
 
-  // 滚动/resize 时关闭，避免定位错乱
+  useIsomorphicLayoutEffect(() => {
+    if (open) updatePosition()
+  }, [open, updatePosition])
+
   useEffect(() => {
     if (!open) return
-    const close = (event: Event) => {
+    const reposition = (event: Event) => {
       if (event.type === 'scroll' && listRef.current?.contains(event.target as Node)) return
-      setOpen(false)
+      updatePosition()
     }
-    window.addEventListener('resize', close)
-    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
     return () => {
-      window.removeEventListener('resize', close)
-      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
     }
-  }, [open])
+  }, [open, updatePosition])
 
   // Esc 关闭 + 浮层外点击关闭
   useEffect(() => {
@@ -204,7 +217,8 @@ export function Select({
             style={{
               top: pos.top,
               left: pos.left,
-              minWidth: pos.width,
+              width: pos.width,
+              maxHeight: pos.maxHeight,
               animationDuration: '0.12s'
             }}
             data-select-dropdown=""

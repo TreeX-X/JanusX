@@ -150,8 +150,7 @@
     "error": "Error: {{message}}"
   },
   "configuration": {
-    "title": "Connect your models",
-    "description": "Configure a channel once and use it across Agents. Each Agent chooses its own channel and model.",
+    "title": "Model configuration",
     "agents": "Agents",
     "channels": "Channels",
     "loading": "Loading model configuration…",
@@ -218,10 +217,10 @@
     "project": "GCP project ID",
     "region": "Region",
     "adc": "Use Application Default Credentials (ADC)",
-    "advanced": "More authentication options",
+    "advanced": "Advanced settings",
     "models": "Available models",
     "modelsPlaceholder": "One model ID per line, e.g.\ngpt-4.1\ngpt-4o",
-    "modelsHint": "Enter model IDs supported by the service. Each Agent can choose independently or enter another model.",
+    "modelsHint": "Fetch from the service or enter model IDs manually, one per line.",
     "defaultModel": "Default model",
     "enabled": "Enable channel",
     "test": "Test connection",
@@ -232,6 +231,11 @@
     "testFailed": "Connection test failed",
     "testSuccess": "Connected · {{latency}} ms",
     "saveFailed": "Could not save channel",
-    "incompatible": "Incompatible protocol"
+    "incompatible": "Incompatible protocol",
+    "availableModels": "Channel models",
+    "fetchModels": "Fetch models",
+    "modelsLoading": "Fetching...",
+    "modelsFound": "Found {{count}} models",
+    "modelsEmpty": "The service returned no models. Enter a model ID manually."
   }
 }

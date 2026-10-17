@@ -5,7 +5,7 @@
  *              本文件只做参数解包与 handler 注册。
  */
 
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, net } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { UserMemoryDelivery } from '../../shared/memory-strength'
 import { containsMemoryDelivery, recordUserMemoryAccessBestEffort } from '../knowledge/memory-access'
@@ -20,6 +20,7 @@ import type { ChatAnswerQuestionPayload, ChatWorkspaceResource, LlmRuntimeStatus
 import { getDevelopmentLlmSyncStatus } from '../llm/development-config-sync'
 import { generateText } from '../llm/ai-runtime'
 import { configurationService } from '../llm/configuration-service'
+import { discoverProviderModels } from '../llm/discover-provider-models'
 import { nativeLoginService, startNativeLogin, stopNativeLogin } from '../llm/native-login'
 import type { AgentModelBinding, LlmConsumer } from '../../shared/llm-configuration'
 import {
@@ -156,6 +157,10 @@ export function registerLlmHandlers(): void {
       console.error('[IPC] llm:test-connection error:', error)
       return { success: false, error: error.message }
     }
+  })
+
+  ipcMain.handle(LLM_CHANNELS.discoverModels, async (_, provider: ProviderSettings) => {
+    return discoverProviderModels(provider, (input, init) => net.fetch(String(input), init))
   })
 
   // 删除单终端的 Provider

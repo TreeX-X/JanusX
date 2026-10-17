@@ -10,7 +10,6 @@ import { Select } from './ui/Select'
 import styles from './LlmConfiguration.module.css'
 
 const PRESETS: Array<{ id: string; name: string; url: string; protocol: ChannelProtocol; official?: boolean }> = [
-  { id: 'custom', name: 'Custom API', url: '', protocol: 'openai' },
   { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', protocol: 'responses', official: true },
   { id: 'openai-chat', name: 'OpenAI · Chat Completions', url: 'https://api.openai.com/v1', protocol: 'openai', official: true },
   { id: 'anthropic', name: 'Anthropic', url: 'https://api.anthropic.com', protocol: 'anthropic', official: true },
@@ -19,6 +18,7 @@ const PRESETS: Array<{ id: string; name: string; url: string; protocol: ChannelP
   { id: 'moonshot', name: 'Moonshot', url: 'https://api.moonshot.cn/v1', protocol: 'openai', official: true },
   { id: 'cpa', name: 'CPA', url: 'http://127.0.0.1:8317/v1', protocol: 'openai' },
   { id: 'vertex', name: 'Vertex AI', url: '', protocol: 'vertex', official: true },
+  { id: 'custom', name: 'Custom API', url: '', protocol: 'openai' },
 ]
 const PROTOCOL_NAMES: Record<ChannelProtocol, string> = { openai: 'OpenAI Chat Completions', responses: 'OpenAI Responses', anthropic: 'Anthropic Messages', vertex: 'Vertex AI' }
 function official(provider: ProviderSettings): boolean {
@@ -135,7 +135,6 @@ export function CliSyncSection() {
       : binding.mode === 'native' ? c('native') : c('notConfigured')
   }
   return <section className={styles.root}>
-    <div className={styles.intro}><h3>{c('title')}</h3><p>{c('description')}</p></div>
     <div className={styles.navigation} role="tablist" aria-label={c('title')}>
       {(['agents', 'channels'] as const).map(tab => <button key={tab} type="button" role="tab" aria-selected={view === tab} disabled={busy} onClick={() => { setView(tab); setError(''); setNotice('') }}>{c(tab)}<span>{tab === 'agents' ? 5 : providers.length}</span></button>)}
     </div>
@@ -167,9 +166,15 @@ export function CliSyncSection() {
               }} />
           </label>
           {selected.mode === 'provider' && <label className={styles.field}><span>{c('model')}</span>
-            <input aria-label={c('model')} list={'llm-models-' + active} value={selected.modelId || ''} disabled={busy}
+            <input aria-label={c('model')} value={selected.modelId || ''} disabled={busy}
               placeholder={c('modelPlaceholder')} onChange={event => changeBinding({ ...selected, modelId: event.target.value })} />
-            <datalist id={'llm-models-' + active}>{selectedProvider && channelModels(selectedProvider).map(model => <option key={model} value={model}>{model + ' · ' + selectedProvider.name}</option>)}</datalist>
+            {selectedProvider && channelModels(selectedProvider).length > 0 && (channelModels(selectedProvider).length > 8
+              ? <Select ariaLabel={c('availableModels')} value={selected.modelId || ''} disabled={busy}
+                  options={channelModels(selectedProvider).map(model => ({ value: model, label: model }))}
+                  onChange={value => changeBinding({ ...selected, modelId: value })} />
+              : <div className={styles.modelChoices} aria-label={c('availableModels')}>
+                  {channelModels(selectedProvider).map(model => <button key={model} type="button" aria-pressed={selected.modelId === model} disabled={busy} onClick={() => changeBinding({ ...selected, modelId: model })}>{model}</button>)}
+                </div>)}
           </label>}
         </div>
         {selected.mode === 'native' && active !== 'janus' && <div className={styles.loginStatus}>
@@ -205,7 +210,7 @@ export function CliSyncSection() {
         onSaved={async provider => { await load(); setEditing(null); notify(provider.id); setNotice(c('saved')) }} />
         : <>
           <div className={styles.toolbar}><input aria-label={c('search')} placeholder={c('search')} value={query} onChange={event => setQuery(event.target.value)} />
-            <button type="button" className={styles.primary} disabled={busy} onClick={() => { setNotice(''); setError(''); setEditing({ id: crypto.randomUUID(), name: '', authType: authTypeForProtocol('openai'), baseURL: '', models: [], extra: { presetId: 'custom', protocol: 'openai' } }) }}><Plus size={14} />{c('addChannel')}</button>
+            <button type="button" className={styles.primary} disabled={busy} onClick={() => { setNotice(''); setError(''); setEditing({ id: crypto.randomUUID(), name: 'OpenAI', authType: authTypeForProtocol('responses'), baseURL: 'https://api.openai.com/v1', models: [], extra: { presetId: 'openai', protocol: 'responses' } }) }}><Plus size={14} />{c('addChannel')}</button>
           </div>
           {!providers.length && <div className={styles.empty}><h4>{c('emptyTitle')}</h4><p>{c('emptyDescription')}</p></div>}
           <div className={styles.channelList}>
@@ -245,10 +250,35 @@ function ChannelEditor({ initial, busy, setBusy, onCancel, onSaved }: {
   const [visible, setVisible] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState('')
+  const [discovering, setDiscovering] = useState(false)
   const protocol = channelProtocol(draft)
   const modelIds = [...new Set(models.split(/[\n,]/).map(model => model.trim()).filter(Boolean))]
   const update = (patch: Partial<ProviderSettings>) => { setDraft(previous => ({ ...previous, ...patch })); setError(''); setResult('') }
   const vertex = (patch: Record<string, unknown>) => update({ vertexAI: { ...draft.vertexAI, ...patch } as ProviderSettings['vertexAI'] })
+  const choosePreset = (value: string) => {
+    if (value === draft.extra?.presetId) return
+    const preset = PRESETS.find(item => item.id === value)!
+    const previousPreset = PRESETS.find(item => item.id === draft.extra?.presetId)
+    setDraft(previous => ({ ...previous,
+      name: !previous.name || previous.name === previousPreset?.name ? (preset.id === 'custom' ? '' : preset.name) : previous.name,
+      baseURL: preset.url,
+      authType: authTypeForProtocol(preset.protocol),
+      extra: { ...previous.extra, presetId: value, protocol: preset.protocol },
+    }))
+    setModels('')
+    setError(''); setResult('')
+  }
+  const discover = async () => {
+    setDiscovering(true); setError(''); setResult('')
+    try {
+      const found = await window.electron.llm.discoverModels(draft)
+      if (!found.length) throw new Error(c('modelsEmpty'))
+      const current = new Set(modelIds)
+      found.forEach(id => current.add(id))
+      setModels([...current].join('\n'))
+      setResult(t('llm:configuration.modelsFound', { count: found.length }))
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)) } finally { setDiscovering(false) }
+  }
   const saveOrTest = async (test: boolean) => {
     setBusy(true); setError(''); setResult('')
     const defaultModel = modelIds.includes(draft.defaultModelId || '') ? draft.defaultModelId! : modelIds[0] || ''
@@ -274,20 +304,13 @@ function ChannelEditor({ initial, busy, setBusy, onCancel, onSaved }: {
     {error && <p className={styles.error} role="alert">{error}</p>}
     {result && <p className={styles.notice} role="status">{result}</p>}
     <div className={styles.fields}>
-      <label className={styles.field}><span>{c('preset')}</span><Select ariaLabel={c('preset')} value={String(draft.extra?.presetId || 'custom')} disabled={busy}
-        options={PRESETS.map(item => ({ value: item.id, label: item.id === 'custom' ? c('custom') : item.name + (item.official ? ' · ' + c('official') : '') }))}
-        onChange={value => {
-          const preset = PRESETS.find(item => item.id === value)!
-          setDraft(previous => ({ ...previous, name: previous.name || (preset.id === 'custom' ? '' : preset.name), baseURL: preset.url,
-            authType: preset.protocol === 'anthropic' ? authTypeForProtocol('anthropic') : preset.protocol === 'vertex' ? authTypeForProtocol('vertex') : authTypeForProtocol('openai'),
-            extra: { ...previous.extra, presetId: value, protocol: preset.protocol } }))
-          setError(''); setResult('')
-        }} /></label>
+      <div className={styles.field + ' ' + styles.full}><span>{c('preset')}</span>
+        <div className={styles.presetGrid} role="group" aria-label={c('preset')}>
+          {PRESETS.map(item => <button key={item.id} type="button" className={styles.presetButton} aria-pressed={draft.extra?.presetId === item.id} disabled={busy || discovering}
+            onClick={() => choosePreset(item.id)}>{item.id === 'custom' ? c('custom') : item.name}</button>)}
+        </div>
+      </div>
       <label className={styles.field}><span>{c('name')}</span><input aria-label={c('name')} required maxLength={80} value={draft.name} disabled={busy} placeholder={c('namePlaceholder')} onChange={event => update({ name: event.target.value })} /></label>
-      <label className={styles.field + ' ' + styles.full}><span>{c('protocol')}</span><Select ariaLabel={c('protocol')} disabled={busy} value={protocol} options={Object.entries(PROTOCOL_NAMES).map(([value, label]) => ({ value, label }))} onChange={value => update({
-        authType: value === 'anthropic' ? authTypeForProtocol('anthropic') : value === 'vertex' ? authTypeForProtocol('vertex') : authTypeForProtocol('openai'),
-        extra: { ...draft.extra, protocol: value },
-      })} /></label>
       {protocol !== 'vertex' ? <>
         <label className={styles.field + ' ' + styles.full}><span>{c('endpoint')}</span><input aria-label={c('endpoint')} type="url" required disabled={busy} value={draft.baseURL || ''} placeholder="https://api.example.com/v1" onChange={event => update({ baseURL: event.target.value })} /></label>
         <label className={styles.field + ' ' + styles.full}><span>{c('apiKey')}</span><div className={styles.secret}><input aria-label={c('apiKey')} type={visible ? 'text' : 'password'} autoComplete="new-password" disabled={busy || draft.authType === 'none'} value={draft.apiKey || ''} placeholder="sk-…" onChange={event => update({ apiKey: event.target.value })} />
@@ -302,9 +325,15 @@ function ChannelEditor({ initial, busy, setBusy, onCancel, onSaved }: {
           {(['clientEmail', 'privateKey', 'serviceAccountPath', 'proxy'] as const).map(key => <label key={key} className={styles.field + ' ' + styles.full}><span>{key}</span><input aria-label={key} type={key === 'privateKey' ? 'password' : 'text'} disabled={busy} value={draft.vertexAI?.[key] || ''} onChange={event => vertex({ [key]: event.target.value })} /></label>)}
         </div></details>
       </>}
-      <label className={styles.field + ' ' + styles.full}><span>{c('models')}</span><textarea aria-label={c('models')} required rows={3} disabled={busy} value={models} placeholder={c('modelsPlaceholder')} onChange={event => { setModels(event.target.value); setResult(''); setError('') }} /><small>{c('modelsHint')}</small></label>
-      <label className={styles.field + ' ' + styles.full}><span>{c('defaultModel')}</span><Select ariaLabel={c('defaultModel')} disabled={busy || !modelIds.length} value={modelIds.includes(draft.defaultModelId || '') ? draft.defaultModelId! : modelIds[0] || ''} options={modelIds.map(id => ({ value: id, label: id }))} onChange={value => update({ defaultModelId: value })} /></label>
-      <label className={styles.checkbox}><input type="checkbox" checked={draft.enabled !== false} disabled={busy} onChange={event => update({ enabled: event.target.checked })} />{c('enabled')}</label>
+      <div className={styles.field + ' ' + styles.full}><div className={styles.fieldHeader}><span>{c('models')}</span>{protocol !== 'vertex' && <button type="button" className={styles.link} disabled={busy || discovering} onClick={() => void discover()}><RefreshCw size={13} className={discovering ? styles.spinning : undefined} />{discovering ? c('modelsLoading') : c('fetchModels')}</button>}</div>
+        <textarea aria-label={c('models')} required rows={3} disabled={busy || discovering} value={models} placeholder={c('modelsPlaceholder')} onChange={event => { setModels(event.target.value); setResult(''); setError('') }} /><small>{c('modelsHint')}</small></div>
+      {modelIds.length > 1 && <label className={styles.field + ' ' + styles.full}><span>{c('defaultModel')}</span><Select ariaLabel={c('defaultModel')} disabled={busy} value={modelIds.includes(draft.defaultModelId || '') ? draft.defaultModelId! : modelIds[0]} options={modelIds.map(id => ({ value: id, label: id }))} onChange={value => update({ defaultModelId: value })} /></label>}
+      <details className={styles.full}><summary>{c('advanced')}</summary><div className={styles.fields}>
+        <label className={styles.field + ' ' + styles.full}><span>{c('protocol')}</span><Select ariaLabel={c('protocol')} disabled={busy} value={protocol} options={Object.entries(PROTOCOL_NAMES).map(([value, label]) => ({ value, label }))} onChange={value => update({
+          authType: authTypeForProtocol(value as ChannelProtocol), extra: { ...draft.extra, protocol: value },
+        })} /></label>
+        <label className={styles.checkbox}><input type="checkbox" checked={draft.enabled !== false} disabled={busy} onChange={event => update({ enabled: event.target.checked })} />{c('enabled')}</label>
+      </div></details>
     </div>
     <div className={styles.footer}><button type="button" className={styles.button} disabled={busy} onClick={() => void saveOrTest(true)}>{busy ? c('working') : c('test')}</button><div className={styles.rowActions}><button type="button" className={styles.button} disabled={busy} onClick={onCancel}>{c('cancel')}</button><button className={styles.primary} type="submit" disabled={busy}>{busy ? c('working') : c('save')}</button></div></div>
   </form>
