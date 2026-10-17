@@ -209,6 +209,8 @@ export function JanusIsland({
   const loadBlueprint = useBlueprintStore((state) => state.loadBlueprint)
 
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
+  /** 副黑板开合态：下拉语义随状态翻转（放下 ↔ 收起） */
+  const blackboardOpen = useAppStore((s) => s.blackboardHeight > 0)
   const roundtableEnabled = useExperimentalStore((s) => s.roundtable)
   const personaEnabled = useExperimentalStore((s) => s.persona)
   const loadExperimental = useExperimentalStore((s) => s.load)
@@ -283,10 +285,10 @@ export function JanusIsland({
   }, [handleSingleTap])
 
   const handleSwipeBoard = useCallback(() => {
-    // 下拉 ≥60px 放下副黑板（工作区下滑让位）：Note island-blackboard.md
-    // 只负责"开"；收板归板下缘上推 / 收起按钮 / Esc。
+    // 下拉 ≥60px 副黑板开合（toggle）：Note island-blackboard.md
+    // 板未开则放下；板已开时同一手势再次下拉即自动回收。
+    // 收板另有图标收起控件 / 板下缘上推 / Esc。
     const app = useAppStore.getState()
-    if (app.blackboardHeight > 0) return
     app.setBlackboardDrag(null)
     app.toggleBlackboard()
   }, [])
@@ -324,10 +326,15 @@ export function JanusIsland({
     onDragProgress: handleDragProgress,
     isRunning: janusRunning,
     enableComplexGestures: stage !== 'expanded',
-    pullHint: {
-      keep: t('janus:blackboard.pullHint.keep'),
-      release: t('janus:blackboard.pullHint.release'),
-    },
+    pullHint: blackboardOpen
+      ? {
+          keep: t('janus:blackboard.pullHint.keepClose'),
+          release: t('janus:blackboard.pullHint.releaseClose'),
+        }
+      : {
+          keep: t('janus:blackboard.pullHint.keep'),
+          release: t('janus:blackboard.pullHint.release'),
+        },
   })
 
   const activeSession = useBlueprintStore((s) => s.activeSession)

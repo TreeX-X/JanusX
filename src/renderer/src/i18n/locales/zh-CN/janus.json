@@ -749,22 +749,11 @@
     "title": "副黑板",
     "pullHint": {
       "keep": "继续下拉放下副板",
-      "release": "松手放下副板"
+      "release": "松手放下副板",
+      "keepClose": "继续下拉收起副板",
+      "releaseClose": "松手收起副板"
     },
-    "tab": {
-      "blueprint": "蓝图活图"
-    },
-    "pinPlaceholder": "钉住工作区文件（.html / .md）",
-    "pin": "钉住",
-    "refresh": "刷新",
-    "follow": "跟随文件",
-    "openReal": "打开真身",
-    "unpin": "取消钉",
-    "close": "收起黑板",
-    "blueprint": {
-      "empty": "暂无聚焦的蓝图节点",
-      "openWorkbench": "打开蓝图工作台"
-    }
+    "close": "收起黑板"
   },
   "memo": {
     "loading": "正在读取备忘录…",

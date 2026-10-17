@@ -749,22 +749,11 @@
     "title": "Second board",
     "pullHint": {
       "keep": "Keep pulling to drop the board",
-      "release": "Release to drop the board"
+      "release": "Release to drop the board",
+      "keepClose": "Keep pulling to retract the board",
+      "releaseClose": "Release to retract the board"
     },
-    "tab": {
-      "blueprint": "Blueprint live"
-    },
-    "pinPlaceholder": "Pin a workspace file (.html / .md)",
-    "pin": "Pin",
-    "refresh": "Refresh",
-    "follow": "Follow file",
-    "openReal": "Open in workspace",
-    "unpin": "Unpin",
-    "close": "Close board",
-    "blueprint": {
-      "empty": "No focused blueprint node",
-      "openWorkbench": "Open blueprint workbench"
-    }
+    "close": "Close board"
   },
   "memo": {
     "loading": "Loading memos…",

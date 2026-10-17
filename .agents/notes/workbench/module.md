@@ -87,7 +87,7 @@ Chat 会话删除确认框虽通过 portal 挂到 body，仍属于 island 的交
 
 槽位演进链（非重复，保留先后）：[island-slots](./requirements/island-rightdock-slots.md)、[right-dock](./right-dock.md)、[empty-collapse](./right-dock-empty-collapse.md)、[toggle-motion](./right-rail-toggle-motion.md)、[drawer-resize](./runtime-drawer-cards-resize.md)、[run-orb](./run-orb-budding.md)、[hifi-alignment](./island-hifi-optimized-alignment.md)、[capsule](./island-notification-capsule.md)；turn 双件[island](./turn-change-island.md)与[card](./turn-change-card-external-cli.md)同属本域。
 
-下拉副黑板（演示切片已落地）：岛胶囊下拉 ≥60px 让中部工作区下滑让位，副黑板在中央列上带长出；中断代价判据与投影/借调两类钉见[下拉副黑板决策](./island-blackboard.md)。整窗宽覆盖与蓝图翻牌（`blueprintMode`）已否决并退役，蓝图入口只留工作台切换器；切片含钉头、蓝图活图、html/md/text 投影钉与下缘拖高收板；借调钉、多槽与拖钉入口未做。
+下拉副黑板（演示切片已落地）：岛胶囊下拉 ≥60px 让中部工作区下滑让位，副黑板在中央列上带长出，下拉手势 toggle（再下拉自动回收，另有图标收起控件）；中断代价判据与投影/借调分类见[下拉副黑板决策](./island-blackboard.md)。整窗宽覆盖与蓝图翻牌（`blueprintMode`）已否决并退役，蓝图入口只留工作台切换器；板面复用蓝图界面（画布交互 + 左详情槽，无右侧对话），文件钉已移除，下缘拖高收板保留；借调钉与多槽未做。
 
 产物语义：[workspace 重构](./product-workspace.md)、[notice-matrix](./product-notice-matrix.md)、[peek-race](./product-peek-width-and-close-race.md)、[preview-p0](./product-preview-p0.md)、[tour](./product-tour.md)、[landing](../desktop/landing-page.md)。
 

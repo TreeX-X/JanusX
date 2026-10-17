@@ -6,7 +6,7 @@
   "lifecycle": "draft",
   "created": "2026-10-17",
   "class": "architecture",
-  "updated": "2026-10-17T10:40:00Z",
+  "updated": "2026-10-17T11:45:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -25,7 +25,9 @@
 
 **判据取中断代价，不取能否交互**。收起时可 reload、可恢复的内容（原型、报告、预览）随便交互；中断有代价的内容（跑着的进程、未保存编辑、会话上下文）不上板。早期「黑板永不持有键盘输入」的规则作废——它与展开岛 chat composer 已收键盘输入的事实矛盾，且误伤交互原型这一核心场景。
 
-**三种钉**：
+**板面内容（2026-10-17 三次修订）**：板面**只承载复用蓝图界面**——`BlueprintView`（workbench 密度，不渲染嵌入聊天）直接落在板上：画布节点可交互点击查看，左侧详情槽（`BlueprintDetailPortalContext` + `bp-node-detail`，复刻工作台左列）常驻显示内容，**不带右侧对话**；蓝图载入后默认选中根节点展开左列（画布既有行为）。文件钉（html/md/text）功能**整体移除**：钉入口、钉 store（`janus:blackboard-pins`）、跟随文件 watch、打开真身一并退役；下面的三种钉分类降级为未来扩展的判据记录，不再是当前交付。
+
+**三种钉（规划分类，当前交付不含文件钉）**：
 
 | 钉型 | 内容 | 语义 |
 | --- | --- | --- |
@@ -35,9 +37,9 @@
 
 判定规则一句话：能造出廉价分身的走投影，造不出的走借调；两者都保证收板无代价。借调目前只有浏览器一个成员，规则通用——未来原生视图类内容（如 PDF 阅读器）直接套用。
 
-**交互**：唤出走岛胶囊下拉 ≥60px（pull-hint 改「放下副板」语义）加键盘快捷键与标题栏微入口，布局按工作区持久化；单击 peek、双击控制台、长按启动、下拉黑板四手势正交，expanded 下复杂手势仍禁用。钉入口三种：拖文件/产物/对话引用到板上、文件树右键与产物卡「钉到黑板」、板内 `+` 选择器（过滤 html/md）；重复钉=聚焦已有。板内 1–2 大槽加板内小页签，不做自由拖窗（避免长出第二棵 pane 树）；钉头发丝线加悬停文字钮（刷新/跟随文件/打开真身/取消钉），遵守无色块与四级排版纪律（[运行配置分体卡片](./run-config-island-cards.md)的令牌管道）。iframe 内交互直通（点击、hover、输入、原型内导航）；`window.open`/`target=_blank` 拦截转发「浏览器真身」——打开真身即工作区浏览器 pane，板上钉保留。跟随文件开关 watch 源文件防抖刷新 iframe，串起「工作区改设计稿、黑板实时看」的设计迭代环。焦点与 Esc 分层：收板只走上推手势与板 chrome，绕开 iframe 焦点陷阱；焦点在 iframe 内 Esc 归原型，在板 chrome Esc 收板。借调 v1 限单槽；动画期原生视图走 freeze-frame 皮（`0770929` 已有），拖板高逐帧 setBounds；原生视图直角限制被「工作区直角加发丝线」纪律天然掩盖。
+**交互（2026-10-17 三次修订）**：岛胶囊下拉 ≥60px 为 **toggle**——板未开则放下，板已开则同一手势再下拉**自动回收**；pull-hint 文案随开合态翻转（放下 ↔ 收起）。收板另有**图标式收起控件**（板头 ChevronUp，透明底 + 1px 发丝线，无文字钮）、板下缘上推与 Esc 三层。单击 peek、双击控制台、长按启动、下拉黑板四手势正交，expanded 下复杂手势仍禁用。板内布局=左详情槽 + 画布（复用蓝图界面，无右侧对话），不做自由拖窗（避免长出第二棵 pane 树）；板面交互全部继承蓝图画布（点选节点开左列、搜索/筛选/fit 等画布工具栏原样可用），遵守无色块与四级排版纪律（[运行配置分体卡片](./run-config-island-cards.md)的令牌管道）。焦点与 Esc 分层：收板走上推手势、图标控件与 Esc；焦点在 iframe 内 Esc 归板内页面。借调 v1 限单槽留待未来；动画期原生视图走 freeze-frame 皮（`0770929` 已有），拖板高逐帧 setBounds；原生视图直角限制被「工作区直角加发丝线」纪律天然掩盖。
 
-**入口收敛（2026-10-17 已完成）**：`blueprintMode` 翻牌路径整体退役——翻转卡正反面（`BlueprintFocusView`）、`flipDuration`/`dragFlipProgress`/`isIslandDragging` 与 App 的 perspective 旋转预览全部移除；蓝图完整入口只留右上 `WorkbenchSwitcher`（`activeWorkbench`），一入口一语义。蓝图是黑板的默认内容（活图页签），通知动作（打开蓝图/打开维护）可就地落到黑板。
+**入口收敛（2026-10-17 已完成）**：`blueprintMode` 翻牌路径整体退役——翻转卡正反面（`BlueprintFocusView`）、`flipDuration`/`dragFlipProgress`/`isIslandDragging` 与 App 的 perspective 旋转预览全部移除；蓝图完整入口只留右上 `WorkbenchSwitcher`（`activeWorkbench`），一入口一语义。蓝图是黑板的唯一内容（复用蓝图界面，三次修订起），通知动作（打开蓝图/打开维护）可就地落到黑板。
 
 ## Alternatives considered
 
@@ -52,8 +54,8 @@
 
 ## Consequences
 
-落地面：`useIslandGesture` 回调从 `setBlueprintMode` 改落板语义、卷帘板 chrome 与槽位、钉 store 与按工作区持久化、iframe 沙箱钉、md 钉读、蓝图活图页签、浏览器借调（占位卡 + freeze-frame + setBounds 归还）、跟随文件 watch、`blueprintMode` 收敛。视觉遵守 planche 纸底墨线、透明面板加 1px 发丝线、无色块填充（选中=文字+2px 强调条）与四级排版层次，板与主工作区同材质（[planche-theme](./requirements/planche-theme.md)）。`design/janus-island-hifi.html` S0 表「下拉拖拽 ≥60px → 翻转蓝图视图（flip）」一行由本决策取代。
+落地面：`useIslandGesture` 回调从 `setBlueprintMode` 改落板 toggle 语义、板 chrome 与左详情槽 + 画布槽位、`BlueprintView`/`BlueprintDetailPortalContext` 复用、`blueprintMode` 收敛。视觉遵守 planche 纸底墨线、透明面板加 1px 发丝线、无色块填充（选中=文字+2px 强调条）与四级排版层次（[planche-theme](./requirements/planche-theme.md)）；板内蓝图界面沿用自身材质（复用优先于换皮）。`design/janus-island-hifi.html` S0 表「下拉拖拽 ≥60px → 翻转蓝图视图（flip）」一行由本决策取代。
 
-修订条件：出现「板上要敲命令」的持续证据→重启终端议题（当前明确拒绝）；用户长期开让位模式→常驻共存改道工作区分屏，而非继续拧卷帘；出现第二个原生视图类内容→直接套借调钉规则。
+修订条件：出现「板上要敲命令」的持续证据→重启终端议题（当前明确拒绝）；用户长期开让位模式→常驻共存改道工作区分屏，而非继续拧卷帘；出现第二个原生视图类内容→直接套借调钉规则；文件钉需求回归→按三种钉分类重启，不走旧 `janus:blackboard-pins` 实现。
 
-**落地状态（2026-10-17，演示切片 + 格局修订）**：手势已改绑——下拉 ≥60px 落板，拖拽预览跟手（`blackboardDrag`），松手落点到持久化高度；板是 `main` 的 flex 首子（中央列上带），工作区容器 `flex-1` 下滑让位；`IslandBlackboard` 落地钉头（页签/钉住/刷新/跟随文件/打开真身/取消钉/收起）、蓝图活图页签、html/md/text 投影钉（复用 `LocalFileStage`）、下缘 9px 拖高（低于 220px 上推收板）与 Esc 分层；翻牌路径已退役（见入口收敛）。板高与钉布局持久化 localStorage。未做：借调钉、板内多槽、md 钉读阅读最大宽度、从文件树/产物拖钉入口、收起/落板的过渡动效打磨。
+**落地状态（2026-10-17 三次修订后）**：手势为 toggle——下拉 ≥60px 落板/再下拉回收，拖拽预览跟手（`blackboardDrag`，仅未开时），松手落点到持久化高度；板是 `main` 的 flex 首子（中央列上带），工作区容器 `flex-1` 下滑让位；板面=复用 `BlueprintView`（workbench 密度，无右侧对话）+ `BlueprintDetailPortalContext` 左详情槽（载入默认展开根节点），板头仅标题与图标收起控件（ChevronUp）；下缘 9px 拖高（低于 220px 上推收板）与 Esc 分层保留；翻牌路径已退役（见入口收敛）。板高持久化 localStorage；文件钉（`janus:blackboard-pins`、跟随文件、打开真身）及其持久化已随三次修订移除。未做：借调钉、文件钉（明确移除，回归走修订条件）、收起/落板的过渡动效打磨。

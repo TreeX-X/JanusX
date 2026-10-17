@@ -1,7 +1,8 @@
 /* IslandBlackboard —— 岛下拉副黑板。
    材质纪律：透明面板 + 1px 发丝线、无色块填充；选中 = 文字提亮 + 2px 强调条。
    形态：中部工作区列内的上带（flex 首子），主工作区下滑让位；
-   不是整窗宽卷帘，不碰左右栏架。下缘发丝线即天际线。 */
+   不是整窗宽卷帘，不碰左右栏架。下缘发丝线即天际线。
+   板面复用蓝图界面：左详情槽 + 画布，无右侧对话。 */
 
 .island-blackboard {
   position: relative;
@@ -20,12 +21,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .island-blackboard {
+  .island-blackboard,
+  .bb-detail-slot {
     transition: none;
   }
 }
 
-/*-- 钉头 --*/
+/*-- 板头 --*/
 .bb-bar {
   display: flex;
   align-items: center;
@@ -37,127 +39,38 @@
   flex-shrink: 0;
 }
 
-.bb-tabs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.bb-tabs::-webkit-scrollbar {
-  display: none;
-}
-
-.bb-tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 220px;
-  padding: 4px 8px;
-  border: 0;
-  background: transparent;
-  color: var(--shell-muted);
+.bb-title {
   font-size: 11px;
-  line-height: 1.4;
-  cursor: pointer;
+  letter-spacing: 0.04em;
+  color: var(--shell-muted);
   white-space: nowrap;
-  transition: color 160ms ease;
 }
 
-.bb-tab:hover {
-  color: var(--shell-text);
-}
-
-.bb-tab[data-active] {
-  color: var(--shell-text);
-}
-
-.bb-tab[data-active]::after {
-  content: '';
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 0;
-  height: 2px;
-  background: var(--shell-accent);
-}
-
-.bb-tab:focus-visible {
-  outline: 1px solid var(--shell-accent-border);
-  outline-offset: -1px;
-}
-
-.bb-tab-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.bb-follow-mark {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--shell-accent);
-  flex-shrink: 0;
-}
-
-.bb-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.bb-pin-input {
-  width: 220px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--control-border, var(--shell-border));
-  background: var(--rc-field, transparent);
-  color: var(--shell-text);
-  font-size: 11px;
-  outline: none;
-}
-
-.bb-pin-input:focus {
-  border-color: var(--shell-accent-border);
-}
-
-.bb-pin-input::placeholder {
-  color: var(--shell-dim);
-}
-
-.bb-action {
+/*-- 收起控件：图标式（上推语义），透明底 + 1px 发丝线 --*/
+.bb-collapse {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  width: 24px;
   height: 24px;
-  padding: 0 8px;
-  border: 0;
+  padding: 0;
+  border: 1px solid var(--shell-border);
   background: transparent;
   color: var(--shell-muted);
-  font-size: 11px;
   cursor: pointer;
   transition: color 160ms ease;
 }
 
-.bb-action:hover {
+.bb-collapse:hover {
   color: var(--shell-text);
 }
 
-.bb-action:focus-visible {
+.bb-collapse:focus-visible {
   outline: 1px solid var(--shell-accent-border);
   outline-offset: -1px;
 }
 
-.bb-action[data-pressed] {
-  color: var(--shell-text);
-  box-shadow: inset 0 -2px 0 var(--shell-accent);
-}
-
-/*-- 板面 --*/
+/*-- 板面：左详情槽 + 蓝图画布 --*/
 .bb-slot {
   flex: 1;
   min-height: 0;
@@ -165,58 +78,41 @@
   background: var(--shell-canvas);
 }
 
-.bb-blueprint {
+.bb-blueprint-row {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px 24px;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
-.bb-blueprint-head {
+.bb-detail-slot {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex: 0 0 0;
+  min-width: 0;
+  overflow: hidden;
+  transition:
+    flex-basis 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin-right 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.bb-blueprint-kicker {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--shell-dim);
+.bb-detail-slot[data-open='true'] {
+  flex-basis: clamp(240px, 34%, 360px);
+  margin-right: 12px;
 }
 
-.bb-blueprint-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--shell-muted);
+.bb-detail-slot .bp-node-detail {
+  flex: 1 0 auto;
+  width: 100%;
+  min-width: 240px;
+  min-height: 0;
+  max-height: none;
 }
 
-.bb-status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.bb-blueprint-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--shell-text);
-  line-height: 1.4;
-}
-
-.bb-blueprint-empty {
-  margin: 0;
-  font-size: 12px;
-  color: var(--shell-muted);
-}
-
-.bb-blueprint-open {
-  align-self: flex-start;
-  border: 1px solid var(--shell-border);
+.bb-canvas-slot {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
 }
 
 /*-- 下缘拖高/上推收板命中区（9px，与工作区分隔线同语言） --*/
