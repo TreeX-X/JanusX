@@ -1,23 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Check, ChevronRight, Eye, EyeOff, LogIn, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, Eye, EyeOff, LogIn, Network, Plug, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import type { ProviderSettings } from '@janusx/llm-core'
 import { useI18n } from '@/i18n/useI18n'
 import { EXTERNAL_CLI_TOOL_META } from '../../../shared/ipc/external-cli'
 import { LLM_CONSUMERS, authTypeForProtocol, channelModel, channelModels, channelProtocol, supportsChannel, type AgentModelBinding, type ChannelProtocol, type LlmConfiguration, type LlmConsumer } from '../../../shared/llm-configuration'
 import { NATIVE_LOGIN_CAPABILITIES, type NativeLoginState } from '../../../shared/native-login'
 import { EXTERNAL_CLI_TOOL_ICONS } from '@/lib/cli-tool-icons'
+import deepseekIcon from '@/assets/icons/providers/deepseek-color.svg'
+import qwenIcon from '@/assets/icons/providers/qwen-color.svg'
+import moonshotIcon from '@/assets/icons/providers/moonshot.svg'
+import vertexIcon from '@/assets/icons/providers/googlecloud-color.svg'
 import { Select } from './ui/Select'
 import styles from './LlmConfiguration.module.css'
 
-const PRESETS: Array<{ id: string; name: string; url: string; protocol: ChannelProtocol; official?: boolean }> = [
-  { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', protocol: 'responses', official: true },
-  { id: 'openai-chat', name: 'OpenAI · Chat Completions', url: 'https://api.openai.com/v1', protocol: 'openai', official: true },
-  { id: 'anthropic', name: 'Anthropic', url: 'https://api.anthropic.com', protocol: 'anthropic', official: true },
-  { id: 'deepseek', name: 'DeepSeek', url: 'https://api.deepseek.com/v1', protocol: 'openai', official: true },
-  { id: 'qwen', name: 'Qwen', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', protocol: 'openai', official: true },
-  { id: 'moonshot', name: 'Moonshot', url: 'https://api.moonshot.cn/v1', protocol: 'openai', official: true },
+const PRESETS: Array<{ id: string; name: string; url: string; protocol: ChannelProtocol; official?: boolean; icon?: string; monochrome?: boolean }> = [
+  { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', protocol: 'responses', official: true, icon: EXTERNAL_CLI_TOOL_ICONS.codex, monochrome: true },
+  { id: 'openai-chat', name: 'OpenAI · Chat Completions', url: 'https://api.openai.com/v1', protocol: 'openai', official: true, icon: EXTERNAL_CLI_TOOL_ICONS.codex, monochrome: true },
+  { id: 'anthropic', name: 'Anthropic', url: 'https://api.anthropic.com', protocol: 'anthropic', official: true, icon: EXTERNAL_CLI_TOOL_ICONS.claude },
+  { id: 'deepseek', name: 'DeepSeek', url: 'https://api.deepseek.com/v1', protocol: 'openai', official: true, icon: deepseekIcon },
+  { id: 'qwen', name: 'Qwen', url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', protocol: 'openai', official: true, icon: qwenIcon },
+  { id: 'moonshot', name: 'Moonshot', url: 'https://api.moonshot.cn/v1', protocol: 'openai', official: true, icon: moonshotIcon, monochrome: true },
   { id: 'cpa', name: 'CPA', url: 'http://127.0.0.1:8317/v1', protocol: 'openai' },
-  { id: 'vertex', name: 'Vertex AI', url: '', protocol: 'vertex', official: true },
+  { id: 'vertex', name: 'Vertex AI', url: '', protocol: 'vertex', official: true, icon: vertexIcon },
   { id: 'custom', name: 'Custom API', url: '', protocol: 'openai' },
 ]
 const PROTOCOL_NAMES: Record<ChannelProtocol, string> = { openai: 'OpenAI Chat Completions', responses: 'OpenAI Responses', anthropic: 'Anthropic Messages', vertex: 'Vertex AI' }
@@ -307,7 +311,13 @@ function ChannelEditor({ initial, busy, setBusy, onCancel, onSaved }: {
       <div className={styles.field + ' ' + styles.full}><span>{c('preset')}</span>
         <div className={styles.presetGrid} role="group" aria-label={c('preset')}>
           {PRESETS.map(item => <button key={item.id} type="button" className={styles.presetButton} aria-pressed={draft.extra?.presetId === item.id} disabled={busy || discovering}
-            onClick={() => choosePreset(item.id)}>{item.id === 'custom' ? c('custom') : item.name}</button>)}
+            title={item.id === 'custom' ? c('custom') : item.name} onClick={() => choosePreset(item.id)}>
+            {item.icon ? item.monochrome
+              ? <span aria-hidden="true" className={styles.presetIcon + ' ' + styles.monochromeIcon} style={{ maskImage: `url("${item.icon}")`, WebkitMaskImage: `url("${item.icon}")` }} />
+              : <img className={styles.presetIcon} src={item.icon} alt="" />
+              : item.id === 'cpa' ? <Network className={styles.presetIcon} aria-hidden="true" /> : <Plug className={styles.presetIcon} aria-hidden="true" />}
+            <span className={styles.presetLabel}>{item.id === 'custom' ? c('custom') : item.name}</span>
+          </button>)}
         </div>
       </div>
       <label className={styles.field}><span>{c('name')}</span><input aria-label={c('name')} required maxLength={80} value={draft.name} disabled={busy} placeholder={c('namePlaceholder')} onChange={event => update({ name: event.target.value })} /></label>
