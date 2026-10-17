@@ -131,6 +131,23 @@ export interface ValidationResult {
   warnings: Array<{ field: string; message: string }>
 }
 
+/** 启动时盖章的运行身份：worktree 归属不再靠 id 路径前缀推断。 */
+export interface ProjectRunIdentity {
+  /** 归属工作区（运行球分组键）。 */
+  workspaceId?: string
+  /** 启动时的目标作用域（worktree 路径或工作区根）。 */
+  scopePath?: string
+  /** 目标 worktree 分支，供运行球子芽/面板展示。 */
+  branch?: string
+}
+
+export interface ProjectRunOptions {
+  /** 归属盖章，随 summary 透出供运行球按 worktree 分组。 */
+  identity?: ProjectRunIdentity
+  /** 目标目录缺少启动配置时的继承来源（主仓模板）；命令仍在 projectPath 执行。 */
+  inheritFrom?: string
+}
+
 export interface RunningProjectSummary {
   id: string
   pid: number
@@ -139,6 +156,11 @@ export interface RunningProjectSummary {
   port?: number
   startTime: string
   uptime: number
+  /** 配置名（盖章；缺省时前端从 id 兜底解析）。 */
+  configName?: string
+  workspaceId?: string
+  scopePath?: string
+  branch?: string
 }
 
 export interface RunningProjectDetail {
@@ -166,7 +188,7 @@ export interface ProjectAPI {
   createDefaultConfig(projectPath: string, projectType: ProjectType, projectName: string): Promise<ProjectResult<LaunchConfig>>
   validateConfig(config: LaunchConfig): Promise<ProjectResult<ValidationResult>>
   test(projectPath: string, script?: string): Promise<ProjectResult<ProjectTaskResult>>
-  run(projectPath: string, configName?: string): Promise<ProjectResult<ProjectRunResult>>
+  run(projectPath: string, configName?: string, options?: ProjectRunOptions): Promise<ProjectResult<ProjectRunResult>>
   stop(projectId: string): Promise<ProjectCommandResult>
   list(): Promise<ProjectResult<RunningProjectSummary[]>>
   get(projectId: string): Promise<ProjectResult<RunningProjectDetail>>

@@ -3,6 +3,7 @@ import type {
   LaunchConfig,
   ProjectCommandResult,
   ProjectResult,
+  ProjectRunOptions,
   ProjectRunResult,
   ProjectTaskResult,
   ProjectType,
@@ -242,8 +243,8 @@ export const projectService = {
     return unwrap(await window.electron.project.test(projectPath, script))
   },
 
-  async start(projectPath: string, configName?: string): Promise<true> {
-    unwrap<ProjectRunResult>(await window.electron.project.run(projectPath, configName))
+  async start(projectPath: string, configName?: string, options?: ProjectRunOptions): Promise<true> {
+    unwrap<ProjectRunResult>(await window.electron.project.run(projectPath, configName, options))
     return true
   },
 
@@ -265,6 +266,10 @@ export const projectService = {
 
   async listByWorkspace(workspacePath: string): Promise<RunningProjectSummary[]> {
     const all = await projectService.list()
-    return all.filter((project) => project.id.startsWith(`${workspacePath}::`))
+    // 盖章 scope 优先；id 前缀兜底旧数据（`${projectPath}::${configName}::${ts}`）
+    return all.filter(
+      (project) =>
+        project.scopePath === workspacePath || project.id.startsWith(`${workspacePath}::`),
+    )
   },
 }

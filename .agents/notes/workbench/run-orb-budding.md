@@ -6,6 +6,9 @@
   "lifecycle": "implemented",
   "created": "2026-09-09",
   "class": "feature",
+  "relations": [
+    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/cc4811c7-b7f1-490f-8770-81eaae8805e6"}
+  ],
   "extensions": {
     "r6Organization": {
       "sourcePath": ".agents/notes/2026-09-09-agent-note-run-orb-budding-for-multi-workspace-running-state--80e64e6f.md",
@@ -22,7 +25,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-18T00:00:00.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -36,6 +39,8 @@ Janus Island expresses running state through the island body alone. Long-press t
 ## Decision
 
 Running state lives outside the island body as satellite orbs. `stores/running.ts` groups the full `projectService.list()` result by workspace path with longest-prefix match and exposes `runningByWorkspace` plus `groupByWorkspace`. `useGlobalRunning` polls the full list every 3s (10s when the document is hidden) and never filters by active workspace. `Titlebar.tsx` mounts a `janus-island-cluster` holding `JanusIsland` and `JanusRunOrbs`. Each workspace with running processes gets one 24px orb showing the workspace initial and process count; more than three orbs collapse into a `+N` overflow. Long-press on the island body only starts the active workspace once; an already-running workspace triggers an orb nudge and a hint instead of a stop. Stopping requires an explicit hold-to-confirm on the orb or in its popover. Closing a popover, pressing `Esc`, or clicking outside closes the view only and never stops a process. A vanished orb plays a 200ms shrink before unmount.
+
+The 2026-10-18 revision lifts the orb to a per-worktree "orb group" for [worktree run targets](worktree-run-test-target.md). Running projects carry stamped `workspaceId`/`scopePath`/`branch`/`configName` (set at start via `ProjectRunOptions.identity`; id-prefix inference stays as legacy fallback), and `groupByWorkspace` builds `WorkspaceRunInfo.scopes` — one `ScopeRunInfo` per worktree scope. When a workspace runs across multiple worktrees, the main orb chains 12px scope buds (hold 1s stops that worktree only, click opens the panel focused on that scope) and the orbit ring switches to one arc segment per running scope; single-worktree visuals are unchanged. The popover groups processes by scope with a two-step-arm scope stop, lists idle worktrees with a start affordance, and warns on duplicate ports without auto-remapping.
 
 ## Alternatives considered
 

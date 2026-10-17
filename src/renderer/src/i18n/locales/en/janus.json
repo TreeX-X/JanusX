@@ -374,7 +374,18 @@
       "stopOne": "Stop",
       "cancel": "Cancel",
       "dismissFailed": "Acknowledge and close",
-      "stopping": "Stopping…"
+      "stopping": "Stopping…",
+      "budAria": "{{name}} running, {{count}} processes",
+      "budTooltip": "{{name}} · {{path}} · {{count}} processes · running {{uptime}}",
+      "overflowBuds": "{{count}} more worktrees",
+      "scopeMeta": "{{count}} processes",
+      "scopeStopConfirm": "Stop all processes in this worktree?",
+      "scopeStopping": "Stopping…",
+      "idleTitle": "Ready to start",
+      "startScope": "Start",
+      "starting": "Starting…",
+      "mainCheckout": "main checkout",
+      "portConflict": "port conflict"
     }
   },
   "expanded": {

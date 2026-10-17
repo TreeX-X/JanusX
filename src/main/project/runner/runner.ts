@@ -13,8 +13,8 @@ import { spawn, spawnSync, ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
-import { extname, isAbsolute, join, resolve } from 'node:path'
-import { ProjectType, type LaunchConfiguration, type ProcessHandle } from '../types'
+import { extname, isAbsolute, join, relative, resolve } from 'node:path'
+import { ProjectType, type LaunchConfiguration, type ProcessHandle, type ProjectRunOptions } from '../types'
 import ProjectConfig from '../config/project-config'
 import CommandBuilder from './command-builder'
 import PortExtractor from '../utils/port-extractor'
@@ -117,19 +117,25 @@ export class ProjectRunner extends EventEmitter {
    * 启动项目
    *
    * 流程：
-   * 1. 读取项目配置
+   * 1. 读取项目配置（目标目录缺失时可用 inheritFrom 继承主仓模板）
    * 2. 验证配置有效性
    * 3. 等待可用的进程槽位
    * 4. 构造和启动命令
    * 5. 监听输出和事件
    *
-   * @param projectPath 项目根目录
+   * @param projectPath 项目根目录（worktree 运行时为目标 worktree）
    * @param configName 配置名称（默认 'dev'）
+   * @param options 归属盖章 + 配置继承来源（见 ProjectRunOptions）
    * @returns 进程句柄
    */
-  async run(projectPath: string, configName: string = 'dev'): Promise<ProcessHandle> {
-    // 1. 读取配置
+  async run(projectPath: string, configName: string = 'dev', options: ProjectRunOptions = {}): Promise<ProcessHandle> {
+    // 1. 读取配置：目标目录优先；缺失时从 inheritFrom 继承模板（命令仍在 projectPath 执行）
     let config = await ProjectConfig.read(projectPath)
+    let configInherited = false
+    if (!config && options.inheritFrom && options.inheritFrom !== projectPath) {
+      config = await ProjectConfig.read(options.inheritFrom)
+      configInherited = config != null
+    }
     if (!config) {
       throw new Error(`No configuration found for project at ${projectPath}`)
     }
@@ -162,10 +168,20 @@ export class ProjectRunner extends EventEmitter {
     // 5. 启动进程
     const processId = this.generateProcessId(projectPath, configName)
     const configuredCwd = launchConfig.cwd?.replace('${workspaceFolder}', projectPath)
+    const runCwd = configuredCwd
+      ? (isAbsolute(configuredCwd) ? configuredCwd : resolve(projectPath, configuredCwd))
+      : projectPath
+    // 继承来的配置不得把命令带回主盘：解析后的工作目录必须落在目标 projectPath 内。
+    if (configInherited) {
+      const rel = relative(resolve(projectPath), resolve(runCwd))
+      if (rel === '..' || rel.startsWith('..\\') || rel.startsWith('../') || isAbsolute(rel)) {
+        throw new Error(
+          `Inherited launch configuration '${configName}' resolves cwd outside the target directory: ${runCwd}`
+        )
+      }
+    }
     const childProc = this.spawnProcess(commandInfo.command, commandInfo.args, {
-      cwd: configuredCwd
-        ? (isAbsolute(configuredCwd) ? configuredCwd : resolve(projectPath, configuredCwd))
-        : projectPath,
+      cwd: runCwd,
       env: { ...process.env, ...launchConfig.env },
     })
 
@@ -179,6 +195,10 @@ export class ProjectRunner extends EventEmitter {
       process: childProc,
       eventEmitter: new EventEmitter(),
       terminated: false,
+      configName,
+      ...(options.identity?.workspaceId ? { workspaceId: options.identity.workspaceId } : {}),
+      ...(options.identity?.scopePath ? { scopePath: options.identity.scopePath } : {}),
+      ...(options.identity?.branch ? { branch: options.identity.branch } : {}),
     }
 
     // 6. 设置事件监听
@@ -193,13 +213,7 @@ export class ProjectRunner extends EventEmitter {
       command: commandInfo.displayName,
     })
 
-    return {
-      pid: runningProject.pid,
-      config: runningProject.config,
-      startTime: runningProject.startTime,
-      port: runningProject.port,
-      output: runningProject.output,
-    }
+    return this.toHandle(runningProject)
   }
 
   /**
@@ -282,13 +296,7 @@ export class ProjectRunner extends EventEmitter {
     return {
       projectId,
       ...(logPath ? { logPath } : {}),
-      handle: {
-        pid: runningProject.pid,
-        config: runningProject.config,
-        startTime: runningProject.startTime,
-        port: runningProject.port,
-        output: runningProject.output,
-      },
+      handle: this.toHandle(runningProject),
     }
   }
 
@@ -364,15 +372,7 @@ export class ProjectRunner extends EventEmitter {
    */
   getRunning(projectId: string): ProcessHandle | null {
     const running = this.runningProjects.get(projectId)
-    return running
-      ? {
-          pid: running.pid,
-          config: running.config,
-          startTime: running.startTime,
-          port: running.port,
-          output: running.output,
-        }
-      : null
+    return running ? this.toHandle(running) : null
   }
 
   /**
@@ -388,15 +388,24 @@ export class ProjectRunner extends EventEmitter {
   getAllRunning(): Map<string, ProcessHandle> {
     const result = new Map<string, ProcessHandle>()
     this.runningProjects.forEach((running, id) => {
-      result.set(id, {
-        pid: running.pid,
-        config: running.config,
-        startTime: running.startTime,
-        port: running.port,
-        output: running.output,
-      })
+      result.set(id, this.toHandle(running))
     })
     return result
+  }
+
+  /** 运行条目 → 对外句柄（含 worktree 归属盖章字段）。 */
+  private toHandle(running: RunningProject): ProcessHandle {
+    return {
+      pid: running.pid,
+      config: running.config,
+      startTime: running.startTime,
+      port: running.port,
+      output: running.output,
+      ...(running.configName ? { configName: running.configName } : {}),
+      ...(running.workspaceId ? { workspaceId: running.workspaceId } : {}),
+      ...(running.scopePath ? { scopePath: running.scopePath } : {}),
+      ...(running.branch ? { branch: running.branch } : {}),
+    }
   }
 
   /**

@@ -371,14 +371,16 @@ export function ProjectSettings({
     setExecuting('run')
     setError(null)
     try {
-      await projectService.start(projectPath, configToRun.configurations[0]?.name)
+      await projectService.start(projectPath, configToRun.configurations[0]?.name, {
+        identity: { workspaceId, scopePath: workspaceRoot ?? projectPath },
+      })
       setRunningProjects(await projectService.listByWorkspace(projectPath))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('editor:project.runFailed'))
     } finally {
       setExecuting(null)
     }
-  }, [config, handleSave, projectPath, t, unsavedChanges])
+  }, [config, handleSave, projectPath, t, unsavedChanges, workspaceId, workspaceRoot])
 
   const handleStop = useCallback(async () => {
     if (runningProjects.length === 0) return

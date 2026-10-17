@@ -374,7 +374,18 @@
       "stopOne": "停止",
       "cancel": "取消",
       "dismissFailed": "确认并关闭",
-      "stopping": "正在停止…"
+      "stopping": "正在停止…",
+      "budAria": "{{name}} 运行中，{{count}} 个进程",
+      "budTooltip": "{{name}} · {{path}} · {{count}} 个进程 · 已运行 {{uptime}}",
+      "overflowBuds": "还有 {{count}} 个 worktree",
+      "scopeMeta": "{{count}} 个进程",
+      "scopeStopConfirm": "确认停止该 worktree 全部进程？",
+      "scopeStopping": "正在停止…",
+      "idleTitle": "可启动",
+      "startScope": "启动",
+      "starting": "启动中…",
+      "mainCheckout": "主盘",
+      "portConflict": "端口冲突"
     }
   },
   "expanded": {

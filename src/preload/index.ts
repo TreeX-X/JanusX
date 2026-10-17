@@ -156,7 +156,7 @@ const projectAPI: ProjectAPI = {
     ipcRenderer.invoke(PROJECT_CHANNELS.createDefaultConfig, projectPath, projectType, projectName),
   validateConfig: (config) => ipcRenderer.invoke(PROJECT_CHANNELS.validateConfig, config),
   test: (projectPath, script) => ipcRenderer.invoke(PROJECT_CHANNELS.test, projectPath, script),
-  run: (projectPath, configName) => ipcRenderer.invoke(PROJECT_CHANNELS.run, projectPath, configName),
+  run: (projectPath, configName, options) => ipcRenderer.invoke(PROJECT_CHANNELS.run, projectPath, configName, options),
   stop: (projectId) => ipcRenderer.invoke(PROJECT_CHANNELS.stop, projectId),
   list: () => ipcRenderer.invoke(PROJECT_CHANNELS.list),
   get: (projectId) => ipcRenderer.invoke(PROJECT_CHANNELS.get, projectId),

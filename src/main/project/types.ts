@@ -7,6 +7,8 @@ export {
   type JsonValue,
   type LaunchConfig,
   type LaunchConfiguration,
+  type ProjectRunIdentity,
+  type ProjectRunOptions,
   type ProjectTypeSchema,
   type SchemaField,
   type ValidationError,
@@ -19,6 +21,11 @@ export interface ProcessHandle {
   startTime: Date
   port?: number
   output: string[]
+  /** 启动时盖章的运行身份（worktree 归属）；未盖章的旧路径按 id 前缀兜底。 */
+  workspaceId?: string
+  scopePath?: string
+  branch?: string
+  configName?: string
 }
 
 export interface ProcessEvent {

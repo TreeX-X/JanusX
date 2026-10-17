@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectType, type ProjectAPI } from '../../../src/shared/ipc/project'
 import { orbConfigLabel, formatOrbUptime } from '../../../src/renderer/src/components/janus/JanusRunOrb'
-import { stopWorkspaceProjects } from '../../../src/renderer/src/components/janus/useProjectRunning'
-import { useRunningStore } from '../../../src/renderer/src/stores/running'
+import { stopScopeProjects, stopWorkspaceProjects } from '../../../src/renderer/src/components/janus/useProjectRunning'
+import { scopeKey, useRunningStore } from '../../../src/renderer/src/stores/running'
 
 const projectApi = {
   list: vi.fn(),
@@ -75,9 +75,58 @@ describe('orb helpers', () => {
         workspaceId: 'wa',
         workspaceName: 'A',
         workspacePath: 'C:\\a',
+        scopes: [],
         projects: [running('C:\\a::dev::1')],
         startedAt: null,
       }),
     ).toBe('dev')
+  })
+
+  it('prefers the stamped config name over id parsing', () => {
+    expect(
+      orbConfigLabel({
+        workspaceId: 'wa',
+        workspaceName: 'A',
+        workspacePath: 'C:\\a',
+        scopes: [],
+        projects: [{ ...running('C:\\a-wt\\x::dev::1'), configName: 'api' }],
+        startedAt: null,
+      }),
+    ).toBe('api')
+  })
+})
+
+describe('stopScopeProjects', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', { electron: { project: projectApi } })
+    vi.mocked(projectApi.list).mockReset()
+    vi.mocked(projectApi.stop).mockReset()
+    useRunningStore.getState().resetForTests()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('stops only the target worktree scope and marks scope stopping', async () => {
+    vi.mocked(projectApi.list).mockResolvedValue({
+      success: true,
+      data: [
+        { ...running('C:\\a-wt\\x::dev::1'), scopePath: 'C:\\a-wt\\x' },
+        { ...running('C:\\a-wt\\x::api::2'), scopePath: 'C:\\a-wt\\x' },
+        { ...running('C:\\a::dev::3'), scopePath: 'C:\\a' },
+      ],
+    })
+    vi.mocked(projectApi.stop).mockResolvedValue({ success: true })
+
+    const ok = await stopScopeProjects('C:\\a-wt\\x')
+
+    expect(ok).toBe(true)
+    expect(vi.mocked(projectApi.stop).mock.calls.map((call) => call[0]).sort()).toEqual([
+      'C:\\a-wt\\x::dev::1',
+      'C:\\a-wt\\x::api::2',
+    ].sort())
+    expect(useRunningStore.getState().stoppingByScope[scopeKey('C:\\a-wt\\x')]).toBeDefined()
+    expect(useRunningStore.getState().stoppingByScope[scopeKey('C:\\a')]).toBeUndefined()
   })
 })

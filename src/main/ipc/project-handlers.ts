@@ -201,17 +201,21 @@ export function registerProjectHandlers(authorize: RendererActionAuthorizer = au
 
   /**
    * 启动项目
-   * @param projectPath 项目根目录
+   * @param projectPath 项目根目录（worktree 运行时为目标 worktree）
    * @param configName 配置名称（默认 'dev'）
+   * @param options 归属盖章 + 配置继承来源（ProjectRunOptions）
    * @returns 进程信息
    */
   ipcMain.handle(
     PROJECT_CHANNELS.run,
-    async (event, projectPath: string, configName: string = 'dev') => {
+    async (event, projectPath: string, configName: string = 'dev', options?: import('../../shared/ipc/project').ProjectRunOptions) => {
       try {
-        if (!await authorize(event, { workspaceRoot: projectPath, toolName: 'legacy.project.run', actionRisk: 'run', source: 'renderer-user', preview: { summary: 'Start project', paths: [projectPath], detail: `Configuration: ${configName}`, truncated: false } })) return { success: false, error: 'Project run denied by workspace policy' }
+        const scopeNote = options?.identity?.scopePath && options.identity.scopePath !== projectPath
+          ? ` (scope: ${options.identity.scopePath})`
+          : ''
+        if (!await authorize(event, { workspaceRoot: projectPath, toolName: 'legacy.project.run', actionRisk: 'run', source: 'renderer-user', preview: { summary: 'Start project', paths: [projectPath], detail: `Configuration: ${configName}${scopeNote}`, truncated: false } })) return { success: false, error: 'Project run denied by workspace policy' }
         const runner = getProjectRunner()
-        const processHandle = await runner.run(projectPath, configName)
+        const processHandle = await runner.run(projectPath, configName, options)
 
         return {
           success: true,
@@ -268,6 +272,10 @@ export function registerProjectHandlers(authorize: RendererActionAuthorizer = au
         port: handle.port,
         startTime: handle.startTime.toISOString(),
         uptime: Date.now() - handle.startTime.getTime(),
+        ...(handle.configName ? { configName: handle.configName } : {}),
+        ...(handle.workspaceId ? { workspaceId: handle.workspaceId } : {}),
+        ...(handle.scopePath ? { scopePath: handle.scopePath } : {}),
+        ...(handle.branch ? { branch: handle.branch } : {}),
       }))
 
       return {

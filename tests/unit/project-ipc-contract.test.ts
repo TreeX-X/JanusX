@@ -58,7 +58,8 @@ describe('Project IPC contract', () => {
     await projectApi.createDefaultConfig('C:\\demo', ProjectType.Vite, 'demo')
     await projectApi.validateConfig(config)
     await projectApi.test('C:\\demo', 'test:unit')
-    await projectApi.run('C:\\demo', 'dev')
+    const runOptions = { identity: { workspaceId: 'wa', scopePath: 'C:\\demo-wt\\login', branch: 'feat/login' }, inheritFrom: 'C:\\demo' }
+    await projectApi.run('C:\\demo', 'dev', runOptions)
     await projectApi.stop('C:\\demo')
     await projectApi.list()
     await projectApi.get('C:\\demo')
@@ -72,7 +73,7 @@ describe('Project IPC contract', () => {
       [PROJECT_CHANNELS.createDefaultConfig, 'C:\\demo', ProjectType.Vite, 'demo'],
       [PROJECT_CHANNELS.validateConfig, config],
       [PROJECT_CHANNELS.test, 'C:\\demo', 'test:unit'],
-      [PROJECT_CHANNELS.run, 'C:\\demo', 'dev'],
+      [PROJECT_CHANNELS.run, 'C:\\demo', 'dev', runOptions],
       [PROJECT_CHANNELS.stop, 'C:\\demo'],
       [PROJECT_CHANNELS.list],
       [PROJECT_CHANNELS.get, 'C:\\demo'],

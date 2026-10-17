@@ -26,6 +26,7 @@ export function JanusRunOrbs() {
     [byId],
   )
   const [openFor, setOpenFor] = useState<string | null>(null)
+  const [focusScope, setFocusScope] = useState<string | null>(null)
   const [overflowOpen, setOverflowOpen] = useState(false)
   const [leavingIds, setLeavingIds] = useState<string[]>([])
   const containerRef = useRef<HTMLDivElement>(null)
@@ -63,12 +64,14 @@ export function JanusRunOrbs() {
       const target = event.target as Node | null
       if (target && !containerRef.current?.contains(target)) {
         setOpenFor(null)
+        setFocusScope(null)
         setOverflowOpen(false)
       }
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       setOpenFor(null)
+      setFocusScope(null)
       setOverflowOpen(false)
     }
     document.addEventListener('pointerdown', onPointerDown, true)
@@ -85,8 +88,15 @@ export function JanusRunOrbs() {
     if (!openFor || byId[openFor]) return null
     const last = lastInfosRef.current[openFor]
     if (!last) return null
-    return { workspaceId: last.workspaceId, workspaceName: last.workspaceName, workspacePath: last.workspacePath }
-  }, [openFor, byId])
+    const scope = (focusScope ? last.scopes.find((s) => s.scopePath === focusScope) : undefined) ?? last.scopes[0]
+    return {
+      workspaceId: last.workspaceId,
+      workspaceName: last.workspaceName,
+      workspacePath: last.workspacePath,
+      ...(scope?.scopePath ? { scopePath: scope.scopePath } : {}),
+      ...(scope?.branch ? { branch: scope.branch } : {}),
+    }
+  }, [openFor, byId, focusScope])
 
   if (ids.length === 0 && leavingIds.length === 0 && !ghostSnapshot) return null
 
@@ -105,8 +115,10 @@ export function JanusRunOrbs() {
             key={id}
             info={info}
             open={openFor === id}
-            onOpenChange={(next) => {
+            focusScopePath={openFor === id ? focusScope : null}
+            onOpenChange={(next, scope) => {
               setOpenFor(next)
+              setFocusScope(next ? (scope ?? null) : null)
               if (next) setOverflowOpen(false)
             }}
           />
@@ -158,6 +170,7 @@ export function JanusRunOrbs() {
             info={null}
             stopping={false}
             stoppedSnapshot={ghostSnapshot}
+            focusScopePath={focusScope}
             onClose={() => setOpenFor(null)}
           />
         </div>
