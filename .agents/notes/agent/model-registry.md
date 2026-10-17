@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-12T03:38:45.000Z",
+  "updated": "2026-10-17T02:11:22.000Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -52,11 +52,19 @@ Production model ports reject unresolved limits before constructing the language
 
 ## Consequences
 
+Settings presents the catalog as a quiet vendor/model list with separate context/capability and pricing sections. The sections sit side by side on wide screens and stack below 720px. Context and maximum output remain distinct; supported parameters become localized capability labels with readable fallback names. Runtime conversion and the bundled-registry generator preserve the complete OpenRouter `pricing` object alongside the legacy input/output fields. Older runtime caches can supply details through `raw.pricing`; older bundled entries retain their existing base prices until the catalog is updated.
+
+Token rates show USD per million tokens, including cache reads, cache writes, one-hour cache writes, audio-cache input and internal reasoning when supplied. Missing or invalid rates stay unavailable; a published zero remains zero. Conditional `overrides` with `min_prompt_tokens` get expandable tier tables showing only overridden rates. Unknown rules and other charge types preserve their original values without assuming a token unit. These are OpenRouter reference prices, not the configured provider's bill. Revisit dedicated image/audio/search formatting when their billing-unit contracts are available.
+
+The usage statistics page consumes this catalog to estimate persisted token records and shows a compact USD total beside total usage, with an icon to refresh prices. Coverage and unavailable prices use short tooltips; there is no separate cost table or explanatory paragraph. Conditional rates require request-level event data; unresolved tiers, cache TTL splits and separate reasoning rates remain unpriced. Codex events carry their preceding turn's model, and source-backed replay enriches missing historical models without duplicating consumption. The accounting contract and source verification live in [native usage accounting](../terminal/requirements/usage-telemetry-single-source.md).
+
 Chat budgeting consumes the same cached catalog exposed by settings. Manual settings remain stored but do not override complete automatic metadata. Cache reuse and shared refreshes avoid one network request per conversation turn.
 
 A missing or incomplete model may delay first detection by the network timeout. OpenRouter coverage and matching confidence bound automatic detection; unknown aliases and refresh failures can require a manual context/output pair. A known stale model keeps its previous capacities while refresh runs. Automatic metadata is a model capacity description, not proof of a provider account's restrictions. Revisit the source priority if adapters acquire authoritative provider-reported limits or catalog discrepancies become measurable. Larger output allowances reserve more context and can increase generation cost.
 
 ## Verification
+
+The catalog presentation change passed `npx vitest run tests/unit/model-catalog-panel-logic.test.ts tests/unit/model-catalog-service.test.ts --maxWorkers=2 --reporter=dot` (20 tests), `npm run test:llm-core -- --reporter=dot` (80 tests), and `npm run typecheck`. `tests/e2e/model-catalog.spec.ts` passed two Playwright island cases covering both themes, cache/tier values, raw extra charges, 390px overflow, missing prices, search and refresh. Responses are fixtures, not provider billing evidence. Screenshots are under `artifacts/model-catalog/`. Run the island tests with `NO_PROXY=localhost,127.0.0.1` in proxy-enabled environments.
 
 `npx vitest run tests/unit/managed-chat-session.test.ts tests/unit/llm/janus-agent-ports.test.ts tests/unit/model-catalog-service.test.ts --maxWorkers=1 --minWorkers=1` passed 49 cases: automatic priority, querying despite old manual context, both-limit validation, blocking unresolved production inference, missing-output refresh, offline/cache reuse and compaction. Network responses are simulated. The actual orchestrator regression in `chat-turn-guard.test.ts` also verifies `maxTokens: 65536` reaches inference despite a saved context-only setting. That file passed 19 of 22 cases; three engineering-memory capture/access assertions remain failing outside this capacity change.
 

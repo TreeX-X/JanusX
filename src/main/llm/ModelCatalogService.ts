@@ -215,6 +215,7 @@ function isRegistryEntry(value: unknown): value is AiModelRegistryDocument['mode
     && optionalStringArray(model.outputModalities)
     && optionalString(model.tokenizer)
     && optionalStringArray(model.supportedParameters)
+    && (model.pricing === undefined || (!!model.pricing && typeof model.pricing === 'object' && !Array.isArray(model.pricing)))
     && optionalNumericString(model.promptPricePerToken)
     && optionalNumericString(model.completionPricePerToken)
     && isStringArray(model.aliases)

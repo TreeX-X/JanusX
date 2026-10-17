@@ -25,6 +25,8 @@ export interface AiModelRegistryEntry {
   tokenizer?: string
   supportedParameters?: string[]
 
+  /** Complete provider pricing, including cache rates and conditional overrides. */
+  pricing?: Record<string, unknown>
   promptPricePerToken?: string
   completionPricePerToken?: string
 
@@ -105,5 +107,6 @@ export interface OpenRouterModelRecord {
   pricing?: {
     prompt?: string
     completion?: string
+    [key: string]: unknown
   }
 }

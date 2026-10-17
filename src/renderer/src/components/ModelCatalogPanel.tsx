@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ChevronRight, RefreshCw, Search } from 'lucide-react'
 import type { AiModelRegistryEntry, ModelCatalogSnapshot } from '@janusx/llm-core'
 import { getModelCatalog, refreshModelCatalog } from '../services/llm'
-import { buildCapabilityList, catalogEmptyState, formatList, groupModels, UNKNOWN_VENDOR } from './modelCatalogPanelLogic'
+import { asRecord, buildCapabilityList, catalogEmptyState, formatList, groupModels, pricePerMillion, readModelPricing, TOKEN_PRICE_KEYS, UNKNOWN_VENDOR } from './modelCatalogPanelLogic'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './ModelCatalogPanel.module.css'
 
@@ -30,7 +31,7 @@ export function ModelCatalogPanel() {
         if (active) setLoading(false)
       })
     return () => { active = false }
-  }, [])
+  }, [t])
 
   const groups = useMemo(() => groupModels(catalog?.models ?? [], query), [catalog, query])
   const resultCount = groups.reduce((count, group) => count + group.models.length, 0)
@@ -62,7 +63,7 @@ export function ModelCatalogPanel() {
       <div className={styles.toolbar}>
         <label className={styles.searchField}>
           <span className={styles.srOnly}>{t('model:search.label')}</span>
-          <span className={styles.searchIcon} aria-hidden="true">⌕</span>
+          <Search className={styles.searchIcon} size={15} aria-hidden="true" />
           <input
             type="search"
             value={query}
@@ -77,7 +78,7 @@ export function ModelCatalogPanel() {
           onClick={handleRefresh}
           disabled={refreshing}
         >
-          <span className={refreshing ? styles.spinning : ''} aria-hidden="true">↻</span>
+          <RefreshCw size={14} className={refreshing ? styles.spinning : ''} aria-hidden="true" />
           {refreshing ? t('model:refresh.updating') : loadError ? t('model:refresh.retry') : t('model:refresh.updateCatalog')}
         </button>
       </div>
@@ -145,20 +146,65 @@ function ModelItem({ model }: { model: AiModelRegistryEntry }) {
         </span>
         <span className={styles.modelQuickMeta}>
           {model.effectiveContextWindow ? formatTokens(model.effectiveContextWindow) : t('model:model.contextUnknown')}
+          <ChevronRight size={14} className={styles.chevron} aria-hidden="true" />
         </span>
       </summary>
       <div className={styles.details}>
-        <Metadata label={t('model:meta.context')} value={formatOptionalTokens(model.effectiveContextWindow, t)} />
-        <Metadata label={t('model:meta.maxOutput')} value={formatOptionalTokens(model.maxOutputTokens, t)} />
-        <Metadata label={t('model:meta.input')} value={formatList(model.inputModalities)} />
-        <Metadata label={t('model:meta.output')} value={formatList(model.outputModalities)} />
-        <Metadata label={t('model:meta.capabilities')} value={formatList(capabilities)} />
-        <Metadata label={t('model:meta.inputPrice')} value={formatPrice(model.promptPricePerToken, t)} />
-        <Metadata label={t('model:meta.outputPrice')} value={formatPrice(model.completionPricePerToken, t)} />
+        <section className={styles.detailSection} aria-label={t('model:sections.capabilities')}>
+          <h3>{t('model:sections.capabilities')}</h3>
+          <div className={styles.capacityGrid}>
+            <Metadata label={t('model:meta.context')} value={formatOptionalTokens(model.effectiveContextWindow, t)} />
+            <Metadata label={t('model:meta.maxOutput')} value={formatOptionalTokens(model.maxOutputTokens, t)} />
+          </div>
+          <Metadata label={t('model:meta.input')} value={formatList(model.inputModalities)} />
+          <Metadata label={t('model:meta.output')} value={formatList(model.outputModalities)} />
+          <div className={styles.capabilities}>
+            {capabilities.map(capability => <span key={capability}>{t(`model:capabilities.${capability}`, { defaultValue: capability.replaceAll('_', ' ') })}</span>)}
+          </div>
+        </section>
+        <section className={styles.detailSection} aria-label={t('model:sections.pricing')}>
+          <h3>{t('model:sections.pricing')}<span>USD / 1M tokens</span></h3>
+          <PricingDetails pricing={readModelPricing(model)} />
+          <p className={styles.priceHint}>{t('model:pricing.sourceHint')}</p>
+        </section>
         {model.description && <p className={styles.description}>{model.description}</p>}
       </div>
     </details>
   )
+}
+
+function PricingDetails({ pricing, tier = false }: { pricing: Record<string, unknown>; tier?: boolean }) {
+  const { t } = useI18n('model')
+  const extra = Object.entries(pricing).filter(([key, value]) =>
+    !TOKEN_PRICE_KEYS.includes(key as typeof TOKEN_PRICE_KEYS[number])
+    && key !== 'overrides' && key !== 'min_prompt_tokens' && value !== undefined)
+  const overrides = Array.isArray(pricing.overrides) ? pricing.overrides : []
+  return <>
+    <dl className={styles.priceList}>
+      {TOKEN_PRICE_KEYS.filter(key => (!tier && ['prompt', 'completion', 'input_cache_read', 'input_cache_write'].includes(key)) || pricing[key] !== undefined).map(key => {
+        const value = pricePerMillion(pricing[key])
+        return <div key={key}><dt>{t(`model:pricing.${key}`)}</dt><dd className={value === undefined ? styles.unavailable : undefined}>{value === undefined ? t('model:pricing.unavailable') : `$${value}`}</dd></div>
+      })}
+    </dl>
+    {overrides.map((rule, index) => {
+      const entry = asRecord(rule)
+      const threshold = entry.min_prompt_tokens
+      return <details className={styles.specialRule} key={index}>
+        <summary>{typeof threshold === 'number' && Number.isFinite(threshold)
+          ? t('model:pricing.tierThreshold', { count: threshold.toLocaleString() })
+          : t('model:pricing.specialRule', { index: index + 1 })}</summary>
+        {typeof threshold === 'number' && Number.isFinite(threshold)
+          ? <><p className={styles.priceHint}>{t('model:pricing.tierHint')}</p><PricingDetails pricing={entry} tier /></>
+          : <pre>{JSON.stringify(rule, null, 2)}</pre>}
+      </details>
+    })}
+    {(extra.length > 0 || (pricing.overrides !== undefined && !Array.isArray(pricing.overrides))) && <details className={styles.specialRule}>
+      <summary>{t('model:pricing.otherCharges')}</summary>
+      <p className={styles.priceHint}>{t('model:pricing.rawHint')}</p>
+      <dl className={styles.priceList}>{extra.map(([key, value]) => <div key={key}><dt>{t(`model:pricing.${key}`, { defaultValue: key })}</dt><dd><code>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</code></dd></div>)}</dl>
+      {pricing.overrides !== undefined && !Array.isArray(pricing.overrides) && <pre>{JSON.stringify(pricing.overrides, null, 2)}</pre>}
+    </details>}
+  </>
 }
 
 function Metadata({ label, value }: { label: string; value?: string }) {
@@ -174,13 +220,6 @@ function formatTokens(value: number): string {
 
 function formatOptionalTokens(value: number | undefined, t: TFunc): string | undefined {
   return value ? t('model:model.tokensSuffix', { value: formatTokens(value) }) : undefined
-}
-
-function formatPrice(value: string | undefined, t: TFunc): string | undefined {
-  if (value === undefined) return undefined
-  const price = Number(value) * 1_000_000
-  if (!Number.isFinite(price)) return undefined
-  return t('model:model.priceFormat', { price: price.toLocaleString(undefined, { maximumFractionDigits: 4 }) })
 }
 
 function formatDate(value: string, t: TFunc): string {

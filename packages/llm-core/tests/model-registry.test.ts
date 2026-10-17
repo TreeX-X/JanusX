@@ -52,12 +52,15 @@ describe('model registry', () => {
       supported_parameters: ['tools', 'tool_choice'],
       pricing: {
         prompt: '0.0000004',
-        completion: '0.0000016'
+        completion: '0.0000016',
+        input_cache_read: '0',
+        overrides: [{ min_prompt_tokens: 200000, prompt: '0.0000008' }]
       }
     })
 
     expect(entry).toBeDefined()
     expect(entry?.providerAuthor).toBe('openai')
+    expect(entry?.pricing).toMatchObject({ input_cache_read: '0', overrides: [{ min_prompt_tokens: 200000, prompt: '0.0000008' }] })
     expect(entry?.contextLength).toBe(128000)
     expect(entry?.providerContextLength).toBe(1047576)
     expect(entry?.effectiveContextWindow).toBe(1047576)

@@ -7,9 +7,24 @@ import {
   catalogEmptyState,
   formatList,
   groupModels,
+  pricePerMillion,
+  readModelPricing,
 } from '../../src/renderer/src/components/modelCatalogPanelLogic'
 
 describe('model catalog panel logic', () => {
+  it('retains cache and tier prices from current and legacy raw catalogs', () => {
+    const pricing = { prompt: '0.000002', input_cache_read: '0', overrides: [{ min_prompt_tokens: 200000, prompt: '0.000004' }] }
+    expect(readModelPricing({ ...model('a/b', 'B'), raw: { pricing } })).toMatchObject(pricing)
+    expect(readModelPricing({ ...model('a/b', 'B'), promptPricePerToken: '0.000001', pricing })).toMatchObject(pricing)
+    expect(readModelPricing({ ...model('a/b', 'B'), promptPricePerToken: '0.000001' }).prompt).toBe('0.000001')
+  })
+
+  it('distinguishes free, tiny, unavailable and malformed prices', () => {
+    expect(pricePerMillion('0')).toBe('0')
+    expect(pricePerMillion('0.00000000001')).toBe('0.00001')
+    expect(pricePerMillion('0.0000025')).toBe('2.5')
+    for (const value of [undefined, null, '', ' ', -1, 'NaN', Infinity, {}, true]) expect(pricePerMillion(value)).toBeUndefined()
+  })
   it('groups models by vendor with an unknown fallback and filters by name or id', () => {
     const models = [
       model('zeta/alpha', 'Alpha', 'zeta'),

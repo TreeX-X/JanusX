@@ -58,3 +58,31 @@ export function formatList(value?: string[]): string | undefined {
 function dedupe(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
 }
+
+export const TOKEN_PRICE_KEYS = [
+  'prompt', 'completion', 'input_cache_read', 'input_cache_write',
+  'input_cache_write_1h', 'input_audio_cache', 'internal_reasoning',
+] as const
+
+export function readModelPricing(model: AiModelRegistryEntry): Record<string, unknown> {
+  return {
+    prompt: model.promptPricePerToken,
+    completion: model.completionPricePerToken,
+    ...asRecord(asRecord(model.raw).pricing),
+    ...asRecord(model.pricing),
+  }
+}
+
+export function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown> : {}
+}
+
+// Unknown and malformed prices must never become a free rate.
+export function pricePerMillion(value: unknown): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined
+  if (typeof value === 'string' && !value.trim()) return undefined
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(amount * 1_000_000)) return undefined
+  return (amount * 1_000_000).toLocaleString(undefined, { maximumSignificantDigits: 10 })
+}

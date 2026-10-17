@@ -39,6 +39,44 @@
     "tokensSuffix": "{{value}} tokens",
     "priceFormat": "${{price}} / 1M tokens"
   },
+  "sections": {
+    "capabilities": "上下文与能力",
+    "pricing": "定价与特殊价格"
+  },
+  "pricing": {
+    "prompt": "输入",
+    "completion": "输出",
+    "input_cache_read": "缓存命中 / 读取",
+    "input_cache_write": "缓存写入",
+    "input_cache_write_1h": "缓存写入 · 1 小时",
+    "input_audio_cache": "音频缓存输入",
+    "internal_reasoning": "内部推理",
+    "image": "图片输入 · image",
+    "image_output": "图片输出 · image_output",
+    "audio": "音频输入 · audio",
+    "audio_output": "音频输出 · audio_output",
+    "web_search": "网络搜索 · web_search",
+    "unavailable": "未提供",
+    "tierThreshold": "输入达到 {{count}} tokens 的阶梯价格",
+    "tierHint": "仅列出此阶梯覆盖的价格；其他项目沿用基础价格。",
+    "specialRule": "特殊价格规则 {{index}}",
+    "otherCharges": "其他计费与原始规则",
+    "rawHint": "以下为接口原始报价，未换算为百万 tokens。图片、音频、搜索及其他项目的计费单位与条件以服务商说明为准。",
+    "sourceHint": "OpenRouter 参考报价，币种 USD。未提供不代表免费；实际费用以所用服务商账单为准。"
+  },
+  "capabilities": {
+    "tools": "工具调用",
+    "tool_choice": "工具选择",
+    "reasoning": "推理",
+    "include_reasoning": "推理内容",
+    "structured_outputs": "结构化输出",
+    "response_format": "响应格式",
+    "temperature": "温度",
+    "top_p": "Top P",
+    "max_tokens": "输出上限",
+    "seed": "随机种子",
+    "stop": "停止序列"
+  },
   "meta": {
     "context": "上下文",
     "maxOutput": "最大输出",

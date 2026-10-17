@@ -1,9 +1,8 @@
 /**
  * src/renderer/src/components/ModelCatalogPanel.module.css
  *
- * 模型目录。旧版是三层嵌套的填充容器（vendorGroup 卡片 → modelItem 卡片 → details 卡片），
- * 每层都有自己的底色和边框，展开后整页都是矩形块。这里改成"发丝线 + 缩进"的列表：
- * 层级靠左缩进和分隔线表达，不靠嵌套边框。视觉规则见 AppSettingsModal.module.css。
+ * 模型目录：用轻量分隔线和缩进组织厂商与型号。
+ * 展开后独立呈现能力和定价，复用设置页主题变量。
  */
 
 .root {
@@ -126,14 +125,11 @@
 .messageError { border-color: rgba(215, 139, 146, 0.7); color: #d78b92; }
 .messageSuccess { border-color: rgba(111, 184, 138, 0.7); color: #6fb88a; }
 
-/* 列表整体一张灰卡，与通用页 generalRow 对齐；内部保留发丝线分隔 */
+/* 平面列表，用分隔线组织层级。 */
 .groups {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--shell-border);
-  border-radius: 10px;
-  background: var(--shell-card);
-  padding: 4px 8px;
+  border-top: 1px solid var(--shell-border);
 }
 
 .vendorGroup {
@@ -186,13 +182,11 @@
   text-align: right;
 }
 
-/* 型号列表靠缩进 + 左侧竖线表达从属，而不是再套一层卡片。 */
+/* 型号列表通过缩进表达从属。 */
 .modelList {
   display: flex;
   flex-direction: column;
-  margin: 0 0 6px 21px;
-  padding-left: 1px;
-  border-left: 1px solid var(--so-rule-soft);
+  margin: 0 0 14px 14px;
 }
 
 .modelItem {
@@ -204,25 +198,26 @@
 .modelSummary {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
-  min-height: 46px;
-  padding: 7px 10px;
+  min-height: 64px;
+  padding: 12px;
+  border-radius: 8px;
 }
 
 .modelSummary:hover { background: rgba(255, 255, 255, 0.025); }
 
 .modelIdentity { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.modelIdentity strong { color: var(--shell-text); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.modelIdentity strong { color: var(--shell-text); font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
 .modelIdentity code { color: var(--shell-dim); font: 10px/1.35 'SF Mono', Consolas, monospace; overflow-wrap: anywhere; }
-.modelQuickMeta { color: var(--shell-muted); font-size: 10px; white-space: nowrap; }
+.modelQuickMeta { display: flex; align-items: center; gap: 12px; color: var(--shell-muted); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .details {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  padding: 4px 10px 14px;
+  gap: 20px 28px;
+  padding: 8px 12px 24px;
 }
 
-.metadata { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.metadata { min-width: 0; display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .metadata span { color: var(--shell-dim); font-size: 10px; }
 .metadata strong { color: var(--shell-text); font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
 
@@ -305,4 +300,39 @@
 :global([data-theme='planche']) .vendorHeader:hover,
 :global([data-theme='planche']) .modelSummary:hover {
   background: var(--paper-deep, #DCCFA8);
+}
+
+.detailSection { min-width: 0; }
+.detailSection + .detailSection { padding-left: 24px; border-left: 1px solid var(--so-rule-soft, var(--shell-border-soft)); }
+.detailSection h3 { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 18px; color: var(--shell-text); font-size: 12px; font-weight: 600; }
+.detailSection h3 > span { color: var(--shell-dim); font-size: 10px; font-weight: 400; }
+.capacityGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 6px; }
+.capacityGrid strong { font-size: 18px; font-weight: 500; letter-spacing: -0.5px; }
+.capabilities { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.capabilities > span { padding: 3px 7px; border-radius: 5px; background: color-mix(in srgb, var(--shell-text) 5%, transparent); color: var(--shell-muted); font-size: 10px; line-height: 1.5; }
+.priceList { margin: 0; }
+.priceList > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid var(--so-rule-soft, var(--shell-border-soft)); font-size: 11px; }
+.priceList > div:first-child { padding-top: 0; }
+.priceList dt { color: var(--shell-muted); overflow-wrap: anywhere; }
+.priceList dd { margin: 0; color: var(--shell-text); font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.priceList dd.unavailable { color: var(--shell-dim); }
+.priceList code { font-size: 10px; }
+.priceHint { margin: 12px 0 0; color: var(--shell-dim); font-size: 10px; line-height: 1.65; }
+.specialRule { margin-top: 14px; }
+.specialRule summary { cursor: pointer; color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
+.specialRule[open] > summary { margin-bottom: 12px; }
+.specialRule .priceHint { margin: 0 0 12px; }
+.specialRule pre { margin: 8px 0 0; padding: 10px; border-radius: 6px; color: var(--shell-muted); background: color-mix(in srgb, var(--shell-text) 4%, transparent); font-size: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chevron { transition: transform 0.15s ease; }
+.modelItem[open] > summary .chevron { transform: rotate(90deg); }
+.vendorHeader:focus-visible, .modelSummary:focus-visible, .specialRule summary:focus-visible, .refreshButton:focus-visible, .inlineButton:focus-visible { outline: 2px solid var(--shell-muted); outline-offset: 2px; border-radius: 5px; }
+.searchInput:focus { background: var(--so-field, var(--shell-card)); border-color: var(--shell-muted); }
+.vendorHeader:hover, .modelSummary:hover, .refreshButton:hover:not(:disabled), .inlineButton:hover:not(:disabled) { background: color-mix(in srgb, var(--shell-text) 4%, transparent); }
+@media (max-width: 720px) {
+  .detailSection + .detailSection { border-left: 0; border-top: 1px solid var(--so-rule-soft, var(--shell-border-soft)); padding: 20px 0 0; }
+  .modelList { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chevron, .vendorHeader::before { transition: none; }
+  .spinning { animation: none; }
 }

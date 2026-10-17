@@ -65,6 +65,7 @@ export function openRouterRecordToRegistryEntry(record: OpenRouterModelRecord): 
     outputModalities: record.architecture?.output_modalities,
     tokenizer: record.architecture?.tokenizer,
     supportedParameters: record.supported_parameters,
+    pricing: record.pricing,
     promptPricePerToken: record.pricing?.prompt,
     completionPricePerToken: record.pricing?.completion,
     aliases,

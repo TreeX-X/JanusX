@@ -39,6 +39,44 @@
     "tokensSuffix": "{{value}} tokens",
     "priceFormat": "${{price}} / 1M tokens"
   },
+  "sections": {
+    "capabilities": "Context & capabilities",
+    "pricing": "Pricing & special rates"
+  },
+  "pricing": {
+    "prompt": "Input",
+    "completion": "Output",
+    "input_cache_read": "Cache hit / read",
+    "input_cache_write": "Cache write",
+    "input_cache_write_1h": "Cache write · 1 hour",
+    "input_audio_cache": "Audio cache input",
+    "internal_reasoning": "Internal reasoning",
+    "image": "Image input · image",
+    "image_output": "Image output · image_output",
+    "audio": "Audio input · audio",
+    "audio_output": "Audio output · audio_output",
+    "web_search": "Web search · web_search",
+    "unavailable": "Not provided",
+    "tierThreshold": "Tier starting at {{count}} input tokens",
+    "tierHint": "Only overridden rates are listed; other items retain their base rates.",
+    "specialRule": "Special pricing rule {{index}}",
+    "otherCharges": "Other charges & original rules",
+    "rawHint": "Original API quotes below, without conversion to million tokens. See provider documentation for image, audio, search and other billing units and conditions.",
+    "sourceHint": "OpenRouter reference rates in USD. Missing prices do not mean free usage; your provider's bill is authoritative."
+  },
+  "capabilities": {
+    "tools": "Tool calling",
+    "tool_choice": "Tool choice",
+    "reasoning": "Reasoning",
+    "include_reasoning": "Reasoning content",
+    "structured_outputs": "Structured outputs",
+    "response_format": "Response format",
+    "temperature": "Temperature",
+    "top_p": "Top P",
+    "max_tokens": "Output limit",
+    "seed": "Seed",
+    "stop": "Stop sequences"
+  },
   "meta": {
     "context": "Context",
     "maxOutput": "Max output",
