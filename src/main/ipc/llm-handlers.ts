@@ -20,6 +20,7 @@ import type { ChatAnswerQuestionPayload, ChatWorkspaceResource, LlmRuntimeStatus
 import { getDevelopmentLlmSyncStatus } from '../llm/development-config-sync'
 import { generateText } from '../llm/ai-runtime'
 import { configurationService } from '../llm/configuration-service'
+import { nativeLoginService, startNativeLogin, stopNativeLogin } from '../llm/native-login'
 import type { AgentModelBinding, LlmConsumer } from '../../shared/llm-configuration'
 import {
   abortChatStream,
@@ -79,22 +80,36 @@ export async function refreshLlmRuntimeStatus(): Promise<LlmRuntimeStatus> {
  * 注册 LLM 相关的 IPC handlers
  */
 export function registerLlmHandlers(): void {
-  for (const channel of [LLM_CHANNELS.getConfiguration, LLM_CHANNELS.saveProvider, LLM_CHANNELS.applyBinding]) {
+  for (const channel of [LLM_CHANNELS.getConfiguration, LLM_CHANNELS.saveProvider, LLM_CHANNELS.applyBinding, LLM_CHANNELS.getNativeLoginStatus]) {
     ipcMain.handle(channel, async (event, first: unknown, second: unknown) => {
       const authorized = BrowserWindow.getAllWindows().some(window => !window.isDestroyed() && window.webContents === event.sender)
         && event.senderFrame === event.sender.mainFrame
       if (!authorized) throw new Error('Unauthorized')
       try {
         if (channel === LLM_CHANNELS.getConfiguration) return await configurationService.get()
+        if (channel === LLM_CHANNELS.getNativeLoginStatus) return await nativeLoginService.getStatus(first as LlmConsumer)
         if (channel === LLM_CHANNELS.saveProvider) return await configurationService.save(first as ProviderSettings)
         await configurationService.apply(first as LlmConsumer, second as AgentModelBinding)
         return { success: true }
       } catch (error) {
         if (channel === LLM_CHANNELS.getConfiguration) throw error
+        if (channel === LLM_CHANNELS.getNativeLoginStatus) return { status: 'unknown', checkedAt: new Date().toISOString() }
         return { success: false, error: error instanceof Error ? error.message : String(error) }
       }
     })
   }
+  ipcMain.handle(LLM_CHANNELS.startNativeLogin, async (_event, consumer: LlmConsumer) => {
+    const authorized = BrowserWindow.getAllWindows().some(window => !window.isDestroyed() && window.webContents === _event.sender)
+      && _event.senderFrame === _event.sender.mainFrame
+    if (!authorized) throw new Error('Unauthorized')
+    return startNativeLogin(consumer)
+  })
+  ipcMain.handle(LLM_CHANNELS.stopNativeLogin, async (_event, consumer: LlmConsumer) => {
+    const authorized = BrowserWindow.getAllWindows().some(window => !window.isDestroyed() && window.webContents === _event.sender)
+      && _event.senderFrame === _event.sender.mainFrame
+    if (!authorized) throw new Error('Unauthorized')
+    stopNativeLogin(consumer)
+  })
   ipcMain.handle(LLM_CHANNELS.runtimeStatus, () => refreshLlmRuntimeStatus())
   ipcMain.handle(LLM_CHANNELS.getCatalog, () => getModelCatalogService().getCatalog())
   ipcMain.handle(LLM_CHANNELS.getChatModelBudget, (_event, providerId: string, modelId: string) => llmService.getChatModelBudget(providerId, modelId))

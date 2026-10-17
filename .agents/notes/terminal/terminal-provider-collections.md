@@ -27,7 +27,7 @@
       }
     }
   },
-  "updated": "2026-10-16T16:49:11.414Z",
+  "updated": "2026-10-17T05:49:57.042Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -49,7 +49,7 @@ Applying an external selection writes its connection and model, verifies the man
 
 A per-Agent journal in `janusx/llm-connections` records original and applied fields. A bounded recovery snapshot retains pre-operation file bytes. Normal write/verification/binding failures restore the preceding bytes; native restoration removes only managed overrides and restores the original values. If managed fields changed outside JanusX, native restoration refuses to overwrite them; explicitly reapplying a channel establishes the managed values again. Channel edits and detected file drift mark external selections as needing reapplication. They do not silently rewrite running Agents.
 
-Native configuration uses the Agent's existing settings/sign-in; it does not create an OAuth session or copy subscription tokens. Start a new session after applying. Environment variables and project settings may override global configuration. Current native home overrides are respected; remote environments, routing, protocol conversion and failover belong to phase two. CPA remains responsible for accounts and quotas.
+Native configuration uses the Agent's existing settings/sign-in; it does not create an OAuth session or copy subscription tokens. Start a new session after applying. The settings surface additionally probes whether the Agent holds local credentials and, when it does not, blocks apply until the user completes the Agent's own sign-in, triggered from settings in a background PTY so the browser pops directly — ownership and token handling are unchanged; see [native login-first](./native-login-first.md). Environment variables and project settings may override global configuration. Current native home overrides are respected; remote environments, routing, protocol conversion and failover belong to phase two. CPA remains responsible for accounts and quotas.
 
 ## Migration and persistence
 

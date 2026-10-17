@@ -94,6 +94,46 @@ test('editing a shared channel marks its external Agents as needing reapplicatio
   await expect(page.getByRole('button', { name: /^Pi / })).not.toContainText('Apply needed')
 })
 
+test('native sign-in gate blocks Apply when the Agent is not signed in', async ({ page }) => {
+  await page.goto('/settings.html?tab=llm&en&login=logged-out')
+  await page.getByRole('button', { name: /^Claude / }).click()
+  await expect(page.locator('[data-state="logged-out"]')).toContainText('Not signed in')
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Apply configuration', exact: true })).toBeDisabled()
+})
+
+test('native Apply is enabled once credentials are detected', async ({ page }) => {
+  await page.goto('/settings.html?tab=llm&en&login=logged-in')
+  await page.getByRole('button', { name: /^Claude / }).click()
+  await expect(page.locator('[data-state="logged-in"]')).toContainText('Signed in')
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Apply configuration', exact: true })).toBeEnabled()
+})
+
+test('Pi stays unknown with no sign-in action and Apply remains available', async ({ page }) => {
+  await page.goto('/settings.html?tab=llm&en&login=logged-out')
+  await page.getByRole('button', { name: /^Pi / }).click()
+  await expect(page.locator('[data-state="unknown"]')).toContainText('Unknown')
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Apply configuration', exact: true })).toBeEnabled()
+})
+
+test('polling flips logged-out to signed-in and unlocks Apply', async ({ page }) => {
+  await page.goto('/settings.html?tab=llm&en&login=flip')
+  await page.getByRole('button', { name: /^Claude / }).click()
+  await expect(page.locator('[data-state="logged-out"]')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Apply configuration', exact: true })).toBeDisabled()
+  await expect(page.locator('[data-state="logged-in"]')).toBeVisible({ timeout: 8000 })
+  await expect(page.getByRole('button', { name: 'Apply configuration', exact: true })).toBeEnabled()
+})
+
+test('Sign in starts the background login for the selected Agent', async ({ page }) => {
+  await page.goto('/settings.html?tab=llm&en&login=logged-out')
+  await page.getByRole('button', { name: /^Codex / }).click()
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await expect.poll(async () => page.evaluate(() => document.documentElement.dataset.nativeLoginStart)).toBe('codex')
+})
+
 for (const theme of ['planche', 'dark']) {
   for (const width of [1280, 640]) {
     test(`LLM configuration fits ${theme} at ${width}px`, async ({ page }) => {

@@ -28,7 +28,7 @@
       }
     }
   },
-  "updated": "2026-10-16T16:49:11.414Z",
+  "updated": "2026-10-17T05:49:57.042Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -44,7 +44,7 @@ Settings opens on General: `AppSettingsModal` defaults `initialTab` to `general`
 
 LLM settings now use one shared channel catalog and independent Agent/model selections. Current storage, migration, official API presets, native configuration and connection application are owned by [the channel design](./terminal-provider-collections.md). Janus uses its own selected model for both chat and background work. An unconfigured Janus binding preserves the unconfigured behavior.
 
-Anthropic remains a first-class `anthropic` authentication type backed by the Messages API and `AnthropicAdapter`. OpenAI-compatible channels explicitly choose Chat Completions or Responses. Native official login remains owned by each external Agent, rather than a new subscription-token manager in JanusX.
+Anthropic remains a first-class `anthropic` authentication type backed by the Messages API and `AnthropicAdapter`. OpenAI-compatible channels explicitly choose Chat Completions or Responses. Native official login remains owned by each external Agent, rather than a new subscription-token manager in JanusX; the settings surface probes sign-in state and guides the user through the Agent's own login before apply — see [native login-first](./native-login-first.md).
 
 ## Alternatives considered
 

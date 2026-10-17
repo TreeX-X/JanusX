@@ -9,6 +9,7 @@ import { DEFAULT_AGENT_NOTIFICATION_SETTINGS, normalizeAgentNotificationSettings
 import type { AgentNotificationSettingsView } from '../../../src/shared/notifications'
 import type { UpdaterEvent, UpdaterState } from '../../../src/shared/ipc/updater'
 import { LLM_CONSUMERS, authTypeForProtocol, type AgentModelBinding, type LlmConfiguration, type LlmConsumer } from '../../../src/shared/llm-configuration'
+import type { NativeLoginState } from '../../../src/shared/native-login'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/styles/themes.generated.css'
 
@@ -45,6 +46,30 @@ if (params.get('tab') === 'llm') {
       return { success: true }
     },
   })
+  // Native login probe fixture: `&login=logged-in|logged-out|unknown|flip`.
+  // Default is unknown so existing native-apply scenarios stay unblocked.
+  let loginCalls = 0
+  Object.assign(window.electron.llm, {
+    getNativeLoginStatus: async (consumer: LlmConsumer): Promise<NativeLoginState> => {
+      // Mirrors the main-process probe: pi has no known credential location.
+      if (consumer === 'pi') return { status: 'unknown', checkedAt: new Date().toISOString() }
+      loginCalls += 1
+      const mode = params.get('login') || 'unknown'
+      const status = mode === 'flip' ? (loginCalls === 1 ? 'logged-out' : 'logged-in')
+        : mode === 'logged-in' || mode === 'logged-out' ? mode
+        : 'unknown'
+      return { status, checkedAt: new Date().toISOString() }
+    },
+  })
+  if (params.has('login')) {
+    Object.assign(window.electron.llm, {
+      startNativeLogin: async (consumer: LlmConsumer) => {
+        document.documentElement.dataset.nativeLoginStart = consumer
+        return { success: true }
+      },
+      stopNativeLogin: async () => undefined,
+    })
+  }
 }
 if (params.has('updater')) {
   let autoCheck = true

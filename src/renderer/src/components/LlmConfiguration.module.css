@@ -53,6 +53,16 @@
 .channelTitle strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .channelInfo > span, .channelInfo small { color: var(--shell-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.6; }
 .badge { padding: 1px 5px; border: 1px solid var(--shell-border); border-radius: 4px; color: var(--shell-muted); font-size: 10px; flex-shrink: 0; }
+/* Native login status: text + hairline badge only, no filled chips. */
+.loginStatus { display: flex; align-items: center; gap: 8px; margin: 14px 0 -2px; }
+.loginStatus .badge[data-state="logged-in"] { color: var(--status-success); border-color: var(--status-success); }
+.loginStatus .badge[data-state="logged-out"] { color: var(--status-warning); border-color: var(--status-warning); }
+.loginStatus .button { min-height: 26px; padding: 3px 10px; font-size: 11px; }
+.loginStatus .iconButton { width: 26px; min-height: 26px; }
+/* One-shot launch diagnosis: inline under the status row, auto-dismissed. */
+.loginFailure { margin: 4px 0 0; color: var(--status-danger); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.spinning { animation: login-refresh-spin 900ms linear infinite; }
+@keyframes login-refresh-spin { to { transform: rotate(360deg); } }
 .rowActions { display: flex; align-items: center; gap: 8px; }
 .editor > .link { margin-bottom: 20px; }
 .secret { display: flex; align-items: center; gap: 4px; }

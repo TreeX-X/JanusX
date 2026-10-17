@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Check, ChevronRight, Eye, EyeOff, Plus, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeft, Check, ChevronRight, Eye, EyeOff, LogIn, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import type { ProviderSettings } from '@janusx/llm-core'
 import { useI18n } from '@/i18n/useI18n'
 import { EXTERNAL_CLI_TOOL_META } from '../../../shared/ipc/external-cli'
 import { LLM_CONSUMERS, authTypeForProtocol, channelModel, channelModels, channelProtocol, supportsChannel, type AgentModelBinding, type ChannelProtocol, type LlmConfiguration, type LlmConsumer } from '../../../shared/llm-configuration'
+import { NATIVE_LOGIN_CAPABILITIES, type NativeLoginState } from '../../../shared/native-login'
 import { EXTERNAL_CLI_TOOL_ICONS } from '@/lib/cli-tool-icons'
 import { Select } from './ui/Select'
 import styles from './LlmConfiguration.module.css'
@@ -41,11 +42,83 @@ export function CliSyncSection() {
   const [notice, setNotice] = useState('')
   const [query, setQuery] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [loginState, setLoginState] = useState<NativeLoginState | null>(null)
+  const [loginChecking, setLoginChecking] = useState(false)
+  const [loginFailure, setLoginFailure] = useState('')
+  const loginPollDeadline = useRef(0)
+  const loginFailureTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const shownLaunchError = useRef('')
+  const showLoginFailure = useCallback((message: string) => {
+    setLoginFailure(message)
+    if (loginFailureTimer.current) clearTimeout(loginFailureTimer.current)
+    // Transient by design: a launch failure is a one-shot diagnosis, not
+    // panel state — it must not park itself at the top of the settings page.
+    loginFailureTimer.current = setTimeout(() => setLoginFailure(''), 15_000)
+  }, [])
+  useEffect(() => () => { if (loginFailureTimer.current) clearTimeout(loginFailureTimer.current) }, [])
   const load = useCallback(async () => { setConfig(await window.electron.llm.getConfiguration()) }, [])
   useEffect(() => { void load().catch(err => setError(String(err))) }, [load])
   const act = async (operation: () => Promise<void>) => {
     setBusy(true); setError(''); setNotice('')
     try { await operation() } catch (err) { setError(err instanceof Error ? err.message : String(err)) } finally { setBusy(false) }
+  }
+  // Native "login first": poll the Agent's credential file while a native
+  // binding is selected. The credentials file is the only success signal —
+  // ownership of the actual sign-in stays with each CLI (usually browser OAuth).
+  const nativeActive = !!config && active !== 'janus' && (drafts[active] || config.bindings[active]).mode === 'native'
+  const loginCapability = active === 'janus' ? undefined : NATIVE_LOGIN_CAPABILITIES[active].login
+  const checkLogin = useCallback(async () => {
+    setLoginChecking(true)
+    try {
+      const state = await window.electron.llm.getNativeLoginStatus(active)
+      setLoginState(state)
+      // A background login that died early (port bind, browser closed, …)
+      // surfaces once under the status row; the main process forgets it after
+      // one read, and the message auto-dismisses.
+      if (state.launchError && state.launchError !== shownLaunchError.current) {
+        shownLaunchError.current = state.launchError
+        showLoginFailure(state.launchError)
+      }
+      if (state.status === 'logged-in') { setLoginFailure(''); shownLaunchError.current = '' }
+      return state
+    } catch {
+      setLoginState({ status: 'unknown', checkedAt: '' })
+      return { status: 'unknown' as const, checkedAt: '' }
+    } finally { setLoginChecking(false) }
+  }, [active, showLoginFailure])
+  useEffect(() => {
+    if (!nativeActive) { setLoginState(null); return }
+    let disposed = false
+    loginPollDeadline.current = Date.now() + 5 * 60_000
+    const poll = async () => {
+      if (disposed) return
+      const state = await checkLogin()
+      if (disposed || state.status === 'logged-in') return
+      if (Date.now() > loginPollDeadline.current) return
+      timer = setTimeout(() => { void poll() }, 2500)
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined
+    void poll()
+    const onFocus = () => { void checkLogin() }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      disposed = true
+      if (timer) clearTimeout(timer)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [nativeActive, checkLogin])
+  const startNativeLogin = async () => {
+    if (!loginCapability) return
+    shownLaunchError.current = ''
+    setLoginFailure('')
+    await act(async () => {
+      // The CLI runs in a hidden main-process PTY and opens the browser
+      // itself; the settings page stays put and the poll flips state.
+      loginPollDeadline.current = Date.now() + 5 * 60_000
+      const result = await window.electron.llm.startNativeLogin(active)
+      if (!result.success) throw new Error(result.error || c('nativeLoginFailed'))
+      setNotice(c('nativeLoginOpened'))
+    })
   }
   if (!config) return <section className={styles.root} aria-busy={!error}>
     {error ? <><p role="alert">{error}</p><button className={styles.button} onClick={() => void act(load)}>{c('retry')}</button></> : <p>{c('loading')}</p>}
@@ -99,10 +172,23 @@ export function CliSyncSection() {
             <datalist id={'llm-models-' + active}>{selectedProvider && channelModels(selectedProvider).map(model => <option key={model} value={model}>{model + ' · ' + selectedProvider.name}</option>)}</datalist>
           </label>}
         </div>
-        <p className={styles.hint}>{selected.mode === 'native' ? c('nativeHint') : c('compatibility', { protocol: active === 'codex' ? 'Responses API' : active === 'claude' ? 'Anthropic Messages' : active === 'janus' ? 'Chat Completions / Responses / Anthropic / Vertex AI' : 'Chat Completions / Responses / Anthropic' })}</p>
+        {selected.mode === 'native' && active !== 'janus' && <div className={styles.loginStatus}>
+          <span className={styles.badge} data-state={loginState?.status || 'checking'}>
+            {!loginState ? c('nativeLoginChecking')
+              : loginState.status === 'logged-in' ? c('nativeLoggedIn')
+              : loginState.status === 'logged-out' ? c('nativeLoggedOut')
+              : c('nativeLoginUnknown')}
+          </span>
+          {loginCapability && loginState?.status === 'logged-out' && <button type="button" className={styles.button} disabled={busy} title={c('nativeLoginHint')} onClick={() => void startNativeLogin()}><LogIn size={13} />{c('nativeLogin')}</button>}
+          <button type="button" className={styles.iconButton} aria-label={c('nativeLoginRefresh')} title={c('nativeLoginRefresh')} disabled={loginChecking} onClick={() => void checkLogin()}><RefreshCw size={13} className={loginChecking ? styles.spinning : undefined} /></button>
+        </div>}
+        {selected.mode === 'native' && loginFailure && <p className={styles.loginFailure} role="status">{loginFailure}</p>}
+        <p className={styles.hint}>{selected.mode === 'native'
+          ? (loginState?.status === 'logged-out' ? c('nativeLoginHint') : c('nativeHint'))
+          : c('compatibility', { protocol: active === 'codex' ? 'Responses API' : active === 'claude' ? 'Anthropic Messages' : active === 'janus' ? 'Chat Completions / Responses / Anthropic / Vertex AI' : 'Chat Completions / Responses / Anthropic' })}</p>
         {!providers.length && <button type="button" className={styles.link} onClick={() => setView('channels')}>{c('addFirst')}<ChevronRight size={13} /></button>}
-        <div className={styles.footer}><span>{active === 'janus' ? c('internalHint') : c('restartHint')}</span>
-          <button type="button" className={styles.primary} disabled={busy || (selected.mode === 'provider' && (!selected.modelId?.trim() || !selectedProvider || !supportsChannel(active, selectedProvider)))} onClick={() => void act(async () => {
+        <div className={styles.footer}><span>{active === 'janus' ? c('internalHint') : (selected.mode === 'native' && loginState?.status === 'logged-out' ? c('nativeApplyBlocked') : c('restartHint'))}</span>
+          <button type="button" className={styles.primary} disabled={busy || (selected.mode === 'provider' && (!selected.modelId?.trim() || !selectedProvider || !supportsChannel(active, selectedProvider))) || (selected.mode === 'native' && loginState?.status === 'logged-out')} onClick={() => void act(async () => {
             const result = await window.electron.llm.applyBinding(active, selected)
             if (!result.success) throw new Error(result.error || c('applyFailed'))
             await load()

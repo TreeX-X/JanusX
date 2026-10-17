@@ -5,6 +5,7 @@
 // .agents/notes/sessions/records/external-session-transcript-backfill.md
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { resolveOpencodeDbPath } from '../sessions/opencode-store-path'
 import type { AgentHookSource } from './agent-hook-types'
 
 export type TranscriptKind = 'claude-jsonl' | 'codex-rollout' | 'janus-history' | null
@@ -123,7 +124,7 @@ export function resolveSessionStorePath(
     return join(codeHome && codeHome.length > 0 ? codeHome : join(home, '.codex'), 'sessions')
   }
   if (kind === 'opencode-sqlite') {
-    return join(env.XDG_DATA_HOME?.trim() || join(home, '.local', 'share'), 'opencode', 'opencode.db')
+    return resolveOpencodeDbPath(home, env)
   }
   if (kind === 'pi-sessions') {
     return join(home, '.pi', 'agent', 'sessions')
