@@ -1177,7 +1177,7 @@ export function Sidebar() {
                 onClick={handleAddWorkspace}
                 className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--shell-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{
-                  color: 'var(--shell-dim)',
+                  color: 'var(--shell-text)',
                 }}
                 aria-label={t('common:workspace.add')}
               >
@@ -1190,7 +1190,7 @@ export function Sidebar() {
                 aria-expanded={!sidebarCollapsed}
                 aria-controls="workspace-sidebar-content"
                 className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--shell-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
-                style={{ color: 'var(--shell-dim)' }}
+                style={{ color: 'var(--shell-text)' }}
                 aria-label={t('common:workspace.collapseAria')}
               >
                 <PanelLeftClose size={15} strokeWidth={1.6} aria-hidden="true" />
@@ -1198,10 +1198,10 @@ export function Sidebar() {
               </ThemedTooltip>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto px-1.5 py-1" onDragOverCapture={handleWorkspaceListDragOver}>
+          <div className="flex-1 min-h-0 overflow-y-auto px-1.5 py-1" onDragOverCapture={handleWorkspaceListDragOver}>
             {orderedWorkspaces.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4 opacity-30">
-                <div className="text-xs text-[var(--shell-dim)]">{t('common:workspace.empty')}</div>
+              <div className={styles.emptyState}>
+                <p>{t('common:workspace.empty')}</p>
               </div>
             ) : (
               <>

@@ -280,6 +280,9 @@
 .assistantStatus { color: var(--shell-dim); font-size: 9px; white-space: nowrap; }
 
 .messages {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-app-region: no-drag;
   display: flex;
   min-height: 0;
   flex: 1;
@@ -341,6 +344,9 @@
 }
 
 .promptBox textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-app-region: no-drag;
   flex: 1 1 auto;
   min-width: 0;
   box-sizing: border-box;

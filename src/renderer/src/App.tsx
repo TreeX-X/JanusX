@@ -49,6 +49,7 @@ import { TeamSetupGate } from '@/components/team/TeamSetupGate'
 import { FolderOpen } from 'lucide-react'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
 import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
+import styles from './App.module.css'
 
 /*-- P4: 重量级面板按需分包。蓝图画布（@xyflow）与产物工作区不进首屏 bundle，
      Suspense fallback 为 null（蓝图在翻转卡背面、产物工作区有显隐门控，无感加载）。 --*/
@@ -437,7 +438,7 @@ export default function App() {
       <Titlebar />
       <div
         ref={appGridRef}
-        className={`flex-1 grid grid-rows-[1fr_28px] overflow-hidden ${dockStyles.workbenchGrid}`}
+        className={`flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_28px] overflow-hidden ${dockStyles.workbenchGrid}`}
         data-resizing={productResizing || rightDockResizing || editorResizing}
         style={{
           gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${
@@ -448,7 +449,7 @@ export default function App() {
         <Sidebar />
 
         {/*-- 中心区域：3D 翻转容器（正面=终端，背面=蓝图） --*/}
-        <main ref={centerWorkspaceRef} className="min-w-0 overflow-hidden relative" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
+        <main ref={centerWorkspaceRef} className="min-w-0 min-h-0 overflow-hidden relative" style={{ perspective: 1500, background: 'var(--bg-deep)' }}>
           <div
             ref={flipperElRef}
             style={{
@@ -635,22 +636,21 @@ function EmptyWorkspace() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-full" style={{ background: 'var(--bg-deep)' }}>
-      {/* 细线条图标：代替大色块，保留视觉锚点 */}
-      <div className="mb-4 text-[#555]">
-        <FolderOpen size={28} strokeWidth={1.1} aria-hidden="true" />
+    <section className={styles.emptyWorkspace} aria-labelledby="empty-workspace-title">
+      <div className={styles.emptyContent}>
+        <div className={styles.emptyIcon}>
+          <FolderOpen size={28} strokeWidth={1.1} aria-hidden="true" />
+        </div>
+        <h1 id="empty-workspace-title" className={styles.emptyTitle}>{t('common:emptyWorkspace.title')}</h1>
+        <button
+          onClick={handleAdd}
+          className={styles.emptyAction}
+        >
+          <FolderOpen size={12} strokeWidth={1.5} aria-hidden="true" />
+          {t('common:emptyWorkspace.chooseFolder')}
+        </button>
+        <p className={styles.emptyHint}>{t('common:emptyWorkspace.hint')}</p>
       </div>
-      <div className="text-[13px] font-medium tracking-wide text-[#aaa]">{t('common:emptyWorkspace.title')}</div>
-      <button
-        onClick={handleAdd}
-        className="mt-3 flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[12px] cursor-pointer
-          text-[#8a8a8a] border border-[#2e2e2e] bg-transparent
-          transition-colors hover:text-[#ddd] hover:border-[#444] hover:bg-white/[0.03]"
-      >
-        <FolderOpen size={12} strokeWidth={1.5} aria-hidden="true" />
-        {t('common:emptyWorkspace.chooseFolder')}
-      </button>
-      <div className="mt-5 text-[11px] text-[#4a4a4a]">{t('common:emptyWorkspace.hint')}</div>
-    </div>
+    </section>
   )
 }

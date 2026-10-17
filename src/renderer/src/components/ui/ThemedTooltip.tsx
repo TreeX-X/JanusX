@@ -44,6 +44,7 @@ export function ThemedTooltip({
   const timerRef = useRef<number | null>(null)
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
   const [geometry, setGeometry] = useState<TipGeometry | null>(null)
+  const [armed, setArmed] = useState(false)
 
   const clearTimer = () => {
     if (timerRef.current !== null) {
@@ -54,6 +55,7 @@ export function ThemedTooltip({
 
   const hide = useCallback(() => {
     clearTimer()
+    setArmed(false)
     setAnchorRect(null)
     setGeometry(null)
   }, [])
@@ -61,6 +63,7 @@ export function ThemedTooltip({
   const show = () => {
     if (disabled || !label) return
     clearTimer()
+    setArmed(true)
     timerRef.current = window.setTimeout(() => {
       // display: contents 自身无盒，量第一个子元素
       const target = anchorRef.current?.firstElementChild ?? anchorRef.current
@@ -94,6 +97,7 @@ export function ThemedTooltip({
   }, [anchorRect, placement, label])
 
   useEffect(() => {
+    if (!armed) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') hide()
     }
@@ -107,7 +111,7 @@ export function ThemedTooltip({
       document.removeEventListener('pointerdown', hide, true)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [hide])
+  }, [armed, hide])
 
   useEffect(() => { if (disabled) hide() }, [disabled, hide])
 
