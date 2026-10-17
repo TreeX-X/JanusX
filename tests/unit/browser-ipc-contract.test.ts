@@ -45,6 +45,7 @@ beforeAll(async () => {
     embed: vi.fn(),
     setBounds: vi.fn(),
     getState: vi.fn(),
+    getHiddenFrame: vi.fn(),
     openTab: vi.fn(),
     closeTab: vi.fn(),
     activateTab: vi.fn(),
@@ -88,6 +89,7 @@ describe('Browser IPC contract', () => {
     await browserApi.embed('s1')
     await browserApi.setBounds('s1', bounds)
     await browserApi.getState('s1')
+    await browserApi.getHiddenFrame('s1')
     await browserApi.openTab('s1', 'https://a.dev')
     await browserApi.openTab('s1')
     await browserApi.closeTab('s1', 't1')
@@ -104,6 +106,7 @@ describe('Browser IPC contract', () => {
       [BROWSER_INVOKE_CHANNELS.embed, 's1'],
       [BROWSER_INVOKE_CHANNELS.setBounds, 's1', bounds],
       [BROWSER_INVOKE_CHANNELS.getState, 's1'],
+      [BROWSER_INVOKE_CHANNELS.getHiddenFrame, 's1'],
       [BROWSER_INVOKE_CHANNELS.openTab, 's1', 'https://a.dev'],
       [BROWSER_INVOKE_CHANNELS.openTab, 's1', undefined],
       [BROWSER_INVOKE_CHANNELS.closeTab, 's1', 't1'],

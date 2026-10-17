@@ -27,6 +27,7 @@ import {
 import { CLITerminal } from './CLITerminal'
 import { TurnChangeIsland } from './TurnChangeIsland'
 import { HoldToConfirm } from './ui/HoldToConfirm'
+import { useBrowserOcclusion } from '@/hooks/useBrowserOcclusion'
 import { useI18n } from '@/i18n/useI18n'
 import { getContextPopoverPosition, type PopoverAnchorRect, type PopoverSize } from './context-popover-position'
 import {
@@ -303,6 +304,10 @@ function TerminalPresetCapsule({
   // renderPanel 滞后于 open：关闭时先播收回动画再卸载；exiting 期间仍按旧锚点定位
   const [renderPanel, setRenderPanel] = useState(false)
   const [exiting, setExiting] = useState(false)
+  // 浮层 portal 到 body 后与原生网页（CPA / 浏览器）的视图矩形相交时会被盖住——
+  // WebContentsView 永远在 DOM 之上。按既有对话框/工具箱同一套让位规则持租约，
+  // 覆盖整个 renderPanel 生命周期（含收回动画），原生视图让位后菜单可点。
+  useBrowserOcclusion(renderPanel)
   // planche 下预设菜单走纸面 + 朱红，悬浮不再是深棕黑底
   const plancheMenu = useThemeStore((s) => s.theme) === 'planche'
   const { t } = useI18n('terminal')

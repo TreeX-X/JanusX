@@ -28,6 +28,8 @@ interface BrowserSurface {
   standaloneWindow: BrowserWindow | null
   agentControlled: boolean
   options: BrowserSurfaceOptions
+  /*-- 让位瞬间的冻结帧：detach 前 capturePage 的进行中结果，getHiddenFrame 等它 --*/
+  hiddenFrame: Promise<string | null> | null
 }
 
 /** Host-owned profile, never accepted from the browser IPC request. */
@@ -86,6 +88,7 @@ export class BrowserSurfaceManager {
       standaloneWindow: null,
       agentControlled: false,
       options,
+      hiddenFrame: null,
     }
     this.surfaces.set(surface.surfaceId, surface)
 
@@ -171,8 +174,28 @@ export class BrowserSurfaceManager {
   setBounds(surfaceId: string, bounds: BrowserBounds): void {
     const surface = this.surfaces.get(surfaceId)
     if (!surface) return
+    /*-- 从可见转为让位的瞬间：detach 前抓住当前帧，让渲染层以冻结帧替代黑屏空场 --*/
+    const wasVisible = Boolean(surface.bounds && surface.bounds.width > 0 && surface.bounds.height > 0)
+    const willHide = !(bounds.width > 0 && bounds.height > 0)
+    if (wasVisible && willHide && !surface.hiddenFrame) {
+      const tab = surface.activeTabId ? surface.tabs.get(surface.activeTabId) ?? null : null
+      if (tab) {
+        surface.hiddenFrame = tab.view.webContents.capturePage()
+          .then((image) => (image.isEmpty() ? null : image.toJPEG(72)))
+          .then((bytes) => (bytes ? `data:image/jpeg;base64,${bytes.toString('base64')}` : null))
+          .catch(() => null)
+      }
+    } else if (!wasVisible && !willHide) {
+      /*-- 回到可见后冻结帧作废，下次让位重新抓 --*/
+      surface.hiddenFrame = null
+    }
     surface.bounds = bounds
     this.attachActiveTab(surface)
+  }
+
+  async getHiddenFrame(surfaceId: string): Promise<string | null> {
+    const frame = this.surfaces.get(surfaceId)?.hiddenFrame
+    return frame ? await frame : null
   }
 
   getState(surfaceId: string): BrowserSurfaceState | null {

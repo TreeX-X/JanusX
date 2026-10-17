@@ -26,6 +26,10 @@ export function getBrowserSurfaceState(surfaceId: string) {
   return window.electron.browser.getState(surfaceId)
 }
 
+export function getBrowserHiddenFrame(surfaceId: string) {
+  return window.electron.browser.getHiddenFrame(surfaceId)
+}
+
 export function openBrowserTab(surfaceId: string, url?: string) {
   return window.electron.browser.openTab(surfaceId, url)
 }

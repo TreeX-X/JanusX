@@ -43,6 +43,7 @@ export function registerBrowserHandlers(
     surfaces.setBounds(surfaceId, bounds),
   )
   ipcMain.handle(BROWSER_INVOKE_CHANNELS.getState, (_event, surfaceId: string) => surfaces.getState(surfaceId))
+  ipcMain.handle(BROWSER_INVOKE_CHANNELS.getHiddenFrame, (_event, surfaceId: string) => surfaces.getHiddenFrame(surfaceId))
   ipcMain.handle(BROWSER_INVOKE_CHANNELS.openTab, (_event, surfaceId: string, url?: string) =>
     surfaces.openTab(surfaceId, url),
   )

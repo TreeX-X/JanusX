@@ -10,6 +10,10 @@ const h = vi.hoisted(() => {
     reload = vi.fn()
     close = vi.fn()
     setWindowOpenHandler = vi.fn()
+    capturePage = vi.fn(async () => ({
+      isEmpty: () => false,
+      toJPEG: () => Buffer.from('fake-jpeg'),
+    }))
     getURL = vi.fn(() => 'https://example.com/')
     getTitle = vi.fn(() => 'Example')
     isLoading = vi.fn(() => false)
@@ -174,6 +178,29 @@ describe('BrowserSurfaceManager', () => {
       partition: 'persist:janusx-cpa-test', nodeIntegration: false,
       contextIsolation: true, sandbox: true, webSecurity: true,
     } })
+  })
+
+  it('freezes one frame per yield and drops it once the view is visible again', async () => {
+    manager.createSurface({ surfaceId: 's1', carrier: 'pane', url: 'http://localhost:3000' })
+    const view = h.MockWebContentsView.instances[0]
+    view.webContents.getURL.mockReturnValue('http://localhost:3000')
+    manager.setBounds('s1', { x: 10, y: 80, width: 900, height: 600 })
+    expect(mainWindow.contentView.children).toEqual([view])
+    expect(view.webContents.capturePage).not.toHaveBeenCalled()
+
+    // Yielding to an overlay captures exactly once, even across repeated zero reports.
+    manager.setBounds('s1', { x: 0, y: 0, width: 0, height: 0 })
+    expect(mainWindow.contentView.children).toHaveLength(0)
+    manager.setBounds('s1', { x: 0, y: 0, width: 0, height: 0 })
+    expect(view.webContents.capturePage).toHaveBeenCalledTimes(1)
+    expect(await manager.getHiddenFrame('s1')).toMatch(/^data:image\/jpeg;base64,/)
+
+    // Back to visible invalidates the frame; the next yield captures fresh.
+    manager.setBounds('s1', { x: 10, y: 80, width: 900, height: 600 })
+    manager.setBounds('s1', { x: 0, y: 0, width: 0, height: 0 })
+    expect(view.webContents.capturePage).toHaveBeenCalledTimes(2)
+    expect(await manager.getHiddenFrame('s1')).toMatch(/^data:image\/jpeg;base64,/)
+    expect(await manager.getHiddenFrame('missing')).toBeNull()
   })
 
   it('restricts service navigation and popups to web pages without changing ordinary browser behavior', () => {

@@ -5,6 +5,7 @@ export const BROWSER_INVOKE_CHANNELS = {
   embed: 'browser:surface:embed',
   setBounds: 'browser:surface:set-bounds',
   getState: 'browser:surface:get-state',
+  getHiddenFrame: 'browser:surface:hidden-frame',
   openTab: 'browser:tab:open',
   closeTab: 'browser:tab:close',
   activateTab: 'browser:tab:activate',
@@ -70,6 +71,8 @@ export interface BrowserAPI {
   embed(surfaceId: string): Promise<BrowserResult<{ surfaceId: string }>>
   setBounds(surfaceId: string, bounds: BrowserBounds): Promise<void>
   getState(surfaceId: string): Promise<BrowserSurfaceState | null>
+  /** 原生视图让位瞬间的冻结帧（data URL）；无帧或 surface 不存在返回 null。 */
+  getHiddenFrame(surfaceId: string): Promise<string | null>
   openTab(surfaceId: string, url?: string): Promise<BrowserResult<{ tabId: string }>>
   closeTab(surfaceId: string, tabId: string): Promise<void>
   activateTab(surfaceId: string, tabId: string): Promise<void>

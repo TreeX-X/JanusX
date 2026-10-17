@@ -125,6 +125,7 @@ export function installElectronApiFallback(): void {
       embed: unavailable,
       setBounds: unavailable,
       getState: () => Promise.resolve(null),
+      getHiddenFrame: () => Promise.resolve(null),
       openTab: unavailable,
       closeTab: unavailable,
       activateTab: unavailable,

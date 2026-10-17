@@ -170,6 +170,7 @@ const browserAPI: BrowserAPI = {
   embed: (surfaceId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.embed, surfaceId),
   setBounds: (surfaceId, bounds) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.setBounds, surfaceId, bounds),
   getState: (surfaceId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.getState, surfaceId),
+  getHiddenFrame: (surfaceId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.getHiddenFrame, surfaceId),
   openTab: (surfaceId, url) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.openTab, surfaceId, url),
   closeTab: (surfaceId, tabId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.closeTab, surfaceId, tabId),
   activateTab: (surfaceId, tabId) => ipcRenderer.invoke(BROWSER_INVOKE_CHANNELS.activateTab, surfaceId, tabId),

@@ -24,6 +24,7 @@ import { isBrowserStartPageUrl } from '../../../../shared/browser-url'
 import {
   activateBrowserTab,
   closeBrowserTab,
+  getBrowserHiddenFrame,
   getBrowserSurfaceState,
   navigateBrowserTab,
   browserTabGoBack,
@@ -67,6 +68,7 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
   const dialogOpen = useBrowserOcclusionStore((s) => s.count > 0)
   const workbenchCovered = useAppStore((s) => s.activeWorkbench !== null || s.blueprintMode || s.isIslandDragging)
   const [missing, setMissing] = useState(false)
+  const [frozenFrame, setFrozenFrame] = useState<string | null>(null)
   const [addressDraft, setAddressDraft] = useState('')
   const [addressFocused, setAddressFocused] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -141,6 +143,22 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
       }
     }
   }, [surfaceId, effectiveVisible, carrier, activeTab?.tabId])
+
+  /*-- 让位瞬间以冻结帧顶替原生视图：DOM 叠层（工具菜单、对话框）压住网页时，
+      空场不再是一整块黑屏，而是页面的最后一帧。回到可见后丢弃。 --*/
+  useEffect(() => {
+    if (effectiveVisible) {
+      setFrozenFrame(null)
+      return
+    }
+    let disposed = false
+    void getBrowserHiddenFrame(surfaceId).then((frame) => {
+      if (!disposed && frame) setFrozenFrame(frame)
+    })
+    return () => {
+      disposed = true
+    }
+  }, [surfaceId, effectiveVisible])
 
   /*-- 地址栏草稿：未聚焦时跟随活动 tab 的 URL --*/
   useEffect(() => {
@@ -234,6 +252,10 @@ export function BrowserSurface({ surfaceId, carrier, visible, onRequestPopOut, o
       </div>}
 
       <div ref={bodyRef} className={styles.body}>
+        {/*-- 冻结帧只补"本该显示网页"的空场：起始页 / 无 tab / 加载失败各有自己的 DOM，不盖 --*/}
+        {!effectiveVisible && frozenFrame && !showStartPage && !isEmpty && !activeTab?.loadError && (
+          <img className={styles.frozen} src={frozenFrame} alt="" data-browser-frozen="true" />
+        )}
         {showStartPage && <div className={styles.empty} data-browser-start-page="true">
           <Globe size={32} strokeWidth={1.2} className={styles.emptyIcon} aria-hidden="true" />
           <h2>{t('common:browser.startTitle')}</h2>
