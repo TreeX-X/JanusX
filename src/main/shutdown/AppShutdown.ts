@@ -14,6 +14,7 @@ export interface AppShutdownDeps {
   stopHookBridge?: ShutdownStep
   stopCompanion?: ShutdownStep
   killTerminals?: ShutdownStep
+  stopRuntimeTelemetry?: ShutdownStep
   killAgents?: ShutdownStep
   stopProjects?: ShutdownStep
   stopLanguageServices?: ShutdownStep
@@ -108,6 +109,7 @@ export class AppShutdown {
       ['stopHookBridge', this.deps.stopHookBridge],
       ['stopCompanion', this.deps.stopCompanion],
       ['killTerminals', this.deps.killTerminals],
+      ['stopRuntimeTelemetry', this.deps.stopRuntimeTelemetry],
       ['finalizePendingCheckpoints', this.deps.finalizePendingCheckpoints],
       ['flushAgentSessions', this.deps.flushAgentSessions],
       ['stopOfficeWatches', this.deps.stopOfficeWatches],

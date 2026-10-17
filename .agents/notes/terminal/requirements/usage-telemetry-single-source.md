@@ -8,7 +8,7 @@
   "class": "feature",
   "tags": ["telemetry","usage-stats","terminal","session-files"],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/61b5d05c-e1ad-4f7a-a3e9-57982fb78c4e",
-  "updated": "2026-10-15T03:06:00Z",
+  "updated": "2026-10-17T02:14:55Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -73,7 +73,7 @@
 |---|---|---|
 | claude | JSONL 逐消息 usage | 全量读取完成的 assistant 响应，按 message.id（缺失时 requestId）去重；行 uuid 不作请求身份；上下文取最近有效请求输入 |
 | codex | token_count 的 last/total usage | total 使用持久基线差分，首次只建基线；缓存从含缓存 input 中扣除一次；源替换、截断或旧前缀改写时暂停 |
-| opencode | opencode.db 的 session 累计和最近 assistant tokens | 只读事务保证同次读取一致；session 累计使用持久差分；已核对本机原生 schema，尚不覆盖所有 CLI 版本 |
+| opencode | opencode.db 的 assistant 消息用量；v2 同时读取 compaction | 全历史按原生 message id 和完成时间导入，推理计入输出；流式未完成消息重试，原有累计会话保持模式锁，只记后续差分 |
 | pi | JSONL 消息及 id/parentId 分支结构 | 消耗导入所有分支，按 entry.id 加 timestamp 去重；上下文取活跃叶路径最新 assistant 请求的 input 加缓存，标估算 |
 | janus | 已接入历史只存消息与工具轨迹，无 usage | 找到并验证原生用量落盘点，否则未知 |
 | dsh | session.v4.jsonl.zstd，当前只定位不解码 | 解码器加真实样本，并验证用量字段，否则未知 |
@@ -89,6 +89,24 @@ Codex 本机原生 `total_token_usage` 已提供 `cache_write_input_tokens`。�
 Claude 的 `cache_creation_input_tokens` 原已接入，本轮补充正数/零/缺失回归并修正整段缺失被投影成 0 的情况。近期完整日志使用 `mimo-v2.6-pro`、`step-5-preview`，原生写入均缺失或为零，缓存读取为正；不从读取反推写入。
 
 验证：`npx vitest run tests/unit/runtime-telemetry-history.test.ts tests/unit/runtime-telemetry-corpus-scan.test.ts tests/unit/runtime-telemetry-accounting.test.ts tests/unit/usage-ledger.test.ts tests/unit/runtime-telemetry-coordinator.test.ts tests/unit/usage-stats.test.ts --maxWorkers=2 --reporter=dot`，6 文件 81 项通过；遥测三文件定向 ESLint、普通类型检查通过。真实日志只读核验（临时账本）：5 个近期 Codex 会话均满足事件写入之和等于累计写入、事件总量之和等于累计总量，且输入/读/写/输出守恒；3 个近期 Claude 会话解析写入为 0，与源一致。未运行 live Electron 验证。全项目 `typecheck:strict-unused` 被其他文件的 3 个未使用变量错误阻塞（TerminalManagerPanel 的 useEffect/load、workspace 的 getBrowserPaneContent），未改动这些文件。
+
+### OpenCode 全历史与费用估算（2026-10-17）
+
+漏统断点是全语料扫描未枚举 SQLite，且 pty 相关归属不支持 OpenCode。参考 [magpie 的原生读取](https://github.com/yetone/magpie/blob/8bb9375e745845ee8520c1045ee25516e6a023c5/internal/sessions/opencode.go)及[逐请求统计](https://github.com/yetone/magpie/blob/8bb9375e745845ee8520c1045ee25516e6a023c5/internal/sessions/calls_opencode.go)，`opencode-source.ts` 只读投影消息的 tokens、模型及时间，不把消息正文传入统计。v1 读取 message，v2 读取 session_message 的 assistant/compaction；迁移时已复制会话优先 v2，kv 标记迁移完成后忽略遗留 v1 表。子会话独立导入，不加回父会话。输入、缓存读、缓存写为互斥计数，输出包含 reasoning；只导入有完成时间且有消耗的稳定消息。每条消息用原生 id 去重，不从 session 总数反推历史请求日期。
+
+全扫描先处理 OpenCode，再处理 JSONL 引擎；每个会话之间让出事件循环，沿用启动 20 秒后及每 5 分钟扫描。暂未为 SQLite 增加持久增量游标，每次按会话重读用量字段。终端自动归属使用同一数据库的 directory/time_updated，与 pty 活跃窗口匹配，唯一候选才绑定。统计、会话发现、恢复和知识转录回补共用数据库路径解析：OPENCODE_DB 的绝对路径优先，相对路径在 XDG_DATA_HOME/opencode（默认 ~/.local/share/opencode）下；:memory: 不作磁盘路径。已存在累计基线的会话继续原生 session 累计差分，避免历史双计；其旧覆盖起点和采样时间口径不改写。OpenCode v2 的转录详情渲染未在本次扩展。
+
+用量页从持久账本投影参考费用，不把计算金额写回原始 token 记录。模型精确或高置信匹配当前目录，按新鲜输入、输出、缓存读、缓存写分别计价。在总用量旁以一行「预估费用 + USD 金额」展示，保留小图标更新价格；不再另设费用面板、分项表格或长说明。计价覆盖率、缺价和更新失败状态仅通过金额的简短提示展示。请求级事件可按含缓存的 prompt 选择 min_prompt_tokens 阶梯，累计采样缺少请求拆分时不猜阶梯。不同 TTL 的缓存写入或独立推理价格缺少用量拆分时，相应部分保持未计价；未知模型/价格显示「–」，真实零价保留。图片、音频、搜索附加费未估算，当前目录也不能还原历史账单。
+
+验证：遥测、费用、账本与设置加载相关 12 文件 127 项通过；费用五项覆盖缓存拆分、零价/缺失、阶梯、TTL/推理限制、筛选与去重。Playwright `usage-cost.spec.ts` 与 `usage-stats.spec.ts` 共 6 项通过，包含双主题、390px 布局、引擎筛选、价格刷新及原有趋势交互。严格类型与语言键检查通过。真实 OpenCode 数据库只读核验以临时账本导入 545 会话、43,539 条有消耗请求，共 8,192,796,763 tokens；四分项分别与源 SQL 求和相等，复扫记录数及总数不变，源文件 size/mtime 未变，零 issue。证据在 `artifacts/opencode-usage-verification.json`；截图在 `artifacts/usage-cost/`。未运行真实 Electron 终端交互，v2 兼容由 fixture 验证。
+
+### 费用零值修复与紧凑展示（2026-10-17）
+
+真实 dev 账本的当日 Codex 事件缺少 model，导致用量存在但目录无法匹配价格。`collectCodexEvents` 按文件顺序读取前置 `turn_context.payload.model`，切换模型只影响后续事件，缺失模型不沿用旧值。账本保存原生 eventId；重放旧事件时，仅补齐会话、事件时间、全部 token 分项唯一匹配记录的空模型，不覆盖已知模型或重记消耗。`codexEventModels` 版本标记使旧 Codex 事件文件即使大小不变也重读一次，随后恢复字节游标跳过。累计模式锁与异常暂停保持原口径。
+
+实际只读源验证使用 SQLite backup 的临时副本，重放其中 2 个 Codex 会话已入账的 191 个源事件。当日 155 条记录全部补齐模型，20,403,333 tokens 不变，金额从 $0 恢复为 $7.1691381；记录 id、日期和各 token 分项保持相同。证据为 `artifacts/usage-cost/codex-model-repair.json`；未写入运行实例的账本，更新主进程后由正常扫描自动回补。
+
+本次验证：`runtime-telemetry-accounting`、`runtime-telemetry-corpus-scan`、`usage-ledger`、`usage-cost`、`usage-stats-loading` 五个单测文件 58 项通过，覆盖模型切换、旧记录唯一匹配、重复回放、缓存写入同步升级及歧义保留。`usage-cost.spec.ts` 与 `usage-stats.spec.ts` 六项 Playwright island 测试通过，双主题及 390/480px 窗口无页面溢出，费用行不超过 24px；截图位于 `artifacts/usage-cost/` 和 `artifacts/usage-stats-narrow.png`。严格类型、语言键、构建检查通过；Notes 校验为 315 篇、0 错误及 17 条既有外链诊断。定向源 ESLint 无错误，UsageStatsPanel 的 customRange effect 依赖提示为既有告警。未运行 live Electron 交互。
 
 ### Codex 绑定实证（2026-10-14，用户 dev 实例）
 
@@ -136,11 +154,17 @@ Out of scope：DSH 解码、Janus 新增用量落盘协议、费用定价、无�
 
 coordinator 在主进程跟踪终端，hook 触发刷新，10 秒轮询补偿漏事件；同终端读数串行，读数未完成时不叠加周期任务。renderer 只订阅上下文、查询账本。异步读取后复核同一绑定对象，拒绝换绑或解绑后的结果；退出时先停轮询，再尝试最后一次采集并解除原绑定。精确绑定不以新终端 `startedAt` 过滤原生历史，恢复同一会话沿用原基线。事件源可补原生历史；累计源只能保留离线区间和采样增量，不能还原区间内每次请求。
 
-`usage-ledger.ts` 使用 SQLite WAL、synchronous FULL、busy_timeout 3000ms；`BEGIN IMMEDIATE` 将会话基线、事件身份和增量记录作为一次原子提交，并处理跨进程写入互斥。写入失败回滚，保留旧基线供重试；损坏或未来版本显式报错，保留原数据库。相同事件源重放可幂等校验，但账本损坏后不自动重建；累计源无法重建已经丢失的采样时间分布。异常会话与读写错误在统计页提示，正常重试可清除暂时不可用状态，源改写或计数回落的暂停不自动解除。
+`usage-ledger.ts` 使用 SQLite WAL、synchronous FULL、busy_timeout 100ms；复用连接并在关闭或 profile 路径变化时释放，仅新库在事务内初始化 schema/version，普通查询不写版本或反复创建 WAL/SHM。`BEGIN IMMEDIATE` 将会话基线、事件身份和增量记录作为一次原子提交，并处理跨进程写入互斥。查询或写入失败回滚，保留旧基线供重试；较短锁等待限制单次主线程停顿，持续争锁会延后采集。损坏或未来版本显式报错，保留原数据库。相同事件源重放可幂等校验，但账本损坏后不自动重建；累计源无法重建已经丢失的采样时间分布。异常会话与读写错误在统计页提示，正常重试可清除暂时不可用状态，源改写或计数回落的暂停不自动解除。
+
+绑定会话最多缓存 128 份成功投影，不缓存 JSONL 或 usageObservation。键包含引擎、绑定、cwd 和自定义 Codex home；命中前异步 stat 核对文件身份、大小、mtime 与 ctime，最长 30 秒强制全文复核，异常或重绑失效。源变化仍执行完整 JSON 校验、精确压缩计数和累计前缀哈希验证。后台语料扫描不重叠，在文件间让出事件循环并支持取消；累计模式预读保留实际文件身份与完整行字节，半写尾行不进入前缀哈希。应用退出在终端停止后取消扫描及采集定时器，清缓存排入最终采集，等待在途读取再关账本。版本对比、压力数据与验收边界见[长时间使用性能分析](../../workbench/long-session-performance.md)。
 
 2026-10-14 用户要求下的偏离：**Codex 的 issue 会话不再触发统计页的“用量尚不完整”提示**。理由是本机 24 个 codex 暂停会话全部源于压缩后累计计数器重置（实测回落点≈上下文窗口值），属已知 CLI 行为而非数据损坏，提示只是噪音；提示对 codex Filter 与“全部”视图均屏蔽，其他引擎的缺口照常提示。会话本身仍处于暂停状态（压缩后消耗不入账），界面不再可见该信号——若后续要把这部分消耗补上，需要识别重置并重新建立基线，属账本正确性扩展而非展示问题。
 
 ### 时间、模型与展示
+
+2026-10-16：设置用量页采用轻分隔线、紧凑日期分段控件和数字优先的汇总布局，保留原有输入/输出配色与趋势交互。`UsageHeatmap` 通过同一账本接口独立查询最近 365 个本地自然日，以日 token 总数生成周日开头的 53 列日历；首尾补位不可交互，日期递增采用日历运算以适应夏令时。热力图跟随终端类型筛选，今日/本周/本月/自定义只控制原汇总和趋势。五档绿阶以当前筛选的单日峰值线性分级，跨引擎颜色深浅不表示固定相同 token 阈值。悬停、聚焦和方向键可查看日期及精确 token 数；窄面板仅日历内部横向滚动，首次加载后定位到最近日期。
+
+年度视图每 60 秒刷新，查询范围保持在 IPC 的 367 天限制内，沿用 2000 条分页与客户端 100 页上限；超限或读取失败保留上一份完整日历并提示失败，不发布部分年度总量。类型切换期间保留旧图并标记 busy/降透明度，异步结果取消标志阻止旧引擎覆盖新筛选。色块只描述账本已记录消耗，空白日期不证明源用量完整。聚合边界见 `tests/unit/usage-heatmap.test.ts`；筛选、年度历史、键盘及宽窄/明暗布局见 `tests/e2e/usage-stats.spec.ts`；加载保留、失败恢复见 `tests/unit/usage-stats-loading.test.ts`。
 
 有可靠请求时间的事件按该时间归桶；只有累计采样差分的记录保留上次/本次采集区间，以采集确认时间归桶。按用户要求，时间口径说明仅保留在开发文档，不在用量统计界面展示。跨午夜、长时间离线及首次观察的历史差额不能宣称精确发生在发现时刻，不按比例虚构请求时间。`observedAt`、请求时间与采集时间分开；文件增长检测结合 size/源版本，mtime 不单独决定新旧。
 

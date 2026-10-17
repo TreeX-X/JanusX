@@ -23,6 +23,8 @@ import { EXTERNAL_CLI_TOOL_ICONS } from '@/lib/cli-tool-icons'
 import { getThemeDefinition } from '../../../shared/theme/registry'
 import llmStyles from './LlmConfigModal.module.css'
 import styles from './UsageStatsPanel.module.css'
+import { UsageHeatmap } from './UsageHeatmap'
+import { UsageCostPanel } from './UsageCostPanel'
 
 const RANGES: UsageRange[] = ['today', 'week', 'month', 'custom']
 const RANGE_KEYS = { today: 'rangeToday', week: 'rangeWeek', month: 'rangeMonth', custom: 'rangeCustom' } as const
@@ -365,7 +367,7 @@ export function UsageStatsPanel() {
   const [ledger, setLedger] = useState<UsageLedgerPage>({ records: [], sessions: [] })
   const [refreshing, setRefreshing] = useState(false)
   /** Aggregates of the last data that answered a query key, shown while a new key loads. */
-  const [settled, setSettled] = useState<{ key: string; view: ReturnType<typeof aggregateUsageStats> } | null>(null)
+  const [settled, setSettled] = useState<{ key: string; view: ReturnType<typeof aggregateUsageStats>; records: UsageLedgerPage['records'] } | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
@@ -414,7 +416,7 @@ export function UsageStatsPanel() {
       setLedger(result)
       // Snapshot the aggregates this data answers, so a later filter change
       // can keep showing them until its own data lands.
-      setSettled({ key, view: aggregateUsageStats(result.records, range, now, engine, customRange) })
+      setSettled({ key, view: aggregateUsageStats(result.records, range, now, engine, customRange), records: result.records })
       setLoadError(Boolean(result.warning))
     }).catch(() => { if (!cancelled) setLoadError(true) })
       .finally(() => { if (!cancelled) setRefreshing(false) })
@@ -457,7 +459,7 @@ export function UsageStatsPanel() {
           <p className={styles.subtitle}>{t('settings:usageStats.subtitle')}</p>
         </div>
       </div>
-      <div className={styles.tabRow} role="group" aria-label={t('settings:usageStats.timeRange')}>
+      <div className={styles.rangeRow} role="group" aria-label={t('settings:usageStats.timeRange')}>
         {RANGES.map((candidate) => <button key={candidate} type="button" className={`${styles.tab} ${candidate === range ? styles.tabActive : ''}`} aria-pressed={candidate === range} onClick={() => setRange(candidate)}>{t(`settings:usageStats.${RANGE_KEYS[candidate]}`)}</button>)}
       </div>
       {range === 'custom' && (
@@ -494,6 +496,7 @@ export function UsageStatsPanel() {
           <div className={styles.summaryInfo}>
             <span className={styles.label}>{t('settings:usageStats.total')}</span>
             <div className={styles.value} data-testid="usage-total">{unavailableEngine ? '–' : formatCount(animatedTotal)}<small>tokens</small></div>
+            <UsageCostPanel records={settled?.records ?? ledger.records} start={view.rangeStart} end={view.rangeEnd} engine={view.rows.length === 1 ? view.rows[0].preset : undefined} />
             <div className={styles.legend}>{view.rows.map((row) => <span key={row.preset}><i style={{ background: presetColor(row.preset) }} />{presetName(row.preset)} <strong>{view.totalTokens > 0 ? Math.round(row.totalTokens / view.totalTokens * 100) : 0}%</strong></span>)}</div>
           </div>
         </div>
@@ -521,6 +524,7 @@ export function UsageStatsPanel() {
           <div className={styles.legend}>{cache.hasData ? <><span><i style={{ background: hitColor }} />{t('settings:usageStats.hit')} <strong>{formatCount(cache.hits)}</strong></span><span><i style={{ background: missColor }} />{t('settings:usageStats.miss')} <strong>{formatCount(cache.misses)}</strong></span></> : t('settings:usageStats.noCacheData')}</div>
         </div>
       </div>
+      <UsageHeatmap engine={activeType === 'all' ? undefined : activeType} />
       <div className={`${styles.trendSection}${refreshing ? ' ' + styles.dimmed : ''}`}>
         <div className={styles.toolbar}><h4 className={styles.title}>{t('settings:usageStats.trend')}</h4><span className={styles.label}>tokens{trendBucketHint ? ` · ${trendBucketHint}` : ''}</span></div>
         <p className={styles.hint}>{t('settings:usageStats.ledgerUnavailable')}</p>

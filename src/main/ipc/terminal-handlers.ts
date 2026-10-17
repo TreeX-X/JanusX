@@ -648,6 +648,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   // Register terminal/hook cleanup into the unified shutdown path.
   // Window close without full quit still needs local cleanup.
   appShutdown.configure({
+    stopRuntimeTelemetry: () => terminalContextCoordinator.shutdown(),
     finalizePendingCheckpoints: () => finalizePendingTerminalCheckpoints(),
     flushAgentSessions: () => agentSessionRegistry.flush(),
     stopHookBridge: () => hookBridge.stop(),

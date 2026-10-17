@@ -6,6 +6,12 @@ import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
 import { UsageLedger } from '../../src/main/runtime-telemetry/usage-ledger'
 import type { UsageObservation, UsageTokens } from '../../src/shared/usage'
+const openLedgers: InstanceType<typeof UsageLedger>[] = []
+function createLedger(...args: ConstructorParameters<typeof UsageLedger>) {
+  const value = new UsageLedger(...args)
+  openLedgers.push(value)
+  return value
+}
 
 let directory: string
 let file: string
@@ -15,10 +21,61 @@ const sample = (at: number, input: number, sessionId = 's1'): UsageObservation =
 const events = (at: number, sessionId = 's1'): UsageObservation => ({ engine: 'claude', namespace: '/native', sessionId, collectedAt: at, mode: 'events', events: [{ ...counts(10, 5), id: 'response-1', at: 1000, model: 'm1' }] })
 const all = () => ledger.list({ start: 0, end: 20_000 })
 
-beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'janusx-usage-ledger-')); file = join(directory, 'usage.sqlite'); ledger = new UsageLedger(() => file) })
-afterEach(async () => { await rm(directory, { recursive: true, force: true }) })
+beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'janusx-usage-ledger-')); file = join(directory, 'usage.sqlite'); ledger = createLedger(() => file) })
+afterEach(async () => { for (const value of openLedgers.splice(0)) value.close(); await rm(directory, { recursive: true, force: true }) })
 
 describe('persistent native usage accounting', () => {
+  it('enriches a source-matched legacy model without changing ids, dates, tokens or known models', () => {
+    const observation: UsageObservation = { ...events(2000), engine: 'codex', events: [{ ...counts(10, 5), id: 'response-1', at: 1000 }] }
+    ledger.record(observation)
+    // Older records had no native event linkage.
+    const database = new DatabaseSync(file)
+    database.exec("UPDATE records SET data=json_remove(data,'$.eventId')")
+    database.close()
+    const before = all().records[0]
+    ledger.record({ ...observation, collectedAt: 3000, events: [{ ...observation.events![0], model: 'model-a' }] })
+    expect(all().records).toEqual([{ ...before, model: 'model-a', eventId: 'response-1' }])
+    ledger.record({ ...observation, collectedAt: 4000, events: [{ ...observation.events![0], model: 'model-b' }] })
+    expect(all().records).toEqual([{ ...before, model: 'model-a', eventId: 'response-1' }])
+  })
+  it('does not guess model ownership for ambiguous legacy records or mismatched token counts', () => {
+    const observation: UsageObservation = { ...events(2000), engine: 'codex', events: [
+      { ...counts(10), id: 'a', at: 1000, model: 'known' }, { ...counts(10), id: 'b', at: 1000 },
+    ] }
+    ledger.record(observation)
+    const database = new DatabaseSync(file)
+    database.exec("UPDATE records SET data=json_remove(data,'$.eventId')")
+    database.close()
+    const before = all().records
+    ledger.record({ ...observation, collectedAt: 3000, events: [{ ...counts(10), id: 'a', at: 1000, model: 'candidate' }] })
+    expect(all().records).toEqual(before)
+    ledger.record({ ...observation, collectedAt: 4000, events: [{ ...counts(20), id: 'b', at: 1000, model: 'candidate' }] })
+    expect(all().records).toEqual(before)
+    expect(all().hasIssues).toBe(true)
+  })
+  it('adds models during a simultaneous legacy Codex cache-write upgrade', () => {
+    ledger.record({ ...events(2000), engine: 'codex', events: [{ ...counts(10, 5), id: 'a', at: 1000 }] })
+    const before = all().records[0]
+    ledger.record({ ...events(3000), engine: 'codex', events: [{ ...counts(3, 5), cacheWriteTokens: 7, totalTokens: 15, id: 'a', at: 1000, model: 'model-a' }] })
+    expect(all().records).toEqual([{ ...before, inputTokens: 3, cacheWriteTokens: 7, model: 'model-a' }])
+    expect(all().hasIssues).toBe(false)
+  })
+  it('keeps ambiguous models unknown across successive legacy cache-write upgrades', () => {
+    ledger.record({ ...events(2000), engine: 'codex', events: [
+      { ...counts(10, 5), id: 'a', at: 1000 }, { ...counts(10, 5), id: 'b', at: 1000 },
+    ] })
+    const database = new DatabaseSync(file)
+    database.exec("UPDATE records SET data=json_remove(data,'$.eventId')")
+    database.close()
+    const replay: UsageObservation = { ...events(3000), engine: 'codex', events: [
+      { ...counts(3, 5), cacheWriteTokens: 7, totalTokens: 15, id: 'a', at: 1000, model: 'model-a' },
+      { ...counts(3, 5), cacheWriteTokens: 7, totalTokens: 15, id: 'b', at: 1000, model: 'model-b' },
+    ] }
+    ledger.record(replay)
+    ledger.record({ ...replay, collectedAt: 4000 })
+    expect(all().records.map(row => row.model)).toEqual([undefined, undefined])
+    expect(all().records.map(row => [row.inputTokens, row.cacheWriteTokens, row.totalTokens])).toEqual([[3, 7, 15], [3, 7, 15]])
+  })
   it('continues legacy Codex cumulative accounting when the write breakdown becomes available', () => {
     ledger.record(sample(1000, 100))
     ledger.record({ ...sample(2000, 120), counters: { ...counts(40), cacheWriteTokens: 80, totalTokens: 120 } })
@@ -46,7 +103,8 @@ describe('persistent native usage accounting', () => {
     expect(all().records).toEqual([])
     ledger.record(sample(2000, 120))
     ledger.record(sample(2000, 120))
-    ledger = new UsageLedger(() => file)
+    ledger.close()
+    ledger = createLedger(() => file)
     ledger.record(sample(3000, 125))
     expect(all().records.map(row => row.totalTokens)).toEqual([20, 5])
     expect(all().records[0]).toMatchObject({ timeBasis: 'sample', intervalStart: 1000, at: 2000 })
@@ -73,7 +131,8 @@ describe('persistent native usage accounting', () => {
   })
   it('deduplicates copied response identities across forked sessions and restarts', () => {
     ledger.record(events(2000))
-    ledger = new UsageLedger(() => file)
+    ledger.close()
+    ledger = createLedger(() => file)
     ledger.record(events(3000, 'fork'))
     expect(all().records).toHaveLength(1)
     expect(all().records[0]).toMatchObject({ totalTokens: 15, timeBasis: 'event', at: 1000, cacheReadTokens: 0 })
@@ -113,7 +172,8 @@ describe('persistent native usage accounting', () => {
     expect(() => ledger.record(sample(2000, 120))).toThrow('test failure')
     database.exec('DROP TRIGGER fail_insert')
     database.close()
-    ledger = new UsageLedger(() => file)
+    ledger.close()
+    ledger = createLedger(() => file)
     ledger.record(sample(3000, 125))
     expect(all().records).toHaveLength(1)
     expect(all().records[0]).toMatchObject({ totalTokens: 25, intervalStart: 1000, at: 3000 })
@@ -122,7 +182,8 @@ describe('persistent native usage accounting', () => {
     const midnight = Date.parse('2026-10-13T00:00:00Z')
     ledger.record({ ...events(midnight + 1000), events: [{ ...counts(10), id: 'before-midnight', at: midnight - 1000 }] })
     ledger.record(sample(midnight - 2000, 100))
-    ledger = new UsageLedger(() => file)
+    ledger.close()
+    ledger = createLedger(() => file)
     ledger.record(sample(midnight + 86_400_000, 150))
     const rows = ledger.list({ start: midnight - 4000, end: midnight + 86_400_000 }).records
     expect(rows[0]).toMatchObject({ at: midnight - 1000, timeBasis: 'event' })

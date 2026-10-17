@@ -2,6 +2,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import os from 'node:os'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import {
   listJsonlFiles,
   listJsonlFilesRecursive,
@@ -13,8 +14,11 @@ import {
   readJsonlLinesWithCursor,
   readString,
   type SessionFileRef,
+  type JsonlSourceRead,
 } from './history'
 import { collectCodexEvents } from './history-usage'
+import { OpenCodeUsageSource } from './opencode-source'
+import { resolveOpencodeDbPath } from '../sessions/opencode-store-path'
 import type { UsageLedger } from './usage-ledger'
 import type { UsageEngine, UsageObservation, UsageSourceCheckpoint } from '../../shared/usage'
 
@@ -69,19 +73,20 @@ async function resolvePiCorpusRoots(): Promise<string[]> {
  * this is the only accounting path that also covers closed terminals, offline
  * periods and sessions JanusX never opened.
  *
- * OpenCode stores sessions in one SQLite database rather than per-session
- * files, so it is not enumerated here yet; its bound-terminal path is
- * unchanged.
+ * OpenCode messages are read from SQLite and imported under their native ids.
  */
 export async function scanNativeSessionCorpus(options: {
   ledger: UsageLedger
   checkpointLookup?: CheckpointLookup
   now?: number
+  signal?: AbortSignal
 }): Promise<CorpusScanSummary> {
-  const { ledger, checkpointLookup, now = Date.now() } = options
+  const { ledger, checkpointLookup, signal, now = Date.now() } = options
+  signal?.throwIfAborted()
   const summary: CorpusScanSummary = { scanned: 0, recorded: 0, skipped: 0, unavailable: 0 }
 
   const record = (observation: UsageObservation | undefined, sourceSize?: number) => {
+    signal?.throwIfAborted()
     if (!observation) {
       summary.unavailable += 1
       return
@@ -94,6 +99,32 @@ export async function scanNativeSessionCorpus(options: {
       summary.unavailable += 1
       console.error('Corpus scan:', error instanceof Error ? error.message : String(error))
     }
+  }
+
+  const opencodePath = resolveOpencodeDbPath(os.homedir())
+  if (await stat(opencodePath).catch(() => null)) {
+    let source: OpenCodeUsageSource | undefined
+    try {
+      source = new OpenCodeUsageSource(opencodePath)
+      for (const session of source.sessions()) {
+        await yieldToEventLoop()
+        signal?.throwIfAborted()
+        summary.scanned += 1
+        try {
+          const mode = ledger.sessionState('opencode', opencodePath, session.id)?.mode
+          const checkpoint = ledger.sourceCheckpoint('opencode', opencodePath, session.id)
+          record(source.read(session, now, mode, checkpoint).observation)
+        } catch (error) {
+          signal?.throwIfAborted()
+          summary.unavailable += 1
+          console.error('OpenCode usage:', error instanceof Error ? error.message : String(error))
+        }
+      }
+    } catch (error) {
+      signal?.throwIfAborted()
+      summary.unavailable += 1
+      console.error('OpenCode usage:', error instanceof Error ? error.message : String(error))
+    } finally { source?.close() }
   }
 
   // Claude: one JSONL per session under cwd-keyed project directories.
@@ -109,6 +140,8 @@ export async function scanNativeSessionCorpus(options: {
   }
   for (const dir of projectDirs) {
     for (const file of await listJsonlFiles(dir, name => name.endsWith('.jsonl'))) {
+      await yieldToEventLoop()
+      signal?.throwIfAborted()
       summary.scanned += 1
       const sessionId = claudeSessionIdFromPath(file.path)
       const cursor = sessionId ? ledger.sessionState('claude', claudeNamespace, sessionId)?.sourceSize : undefined
@@ -135,6 +168,8 @@ export async function scanNativeSessionCorpus(options: {
   const codexHome = resolveCodexHome()
   for (const root of [join(codexHome, 'sessions'), join(codexHome, 'archived_sessions')]) {
     for (const file of await listJsonlFilesRecursive(root, name => name.startsWith('rollout-') && name.endsWith('.jsonl'))) {
+      await yieldToEventLoop()
+      signal?.throwIfAborted()
       summary.scanned += 1
       const pathId = codexSessionIdFromPath(file.path)
       const info = await stat(file.path).catch(() => null)
@@ -147,7 +182,8 @@ export async function scanNativeSessionCorpus(options: {
         summary.skipped += 1
         continue
       }
-      const read = await readJsonlLinesWithCursor(file.path, true)
+      let source: JsonlSourceRead | undefined
+      const read = await readJsonlLinesWithCursor(file.path, true, (buffer, info) => { source = { buffer, info } })
       if (read.lines.length === 0) {
         summary.unavailable += 1
         continue
@@ -163,10 +199,8 @@ export async function scanNativeSessionCorpus(options: {
       // the id inside the file so an existing baseline is still honoured.
       const mode = locked?.mode ?? ledger.sessionState('codex', codexHome, sessionId)?.mode
       if (mode === 'cumulative') {
-        const snapshot = await parseCodexSession(file, undefined, codexHome, undefined, true, checkpointLookup, read.lines)
-        if (snapshot?.usageObservation) {
-          snapshot.usageObservation.sourceIdentity = JSON.stringify([info.dev, info.ino, info.birthtimeMs])
-        }
+        const lookup = checkpointLookup ?? ((engine, namespace, id) => ledger.sourceCheckpoint(engine, namespace, id))
+        const snapshot = await parseCodexSession(file, undefined, codexHome, undefined, true, lookup, read.lines, source)
         record(snapshot?.usageObservation, read.completeBytes)
       } else {
         record(collectCodexEvents(codexHome, sessionId, values, now), read.completeBytes)
@@ -178,6 +212,8 @@ export async function scanNativeSessionCorpus(options: {
   // file was found under, matching the bound-terminal path.
   for (const root of await resolvePiCorpusRoots()) {
     for (const file of await listJsonlFilesRecursive(root, name => name.endsWith('.jsonl'))) {
+      await yieldToEventLoop()
+      signal?.throwIfAborted()
       summary.scanned += 1
       const info = await stat(file.path).catch(() => null)
       if (!info) {

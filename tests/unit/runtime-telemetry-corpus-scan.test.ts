@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile, stat } from 'fs/promises'
+import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile, stat } from 'fs/promises'
 import { DatabaseSync } from 'node:sqlite'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -16,6 +16,13 @@ vi.mock('os', async (importOriginal) => {
 
 const { scanNativeSessionCorpus } = await import('../../src/main/runtime-telemetry/corpus-scan')
 const { UsageLedger } = await import('../../src/main/runtime-telemetry/usage-ledger')
+const { getRuntimeTelemetrySnapshot } = await import('../../src/main/runtime-telemetry/history')
+const openLedgers: InstanceType<typeof UsageLedger>[] = []
+function createLedger(...args: ConstructorParameters<typeof UsageLedger>) {
+  const value = new UsageLedger(...args)
+  openLedgers.push(value)
+  return value
+}
 
 let ledger: InstanceType<typeof UsageLedger>
 let ledgerPath: string
@@ -74,14 +81,126 @@ function readRecords() {
 }
 
 describe('corpus usage scan', () => {
+  it('imports unbound OpenCode requests with native timestamps, cache counts and reasoning, then deduplicates replays', async () => {
+    const root = join(testContext.homeDir, '.local', 'share', 'opencode')
+    await mkdir(root, { recursive: true })
+    const path = join(root, 'opencode.db')
+    const db = new DatabaseSync(path)
+    db.exec(`CREATE TABLE session(id TEXT PRIMARY KEY,directory TEXT,time_updated INTEGER);
+      CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,time_created INTEGER,time_updated INTEGER,data TEXT);
+      CREATE INDEX message_session ON message(session_id);`)
+    const at = Date.parse('2026-10-14T06:00:00Z')
+    db.prepare('INSERT INTO session VALUES (?,?,?)').run('oc1', 'C:/repo', at)
+    const insert = db.prepare('INSERT INTO message VALUES (?,?,?,?,?)')
+    const data = (completed: boolean, model = 'model-a') => JSON.stringify({ role: 'assistant', modelID: model, time: { created: at, completed: completed ? at + 1000 : undefined }, tokens: { input: 10, output: 5, reasoning: 3, cache: { read: 20, write: 2 } } })
+    insert.run('m1', 'oc1', at, at + 1000, data(true))
+    insert.run('m2', 'oc1', at, at + 1000, data(false, 'model-b'))
+    await scanNativeSessionCorpus({ ledger })
+    expect(readRecords()).toHaveLength(1)
+    expect(readRecords()[0]).toMatchObject({ engine: 'opencode', model: 'model-a', inputTokens: 10, outputTokens: 8, cacheReadTokens: 20, cacheWriteTokens: 2, totalTokens: 40, at: at + 1000, timeBasis: 'event' })
+    await scanNativeSessionCorpus({ ledger })
+    expect(readRecords()).toHaveLength(1)
+    db.prepare('UPDATE message SET data=? WHERE id=?').run(data(true, 'model-b'), 'm2')
+    db.close()
+    await scanNativeSessionCorpus({ ledger })
+    expect(readRecords()).toHaveLength(2)
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'opencode', cwd: 'C:/repo', sessionId: 'oc1' })
+    expect(snapshot).toMatchObject({ totalTokens: 80, contextTokens: 32, outputTokens: 16 })
+    ledger.record(snapshot!.usageObservation!)
+    expect(readRecords()).toHaveLength(2)
+    expect(await getRuntimeTelemetrySnapshot({ preset: 'opencode', cwd: 'C:/other', sessionId: 'oc1' })).toBeNull()
+  })
+
+  it('reads OpenCode v2 without replaying migrated v1 sessions and keeps compaction usage', async () => {
+    const root = join(testContext.homeDir, '.local', 'share', 'opencode')
+    await mkdir(root, { recursive: true })
+    const db = new DatabaseSync(join(root, 'opencode.db'))
+    db.exec(`CREATE TABLE session(id TEXT PRIMARY KEY,directory TEXT,time_updated INTEGER);
+      CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,time_created INTEGER,time_updated INTEGER,data TEXT);
+      CREATE TABLE session_v2(id TEXT PRIMARY KEY,directory TEXT,time_updated INTEGER);
+      CREATE TABLE session_message(id TEXT PRIMARY KEY,session_id TEXT,seq INTEGER,type TEXT,time_updated INTEGER,data TEXT);
+      CREATE TABLE kv(key TEXT PRIMARY KEY,value TEXT);`)
+    const at = Date.parse('2026-10-14T06:00:00Z')
+    db.prepare('INSERT INTO session VALUES (?,?,?)').run('same', 'C:/repo', at)
+    db.prepare('INSERT INTO session_v2 VALUES (?,?,?)').run('same', 'C:/repo', at)
+    const data = { model: { id: 'v2-model' }, time: { completed: at }, tokens: { input: 10, output: 2, reasoning: 1, cache: { read: 0, write: 0 } } }
+    db.prepare('INSERT INTO message VALUES (?,?,?,?,?)').run('old', 'same', at, at, JSON.stringify({ ...data, role: 'assistant' }))
+    const insert = db.prepare('INSERT INTO session_message VALUES (?,?,?,?,?,?)')
+    insert.run('new', 'same', 1, 'assistant', at, JSON.stringify(data))
+    insert.run('compact', 'same', 2, 'compaction', at, JSON.stringify({ ...data, model: undefined }))
+    await scanNativeSessionCorpus({ ledger })
+    expect(readRecords()).toHaveLength(2)
+    expect(readRecords().every(row => row.model === 'v2-model' && row.outputTokens === 3)).toBe(true)
+    db.prepare('INSERT INTO kv VALUES (?,?)').run('migration.v1-v2', JSON.stringify({ phase: 'completed' }))
+    db.prepare('INSERT INTO session VALUES (?,?,?)').run('stale-only', 'C:/repo', at)
+    db.prepare('INSERT INTO message VALUES (?,?,?,?,?)').run('stale', 'stale-only', at, at, JSON.stringify({ ...data, role: 'assistant' }))
+    db.close()
+    await scanNativeSessionCorpus({ ledger })
+    expect(readRecords()).toHaveLength(2)
+  })
+
+  it('retains an existing OpenCode cumulative baseline instead of replaying its historical events', async () => {
+    const root = join(testContext.homeDir, '.local', 'share', 'opencode')
+    await mkdir(root, { recursive: true })
+    const path = join(root, 'opencode.db')
+    const db = new DatabaseSync(path)
+    db.exec(`CREATE TABLE session(id TEXT PRIMARY KEY,directory TEXT,time_updated INTEGER,tokens_input INTEGER,tokens_output INTEGER,tokens_cache_read INTEGER,tokens_cache_write INTEGER);
+      CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,time_created INTEGER,time_updated INTEGER,data TEXT);`)
+    const at = Date.parse('2026-10-14T06:00:00Z')
+    const counters = { inputTokens: 10, outputTokens: 5, cacheReadTokens: 20, cacheWriteTokens: 2, totalTokens: 37 }
+    ledger.record({ engine: 'opencode', namespace: path, sessionId: 'old', collectedAt: at, mode: 'cumulative', counters, model: 'm' })
+    db.prepare('INSERT INTO session VALUES (?,?,?,?,?,?,?)').run('old', 'C:/repo', at + 1000, 20, 10, 40, 4)
+    db.prepare('INSERT INTO message VALUES (?,?,?,?,?)').run('reply', 'old', at, at + 1000, JSON.stringify({ role: 'assistant', modelID: 'm', time: { completed: at + 1000 }, tokens: { input: 20, output: 10, cache: { read: 40, write: 4 } } }))
+    db.close()
+    await scanNativeSessionCorpus({ ledger, now: at + 2000 })
+    expect(readRecords()).toHaveLength(1)
+    expect(readRecords()[0]).toMatchObject({ ...counters, timeBasis: 'sample', model: 'm' })
+    await scanNativeSessionCorpus({ ledger, now: at + 3000 })
+    expect(readRecords()).toHaveLength(1)
+  })
+  it('preserves verified source hashes when a cumulative session moves between terminal and corpus reads', async () => {
+    const id = 'cccccccc-1111-4111-8111-111111111111'
+    await writeCodexRollout(id, [{ at: '2026-10-14T06:01:00Z', input: 10, cached: 0, output: 0, total: 10 }])
+    const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId: id })
+    ledger.record(snapshot!.usageObservation!)
+    const file = snapshot!.filePath!
+    const count = (input: number) => JSON.stringify({ type: 'event_msg', payload: { type: 'token_count', info: { total_token_usage: { input_tokens: input, cached_input_tokens: 0, output_tokens: 0, total_tokens: input } } } })
+    await appendFile(file, '\n' + count(20) + '\n{"unfinished":')
+    await scanNativeSessionCorpus({ ledger })
+    await appendFile(file, 'true}\n' + count(25) + '\n')
+    await scanNativeSessionCorpus({ ledger })
+    let page = ledger.list({ start: Date.now() - 60_000, end: Date.now() + 1000 })
+    expect(page.hasIssues).toBe(false)
+    expect(page.records.map(value => value.totalTokens)).toEqual([10, 5])
+    const before = await readFile(file, 'utf8')
+    await writeFile(file, before.replace('"input_tokens":10', '"input_tokens":11') + '\n')
+    await scanNativeSessionCorpus({ ledger })
+    page = ledger.list({ start: Date.now() - 60_000, end: Date.now() + 1000 })
+    expect(page.sessions[0].issue).toBe('counter-source-changed')
+    expect(page.records.map(value => value.totalTokens)).toEqual([10, 5])
+  })
+  it('stops between files on cancellation and resumes without losing or double-counting usage', async () => {
+    const events = [{ at: '2026-10-14T06:01:00Z', input: 10, cached: 0, output: 0, total: 10 }]
+    await writeCodexRollout('aaaaaaaa-1111-4111-8111-111111111111', events)
+    await writeCodexRollout('bbbbbbbb-1111-4111-8111-111111111111', events)
+    const controller = new AbortController()
+    const record = ledger.record.bind(ledger)
+    const cancel = vi.spyOn(ledger, 'record').mockImplementation(observation => { record(observation); controller.abort() })
+    await expect(scanNativeSessionCorpus({ ledger, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    cancel.mockRestore()
+    expect((await scanNativeSessionCorpus({ ledger })).skipped).toBe(1)
+    const page = ledger.list({ start: Date.parse('2026-10-14'), end: Date.parse('2026-10-15') })
+    expect(page.records.map(value => value.totalTokens)).toEqual([10, 10])
+  })
   beforeEach(async () => {
     vi.stubEnv('CODEX_HOME', '')
     testContext.homeDir = await mkdtemp(join(tmpdir(), 'janusx-corpus-'))
     ledgerPath = join(testContext.homeDir, 'ledger', 'usage-ledger.sqlite')
-    ledger = new UsageLedger(() => ledgerPath)
+    ledger = createLedger(() => ledgerPath)
   })
 
   afterEach(async () => {
+    for (const value of openLedgers.splice(0)) value.close()
     vi.unstubAllEnvs()
     await rm(testContext.homeDir, { recursive: true, force: true })
   })
@@ -120,6 +239,28 @@ describe('corpus usage scan', () => {
     expect(readRecords()[0]).toMatchObject({ id: before.id, at: before.at, inputTokens: 100, cacheWriteTokens: 700, totalTokens: 1100 })
     expect(ledger.list({ start: at - 1000, end: at + 3000 }).hasIssues).toBe(false)
     expect((await scanNativeSessionCorpus({ ledger, now: at + 3000 })).skipped).toBe(1)
+  })
+
+  it('rereads unchanged Codex files once to enrich legacy event models, then resumes skipping', async () => {
+    const sessionId = '01a88888-8888-4888-8888-888888888888'
+    const namespace = join(testContext.homeDir, '.codex')
+    const at = Date.parse('2026-10-14T06:01:00Z')
+    await writeCodexRollout(sessionId, [{ at: new Date(at).toISOString(), input: 10, cached: 0, output: 0, total: 10 }])
+    const file = join(namespace, 'sessions', '2026', '10', '14', `rollout-2026-10-14T06-00-00-${sessionId}.jsonl`)
+    const lines = (await readFile(file, 'utf8')).split('\n')
+    lines.splice(1, 0, JSON.stringify({ type: 'turn_context', payload: { model: 'model-a' } }))
+    await writeFile(file, lines.join('\n'))
+    ledger.record({ engine: 'codex', namespace, sessionId, collectedAt: at + 1000, mode: 'events', sourceSize: (await stat(file)).size,
+      events: [{ id: `${sessionId}#1`, at, inputTokens: 10, cacheReadTokens: 0, outputTokens: 0, totalTokens: 10 }] })
+    const before = readRecords()[0]
+    const database = new DatabaseSync(ledgerPath)
+    database.exec("UPDATE sessions SET data=json_remove(data,'$.codexEventModels')")
+    database.exec("UPDATE records SET data=json_remove(data,'$.eventId')")
+    database.close()
+    expect((await scanNativeSessionCorpus({ ledger, now: at + 2000 })).recorded).toBe(1)
+    expect(readRecords()).toEqual([{ ...before, model: 'model-a' }])
+    expect((await scanNativeSessionCorpus({ ledger, now: at + 3000 })).skipped).toBe(1)
+    expect(readRecords()).toHaveLength(1)
   })
 
   it('imports a never-opened codex session by event time and dedups re-scans', async () => {

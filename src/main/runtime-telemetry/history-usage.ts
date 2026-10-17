@@ -74,6 +74,7 @@ export function cumulativeUsage(engine: UsageEngine, namespace: string, sessionI
 export function collectCodexEvents(namespace: string, sessionId: string, values: RecordValue[], collectedAt: number): UsageObservation {
   const events = new Map<string, UsageEvent>()
   let issue: string | undefined
+  let model: string | undefined
   const meta = values.find(value => value.type === 'session_meta')
   const inheritedFrom = count(record(meta?.payload)?.subagent_history_start_ordinal)
   // A root session's cumulative counters start at zero, so the first event's
@@ -90,6 +91,10 @@ export function collectCodexEvents(namespace: string, sessionId: string, values:
     }
   }
   for (const value of values) {
+    if (value.type === 'turn_context') {
+      model = text(record(value.payload)?.model)
+      continue
+    }
     if (value.type !== 'event_msg') continue
     const payload = record(value.payload)
     if (!payload || payload.type !== 'token_count') continue
@@ -127,7 +132,7 @@ export function collectCodexEvents(namespace: string, sessionId: string, values:
     }
     const tokens = usageTokens(deltaInput - deltaCached - (deltaWritten ?? 0), deltaOutput, deltaCached, deltaWritten, deltaTotal)
     if (!tokens) { issue = 'invalid-event'; previous = cumulative; continue }
-    const event: UsageEvent = { ...tokens, id, at: time(value.timestamp) }
+    const event: UsageEvent = { ...tokens, id, at: time(value.timestamp), model }
     const existing = events.get(id)
     if (!existing || event.totalTokens >= existing.totalTokens) events.set(id, event)
     previous = cumulative

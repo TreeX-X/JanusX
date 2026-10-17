@@ -82,6 +82,37 @@ async function refreshing(page: Page) {
   return page.getByTestId('usage-summary').getAttribute('data-refreshing')
 }
 
+it('retains the annual calendar during loading and failure, then recovers on a filter change', async () => {
+  const page = await browser.newPage()
+  try {
+    await mount(page)
+    const total = page.getByTestId('usage-heatmap-total')
+    const heatmap = page.getByTestId('usage-heatmap')
+    await expect.poll(() => total.textContent()).toBe('1,200 tokens')
+    await page.evaluate(() => { window.gate = new Promise(resolve => { window.release = resolve }) })
+    await page.getByRole('button', { name: 'Codex', exact: true }).click()
+    await expect.poll(() => heatmap.getAttribute('aria-busy')).toBe('true')
+    expect(await total.textContent()).toBe('1,200 tokens')
+    await page.evaluate(() => { window.gate = null; window.release() })
+    await expect.poll(() => total.textContent()).toBe('500 tokens')
+    await expect.poll(() => heatmap.getAttribute('aria-busy')).toBe('false')
+    await page.evaluate(() => {
+      const original = window.electron.system.listUsageLedger
+      window.electron.system.listUsageLedger = async query => {
+        if (query.engine === 'claude') throw new Error('offline')
+        return original(query)
+      }
+    })
+    await page.getByRole('button', { name: 'Claude Code', exact: true }).click()
+    await expect.poll(() => heatmap.getAttribute('aria-busy')).toBe('false')
+    expect(await total.textContent()).toBe('500 tokens')
+    await expect.poll(() => heatmap.getByRole('status').count()).toBe(1)
+    await page.getByRole('button', { name: 'All', exact: true }).click()
+    await expect.poll(() => total.textContent()).toBe('1,200 tokens')
+    await expect.poll(() => heatmap.getByRole('status').count()).toBe(0)
+  } finally { await page.close() }
+})
+
 it('keeps the previous data visible while a filter switch reloads, then swaps', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
   try {

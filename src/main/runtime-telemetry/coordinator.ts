@@ -2,12 +2,14 @@ import { app } from 'electron'
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
 import { getRuntimeTelemetrySnapshot } from './history'
 import { scanNativeSessionCorpus } from './corpus-scan'
 import { findCorrelatedSession } from './session-attribution'
 import { UsageLedger } from './usage-ledger'
 import type { UsageLedgerPage, UsageLedgerQuery } from '../../shared/usage'
+import { sourceVersion } from './source-version'
 
 type TelemetryEngine = Exclude<NonNullable<RuntimeTelemetryRequest['preset']>, 'shell'>
 
@@ -17,6 +19,8 @@ const CORPUS_INTERVAL_MS = 5 * 60_000
 /** Correlation is IO per unbound terminal; the context bar tolerates this lag. */
 const ATTRIBUTION_INTERVAL_MS = 15_000
 const ACTIVITY_THROTTLE_MS = 1_000
+const SNAPSHOT_RECHECK_MS = 30_000
+const MAX_CACHED_SNAPSHOTS = 128
 
 interface ModelSegment {
   model?: string
@@ -54,8 +58,14 @@ export class TerminalContextCoordinator {
   private readonly codexHomes = new Map<string, string>()
   private readonly listeners = new Map<string, (snapshot: RuntimeTelemetrySnapshot) => void>()
   private readonly pending = new Map<string, Promise<RuntimeTelemetrySnapshot | null>>()
+  private readonly snapshots = new Map<string, { key: string; version: string; at: number; snapshot: RuntimeTelemetrySnapshot }>()
   private pollTimer?: ReturnType<typeof setInterval>
   private corpusTimer?: ReturnType<typeof setInterval>
+  private corpusInitialTimer?: ReturnType<typeof setTimeout>
+  private corpusPending?: Promise<unknown>
+  private readonly corpusAbort = new AbortController()
+  private stopping = false
+  private shutdownFlight?: Promise<void>
   private corpusScanning = false
   private lastAttributionAt = 0
   private attributionBusy = false
@@ -67,7 +77,7 @@ export class TerminalContextCoordinator {
   private readonly failedSessions = new Map<string, string>()
 
   trackTerminal(terminalId: string, preset: RuntimeTelemetryRequest['preset'], cwd: string, notify?: (snapshot: RuntimeTelemetrySnapshot) => void, codexHome?: string): void {
-    if (!preset || preset === 'shell') return
+    if (this.stopping || !preset || preset === 'shell') return
     if (preset === 'codex' && codexHome) this.codexHomes.set(terminalId, codexHome)
     this.requests.set(terminalId, { terminalId, preset, cwd })
     if (!this.startedAt.has(terminalId)) this.startedAt.set(terminalId, Date.now())
@@ -145,7 +155,10 @@ export class TerminalContextCoordinator {
     this.requests.delete(terminalId)
     this.listeners.delete(terminalId)
     const bound = this.entries.get(terminalId)
-    try { if (request) await this.getSnapshot(request) }
+    try {
+      if (this.stopping) await this.pending.get(terminalId)
+      else if (request) await this.getSnapshot(request)
+    }
     catch (error) { this.reportUsageError(error) }
     finally { if (this.entries.get(terminalId) === bound) this.unbindTerminal(terminalId) }
   }
@@ -156,12 +169,13 @@ export class TerminalContextCoordinator {
    * history, which is what closed terminals and never-opened sessions need.
    */
   startCorpusScan(): void {
-    if (this.corpusTimer) return
+    if (this.stopping || this.corpusTimer) return
     const run = () => {
-      if (this.corpusScanning) return
+      if (this.stopping || this.corpusScanning) return
       this.corpusScanning = true
-      scanNativeSessionCorpus({
+      this.corpusPending = scanNativeSessionCorpus({
         ledger: this.usageLedger,
+        signal: this.corpusAbort.signal,
         checkpointLookup: (engine, namespace, nativeId) => {
           try { return this.usageLedger.sourceCheckpoint(engine, namespace, nativeId) }
           catch (error) {
@@ -169,15 +183,17 @@ export class TerminalContextCoordinator {
             return undefined
           }
         },
-      }).catch(error => this.reportUsageError(error))
+      }).catch(error => { if (!this.corpusAbort.signal.aborted) this.reportUsageError(error) })
         .finally(() => { this.corpusScanning = false })
     }
-    setTimeout(run, CORPUS_INITIAL_DELAY_MS).unref?.()
+    this.corpusInitialTimer = setTimeout(run, CORPUS_INITIAL_DELAY_MS)
+    this.corpusInitialTimer.unref?.()
     this.corpusTimer = setInterval(run, CORPUS_INTERVAL_MS)
     this.corpusTimer.unref()
   }
 
   listUsage(query: UsageLedgerQuery): UsageLedgerPage {
+    if (this.stopping) return { records: [], sessions: [], error: 'Usage collection is shutting down' }
     try { return { ...this.usageLedger.list(query), warning: this.usageError ?? this.failedSessions.values().next().value } }
     catch (error) { this.reportUsageError(error); return { records: [], sessions: [], error: this.usageError } }
   }
@@ -188,6 +204,7 @@ export class TerminalContextCoordinator {
   }
 
   bindSession(terminalId: string, engine: TelemetryEngine, sessionId?: string, source: 'hook' | 'correlated' = 'hook'): boolean {
+    if (this.stopping) return false
     const normalizedSessionId = sessionId?.trim()
     if (!terminalId || !normalizedSessionId) return false
     this.load()
@@ -205,6 +222,7 @@ export class TerminalContextCoordinator {
       return true
     }
     if (previous) this.sessionOwners.delete(this.sessionKey(previous.engine, previous.sessionId))
+    this.snapshots.delete(terminalId)
 
     this.entries.set(terminalId, {
       engine,
@@ -226,6 +244,7 @@ export class TerminalContextCoordinator {
     this.listeners.delete(terminalId)
     this.activity.delete(terminalId)
     this.startedAt.delete(terminalId)
+    this.snapshots.delete(terminalId)
     if (this.requests.size === 0 && this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = undefined }
     const entry = this.entries.get(terminalId)
     if (!entry) return
@@ -235,11 +254,32 @@ export class TerminalContextCoordinator {
   }
 
   getSnapshot(request: RuntimeTelemetryRequest): Promise<RuntimeTelemetrySnapshot | null> {
+    if (this.stopping) return Promise.resolve(null)
     const key = request.terminalId ?? ''
     const pending = (this.pending.get(key) ?? Promise.resolve(null)).catch(() => null).then(() => this.readSnapshot(request))
     this.pending.set(key, pending)
     void pending.finally(() => { if (this.pending.get(key) === pending) this.pending.delete(key) }).catch(() => {})
     return pending
+  }
+
+  shutdown(): Promise<void> {
+    if (this.shutdownFlight) return this.shutdownFlight
+    clearInterval(this.pollTimer)
+    clearInterval(this.corpusTimer)
+    clearTimeout(this.corpusInitialTimer)
+    this.corpusAbort.abort()
+    // Terminal exit callbacks may still be arriving. Queue the final complete
+    // samples before refusing new work; releaseTerminal drains these same reads.
+    this.snapshots.clear()
+    for (const request of this.requests.values()) void this.getSnapshot(request).catch(error => this.reportUsageError(error))
+    this.stopping = true
+    this.shutdownFlight = Promise.allSettled([...this.pending.values(), this.corpusPending]).then(() => {
+      this.usageLedger.close()
+      this.snapshots.clear()
+      this.requests.clear()
+      this.listeners.clear()
+    })
+    return this.shutdownFlight
   }
 
   private async readSnapshot(request: RuntimeTelemetryRequest): Promise<RuntimeTelemetrySnapshot | null> {
@@ -253,6 +293,16 @@ export class TerminalContextCoordinator {
     const sessionId = bound?.sessionId
     // Restoring the same native session must not redefine its accounting or context range.
     const codexHome = request.terminalId ? this.codexHomes.get(request.terminalId) : undefined
+    const cacheKey = JSON.stringify([preset, sessionId, request.cwd, codexHome])
+    const cached = request.terminalId ? this.snapshots.get(request.terminalId) : undefined
+    if (bound && cached && cached.key === cacheKey && Date.now() - cached.at < SNAPSHOT_RECHECK_MS) {
+      const info = cached.snapshot.filePath ? await stat(cached.snapshot.filePath).catch(() => null) : null
+      if (request.terminalId && this.entries.get(request.terminalId) !== bound) return null
+      if (info && sourceVersion(info) === cached.version) return {
+        ...cached.snapshot, observedAt: Date.now(), sessionBinding: bound.source === 'correlated' ? 'correlated' : 'exact',
+      }
+    }
+    if (request.terminalId) this.snapshots.delete(request.terminalId)
     const snapshot = await getRuntimeTelemetrySnapshot({ ...request, codexHome, sessionId, startedAt: bound ? undefined : request.startedAt }, (engine, namespace, nativeId) => {
       try { return this.usageLedger.sourceCheckpoint(engine, namespace, nativeId) }
       catch (error) {
@@ -269,7 +319,7 @@ export class TerminalContextCoordinator {
       return null
     }
 
-    const { usageObservation, ...telemetry } = snapshot
+    const { usageObservation, sourceVersion: version, ...telemetry } = snapshot
 
     if (!bound) return telemetry
     if (snapshot.sessionId && snapshot.sessionId !== bound.sessionId) return null
@@ -289,6 +339,12 @@ export class TerminalContextCoordinator {
       sessionBinding: bound.source === 'correlated' ? 'correlated' : 'exact',
     }
     this.recordSnapshot(request.terminalId!, bound, exact)
+    if (request.terminalId && version && exact.filePath && !usageObservation?.issue
+      && !this.failedSessions.has(this.sessionKey(bound.engine, bound.sessionId))) {
+      this.snapshots.delete(request.terminalId)
+      this.snapshots.set(request.terminalId, { key: cacheKey, version, at: Date.now(), snapshot: exact })
+      if (this.snapshots.size > MAX_CACHED_SNAPSHOTS) this.snapshots.delete(this.snapshots.keys().next().value!)
+    }
     return exact
   }
 

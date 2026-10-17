@@ -1,21 +1,25 @@
-.panel { --usage-claude: #c4623d; --usage-codex: #247e83; --usage-opencode: #8562b6; --usage-pi: #a87c24; --usage-janus: #587b35; --usage-dsh: #416ac4; --usage-input: #28769a; --usage-output: #a9672e; container-type: inline-size; display: flex; flex-direction: column; gap: 14px; color: var(--shell-text); }
+.panel { --usage-claude: #c4623d; --usage-codex: #247e83; --usage-opencode: #8562b6; --usage-pi: #a87c24; --usage-janus: #587b35; --usage-dsh: #416ac4; --usage-input: #28769a; --usage-output: #a9672e; container-type: inline-size; display: flex; flex-direction: column; gap: 22px; color: var(--shell-text); }
 .panel[data-theme-base='dark'] { --usage-claude: #e69a79; --usage-codex: #6ac6bd; --usage-opencode: #bba2eb; --usage-pi: #e2c06a; --usage-janus: #a6c97e; --usage-dsh: #7fa6f1; --usage-input: #7bb8dc; --usage-output: #e5b67e; }
 .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .headInfo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.title { margin: 0; font-size: 13px; font-weight: 650; line-height: 1.5; }
+.headInfo > .title { font-size: 20px; letter-spacing: -0.5px; }
+.title { margin: 0; font-size: 12px; font-weight: 600; line-height: 1.5; }
 .subtitle { margin: 0; color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .label, .hint { color: var(--shell-muted); font-size: 11px; line-height: 1.6; }
 .hint { margin: 4px 0 12px; }
 .panel button:focus-visible, .chart rect:focus-visible, .dateField input:focus-visible { outline: 2px solid var(--shell-text); outline-offset: 3px; }
-/* 终端类型切换与 LLM 引擎 terminalTabs 同语言：顶部一行下划线，选中态 accent 下划线。 */
+.rangeRow { display: flex; flex-wrap: wrap; align-self: flex-start; gap: 2px; padding: 3px; border-radius: 7px; background: var(--shell-card); border: 1px solid var(--shell-border-soft, var(--shell-border)); }
+.rangeRow .tab { margin: 0; height: 26px; border: 0; border-radius: 4px; padding: 0 13px; font-size: 11px; font-weight: 500; }
+.rangeRow .tabActive { background: var(--shell-canvas); box-shadow: 0 1px 3px color-mix(in srgb, var(--shell-text) 8%, transparent); }
+/* Terminal types retain the shared engine-tab language. */
 .tabRow { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--shell-border-soft, var(--shell-border)); padding-bottom: 8px; }
 .tab { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -9px; background: transparent; color: var(--shell-dim); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: color 0.16s ease, border-color 0.16s ease; }
 .tab:hover { color: var(--shell-text); }
 .tabActive { color: var(--shell-text); border-bottom-color: var(--so-accent, var(--shell-accent)); }
 .customBar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
 .dateField { display: inline-flex; align-items: center; gap: 8px; color: var(--shell-muted); font-size: 11px; }
-.dateField input { min-height: var(--control-h, 30px); background: rgba(0, 0, 0, 0.28); border: 1px solid var(--control-border, var(--shell-border)); padding: 6px 10px; border-radius: 6px; color: var(--shell-text); font: inherit; font-size: 12px; color-scheme: dark light; transition: border-color 0.18s ease, background 0.18s ease; }
+.dateField input { min-height: var(--control-h, 30px); background: var(--shell-canvas); border: 1px solid var(--control-border, var(--shell-border)); padding: 6px 10px; border-radius: 6px; color: var(--shell-text); font: inherit; font-size: 12px; color-scheme: dark light; transition: border-color 0.18s ease, background 0.18s ease; }
 .dateField input:hover { border-color: rgba(255, 255, 255, 0.16); }
 .dateSep { color: var(--shell-dim); }
 .error { margin: 0; width: 100%; color: #d78b92; font-size: 11px; line-height: 1.55; }
@@ -31,12 +35,13 @@
   .dimmed { transition: none; }
   .refreshBar::after { animation: none; width: 100%; opacity: 0.45; }
 }
-.summary { position: relative; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); overflow: hidden; }
-.summaryCell { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 16px; }
+.summary { position: relative; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); border: 1px solid var(--shell-border); border-radius: 0; border-width: 0 0 1px; background: transparent; overflow: hidden; }
+.summaryCell { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 4px 18px 22px; }
 .summaryCell + .summaryCell { border-left: 1px solid var(--shell-border-soft, var(--shell-border)); }
-.totalCell > svg { flex-shrink: 0; width: 58px; height: 58px; }
+.totalCell { padding-left: 0; }
+.totalCell > svg { flex-shrink: 0; width: 38px; height: 38px; }
 .summaryInfo { min-width: 0; }
-.value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; margin: 2px 0 6px; font-size: 30px; font-weight: 600; letter-spacing: -1px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px; margin: 2px 0 6px; font-size: 32px; font-weight: 600; letter-spacing: -1px; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .value small, .modelTotal small { font-size: 10px; color: var(--shell-muted); font-weight: 400; letter-spacing: 0; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--shell-muted); font-size: 10px; line-height: 1.6; min-height: 20px; }
 .legend > span { display: inline-flex; align-items: center; gap: 5px; }
@@ -57,10 +62,10 @@
 .ioFillIn { background: var(--usage-input); }
 .ioFillOut { background: var(--usage-output); }
 .cacheHeading { display: flex; align-items: center; gap: 10px; }
-.cacheHeading > svg { flex-shrink: 0; width: 40px; height: 40px; }
+.cacheHeading > svg { flex-shrink: 0; width: 30px; height: 30px; }
 .cacheCell .value { margin-bottom: 0; font-size: 26px; }
 .donutArc { transition: stroke-dasharray 380ms ease, stroke-dashoffset 380ms ease; }
-.trendSection { border: 1px solid var(--shell-border); border-radius: 10px; padding: 16px; background: var(--shell-card); }
+.trendSection { border-top: 1px solid var(--shell-border-soft, var(--shell-border)); padding: 20px 0 0; }
 .chart { display: block; width: 100%; overflow: hidden; }
 /* 形态变化（换范围/粒度）时新曲线绘制进场：pathLength=100 归一化线长，
    无需测量即可从 0 画到完整；同形态的数值变化走补间，不触发本动画。 */
@@ -79,7 +84,7 @@
 .summaryEmpty .summaryCell svg, .summaryEmpty .value, .summaryEmpty .ioNumbers strong { opacity: 0.45; }
 .summaryEmpty .legend { min-height: 0; }
 .emptyWatermark { fill: var(--shell-muted); font-size: 12px; opacity: 0.8; }
-.breakdown { display: flex; flex-direction: column; gap: 0; padding: 4px 16px 8px; border: 1px solid var(--shell-border); border-radius: 10px; background: var(--shell-card); }
+.breakdown { display: flex; flex-direction: column; gap: 0; padding: 0 0 8px; border-top: 1px solid var(--shell-border-soft, var(--shell-border)); }
 .breakdown > .title { margin: 0; padding: 12px 0 10px; }
 .modelRow { display: grid; grid-template-columns: minmax(0, 1fr) 80px 64px 64px 70px; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--shell-border-soft, var(--shell-border)); }
 .modelInfo { min-width: 0; }
@@ -93,6 +98,9 @@
 @container (max-width: 680px) {
   .summary { grid-template-columns: 1fr 1fr; }
   .totalCell { grid-column: 1 / -1; border-bottom: 1px solid var(--shell-border-soft, var(--shell-border)); }
+  .totalCell .summaryInfo { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 16px; flex: 1; }
+  .totalCell .summaryInfo > .label, .totalCell .legend { grid-column: 1 / -1; }
+  .totalCell .costInline { justify-self: start; }
   .summary .ioCell { border-left: 0; }
   .modelRow { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
   .modelInfo { grid-column: 1 / -1; }
@@ -117,3 +125,34 @@
   .chartEnter path[data-series] { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
   .chartEnter circle, .chartEnter .axis { animation: none; }
 }
+
+/* Calendar activity uses one quiet green scale across terminal filters and themes. */
+.heatmapSection { --heat-color: #238636; --heat-empty: color-mix(in srgb, var(--shell-text) 6%, var(--shell-canvas)); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel[data-theme-base="dark"] .heatmapSection { --heat-color: #40c463; }
+.heatmapTotal { font-size: 18px; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.heatmapTotal small { color: var(--shell-muted); font-size: 10px; letter-spacing: 0; }
+.heatmapScroll { overflow-x: auto; padding: 3px 2px 6px; scrollbar-width: thin; }
+.heatmapCalendar { min-width: 680px; }
+.heatmapMonths { display: grid; grid-template-columns: repeat(53, minmax(0, 1fr)); margin: 0 0 8px 30px; color: var(--shell-muted); font-size: 10px; height: 14px; }
+.heatmapMonths span { white-space: nowrap; }
+.heatmapBody { display: flex; gap: 8px; }
+.heatmapWeekdays { display: grid; grid-template-rows: repeat(7, 1fr); width: 22px; flex-shrink: 0; font-size: 9px; color: var(--shell-muted); }
+.heatmapWeekdays span { display: flex; align-items: center; }
+.heatmapGrid { display: grid; grid-auto-flow: column; grid-template-columns: repeat(53, minmax(0, 1fr)); grid-template-rows: repeat(7, 1fr); gap: 3px; flex: 1; }
+.heatmapDay { display: block; aspect-ratio: 1; min-width: 0; width: 100%; padding: 0; border: 1px solid color-mix(in srgb, var(--shell-text) 5%, transparent); border-radius: 2px; background: var(--heat-empty); }
+button.heatmapDay { cursor: pointer; }
+.heatmapDay[data-level="1"] { background: color-mix(in srgb, var(--heat-color) 25%, var(--heat-empty)); }
+.heatmapDay[data-level="2"] { background: color-mix(in srgb, var(--heat-color) 48%, var(--heat-empty)); }
+.heatmapDay[data-level="3"] { background: color-mix(in srgb, var(--heat-color) 73%, var(--heat-empty)); }
+.heatmapDay[data-level="4"] { background: var(--heat-color); }
+.heatmapDay[data-future] { visibility: hidden; }
+button.heatmapDay:hover { outline: 1px solid var(--shell-muted); outline-offset: 1px; }
+.heatmapFooter { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 8px; color: var(--shell-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.heatmapScale { display: inline-flex; align-items: center; gap: 4px; }
+.heatmapScale i { width: 10px; height: 10px; }
+
+.costInline { display: inline-flex; align-items: center; gap: 7px; color: var(--shell-muted); font-size: 10px; line-height: 20px; }
+.costInline strong { color: var(--shell-text); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.costInline button { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--shell-dim); cursor: pointer; }
+.costInline button:hover { background: var(--shell-hover); color: var(--shell-text); }
+.costInline button:disabled { opacity: 0.5; cursor: wait; }

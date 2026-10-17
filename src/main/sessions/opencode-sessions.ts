@@ -1,8 +1,6 @@
 // Note: opencode sqlite backfill plus detail reads — see
 // .agents/notes/sessions/records/opencode-session-driver.md
 import { DatabaseSync } from 'node:sqlite'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import type { TranscriptTurn } from '../../shared/ipc/session'
 import { TRANSCRIPT_TURN_CAP, truncateTranscriptText } from './transcript-reader'
 
@@ -23,10 +21,7 @@ export interface OpencodeTurnList {
   truncated: boolean
 }
 
-/** Provider on-disk store: the opencode sqlite database under the home dir. */
-export function resolveOpencodeDbPath(home: string = homedir()): string {
-  return join(home, '.local', 'share', 'opencode', 'opencode.db')
-}
+export { resolveOpencodeDbPath } from './opencode-store-path'
 
 /**
  * Presence of one session id in the opencode sqlite store.

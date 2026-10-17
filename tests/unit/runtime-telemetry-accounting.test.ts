@@ -10,12 +10,32 @@ vi.mock('os', async (importOriginal) => {
 })
 const { getRuntimeTelemetrySnapshot } = await import('../../src/main/runtime-telemetry/history')
 const { UsageLedger } = await import('../../src/main/runtime-telemetry/usage-ledger')
+const { collectCodexEvents } = await import('../../src/main/runtime-telemetry/history-usage')
+const openLedgers: InstanceType<typeof UsageLedger>[] = []
+function createLedger(...args: ConstructorParameters<typeof UsageLedger>) {
+  const value = new UsageLedger(...args)
+  openLedgers.push(value)
+  return value
+}
 beforeEach(async () => { context.homeDir = await mkdtemp(join(tmpdir(), 'janusx-usage-source-')) })
-afterEach(async () => { await rm(context.homeDir, { recursive: true, force: true }) })
+afterEach(async () => { for (const value of openLedgers.splice(0)) value.close(); await rm(context.homeDir, { recursive: true, force: true }) })
 const now = () => new Date().toISOString()
 const claude = (id: string, input: number, extra: object = {}) => ({ timestamp: now(), sessionId: 's1', message: { id, role: 'assistant', stop_reason: 'end_turn', model: 'm', usage: { input_tokens: input, output_tokens: 0, cache_read_input_tokens: 0 } }, ...extra })
 
 describe('native session source accounting', () => {
+  it('attributes Codex requests to their preceding turn model, including switches and missing contexts', () => {
+    const event = (ordinal: number) => ({ type: 'event_msg', ordinal, timestamp: '2026-10-14T06:00:00Z', payload: {
+      type: 'token_count', info: { total_token_usage: { input_tokens: ordinal * 10, cached_input_tokens: 0, output_tokens: 0, total_tokens: ordinal * 10 } },
+    } })
+    const observation = collectCodexEvents('/native', 's1', [
+      event(1), { type: 'turn_context', payload: { model: 'model-a' } }, event(2),
+      { type: 'turn_context', payload: { model: 'model-b' } }, event(3),
+      { type: 'turn_context', payload: {} }, event(4),
+    ], Date.parse('2026-10-14T07:00:00Z'))
+    expect(observation.issue).toBeUndefined()
+    expect(observation.events?.map(event => event.model)).toEqual([undefined, 'model-a', 'model-b', undefined])
+    expect(observation.events?.map(event => event.totalTokens)).toEqual([10, 10, 10, 10])
+  })
   it('counts Codex growth with unchanged mtime and rejects rewritten prefixes', async () => {
     const directory = join(context.homeDir, '.codex', 'sessions', '2026', '10', '13')
     await mkdir(directory, { recursive: true })
@@ -25,7 +45,7 @@ describe('native session source accounting', () => {
     const turn = (model: string, at: number) => JSON.stringify({ type: 'turn_context', timestamp: new Date(at).toISOString(), payload: { model } })
     const original = [JSON.stringify({ type: 'session_meta', payload: { id: sessionId, cwd: 'C:/repo', marker: 'old' } }), turn('m1', Date.now() - 5000), tokenCount(50), ''].join('\n')
     await writeFile(file, original)
-    const ledger = new UsageLedger(() => join(context.homeDir, 'usage.sqlite'))
+    const ledger = createLedger(() => join(context.homeDir, 'usage.sqlite'))
     const collect = async () => {
       const snapshot = await getRuntimeTelemetrySnapshot({ preset: 'codex', cwd: 'C:/repo', sessionId }, (engine, namespace, id) => ledger.sourceCheckpoint(engine, namespace, id))
       ledger.record(snapshot!.usageObservation!)
@@ -56,7 +76,7 @@ describe('native session source accounting', () => {
     const padding = JSON.stringify({ text: 'x'.repeat(20_000) }) + '\n'
     await writeFile(file, padding + JSON.stringify(claude('msg1', 100)) + '\n' + padding.repeat(15) + JSON.stringify(claude('msg2', 10)) + '\n')
     const request = { preset: 'claude' as const, cwd: 'C:/repo', sessionId: 's1' }
-    const ledger = new UsageLedger(() => join(context.homeDir, 'usage.sqlite'))
+    const ledger = createLedger(() => join(context.homeDir, 'usage.sqlite'))
     const first = await getRuntimeTelemetrySnapshot(request)
     expect(first?.totalTokens).toBe(110)
     ledger.record(first!.usageObservation!)
@@ -92,7 +112,7 @@ describe('native session source accounting', () => {
     await writeFile(file, [JSON.stringify({ type: 'session', id: sessionId, cwd: 'C:/repo', timestamp: now() }), JSON.stringify({ type: 'message', id: 'root', parentId: null, message: { role: 'user' } }), JSON.stringify(assistant('a1', 100))].join('\n'))
     const request = { preset: 'pi' as const, cwd: 'C:/repo', sessionId }
     const first = await getRuntimeTelemetrySnapshot(request)
-    const ledger = new UsageLedger(() => join(context.homeDir, 'usage.sqlite'))
+    const ledger = createLedger(() => join(context.homeDir, 'usage.sqlite'))
     ledger.record(first!.usageObservation!)
     await appendFile(file, '\n' + JSON.stringify(assistant('a2', 20)))
     const second = await getRuntimeTelemetrySnapshot(request)

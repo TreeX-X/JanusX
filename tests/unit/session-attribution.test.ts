@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { DatabaseSync } from 'node:sqlite'
 
 const testContext = vi.hoisted(() => ({ homeDir: '' }))
 
@@ -57,6 +58,21 @@ async function writePiSession(sessionId: string, cwd: string, at: string) {
 }
 
 describe('session attribution', () => {
+  it('correlates OpenCode by workspace and session activity, rejecting concurrent ambiguity', async () => {
+    const root = join(testContext.homeDir, '.local', 'share', 'opencode')
+    await mkdir(root, { recursive: true })
+    const path = join(root, 'opencode.db')
+    const db = new DatabaseSync(path)
+    db.exec('CREATE TABLE session(id TEXT PRIMARY KEY,directory TEXT,time_updated INTEGER)')
+    const insert = db.prepare('INSERT INTO session VALUES (?,?,?)')
+    insert.run('oc', CWD.replace(/\\/g, '/'), ACTIVITY_AT)
+    insert.run('foreign', 'C:/foreign', ACTIVITY_AT)
+    const query = { engine: 'opencode' as const, cwd: CWD, terminalStartedAt: STARTED_AT, lastActivityAt: ACTIVITY_AT }
+    expect(await findCorrelatedSession(query)).toMatchObject({ sessionId: 'oc', filePath: path, namespace: path })
+    insert.run('race', CWD, ACTIVITY_AT)
+    expect(await findCorrelatedSession(query)).toBeUndefined()
+    db.close()
+  })
   beforeEach(async () => {
     vi.stubEnv('CODEX_HOME', '')
     testContext.homeDir = await mkdtemp(join(tmpdir(), 'janusx-attribution-'))

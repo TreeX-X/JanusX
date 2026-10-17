@@ -21,6 +21,7 @@ function sameTokens(left: UsageTokens, right: UsageTokens): boolean {
 }
 interface SessionState extends UsageSessionStatus {
   codexCacheWrites?: true
+  codexEventModels?: true
   counters?: UsageTokens
   model?: string
   sourceIdentity?: string
@@ -33,16 +34,29 @@ interface SessionState extends UsageSessionStatus {
 
 /** SQLite commits dedup identities, baselines and deltas together, including across processes. */
 export class UsageLedger {
+  private database?: DatabaseSync
+  private databasePath?: string
   constructor(private readonly filePath: () => string) {}
+  close(): void {
+    this.database?.close()
+    this.database = undefined
+    this.databasePath = undefined
+  }
+
   private open(): DatabaseSync {
     const path = this.filePath()
+    if (this.database && this.databasePath === path) return this.database
+    this.close()
     mkdirSync(dirname(path), { recursive: true })
     const database = new DatabaseSync(path)
     try {
       const version = database.prepare('PRAGMA user_version').get() as { user_version: number }
       if (version.user_version > 1) throw new Error('Unsupported usage ledger version')
-      database.exec('PRAGMA busy_timeout=3000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
-      database.exec(`
+      // A contended background write retries on the next pass, rather than
+      // freezing Electron's event loop for three seconds. Durability is unchanged.
+      database.exec('PRAGMA busy_timeout=100; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
+      if (version.user_version === 0) database.exec(`
+        BEGIN IMMEDIATE;
         CREATE TABLE IF NOT EXISTS sessions (key TEXT PRIMARY KEY, data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS identities (key TEXT PRIMARY KEY, tokens TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS records (id INTEGER PRIMARY KEY, engine TEXT NOT NULL, at REAL NOT NULL, data TEXT NOT NULL);
@@ -50,7 +64,10 @@ export class UsageLedger {
         CREATE INDEX IF NOT EXISTS records_engine_time ON records(engine, at, id);
         CREATE INDEX IF NOT EXISTS records_session ON records(engine, json_extract(data,'$.sessionId'), at, id);
         PRAGMA user_version=1;
+        COMMIT;
       `)
+      this.database = database
+      this.databasePath = path
       return database
     } catch (error) { database.close(); throw error }
   }
@@ -66,9 +83,9 @@ export class UsageLedger {
       if (previous && observation.collectedAt < previous.updatedAt) { database.exec('COMMIT'); return }
       const state: SessionState = previous ?? { engine: observation.engine, sessionId: key, coverageStart: observation.collectedAt, updatedAt: observation.collectedAt }
       const insertRecord = database.prepare('INSERT INTO records(engine, at, data) VALUES (?, ?, ?)')
-      const append = (tokens: UsageTokens, at: number, timeBasis: 'event' | 'sample', model?: string, intervalStart?: number) => {
+      const append = (tokens: UsageTokens, at: number, timeBasis: 'event' | 'sample', model?: string, intervalStart?: number, eventId?: string) => {
         if (tokens.totalTokens === 0) return
-        const record: UsageRecord = { ...tokens, id: '', engine: observation.engine, sessionId: key, at, timeBasis, model, intervalStart }
+        const record: UsageRecord = { ...tokens, id: '', engine: observation.engine, sessionId: key, at, timeBasis, model, intervalStart, eventId }
         insertRecord.run(record.engine, at, JSON.stringify(record))
       }
       // Counter regressions/changed event identities remain paused until source-backed recovery.
@@ -103,18 +120,48 @@ export class UsageLedger {
               // Old records predate stored event identities. Locate one matching
               // booked event, preserve its id/date/model, and only repartition
               // its input. Identical events are upgraded one record at a time.
-              const row = database.prepare(`SELECT id, data FROM records WHERE engine='codex'
+              const rows = database.prepare(`SELECT id, data FROM records WHERE engine='codex'
                 AND json_extract(data,'$.sessionId')=? AND json_extract(data,'$.inputTokens')=?
                 AND json_extract(data,'$.outputTokens')=? AND json_extract(data,'$.cacheReadTokens') IS ?
                 AND json_extract(data,'$.cacheWriteTokens') IS NULL AND json_extract(data,'$.totalTokens')=?
-                AND (? IS NULL OR at=?) ORDER BY id LIMIT 1`)
-                .get(key, oldTokens.inputTokens, oldTokens.outputTokens, oldTokens.cacheReadTokens ?? null,
-                  oldTokens.totalTokens, event.at ?? null, event.at ?? null) as { id: number; data: string } | undefined
+                AND (? IS NULL OR at=?) ORDER BY id LIMIT 2`)
+                .all(key, oldTokens.inputTokens, oldTokens.outputTokens, oldTokens.cacheReadTokens ?? null,
+                  oldTokens.totalTokens, event.at ?? null, event.at ?? null) as Array<{ id: number; data: string }>
+              const row = rows[0]
               if (row) {
+                const booked = JSON.parse(row.data) as UsageRecord
+                // Include already repartitioned rows when checking ownership:
+                // upgrading an earlier identical row must not make this one
+                // appear unambiguous merely because its write split is old.
+                const candidates = event.model && event.at !== undefined ? database.prepare(`SELECT id FROM records WHERE engine='codex' AND at=?
+                  AND json_extract(data,'$.sessionId')=? AND json_extract(data,'$.timeBasis')='event'
+                  AND (json_extract(data,'$.eventId') IS NULL OR json_extract(data,'$.eventId')=?)
+                  AND json_extract(data,'$.inputTokens')+COALESCE(json_extract(data,'$.cacheWriteTokens'),0)=?
+                  AND json_extract(data,'$.outputTokens')=? AND json_extract(data,'$.cacheReadTokens') IS ?
+                  AND json_extract(data,'$.totalTokens')=? LIMIT 2`)
+                  .all(event.at, key, event.id, oldTokens.inputTokens, oldTokens.outputTokens,
+                    oldTokens.cacheReadTokens ?? null, oldTokens.totalTokens) as Array<{ id: number }> : []
+                const model = candidates.length === 1 && candidates[0].id === row.id && booked.timeBasis === 'event' && event.at !== undefined
+                  && (!booked.eventId || booked.eventId === event.id) && !booked.model && event.model
+                  ? { model: event.model, eventId: event.id } : {}
                 database.prepare('UPDATE records SET data=? WHERE id=?')
-                  .run(JSON.stringify({ ...JSON.parse(row.data) as UsageRecord, ...tokens }), row.id)
+                  .run(JSON.stringify({ ...booked, ...tokens, ...model }), row.id)
                 database.prepare('UPDATE identities SET tokens=? WHERE key=?').run(JSON.stringify(tokens), identity)
               }
+            }
+            if (sameTokens(oldTokens, tokens) && event.model && event.at !== undefined && event.totalTokens > 0) {
+              // Legacy records lack an event-to-record link. Only enrich one
+              // unambiguous exact-time/count match, never a latest-model guess.
+              const rows = database.prepare(`SELECT id,data FROM records WHERE engine=? AND at=?
+                AND json_extract(data,'$.sessionId')=? AND json_extract(data,'$.timeBasis')='event'
+                AND (json_extract(data,'$.eventId') IS NULL OR json_extract(data,'$.eventId')=?)
+                AND json_extract(data,'$.inputTokens')=? AND json_extract(data,'$.outputTokens')=?
+                AND json_extract(data,'$.cacheReadTokens') IS ? AND json_extract(data,'$.cacheWriteTokens') IS ?
+                AND json_extract(data,'$.totalTokens')=? LIMIT 2`)
+                .all(observation.engine, event.at, key, event.id, tokens.inputTokens, tokens.outputTokens,
+                  tokens.cacheReadTokens ?? null, tokens.cacheWriteTokens ?? null, tokens.totalTokens) as Array<{ id: number; data: string }>
+              if (rows.length === 1 && !(JSON.parse(rows[0].data) as UsageRecord).model) database.prepare('UPDATE records SET data=? WHERE id=?')
+                .run(JSON.stringify({ ...JSON.parse(rows[0].data) as UsageRecord, model: event.model, eventId: event.id }), rows[0].id)
             }
             continue
           }
@@ -122,7 +169,7 @@ export class UsageLedger {
           const exact = event.at !== undefined && Number.isFinite(event.at) && event.at > 0 && event.at <= observation.collectedAt
           const at = exact ? event.at! : observation.collectedAt
           state.coverageStart = Math.min(state.coverageStart, at)
-          append(tokens, at, exact ? 'event' : 'sample', event.model)
+          append(tokens, at, exact ? 'event' : 'sample', event.model, undefined, event.id)
         }
         // Complete-byte cursor lets the corpus scanner skip unchanged files.
         if (observation.sourceSize !== undefined) state.sourceSize = observation.sourceSize
@@ -157,13 +204,14 @@ export class UsageLedger {
         state.sourceHash = observation.sourceHash
       }
       if (observation.engine === 'codex' && !state.issue) state.codexCacheWrites = true
+      if (observation.engine === 'codex' && observation.mode === 'events' && !state.issue) state.codexEventModels = true
       state.updatedAt = observation.collectedAt
       database.prepare('INSERT OR REPLACE INTO sessions(key, data) VALUES (?, ?)').run(key, JSON.stringify(state))
       database.exec('COMMIT')
     } catch (error) {
       try { database.exec('ROLLBACK') } catch { /* transaction may not have started */ }
       throw error
-    } finally { database.close() }
+    }
   }
 
   list(query: UsageLedgerQuery): UsageLedgerPage {
@@ -185,35 +233,33 @@ export class UsageLedger {
         .map(({ engine, sessionId, coverageStart, updatedAt, issue }) => ({ engine, sessionId, coverageStart, updatedAt, issue }))
       database.exec('COMMIT')
       return { records: rows.slice(0, limit).map(row => ({ ...JSON.parse(row.data) as UsageRecord, id: String(row.id) })), sessions, coverageStart: summary.coverageStart ?? undefined, hasIssues: Boolean(summary.hasIssues), throughId, nextOffset: rows.length > limit ? offset + limit : undefined }
-    } finally { database.close() }
+    } catch (error) {
+      try { database.exec('ROLLBACK') } catch { /* transaction may not have started */ }
+      throw error
+    }
   }
 
   markMissing(engine: string, sessionId: string): void {
     const database = this.open()
-    try {
-      database.prepare("UPDATE sessions SET data=json_set(data,'$.issue','source-unavailable') WHERE json_extract(key,'$[0]')=? AND json_extract(key,'$[2]')=? AND json_extract(data,'$.issue') IS NULL").run(engine, sessionId)
-    } finally { database.close() }
+    database.prepare("UPDATE sessions SET data=json_set(data,'$.issue','source-unavailable') WHERE json_extract(key,'$[0]')=? AND json_extract(key,'$[2]')=? AND json_extract(data,'$.issue') IS NULL").run(engine, sessionId)
   }
 
   sourceCheckpoint(engine: string, namespace: string, sessionId: string): UsageSourceCheckpoint | undefined {
     const database = this.open()
-    try {
-      const row = database.prepare('SELECT data FROM sessions WHERE key=?').get(JSON.stringify([engine, namespace, sessionId])) as { data: string } | undefined
-      if (!row) return undefined
-      const { sourceSize, sourceHash, updatedAt, model } = JSON.parse(row.data) as SessionState
-      return { sourceSize, sourceHash, updatedAt, model }
-    } finally { database.close() }
+    const row = database.prepare('SELECT data FROM sessions WHERE key=?').get(JSON.stringify([engine, namespace, sessionId])) as { data: string } | undefined
+    if (!row) return undefined
+    const { sourceSize, sourceHash, updatedAt, model, mode, counters } = JSON.parse(row.data) as SessionState
+    return { sourceSize, sourceHash, updatedAt, model, mode: mode ?? (counters ? 'cumulative' : 'events') }
   }
 
   /** Corpus scanner pre-flight: accounting mode already locked for a session, plus its read cursor. */
   sessionState(engine: string, namespace: string, sessionId: string): { mode: 'events' | 'cumulative'; sourceSize?: number } | undefined {
     const database = this.open()
-    try {
-      const row = database.prepare('SELECT data FROM sessions WHERE key=?').get(JSON.stringify([engine, namespace, sessionId])) as { data: string } | undefined
-      if (!row) return undefined
-      const { counters, mode, sourceSize, codexCacheWrites } = JSON.parse(row.data) as SessionState
-      // Re-read legacy Codex files once even when their byte size is unchanged.
-      return { mode: mode ?? (counters ? 'cumulative' : 'events'), sourceSize: engine === 'codex' && !codexCacheWrites ? undefined : sourceSize }
-    } finally { database.close() }
+    const row = database.prepare('SELECT data FROM sessions WHERE key=?').get(JSON.stringify([engine, namespace, sessionId])) as { data: string } | undefined
+    if (!row) return undefined
+    const { counters, mode, sourceSize, codexCacheWrites, codexEventModels } = JSON.parse(row.data) as SessionState
+    const lockedMode = mode ?? (counters ? 'cumulative' : 'events')
+    // Re-read old events once for source-backed model/caching enrichment.
+    return { mode: lockedMode, sourceSize: engine === 'codex' && (!codexCacheWrites || (lockedMode === 'events' && !codexEventModels)) ? undefined : sourceSize }
   }
 }

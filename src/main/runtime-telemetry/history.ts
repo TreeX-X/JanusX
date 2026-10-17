@@ -7,9 +7,13 @@ import { statSync, type Stats } from 'node:fs'
 import type { RuntimeTelemetryRequest, RuntimeTelemetrySnapshot } from '../../shared/ipc/system'
 import type { UsageEngine, UsageObservation, UsageSourceCheckpoint } from '../../shared/usage'
 import { collectUsageEvents, cumulativeUsage, usageTokens } from './history-usage'
+import { sourceVersion } from './source-version'
+import { OpenCodeUsageSource } from './opencode-source'
+import { resolveOpencodeDbPath } from '../sessions/opencode-store-path'
 
-export type HistoryTelemetrySnapshot = RuntimeTelemetrySnapshot & { usageObservation?: UsageObservation }
+export type HistoryTelemetrySnapshot = RuntimeTelemetrySnapshot & { usageObservation?: UsageObservation; sourceVersion?: string }
 export type HistoryTelemetryRequest = RuntimeTelemetryRequest & { codexHome?: string }
+export interface JsonlSourceRead { buffer: Buffer; info: Stats }
 type CheckpointLookup = (engine: UsageEngine, namespace: string, sessionId: string) => UsageSourceCheckpoint | undefined
 
 export interface SessionFileRef {
@@ -139,8 +143,10 @@ function recentCacheHitRate(input?: number, cached?: number, written = 0): numbe
 }
 
 export async function parseClaudeSession(file: SessionFileRef, startedAt?: number, preRead?: string[]): Promise<HistoryTelemetrySnapshot | null> {
-  const lines = preRead ?? await readJsonlLines(file.path, true)
+  let version: string | undefined
+  const lines = preRead ?? await readJsonlLines(file.path, true, (_buffer, info) => { version = sourceVersion(info) })
   const snapshot: HistoryTelemetrySnapshot = {
+    sourceVersion: version,
     filePath: file.path,
     observedAt: file.updatedAt,
     source: 'history',
@@ -255,13 +261,15 @@ export async function parseCodexSession(
   includeCompactions = false,
   checkpointLookup?: CheckpointLookup,
   preRead?: string[],
+  preReadSource?: JsonlSourceRead,
 ): Promise<HistoryTelemetrySnapshot | null> {
   // Compression is an auditable count, not a best-effort tail sample. A bound
   // session is read completely so older compactions cannot disappear from a
   // long rollout file.
-  let source: { buffer: Buffer; info: Stats } | undefined
+  let source = preReadSource
   const lines = preRead ?? await readJsonlLines(file.path, includeCompactions, (buffer, info) => { source = { buffer, info } })
   const snapshot: HistoryTelemetrySnapshot & { cwd?: string } = {
+    sourceVersion: source ? sourceVersion(source.info) : undefined,
     filePath: file.path,
     observedAt: file.updatedAt,
     source: 'history',
@@ -422,7 +430,7 @@ export async function readJsonlLinesWithCursor(filePath: string, full = false, c
       }
       const complete = lines.filter(line => line.trim())
       if (complete.some(line => !parseJsonObject(line))) return { lines: [], completeBytes: 0, size }
-      capture?.(fullBuffer, info)
+      capture?.(fullBuffer.subarray(0, completeBytes), info)
       return { lines: complete, completeBytes, size }
     }
 
@@ -584,7 +592,25 @@ async function readOpenCodeBootstrapTelemetry(cwd: string): Promise<RuntimeTelem
 }
 
 function readOpenCodeSessionTelemetry(cwd: string, sessionId: string, checkpointLookup?: CheckpointLookup): HistoryTelemetrySnapshot | null {
-  const databasePath = join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db')
+  const databasePath = resolveOpencodeDbPath(os.homedir())
+  let source: OpenCodeUsageSource | undefined
+  try {
+    source = new OpenCodeUsageSource(databasePath)
+    const session = source.sessions().find(row => row.id === sessionId)
+    if (!session || !pathsEqual(session.directory, cwd)) return null
+    const checkpoint = checkpointLookup?.('opencode', databasePath, sessionId)
+    const result = source.read(session, Date.now(), checkpoint && checkpoint.mode !== 'events' ? 'cumulative' : 'events', checkpoint)
+    const latest = result.latest
+    const contextTokens = latest ? latest.inputTokens + (latest.cacheReadTokens ?? 0) + (latest.cacheWriteTokens ?? 0) : undefined
+    return {
+      ...result.totals, sessionId, filePath: databasePath,
+      detectedModel: latest?.model, contextTokens,
+      recentCacheHitRate: latest ? recentCacheHitRate(latest.inputTokens, latest.cacheReadTokens, latest.cacheWriteTokens) : undefined,
+      observedAt: latest?.at ?? session.time_updated, source: 'history', confidence: 'authoritative',
+      usageObservation: result.observation,
+    }
+  } catch { /* Older stores without native message identities retain the cumulative adapter below. */ }
+  finally { source?.close() }
   let database: DatabaseSync | undefined
   try {
     database = new DatabaseSync(databasePath, { readOnly: true })

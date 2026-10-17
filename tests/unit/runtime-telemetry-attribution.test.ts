@@ -18,6 +18,12 @@ vi.mock('os', async (importOriginal) => {
 })
 
 const { TerminalContextCoordinator } = await import('../../src/main/runtime-telemetry/coordinator')
+const coordinators: InstanceType<typeof TerminalContextCoordinator>[] = []
+function createCoordinator() {
+  const value = new TerminalContextCoordinator()
+  coordinators.push(value)
+  return value
+}
 
 const CWD = 'C:/repo'
 // Keep terminal starts and file timestamps on one clock even on slow runners.
@@ -45,6 +51,7 @@ describe('terminal attribution without hooks', () => {
   })
 
   afterEach(async () => {
+    await Promise.all(coordinators.splice(0).map(value => value.shutdown()))
     vi.restoreAllMocks()
     vi.unstubAllEnvs()
     await rm(testContext.homeDir, { recursive: true, force: true })
@@ -53,7 +60,7 @@ describe('terminal attribution without hooks', () => {
 
   it('binds an unbound terminal to the session its pty activity matches', async () => {
     await writeCodexSession(CWD, NOW)
-    const coordinator = new TerminalContextCoordinator()
+    const coordinator = createCoordinator()
     coordinator.trackTerminal('terminal-1', 'codex', CWD)
     coordinator.noteTerminalActivity('terminal-1', NOW)
 
@@ -65,7 +72,7 @@ describe('terminal attribution without hooks', () => {
 
   it('never re-attributes a terminal that already has a hook binding', async () => {
     await writeCodexSession(CWD, NOW)
-    const coordinator = new TerminalContextCoordinator()
+    const coordinator = createCoordinator()
     coordinator.trackTerminal('terminal-1', 'codex', CWD)
     // The hook asserted this session first; correlation must not disturb it.
     expect(coordinator.bindSession('terminal-1', 'codex', SESSION_ID, 'hook')).toBe(true)
@@ -80,7 +87,7 @@ describe('terminal attribution without hooks', () => {
 
   it('lets a hook assertion upgrade a correlated binding', async () => {
     await writeCodexSession(CWD, NOW)
-    const coordinator = new TerminalContextCoordinator()
+    const coordinator = createCoordinator()
     coordinator.trackTerminal('terminal-1', 'codex', CWD)
     coordinator.noteTerminalActivity('terminal-1', NOW)
     await coordinator.runAttributionPass()
@@ -105,7 +112,7 @@ describe('terminal attribution without hooks', () => {
 
   it('keeps one session exclusive across terminals', async () => {
     await writeCodexSession(CWD, NOW)
-    const coordinator = new TerminalContextCoordinator()
+    const coordinator = createCoordinator()
     coordinator.trackTerminal('terminal-1', 'codex', CWD)
     coordinator.trackTerminal('terminal-2', 'codex', CWD)
     coordinator.noteTerminalActivity('terminal-1', NOW)
@@ -124,7 +131,7 @@ describe('terminal attribution without hooks', () => {
 
   it('stays unbound without pty activity even when a session file exists', async () => {
     await writeCodexSession(CWD, NOW)
-    const coordinator = new TerminalContextCoordinator()
+    const coordinator = createCoordinator()
     coordinator.trackTerminal('terminal-1', 'codex', CWD)
 
     await coordinator.runAttributionPass()

@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import os from 'node:os'
 import { listJsonlFiles, listJsonlFilesRecursive, parseJsonObject, readJsonConfig, readJsonlLinesWithCursor, readString, toClaudeProjectKey } from './history'
 import type { UsageEngine } from '../../shared/usage'
+import { OpenCodeUsageSource } from './opencode-source'
+import { resolveOpencodeDbPath } from '../sessions/opencode-store-path'
 
 /**
  * How close a session file's last write must be to the terminal's last pty
@@ -31,8 +33,8 @@ export interface AttributionQuery {
   codexHome?: string
 }
 
-function isCorrelatable(engine: UsageEngine): engine is 'claude' | 'codex' | 'pi' {
-  return engine === 'claude' || engine === 'codex' || engine === 'pi'
+function isCorrelatable(engine: UsageEngine): engine is 'claude' | 'codex' | 'pi' | 'opencode' {
+  return engine === 'claude' || engine === 'codex' || engine === 'pi' || engine === 'opencode'
 }
 
 /**
@@ -87,6 +89,18 @@ export async function findCorrelatedSession(query: AttributionQuery): Promise<Co
         })
       }
     }
+  } else if (query.engine === 'opencode') {
+    const databasePath = resolveOpencodeDbPath(os.homedir())
+    let source: OpenCodeUsageSource | undefined
+    try {
+      source = new OpenCodeUsageSource(databasePath)
+      for (const session of source.sessions()) {
+        if (!pathsEqual(session.directory, cwd) || session.time_updated < earliest
+          || Math.abs(session.time_updated - lastActivityAt) > CORRELATION_WINDOW_MS) continue
+        candidates.push({ sessionId: session.id, namespace: databasePath, filePath: databasePath, activatedAt: session.time_updated })
+      }
+    } catch { /* Missing or unreadable database cannot establish attribution. */ }
+    finally { source?.close() }
   } else {
     for (const root of await piSessionRoots()) {
       for (const file of await listJsonlFilesRecursive(root, name => name.endsWith('.jsonl'))) {
