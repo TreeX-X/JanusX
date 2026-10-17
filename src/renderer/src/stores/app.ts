@@ -9,6 +9,9 @@ interface AppStore {
   panelCollapsed: boolean
   blueprintMode: boolean
   activeWorkbench: ActiveWorkbench
+  /** 岛下拉副黑板：展开中的卷帘板与其下缘的视口 Y（原生浏览器视图按此让出顶带）。 */
+  blackboardOpen: boolean
+  blackboardBottom: number
   /** 翻转动画时长（ms），快甩 350 / 慢拖 650 */
   flipDuration: number
   /** 灵动岛是否正在拖拽中（App.tsx 据此禁用 transition） */
@@ -27,6 +30,9 @@ interface AppStore {
   setBlueprintMode: (enabled: boolean) => void
   setActiveWorkbench: (workbench: ActiveWorkbench) => void
   toggleWorkbench: (workbench: Exclude<ActiveWorkbench, null>) => void
+  setBlackboardOpen: (open: boolean) => void
+  toggleBlackboard: () => void
+  setBlackboardBottom: (bottom: number) => void
   setFlipDuration: (ms: number) => void
   setIsIslandDragging: (v: boolean) => void
   setDragFlipProgress: (v: number) => void
@@ -42,6 +48,8 @@ export const useAppStore = create<AppStore>((set) => ({
   panelCollapsed: true,
   blueprintMode: false,
   activeWorkbench: null,
+  blackboardOpen: false,
+  blackboardBottom: 0,
   flipDuration: 650,
   isIslandDragging: false,
   dragFlipProgress: 0,
@@ -55,6 +63,15 @@ export const useAppStore = create<AppStore>((set) => ({
   setBlueprintMode: (blueprintMode) => set({ blueprintMode }),
   setActiveWorkbench: (activeWorkbench) => set({ activeWorkbench }),
   toggleWorkbench: (workbench) => set((s) => ({ activeWorkbench: s.activeWorkbench === workbench ? null : workbench })),
+  setBlackboardOpen: (blackboardOpen) => set((s) => ({
+    blackboardOpen,
+    blackboardBottom: blackboardOpen ? s.blackboardBottom : 0,
+  })),
+  toggleBlackboard: () => set((s) => ({
+    blackboardOpen: !s.blackboardOpen,
+    blackboardBottom: !s.blackboardOpen ? s.blackboardBottom : 0,
+  })),
+  setBlackboardBottom: (blackboardBottom) => set({ blackboardBottom }),
   setFlipDuration: (ms) => set({ flipDuration: ms }),
   setIsIslandDragging: (v) => set({ isIslandDragging: v }),
   setDragFlipProgress: (v) => set({ dragFlipProgress: v }),

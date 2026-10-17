@@ -27,6 +27,8 @@ interface IslandGestureOptions {
   onDragProgress?: (deltaY: number, progress: number) => void
   isRunning: boolean
   enableComplexGestures?: boolean
+  /** pull-hint 文案（下拉副黑板语义）；缺省保留原型英文 */
+  pullHint?: { keep: string; release: string }
 }
 
 export function useIslandGesture({
@@ -37,6 +39,7 @@ export function useIslandGesture({
   onDragProgress,
   isRunning,
   enableComplexGestures = true,
+  pullHint,
 }: IslandGestureOptions) {
   const islandRef = useRef<HTMLDivElement>(null)
   const pullHintRef = useRef<HTMLDivElement>(null)
@@ -72,6 +75,8 @@ export function useIslandGesture({
   const DOUBLE_TAP_TOLERANCE = 18
 
   singleTapCallbackRef.current = onSingleTap
+  const pullHintLabelsRef = useRef(pullHint)
+  pullHintLabelsRef.current = pullHint
 
   /*-- 清理 --*/
   useEffect(() => {
@@ -280,11 +285,12 @@ export function useIslandGesture({
           if (deltaY > 20 && !isRunning) {
             hint.style.opacity = String(Math.min(deltaY / 30, 1))
             hint.style.transform = `translate(-50%, ${offset}px)` // 跟随岛屿向下移动
+            const labels = pullHintLabelsRef.current
             if (deltaY >= T) {
-              hint.textContent = 'Release to flip'
+              hint.textContent = labels?.release ?? 'Release to flip'
               hint.style.color = '#fff'
             } else {
-              hint.textContent = 'Keep pulling to switch view'
+              hint.textContent = labels?.keep ?? 'Keep pulling to switch view'
               hint.style.color = '#888'
             }
           } else {

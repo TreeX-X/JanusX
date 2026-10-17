@@ -208,8 +208,7 @@ export function JanusIsland({
   const cancelMaintenance = useBlueprintMaintenanceStore((state) => state.cancel)
   const loadBlueprint = useBlueprintStore((state) => state.loadBlueprint)
 
-  const blueprintMode = useAppStore((s) => s.blueprintMode)
-  const setBlueprintMode = useAppStore((s) => s.setBlueprintMode)
+  const toggleBlackboard = useAppStore((s) => s.toggleBlackboard)
   const setActiveWorkbench = useAppStore((s) => s.setActiveWorkbench)
   const roundtableEnabled = useExperimentalStore((s) => s.roundtable)
   const personaEnabled = useExperimentalStore((s) => s.persona)
@@ -284,9 +283,10 @@ export function JanusIsland({
     handleSingleTap()
   }, [handleSingleTap])
 
-  const handleSwipeFlip = useCallback(() => {
-    setBlueprintMode(!blueprintMode)
-  }, [blueprintMode, setBlueprintMode])
+  const handleSwipeBoard = useCallback(() => {
+    // 下拉 ≥60px 放下副黑板（取代蓝图翻牌）：Note island-blackboard.md
+    toggleBlackboard()
+  }, [toggleBlackboard])
 
   const handleOpenBlueprintWorkbench = useCallback(() => {
     setActiveWorkbench('blueprint')
@@ -307,12 +307,16 @@ export function JanusIsland({
     handlePointerCancel,
   } = useIslandGesture({
     onLongPress: handleLongPress,
-    onSwipeFlip: handleSwipeFlip,
+    onSwipeFlip: handleSwipeBoard,
     onDoubleTap: handleDoubleTap,
     onSingleTap: handleSingleTap,
     onDragProgress: handleDragProgress,
     isRunning: janusRunning,
     enableComplexGestures: stage !== 'expanded',
+    pullHint: {
+      keep: t('janus:blackboard.pullHint.keep'),
+      release: t('janus:blackboard.pullHint.release'),
+    },
   })
 
   const activeSession = useBlueprintStore((s) => s.activeSession)

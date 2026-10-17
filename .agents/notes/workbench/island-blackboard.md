@@ -6,7 +6,7 @@
   "lifecycle": "draft",
   "created": "2026-10-17",
   "class": "architecture",
-  "updated": "2026-10-17T06:52:36Z",
+  "updated": "2026-10-17T09:55:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -54,3 +54,5 @@
 落地面：`useIslandGesture` 回调从 `setBlueprintMode` 改落板语义、卷帘板 chrome 与槽位、钉 store 与按工作区持久化、iframe 沙箱钉、md 钉读、蓝图活图页签、浏览器借调（占位卡 + freeze-frame + setBounds 归还）、跟随文件 watch、`blueprintMode` 收敛。视觉遵守 planche 纸底墨线、透明面板加 1px 发丝线、无色块填充（选中=文字+2px 强调条）与四级排版层次，板与主工作区同材质（[planche-theme](./requirements/planche-theme.md)）。`design/janus-island-hifi.html` S0 表「下拉拖拽 ≥60px → 翻转蓝图视图（flip）」一行由本决策取代。
 
 修订条件：出现「板上要敲命令」的持续证据→重启终端议题（当前明确拒绝）；用户长期开让位模式→常驻共存改道工作区分屏，而非继续拧卷帘；出现第二个原生视图类内容→直接套借调钉规则。
+
+**落地状态（2026-10-17，演示切片）**：手势已改绑——下拉 ≥60px 落卷帘板（`toggleBlackboard`），pull-hint 文案随 i18n；`IslandBlackboard` 组件落地钉头（页签/钉住/刷新/跟随文件/打开真身/取消钉/收起）、蓝图活图页签、html/md/text 投影钉（复用 `LocalFileStage`）、下缘 9px 拖高与 Esc 分层收板；浏览器原生视图按 `blackboardBottom` 让出顶带（`BrowserSurface` bounds 裁剪 + 订阅重报）。板高与钉布局持久化 localStorage。未做：借调钉、板内多槽、`blueprintMode` 翻牌路径退役、让位模式、从文件树/产物拖钉入口。

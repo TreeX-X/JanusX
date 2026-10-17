@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
 import { JanusIsland } from '@/components/janus'
+import { IslandBlackboard } from '@/components/blackboard/IslandBlackboard'
 import { AppSettingsModal, type SettingsTab } from '@/components/AppSettingsModal'
 import { PersonalMemoryWorkbench } from '@/components/knowledge'
 import { UpdaterBadge } from '@/components/UpdaterBadge'
@@ -363,6 +364,9 @@ export function Titlebar() {
         isOpen={knowledgeEnabled && activeWorkbench === 'knowledge'}
         onClose={() => setActiveWorkbench(null)}
       />
+
+      {/* 岛下拉副黑板（卷帘）：固定在标题栏下沿，盖住工作区顶带 */}
+      <IslandBlackboard />
 
       {/* 灵动岛 + 运行球簇 */}
       <div
