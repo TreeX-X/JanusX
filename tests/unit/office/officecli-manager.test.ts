@@ -30,6 +30,23 @@ function createHarness(options: {
 }
 
 describe('OfficecliManager', () => {
+  it('lets terminal launches read startup verification without starting another probe', async () => {
+    const binary = resolve('C:\\bundle\\officecli.exe')
+    const { manager, run } = createHarness({ files: [binary], bundledBinaryPath: binary })
+    expect(manager.getVerifiedBinary()).toBeUndefined()
+    expect(run).not.toHaveBeenCalled()
+    await manager.detect()
+    run.mockClear()
+    expect(manager.getVerifiedBinary()?.path).toBe(binary)
+    expect(run).not.toHaveBeenCalled()
+
+    manager.configureBundledBinaryPath(undefined)
+    expect(manager.getVerifiedBinary()).toBeUndefined()
+    await manager.detect()
+    for (let i = 0; i < 3; i++) expect(manager.getVerifiedBinary()).toBeUndefined()
+    expect(run).not.toHaveBeenCalled()
+  })
+
   it('returns the missing bundled state without probes when no binary is configured', async () => {
     const { manager, run } = createHarness()
 

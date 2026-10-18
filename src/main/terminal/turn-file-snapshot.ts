@@ -9,6 +9,7 @@ import type { TurnChangedFile } from '../../shared/ipc/terminal'
 const execFileAsync = promisify(execFile)
 const MAX_FILE_BYTES = 2 * 1024 * 1024
 const MAX_TEXT_BYTES = 16 * 1024 * 1024
+const CAPTURE_CONCURRENCY = 8
 const SKIP = new Set(['.git', '.janusX', 'node_modules', 'out', 'dist', 'build', '.cache', '.next', '.vite', '.turbo', 'coverage'])
 
 interface FileSnapshot {
@@ -45,43 +46,56 @@ async function filePaths(cwd: string): Promise<string[]> {
   }
 }
 
+async function captureFile(root: string, path: string): Promise<[string, FileSnapshot] | undefined> {
+  const normalized = path.replace(/\\/g, '/')
+  if (normalized.split('/').some(part => SKIP.has(part))) return
+  const absolute = resolve(root, path)
+  const rel = relative(root, absolute)
+  if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) return
+  try {
+    const stats = await lstat(absolute)
+    if (!stats.isFile()) return
+    if (stats.size >= MAX_FILE_BYTES) {
+      return [normalized, { hash: `${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`, size: stats.size, binary: false, oversized: true }]
+    }
+    const handle = await open(absolute, 'r')
+    let content: Buffer
+    try {
+      const buffer = Buffer.allocUnsafe(Math.min(stats.size + 1, MAX_FILE_BYTES))
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+      if (bytesRead !== stats.size) throw new Error(`File changed during turn snapshot: ${normalized}`)
+      content = buffer.subarray(0, bytesRead)
+    } finally {
+      await handle.close()
+    }
+    const binary = content.subarray(0, 8192).includes(0)
+    const oversized = content.length >= MAX_FILE_BYTES
+    return [normalized, {
+      hash: createHash('sha256').update(content).digest('hex'), size: content.length, binary, oversized,
+      ...(!binary && !oversized ? { text: content.toString('utf8') } : {}),
+    }]
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+}
+
 export async function captureTurnFiles(cwd: string): Promise<TurnFileSnapshot> {
   const root = resolve(cwd)
   const snapshot: TurnFileSnapshot = new Map()
+  const paths = (await filePaths(root)).sort()
   let textBytes = 0
-  for (const path of await filePaths(root)) {
-    const normalized = path.replace(/\\/g, '/')
-    if (normalized.split('/').some(part => SKIP.has(part))) continue
-    const absolute = resolve(root, path)
-    const rel = relative(root, absolute)
-    if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) continue
-    try {
-      const stats = await lstat(absolute)
-      if (!stats.isFile()) continue
-      if (stats.size >= MAX_FILE_BYTES) {
-        snapshot.set(normalized, { hash: `${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`, size: stats.size, binary: false, oversized: true })
-        continue
+  // Bound both open handles and transient file contents. Commit in path order
+  // so I/O completion order cannot change which texts fit the retention budget.
+  for (let offset = 0; offset < paths.length; offset += CAPTURE_CONCURRENCY) {
+    const entries = await Promise.all(paths.slice(offset, offset + CAPTURE_CONCURRENCY).map(path => captureFile(root, path)))
+    for (const entry of entries) {
+      if (!entry) continue
+      const [path, file] = entry
+      if (file.text !== undefined) {
+        if (textBytes + file.size <= MAX_TEXT_BYTES) textBytes += file.size
+        else delete file.text
       }
-      const handle = await open(absolute, 'r')
-      let content: Buffer
-      try {
-        const buffer = Buffer.allocUnsafe(Math.min(stats.size + 1, MAX_FILE_BYTES))
-        const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
-        if (bytesRead !== stats.size) throw new Error(`File changed during turn snapshot: ${normalized}`)
-        content = buffer.subarray(0, bytesRead)
-      } finally {
-        await handle.close()
-      }
-      const binary = content.subarray(0, 8192).includes(0)
-      const oversized = content.length >= MAX_FILE_BYTES
-      const retainText = !binary && !oversized && textBytes + content.length <= MAX_TEXT_BYTES
-      snapshot.set(normalized, {
-        hash: createHash('sha256').update(content).digest('hex'), size: content.length, binary, oversized,
-        ...(retainText ? { text: content.toString('utf8') } : {}),
-      })
-      if (retainText) textBytes += content.length
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      snapshot.set(path, file)
     }
   }
   return snapshot

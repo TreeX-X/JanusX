@@ -104,6 +104,17 @@ describe('adjacent completed turn snapshots', () => {
 })
 
 describe('bounded file capture', () => {
+  it('retains the same first 16 MiB in path order across concurrent batches', async () => {
+    const names = Array.from({ length: 18 }, (_, index) => `${String(index).padStart(2, '0')}.txt`)
+    await Promise.all(names.map(name => writeFile(join(cwd, name), Buffer.alloc(1024 * 1024, 65))))
+    const snapshot = await captureTurnFiles(cwd)
+    expect([...snapshot.keys()]).toEqual(names)
+    expect([...snapshot].filter(([, file]) => file.text !== undefined).map(([name]) => name)).toEqual(names.slice(0, 16))
+    expect(snapshot.get('17.txt')).toMatchObject({ size: 1024 * 1024, binary: false, oversized: false })
+    expect(snapshot.get('17.txt')?.hash).toBe(snapshot.get('00.txt')?.hash)
+    expect(compareTurnFiles(snapshot, await captureTurnFiles(cwd))).toEqual([])
+  })
+
   it('honors Git ignores and preserves Unicode paths', async () => {
     await promisify(execFile)('git', ['init', '-q'], { cwd })
     await writeFile(join(cwd, '.gitignore'), '*.log\n')

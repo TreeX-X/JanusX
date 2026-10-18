@@ -1,4 +1,8 @@
 {
+  "startup": {
+    "starting": "Starting terminal…",
+    "waitingForOutput": "Waiting for terminal output…"
+  },
   "status": {
     "running": "Running",
     "wait": "Idle",

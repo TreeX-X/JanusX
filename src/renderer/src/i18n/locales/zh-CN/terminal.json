@@ -1,4 +1,8 @@
 {
+  "startup": {
+    "starting": "正在启动终端…",
+    "waitingForOutput": "正在等待终端输出…"
+  },
   "status": {
     "running": "运行中",
     "wait": "空闲",

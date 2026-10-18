@@ -1,6 +1,8 @@
 import { useRef, useEffect, useCallback, useState, type DragEvent } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { LoaderCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import '@xterm/xterm/css/xterm.css'
 import {
   formatTerminalFileReference,
@@ -65,6 +67,13 @@ export function CLITerminal({
   const visibilityRecoveryTimerRef = useRef<number | null>(null)
   const [fileDragOver, setFileDragOver] = useState(false)
   const [rendererGeneration, setRendererGeneration] = useState(0)
+  const [hasRenderedOutput, setHasRenderedOutput] = useState(false)
+  const { t } = useTranslation('terminal')
+  const pid = useWorkspaceStore((s) => s.terminals.find((terminal) => terminal.id === terminalId)?.pid)
+  const exited = useWorkspaceStore((s) => {
+    const terminal = s.terminals.find((item) => item.id === terminalId)
+    return Boolean(terminal?.errorMessage) || terminal?.exitCode !== undefined
+  })
   const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed)
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
   const appTheme = useThemeStore((s) => s.theme)
@@ -217,6 +226,19 @@ export function CLITerminal({
       : []
 
     const hostElement = containerRef.current
+    // A spawned PTY or an ANSI-only packet is not a painted prompt. Keep the
+    // startup hint until xterm has actually rendered visible text (including replay).
+    let firstOutputRendered = false
+    const renderDisposable = term.onRender(({ start, end }) => {
+      if (firstOutputRendered) return
+      const buffer = term.buffer.active
+      for (let row = start; row <= end; row++) {
+        if (!buffer.getLine(buffer.viewportY + row)?.translateToString(true).trim()) continue
+        firstOutputRendered = true
+        setHasRenderedOutput(true)
+        break
+      }
+    })
     const hostParent = hostElement.parentElement
     const scrollIntent = createTerminalScrollIntentController(term)
     attachTerminalTuiWheelHandler(term)
@@ -519,6 +541,7 @@ export function CLITerminal({
       unregisterTerminalForceFit(terminalId)
       clearTerminalGeometry(terminalId)
       bufferChangeDisposable.dispose()
+      renderDisposable.dispose()
       win32InputModeEnableDisposable.dispose()
       win32InputModeDisableDisposable.dispose()
       for (const disposable of colorQueryDisposables) disposable.dispose()
@@ -575,16 +598,27 @@ export function CLITerminal({
   }, [terminalId])
 
   return (
-    <div
-      ref={containerRef}
-      className="cli-terminal w-full h-full transition-[box-shadow,background]"
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      style={{
-        boxShadow: fileDragOver ? 'inset 0 0 0 1px rgba(255, 120, 48, 0.45)' : 'none',
-        background: fileDragOver ? 'rgba(255, 120, 48, 0.035)' : 'transparent',
-      }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className="cli-terminal w-full h-full transition-[box-shadow,background]"
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        style={{
+          boxShadow: fileDragOver ? 'inset 0 0 0 1px rgba(255, 120, 48, 0.45)' : 'none',
+          background: fileDragOver ? 'rgba(255, 120, 48, 0.035)' : 'transparent',
+        }}
+      />
+      {!hasRenderedOutput && !exited && (
+        <div
+          role="status"
+          className="pointer-events-none absolute left-5 top-4 flex items-center gap-2 text-[12px] text-[var(--shell-muted)]"
+        >
+          <LoaderCircle size={14} aria-hidden="true" className="motion-safe:animate-spin" />
+          <span>{t(pid ? 'startup.waitingForOutput' : 'startup.starting')}</span>
+        </div>
+      )}
+    </>
   )
 }

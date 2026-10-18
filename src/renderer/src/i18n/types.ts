@@ -3789,6 +3789,8 @@ export type TypedI18nKey =
   | 'terminal:shellSettings.visibility.default'
   | 'terminal:shellSettings.visibility.hidden'
   | 'terminal:shellSettings.visibility.visible'
+  | 'terminal:startup.starting'
+  | 'terminal:startup.waitingForOutput'
   | 'terminal:status.degraded'
   | 'terminal:status.error'
   | 'terminal:status.needs-action'

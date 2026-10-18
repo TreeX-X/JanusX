@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-18T03:55:20Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -36,6 +36,8 @@ Office preview depends on a version-pinned OfficeCLI, yet the app ships without 
 ## Decision
 
 OfficeCLI is a bundled asset at `resources/officecli/officecli.exe` (pinned `1.0.135`, per-arch binary placed before packaging). `office-bundled-path.ts` owns the version, the expected SHA256, and the single resolver (`JANUSX_OFFICECLI_BINARY` override for dev, otherwise `<resources>/officecli`). `officecli-manager.ts` verifies only that candidate with `--version` plus `watch/create/batch` capability probes and reports `source: 'bundled'`. The broker pins the same SHA256. Preview, terminal, agent, and launcher consumers read the verified bundled path. Missing or incompatible binaries surface reinstall copy ("reinstall JanusX"), never an install prompt.
+
+Terminal creation reads `getVerifiedBinary()` synchronously. Application bootstrap already awaits `initializeOfficecliProvider()` before opening the window, so terminal registration, warmup and create do not repeat probes or refresh a missing result. A missing/incompatible OfficeCLI therefore cannot delay Shell or AI terminal startup; the terminal receives no verified OfficeCLI override in that case. Explicit Office consumers may still detect/refresh, and only subsequently created terminals receive a newly verified path. The Office manager and terminal IPC tests cover this behavior; the [startup investigation](../terminal/terminal-right-island-turn-history.md) owns timing evidence and UI feedback.
 
 ## Alternatives considered
 

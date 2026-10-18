@@ -91,6 +91,11 @@ export class OfficecliManager {
     return this.verifiedBinary
   }
 
+  /** Startup verifies the bundle before opening the window; terminal creation only reads it. */
+  getVerifiedBinary(): ResolvedBinary | undefined {
+    return this.verifiedBinary
+  }
+
   private async findCandidate(): Promise<ResolvedBinary | undefined> {
     const override = this.deps.env.JANUSX_OFFICECLI_BINARY
     if (override && await this.isRegularAbsoluteFile(override)) {

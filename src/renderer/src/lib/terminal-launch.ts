@@ -93,7 +93,7 @@ function waitForTerminalCreated(terminalId: string, timeoutMs = 8000): Promise<b
 
 /**
  * Fire-and-forget main-process prewarm for terminal creation:
- * CLI path cache, optional engine hook install, officecli binary cache.
+ * CLI path cache and optional engine hook install.
  */
 export function warmTerminalCreatePath(
   engines?: Array<Exclude<TerminalPreset, 'shell'> | 'shell'>,

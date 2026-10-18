@@ -404,13 +404,13 @@ function isWarmupEngine(value: string): value is WarmupEngine {
   return (AGENT_CLI_COMMANDS as readonly string[]).includes(value)
 }
 
-async function resolveOfficecliLaunchAssets(): Promise<{
+function resolveOfficecliLaunchAssets(): {
   pathDir: string | undefined
   binaryPath: string | undefined
-}> {
-  // Prefer session cache (resolveBinary only detect()s when verifiedBinary is empty).
-  // Do not call refreshAgentPathDir() on every create — full capability probes are expensive.
-  const binary = await officecliManager.resolveBinary()
+} {
+  // initializeOfficecliProvider runs before the window opens. Missing or broken
+  // Office support must not put capability probes on the terminal startup path.
+  const binary = officecliManager.getVerifiedBinary()
   return {
     pathDir: officecliManager.resolveAgentPathDir(),
     binaryPath: binary?.path,
@@ -643,7 +643,6 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   for (const command of AGENT_CLI_COMMANDS) {
     void resolveCLIPath(command).catch(() => undefined)
   }
-  void officecliManager.resolveBinary().catch(() => undefined)
 
   // Register terminal/hook cleanup into the unified shutdown path.
   // Window close without full quit still needs local cleanup.
@@ -706,7 +705,6 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
 
     await Promise.all([
       hookBridge.start().catch(() => undefined),
-      officecliManager.resolveBinary().catch(() => undefined),
       ...requested.map((engine) => resolveCLIPath(engine).catch(() => null)),
       ...requested.map(async (engine) => {
         try {
@@ -721,6 +719,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
   })
 
   const createTerminalLifecycle = async (config: TerminalCreateRequest, recoveryEnv?: SessionRecoveryEnvironment) => {
+    const launchStartedAt = performance.now()
     const { id, cwd, shell, preset, command, args, cols, rows, extraArgs, shellProfileId, shellCommand } = config
 
     const workspaceId = typeof config.workspaceId === 'string' ? config.workspaceId : ''
@@ -861,23 +860,9 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       }
     })()
 
-    // I-1 [P1] AC6: resolveOfficecliLaunchAssets() can reject when
-    // officecliManager.resolveBinary() -> detect() -> run() fails (no
-    // internal catch; see line 251's own .catch(() => undefined) proof).
-    // Without this guard, Promise.all below rejects between the pre-stub
-    // set (creationLocked: true) and the inner try that would release it,
-    // leaking the lock and permanently deadlocking same-id creates.
-    // Mirror the resolveProgramPromise/hookEnvPromise internal guard so
-    // all three legs of Promise.all are non-rejecting.
-    const officePromise = resolveOfficecliLaunchAssets().catch(() => ({
-      pathDir: undefined as string | undefined,
-      binaryPath: undefined as string | undefined,
-    }))
-
-    const [resolvedProgram, hookEnvBase, office] = await Promise.all([
+    const [resolvedProgram, hookEnvBase] = await Promise.all([
       resolveProgramPromise,
       hookEnvPromise,
-      officePromise,
     ])
 
     const launchProgramError = resolvedProgram && 'error' in resolvedProgram ? resolvedProgram.error : undefined
@@ -897,6 +882,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
       }
     }
     const programArgs = [...(launchProgramResolved?.args ?? []), ...piExtensionArgs, ...(extraArgs ?? [])]
+    const preparationMs = Math.round(performance.now() - launchStartedAt)
 
     logTerminalDiagnostic('terminal create requested', {
       id,
@@ -913,7 +899,10 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
     try {
       if (launchProgramError) throw new Error(launchProgramError)
       if (recoveryHookError) throw recoveryHookError
+      const baselineStartedAt = performance.now()
       if (engine !== 'shell') await turnChangeTracker.register(id, cwd)
+      const baselineMs = Math.round(performance.now() - baselineStartedAt)
+      const office = resolveOfficecliLaunchAssets()
       const officeMcpEntry = resolve(__dirname, '..', 'office-mcp.js')
       const officeSession = buildOfficeAgentSession(engine, cwd, office.binaryPath, officeMcpEntry)
       if (officeSession.limitation) {
@@ -935,14 +924,14 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
           ...(recoveryEnv?.codexHome ? { CODEX_HOME: recoveryEnv.codexHome } : {}),
         },
       }, office.pathDir)
+      logTerminalDiagnostic('terminal launch timing', {
+        id, engine, preparationMs, baselineMs,
+        totalMs: Math.round(performance.now() - launchStartedAt),
+      })
       if (engine === 'codex') {
         serviceErrorDetectors.set(id, createTerminalServiceErrorDetector())
       } else {
         serviceErrorDetectors.delete(id)
-      }
-      // Only soft-revalidate when create had no officecli cache; avoid clearing a warm cache mid-flight.
-      if (!office.pathDir && !office.binaryPath) {
-        void officecliManager.refreshAgentPathDir().catch(() => undefined)
       }
     } catch (err) {
       logTerminalDiagnostic('terminal create failed', {
@@ -1042,6 +1031,7 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
 
     // PTY output: keep a bounded replay buffer so remounted terminals can recover
     // after workspace switches, then forward live data to the renderer.
+    let firstOutputReceived = false
     instance.pty.onData((data: string) => {
       // AC3: isolate native pty callback exceptions so a single terminal's
       // failure cannot crash the main process or other terminals.
@@ -1049,6 +1039,13 @@ export function registerTerminalHandlers(getMainWindow: () => BrowserWindow | nu
         // AC5: skip stale callbacks from a replaced pty.
         const current = terminalManager.getInstance(id)
         if (current && current.pty.pid !== registeredPid) return
+
+        if (!firstOutputReceived && data.length > 0) {
+          firstOutputReceived = true
+          logTerminalDiagnostic('terminal first output', {
+            id, engine, totalMs: Math.round(performance.now() - launchStartedAt),
+          })
+        }
 
         const colorQueryResponse = colorQueryResponder?.push(data)
         if (colorQueryResponse) {

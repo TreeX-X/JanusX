@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   onRenderer: vi.fn(),
   removeListener: vi.fn(),
   send: vi.fn(),
+  officeProbe: vi.fn(() => new Promise(() => {})),
 }))
 
 let terminalApi: TerminalAPI
@@ -36,12 +37,14 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../src/main/terminal/manager', () => ({
-  terminalManager: { appendOutput: vi.fn(), create: vi.fn(), getOutputReplay: vi.fn(), kill: vi.fn(), killAll: vi.fn(), resize: vi.fn(), write: vi.fn() },
+  terminalManager: { appendOutput: vi.fn(), create: vi.fn(() => ({ pty: { pid: 42, onData: vi.fn(), onExit: vi.fn() } })), getOutputReplay: vi.fn(), kill: vi.fn(), killAll: vi.fn(), resize: vi.fn(), write: vi.fn() },
 }))
-vi.mock('@janus-agent/agent-core', async (importOriginal) => ({ ...(await importOriginal()), checkpointManager: {} }))
+vi.mock('@janus-agent/agent-core', async (importOriginal) => ({ ...(await importOriginal()), checkpointManager: { initialize: vi.fn(async () => {}) } }))
 vi.mock('../../src/main/janus/analyzer', () => ({ analyzer: {} }))
-vi.mock('../../src/main/agent/cli-resolver', () => ({ resolveCLIPath: vi.fn(async () => null) }))
-vi.mock('../../src/main/agent/subagent-run-registry', () => ({ subAgentRunRegistry: {} }))
+vi.mock('../../src/main/janus-runner/cli-resolver', () => ({ resolveCLIPath: vi.fn(async () => null) }))
+vi.mock('../../src/main/janus-runner/subagent-run-registry', () => ({ subAgentRunRegistry: {} }))
+vi.mock('../../src/main/terminal/shell-profiles', () => ({ resolveShellProfileLaunch: vi.fn(async () => ({ program: { command: 'powershell.exe', args: [] } })) }))
+vi.mock('../../src/main/runtime-telemetry/coordinator', () => ({ terminalContextCoordinator: { startCorpusScan: vi.fn(), trackTerminal: vi.fn(), runAttributionPass: vi.fn(async () => {}) } }))
 vi.mock('../../src/main/notifications/agent-hook-bridge', () => ({ AgentHookBridge: class { start = vi.fn(async () => {}); stop = vi.fn(); getEnv = vi.fn(() => ({})) } }))
 vi.mock('../../src/main/notifications/agent-hook-config', () => ({ AgentHookConfigManager: class {} }))
 vi.mock('../../src/main/notifications/agent-hook-coordinator', () => ({ AgentHookCoordinator: class { dispose = vi.fn() } }))
@@ -49,8 +52,8 @@ vi.mock('../../src/main/notifications/agent-hook-diagnostics', () => ({ AgentHoo
 vi.mock('../../src/main/terminal/diagnostics', () => ({ logTerminalDiagnostic: vi.fn() }))
 vi.mock('../../src/main/knowledge/agent-turn-recorder', () => ({ agentTurnRecorder: { dispose: vi.fn(), setEventSink: vi.fn() } }))
 vi.mock('../../src/main/shutdown/AppShutdown', () => ({ appShutdown: { configure: vi.fn(), isQuitting: false } }))
-vi.mock('../../src/main/office/officecli-manager', () => ({ officecliManager: { resolveBinary: vi.fn(async () => null) } }))
-vi.mock('../../src/main/office/office-agent-policy', () => ({ buildOfficeAgentSession: vi.fn(), mergeOfficeAgentEnv: vi.fn() }))
+vi.mock('../../src/main/office/officecli-manager', () => ({ officecliManager: { resolveBinary: mocks.officeProbe, getVerifiedBinary: vi.fn(), resolveAgentPathDir: vi.fn(), refreshAgentPathDir: mocks.officeProbe } }))
+vi.mock('../../src/main/office/office-agent-policy', () => ({ buildOfficeAgentSession: vi.fn(() => ({ env: {}, mode: 'managed' })), mergeOfficeAgentEnv: vi.fn(() => ({})) }))
 
 beforeAll(async () => {
   await import('../../src/preload/index')
@@ -59,6 +62,16 @@ beforeAll(async () => {
 })
 
 describe('Terminal IPC contract', () => {
+  it('starts repeated shells without invoking a blocked OfficeCLI probe', async () => {
+    const create = mocks.handle.mock.calls.find(([channel]) => channel === TERMINAL_INVOKE_CHANNELS.create)![1]
+    const warmup = mocks.handle.mock.calls.find(([channel]) => channel === TERMINAL_INVOKE_CHANNELS.warmup)![1]
+    await warmup({}, { engines: [] })
+    for (const id of ['shell-start-1', 'shell-start-2']) {
+      await expect(create({}, { id, cwd: process.cwd(), shell: 'powershell.exe', preset: 'shell' })).resolves.toEqual({ pid: 42 })
+    }
+    expect(mocks.officeProbe).not.toHaveBeenCalled()
+  }, 2000)
+
   beforeEach(() => {
     mocks.invoke.mockReset()
     mocks.onRenderer.mockReset()
