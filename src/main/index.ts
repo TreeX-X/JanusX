@@ -204,6 +204,11 @@ async function bootstrapApp(): Promise<void> {
     { clangdManager },
   ] = await importBootstrapModules()
 
+  // Resolve persisted theme before any startup/second-instance window can be created.
+  // Note: .agents/notes/workbench/standalone-editor-initial-theme.md
+  const { configService } = await import('./config/service')
+  await configService.getTheme()
+
   let mainWindow: BrowserWindow | null = null
   let quitAck: (() => void) | null = null
   ipcMain.on('app:prepareQuitAck', () => { quitAck?.(); quitAck = null })

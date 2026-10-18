@@ -147,7 +147,7 @@ if (isDesktopToast) {
   renderRoot()
 } else {
   // Note: .agents/notes/workbench/standalone-editor-initial-theme.md
-  // The loading fallback and Monaco must share the persisted theme on first render.
-  const themeReady = isEditorWindow ? useThemeStore.getState().load() : Promise.resolve()
+  // Every opaque app surface must use its persisted theme on first render.
+  const themeReady = useThemeStore.getState().load()
   void Promise.all([i18nReady, themeReady]).then(renderRoot)
 }

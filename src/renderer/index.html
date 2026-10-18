@@ -14,12 +14,13 @@
     <script>
       try {
         const params = new URLSearchParams(location.search)
-        // Seed the detached editor before styles/modules load; persisted theme is
+        // Seed the window before styles/modules load; persisted theme is
         // still read before React mounts. See standalone-editor-initial-theme Note.
-        if (params.get('editorWindow') === '1' && params.has('editorTheme')) {
-          document.documentElement.dataset.theme = params.get('editorTheme')
-          document.documentElement.style.backgroundColor = `var(--shell-canvas, ${params.get('editorBackground') || 'transparent'})`
-          document.documentElement.style.colorScheme = params.get('editorColorScheme') || ''
+        const prefix = params.has('initialTheme') ? 'initial' : 'editor'
+        if (params.has(`${prefix}Theme`)) {
+          document.documentElement.dataset.theme = params.get(`${prefix}Theme`)
+          document.documentElement.style.backgroundColor = `var(--shell-canvas, ${params.get(`${prefix}Background`) || 'transparent'})`
+          document.documentElement.style.colorScheme = params.get(`${prefix}ColorScheme`) || ''
         }
         if (params.get('desktopToast') === '1') {
           document.documentElement.classList.add('toast-prepaint')

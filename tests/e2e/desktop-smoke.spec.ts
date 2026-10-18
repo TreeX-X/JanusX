@@ -22,6 +22,52 @@ type ElectronProcess = ReturnType<ElectronApplication['process']>
 
 const PROCESS_EXIT_TIMEOUT = 5_000
 
+for (const theme of ['dark', 'planche']) {
+  test(`startup theme ${theme} matches the persisted profile from the native background onward`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'janusx-startup-theme-'))
+    let application: ElectronApplication | undefined
+    try {
+      const userDataDir = join(root, 'profile')
+      await mkdir(join(userDataDir, 'janusx'), { recursive: true })
+      await writeFile(join(userDataDir, 'janusx', 'config.json'), JSON.stringify({ theme, themeMigratedToSlate: true }))
+      application = await electron.launch({
+        args: [resolve('out/main/index.js'), `--user-data-dir=${userDataDir}`],
+        env: createDesktopTestEnv(root),
+      })
+      const page = await application.firstWindow()
+      const background = theme === 'dark' ? '#151517' : '#EFE4C5'
+      expect(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBackgroundColor())).toBe(background)
+      await page.waitForLoadState('domcontentloaded')
+      expect(new URL(page.url()).searchParams.get('initialTheme')).toBe(theme)
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      await expect(page.locator('#root')).not.toBeEmpty()
+
+      // Replay navigation with instrumentation installed before the HTML script,
+      // sampling every frame, including the empty page before React mounts.
+      await page.addInitScript(() => {
+        const frames: Array<{ theme: string | undefined; background: string }> = []
+        ;(window as any).startupFrames = frames
+        const sample = () => {
+          frames.push({ theme: document.documentElement.dataset.theme, background: getComputedStyle(document.documentElement).backgroundColor })
+          if (frames.length < 30) requestAnimationFrame(sample)
+        }
+        requestAnimationFrame(sample)
+      })
+      await page.reload()
+      await expect(page.locator('#root')).not.toBeEmpty()
+      await expect.poll(() => page.evaluate(() => (window as any).startupFrames.length)).toBeGreaterThan(5)
+      const frames = await page.evaluate(() => (window as any).startupFrames as Array<{ theme: string; background: string }>)
+      expect(frames.every(frame => frame.theme === theme)).toBe(true)
+      const rgb = theme === 'dark' ? 'rgb(21, 21, 23)' : 'rgb(239, 228, 197)'
+      expect(frames.every(frame => frame.background === rgb)).toBe(true)
+      await page.screenshot({ path: test.info().outputPath(`startup-${theme}.png`) })
+    } finally {
+      await closeApplication(application)
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    }
+  })
+}
+
 async function cleanupRendererFixtures(
   page: Page | undefined,
   terminalId: string | undefined,
