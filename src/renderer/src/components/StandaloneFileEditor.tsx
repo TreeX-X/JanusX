@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { FileViewerContent } from '@/components/FileViewerContent'
-import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
+import { getEditorFileId, invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useThemeStore } from '@/stores/theme'
 import { Maximize2, PanelRightOpen, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
 import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
@@ -72,6 +72,13 @@ export function StandaloneFileEditor() {
   const [baselineContent, setBaselineContent] = useState<string | undefined>(undefined)
   const [baselineFileId, setBaselineFileId] = useState<string | null>(null)
   const [isPinned, setIsPinned] = useState(false)
+  const viewedPath = activeFile && !activeFile.isLoading && !activeFile.error && activeFile.viewType !== 'binary'
+    ? activeFile.absolutePath : null
+  // Note: report only successfully loaded, viewable files to the main workbench — see .agents/notes/workbench/first-run-learning.md
+  useEffect(() => {
+    if (!editorParams || !viewedPath) return
+    window.electron.window.reportEditorViewed({ filePath: viewedPath, workspacePath: editorParams.workspacePath })
+  }, [viewedPath, editorParams])
   const unwatchFindControlsRef = useRef<(() => void) | null>(null)
   // 独立窗口不经过 App 根的 theme store，自行拉取持久化主题并挂载 [data-theme]，
   // 顶栏走 shell 语义令牌，与嵌入版保持一致；MonacoViewer 内的 load 仅覆盖编辑区。
@@ -104,7 +111,14 @@ export function StandaloneFileEditor() {
       // The main process reuses this window for new files. Opening through the
       // store activates an existing tab and only loads content for a new tab;
       // reloading here would reset the current editor's scroll position.
-      void openFile(payload.filePath, payload.workspacePath)
+      void openFile(payload.filePath, payload.workspacePath).then(() => {
+        // Reopening the already active tab changes no effect dependencies.
+        const state = useEditorStore.getState()
+        const file = state.openFiles.find(item => item.id === getEditorFileId(payload.filePath) && item.id === state.activeFileId)
+        if (file && !file.isLoading && !file.error && file.viewType !== 'binary') {
+          window.electron.window.reportEditorViewed({ filePath: file.absolutePath, workspacePath: payload.workspacePath })
+        }
+      })
     })
     window.electron.window.editorReady()
     return unsubscribe

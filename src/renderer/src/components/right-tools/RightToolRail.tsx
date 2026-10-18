@@ -73,6 +73,7 @@ export function RightToolRail({
               type="button"
               className={styles.railButton}
               data-state={state}
+              data-onboarding={tool.id === 'files' ? 'files' : undefined}
               aria-label={t('common:rightTool.railButtonAria', { label: rightToolLabel(tool, t, 'ariaLabel'), state: stateLabel })}
               aria-pressed={state === 'active'}
               onClick={() => onToggleTool(tool.id)}

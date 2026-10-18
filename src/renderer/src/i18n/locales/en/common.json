@@ -1,4 +1,66 @@
 {
+  "learning": {
+    "title": "Help & learning",
+    "introTitle": "Getting started",
+    "welcomeTitle": "Start with your first project",
+    "welcomeBody": "Get to know JanusX in four small actions: choose a project, open a terminal, try split panes, and view a file. No model setup needed. Leave whenever you like.",
+    "centerBody": "Learn by working in your workspace. Continue where you left off, or start again whenever you need a refresher.",
+    "finishTitle": "This introduction has ended",
+    "finishBody": "Verified and skipped steps are recorded separately. Continue working, or try again to practice the steps you skipped.",
+    "duration": "4 steps · About 3 minutes · No model needed",
+    "previouslyCompleted": "All actions completed before",
+    "summary": "This attempt: {{completed}} verified, {{skipped}} skipped.",
+    "returnHint": "Use Help & learning in the top right to continue or replay. It is also available in settings.",
+    "savedHint": "Leaving keeps your progress. Continue from Help & learning.",
+    "start": "Start learning",
+    "resume": "Continue learning",
+    "restart": "Start over",
+    "replay": "Learn again",
+    "directUse": "Explore on my own",
+    "continueWorking": "Continue working",
+    "exit": "Exit guide and keep progress",
+    "skipStep": "Skip this step",
+    "next": "Next",
+    "finish": "End introduction",
+    "done": "Verified",
+    "skipped": "Skipped",
+    "verified": "Action verified. You can continue.",
+    "stepCount": "Getting started · {{current}} / {{total}}",
+    "chooseProject": "Return to project selection",
+    "chooseFolder": "Choose project folder",
+    "openShell": "Open Shell",
+    "addShell": "Add a Shell terminal",
+    "openFiles": "Open file tool",
+    "projectMissing": "There is no active project. Return to project selection to continue. Your recorded progress is kept.",
+    "cliHint": "Shell needs no model. External CLIs such as Claude and Codex need their own installation and login; Island uses a separate model configuration.",
+    "actionError": "The action failed. Check the folder or terminal configuration and retry, or skip this step.",
+    "steps": {
+      "workspace": {
+        "title": "Choose a project",
+        "summary": "A folder becomes your workspace.",
+        "body": "Choose a local project folder. Your files stay where they are. If a project is already open, use the current workspace.",
+        "waiting": "Waiting for a project. Canceling folder selection does not advance the guide."
+      },
+      "terminal": {
+        "title": "Open your first terminal",
+        "summary": "Start Shell or a configured CLI in your project.",
+        "body": "Choose Open Shell, or use a terminal entry in the workspace. New terminals start in the project folder (or current worktree) shown below. You can reuse an existing live terminal.",
+        "waiting": "Waiting for a terminal to start successfully. Failed launches do not count."
+      },
+      "split": {
+        "title": "Work in two terminal panes",
+        "summary": "Drag a tab to a content edge and release to split.",
+        "body": "Prepare two terminals. Drag one terminal tab to the left, right, top, or bottom edge of the content area, then release when the drop hint appears. Reuse existing terminals when possible.",
+        "waiting": "Waiting for two live terminals in separate panes. You can skip this step if dragging is difficult."
+      },
+      "files": {
+        "title": "View a project file alongside your work",
+        "summary": "Open the file tool on the right and select a file.",
+        "body": "Open the file tool on the right and double-click a text, code, or image file. View it in its own window, then return here to continue. No editing or saving is needed. You can skip this for an empty folder.",
+        "waiting": "Waiting for a file in the current project to open successfully. Opening the file tool alone does not count."
+      }
+    }
+  },
   "cpa": {
     "settingsNav": "Service integrations",
     "settingsSubtitle": "Connect external management tools and reuse them across projects.",

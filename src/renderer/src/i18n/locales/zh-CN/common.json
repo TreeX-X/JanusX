@@ -1,4 +1,66 @@
 {
+  "learning": {
+    "title": "帮助与学习",
+    "introTitle": "首次入门",
+    "welcomeTitle": "从第一个项目开始",
+    "welcomeBody": "用四个小操作熟悉 JanusX：选项目、开终端、试分屏、看文件。无需配置模型，随时可以退出。",
+    "centerBody": "跟着实际操作熟悉工作区。退出后可以继续，也可以从头再学一次。",
+    "finishTitle": "这一轮入门学习已结束",
+    "finishBody": "已验证和跳过的步骤分别记录。你可以继续工作，或再学一次补上未练习的内容。",
+    "duration": "4 步 · 约 3 分钟 · 无需模型",
+    "previouslyCompleted": "曾完成全部实操",
+    "summary": "本轮已验证 {{completed}} 项，跳过 {{skipped}} 项。",
+    "returnHint": "右上角「帮助与学习」可随时继续或重学；设置中也有入口。",
+    "savedHint": "退出后保留进度，从「帮助与学习」继续。",
+    "start": "开始学习",
+    "resume": "继续学习",
+    "restart": "从头开始",
+    "replay": "再学一次",
+    "directUse": "直接使用",
+    "continueWorking": "继续工作",
+    "exit": "退出导引并保留进度",
+    "skipStep": "跳过这一步",
+    "next": "下一步",
+    "finish": "结束学习",
+    "done": "已验证",
+    "skipped": "已跳过",
+    "verified": "已检测到操作结果，可以继续。",
+    "stepCount": "首次入门 · {{current}} / {{total}}",
+    "chooseProject": "返回选择项目",
+    "chooseFolder": "选择项目文件夹",
+    "openShell": "打开 Shell",
+    "addShell": "添加一个 Shell 终端",
+    "openFiles": "打开文件工具",
+    "projectMissing": "当前没有活动项目。先返回选择项目，再继续学习；已经记录的进度会保留。",
+    "cliHint": "Shell 无需模型。Claude、Codex 等外部 CLI 需要各自安装和登录；Island 的模型配置另行设置。",
+    "actionError": "操作未成功。请检查目录或终端配置后重试，也可以跳过这一步。",
+    "steps": {
+      "workspace": {
+        "title": "选择一个项目",
+        "summary": "一个文件夹，就是一个工作区。",
+        "body": "选择本地项目文件夹，文件仍留在原处。已有项目时，直接使用当前工作区即可。",
+        "waiting": "等待选择项目；取消文件夹选择不会推进步骤。"
+      },
+      "terminal": {
+        "title": "打开第一个终端",
+        "summary": "在项目目录中启动 Shell 或已配置的 CLI。",
+        "body": "点击「打开 Shell」，或使用工作区中的终端入口。新终端会从下方项目目录（或当前任务盘）启动；已有可用终端可直接继续。",
+        "waiting": "等待终端成功启动；启动失败不会计为完成。"
+      },
+      "split": {
+        "title": "让两个终端并排工作",
+        "summary": "拖动标签到内容边缘，松手完成分屏。",
+        "body": "先准备两个终端，再把其中一个终端标签拖到内容区左、右、上或下边缘，出现落点提示后松手。已有两个终端时无需重复创建。",
+        "waiting": "等待两个可用终端分别出现在两个分屏中。拖拽不方便时可以先跳过。"
+      },
+      "files": {
+        "title": "在旁边查看项目文件",
+        "summary": "打开右侧文件工具，选择一个文件。",
+        "body": "打开右侧文件工具，双击一个文本、代码或图片文件，在独立窗口查看后回到这里继续。无需编辑或保存；空文件夹可以跳过。",
+        "waiting": "等待当前项目中的文件成功打开；仅展开文件工具不会计为完成。"
+      }
+    }
+  },
   "cpa": {
     "settingsNav": "服务集成",
     "settingsSubtitle": "连接外部管理工具，在各项目间复用。",

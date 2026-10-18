@@ -1,0 +1,143 @@
+import { expect, test, type Page } from '@playwright/test'
+
+const tour = (page: Page) => page.getByRole('region', { name: '首次入门', exact: true })
+const help = (page: Page) => page.locator('[data-onboarding="learning"]').first()
+
+async function openIntro(page: Page, query = '') {
+  await page.goto(`/onboarding.html${query}`)
+  await page.getByRole('button', { name: '开始学习', exact: true }).click()
+  await expect(tour(page)).toHaveAttribute('data-onboarding-step', 'workspace')
+}
+async function chooseProject(page: Page) {
+  await tour(page).getByRole('button', { name: '选择项目文件夹', exact: true }).click()
+  await expect(tour(page).getByRole('button', { name: '下一步', exact: true })).toBeEnabled()
+  await tour(page).getByRole('button', { name: '下一步', exact: true }).click()
+}
+
+test('first run completes real project, terminal, split and standalone-file actions, then replays without creating resources', async ({ page }) => {
+  test.setTimeout(60000)
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await openIntro(page)
+  await chooseProject(page)
+  await tour(page).getByRole('button', { name: '打开 Shell', exact: true }).click()
+  await expect(tour(page).getByRole('button', { name: '下一步', exact: true })).toBeEnabled()
+  await tour(page).getByRole('button', { name: '下一步', exact: true }).click()
+  await tour(page).getByRole('button', { name: '添加一个 Shell 终端', exact: true }).click()
+  const tabs = page.locator('[data-pane-region="project"] [data-tab-id]')
+  await expect(tabs).toHaveCount(2)
+  await expect(tour(page).getByRole('button', { name: '下一步', exact: true })).toBeDisabled()
+  const source = (await tabs.last().boundingBox())!
+  const pane = (await page.locator('[data-pane-region="project"] [data-pane-id]').first().boundingBox())!
+  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(source.x + source.width / 2 + 10, source.y + source.height / 2)
+  await page.mouse.move(pane.x + pane.width - 20, pane.y + pane.height * .4, { steps: 12 })
+  await page.mouse.up()
+  await expect(tour(page).getByRole('button', { name: '下一步', exact: true })).toBeEnabled()
+  await tour(page).getByRole('button', { name: '下一步', exact: true }).click()
+  await tour(page).getByRole('button', { name: '打开文件工具', exact: true }).click()
+  await expect(tour(page).getByRole('button', { name: '结束学习', exact: true })).toBeDisabled()
+  const popupPromise = page.waitForEvent('popup')
+  await page.getByText('README.md', { exact: true }).dblclick()
+  const editor = await popupPromise
+  await expect(editor.locator('p').filter({ hasText: /^A file to read during onboarding\.$/ })).toBeVisible()
+  await page.bringToFront()
+  await expect(tour(page).getByRole('button', { name: '结束学习', exact: true })).toBeEnabled()
+  await tour(page).getByRole('button', { name: '结束学习', exact: true }).click()
+  await expect(page.getByRole('dialog').getByText('本轮已验证 4 项，跳过 0 项。')).toBeVisible()
+  await expect(page.getByText('曾完成全部实操')).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('intro-completed.png') })
+  await page.getByRole('button', { name: '再学一次', exact: true }).click()
+  await tour(page).getByRole('button', { name: '下一步', exact: true }).click()
+  await expect(tour(page).getByRole('button', { name: '打开 Shell', exact: true })).toHaveCount(0)
+  expect(await page.evaluate(() => (window as any).onboardingFixture.state.creates)).toBe(2)
+  await editor.close()
+  expect(errors).toEqual([])
+})
+
+test('cancel and failed terminal launches do not advance, and a reload resumes progress', async ({ page }) => {
+  test.setTimeout(45000)
+  await openIntro(page, '?cancel&failTerminal')
+  await tour(page).getByRole('button', { name: '选择项目文件夹', exact: true }).click()
+  await expect(tour(page).getByRole('button', { name: '下一步', exact: true })).toBeDisabled()
+  await page.evaluate(() => { (window as any).onboardingFixture.state.cancel = false })
+  await chooseProject(page)
+  await tour(page).getByRole('button', { name: '打开 Shell', exact: true }).click()
+  await expect(tour(page).getByRole('alert')).toBeVisible()
+  await expect(tour(page).getByRole('button', { name: '下一步', exact: true })).toBeDisabled()
+  await page.evaluate(() => { (window as any).onboardingFixture.state.failTerminal = false })
+  await tour(page).getByRole('button', { name: '打开 Shell', exact: true }).click()
+  await tour(page).getByRole('button', { name: '下一步', exact: true }).click()
+  await tour(page).getByRole('button', { name: '退出导引并保留进度' }).click()
+  await page.reload()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await help(page).click()
+  await page.getByRole('button', { name: '继续学习', exact: true }).click()
+  await expect(tour(page)).toHaveAttribute('data-onboarding-step', 'split')
+  await page.evaluate(() => (window as any).onboardingFixture.removeProject())
+  await expect(tour(page).getByRole('button', { name: '返回选择项目', exact: true })).toBeVisible()
+  await expect(tour(page).getByRole('button', { name: '下一步', exact: true })).toBeDisabled()
+})
+
+test('existing users enter manually; skipped actions stay distinct; settings also opens learning', async ({ page }) => {
+  await page.goto('/onboarding.html?existing')
+  await expect(page.locator('[data-onboarding="shell"]')).toBeVisible()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await help(page).click()
+  await page.getByRole('button', { name: '开始学习', exact: true }).click()
+  for (let i = 0; i < 4; i++) await tour(page).getByRole('button', { name: '跳过这一步', exact: true }).click()
+  await expect(page.getByText('本轮已验证 0 项，跳过 4 项。')).toBeVisible()
+  await expect(page.getByText('曾完成全部实操')).toHaveCount(0)
+  await page.getByRole('button', { name: '继续工作', exact: true }).click()
+  await page.getByTitle('Settings', { exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '帮助与学习', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '帮助与学习' })).toBeVisible()
+})
+
+test('opening a standalone window with a failed file read does not verify the file step', async ({ page }) => {
+  await page.goto('/onboarding.html?existing&failRead')
+  await help(page).click()
+  await page.getByRole('button', { name: '开始学习', exact: true }).click()
+  for (let i = 0; i < 3; i++) await tour(page).getByRole('button', { name: '跳过这一步', exact: true }).click()
+  await tour(page).getByRole('button', { name: '打开文件工具', exact: true }).click()
+  const popupPromise = page.waitForEvent('popup')
+  await page.getByText('README.md', { exact: true }).dblclick()
+  const editor = await popupPromise
+  await expect(editor.getByText('Fixture read failure', { exact: true })).toBeVisible()
+  await page.bringToFront()
+  await expect(tour(page).getByRole('button', { name: '结束学习', exact: true })).toBeDisabled()
+  await editor.close()
+})
+
+test('first-run introduction waits until the optional team gate is dismissed', async ({ page }) => {
+  await page.goto('/onboarding.html?team')
+  await expect(page.getByRole('button', { name: '开始学习', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: '稍后再说，先用本地功能', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: '从第一个项目开始' })).toBeVisible()
+})
+
+for (const theme of ['planche', 'dark']) {
+  test(`welcome and guide fit a short ${theme} window and modal keyboard focus stays inside`, async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 480 })
+    await page.goto(`/onboarding.html?theme=${theme}&en`)
+    const dialog = page.getByRole('dialog', { name: 'Start with your first project' })
+    await expect(dialog).toBeVisible()
+    await page.getByRole('button', { name: 'Start learning', exact: true }).focus()
+    await page.keyboard.press('Tab')
+    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused()
+    await expect(dialog).toHaveCSS('opacity', '1')
+    await page.screenshot({ path: test.info().outputPath(`welcome-${theme}.png`) })
+    await page.getByRole('button', { name: 'Start learning', exact: true }).click()
+    const guide = page.getByRole('region', { name: 'Getting started', exact: true })
+    const bounds = (await guide.boundingBox())!
+    expect(bounds.y).toBeGreaterThanOrEqual(38)
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(480)
+    expect(await guide.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true)
+    await page.screenshot({ path: test.info().outputPath(`guide-${theme}.png`) })
+    await guide.getByRole('heading').focus()
+    await page.keyboard.press('Escape')
+    await expect(guide).toHaveCount(0)
+    await expect.poll(() => page.evaluate(() => (window as any).onboardingFixture.occlusion())).toBe(0)
+  })
+}

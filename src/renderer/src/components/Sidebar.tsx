@@ -784,6 +784,7 @@ export function Sidebar() {
       addWorkspace(workspace)
       setActiveWorkspace(workspace.id)
       setLoadState('no-terminal')
+      await loadWorkspaceFileTree(workspace.path, () => getActiveScopePath() === workspace.path, { visualTransition: true }).catch(() => {})
     } catch (err) {
       console.error('Failed to create workspace:', err)
     }
@@ -1174,6 +1175,7 @@ export function Sidebar() {
             <div className="flex items-center gap-0.5">
               <ThemedTooltip label={t('common:workspace.add')}>
               <button
+                data-onboarding="add-workspace"
                 onClick={handleAddWorkspace}
                 className="flex h-7 w-7 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--shell-hover)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-1"
                 style={{

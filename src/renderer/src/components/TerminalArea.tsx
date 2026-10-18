@@ -410,6 +410,7 @@ function TerminalPresetCapsule({
       <ThemedTooltip label={open ? 'Close terminal menu' : 'New Terminal'}>
       <button
         type="button"
+        data-onboarding="new-terminal"
         aria-label={open ? 'Close terminal menu' : 'New Terminal'}
         aria-expanded={open}
         aria-haspopup="menu"

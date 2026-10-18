@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '@/stores/app'
 import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -36,7 +36,8 @@ function scheduleIndexWarmup(paths: string[]): () => void {
   return () => { disposed = true }
 }
 
-export function useWorkspaceBootstrap(): void {
+export function useWorkspaceBootstrap(): boolean {
+  const [workspaceReady, setWorkspaceReady] = useState(false)
   useEffect(() => {
     let activeScopePath: string | null = null
     const refreshActiveWorkspace = () => {
@@ -62,6 +63,7 @@ export function useWorkspaceBootstrap(): void {
     void window.electron.workspace.initialize().then(async (state) => {
       if (disposed) return
       useWorkspaceStore.setState({ workspaces: state.workspaces, activeWorkspaceId: state.activeWorkspaceId })
+      setWorkspaceReady(true)
       if (state.workspaces.length === 0) {
         useAppStore.setState({ loadState: 'no-workspace' })
         return
@@ -116,4 +118,5 @@ export function useWorkspaceBootstrap(): void {
     })
     return () => { queue.dispose(); unsubscribe() }
   }, [])
+  return workspaceReady
 }

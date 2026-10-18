@@ -18,6 +18,7 @@ import { CpaSettingsPanel } from './cpa/CpaSettingsPanel'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './AppSettingsModal.module.css'
+import { LearningButton } from './onboarding/LearningButton'
 
 export type SettingsTab = 'general' | 'terminal' | 'integrations' | 'experimental' | 'notifications' | 'personal' | 'knowledge' | 'agent' | 'llm' | 'usage' | 'models' | 'team' | 'hosted' | 'about'
 
@@ -147,6 +148,7 @@ export function AppSettingsModal({ isOpen, onClose, initialTab = 'general' }: Ap
                 </section>
               ))}
             </nav>
+            <LearningButton onOpen={onClose} />
           </aside>
 
           <section className={styles.content}>

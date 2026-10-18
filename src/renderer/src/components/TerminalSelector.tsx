@@ -88,6 +88,7 @@ function ShellCard({
     <div className={styles.shellCard} ref={rootRef}>
       <button
         type="button"
+        data-onboarding="shell"
         disabled={!defaultEntry || busyKey !== null}
         onClick={() => defaultEntry && onLaunch(defaultEntry)}
         onMouseEnter={() => {

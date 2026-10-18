@@ -47,10 +47,12 @@ import { useTerminalLifecycle } from '@/features/terminal/useTerminalLifecycle'
 import { useTeamStore } from '@/stores/team'
 import { TeamSetupGate } from '@/components/team/TeamSetupGate'
 import { FolderOpen } from 'lucide-react'
-import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
+import { chooseAndCreateWorkspace, getActiveScopePath, loadWorkspaceFileTree } from '@/features/workspace/actions'
 import { useGlobalToolsStore } from '@/stores/global-tools'
 import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
 import { IslandBlackboard } from '@/components/blackboard/IslandBlackboard'
+import { OnboardingHost } from '@/components/onboarding/OnboardingHost'
+import { LearningButton } from '@/components/onboarding/LearningButton'
 import styles from './App.module.css'
 
 /*-- P4: 重量级面板按需分包。产物工作区不进首屏 bundle，Suspense fallback 为 null。 --*/
@@ -89,7 +91,7 @@ interface EditorResizeSession {
 }
 
 export default function App() {
-  useWorkspaceBootstrap()
+  const workspaceReady = useWorkspaceBootstrap()
   useTerminalLifecycle()
   // ToB M2：启动即恢复团队会话（refresh 静默续期），失败即 guest 由挡板接管。
   useEffect(() => { void useTeamStore.getState().bootstrap() }, [])
@@ -553,6 +555,7 @@ export default function App() {
       <AgentNotificationHost />
       {/* ToB M2：未登录/无组织时全屏挡板 */}
       <TeamSetupGate />
+      <OnboardingHost workspaceReady={workspaceReady} />
     </div>
     </JanusChatProvider>
   )
@@ -571,6 +574,7 @@ function EmptyWorkspace() {
       addWorkspace(workspace)
       setActiveWorkspace(workspace.id)
       setLoadState('no-terminal')
+      await loadWorkspaceFileTree(workspace.path, () => getActiveScopePath() === workspace.path, { visualTransition: true }).catch(() => {})
     } catch (err) {
       console.error('Failed to create workspace:', err)
     }
@@ -584,6 +588,7 @@ function EmptyWorkspace() {
         </div>
         <h1 id="empty-workspace-title" className={styles.emptyTitle}>{t('common:emptyWorkspace.title')}</h1>
         <button
+          data-onboarding="add-workspace"
           onClick={handleAdd}
           className={styles.emptyAction}
         >
@@ -591,6 +596,7 @@ function EmptyWorkspace() {
           {t('common:emptyWorkspace.chooseFolder')}
         </button>
         <p className={styles.emptyHint}>{t('common:emptyWorkspace.hint')}</p>
+        <LearningButton />
       </div>
     </section>
   )

@@ -36,6 +36,19 @@ describe('remaining typed IPC contracts', () => {
     removeListener.mockReset()
   })
 
+  it('reports viewed editor files and releases the main-window observation subscription', () => {
+    const payload = { filePath: 'C:/repo/README.md', workspacePath: 'C:/repo' }
+    const callback = vi.fn()
+    api.window.reportEditorViewed(payload)
+    expect(send).toHaveBeenCalledWith(SYSTEM_CHANNELS.editorViewed, payload)
+    const unsubscribe = api.window.onEditorViewed(callback)
+    const listener = on.mock.calls[0][1]
+    listener({}, payload)
+    expect(callback).toHaveBeenCalledWith(payload)
+    unsubscribe()
+    expect(removeListener).toHaveBeenCalledWith(SYSTEM_CHANNELS.editorViewed, listener)
+  })
+
   it('defines a unique channel surface and exposes no generic bridge', () => {
     const channels = [
       ...Object.values(AGENT_CHANNELS), ...Object.values(SUBAGENT_RUN_CHANNELS),

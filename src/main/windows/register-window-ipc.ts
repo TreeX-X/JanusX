@@ -11,6 +11,13 @@ export function registerWindowIpc(editorWindows: EditorWindowManager, getMainWin
   ipcMain.handle(SYSTEM_CHANNELS.close, () => BrowserWindow.getFocusedWindow()?.close())
   ipcMain.handle(SYSTEM_CHANNELS.openEditor, (_event, payload: EditorWindowPayload) => editorWindows.open(payload))
   ipcMain.on(SYSTEM_CHANNELS.editorReady, (event) => editorWindows.ready(event.sender))
+  // Note: learning verifies a loaded file, not merely creation of an editor window — see .agents/notes/workbench/first-run-learning.md
+  ipcMain.on(SYSTEM_CHANNELS.editorViewed, (event, payload: { filePath?: unknown; workspacePath?: unknown }) => {
+    if (!editorWindows.list().some(window => window.webContents === event.sender)) return
+    if (typeof payload?.filePath !== 'string' || typeof payload?.workspacePath !== 'string') return
+    const main = getMainWindow()
+    if (main && !main.isDestroyed()) main.webContents.send(SYSTEM_CHANNELS.editorViewed, { filePath: payload.filePath, workspacePath: payload.workspacePath })
+  })
   ipcMain.handle(SYSTEM_CHANNELS.setAlwaysOnTop, (event, value: boolean) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window || window.isDestroyed()) return { value: false }

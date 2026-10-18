@@ -162,7 +162,7 @@ export async function chooseAndCreateWorkspace(): Promise<Workspace | null> {
     path: folderPath,
   })
   invalidateEditorFileCache(folderPath)
-  await loadWorkspaceFileTree(folderPath).catch(() => {})
+  // Note: callers load after activation, which clears the previous tree — see .agents/notes/workbench/first-run-learning.md
   return workspace
 }
 

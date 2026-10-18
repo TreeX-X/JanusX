@@ -454,6 +454,8 @@ export function installElectronApiFallback(): void {
       close: unavailable,
       openEditor: unavailable,
       editorReady: () => {},
+      reportEditorViewed: () => {},
+      onEditorViewed: () => () => {},
       embedEditor: unavailable,
       setAlwaysOnTop: unavailable,
       onEditorEmbedded: () => () => {},
