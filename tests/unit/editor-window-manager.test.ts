@@ -15,11 +15,13 @@ interface MockEditorWindow {
     setWindowOpenHandler: ReturnType<typeof vi.fn>
   }
   on: (event: string, callback: () => void) => void
+  once: (event: string, callback: () => void) => void
 }
 
 const mocks = vi.hoisted(() => {
   const windows: MockEditorWindow[] = []
   const loadRendererWindow = vi.fn(async () => {})
+  const getTheme = vi.fn(async () => 'planche')
   const BrowserWindow = vi.fn(function BrowserWindowMock() {
     const callbacks = new Map<string, () => void>()
     const window: MockEditorWindow = {
@@ -33,11 +35,12 @@ const mocks = vi.hoisted(() => {
       isMinimized: vi.fn(() => false),
       webContents: { send: vi.fn(), setWindowOpenHandler: vi.fn() },
       on: (event, callback) => { callbacks.set(event, callback) },
+      once: (event, callback) => { callbacks.set(event, callback) },
     }
     windows.push(window)
     return window
   })
-  return { BrowserWindow, loadRendererWindow, windows }
+  return { BrowserWindow, loadRendererWindow, windows, getTheme }
 })
 
 vi.mock('electron', () => ({
@@ -47,6 +50,7 @@ vi.mock('electron', () => ({
 vi.mock('../../src/main/windows/renderer-loader', () => ({
   loadRendererWindow: mocks.loadRendererWindow,
 }))
+vi.mock('../../src/main/config/service', () => ({ configService: { getTheme: mocks.getTheme } }))
 
 import { EditorWindowManager } from '../../src/main/windows/editor-window'
 
@@ -55,16 +59,17 @@ describe('EditorWindowManager', () => {
     mocks.windows.length = 0
     mocks.BrowserWindow.mockClear()
     mocks.loadRendererWindow.mockClear()
+    mocks.getTheme.mockResolvedValue('planche')
   })
 
-  it('reuses one workspace window and queues files until the renderer is ready', () => {
+  it('reuses one workspace window and queues files until the renderer is ready', async () => {
     const manager = new EditorWindowManager()
     const first = { filePath: 'C:\\Workspace\\first.ts', workspacePath: 'C:\\Workspace' }
     const second = { filePath: 'C:\\Workspace\\second.ts', workspacePath: 'c:/workspace/' }
 
-    expect(manager.open(first)).toEqual({ success: true })
-    expect(manager.open(second)).toEqual({ success: true })
-    expect(manager.open(second)).toEqual({ success: true })
+    expect(await manager.open(first)).toEqual({ success: true })
+    expect(await manager.open(second)).toEqual({ success: true })
+    expect(await manager.open(second)).toEqual({ success: true })
 
     expect(mocks.BrowserWindow).toHaveBeenCalledTimes(1)
     expect(manager.list()).toHaveLength(1)
@@ -78,7 +83,7 @@ describe('EditorWindowManager', () => {
     )
 
     const third = { filePath: 'C:\\Workspace\\third.ts', workspacePath: 'C:\\Workspace' }
-    manager.open(third)
+    await manager.open(third)
     expect(mocks.BrowserWindow).toHaveBeenCalledTimes(1)
     expect(mocks.windows[0].webContents.send).toHaveBeenLastCalledWith(
       SYSTEM_CHANNELS.refreshEditor,
@@ -86,16 +91,33 @@ describe('EditorWindowManager', () => {
     )
   })
 
-  it('keeps different workspaces isolated and releases a closed window', () => {
+  it('keeps different workspaces isolated and releases a closed window', async () => {
     const manager = new EditorWindowManager()
-    manager.open({ filePath: 'C:\\One\\file.ts', workspacePath: 'C:\\One' })
-    manager.open({ filePath: 'C:\\Two\\file.ts', workspacePath: 'C:\\Two' })
+    await manager.open({ filePath: 'C:\\One\\file.ts', workspacePath: 'C:\\One' })
+    await manager.open({ filePath: 'C:\\Two\\file.ts', workspacePath: 'C:\\Two' })
     expect(manager.list()).toHaveLength(2)
 
     mocks.windows[0].callbacks.get('closed')?.()
     expect(manager.list()).toHaveLength(1)
 
-    manager.open({ filePath: 'C:\\One\\again.ts', workspacePath: 'C:\\One' })
+    await manager.open({ filePath: 'C:\\One\\again.ts', workspacePath: 'C:\\One' })
     expect(mocks.BrowserWindow).toHaveBeenCalledTimes(3)
+  })
+
+  it.each([['dark', '#151517'], ['planche', '#EFE4C5']])('seeds %s before loading and keeps concurrent opens hidden until first paint', async (theme, background) => {
+    mocks.getTheme.mockResolvedValue(theme)
+    const manager = new EditorWindowManager()
+    await Promise.all(['one.ts', 'two.ts'].map(file => manager.open({ filePath: `C:/Workspace/${file}`, workspacePath: 'C:/Workspace' })))
+    expect(mocks.BrowserWindow).toHaveBeenCalledTimes(1)
+    expect(mocks.BrowserWindow).toHaveBeenCalledWith(expect.objectContaining({ show: false, backgroundColor: background }))
+    expect(mocks.windows[0].show).not.toHaveBeenCalled()
+    const args = mocks.loadRendererWindow.mock.calls[0] as unknown as [unknown, (url: URL) => void, Record<string, string>]
+    const url = new URL('http://localhost/')
+    args[1](url)
+    expect(url.searchParams.get('editorTheme')).toBe(theme)
+    expect(url.searchParams.get('editorBackground')).toBe(background)
+    expect(args[2]).toMatchObject({ editorTheme: theme, editorBackground: background })
+    mocks.windows[0].callbacks.get('ready-to-show')?.()
+    expect(mocks.windows[0].show).toHaveBeenCalledTimes(1)
   })
 })

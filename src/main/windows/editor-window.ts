@@ -2,6 +2,10 @@ import { BrowserWindow, shell, type WebContents } from 'electron'
 import { join, normalize } from 'node:path'
 import { loadRendererWindow } from './renderer-loader'
 import { SYSTEM_CHANNELS } from '../../shared/ipc/system'
+import { configService } from '../config/service'
+import { getThemeDefinition } from '../../shared/theme/registry'
+
+// Note: .agents/notes/workbench/standalone-editor-initial-theme.md
 
 export interface EditorWindowPayload { filePath?: string; workspacePath?: string }
 
@@ -43,17 +47,20 @@ export class EditorWindowManager {
     }
   }
 
-  open(payload: EditorWindowPayload): { success: boolean; error?: string } {
+  async open(payload: EditorWindowPayload): Promise<{ success: boolean; error?: string }> {
     if (!payload.filePath || !payload.workspacePath) {
       return { success: false, error: 'Missing editor window payload' }
     }
+    const theme = getThemeDefinition(await configService.getTheme())
     const workspaceKey = identityPath(payload.workspacePath)
     const fileKey = identityPath(payload.filePath)
     const existing = this.windows.get(workspaceKey)
     if (existing && !existing.window.isDestroyed()) {
       if (existing.window.isMinimized()) existing.window.restore()
-      existing.window.show()
-      existing.window.focus()
+      if (existing.ready) {
+        existing.window.show()
+        existing.window.focus()
+      }
       if (existing.ready) {
         existing.window.webContents.send(SYSTEM_CHANNELS.refreshEditor, payload)
       } else if (!existing.pending.some((item) => identityPath(item.filePath ?? '') === fileKey)) {
@@ -71,9 +78,8 @@ export class EditorWindowManager {
       minWidth: 820,
       minHeight: 520,
       title: 'JanusX Editor',
-      // 默认主题为 planche 纸面：首漆底色用纸色，避免纸面主题下闪黑；
-      // 渲染侧挂载后仍以 [data-theme] 语义令牌为准，dark 用户切主题即跟随。
-      backgroundColor: '#EFE4C5',
+      show: false,
+      backgroundColor: theme.tokens['shell-canvas'],
       frame: false,
       autoHideMenuBar: true,
       webPreferences: {
@@ -82,6 +88,9 @@ export class EditorWindowManager {
         webSecurity: true,
         webviewTag: false,
       },
+    })
+    window.once('ready-to-show', () => {
+      if (!window.isDestroyed()) window.show()
     })
     window.on('closed', () => {
       if (this.windows.get(workspaceKey)?.window === window) this.windows.delete(workspaceKey)
@@ -97,8 +106,14 @@ export class EditorWindowManager {
         url.searchParams.set('editorWindow', '1')
         url.searchParams.set('editorFile', filePath)
         url.searchParams.set('workspacePath', workspacePath)
+        url.searchParams.set('editorTheme', theme.id)
+        url.searchParams.set('editorBackground', theme.tokens['shell-canvas'])
+        url.searchParams.set('editorColorScheme', theme.base)
       },
-      { editorWindow: '1', editorFile: filePath, workspacePath },
+      {
+        editorWindow: '1', editorFile: filePath, workspacePath,
+        editorTheme: theme.id, editorBackground: theme.tokens['shell-canvas'], editorColorScheme: theme.base,
+      },
     )
     return { success: true }
   }

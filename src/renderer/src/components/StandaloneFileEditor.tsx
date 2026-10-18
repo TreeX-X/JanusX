@@ -80,8 +80,8 @@ export function StandaloneFileEditor() {
     window.electron.window.reportEditorViewed({ filePath: viewedPath, workspacePath: editorParams.workspacePath })
   }, [viewedPath, editorParams])
   const unwatchFindControlsRef = useRef<(() => void) | null>(null)
-  // 独立窗口不经过 App 根的 theme store，自行拉取持久化主题并挂载 [data-theme]，
-  // 顶栏走 shell 语义令牌，与嵌入版保持一致；MonacoViewer 内的 load 仅覆盖编辑区。
+  // 正式入口在 React 挂载前加载主题；保留幂等调用，供直接挂载组件的宿主初始化。
+  // Note: .agents/notes/workbench/standalone-editor-initial-theme.md
   useEffect(() => {
     void useThemeStore.getState().load()
   }, [])

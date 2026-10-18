@@ -4,6 +4,7 @@ import { installElectronApiFallback } from './lib/electron-api-fallback'
 import { initBrowserEventSubscriptions } from './stores/browser'
 import { registerCpaExtension } from './extensions/cpa'
 import { initI18n } from './i18n'
+import { useThemeStore } from './stores/theme'
 import './styles/globals.css'
 import './styles/themes.generated.css'
 import './styles/theme-hovers.css'
@@ -145,5 +146,8 @@ const renderRoot = () => {
 if (isDesktopToast) {
   renderRoot()
 } else {
-  void i18nReady.then(renderRoot)
+  // Note: .agents/notes/workbench/standalone-editor-initial-theme.md
+  // The loading fallback and Monaco must share the persisted theme on first render.
+  const themeReady = isEditorWindow ? useThemeStore.getState().load() : Promise.resolve()
+  void Promise.all([i18nReady, themeReady]).then(renderRoot)
 }

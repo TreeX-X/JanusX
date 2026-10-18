@@ -41,6 +41,31 @@ test('file opens share one workspace editor window and switch existing tabs', as
     const mainPage = await application.firstWindow({ timeout: 30_000 })
     await mainPage.waitForFunction(() => typeof (window as EditorWindowAPI).electron?.window?.openEditor === 'function')
 
+    // Delay theme IPC so a default-colored loading fallback would be observable.
+    await mainPage.evaluate(async () => {
+      await (window as any).electron.theme.update('dark')
+    })
+    await application.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('theme:get')
+      ipcMain.handle('theme:get', async () => {
+        await new Promise(resolve => setTimeout(resolve, 400))
+        return 'dark'
+      })
+    })
+    await application.context().addInitScript(() => {
+      if (new URLSearchParams(location.search).get('editorWindow') !== '1') return
+      const frames: Array<{ theme: string | undefined; background: string }> = []
+      ;(window as any).editorThemeFrames = frames
+      const sample = () => {
+        const root = document.getElementById('root')
+        if (root?.firstElementChild) {
+          frames.push({ theme: document.documentElement.dataset.theme, background: getComputedStyle(root.firstElementChild).backgroundColor })
+        }
+        if (frames.length < 20) requestAnimationFrame(sample)
+      }
+      requestAnimationFrame(sample)
+    })
+
     await mainPage.evaluate(
       async ({ first, second, workspace }) => {
         await Promise.all([
@@ -57,6 +82,18 @@ test('file opens share one workspace editor window and switch existing tabs', as
     await expect(editorPage.locator('[data-editor-window-state="ready"]')).toBeVisible()
     await expect(editorPage.locator('[data-editor-window-state="error"]')).toHaveCount(0)
     await expect(editorPage.locator('.monaco-editor')).toBeVisible({ timeout: 30_000 })
+    await expect(editorPage.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect.poll(() => editorPage.evaluate(() => (window as any).editorThemeFrames.length)).toBeGreaterThan(0)
+    const frames = await editorPage.evaluate(() => (window as any).editorThemeFrames as Array<{ theme: string; background: string }>)
+    expect(frames.every(frame => frame.theme === 'dark')).toBe(true)
+    expect(frames.some(frame => frame.background === 'rgb(239, 228, 197)')).toBe(false)
+    expect(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()
+      .find(window => new URL(window.webContents.getURL()).searchParams.get('editorWindow') === '1')?.getBackgroundColor())).toBe('#151517')
+    await mainPage.evaluate(() => (window as any).electron.theme.update('planche'))
+    await expect(editorPage.locator('html')).toHaveAttribute('data-theme', 'planche')
+    await expect(editorPage.locator('html')).toHaveCSS('background-color', 'rgb(239, 228, 197)')
+    await mainPage.evaluate(() => (window as any).electron.theme.update('dark'))
+    await expect(editorPage.locator('html')).toHaveAttribute('data-theme', 'dark')
     await editorPage.screenshot({ path: test.info().outputPath('standalone-editor-ready.png') })
     const tabs = editorPage.locator('[data-editor-tab]')
     await expect(tabs).toHaveCount(2)
