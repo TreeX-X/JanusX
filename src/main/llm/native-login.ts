@@ -7,6 +7,7 @@ import type { LlmConsumer } from '../../shared/llm-configuration'
 import { terminalManager } from '../terminal/manager'
 import { resolveCLIPath } from '../janus-runner/cli-resolver'
 
+// Design and renderer compatibility evidence: .agents/notes/terminal/native-login-first.md
 // Presence-only probe: parse the credentials file just enough to confirm it is
 // a non-empty JSON object, then discard everything. Contents never leave this
 // function — no token management, no cross-IPC bytes. Path drift is corrected
@@ -93,7 +94,9 @@ function cleanOutput(text: string): string {
   // Strip ANSI/VT sequences so the surfaced error is readable plain text.
   return text
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+    // ConPTY uses cursor moves instead of spaces. Preserve word boundaries,
+    // but keep SGR styling inside words transparent.
+    .replace(/\x1b\[[0-9;?>]*[A-Za-z]/g, sequence => sequence.endsWith('m') ? '' : ' ')
     .replace(/\x1b[=>()][A-Za-z0-9]?/g, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -135,6 +138,11 @@ export async function startNativeLogin(consumer: LlmConsumer): Promise<{ success
       shell: process.platform === 'win32' ? 'powershell.exe' : 'bash',
       program: command,
       programArgs: plan.args,
+      // This PTY has no visible renderer. Keep Claude's login in classic mode:
+      // fullscreen boot canaries survive forced early termination and can
+      // disable fullscreen for later, visible sessions sharing the same config.
+      // Scope the override to this child; never rewrite the user's TUI setting.
+      env: consumer === 'claude' ? { CLAUDE_CODE_NO_FLICKER: '0' } : undefined,
       cols: 120,
       rows: 40,
     })
@@ -165,7 +173,7 @@ export async function startNativeLogin(consumer: LlmConsumer): Promise<{ success
       }
       // /login opens a login-method menu (1 subscription · 2 console · 3
       // platform); option 1 is preselected — confirm it to open the browser.
-      if (slashSubmitted && !methodConfirmed && /Select login method/i.test(plain) && /Claude account with subscription/i.test(plain)) {
+      if (slashSubmitted && !methodConfirmed && /login method/i.test(plain) && /Claude account with subscription/i.test(plain)) {
         methodConfirmed = true
         setTimeout(() => write('\r'), 400)
       }
