@@ -17,7 +17,7 @@
 }
 .entry:hover, .iconButton:hover, .textButton:hover { background: var(--shell-hover); color: var(--shell-text); }
 .entry:focus-visible, .overview button:focus-visible, .tour button:focus-visible {
-  outline: 2px solid var(--shell-accent);
+  outline: 2px solid var(--shell-accent-border);
   outline-offset: 3px;
 }
 .overview {
@@ -52,12 +52,14 @@
 .actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 9px; margin-top: 18px; }
 .overviewFooter { flex: none; margin: 0; padding: 14px 26px 22px; border-top: 1px solid var(--shell-border-soft); }
 .primary, .secondary, .textButton { min-height: 32px; padding: 7px 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; }
-.primary { border: 1px solid var(--shell-accent); color: var(--shell-accent); background: var(--shell-accent-soft); }
-.primary:hover { background: var(--accent-mid); }
+.primary { border: 1px solid var(--shell-accent-border); color: var(--shell-text); background: var(--shell-accent-soft); font-weight: 500; }
+.primary:hover:not(:disabled) { background: var(--accent-mid); }
+.primary:active:not(:disabled) { background: var(--shell-active); }
 .secondary { border: 1px solid var(--shell-border); background: var(--shell-card); color: var(--shell-text); }
-.secondary:hover { background: var(--shell-hover); }
+.secondary:hover:not(:disabled) { background: var(--shell-hover); }
 .textButton { margin-right: auto; padding-left: 0; border: 0; background: transparent; color: var(--shell-muted); }
 .overview button:disabled, .tour button:disabled { opacity: .45; cursor: not-allowed; }
+.primary:disabled { border-color: var(--shell-border); color: var(--shell-muted); background: var(--shell-hover); }
 .tour {
   position: fixed;
   left: 68px;
@@ -84,7 +86,7 @@
 .note, .savedHint { color: var(--shell-muted); }
 .savedHint { margin: 12px 0 0; }
 .error { color: var(--status-danger); }
-.highlight { position: fixed; z-index: 1800; pointer-events: none; border: 2px solid var(--shell-accent); border-radius: 7px; }
+.highlight { position: fixed; z-index: 1800; pointer-events: none; border: 1px solid var(--shell-accent-border); border-radius: 7px; box-shadow: 0 0 0 2px var(--shell-accent-soft); }
 .splitExample { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 12px 0; font: 10px/1.6 monospace; color: var(--shell-muted); }
 .splitExample > span, .splitExample > div { display: flex; align-items: center; min-height: 48px; border: 1px solid var(--shell-border); border-radius: 5px; }
 .splitExample span { padding: 8px; }
