@@ -1,3 +1,4 @@
+import { useGlobalToolsStore } from '../../../src/renderer/src/stores/global-tools'
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { TerminalArea } from '../../../src/renderer/src/components/TerminalArea'
@@ -45,7 +46,7 @@ extensionRegistry.register({ id: 'broken.tools', views: [{ id: 'page', title: 'B
 openExtensionView('extension:example.tools/overview')
 Object.assign(window, { extensionFixture: {
   recoverBrokenView: () => { brokenViewFails = false },
-  state: () => ({ ...metrics, tabs: getLeafPanes(useWorkspaceStore.getState().paneTree).flatMap((leaf) => leaf.tabs),
+  state: () => ({ ...metrics, tabs: [...getLeafPanes(useWorkspaceStore.getState().paneTree), ...getLeafPanes(useGlobalToolsStore.getState().paneTree)].flatMap((leaf) => leaf.tabs),
     right: useRightToolStore.getState().openToolIds, snapshots: useWorkspaceStore.getState().terminalSnapshots }),
 } })
 await initI18n()

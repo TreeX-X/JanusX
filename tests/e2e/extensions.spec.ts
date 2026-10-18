@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const state = (page: Page) => page.evaluate(() => (window as any).extensionFixture.state())
-const example = (page: Page, location: 'workspace' | 'right') => page.locator(`[data-extension-example="${location}"]:visible`)
+const example = (page: Page, location: 'workspace' | 'right', scope = 'application') => page.locator(`[data-extension-example="${location}"]${location === 'workspace' ? `[data-view-id="extension:example.tools/${scope === 'project' ? 'project' : 'overview'}"]` : ''}:visible`)
 
 for (const theme of ['planche', 'dark']) {
   test(`registers both positions, shares project state and isolates projects (${theme})`, async ({ page }) => {
@@ -13,17 +13,17 @@ for (const theme of ['planche', 'dark']) {
     await expect(example(page, 'right')).toContainText('one · 0')
     await example(page, 'right').getByRole('button', { name: 'Increment', exact: true }).click()
     await example(page, 'right').getByRole('button', { name: 'Open project view' }).click()
-    await expect(example(page, 'workspace')).toContainText('one · 1')
-    await example(page, 'workspace').getByRole('button', { name: 'Increment', exact: true }).click()
+    await expect(example(page, 'workspace', 'project')).toContainText('one · 1')
+    await example(page, 'workspace', 'project').getByRole('button', { name: 'Increment', exact: true }).click()
     await expect(example(page, 'right')).toContainText('one · 2')
     await page.getByRole('button', { name: 'Project two', exact: true }).click()
     await expect(example(page, 'right')).toContainText('two · 0')
     await expect(example(page, 'workspace')).toContainText('Application · 0')
     await example(page, 'right').getByRole('button', { name: 'Open project view' }).click()
-    await expect(example(page, 'workspace')).toContainText('two · 0')
+    await expect(example(page, 'workspace', 'project')).toContainText('two · 0')
     await page.getByRole('button', { name: 'Project one', exact: true }).click()
     await expect(example(page, 'right')).toContainText('one · 2')
-    await expect(example(page, 'workspace')).toContainText('one · 2')
+    await expect(example(page, 'workspace', 'project')).toContainText('one · 2')
     expect((await state(page)).tabs.filter((tab: any) => tab.scope === 'application')).toHaveLength(1)
     expect(errors).toEqual([])
   })
@@ -31,9 +31,11 @@ for (const theme of ['planche', 'dark']) {
 
 test('opens registered workspace views from the existing menu and holds to close without disabling', async ({ page }) => {
   await page.goto('/extensions.html')
+  await page.getByRole('button', { name: 'Example inspector', exact: false }).click()
+  await example(page, 'right').getByRole('button', { name: 'Open project view' }).click()
   await page.getByRole('button', { name: 'New Terminal', exact: true }).click()
   await page.getByRole('menuitem', { name: 'Example project', exact: true }).click()
-  await expect(example(page, 'workspace')).toContainText('one · 0')
+  await expect(example(page, 'workspace', 'project')).toContainText('one · 0')
   const tab = page.locator('[data-tab-id*="/project:"]')
   await tab.hover()
   await tab.locator('[data-tab-close]').click()

@@ -222,6 +222,12 @@
     "badgeTitle": "{{count}} 项待处理需求"
   },
   "toolGroup": {
+    "resizeRegions": "调整项目与工具区宽度",
+    "collapseTools": "收起工具区",
+    "expandTools": "展开工具区",
+    "draftScope": "文稿归属",
+    "globalDrafts": "全局文稿",
+    "retainedDrafts": "保留的文稿 · {{id}}",
     "aria": "工作区工具",
     "triggerAction": "展开选择要打开的工具",
     "browser": "浏览器",

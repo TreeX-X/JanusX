@@ -222,6 +222,12 @@
     "badgeTitle": "{{count}} pending requirement"
   },
   "toolGroup": {
+    "resizeRegions": "Resize project and tools",
+    "collapseTools": "Collapse tools",
+    "expandTools": "Show tools",
+    "draftScope": "Draft source",
+    "globalDrafts": "Global drafts",
+    "retainedDrafts": "Retained drafts · {{id}}",
     "aria": "Workspace tools",
     "triggerAction": "Choose a tool to open",
     "browser": "Browser",

@@ -2,19 +2,21 @@ import { useEffect } from 'react'
 import { QuickNote } from './note/QuickNote'
 import { useDraftCardStore } from '@/stores/draft-card'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { GLOBAL_MARKDOWN_PANEL, useGlobalToolsStore } from '@/stores/global-tools'
+import { GLOBAL_PANE_SCOPE } from '@/lib/workspace-front-surface'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './MarkdownPane.module.css'
 
-/**
- * 中央工作区的 Markdown 面板：一个面板承载草稿列表与当前文稿编辑器。
- *
- * `panelId` 就是草稿作用域（首版每个工作区复用一个面板，因此与 workspaceId 同值）。
- * 这里刻意不读活动工作区：切换工作区时其他 surface 仍 mounted 只是被 inert 隐藏，
- * 若按活动工作区取作用域，那些挂起的面板会显示别的项目的文稿。
- * 草稿按作用域归属，因此面板被拖到别的 pane、分屏、合并后继续编辑同一批正文。
- */
+// The global panel selects document ownership explicitly; workspace switches do not select another document.
 export function MarkdownPane({ panelId }: { panelId: string }) {
   const { t } = useI18n('terminal')
+  const selectedScope = useGlobalToolsStore((s) => s.markdownScopeId)
+  const setScope = useGlobalToolsStore((s) => s.setMarkdownScope)
+  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const drafts = useDraftCardStore((s) => s.drafts)
+  const global = panelId === GLOBAL_MARKDOWN_PANEL
+  const scopeId = global ? selectedScope ?? GLOBAL_PANE_SCOPE : panelId
+  const scopes = [...new Set([GLOBAL_PANE_SCOPE, ...workspaces.map((w) => w.id), ...Object.keys(drafts), scopeId])]
   const migrateLegacyDraftScopes = useDraftCardStore((s) => s.migrateLegacyDraftScopes)
 
   // 首次挂载时把旧版按终端归属的草稿迁到作用域上；幂等，之后不再跑。
@@ -30,7 +32,15 @@ export function MarkdownPane({ panelId }: { panelId: string }) {
 
   return (
     <div className={styles.pane} aria-label={t('terminal:tab.view.note')}>
-      <QuickNote scopeId={panelId} />
+      {global && <label className={styles.scope}>
+        <span>{t('common:toolGroup.draftScope')}</span>
+        <select aria-label={t('common:toolGroup.draftScope')} value={scopeId} onChange={(event) => setScope(event.target.value)}>
+          {scopes.map((id) => <option key={id} value={id}>
+            {id === GLOBAL_PANE_SCOPE ? t('common:toolGroup.globalDrafts') : workspaces.find((w) => w.id === id)?.name ?? t('common:toolGroup.retainedDrafts', { id })}
+          </option>)}
+        </select>
+      </label>}
+      <div className="min-h-0 flex-1"><QuickNote key={scopeId} scopeId={scopeId} /></div>
     </div>
   )
 }

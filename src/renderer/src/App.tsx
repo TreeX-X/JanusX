@@ -48,6 +48,7 @@ import { useTeamStore } from '@/stores/team'
 import { TeamSetupGate } from '@/components/team/TeamSetupGate'
 import { FolderOpen } from 'lucide-react'
 import { chooseAndCreateWorkspace } from '@/features/workspace/actions'
+import { useGlobalToolsStore } from '@/stores/global-tools'
 import { shouldRenderWorkspacePane } from '@/lib/workspace-front-surface'
 import { IslandBlackboard } from '@/components/blackboard/IslandBlackboard'
 import styles from './App.module.css'
@@ -106,7 +107,8 @@ export default function App() {
   const hasRetainedWorkspacePane = useWorkspaceStore((s) =>
     Object.values(s.terminalSnapshots).some((snapshot) => snapshot.paneTree !== null)
   )
-  const showWorkspacePane = shouldRenderWorkspacePane(workspacePaneTree !== null)
+  const globalToolsTree = useGlobalToolsStore((s) => s.paneTree)
+  const showWorkspacePane = shouldRenderWorkspacePane(workspacePaneTree !== null || globalToolsTree !== null)
   const mountWorkspacePane = showWorkspacePane || hasRetainedWorkspacePane
   const visibleProductWorkspaceId = useProductWorkspaceStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)

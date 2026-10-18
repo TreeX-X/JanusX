@@ -9,3 +9,6 @@
   overflow: hidden;
   padding: 6px;
 }
+
+.scope { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px 8px; color: var(--shell-muted); font-size: 11px; }
+.scope select { min-width: 0; flex: 1; padding: 3px 6px; border: 1px solid var(--shell-border-soft); border-radius: 4px; color: var(--shell-text); background: var(--shell-canvas); }

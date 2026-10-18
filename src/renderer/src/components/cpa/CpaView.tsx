@@ -6,7 +6,7 @@ import { ModalFrame } from '@/components/shared/ModalFrame'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
 import { useCpaStore } from '@/stores/cpa'
 import { useBrowserStore } from '@/stores/browser'
-import { useWorkspaceStore } from '@/stores/workspace'
+import { useGlobalToolsStore } from '@/stores/global-tools'
 import { getLeafPanes } from '@/lib/workspace-pane'
 import { CPA_VIEW_ID } from '@/extensions/cpa'
 import type { ExtensionViewProps } from '@/extensions/types'
@@ -16,7 +16,7 @@ import { CpaSettingsPanel } from './CpaSettingsPanel'
 import styles from './Cpa.module.css'
 
 function isViewOpen(): boolean {
-  return getLeafPanes(useWorkspaceStore.getState().paneTree).some((leaf) =>
+  return getLeafPanes(useGlobalToolsStore.getState().paneTree).some((leaf) =>
     leaf.tabs.some((tab) => tab.type === 'extension' && tab.viewId === CPA_VIEW_ID))
 }
 
@@ -62,7 +62,7 @@ export function CpaView({ active }: ExtensionViewProps) {
   }, [active, settings?.mode])
 
   useEffect(() => () => {
-    // Application tabs transfer between projects: keep the same live guest.
+    // Global tools stay mounted across project switches and responsive collapse.
     // Only a real close/removal releases it. Its isolated login data persists.
     if (!isViewOpen()) void window.electron.cpa.close().catch(() => {})
   }, [])

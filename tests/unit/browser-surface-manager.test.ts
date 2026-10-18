@@ -42,6 +42,10 @@ const h = vi.hoisted(() => {
   }
 
   class MockBrowserWindow {
+    isMinimized = vi.fn(() => true)
+    restore = vi.fn()
+    show = vi.fn()
+    focus = vi.fn()
     static instances: MockBrowserWindow[] = []
     contentView = {
       children: [] as MockWebContentsView[],
@@ -417,11 +421,17 @@ describe('BrowserSurfaceManager', () => {
     expect(mainWindow.contentView.children).toContain(view)
   })
 
-  it('rejects popOut/embed for surfaces in the wrong carrier', () => {
+  it('rejects embedding a pane but reveals the existing window on repeated popOut', () => {
     manager.createSurface({ surfaceId: 's1', carrier: 'pane' })
     expect(manager.embed('s1').success).toBe(false)
     expect(manager.popOut('s1').success).toBe(true)
-    expect(manager.popOut('s1').success).toBe(false)
+    const count = h.MockBrowserWindow.instances.length
+    const window = h.MockBrowserWindow.instances.at(-1)!
+    expect(manager.popOut('s1').success).toBe(true)
+    expect(h.MockBrowserWindow.instances).toHaveLength(count)
+    expect(window.restore).toHaveBeenCalledOnce()
+    expect(window.show).toHaveBeenCalledOnce()
+    expect(window.focus).toHaveBeenCalledOnce()
   })
 
   it('destroys the surface when the user closes the standalone window', () => {

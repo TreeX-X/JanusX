@@ -1,0 +1,9 @@
+.layout { display: flex; position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.project, .tools { position: relative; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.tools { background: var(--shell-canvas); }
+.divider { position: relative; flex: 0 0 9px; cursor: col-resize; touch-action: none; outline: none; }
+.divider::after { content: ''; position: absolute; inset: 0 4px; background: var(--shell-border-soft); }
+.divider:hover::after, .divider:focus-visible::after { background: var(--shell-accent-border); }
+.rail { flex: 0 0 29px; display: flex; justify-content: center; padding-top: 8px; border-left: 1px solid var(--shell-border-soft); }
+.toggle { display: flex; align-items: center; justify-content: center; width: 23px; height: 23px; border-radius: 4px; color: var(--shell-muted); background: var(--shell-canvas); }
+.toggle:hover, .toggle:focus-visible { color: var(--shell-text); background: var(--shell-chrome-raised); }

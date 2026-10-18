@@ -4,6 +4,7 @@ import { ChevronDown, Globe, Puzzle } from 'lucide-react'
 import { ThemedTooltip } from './ui/ThemedTooltip'
 import { MarkdownIcon } from './ui/MarkdownIcon'
 import { ToolboxIcon } from './ui/ToolboxIcon'
+import { useGlobalToolsStore } from '@/stores/global-tools'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useExtensionViews } from '@/extensions/react'
@@ -26,23 +27,22 @@ import styles from './TitlebarToolGroup.module.css'
  * 工作台，再打开目标 pane。本组与蓝图/知识库工作台分组同排但由竖分隔线隔开
  * （见 markdown-pane-entry.md 的顶栏分组）。
  *
- * 每个工具在一个工作区里只开一个实例，所以菜单里"已开着"的条目直接置灰并带
- * "已打开"标记：关闭对应标签后恢复可点。不做重复点击只做聚焦的条目——分屏里
- * 想跳焦点可以直接点那个 pane。
+ * 全局工具只有一个实例；重复点击定位原工具，并展开已收起的工具区。
  */
 export function TitlebarToolGroup() {
   const { t } = useI18n()
   const openBrowserInWorkspace = useWorkspaceStore((s) => s.openBrowserInWorkspace)
   const openMarkdownInWorkspace = useWorkspaceStore((s) => s.openMarkdownInWorkspace)
-  const paneTree = useWorkspaceStore((s) => s.paneTree)
+  const paneTree = useGlobalToolsStore((s) => s.paneTree)
+  const projectTree = useWorkspaceStore((s) => s.paneTree)
+  const browserSurfaceId = useGlobalToolsStore((s) => s.browserSurfaceId)
   const workspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const extensionViews = useExtensionViews()
   const [menuOpen, setMenuOpen] = useState(false)
   useBrowserOcclusion(menuOpen)
   const comboRef = useRef<HTMLDivElement | null>(null)
 
-  // 顶层 paneTree 就是当前屏幕上的那棵树：有项目时是该项目的工作区，无项目时是全局那棵。
-  const openState = resolveGlobalToolOpenState(paneTree)
+  const openState = { ...resolveGlobalToolOpenState(paneTree), browser: browserSurfaceId !== null }
 
   // 展开后点外面或按 Esc 收起（与 ShellCard 的菜单同一套收合规则）。
   useEffect(() => {
@@ -61,7 +61,7 @@ export function TitlebarToolGroup() {
     }
   }, [menuOpen])
 
-  // Built-in tools and declared extension launchers share the same opening and disabled semantics.
+  // Built-in tools and declared extension launchers share the same opening and reveal semantics.
   const tools: Array<{
     id: string
     icon: ReactNode
@@ -94,7 +94,7 @@ export function TitlebarToolGroup() {
         icon: <Icon className={styles.menuIcon} size={14} strokeWidth={1.5} aria-hidden="true" />,
         label: view.title,
         actionLabel: view.title,
-        opened: getLeafPanes(paneTree).some((leaf) => leaf.tabs.some((tab) => tab.type === 'extension' && tab.viewId === view.id)),
+        opened: getLeafPanes(view.scope === 'application' ? paneTree : projectTree).some((leaf) => leaf.tabs.some((tab) => tab.type === 'extension' && tab.viewId === view.id)),
         open: () => { openExtensionView(view.id) },
       }
     }),
@@ -132,7 +132,6 @@ export function TitlebarToolGroup() {
                 role="menuitem"
                 className={styles.menuItem}
                 data-id={tool.id}
-                disabled={tool.opened}
                 title={tool.actionLabel}
                 aria-label={tool.actionLabel}
                 onClick={() => pick(tool.open)}

@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-17T03:20:00Z",
+  "updated": "2026-10-18T04:26:17Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -47,6 +47,10 @@ The workspace embeds a real browsing panel on isolated per-tab views with a pers
 
 - **Gains**: Dev servers, local previews, and documentation resolve inside the workspace beside the code that serves them.
 - **Costs and limits**: Each tab carries a full view process, so tab count needs bounding; agent-driven operation awaits its own protocol, switch, and audit pass.
+
+## Global tool ownership
+
+The ordinary browser has one application-level identity and one embedded host in the [global tools region](../workbench/global-tool-layout.md), outside the hot project cache. Workspace changes retain its host. Pop-out detaches only the pane presentation; reopening restores and focuses the existing window. Re-embedding works without an active project, and destroyed events clear the singleton. CPA retains its separate surface and partition.
 
 ## Browser chrome and start page
 

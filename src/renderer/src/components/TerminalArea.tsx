@@ -1,7 +1,10 @@
 import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { ChevronDown, ChevronRight, Globe, Minimize2, Puzzle, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Globe, Minimize2, PanelRightClose, Puzzle, X } from 'lucide-react'
+import { useGlobalToolsStore } from '@/stores/global-tools'
+import { GlobalToolsLayout } from './GlobalToolsLayout'
+import { TerminalSelector } from './TerminalSelector'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { useAppStore } from '@/stores/app'
@@ -154,6 +157,7 @@ function BrowserPaneTabLabel({ surfaceId, isActive }: { surfaceId: string; isAct
 }
 
 interface PaneTreeViewProps {
+  toolsRegion?: boolean
   node: WorkspacePaneNode | null
   workspaceVisible: boolean
   terminalsById: Map<string, Terminal>
@@ -635,6 +639,7 @@ function TerminalPresetCapsule({
 }
 
 function LeafPane({
+  toolsRegion = false,
   leaf,
   workspaceVisible,
   terminalsById,
@@ -692,6 +697,12 @@ function LeafPane({
     return null
   }, [])
 
+  const acceptsNativeDrag = useCallback((event: React.DragEvent) => {
+    const id = resolveStripDraggedTabId(event)
+    const global = !!id && getLeafPanes(useGlobalToolsStore.getState().paneTree).some((pane) => pane.tabs.some((tab) => tab.id === id))
+    return toolsRegion ? global : !global
+  }, [resolveStripDraggedTabId, toolsRegion])
+
   const nativeTerminalId = getActiveTerminalDragId()
   const nativeBrowserId = getActiveBrowserTabDragId()
   const stripDraggedTabId = nativeTerminalId ? `terminal:${nativeTerminalId}` : nativeBrowserId ? `browser:${nativeBrowserId}` : null
@@ -724,6 +735,7 @@ function LeafPane({
 
   const handleTabStripDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
+    if (!acceptsNativeDrag(event)) return
     const draggedId = resolveStripDraggedTabId(event)
     if (!draggedId && !hasTerminalDrag(event.dataTransfer) && !hasBrowserTabDrag(event.dataTransfer)) return
     event.preventDefault()
@@ -732,7 +744,7 @@ function LeafPane({
     setDragHint(null)
     const index = computeTabInsertIndex(event.clientX, draggedId)
     setTabInsertIndex((current) => (current === index ? current : index))
-  }, [computeTabInsertIndex, resolveStripDraggedTabId])
+  }, [computeTabInsertIndex, resolveStripDraggedTabId, acceptsNativeDrag])
 
   const handleTabStripDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
@@ -741,6 +753,7 @@ function LeafPane({
 
   const handleTabStripDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
+    if (!acceptsNativeDrag(event)) return
     const draggedId = resolveStripDraggedTabId(event)
     if (!draggedId && !hasTerminalDrag(event.dataTransfer) && !hasBrowserTabDrag(event.dataTransfer)) return
     event.preventDefault()
@@ -754,10 +767,11 @@ function LeafPane({
       return
     }
     onMoveTabToIndex(draggedId, leaf.id, index)
-  }, [computeTabInsertIndex, leaf.id, leaf.tabs, onMoveTabToIndex, onReorderTab, resolveStripDraggedTabId])
+  }, [computeTabInsertIndex, leaf.id, leaf.tabs, onMoveTabToIndex, onReorderTab, resolveStripDraggedTabId, acceptsNativeDrag])
 
   const handleDragOver = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
+    if (!acceptsNativeDrag(event)) return
 
     const dragTerminalId =
       readTerminalDragData(event.dataTransfer) || getActiveTerminalDragId()
@@ -771,7 +785,7 @@ function LeafPane({
     /*-- 预览比例 = 松手后实际应用的比例（预览即结果）：落点分屏固定平分 --*/
     const ratio = SPLIT_RATIO_EQUAL
     setDragHint((current) => (current && current.zone === zone && current.ratio === ratio ? current : { zone, ratio }))
-  }, [])
+  }, [acceptsNativeDrag])
 
   const handleDragLeave = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
@@ -783,6 +797,7 @@ function LeafPane({
 
   const handleDrop = useCallback((event: React.DragEvent<HTMLElement>) => {
     if (hasWorkspaceFileDrag(event.dataTransfer)) return
+    if (!acceptsNativeDrag(event)) return
 
     const dragTerminalId =
       readTerminalDragData(event.dataTransfer) || getActiveTerminalDragId()
@@ -803,7 +818,7 @@ function LeafPane({
     const terminalId = dragTerminalId
     if (!terminalId) return
     onTerminalDrop(terminalId, leaf.id, edge, ratio)
-  }, [leaf.id, onTerminalDrop, onBrowserTabDrop])
+  }, [leaf.id, onTerminalDrop, onBrowserTabDrop, acceptsNativeDrag])
 
   const renderPaneTab = (tab: WorkspacePaneLeaf['tabs'][number]) => {
     const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
@@ -976,26 +991,33 @@ function LeafPane({
           <div data-tab-drag-slot="" aria-hidden="true" className={styles.slot} />
         </div>
         <div className={styles.controls}>
+          {toolsRegion && <ThemedTooltip label={t('common:toolGroup.collapseTools')}>
+            <button type="button" className={styles.action} aria-expanded={true}
+              aria-label={t('common:toolGroup.collapseTools')}
+              onClick={() => useGlobalToolsStore.getState().setCollapsed(true)}>
+              <PanelRightClose size={14} aria-hidden="true" />
+            </button>
+          </ThemedTooltip>}
           {showFocusChrome && (
             <HoldToConfirm label={t('terminal:tab.collapseLayout')} onConfirm={onCollapseLayout} className={styles.action}>
               <Minimize2 size={13} strokeWidth={1.6} aria-hidden="true" />
             </HoldToConfirm>
           )}
-          <TerminalPresetCapsule
+          {!toolsRegion && <TerminalPresetCapsule
             open={terminalMenuOpen}
             onToggle={openMenu}
             onSelect={onCreateTerminal}
             onClose={onCloseTerminalMenu}
             items={terminalMenuItems}
-          />
-          <HoldToConfirm
+          />}
+          {!toolsRegion && <HoldToConfirm
             label={t('terminal:tab.killCurrentTerminal')}
             disabled={!activeTerminal}
             className={`${styles.action} ${styles.danger} text-[14px] leading-none`}
             onConfirm={() => activeTerminal && onKillTerminal(activeTerminal.id)}
           >
             -
-          </HoldToConfirm>
+          </HoldToConfirm>}
         </div>
       </div>
 
@@ -1150,6 +1172,7 @@ function LeafPane({
 
 export function TerminalArea() {
   const { t } = useI18n('terminal')
+  const globalTools = useGlobalToolsStore()
   // P5: useShallow 细粒度订阅——整 store 订阅会让任意无关字段变化都重渲染这棵大组件树
   const {
     workspaces,
@@ -1333,8 +1356,10 @@ export function TerminalArea() {
   /*-- 关闭浏览器 pane tab：先销毁主进程 surface 再移除 pane 内容 --*/
   const handleCloseBrowserTab = useCallback(
     async (paneId: string, tabId: string, surfaceId: string) => {
+      const global = useGlobalToolsStore.getState().browserSurfaceId === surfaceId
       await destroyBrowserSurface(surfaceId)
-      closePaneTab(paneId, tabId)
+      if (global) useGlobalToolsStore.getState().forgetBrowser(surfaceId)
+      else closePaneTab(paneId, tabId)
     },
     [closePaneTab]
   )
@@ -1342,7 +1367,9 @@ export function TerminalArea() {
   /*-- 关闭 Markdown 标签只移除呈现，不碰草稿：删除文稿是编辑器里的独立动作 --*/
   const handleCloseMarkdownTab = useCallback(
     (paneId: string, tabId: string) => {
-      closePaneTab(paneId, tabId)
+      if (getLeafPanes(useGlobalToolsStore.getState().paneTree).some((pane) => pane.id === paneId)) {
+        useGlobalToolsStore.getState().closePaneTab(paneId, tabId)
+      } else closePaneTab(paneId, tabId)
     },
     [closePaneTab]
   )
@@ -1353,7 +1380,8 @@ export function TerminalArea() {
       const result = await popOutBrowserSurface(surfaceId)
       if (!result.success) return
       useBrowserStore.getState().markCarrier(surfaceId, 'window')
-      closePaneTab(paneId, tabId)
+      if (useGlobalToolsStore.getState().browserSurfaceId === surfaceId) useGlobalToolsStore.getState().closePaneTab(paneId, tabId)
+      else closePaneTab(paneId, tabId)
     },
     [closePaneTab]
   )
@@ -1404,7 +1432,7 @@ export function TerminalArea() {
     [movePaneTabToIndex]
   )
 
-  useLayoutEffect(() => () => cancelTabDragRef.current?.(), [activeWorkspaceId, paneTree])
+  useLayoutEffect(() => () => cancelTabDragRef.current?.(), [activeWorkspaceId, paneTree, globalTools.paneTree])
 
   const handleFluidCandidate = useCallback((contentId: string, paneId: string, event: React.PointerEvent) => {
     if (event.button !== 0 || !event.isPrimary || !terminalAreaRef.current) return
@@ -1413,11 +1441,19 @@ export function TerminalArea() {
     if (control && control !== source) return
     cancelTabDragRef.current?.()
     cancelTabDragRef.current = startPaneTabDrag({
-      root: terminalAreaRef.current,
+      root: source.closest<HTMLElement>('[data-pane-region]') ?? terminalAreaRef.current,
       source,
       event: event.nativeEvent,
       onActiveChange: setTabDragInFlight,
       onDrop: (target) => {
+        if (source.closest('[data-pane-region="tools"]')) {
+          const tools = useGlobalToolsStore.getState()
+          if (target.index !== undefined) {
+            tools.movePaneTabToIndex(contentId, target.paneId, target.index)
+            tools.setPaneTab(target.paneId, contentId)
+          } else tools.dropContent(contentId, target.paneId, target.zone === 'center' ? null : target.zone, SPLIT_RATIO_EQUAL)
+          return
+        }
         if (target.index !== undefined) {
           if (target.paneId === paneId) handleReorderTab(paneId, contentId, target.index)
           else handleMoveTabToIndex(contentId, target.paneId, target.index)
@@ -1427,7 +1463,7 @@ export function TerminalArea() {
         }
         const edge = target.zone === 'center' ? null : target.zone
         if (contentId.startsWith('terminal:')) handleTerminalDrop(contentId.slice(9), target.paneId, edge, SPLIT_RATIO_EQUAL)
-        else if (contentId.startsWith('browser:') || contentId.startsWith('markdown:')) {
+        else {
           handlePaneContentDrop(contentId, target.paneId, edge, SPLIT_RATIO_EQUAL)
         }
       },
@@ -1561,13 +1597,30 @@ export function TerminalArea() {
         ref={terminalAreaRef}
         className={styles.area}
     >
+      <GlobalToolsLayout hasProject={activeWorkspaceId !== null || paneTree !== null} projectId={activeWorkspaceId} projectTree={paneTree}
+        tools={(visible) => <PaneTreeView
+          toolsRegion node={globalTools.paneTree} workspaceVisible={visible}
+          terminalsById={terminalsById} focusedPaneId={globalTools.focused ? globalTools.focusedPaneId : null}
+          activeTerminalId={null} showFocusChrome={getLeafPanes(globalTools.paneTree).length > 1}
+          onCollapseLayout={globalTools.collapsePaneLayout} onPaneFocus={globalTools.setFocusedPane}
+          onTabSelect={globalTools.setPaneTab} onKillTerminalFromTab={handleKillTerminal}
+          onCloseBrowserTab={handleCloseBrowserTab} onCloseMarkdownTab={handleCloseMarkdownTab}
+          onBrowserPopOut={handleBrowserPopOut} onKillTerminal={handleKillTerminal}
+          onTerminalDrop={() => {}} onReorderTab={globalTools.reorderPaneTab}
+          onMoveTabToIndex={globalTools.movePaneTabToIndex} onFluidCandidate={handleFluidCandidate}
+          onBrowserTabDrop={(id, paneId, edge, ratio) => globalTools.dropContent('browser:' + id, paneId, edge, ratio)}
+          onResize={globalTools.resizePane} terminalMenuPaneId={null} onToggleTerminalMenu={() => {}}
+          onCloseTerminalMenu={closeTerminalMenu} onCreateTerminal={handlePresetSelect} terminalMenuItems={terminalMenuItems}
+        />}
+        project={(projectVisible) => <>
       <div className={styles.paneHost} data-pane-host="">
+        {!paneTree && activeWorkspaceId && <TerminalSelector />}
         {workspaceSurfaces.map((surface) => {
           // 无项目时活动 surface 的宿主是全局哨兵，可见性按哨兵判；
           // 有项目时仍按真实 workspaceId 判。
-          const workspaceVisible = activeWorkspaceId === null
+          const workspaceVisible = projectVisible && (activeWorkspaceId === null
             ? surface.workspaceId === GLOBAL_PANE_SCOPE
-            : surface.workspaceId === activeWorkspaceId
+            : surface.workspaceId === activeWorkspaceId)
           return (
             <div
               key={surface.workspaceId}
@@ -1582,7 +1635,7 @@ export function TerminalArea() {
                 node={surface.paneTree}
                 workspaceVisible={workspaceVisible}
                 terminalsById={terminalsById}
-                focusedPaneId={surface.focusedPaneId}
+                focusedPaneId={globalTools.focused ? null : surface.focusedPaneId}
                 activeTerminalId={surface.activeTerminalId}
                 showFocusChrome={workspaceVisible && paneCount > 1}
                 onCollapseLayout={collapsePaneLayout}
@@ -1835,6 +1888,9 @@ export function TerminalArea() {
           )}
         </div>
       </div>
+
+        </>}
+      />
 
     </div>
   )

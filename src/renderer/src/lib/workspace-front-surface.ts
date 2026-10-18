@@ -18,13 +18,8 @@ export interface WorkspaceTerminalSurface extends WorkspaceTerminalSurfaceSnapsh
 export const MAX_HOT_WORKSPACE_SURFACES = 4
 export const HOT_WORKSPACE_EVICTION_GRACE_MS = 30_000
 
-/**
- * 无项目（未选择文件夹）时活动 pane 树的宿主键。
- *
- * `terminalSnapshots` 按 workspaceId 存档，没有项目时就无处可放，而这个哨兵只活在
- * `buildWorkspaceTerminalSurfaces` 产出的 surface 里：不进快照、不进热工作区、
- * 不过 `retainWorkspacePaneContent`，因此切项目即丢弃——浏览器 surface 本身在
- * 主进程存活，重开入口会按原 surfaceId 把它纳回 pane。
+/** Global draft ownership and the fallback key for projectless project surfaces.
+ * Global tools live outside this hot-workspace cache in useGlobalToolsStore.
  */
 export const GLOBAL_PANE_SCOPE = '__global__'
 

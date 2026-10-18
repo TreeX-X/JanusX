@@ -6,15 +6,10 @@ import {
   addTerminalToPaneTree,
   closePaneTab,
   collapsePaneTree,
-  createBrowserPaneContent,
-  createMarkdownPaneContent,
   createExtensionPaneContent,
   isAvailableExtensionPane,
   createTerminalPaneContent,
-  findFirstMarkdownPaneContent,
-  findFirstBrowserPaneContent,
   findLeafPane,
-  findPaneContent,
   findTerminalPane,
   getLeafPanes,
   getPaneContentById,
@@ -32,8 +27,7 @@ import {
   type PaneSplitDirection,
   type WorkspacePaneNode,
 } from '@/lib/workspace-pane'
-import { createBrowserSurface, openBrowserTab } from '@/services/browser'
-import { activePaneScopeId } from '@/lib/workspace-front-surface'
+import { useGlobalToolsStore } from './global-tools'
 import { extensionRegistry } from '@/extensions/registry'
 import type { ExtensionViewId } from '@/extensions/types'
 
@@ -65,7 +59,7 @@ interface WorkspaceStore {
   setWorkspaces: (workspaces: Workspace[]) => void
   addWorkspace: (workspace: Workspace) => void
   removeWorkspace: (id: string) => void
-  setActiveWorkspace: (id: string) => void
+  setActiveWorkspace: (id: string | null) => void
 
   addTerminal: (terminal: Terminal) => void
   addTerminalForWorkspace: (terminal: Terminal) => void
@@ -100,13 +94,6 @@ function createPaneId(prefix = 'pane'): string {
     return `${prefix}-${crypto.randomUUID()}`
   }
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
-
-function createBrowserSurfaceId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID()
-  }
-  return `browser-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 type TerminalLookupState = {
@@ -266,28 +253,21 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     const s = get()
     if (s.activeWorkspaceId === id) return
     // 保存当前工作区的终端快照
-    const globalViews = getLeafPanes(s.paneTree).flatMap((leaf) => leaf.tabs)
-      .filter((tab) => tab.type === 'extension' && tab.scope === 'application' && isAvailableExtensionPane(tab))
     const snapshots = { ...s.terminalSnapshots }
     if (s.activeWorkspaceId) {
       snapshots[s.activeWorkspaceId] = sanitizeWorkspaceSnapshot({
         terminals: s.terminals,
         activeTerminalId: s.activeTerminalId,
-        paneTree: filterExtensionPanes(s.paneTree, (tab) => tab.scope !== 'application'),
+        paneTree: s.paneTree,
         focusedPaneId: s.focusedPaneId,
         focusedTabId: s.focusedTabId,
       }, s.activeWorkspaceId)
     }
     // 恢复目标工作区的终端快照;文件树属于旧工作区,立即清空避免串台
-    const saved = snapshots[id] ? sanitizeWorkspaceSnapshot(snapshots[id], id) : null
-    if (saved) snapshots[id] = saved
-    let paneTree = saved?.paneTree ?? null
-    for (const content of globalViews) {
-      paneTree = addPaneContentToTree(paneTree, saved?.focusedPaneId ?? null, content, createPaneId()).tree
-    }
+    const saved = id && snapshots[id] ? sanitizeWorkspaceSnapshot(snapshots[id], id) : null
+    if (saved && id) snapshots[id] = saved
+    const paneTree = saved?.paneTree ?? null
     const focus = resolvePaneFocus(paneTree, saved?.focusedPaneId ?? null, saved?.focusedTabId ?? null)
-    // Adding a global view activates its tab; restore the destination's focus.
-    if (focus.paneId) paneTree = activatePaneTab(paneTree, focus.paneId, focus.tabId)
     set({
       activeWorkspaceId: id,
       fileTree: [],
@@ -306,6 +286,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
       get().addTerminalForWorkspace(terminal)
       return
     }
+    useGlobalToolsStore.getState().setFocused(false)
     set((s) => {
       const now = Date.now()
       const nextTerminal = {
@@ -365,6 +346,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     set((s) => {
       const terminal = s.terminals.find((t) => t.id === id)
       if (!terminal) return {}
+      useGlobalToolsStore.getState().setFocused(false)
 
       const existing = findTerminalPane(s.paneTree, id)
       if (existing.paneId && existing.tabId) {
@@ -398,6 +380,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     })),
   setFocusedPane: (paneId) =>
     set((s) => {
+      if (!findLeafPane(s.paneTree, paneId)) return {}
+      useGlobalToolsStore.getState().setFocused(false)
       const focus = resolvePaneFocus(s.paneTree, paneId, null)
       if (!allowsTerminalPresentation(s.paneTree, s.activeWorkspaceId, paneId, focus.tabId)) return {}
       return {
@@ -408,6 +392,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   setPaneTab: (paneId, tabId) =>
     set((s) => {
+      if (!findLeafPane(s.paneTree, paneId)) return {}
+      useGlobalToolsStore.getState().setFocused(false)
       if (!allowsTerminalPresentation(s.paneTree, s.activeWorkspaceId, paneId, tabId)) return {}
       const paneTree = activatePaneTab(s.paneTree, paneId, tabId)
       const focus = resolvePaneFocus(paneTree, paneId, tabId)
@@ -420,101 +406,15 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   setTabDragInFlight: (active) =>
     set((s) => (s.tabDragInFlight === active ? {} : { tabDragInFlight: active })),
-  /*-- 把已存在的 browser surface 纳入 pane 树（幂等：已有 tab 则激活） --*/
-  addBrowserSurfaceToTree: (surfaceId) =>
-    set((s) => {
-      const contentId = `browser:${surfaceId}`
-      const existing = findPaneContent(s.paneTree, contentId)
-      if (existing.paneId && existing.tabId) {
-        return {
-          paneTree: activatePaneTab(s.paneTree, existing.paneId, existing.tabId),
-          focusedPaneId: existing.paneId,
-          focusedTabId: existing.tabId,
-          activeTerminalId: null,
-        }
-      }
-
-      const focusedPane = findLeafPane(s.paneTree, s.focusedPaneId)
-      let paneTree = s.paneTree
-      let targetPaneId = focusedPane?.id ?? null
-      if (focusedPane && focusedPane.tabs.length > 0) {
-        const split = splitPaneTree(
-          paneTree,
-          focusedPane.id,
-          'horizontal',
-          createPaneId('split'),
-          createPaneId(),
-          'after',
-          0.62
-        )
-        paneTree = split.tree
-        targetPaneId = split.focus.paneId
-      }
-
-      const result = addPaneContentToTree(
-        paneTree,
-        targetPaneId,
-        createBrowserPaneContent(surfaceId),
-        createPaneId()
-      )
-      return {
-        paneTree: result.tree,
-        focusedPaneId: result.focus.paneId,
-        focusedTabId: result.focus.tabId,
-        activeTerminalId: null,
-      }
-    }),
-  /*-- 用户主动调用浏览器：已有"用户浏览" tab 则激活（带 url 则在其 surface 新开 tab），
-       否则创建新 surface 入网。 --*/
-  openBrowserInWorkspace: async (url) => {
-    const existing = findFirstBrowserPaneContent(get().paneTree)
-    if (existing) {
-      set((s) => ({
-        paneTree: activatePaneTab(s.paneTree, existing.paneId, existing.tabId),
-        focusedPaneId: existing.paneId,
-        focusedTabId: existing.tabId,
-        activeTerminalId: null,
-      }))
-      if (url) await openBrowserTab(existing.surfaceId, url)
-      return
-    }
-    const surfaceId = createBrowserSurfaceId()
-    const result = await createBrowserSurface(surfaceId, 'pane', url)
-    if (!result.success) return
-    get().addBrowserSurfaceToTree(surfaceId)
-  },
-  /*-- 顶栏 Markdown 入口：已有面板则激活，否则按当前作用域新建 --*/
-  openMarkdownInWorkspace: () => {
-    const scopeId = activePaneScopeId(get().activeWorkspaceId)
-    const existing = findFirstMarkdownPaneContent(get().paneTree)
-    if (existing) {
-      const { paneId, tabId } = existing
-      set((s) => ({
-        paneTree: activatePaneTab(s.paneTree, paneId, tabId),
-        focusedPaneId: paneId,
-        focusedTabId: tabId,
-        activeTerminalId: null,
-      }))
-      return
-    }
-    set((s) => {
-      const result = addPaneContentToTree(
-        s.paneTree,
-        s.focusedPaneId,
-        createMarkdownPaneContent(scopeId),
-        createPaneId()
-      )
-      return {
-        paneTree: result.tree,
-        focusedPaneId: result.focus.paneId,
-        focusedTabId: result.focus.tabId,
-        activeTerminalId: null,
-      }
-    })
-  },
+  // Compatibility entry points: global tools never enter a project snapshot.
+  addBrowserSurfaceToTree: (surfaceId) => useGlobalToolsStore.getState().attachBrowser(surfaceId),
+  openBrowserInWorkspace: (url) => useGlobalToolsStore.getState().openBrowser(url),
+  openMarkdownInWorkspace: () => useGlobalToolsStore.getState().openMarkdown(get().activeWorkspaceId),
   openExtensionView: (viewId) => {
     const content = createExtensionPaneContent(viewId, get().activeWorkspaceId)
     if (!content) return
+    if (content.scope === 'application') { useGlobalToolsStore.getState().openContent(content); return }
+    useGlobalToolsStore.getState().setFocused(false)
     set((state) => {
       const result = addPaneContentToTree(state.paneTree, state.focusedPaneId, content, createPaneId())
       return {
@@ -592,6 +492,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   movePaneTabToIndex: (contentId, paneId, targetIndex) =>
     set((s) => {
+      if (!findLeafPane(s.paneTree, paneId)) return {}
       /*-- 侧栏拖入的终端可能尚无 pane 视图：为其建内容后按下标插入 --*/
       let content = getPaneContentById(s.paneTree, contentId)
       let terminals = s.terminals
@@ -615,6 +516,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   moveTerminalToPane: (terminalId, paneId) =>
     set((s) => {
+      if (!findLeafPane(s.paneTree, paneId)) return {}
       const terminal = findTerminalInState(s, terminalId)
       if (!terminal || terminal.workspaceId !== s.activeWorkspaceId) return {}
       const terminals = ensureTerminalInCurrentView(s.terminals, terminal)
@@ -634,6 +536,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   splitPaneWithTerminal: (terminalId, paneId, edge, ratio = 0.5) =>
     set((s) => {
+      if (!findLeafPane(s.paneTree, paneId)) return {}
       const terminal = findTerminalInState(s, terminalId)
       if (!terminal) return {}
       const terminals = terminal.workspaceId === s.activeWorkspaceId
@@ -681,6 +584,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
   /*-- 内容中立的 tab 拖拽落点：browser / markdown 共用，终端另有 moveTerminalToPane --*/
   movePaneContentToPane: (contentId, paneId) =>
     set((s) => {
+      if (!findLeafPane(s.paneTree, paneId)) return {}
       const content = getPaneContentById(s.paneTree, contentId)
       if (!content || content.type === 'terminal') return {}
       const removed = removePaneContentFromTree(s.paneTree, contentId)
@@ -694,6 +598,7 @@ export const useWorkspaceStore = create<WorkspaceStore>((set, get) => ({
     }),
   splitPaneWithContent: (contentId, paneId, edge, ratio = 0.5) =>
     set((s) => {
+      if (!findLeafPane(s.paneTree, paneId)) return {}
       const content = getPaneContentById(s.paneTree, contentId)
       if (!content || content.type === 'terminal') return {}
 

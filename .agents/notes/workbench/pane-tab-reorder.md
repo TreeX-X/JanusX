@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-04",
   "class": "feature",
-  "updated": "2026-10-14T17:17:24Z",
+  "updated": "2026-10-18T04:26:17Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -18,6 +18,8 @@
 The middle workspace combines terminal and browser tabs in a tree of leaf panes. Users need to place a tab within its strip, move it into another pane, or create a split without closing its content. A native drag image and an append-only destination leave the final position uncertain. Measuring animated sibling positions also creates a feedback loop: the preview moves the geometry that chooses the next preview, so a stationary pointer can make tabs oscillate.
 
 ## Decision
+
+全局工具与项目采用[独立分屏树](./global-tool-layout.md)。指针拖拽根限定为源区域，原生拖拽和 store 拒绝跨区域落点；工具区内的浏览器、Markdown 与应用级扩展共享排序、边缘分屏和合并行为。项目终端保持项目区操作。
 
 `TerminalArea.tsx` delegates pointer gestures to `lib/pane-tab-drag.ts`. A primary-button movement of six pixels starts dragging; shorter movements retain ordinary tab selection. Close controls do not start a drag. The controller captures the pointer, hides the source label, and moves an inert DOM clone using animation frames. The source content stays mounted during the gesture. Siblings translate into their preview positions with a 160 ms transition, disabled when reduced motion is requested. Tabs retain a 144 px width and overflow horizontally; holding the pointer near a strip edge scrolls it without requiring further pointer events.
 

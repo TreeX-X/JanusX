@@ -139,7 +139,14 @@ export class BrowserSurfaceManager {
   popOut(surfaceId: string): BrowserResult<{ surfaceId: string }> {
     const surface = this.surfaces.get(surfaceId)
     if (!surface) return { success: false, error: 'Surface not found' }
-    if (surface.carrier !== 'pane') return { success: false, error: 'Surface is not embedded' }
+    if (surface.carrier === 'window') {
+      const win = surface.standaloneWindow
+      if (!win || win.isDestroyed()) return { success: false, error: 'Browser window unavailable' }
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+      return { success: true, data: { surfaceId } }
+    }
 
     /*-- 先从主窗口摘除全部 tab view，再切换载体；webContents 全程存活 --*/
     const mainWindow = this.deps.getMainWindow()

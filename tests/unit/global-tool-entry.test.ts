@@ -72,7 +72,7 @@ describe('resolveGlobalToolOpenState', () => {
     })
   })
 
-  it('greys the browser entry once any browser tab exists', () => {
+  it('marks the browser entry once any browser tab exists', () => {
     const tree = addPaneContentToTree(seedTerminalTree(), 'pane-1', createBrowserPaneContent('surface-1'), 'pane-1').tree
 
     expect(resolveGlobalToolOpenState(tree).browser).toBe(true)
@@ -80,14 +80,14 @@ describe('resolveGlobalToolOpenState', () => {
     expect(resolveGlobalToolOpenState(tree).markdown).toBe(false)
   })
 
-  it('greys the markdown entry once a markdown panel exists', () => {
+  it('marks the markdown entry once a markdown panel exists', () => {
     const tree = addPaneContentToTree(seedTerminalTree(), 'pane-1', createMarkdownPaneContent('workspace-1'), 'pane-1').tree
 
     expect(resolveGlobalToolOpenState(tree).markdown).toBe(true)
     expect(resolveGlobalToolOpenState(tree).browser).toBe(false)
   })
 
-  it('greys both entries once a browser tab and a markdown panel are open', () => {
+  it('marks both entries once a browser tab and a markdown panel are open', () => {
     const tree = addPaneContentToTree(
       addPaneContentToTree(seedTerminalTree(), 'pane-1', createMarkdownPaneContent('workspace-1'), 'pane-1').tree,
       'pane-1',

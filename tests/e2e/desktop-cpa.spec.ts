@@ -25,7 +25,7 @@ async function listen(server: Server): Promise<string> {
 }
 
 async function boot(root: string, env: NodeJS.ProcessEnv = {}): Promise<{ app: ElectronApplication; page: Page }> {
-  const app = await electron.launch({ args: [resolve('out/main/index.js'), `--user-data-dir=${join(root, 'profile')}`], env: { ...createDesktopTestEnv(root), ...env } })
+  const app = await electron.launch({ args: [resolve(process.env.JANUS_E2E_MAIN_ENTRY ?? 'out/main/index.js'), `--user-data-dir=${join(root, 'profile')}`], env: { ...createDesktopTestEnv(root), ...env } })
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   await page.evaluate(() => (window as any).electron.system.setLanguage('en'))
@@ -348,6 +348,45 @@ for (const tool of ['Browser', 'Markdown']) {
   })
 }
 
+test('global browser focuses its popped-out singleton and reembeds without a project', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'janusx-global-browser-'))
+  let app: ElectronApplication | undefined
+  try {
+    const booted = await boot(root)
+    app = booted.app
+    const page = booted.page
+    await page.locator('button[data-id="tool-menu"]').click()
+    await page.locator('[role="menuitem"][data-id="browser"]').click()
+    const tab = page.locator('[data-tab-id^="browser:"]')
+    await expect(tab).toHaveCount(1)
+    const id = (await tab.getAttribute('data-tab-id'))!.slice('browser:'.length)
+    const [standalone] = await Promise.all([
+      app.waitForEvent('window'),
+      page.getByRole('button', { name: 'Pop out to standalone window', exact: true }).click(),
+    ])
+    await expect(tab).toHaveCount(0)
+    await expect(standalone.getByRole('button', { name: 'Embed into main window', exact: true })).toBeVisible()
+    await standalone.evaluate(() => (window as any).electron.window.minimize())
+    await page.bringToFront()
+    await page.locator('button[data-id="tool-menu"]').click()
+    const entry = page.locator('[role="menuitem"][data-id="browser"]')
+    await expect(entry).toBeEnabled()
+    await entry.click()
+    await expect.poll(() => app!.evaluate(({ BrowserWindow }) => {
+      const windows = BrowserWindow.getAllWindows()
+      return { count: windows.length, minimized: windows.some((win) => win.isMinimized()) }
+    })).toEqual({ count: 2, minimized: false })
+    await standalone.getByRole('button', { name: 'Embed into main window', exact: true }).click()
+    await expect(tab).toHaveAttribute('data-tab-id', `browser:${id}`)
+    await expect.poll(() => app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(1)
+    await expect(page.locator('[data-pane-region="tools"]')).toBeVisible()
+    expect(await page.evaluate((surfaceId) => (window as any).electron.browser.getState(surfaceId).then((state: any) => state.carrier), id)).toBe('pane')
+  } finally {
+    if (app) await app.close()
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('CPA native page shares a global login, hides for dialogs, releases on close and reuses login after restart', async () => {
   const root = await mkdtemp(join(tmpdir(), 'janusx-cpa-'))
   const server = createServer((request, response) => {
@@ -371,20 +410,17 @@ test('CPA native page shares a global login, hides for dialogs, releases on clos
     await expectCompactCpa(app, page)
     const toolTrigger = page.locator('button[data-id="tool-menu"]')
     await toolTrigger.click()
-    await expect(page.getByRole('menuitem', { name: 'CPA', exact: true })).toBeDisabled()
+    await expect(page.getByRole('menuitem', { name: 'CPA', exact: true })).toBeEnabled()
     await expect(page.getByRole('menuitem', { name: 'CPA', exact: true })).toContainText('Open')
     await expect.poll(() => nativeCount(app!)).toBe(0)
     await page.screenshot({ path: test.info().outputPath('cpa-titlebar-entry.png') })
     await page.keyboard.press('Escape')
     await expect.poll(() => nativeCount(app!)).toBe(1)
-    await page.getByRole('button', { name: 'New Terminal', exact: true }).click()
-    await expect(page.getByRole('menu', { name: 'New terminal', exact: true })).toBeVisible()
-    await expect(page.getByRole('menuitem', { name: 'CPA', exact: true })).toHaveCount(0)
-    await page.keyboard.press('Escape')
+    await expect(page.locator('[data-pane-region="tools"]').getByRole('button', { name: 'New Terminal', exact: true })).toHaveCount(0)
     await page.screenshot({ path: test.info().outputPath('compact-cpa.png') })
     const originalWeb = web
 
-    // A project switch transfers the application contribution with its guest intact.
+    // A project switch leaves the global tools region and its guest intact.
     await mkdir(join(root, 'project-one'))
     await mkdir(join(root, 'project-two'))
     await page.evaluate(async ({ root }) => {

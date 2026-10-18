@@ -1,3 +1,4 @@
+import { useGlobalToolsStore } from '../../src/renderer/src/stores/global-tools'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ExtensionRegistry, extensionRegistry } from '../../src/renderer/src/extensions/registry'
 import type { ExtensionDefinition, ExtensionView } from '../../src/renderer/src/extensions/types'
@@ -114,11 +115,13 @@ describe('trusted extension registry', () => {
 
 describe('workbench extension integration', () => {
   let unregister: () => void
+  const globalTabs = () => getLeafPanes(useGlobalToolsStore.getState().paneTree).flatMap((leaf) => leaf.tabs)
   const tabs = () => getLeafPanes(useWorkspaceStore.getState().paneTree).flatMap((leaf) => leaf.tabs)
 
   beforeEach(() => {
     useWorkspaceStore.setState({ activeWorkspaceId: 'one', workspaces: [], terminals: [],
       paneTree: null, focusedPaneId: null, focusedTabId: null, activeTerminalId: null, terminalSnapshots: {} })
+    useGlobalToolsStore.setState({ paneTree: null, focusedPaneId: null, focusedTabId: null, focused: false })
     useRightToolStore.setState({ openToolIds: [], activeToolId: null })
     unregister = extensionRegistry.register(definition({ views: [
       view(), view({ id: 'global', scope: 'application' }), view({ id: 'summary', location: 'right' }),
@@ -147,14 +150,16 @@ describe('workbench extension integration', () => {
     expect(tabs()).toEqual([first])
   })
 
-  it('transfers one global view across projects and removes it from inactive snapshots', () => {
+  it('keeps a global view outside all project snapshots', () => {
     openExtensionView('extension:test.tools/global')
-    const global = tabs()[0]
+    const global = globalTabs()[0]
     useWorkspaceStore.getState().setActiveWorkspace('two')
-    expect(tabs()).toEqual([global])
+    expect(globalTabs()).toEqual([global])
+    expect(tabs()).toEqual([])
     expect(useWorkspaceStore.getState().terminalSnapshots.one.paneTree).toBeNull()
     useWorkspaceStore.getState().setActiveWorkspace('one')
-    expect(tabs()).toEqual([global])
+    expect(globalTabs()).toEqual([global])
+    expect(tabs()).toEqual([])
     expect(useWorkspaceStore.getState().terminalSnapshots.two.paneTree).toBeNull()
   })
 
@@ -166,7 +171,7 @@ describe('workbench extension integration', () => {
     expect(createExtensionPaneContent('extension:test.tools/page', null)).toBeNull()
   })
 
-  it('preserves the selected project tab when a global tab transfers back', () => {
+  it('preserves project selection independently of global tools', () => {
     openExtensionView('extension:test.tools/global')
     openExtensionView('extension:test.tools/page')
     const projectTab = useWorkspaceStore.getState().focusedTabId
@@ -183,6 +188,7 @@ describe('workbench extension integration', () => {
     openExtensionView('extension:test.tools/global')
     openExtensionView('extension:test.tools/summary')
     extensionRegistry.disable('test.tools')
+    expect(globalTabs()).toEqual([])
     expect(tabs()).toEqual([])
     expect(useWorkspaceStore.getState().terminalSnapshots.one.paneTree).toBeNull()
     expect(useRightToolStore.getState().openToolIds).toEqual([])

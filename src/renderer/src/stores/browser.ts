@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { BrowserSurfaceState } from '../../../shared/ipc/browser'
-import { useWorkspaceStore } from '@/stores/workspace'
+import { useGlobalToolsStore } from '@/stores/global-tools'
 
 interface BrowserStore {
   /*-- 按 surfaceId 跟踪主进程推送的 surface 状态 --*/
@@ -35,11 +35,11 @@ export function initBrowserEventSubscriptions(): () => void {
   const offState = window.electron.browser.onStateChanged((state) => {
     const prev = useBrowserStore.getState().surfaces[state.surfaceId]
     useBrowserStore.getState().applySurfaceState(state)
-    /*-- embed 回嵌：surface 从独立窗口回到 pane 载体时，主窗口工作区补建/激活 pane tab。
-        独立窗口自身的 workspace store 无 activeWorkspaceId，天然跳过 --*/
+    // Only the renderer owning the singleton may reattach it, including without a project.
+    const tools = useGlobalToolsStore.getState()
+    if (state.destroyed) tools.forgetBrowser(state.surfaceId)
     if (!state.destroyed && prev?.carrier === 'window' && state.carrier === 'pane') {
-      const workspace = useWorkspaceStore.getState()
-      if (workspace.activeWorkspaceId) workspace.addBrowserSurfaceToTree(state.surfaceId)
+      if (tools.browserSurfaceId === state.surfaceId) tools.attachBrowser(state.surfaceId)
     }
   })
   const offAgentControl = window.electron.browser.onAgentControlChanged(({ surfaceId, active }) => {

@@ -31,13 +31,7 @@ export interface GlobalToolOpenState {
   markdown: boolean
 }
 
-/**
- * 两个工具各自"是否已经开着"——顶栏入口据此置灰。
- *
- * 每个工具在一个工作区里只开一个实例，所以"已开着"就是禁用态：关闭对应标签后
- * 恢复可点。这里刻意只看 pane 树里有没有对应内容，不看焦点——焦点会随用户在
- * 各 pane 间点击而变，拿它当禁用条件会让按钮自己反复启停。
- */
+/** Reports open tools for the menu badge; open entries remain actionable to reveal them. */
 export function resolveGlobalToolOpenState(paneTree: WorkspacePaneNode | null): GlobalToolOpenState {
   return {
     browser: findFirstBrowserPaneContent(paneTree) !== null,
