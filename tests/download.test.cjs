@@ -2,6 +2,7 @@ const { chromium } = require(process.env.JANUSX_PLAYWRIGHT || 'playwright');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
+const { createHash } = require('node:crypto');
 const { pathToFileURL } = require('node:url');
 const pageUrl = pathToFileURL(path.resolve(__dirname, '../index.html')).href;
 const history = 'https://github.com/TreeX-X/JanusX/releases';
@@ -9,6 +10,21 @@ const asset = (kind, arch = 'x64') => ({ name: `JanusX-1.2.3-${arch}-${kind}.exe
 const release = { tag_name: 'v1.2.3', published_at: '2026-09-18T00:00:00Z', assets: [asset('setup'), asset('portable')] };
 
 (async () => {
+  const assetsPath = path.resolve(__dirname, '../assets/workspace');
+  const capture = JSON.parse(fs.readFileSync(path.join(assetsPath, 'capture.json')));
+  const imported = JSON.parse(fs.readFileSync(path.join(assetsPath, 'imported.json')));
+  assert.equal(capture.theme, 'dark');
+  assert.equal(capture.cpa.authenticationFiles, 0);
+  assert.equal(capture.cpa.requests, 0);
+  const overview = capture.captures.find(item => item.file === 'overview.png');
+  assert.equal(overview.projectPanes, 4);
+  assert.equal(overview.toolPanes, 2);
+  assert.equal(overview.nativeViews, 1);
+  for (const asset of [...capture.captures, ...imported.assets]) {
+    assert.equal(createHash('sha256').update(fs.readFileSync(path.join(assetsPath, asset.file))).digest('hex'), asset.sha256);
+    if (asset.theme) assert.equal(asset.theme, 'dark');
+  }
+  console.log('PASS seven real dark captures match recorded hashes; six-pane overview includes native CPA');
   const browser = await chromium.launch({ headless: true });
   let checks = 0;
   async function scenario(name, response, verify) {
@@ -34,19 +50,11 @@ const release = { tag_name: 'v1.2.3', published_at: '2026-09-18T00:00:00Z', asse
       for (const img of await page.locator('.tour-shot img').all()) {
         await img.scrollIntoViewIfNeeded();
         await img.evaluate(node => node.decode());
-        assert.deepEqual(await img.evaluate(node => [node.naturalWidth, node.naturalHeight]), [1280, 864]);
+        const src = await img.getAttribute('src');
+        assert.ok(src.startsWith('assets/workspace/'), 'Every feature must use the new dark captures');
+        assert.deepEqual(await img.evaluate(node => [node.naturalWidth, node.naturalHeight]), [1760, 884]);
         assert.ok(await img.getAttribute('alt'));
-        assert.equal(await img.locator('..').getAttribute('href'), (await img.getAttribute('src')).replace('.png', '.gif'));
-      }
-      for (const button of await page.locator('.tour-play').all()) {
-        assert.equal(await button.getAttribute('aria-pressed'), 'false');
-        await button.click();
-        const img = button.locator('..').locator('img');
-        await img.evaluate(node => node.decode());
-        assert.match(await img.getAttribute('src'), /\.gif$/);
-        assert.equal(await button.getAttribute('aria-pressed'), 'true');
-        await button.click();
-        assert.match(await img.getAttribute('src'), /\.png$/);
+        assert.equal(await img.locator('..').getAttribute('href'), src);
       }
       for (const [width, height] of [[1440, 1000], [1920, 1080], [768, 1024], [390, 844], [320, 740]]) {
         await page.setViewportSize({ width, height });
@@ -66,23 +74,6 @@ const release = { tag_name: 'v1.2.3', published_at: '2026-09-18T00:00:00Z', asse
       assert.equal(await page.locator('#download-portable').getAttribute('href'), history);
       assert.match(await page.locator('#portable-meta').innerText(), /未提供/);
     });
-    await scenario('failed animation restores its poster and can retry', {}, async page => {
-      const button = page.locator('.tour-play').first();
-      const img = button.locator('..').locator('img');
-      await page.route('**/assets/terminal-split.gif', route => route.abort());
-      await button.click();
-      await page.waitForFunction(() => document.querySelector('.tour-play').textContent.includes('点击重试'));
-      assert.equal(await button.getAttribute('aria-pressed'), 'false');
-      assert.match(await img.getAttribute('src'), /\.png$/);
-      await img.evaluate(node => node.decode());
-      await page.unroute('**/assets/terminal-split.gif');
-      await button.click();
-      await img.evaluate(node => node.decode());
-      assert.equal(await button.getAttribute('aria-pressed'), 'true');
-      assert.match(await img.getAttribute('src'), /\.gif$/);
-      await button.click();
-      assert.equal(await button.textContent(), '播放分屏演示');
-    });
     await scenario('404 is empty release', { status: 404 }, async page => assert.match(await page.locator('#release-status').innerText(), /暂无公开/));
     for (const response of [{ status: 403 }, { status: 500 }, 'offline', { body: {} }, { body: { ...release, assets: [{ ...asset('setup'), browser_download_url: 'https://example.com/file.exe' }] } }]) {
       await scenario(`failure fallback ${JSON.stringify(response)}`, response, async page => {
@@ -94,10 +85,10 @@ const release = { tag_name: 'v1.2.3', published_at: '2026-09-18T00:00:00Z', asse
     await noScript.goto(pageUrl);
     assert.equal(await noScript.locator('#download-setup').getAttribute('href'), history);
     assert.equal(await noScript.locator('noscript').isVisible(), true);
-    assert.equal(await noScript.locator('.tour-play:visible').count(), 0);
+    assert.equal(await noScript.locator('.workspace-controls').isVisible(), false);
     assert.equal(await noScript.locator('.tour-shot img[src$=".png"]').count(), 6);
     await noScript.close(); checks++;
-    await scenario('reduced motion keeps static posters until play is requested', {}, async page => {
+    await scenario('reduced motion keeps all feature previews static', {}, async page => {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       assert.equal(await page.locator('.tour-shot img[src$=".gif"]').count(), 0);
     });

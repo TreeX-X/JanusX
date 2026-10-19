@@ -49,7 +49,16 @@
         document.getElementById(`${kind}-label`).textContent = '前往 GitHub Releases';
         document.getElementById(`${kind}-meta`).textContent = 'Windows x64 · .exe';
       }
-    } finally { clearTimeout(timeout); }
+    } finally {
+      clearTimeout(timeout);
+      // Share the validated asset and release-history fallback with the first-screen action.
+      const setupLink = document.getElementById('download-setup');
+      const setupLabel = document.getElementById('setup-label').textContent;
+      document.querySelectorAll('[data-download-setup]').forEach(link => {
+        link.href = setupLink.href;
+        link.querySelector('[data-download-label]').textContent = setupLabel === '下载 Windows 安装版' ? '下载 Windows 版' : setupLabel;
+      });
+    }
   }
   void loadRelease();
 })();
