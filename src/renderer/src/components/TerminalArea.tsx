@@ -1598,7 +1598,7 @@ export function TerminalArea() {
         ref={terminalAreaRef}
         className={styles.area}
     >
-      <GlobalToolsLayout hasProject={activeWorkspaceId !== null || paneTree !== null} projectId={activeWorkspaceId} projectTree={paneTree}
+      <GlobalToolsLayout hasProject={activeWorkspaceId !== null || paneTree !== null} projectTree={paneTree}
         tools={(visible) => <PaneTreeView
           toolsRegion node={globalTools.paneTree} workspaceVisible={visible}
           terminalsById={terminalsById} focusedPaneId={globalTools.focused ? globalTools.focusedPaneId : null}

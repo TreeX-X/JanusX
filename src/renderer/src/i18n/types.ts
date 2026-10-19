@@ -1159,6 +1159,7 @@ export type TypedI18nKey =
   | 'common:toolGroup.openedBadge'
   | 'common:toolGroup.resizeRegions'
   | 'common:toolGroup.retainedDrafts'
+  | 'common:toolGroup.toolsNeedSpace'
   | 'common:toolGroup.triggerAction'
   | 'common:trafficLight.close'
   | 'common:trafficLight.maximize'

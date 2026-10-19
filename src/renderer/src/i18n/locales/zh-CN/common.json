@@ -286,6 +286,7 @@
   "toolGroup": {
     "resizeRegions": "调整项目与工具区宽度",
     "collapseTools": "收起工具区",
+    "toolsNeedSpace": "空间不足，请加宽窗口或收起右侧工作区。",
     "expandTools": "展开工具区",
     "draftScope": "文稿归属",
     "globalDrafts": "全局文稿",

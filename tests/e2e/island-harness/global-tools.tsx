@@ -1,4 +1,9 @@
-import React from 'react'
+import { RightDock } from '../../../src/renderer/src/components/right-tools/RightDock'
+import { getRightDockLayout } from '../../../src/renderer/src/components/right-tools/layout'
+import { useRightToolStore } from '../../../src/renderer/src/stores/right-tools'
+import { useAppStore } from '../../../src/renderer/src/stores/app'
+import dockStyles from '../../../src/renderer/src/components/right-tools/RightDock.module.css'
+import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { TerminalArea } from '../../../src/renderer/src/components/TerminalArea'
 import { TitlebarToolGroup } from '../../../src/renderer/src/components/TitlebarToolGroup'
@@ -52,6 +57,27 @@ Object.assign(window, { toolsFixture: {
   switch: (id: string | null) => workspace.setActiveWorkspace(id),
   selectTerminal: (id: string) => workspace.setActiveTerminal(id),
 } })
+const withDock = new URLSearchParams(location.search).has('dock')
+useRightToolStore.setState({ openToolIds: ['files'], activeToolId: 'files', panelWidth: 360, panelWidths: { files: 360 } })
+useAppStore.setState({ panelCollapsed: true })
+function WorkspaceWithDock() {
+  const [width, setWidth] = useState(window.innerWidth)
+  const [resizing, setResizing] = useState(false)
+  const panelCollapsed = useAppStore(s => s.panelCollapsed)
+  const { panelWidth, panelWidths, activeToolId } = useRightToolStore()
+  useEffect(() => {
+    const resize = () => setWidth(window.innerWidth)
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
+  }, [])
+  const layout = getRightDockLayout({ availableWidth: width, panelCollapsed, panelWidth, panelWidths, activeToolId, hasActiveTool: !!activeToolId })
+  return <div data-testid="combined-workspace" className={dockStyles.workbenchGrid} data-resizing={resizing}
+    style={{ display: 'grid', flex: 1, minHeight: 0, gridTemplateColumns: `minmax(320px, 1fr) ${layout.dockWidth}px` }}>
+    <div style={{ minWidth: 0, minHeight: 0 }}><TerminalArea /></div>
+    <RightDock effectiveCollapsed={layout.effectiveCollapsed} effectiveMaxWidth={layout.effectiveMaxWidth}
+      forcedCollapsed={layout.responsiveAutoCollapsed} onResizingChange={setResizing} />
+  </div>
+}
 await initI18n()
 await changeLanguage('en')
 ReactDOM.createRoot(document.getElementById('root')!).render(
@@ -61,8 +87,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         {['A', 'B', 'Empty'].map((id) => <button key={id} onClick={() => workspace.setActiveWorkspace(id)}>Project {id}</button>)}
         <button onClick={() => workspace.setActiveWorkspace(null)}>No project</button>
         <TitlebarToolGroup />
+        {withDock && <button onClick={() => useAppStore.getState().togglePanel()}>Toggle right workspace</button>}
       </nav>
-      <div style={{ flex: 1, minHeight: 0 }}><TerminalArea /></div>
+      {withDock ? <WorkspaceWithDock /> : <div style={{ flex: 1, minHeight: 0 }}><TerminalArea /></div>}
     </div>
   </React.StrictMode>,
 )

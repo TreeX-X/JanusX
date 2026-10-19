@@ -15,6 +15,39 @@ async function drag(page: Page, id: string, target: string, x: number, y: number
   await expect(page.locator('[data-tab-drag-clone]')).toHaveCount(0)
 }
 
+test('tools resize adjacent regions continuously and reverse without remounting', async ({ page }) => {
+  await page.goto('/global-tools.html')
+  const tools = region(page, 'tools')
+  const browser = await tools.locator('[data-tab-id="browser:browser"]').elementHandle()
+  const initial = (await tools.boundingBox())!.width
+  const samples = await page.evaluate(async () => {
+    document.querySelector<HTMLButtonElement>('button[aria-label="Collapse tools"]')!.click()
+    const result: { project: number; tools: number; gap: number }[] = []
+    const start = performance.now()
+    while (performance.now() - start < 300) {
+      await new Promise(requestAnimationFrame)
+      const p = document.querySelector('[data-pane-region="project"]')!.getBoundingClientRect()
+      const t = document.querySelector('[data-pane-region="tools"]')!.getBoundingClientRect()
+      result.push({ project: p.width, tools: t.width, gap: t.left - p.right })
+    }
+    return result
+  })
+  expect(samples.some(s => s.tools > 10 && s.tools < initial - 10)).toBe(true)
+  expect(new Set(samples.map(s => Math.round(s.project))).size).toBeGreaterThan(3)
+  expect(samples.every(s => s.gap >= -0.5 && s.gap <= 9.5)).toBe(true)
+  await expect(tools).toBeHidden()
+  await page.locator('[data-tools-toggle]').click()
+  await page.waitForTimeout(70)
+  await page.getByRole('button', { name: 'Collapse tools', exact: true }).evaluate((b: HTMLButtonElement) => b.click())
+  await page.locator('[data-tools-toggle]').evaluate((b: HTMLButtonElement) => b.click())
+  await expect.poll(async () => (await tools.boundingBox())!.width).toBeCloseTo(initial, 0)
+  expect(await browser!.evaluate(el => el.isConnected)).toBe(true)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.getByRole('button', { name: 'Collapse tools', exact: true }).click()
+  await expect(tools).toBeHidden()
+  await expect(page.locator('[data-global-tools-layout]')).toHaveCSS('transition-duration', '0s')
+})
+
 test('switching projects retains global browser ownership and nested split ratios', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
@@ -46,30 +79,25 @@ test('switching projects retains global browser ownership and nested split ratio
   expect(errors).toEqual([])
 })
 
-test('compact mode hides native guests and reopens tools without destroying project splits', async ({ page }) => {
+test('space collapse preserves preference and project visibility, then restores tools', async ({ page }) => {
   await page.goto('/global-tools.html?theme=dark')
   await page.getByRole('button', { name: 'Project B', exact: true }).click()
   const project = (await state(page)).project
   await page.setViewportSize({ width: 520, height: 720 })
-  await expect(page.getByRole('button', { name: 'Show tools', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Show tools', exact: true })).toBeDisabled()
   await expect(region(page, 'tools')).toBeHidden()
-  await expect.poll(async () => (await state(page)).bounds.at(-1)?.width).toBe(0)
-  await page.getByRole('button', { name: 'Show tools', exact: true }).click()
-  await expect(region(page, 'tools')).toBeVisible()
-  await expect(region(page, 'project')).toBeHidden()
-  await expect.poll(async () => (await state(page)).bounds.at(-1)?.width ?? 0).toBeGreaterThan(0)
-  await page.screenshot({ path: test.info().outputPath('global-tools-compact.png') })
-  await page.getByRole('button', { name: 'Collapse tools', exact: true }).click()
-  expect((await state(page)).project).toEqual(project)
-  await page.locator('[data-id="tool-menu"]').click()
-  const entry = page.locator('[role="menuitem"][data-id="browser"]')
-  await expect(entry).toBeEnabled()
-  await entry.click()
-  await expect(region(page, 'tools')).toBeVisible()
-  await page.setViewportSize({ width: 1280, height: 720 })
   await expect(region(page, 'project')).toBeVisible()
-  await page.screenshot({ path: test.info().outputPath('global-tools-dark.png') })
+  expect((await state(page)).collapsed).toBe(false)
+  await expect.poll(async () => (await state(page)).bounds.at(-1)?.width).toBe(0)
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await expect(region(page, 'tools')).toBeVisible()
+  await expect.poll(async () => (await state(page)).bounds.at(-1)?.width ?? 0).toBeGreaterThan(0)
   expect((await state(page)).project).toEqual(project)
+  await page.getByRole('button', { name: 'Collapse tools', exact: true }).click()
+  await page.setViewportSize({ width: 520, height: 720 })
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await expect(region(page, 'tools')).toBeHidden()
+  expect((await state(page)).collapsed).toBe(true)
 })
 
 test('Markdown selection remains stable and tools split only within their own region', async ({ page }) => {
@@ -116,14 +144,81 @@ test('outer pointer resize and compact project navigation preserve the nested tr
   await expect(separator).toBeFocused()
   expect((await state(page)).project).toEqual(before)
   await page.setViewportSize({ width: 520, height: 720 })
-  await page.getByRole('button', { name: 'Show tools', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Show tools', exact: true })).toBeDisabled()
   await page.getByRole('button', { name: 'Project A', exact: true }).click()
   await expect(region(page, 'tools')).toBeHidden()
   await expect(region(page, 'project').locator('[data-tab-id="terminal:A-1"]')).toBeVisible()
   await page.getByRole('button', { name: 'Project B', exact: true }).click()
   expect((await state(page)).project).toEqual(before)
-  await page.getByRole('button', { name: 'Show tools', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Show tools', exact: true })).toBeDisabled()
   await page.evaluate(() => (window as any).toolsFixture.selectTerminal('B-1'))
   await expect(region(page, 'tools')).toBeHidden()
   await expect(region(page, 'project').locator('[data-tab-id="terminal:B-1"]')).toBeVisible()
+})
+
+for (const theme of ['planche', 'dark']) {
+  test(`right workspace coordinates with tools without overlap in ${theme}`, async ({ page }) => {
+    await page.goto(`/global-tools.html?dock&theme=${theme}`)
+    await page.getByRole('button', { name: 'Project B', exact: true }).click()
+    const before = await state(page)
+    const browser = await region(page, 'tools').locator('[data-tab-id="browser:browser"]').elementHandle()
+    const samples = await page.evaluate(async () => {
+      Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Toggle right workspace')!.click()
+      const result: { overlap: boolean; visible: boolean; overflow: number }[] = []
+      const start = performance.now()
+      while (performance.now() - start < 600) {
+        await new Promise(requestAnimationFrame)
+        const project = document.querySelector<HTMLElement>('[data-pane-region="project"]')!
+        const tools = document.querySelector<HTMLElement>('[data-pane-region="tools"]')!
+        const dock = document.querySelector<HTMLElement>('#right-tool-panel')!.parentElement!
+        const root = document.querySelector<HTMLElement>('[data-global-tools-layout]')!
+        result.push({ overlap: project.getBoundingClientRect().right > tools.getBoundingClientRect().left + 0.5,
+          visible: getComputedStyle(project).visibility === 'visible',
+          overflow: root.getBoundingClientRect().right - dock.getBoundingClientRect().left })
+      }
+      return result
+    })
+    expect(samples.filter(s => s.overlap || !s.visible || s.overflow > 0.5)).toEqual([])
+    await expect(region(page, 'tools')).toBeHidden()
+    expect((await state(page)).collapsed).toBe(false)
+    await page.getByRole('button', { name: 'Toggle right workspace' }).click()
+    await expect(region(page, 'tools')).toBeVisible()
+    await expect.poll(async () => (await state(page)).bounds.at(-1)?.width ?? 0).toBeGreaterThan(0)
+    expect((await state(page)).ratio).toBe(before.ratio)
+    expect((await state(page)).project).toEqual(before.project)
+    expect(await browser!.evaluate(el => el.isConnected)).toBe(true)
+    // Collapse tools and expand the right workspace during the same animation.
+    await page.evaluate(() => {
+      document.querySelector<HTMLButtonElement>('button[aria-label="Collapse tools"]')!.click()
+      Array.from(document.querySelectorAll('button')).find(b => b.textContent === 'Toggle right workspace')!.click()
+    })
+    await expect(region(page, 'tools')).toBeHidden()
+    await page.getByRole('button', { name: 'Toggle right workspace' }).click()
+    await expect(page.getByRole('button', { name: 'Show tools', exact: true })).toBeEnabled()
+    await expect(region(page, 'tools')).toBeHidden()
+    await page.getByRole('button', { name: 'Show tools', exact: true }).click()
+    await expect(region(page, 'tools')).toBeVisible()
+    await page.screenshot({ path: test.info().outputPath(`combined-${theme}.png`) })
+  })
+}
+
+test('right dock resize constrains the split without overwriting its preferred ratio', async ({ page }) => {
+  await page.goto('/global-tools.html?dock')
+  const before = await state(page)
+  await page.getByRole('button', { name: 'Toggle right workspace' }).click()
+  await expect(region(page, 'tools')).toBeVisible()
+  const handle = page.locator('#right-tool-panel [role="separator"]')
+  await expect.poll(async () => (await handle.boundingBox())!.x).toBeCloseTo(872, -1)
+  const box = (await handle.boundingBox())!
+  await page.mouse.move(box.x + 3, box.y + 100)
+  await page.mouse.down()
+  await page.mouse.move(box.x - 157, box.y + 100, { steps: 10 })
+  await page.mouse.up()
+  await expect(region(page, 'tools')).toBeVisible()
+  await expect.poll(async () => (await region(page, 'tools').boundingBox())!.width).toBeCloseTo(320, 0)
+  expect((await region(page, 'project').boundingBox())!.width).toBeGreaterThanOrEqual(240)
+  expect((await state(page)).ratio).toBe(before.ratio)
+  await expect.poll(async () => (await state(page)).bounds.at(-1)?.width ?? 0).toBeGreaterThan(0)
+  await page.getByRole('button', { name: 'Toggle right workspace' }).click()
+  await expect.poll(async () => (await region(page, 'project').boundingBox())!.width / 1223).toBeCloseTo(before.ratio, 2)
 })
