@@ -5,26 +5,27 @@ interface ImageViewerProps {
 }
 
 export function ImageViewer({ base64, mimeType, fileName }: ImageViewerProps) {
+  // Shared fit behavior: .agents/notes/workbench/product-preview-p0.md
   const src = `data:${mimeType};base64,${base64}`
 
   return (
     <div
-      className="flex flex-col items-center justify-center flex-1 overflow-auto"
+      className="flex h-full min-w-0 flex-1 flex-col overflow-hidden"
       style={{ background: 'var(--shell-void)', minHeight: 0 }}
     >
-      <div className="flex items-center justify-center flex-1 p-4 w-full">
+      <div className="relative min-h-0 w-full flex-1 overflow-hidden">
         <img
           src={src}
           alt={fileName}
-          className="max-w-full max-h-full object-contain"
-          style={{ display: 'block' }}
+          className="absolute inset-0 m-auto object-contain"
+          style={{ display: 'block', width: 'auto', height: 'auto', maxWidth: 'calc(100% - 32px)', maxHeight: 'calc(100% - 32px)' }}
         />
       </div>
       <div
         className="shrink-0 flex items-center justify-center gap-2"
         style={{ padding: '10px 16px' }}
       >
-        <span style={{ color: 'var(--shell-dim)', fontSize: 11 }}>{fileName}</span>
+        <span className="min-w-0 truncate" title={fileName} style={{ color: 'var(--shell-dim)', fontSize: 11 }}>{fileName}</span>
         <span style={{ color: 'var(--shell-dim)', fontSize: 11 }}>/</span>
         <span style={{ color: 'var(--shell-dim)', fontSize: 11 }}>{mimeType}</span>
       </div>

@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-19T03:27:40Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -39,6 +39,8 @@
 
 `stores/productWorkspace.ts` 把 `image/text` 与 `md/html` 同等视为本地零端口 Tab，`openPreview` 不申请 `previewLease`，`reloadTab` 与 `watch` 覆盖只递增 `revision`。`ProductWorkspacePanel` 不分支新增种类，`unsupported` 以外的本地种类统一落入 `LocalFileStage`。`LocalFileStage` 按加载器分支：`image` 经由 `window.electron.file.readBinary` 取 `base64/mimeType` 并复用中央 `ImageViewer` 渲染，`svg` 以 `<img data:>` 承载且脚本永不执行；`text/markdown/html` 经由 `window.electron.file.read` 取文本，`text` 在 `PreviewScrollArea` 内以等宽 `<pre>` 只读呈现并在 512KB 处截断，`markdown/html` 走既有渲染链路且行为不变。产物列保持只读预览定位，编辑仍由中央编辑器拥有，`在编辑器打开`是跨列的唯一写入口。
 
+共享 ImageViewer 的默认显示按图片区域的可用宽度和高度同时等比约束，底部文件名与 MIME 信息栏单独保留高度；小图不强制放大。原先图片高度受内容撑开，窗口放大导致图片随宽度增长而纵向溢出；现在图片使用有明确剩余高度的独立容器，不参与撑高 flex 布局。独立编辑器、嵌入编辑器和产物列共用此修复。
+
 ## Alternatives considered
 
 - 产物列 `text` 复用 `MonacoViewer` 只读编辑器——最强理由是与中央 `code` 观感完全一致。否决驱动是窄列无需游标、查找与模型生命周期，`<pre>` 足以承载只读浏览且无额外内存开销。
@@ -48,4 +50,8 @@
 ## Consequences
 
 - **Gains**: 产物索引、岛通知、监控分区与预览列对 P0 格式端到端打通，新增格式只需在 `src/shared/product.ts` 加一行映射并在 `LocalFileStage` 注册已有加载器组合，无需触碰索引、store 与面板。
-- **Costs and limits**: `text` 预览不支持语法高亮与表格语义，`csv/tsv` 按纯文本呈现；图片无缩放平移，大图依赖浏览器原生滚动；`pdf/audio/video` 仍为 `unsupported`，`main/office` 目录名与 `office:files:changed` 通道名的历史包袱保留。`csv` 表格化、`pdf` 嵌入与 `shared/preview.ts` 单一映射是明确的后续重访信号，触发条件是 P1 需求立项。
+- **Costs and limits**: `text` 预览不支持语法高亮与表格语义，`csv/tsv` 按纯文本呈现；图片默认完整适应窗口，尚无独立缩放平移控件；`pdf/audio/video` 仍为 `unsupported`，`main/office` 目录名与 `office:files:changed` 通道名的历史包袱保留。`csv` 表格化、`pdf` 嵌入与 `shared/preview.ts` 单一映射是明确的后续重访信号，触发条件是 P1 需求立项。
+
+## 图片窗口缩放验证
+
+修复前，`image-preview.spec.ts` 在 800×480 窗口复现长图底部达到 1206px，未通过完整显示断言。修复后执行 `npx playwright test tests/e2e/image-preview.spec.ts tests/e2e/product-preview.spec.ts --project=island --workers=1 --output artifacts/image-preview-verified`，5/5 通过：覆盖直接打开 SVG 长图、PNG 横图、JPG 方图及小图，在 800×480、1600×900、600×700 间改变窗口大小，检查完整边界、宽高比、信息栏可见与不放大小图；同时检查产物区共用图片预览及既有浅深主题预览。浏览器测试使用真实预览组件与图片解码，IPC 为测试替身。`npm run typecheck`、ImageViewer ESLint 与 `npm run check:notes` 通过；未重跑 Electron 或安装包构建。

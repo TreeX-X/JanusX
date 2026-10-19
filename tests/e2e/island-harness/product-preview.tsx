@@ -12,6 +12,7 @@ import '../../../src/renderer/src/components/viewers/markdown-preview.css'
 installElectronApiFallback()
 Object.assign(window.electron.office, { onWatchEvicted: () => () => {} })
 Object.assign(window.electron.file, {
+  readBinary: async () => ({ base64: btoa('<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="3600"><rect width="100%" height="100%" fill="orange"/></svg>'), mimeType: 'image/svg+xml', size: 200 }),
   read: async (path: string) => {
     if (path.endsWith('loading.txt')) return new Promise(() => {})
     if (path.endsWith('error.txt')) return { error: 'Fixture read failure' }
@@ -21,6 +22,7 @@ Object.assign(window.electron.file, {
   },
 })
 const tabs: ProductWorkspaceTab[] = [
+  { tabId: 'image', workspaceId: 'fixture', relPath: 'image.svg', kind: 'image', status: 'ready' },
   ...['notes.md', 'data.txt', 'loading.txt', 'error.txt', 'page.html'].map((relPath) => ({
     tabId: relPath, workspaceId: 'fixture', relPath,
     kind: (relPath.endsWith('.md') ? 'markdown' : relPath.endsWith('.html') ? 'html' : 'text') as ProductWorkspaceTab['kind'],
