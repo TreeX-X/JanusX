@@ -2,10 +2,12 @@
 // .agents/notes/sessions/records/external-session-backfill.md
 export const EXTERNAL_SESSION_SYNC_MS = 5000
 
-/** One request at a time; stop on unmount, pause in hidden windows. */
+/** One request at a time; stop on unmount, pause hidden windows/panels.
+ * Keep this scheduler mounted across tab switches so they do not restart it. */
 export function startExternalSessionSync(
   scan: () => Promise<unknown>,
   surface: Pick<Window, 'document' | 'addEventListener' | 'removeEventListener'> = window,
+  isActive: () => boolean = () => true,
 ): () => void {
   let disposed = false
   let running = false
@@ -14,7 +16,7 @@ export function startExternalSessionSync(
     if (disposed || running) return
     clearTimeout(timer)
     try {
-      if (surface.document.visibilityState !== 'hidden') {
+      if (isActive() && surface.document.visibilityState !== 'hidden') {
         running = true
         await scan()
       }

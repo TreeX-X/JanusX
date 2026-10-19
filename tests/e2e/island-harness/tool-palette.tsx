@@ -21,6 +21,7 @@ installElectronApiFallback()
 Object.assign(window.electron.system, { getLanguage: async () => 'zh-CN', setLanguage: async () => undefined })
 const sessionListeners = new Set<unknown>()
 const sessionFilters: unknown[] = []
+let sessionScans = 0
 const stagedPaths: string[][] = []
 let terminalKills = 0
 const killTerminal = window.electron.terminal.kill
@@ -39,6 +40,7 @@ Object.assign(window.electron.git, {
   stage: async (cwd: string, paths: string[]) => { stagedPaths.push(paths); return window.electron.git.status(cwd) },
 })
 Object.assign(window.electron.session, {
+  scanExternal: async () => { sessionScans++; return { scanned: 0, imported: 0, updated: 0, skipped: 0 } },
   onEvent: (listener: unknown) => { sessionListeners.add(listener); return () => { sessionListeners.delete(listener) } },
   list: async (filter: unknown) => { sessionFilters.push(filter); return [{
   id: 'session-palette', workspaceId: 'palette', engine: 'codex', cwd: 'C:/palette',
@@ -62,6 +64,10 @@ useWorkspaceStore.setState({
 await useGitStore.getState().fetchStatus('C:/palette')
 useRightToolStore.setState({ openToolIds: ['files', 'sessions', 'git'], activeToolId: 'files', ...(previewWidth ? { panelWidths: { sessions: previewWidth, git: previewWidth } } : {}) })
 useAppStore.setState({ panelCollapsed: false })
+const toolActivations: Array<string | null> = []
+useRightToolStore.subscribe((state, previous) => {
+  if (state.activeToolId !== previous.activeToolId) toolActivations.push(state.activeToolId)
+})
 Object.assign(window, { builtinExtensionFixture: {
   disable: (id: string) => extensionRegistry.disable(`janusx.${id}`),
   enable: (id: string) => extensionRegistry.enable(`janusx.${id}`),
@@ -71,7 +77,8 @@ Object.assign(window, { builtinExtensionFixture: {
     workspaces: ['palette', 'other'].map((projectId) => ({ id: projectId, name: projectId, path: `C:/${projectId}`,
       clis: [], layout: { mode: 'tabs', positions: [] }, createdAt: '' })),
   }),
-  state: () => ({ listeners: sessionListeners.size, sessionFilters, terminalKills, stagedPaths,
+  state: () => ({ listeners: sessionListeners.size, sessionFilters, sessionScans, terminalKills, stagedPaths,
+    active: useRightToolStore.getState().activeToolId, toolActivations,
     open: useRightToolStore.getState().openToolIds, widths: useRightToolStore.getState().panelWidths }),
 } })
 await initI18n()

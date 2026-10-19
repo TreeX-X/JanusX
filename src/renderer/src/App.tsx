@@ -104,12 +104,12 @@ export default function App() {
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const workspaces = useWorkspaceStore((s) => s.workspaces)
-  const workspacePaneTree = useWorkspaceStore((s) => s.paneTree)
+  const hasWorkspacePane = useWorkspaceStore((s) => s.paneTree !== null)
   const hasRetainedWorkspacePane = useWorkspaceStore((s) =>
     Object.values(s.terminalSnapshots).some((snapshot) => snapshot.paneTree !== null)
   )
-  const globalToolsTree = useGlobalToolsStore((s) => s.paneTree)
-  const showWorkspacePane = shouldRenderWorkspacePane(workspacePaneTree !== null || globalToolsTree !== null)
+  const hasGlobalToolsPane = useGlobalToolsStore((s) => s.paneTree !== null)
+  const showWorkspacePane = shouldRenderWorkspacePane(hasWorkspacePane || hasGlobalToolsPane)
   const mountWorkspacePane = showWorkspacePane || hasRetainedWorkspacePane
   const visibleProductWorkspaceId = useProductWorkspaceStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)

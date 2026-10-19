@@ -59,6 +59,18 @@
 
 .strip::-webkit-scrollbar { display: none; }
 
+.tabIndicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+  pointer-events: none;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), width 160ms ease;
+}
+
+.tabIndicator[data-visible='false'] { visibility: hidden; }
+
 .tab,
 .placeholder {
   position: relative;
@@ -85,19 +97,18 @@
   transition: color 140ms ease, background-color 140ms ease;
 }
 
-.tab:hover {
+.tab:hover:not([data-active='true']) {
   color: var(--shell-text);
   background: color-mix(in srgb, var(--shell-text) 5%, var(--shell-canvas));
 }
 
 .tab[data-active='true'] {
   color: var(--shell-text);
-  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
   font-weight: 600;
 }
 
 /* Inactive splits keep a neutral selection; focus lives in the selected control. */
-.pane[data-focused='true'][data-split='true'] .tab[data-active='true'] {
+.pane[data-focused='true'][data-split='true'] .tabIndicator {
   background: color-mix(in srgb, var(--shell-accent) 11%, var(--shell-canvas));
 }
 
@@ -309,5 +320,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tab, .action, .resize::after, .drawer, .drawerToggle, .drawerChevron, .runtimeCard { transition: none; }
+  .tab, .tabIndicator, .action, .resize::after, .drawer, .drawerToggle, .drawerChevron, .runtimeCard { transition: none; }
 }

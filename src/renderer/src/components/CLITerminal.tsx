@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState, type DragEvent } from 'react'
+import { memo, useRef, useEffect, useLayoutEffect, useCallback, useState, type DragEvent } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { LoaderCircle } from 'lucide-react'
@@ -52,7 +52,7 @@ interface CLITerminalProps {
 }
 
 
-export function CLITerminal({
+export const CLITerminal = memo(function CLITerminal({
   terminalId,
   visible = true,
   focused = false,
@@ -61,6 +61,7 @@ export function CLITerminal({
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<(() => void) | null>(null)
+  const activateViewportRef = useRef<(() => void) | null>(null)
   const focusedRef = useRef(focused)
   const visibleRef = useRef(visible)
   const workspaceVisibleRef = useRef(workspaceVisible)
@@ -138,28 +139,35 @@ export function CLITerminal({
     }
   }, [terminalId, applyTelemetryPatch])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     focusedRef.current = focused
     visibleRef.current = visible
     workspaceVisibleRef.current = workspaceVisible
-    if (visible) {
-      fitRef.current?.()
-      // Workspace activation can settle pane geometry after the first RAF pair
-      // (visibility changes do not reliably notify ResizeObserver). Re-run the
-      // coalesced recovery once the layout transition has had time to settle.
-      if (visibilityRecoveryTimerRef.current !== null) {
-        window.clearTimeout(visibilityRecoveryTimerRef.current)
-      }
-      visibilityRecoveryTimerRef.current = window.setTimeout(() => {
-        visibilityRecoveryTimerRef.current = null
-        if (visibleRef.current) fitRef.current?.()
-      }, 64)
-    } else if (visibilityRecoveryTimerRef.current !== null) {
-      window.clearTimeout(visibilityRecoveryTimerRef.current)
+  }, [focused, visible, workspaceVisible])
+
+  useLayoutEffect(() => {
+    // A warm tab already has its viewport and buffer. Request its paint before
+    // the next frame; only a changed host needs another FitAddon pass.
+    if (visible) activateViewportRef.current?.()
+  }, [visible])
+
+  useLayoutEffect(() => {
+    if (focused) termRef.current?.focus()
+  }, [focused])
+
+  useEffect(() => {
+    // Returning from display:none can settle geometry later. Keep the late
+    // recovery for workspace activation, rather than for every tab/focus click.
+    if (!workspaceVisible) return
+    visibilityRecoveryTimerRef.current = window.setTimeout(() => {
+      visibilityRecoveryTimerRef.current = null
+      if (visibleRef.current) fitRef.current?.()
+    }, 64)
+    return () => {
+      if (visibilityRecoveryTimerRef.current !== null) window.clearTimeout(visibilityRecoveryTimerRef.current)
       visibilityRecoveryTimerRef.current = null
     }
-    if (focused) termRef.current?.focus()
-  }, [focused, visible, workspaceVisible])
+  }, [workspaceVisible])
 
   // Side panel collapse/expand changes the center grid width; force a late refit
   // after the transition, matching the manual "toggle panel to recover" workaround.
@@ -373,6 +381,7 @@ export function CLITerminal({
     )
 
     let lastSyncedGeometry: TerminalGeometrySize | null = null
+    let fittedHostSize: { width: number; height: number } | null = null
     const fitAndSync = () => {
       try {
         if (!workspaceVisibleRef.current) return false
@@ -399,6 +408,7 @@ export function CLITerminal({
         }
 
         if (!fitResult.geometry) return false
+        fittedHostSize = { width: host.clientWidth, height: host.clientHeight }
         if (fitResult.sizeChanged) lastSyncedGeometry = fitResult.geometry
 
         return fitResult.sizeChanged
@@ -411,6 +421,17 @@ export function CLITerminal({
     const recoveryScheduler = createTerminalRecoveryScheduler()
     const scheduleRecovery = () => recoveryScheduler.schedule(() => fitAndSync())
     fitRef.current = scheduleRecovery
+    activateViewportRef.current = () => {
+      const host = containerRef.current
+      if (!host || !workspaceVisibleRef.current) return
+      if (fittedHostSize?.width === host.clientWidth && fittedHostSize?.height === host.clientHeight) {
+        term.refresh(0, term.rows - 1)
+      } else {
+        // Let xterm resume its own viewport before resizing a previously hidden
+        // workspace. Resizing it during the visibility commit can pin old rows.
+        scheduleRecovery()
+      }
+    }
     registerTerminalForceFit(terminalId, scheduleRecovery)
 
     // Establish xterm and PTY geometry before requesting replay. Inactive tabs
@@ -563,6 +584,7 @@ export function CLITerminal({
       term.dispose()
       termRef.current = null
       if (fitRef.current) fitRef.current = null
+      activateViewportRef.current = null
     }
   }, [terminalId, rendererGeneration, applyDshTurnStatus])
 
@@ -621,4 +643,4 @@ export function CLITerminal({
       )}
     </>
   )
-}
+})

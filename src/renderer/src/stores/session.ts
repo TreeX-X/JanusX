@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { shallow } from 'zustand/shallow'
 import { useWorkspaceStore } from './workspace'
 import type {
   AgentSessionDetail,
@@ -16,8 +17,9 @@ interface SessionStore {
   selectedSession: AgentSessionDetail | null
   loading: boolean
   error: string | null
+  lastFetchedAt: number | null
 
-  fetchSessions: (filter?: SessionFilter, opts?: { silent?: boolean }) => Promise<void>
+  fetchSessions: (filter?: SessionFilter, opts?: { silent?: boolean; maxAgeMs?: number }) => Promise<void>
   fetchSessionDetail: (sessionId: string) => Promise<void>
   continueSession: (
     sessionId: string,
@@ -40,6 +42,29 @@ function scopeKeyFor(filter?: SessionFilter): string {
   return 'all'
 }
 
+/** IPC clones every summary. Keep unchanged rows stable for memoized cards. */
+function reconcileSessions(previous: AgentSessionSummary[], incoming: AgentSessionSummary[]): AgentSessionSummary[] {
+  const byId = new Map(previous.map((session) => [session.id, session]))
+  const sessions = incoming.map((session) => {
+    const existing = byId.get(session.id)
+    return existing && shallow(existing, session) ? existing : session
+  })
+  return shallow(previous, sessions) ? previous : sessions
+}
+
+const pendingLists = new Map<string, Promise<AgentSessionSummary[]>>()
+
+function readSessionList(filter: SessionFilter | undefined, reusePending: boolean): Promise<AgentSessionSummary[]> {
+  const key = JSON.stringify([filter?.workspaceId, filter?.cwd, filter?.engine, filter?.includeArchived ?? false])
+  const pending = pendingLists.get(key)
+  if (reusePending && pending) return pending
+  const request = window.electron.session.list(filter).finally(() => {
+    if (pendingLists.get(key) === request) pendingLists.delete(key)
+  })
+  pendingLists.set(key, request)
+  return request
+}
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   scopeKey: null,
   lastFilter: null,
@@ -47,10 +72,18 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   selectedSession: null,
   loading: false,
   error: null,
+  lastFetchedAt: null,
 
   fetchSessions: async (filter, opts) => {
     const key = scopeKeyFor(filter)
     const silent = opts?.silent === true
+    const current = get()
+    const sameScope = current.scopeKey === key && shallow(current.lastFilter ?? {}, filter ?? {})
+    const isCurrentScope = () => get().scopeKey === key && shallow(get().lastFilter ?? {}, filter ?? {})
+    // Activation can reuse a recent read; explicit/event refreshes always read.
+    // See .agents/notes/sessions/records/session-open-stall.md
+    if (opts?.maxAgeMs && sameScope && !current.error && current.lastFetchedAt !== null
+      && Date.now() - current.lastFetchedAt < opts.maxAgeMs) return
     if (filter?.workspaceId === undefined && filter?.cwd === undefined && !activeWorkspaceId() && key !== 'all') {
       set({
         scopeKey: null,
@@ -59,22 +92,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         selectedSession: null,
         loading: false,
         error: null,
+        lastFetchedAt: null,
       })
       return
     }
 
-    const previousKey = get().scopeKey
     // Stale-while-revalidate: background refreshes and scope switches keep
     // the visible cards in place. Clearing the list plus a loading banner
     // above it shifted every card per session:event, which read as flicker.
     // See .agents/notes/sessions/records/session-flicker-storm.md
-    if (silent && previousKey === key) {
+    if (silent && sameScope) {
       try {
-        const sessions = await window.electron.session.list(filter)
-        if (get().scopeKey !== key) return
-        set({ sessions })
+        const sessions = await readSessionList(filter, Boolean(opts?.maxAgeMs))
+        if (!isCurrentScope()) return
+        set((state) => ({ sessions: reconcileSessions(state.sessions, sessions), lastFetchedAt: Date.now(), error: null }))
       } catch (err) {
-        if (get().scopeKey === key) {
+        if (isCurrentScope()) {
           set({ error: (err as Error).message })
         }
       }
@@ -85,16 +118,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       lastFilter: filter ?? null,
       loading: true,
       error: null,
-      ...(previousKey !== key
-        ? { selectedSession: null }
+      ...(!sameScope
+        ? { selectedSession: null, lastFetchedAt: null }
         : {}),
     })
     try {
-      const sessions = await window.electron.session.list(filter)
-      if (get().scopeKey !== key) return
-      set({ sessions, loading: false })
+      const sessions = await readSessionList(filter, Boolean(opts?.maxAgeMs))
+      if (!isCurrentScope()) return
+      set((state) => ({ sessions: reconcileSessions(state.sessions, sessions), loading: false, lastFetchedAt: Date.now() }))
     } catch (err) {
-      if (get().scopeKey === key) {
+      if (isCurrentScope()) {
         set({ error: (err as Error).message, loading: false })
       }
     }
@@ -136,6 +169,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       selectedSession: null,
       loading: false,
       error: null,
+      lastFetchedAt: null,
     }),
 
   setSelected: (session) => set({ selectedSession: session }),

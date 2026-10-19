@@ -10,6 +10,33 @@ function surface() {
 }
 
 describe('visible external session sync', () => {
+  it('keeps the polling deadline across inactive tab switches without scanning hidden panels', async () => {
+    vi.useFakeTimers()
+    const target = surface()
+    let active = true
+    const scan = vi.fn().mockResolvedValue(undefined)
+    const stop = startExternalSessionSync(scan, target, () => active)
+    await vi.advanceTimersByTimeAsync(120)
+    expect(scan).toHaveBeenCalledTimes(1)
+    for (let cycle = 0; cycle < 8; cycle++) {
+      active = false
+      await vi.advanceTimersByTimeAsync(40)
+      active = true
+      await vi.advanceTimersByTimeAsync(160)
+    }
+    expect(scan).toHaveBeenCalledTimes(1)
+    active = false
+    await vi.advanceTimersByTimeAsync(EXTERNAL_SESSION_SYNC_MS)
+    target.dispatchEvent(new Event('focus'))
+    expect(scan).toHaveBeenCalledTimes(1)
+    active = true
+    await vi.advanceTimersByTimeAsync(EXTERNAL_SESSION_SYNC_MS)
+    expect(scan).toHaveBeenCalledTimes(2)
+    stop()
+    await vi.advanceTimersByTimeAsync(EXTERNAL_SESSION_SYNC_MS)
+    expect(scan).toHaveBeenCalledTimes(2)
+  })
+
   it('polls without overlap, wakes on focus and stops even with a pending request', async () => {
     vi.useFakeTimers()
     const target = surface()

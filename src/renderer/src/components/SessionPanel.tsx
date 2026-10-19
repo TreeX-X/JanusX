@@ -11,7 +11,7 @@ import { buildContinueResumeArgs, buildProviderResumeCommand, canOfferSessionRes
 import { TerminalPresetIcon } from './ui/TerminalPresetIcon'
 import type { TerminalPreset } from '@/types'
 import { mergeTranscriptTurns } from '@/lib/session-turn-merge'
-import { startExternalSessionSync } from '@/lib/external-session-sync'
+import { EXTERNAL_SESSION_SYNC_MS, startExternalSessionSync } from '@/lib/external-session-sync'
 import styles from './SessionPanel.module.css'
 
 /** 会话 engine 与终端 preset 同名；未知 engine 落到 shell 字形（与旧 fallback 一致）。 */
@@ -139,25 +139,27 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
   useEffect(() => {
     if (!active) return
     setContinueTarget(null)
-    if (scope === 'all') {
-      void fetchSessions({})
-      return
-    }
-    if (scope === 'archived') {
-      void fetchSessions({ includeArchived: true })
-      return
-    }
-    if (!activeWorkspaceId && !scopePath) {
+    if (scope !== 'all' && scope !== 'archived' && !activeWorkspaceId && !scopePath) {
       clearWorkspaceScope()
       return
     }
     // Project scope follows the workspace until the project model lands (P2).
-    void fetchSessions(scopePath ? { cwd: scopePath } : { workspaceId: activeWorkspaceId ?? undefined })
+    const filter = scope === 'all' ? {} : scope === 'archived' ? { includeArchived: true }
+      : scopePath ? { cwd: scopePath } : { workspaceId: activeWorkspaceId ?? undefined }
+    void fetchSessions(filter, { silent: true, maxAgeMs: EXTERNAL_SESSION_SYNC_MS })
+    // Catch events missed while inactive even when this activation used cache.
+    // Cancel on the next switch, so quick visits do not queue extra IPC reads.
+    const timer = setTimeout(() => {
+      void fetchSessions(filter, { silent: true, maxAgeMs: EXTERNAL_SESSION_SYNC_MS })
+    }, EXTERNAL_SESSION_SYNC_MS)
+    return () => clearTimeout(timer)
   }, [active, fetchSessions, clearWorkspaceScope, activeWorkspaceId, scopePath, scope])
 
-  useEffect(() => active
-    ? startExternalSessionSync(() => window.electron.session.scanExternal())
-    : undefined, [active, scopePath, scope])
+  const activeRef = useRef(active)
+  useEffect(() => { activeRef.current = active }, [active])
+  useEffect(() => startExternalSessionSync(
+    () => window.electron.session.scanExternal(), window, () => activeRef.current,
+  ), [])
 
   const handleToggle = useCallback((sessionId: string) => {
     if (!scopePath) return

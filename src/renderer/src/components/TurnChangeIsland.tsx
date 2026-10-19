@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { Files, History, ChevronLeft } from 'lucide-react'
 import { useTurnChangesStore, type TerminalTurnChangesEvent } from '@/stores/turn-changes'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -12,7 +12,7 @@ type FileChange = TerminalTurnChangesEvent['files'][number]
 type IslandView = 'latest' | 'history'
 
 // Note: latest clears independently of immutable change history — see .agents/notes/terminal/terminal-right-island-turn-history.md
-export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; focused: boolean }) {
+export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, focused }: { terminalId: string; focused: boolean }) {
   const { t, currentLanguage } = useI18n('terminal')
   const change = useTurnChangesStore(s => s.changesByTerminal[terminalId])
   const lastEvent = useTurnChangesStore(s => s.lastEventByTerminal[terminalId])
@@ -181,7 +181,7 @@ export function TurnChangeIsland({ terminalId, focused }: { terminalId: string; 
       )}
     </div>
   )
-}
+})
 
 function Counts({ additions, deletions }: { additions: number; deletions: number }) {
   return <span className="turn-change-line-counts">

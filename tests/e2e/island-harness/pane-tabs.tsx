@@ -1,5 +1,9 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { Terminal as Xterm } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { requestTerminalForceFit } from '../../../src/renderer/src/lib/terminal-geometry'
+import type { TerminalDataEvent } from '../../../src/shared/ipc/terminal'
 import { TerminalArea } from '../../../src/renderer/src/components/TerminalArea'
 import { installElectronApiFallback } from '../../../src/renderer/src/lib/electron-api-fallback'
 import { createBrowserPaneContent, createTerminalPaneContent, getLeafPanes, type WorkspacePaneNode } from '../../../src/renderer/src/lib/workspace-pane'
@@ -21,8 +25,27 @@ useThemeStore.getState().applyExternal(params.get('theme') === 'dark' ? 'dark' :
 const bounds: Record<string, BrowserBounds> = {}
 let kills = 0
 let creates = 0
+const performanceFixture = params.has('performance')
+const tabIds = performanceFixture ? ['a', 'b', 'c', ...Array.from({ length: 17 }, (_, i) => `extra-${i}`)] : ['a', 'b', 'c']
+let fits = 0
+let refreshes = 0
+let resizes = 0
+let replays = 0
+let latestXterm: Xterm | null = null
+const xterms = new Map<string, Xterm>()
+const renderWork: number[] = []
+const outputListeners = new Set<(event: TerminalDataEvent) => void>()
+const sequences = new Map<string, number>()
+if (performanceFixture) {
+  const originalOpen = Xterm.prototype.open
+  Xterm.prototype.open = function (...args) { latestXterm = this; return originalOpen.apply(this, args) }
+  const originalFit = FitAddon.prototype.fit
+  FitAddon.prototype.fit = function () { fits++; return originalFit.call(this) }
+  const originalRefresh = Xterm.prototype.refresh
+  Xterm.prototype.refresh = function (...args) { refreshes++; return originalRefresh.apply(this, args) }
+}
 const workspace = { id: 'ws', name: 'Tabs', path: 'C:/tabs', clis: [], layout: { mode: 'tabs' as const, positions: [] }, createdAt: new Date().toISOString() }
-const terminals = ['a', 'b', 'c', 'sidebar'].map((id) => ({
+const terminals = [...tabIds, 'sidebar'].map((id) => ({
   id, workspaceId: 'ws', cwd: 'C:/tabs', preset: 'shell' as const, name: `Terminal ${id}`, status: 'wait' as const,
   ...(new URLSearchParams(location.search).has('usage') && id === 'a' ? {
     preset: 'codex' as const, detectedModel: 'gpt-5.5', telemetryStartedAt: Date.now() - 65_000,
@@ -45,13 +68,25 @@ Object.assign(window.electron.terminal, {
   kill: async () => { kills++; return { success: true } },
   create: async () => { creates++; throw new Error('Drag must not create a terminal') },
 })
+if (performanceFixture) Object.assign(window.electron.terminal, {
+  replay: async (id: string) => {
+    replays++
+    if (latestXterm) xterms.set(id, latestXterm)
+    return { data: Array.from({ length: 2000 }, (_, i) => `${id}: history line ${i}\r\n`).join('') + `${id}: READY> `, seq: 1 }
+  },
+  resize: async () => { resizes++ },
+  onData: (listener: (event: TerminalDataEvent) => void) => {
+    outputListeners.add(listener)
+    return () => outputListeners.delete(listener)
+  },
+})
 Object.values(surfaces).forEach((surface) => useBrowserStore.getState().applySurfaceState(surface))
 const overflow = new URLSearchParams(location.search).has('overflow')
 const transformed = new URLSearchParams(location.search).has('transformed')
 const browserOnly = new URLSearchParams(location.search).has('browser-only')
 const left = {
   type: 'leaf' as const, id: 'left', activeTabId: browserOnly ? 'browser:d' : 'terminal:a',
-  tabs: browserOnly ? [createBrowserPaneContent('d')] : ['a', 'b', 'c'].map((id) => createTerminalPaneContent(id, 'ws')),
+  tabs: browserOnly ? [createBrowserPaneContent('d')] : tabIds.map((id) => createTerminalPaneContent(id, 'ws')),
 }
 const right = {
   type: 'leaf' as const, id: 'right', activeTabId: browserOnly ? 'browser:e' : 'browser:d',
@@ -78,6 +113,26 @@ Object.assign(window, {
     removeSource: () => useWorkspaceStore.getState().closePaneTab('left', 'terminal:a'),
     updateUsage: (patch: object) => useWorkspaceStore.getState().updateTerminal('a', patch),
     changeLanguage,
+    metrics: () => ({ fits, refreshes, resizes, replays, renderWork: [...renderWork] }),
+    buffersReady: () => xterms.size === tabIds.length && [...xterms.values()].every(terminal => {
+      const buffer = terminal.buffer.normal
+      return buffer.getLine(buffer.length - 1)?.translateToString(true).includes('READY>')
+    }),
+    resetMetrics: () => { fits = 0; refreshes = 0; resizes = 0; replays = 0; renderWork.length = 0 },
+    terminalState: (id: string) => {
+      const terminal = xterms.get(id)!
+      return { cols: terminal.cols, rows: terminal.rows, viewportY: terminal.buffer.active.viewportY,
+        baseY: terminal.buffer.active.baseY, buffer: terminal.buffer.active.type,
+        lastLine: terminal.buffer.active.getLine(terminal.buffer.active.baseY + terminal.rows - 1)?.translateToString(true),
+        connected: terminal.element?.isConnected }
+    },
+    output: (id: string, data: string) => {
+      const seq = (sequences.get(id) ?? 1) + 1
+      sequences.set(id, seq)
+      outputListeners.forEach(listener => listener({ id, data, seq }))
+    },
+    forceFit: requestTerminalForceFit,
+    selectWorkspace: (id: string) => useWorkspaceStore.getState().setActiveWorkspace(id),
   },
 })
 await initI18n()
@@ -88,7 +143,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <div draggable onDragStart={(event) => setTerminalDragData(event.dataTransfer, 'sidebar')} onDragEnd={clearTerminalDragData} data-sidebar-terminal style={{ height: 32 }}>Sidebar terminal</div>
       <main style={{ display: 'flex', flex: 1, minHeight: 0, ...(transformed ? { marginLeft: 180, marginTop: 40, perspective: 1500 } : {}) }}>
         <div style={{ display: 'flex', flex: 1, minWidth: 0, ...(transformed ? { transform: 'rotateX(0deg)', transformStyle: 'preserve-3d' } : {}) }}>
-          <TerminalArea />
+          <React.Profiler id="terminal-area" onRender={(_id, _phase, actualDuration) => { if (performanceFixture) renderWork.push(actualDuration) }}>
+            <TerminalArea />
+          </React.Profiler>
         </div>
       </main>
     </div>

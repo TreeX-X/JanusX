@@ -31,7 +31,7 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/e29da5b4-dc65-40a9-883d-9026e3b280b1"},
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a976752-d637-40c7-9fa3-bce52ac5dc15"}
   ],
-  "updated": "2026-10-18T03:55:20Z",
+  "updated": "2026-10-19T15:58:59Z",
   "moduleState": "partial"
 }
 ---
@@ -49,6 +49,8 @@
 终端阅读入口分为状态、设置、外部 CLI 和 Shell 语义；各组可跨模块引用：
 
 新建终端立即显示启动反馈，直到 xterm 实际绘出文字；进程创建与首屏内容就绪分别表达。启动链路只读应用启动时已验证的 OfficeCLI 缓存，不因 Office 能力探测等待；AI 终端的文件基线保留在进程创建之前，采用最多八文件并发、按路径顺序提交与 16 MiB 文本保留上限。分段计时、验证结果和大目录限制见 [turn-history](./terminal-right-island-turn-history.md)。
+
+已有终端标签切换保留实例和输出缓冲；同尺寸直接请求绘制，避免每次激活两轮适配与整屏刷新。尺寸变化、工作区返回和显式恢复仍保留适配及滚动意图恢复；标签和终端视图通过稳定参数隔离无关渲染。多终端基准、TUI／后台输出回归及限制见[工作区标签](../workbench/pane-tab-reorder.md)。隐藏终端继续解析输出，尚无跨终端总预算。
 
 状态显示链（路由与投影分层，互链不合并）：[model-lifecycle](./terminal-model-lifecycle.md)、[sidebar-states](./terminal-sidebar-states.md)、[status-display](./terminal-status-display.md)、[idle-prompt](./claude-idle-prompt-tab-status.md)、[status-ring](./terminal-status-ring.md)、[sidebar-hierarchy](./sidebar-terminal-hierarchy.md)、[context-telemetry](./claude-opencode-context-telemetry.md)。
 

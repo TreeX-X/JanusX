@@ -13,6 +13,8 @@ for (const theme of ['planche', 'dark']) {
       const started = performance.now()
       while (performance.now() - started < 360) {
         await new Promise(requestAnimationFrame)
+        // Tab feedback starts before the coalesced panel activation.
+        if (document.getElementById('right-tool-panel-sessions')!.hidden) continue
         samples.push({
           shell: shell.getBoundingClientRect().width,
           dock: dock.getBoundingClientRect().width,

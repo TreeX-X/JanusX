@@ -202,6 +202,7 @@ export function RightDock({
               activeToolId={activeToolId}
               onActivate={activateTool}
               onClose={closeTool}
+              disabled={!contentVisible}
             />
           </div>
           <RightToolHost

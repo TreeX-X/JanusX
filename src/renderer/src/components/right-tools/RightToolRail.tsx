@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useAssistantPendingCount } from '@/components/knowledge/useAssistantPendingCount'
 import { useAnimatedOpen } from '@/components/shared/CardFrame'
 // Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/workbench/right-dock-empty-collapse.md
@@ -10,6 +11,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
+import { SlidingSelection } from '@/components/shared/SlidingSelection'
+import { usePendingToolActivation } from './usePendingToolActivation'
 import styles from './RightDock.module.css'
 
 interface RightToolRailProps {
@@ -49,6 +52,11 @@ export function RightToolRail({
   const panelToggle = onTogglePanel ?? onExpandPanel
   const visibleTools = getRightToolDefinitions().filter((tool) => isRightToolEnabled(tool.id, { persona: personaEnabled, knowledge: knowledgeEnabled, sessions: sessionsEnabled })
     && (extensionRegistry.getView(tool.id)?.scope !== 'project' || workspaceId))
+  const toolsRef = useRef<HTMLDivElement>(null)
+  const { pendingToolId, visualToolId, requestActivate, cancelPending } = usePendingToolActivation({
+    activeToolId, validToolIds: visibleTools.map((tool) => tool.id), onActivate: onToggleTool,
+    resetKey: `${collapsed}:${forcedCollapsed}:${workspaceId}:${openToolIds.join(',')}`, toggleCurrent: true,
+  })
   const hasOpenTools = openToolIds.length > 0
   // 首次开 tab 时淡入展开、关掉最后一个 tab 时淡出收起，避免控件突然闪现/消失。
   // useAnimatedOpen 在退出动画播完后再卸载，空栏仍然不渲染该控件。
@@ -58,8 +66,11 @@ export function RightToolRail({
     ? t('common:rightDock.expandAria')
     : t('common:rightDock.collapseAria')
   return (
-    <div className={styles.rail} role="toolbar" aria-label={t('common:rightTool.railAria')}>
-      <div className={styles.railTools}>
+    <div className={styles.rail} role="toolbar" aria-busy={pendingToolId !== null} aria-label={t('common:rightTool.railAria')}>
+      <div ref={toolsRef} className={styles.railTools}>
+        <SlidingSelection containerRef={toolsRef} activeId={visualToolId} itemAttribute="data-rail-tool"
+          layoutKey={visibleTools.map((tool) => tool.id).join(',')} className={styles.railIndicator}
+          testId="right-tool-rail-indicator" />
         {visibleTools.map((tool) => {
           const state = activeToolId === tool.id ? 'active' : openToolIds.includes(tool.id) ? 'open' : 'closed'
           const stateLabel = state === 'active'
@@ -73,10 +84,13 @@ export function RightToolRail({
               type="button"
               className={styles.railButton}
               data-state={state}
+              data-rail-tool={tool.id}
+              data-visual-active={visualToolId === tool.id}
+              data-pending={pendingToolId === tool.id}
               data-onboarding={tool.id === 'files' ? 'files' : undefined}
               aria-label={t('common:rightTool.railButtonAria', { label: rightToolLabel(tool, t, 'ariaLabel'), state: stateLabel })}
               aria-pressed={state === 'active'}
-              onClick={() => onToggleTool(tool.id)}
+              onClick={() => requestActivate(tool.id)}
             >
               <ToolIcon tool={tool} />
               {tool.id === 'assist' && pending !== null && pending > 0 && <span className={styles.railBadge}>{pending > 99 ? '99+' : pending}</span>}
@@ -100,7 +114,7 @@ export function RightToolRail({
             aria-expanded={!collapsed}
             aria-controls="right-tool-panel"
             disabled={forcedCollapsed}
-            onClick={panelToggle}
+            onClick={() => { cancelPending(); panelToggle() }}
           >
             {collapsed
               ? <PanelRightOpen size={16} strokeWidth={1.6} aria-hidden="true" />

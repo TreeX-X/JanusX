@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, memo, type ErrorInfo, type ReactNode } from 'react'
 import { AssistantTool } from '@/components/knowledge/AssistantTool'
 import type { RightToolId } from '@/right-tools/types'
 import { getRightToolView } from '@/right-tools/registry'
@@ -45,6 +45,7 @@ export function RightToolHost({
               toolId={toolId} onClose={() => onClose(toolId)}>
               <ToolContent
                 toolId={toolId}
+                view={view}
                 workspaceId={workspaceId}
                 workspacePath={workspacePath}
                 active={active}
@@ -57,23 +58,24 @@ export function RightToolHost({
   )
 }
 
-function ToolContent({
+const ToolContent = memo(function ToolContent({
   toolId,
+  view,
   workspaceId,
   workspacePath,
   active,
 }: {
   toolId: RightToolId
+  view: ReturnType<typeof getRightToolView>
   workspaceId: string | null
   workspacePath: string | null
   active: boolean
 }) {
-  const view = getRightToolView(toolId)
   if (view) return <ExtensionViewContent view={view} viewId={view.id} location="right"
     active={active} workspaceId={workspaceId} workspacePath={workspacePath} />
   if (toolId === 'assist') return <AssistantTool active={active} workspaceId={workspaceId} workspacePath={workspacePath} />
   return null
-}
+})
 
 interface ToolErrorBoundaryProps {
   toolId: RightToolId

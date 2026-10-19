@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { memo, useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { ChevronDown, ChevronRight, Globe, Minimize2, PanelRightClose, Puzzle, X } from 'lucide-react'
@@ -83,6 +83,7 @@ import {
 import { useTurnChangesStore } from '@/stores/turn-changes'
 import { useThemeStore } from '@/stores/theme'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
+import { SlidingSelection } from '@/components/shared/SlidingSelection'
 import { TerminalStatusLight } from '@/components/ui/TerminalStatusLight'
 import { TerminalPresetIcon } from '@/components/ui/TerminalPresetIcon'
 import styles from './TerminalArea.module.css'
@@ -185,6 +186,107 @@ interface PaneTreeViewProps {
   /** 新建终端菜单内容（shell 条目 + 可见 CLI 预设），由顶层按设置算出。 */
   terminalMenuItems: TerminalPresetOption[]
 }
+
+// Stable tab props let a selection update render only the old and new labels.
+const PaneTab = memo(function PaneTab({ tab, terminal, isActive, paneId, tabNodeRefs,
+  onFluidCandidate, onTabSelect, onKillTerminalFromTab, onCloseBrowserTab, onCloseMarkdownTab,
+}: Pick<PaneTreeViewProps, 'onFluidCandidate' | 'onTabSelect' | 'onKillTerminalFromTab' | 'onCloseBrowserTab' | 'onCloseMarkdownTab'> & {
+  tab: WorkspacePaneLeaf['tabs'][number]
+  terminal: Terminal | undefined
+  isActive: boolean
+  paneId: string
+  tabNodeRefs: React.MutableRefObject<Map<string, HTMLDivElement>>
+}) {
+  const { t } = useI18n('terminal')
+  useExtensionViews()
+  const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
+  const tabStatusLabel = tabVisual ? t(tabVisual.labelKey) : undefined
+  return (
+    <ThemedTooltip
+      label={
+        terminal && tabStatusLabel
+          ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}`
+          : tab.type === 'browser'
+            ? 'Browser'
+            : tab.type === 'markdown'
+              ? t('terminal:tab.view.note')
+              : tab.type === 'extension'
+                ? extensionRegistry.getView(tab.viewId)?.title ?? tab.viewId
+                : tab.terminalId
+      }
+    >
+    <div
+      role="button"
+      tabIndex={0}
+      draggable={false}
+      data-tab-id={tab.id}
+      ref={(node) => {
+        if (node) tabNodeRefs.current.set(tab.id, node)
+        else tabNodeRefs.current.delete(tab.id)
+      }}
+      onPointerDown={(event) => onFluidCandidate(tab.id, paneId, event)}
+      onClick={() => onTabSelect(paneId, tab.id)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        onTabSelect(paneId, tab.id)
+      }}
+      className={`${styles.tab} group/tab font-mono`}
+      data-active={isActive ? 'true' : 'false'}
+      aria-pressed={isActive}
+    >
+      {/*-- tab 左侧状态灯：与左侧工作区同一盏灯（TerminalStatusLight 紧凑环），
+           色/形/动效三编码；8px 环比原来 6px 点宽 2px，仍在 144px 预算余量内。 --*/}
+      {terminal && (
+        <TerminalStatusLight status={terminal.status} compact />
+      )}
+      {terminal && (
+        <TerminalPresetIcon
+          preset={terminal.preset}
+          className="h-3.5 w-3.5 shrink-0"
+          style={{ opacity: isActive ? 0.95 : 0.55 }}
+        />
+      )}
+      {tab.type === 'browser' ? (
+        <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
+      ) : tab.type === 'markdown' ? (
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <MarkdownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
+            {t('terminal:tab.view.note')}
+          </span>
+        </span>
+      ) : tab.type === 'extension' ? (
+        <span className="min-w-0 flex-1 truncate">
+          {extensionRegistry.getView(tab.viewId)?.title ?? tab.viewId}
+        </span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
+          {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
+        </span>
+      )}
+      {/* Note: .agents/notes/workbench/service-integrations.md — all workspace views share hold-to-close. */}
+      <HoldToConfirm
+        as="span"
+        data-tab-close="true"
+        label={tab.type === 'terminal' ? t('terminal:tab.closeTerminal')
+          : tab.type === 'browser' ? t('terminal:tab.closeBrowser')
+            : tab.type === 'markdown' ? t('terminal:tab.closeMarkdown') : t('common:action.close')}
+        className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
+        style={{ color: tab.type === 'terminal' ? 'var(--shell-diff-del)' : 'var(--shell-muted)' }}
+        onConfirm={() => {
+          if (tab.type === 'terminal') onKillTerminalFromTab(tab.terminalId)
+          else if (tab.type === 'browser') onCloseBrowserTab(paneId, tab.id, tab.surfaceId)
+          // Closing a document or extension only closes its presentation.
+          else onCloseMarkdownTab(paneId, tab.id)
+        }}
+      >
+        <X size={12} strokeWidth={1.8} />
+      </HoldToConfirm>
+    </div>
+    </ThemedTooltip>
+  )
+})
 
 function PaneTreeView(props: PaneTreeViewProps) {
   const { t } = useI18n('terminal')
@@ -672,6 +774,8 @@ function LeafPane({
   /*-- tab 条排序占位：插入位是摘除拖拽 tab 后的数组下标，与 reorderPaneTab 语义一致 --*/
   const [tabInsertIndex, setTabInsertIndex] = useState<number | null>(null)
   const tabNodeRefs = useRef(new Map<string, HTMLDivElement>())
+  const tabStripRef = useRef<HTMLDivElement>(null)
+  const tabDragInFlight = useWorkspaceStore((state) => state.tabDragInFlight)
   const isFocused = leaf.id === focusedPaneId
   const activeTabId = leaf.activeTabId ?? leaf.tabs[0]?.id ?? null
   const activeTab = activeTabId ? leaf.tabs.find((tab) => tab.id === activeTabId) ?? null : null
@@ -821,98 +925,14 @@ function LeafPane({
     onTerminalDrop(terminalId, leaf.id, edge, ratio)
   }, [leaf.id, onTerminalDrop, onBrowserTabDrop, acceptsNativeDrag])
 
-  const renderPaneTab = (tab: WorkspacePaneLeaf['tabs'][number]) => {
-    const terminal = tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined
-    const isActive = tab.id === activeTabId
-    const tabVisual = terminal ? getTerminalStatusVisual(terminal.status) : undefined
-    const tabStatusLabel = tabVisual ? t(tabVisual.labelKey) : undefined
-    return (
-      <ThemedTooltip
-        key={tab.id}
-        label={
-          terminal && tabStatusLabel
-            ? `${providerLabel(terminal.preset, t)} · ${tabStatusLabel} · ${terminal.cwd}`
-            : tab.type === 'browser'
-              ? 'Browser'
-              : tab.type === 'markdown'
-                ? t('terminal:tab.view.note')
-                : tab.type === 'extension'
-                  ? extensionRegistry.getView(tab.viewId)?.title ?? tab.viewId
-                  : tab.terminalId
-        }
-      >
-      <div
-        role="button"
-        tabIndex={0}
-        draggable={false}
-        data-tab-id={tab.id}
-        ref={(node) => {
-          if (node) tabNodeRefs.current.set(tab.id, node)
-          else tabNodeRefs.current.delete(tab.id)
-        }}
-        onPointerDown={(event) => onFluidCandidate(tab.id, leaf.id, event)}
-        onClick={() => onTabSelect(leaf.id, tab.id)}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') return
-          event.preventDefault()
-          onTabSelect(leaf.id, tab.id)
-        }}
-        className={`${styles.tab} group/tab font-mono`}
-        data-active={isActive ? 'true' : 'false'}
-        aria-pressed={isActive}
-      >
-        {/*-- tab 左侧状态灯：与左侧工作区同一盏灯（TerminalStatusLight 紧凑环），
-             色/形/动效三编码；8px 环比原来 6px 点宽 2px，仍在 144px 预算余量内。 --*/}
-        {terminal && (
-          <TerminalStatusLight status={terminal.status} compact />
-        )}
-        {terminal && (
-          <TerminalPresetIcon
-            preset={terminal.preset}
-            className="h-3.5 w-3.5 shrink-0"
-            style={{ opacity: isActive ? 0.95 : 0.55 }}
-          />
-        )}
-        {tab.type === 'browser' ? (
-          <BrowserPaneTabLabel surfaceId={tab.surfaceId} isActive={isActive} />
-        ) : tab.type === 'markdown' ? (
-          <span className="flex min-w-0 flex-1 items-center gap-1.5">
-            <MarkdownIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
-              {t('terminal:tab.view.note')}
-            </span>
-          </span>
-        ) : tab.type === 'extension' ? (
-          <span className="min-w-0 flex-1 truncate">
-            {extensionRegistry.getView(tab.viewId)?.title ?? tab.viewId}
-          </span>
-        ) : (
-          <span className="min-w-0 flex-1 truncate" style={{ color: isActive ? 'var(--shell-text)' : 'inherit' }}>
-            {terminal?.name ?? (tab.type === 'terminal' ? tab.terminalId.slice(0, 8) : '')}
-          </span>
-        )}
-        {/* Note: .agents/notes/workbench/service-integrations.md — all workspace views share hold-to-close. */}
-        <HoldToConfirm
-          as="span"
-          data-tab-close="true"
-          label={tab.type === 'terminal' ? t('terminal:tab.closeTerminal')
-            : tab.type === 'browser' ? t('terminal:tab.closeBrowser')
-              : tab.type === 'markdown' ? t('terminal:tab.closeMarkdown') : t('common:action.close')}
-          className="ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] text-[13px] leading-none opacity-0 transition-[opacity,color,background] group-hover/tab:opacity-45 hover:!opacity-100 focus:opacity-100 hover:bg-[color-mix(in_srgb,var(--shell-text)_12%,transparent)]"
-          style={{ color: tab.type === 'terminal' ? 'var(--shell-diff-del)' : 'var(--shell-muted)' }}
-          onConfirm={() => {
-            if (tab.type === 'terminal') onKillTerminalFromTab(tab.terminalId)
-            else if (tab.type === 'browser') onCloseBrowserTab(leaf.id, tab.id, tab.surfaceId)
-            // Closing a document or extension only closes its presentation.
-            else onCloseMarkdownTab(leaf.id, tab.id)
-          }}
-        >
-          <X size={12} strokeWidth={1.8} />
-        </HoldToConfirm>
-      </div>
-      </ThemedTooltip>
-    )
-  }
+  const renderPaneTab = (tab: WorkspacePaneLeaf['tabs'][number]) => (
+    <PaneTab key={tab.id} tab={tab}
+      terminal={tab.type === 'terminal' ? terminalsById.get(tab.terminalId) : undefined}
+      isActive={tab.id === activeTabId} paneId={leaf.id} tabNodeRefs={tabNodeRefs}
+      onFluidCandidate={onFluidCandidate} onTabSelect={onTabSelect}
+      onKillTerminalFromTab={onKillTerminalFromTab} onCloseBrowserTab={onCloseBrowserTab}
+      onCloseMarkdownTab={onCloseMarkdownTab} />
+  )
 
   return (
       <section
@@ -920,7 +940,7 @@ function LeafPane({
       className={styles.pane}
       data-focused={isFocused}
       data-split={showFocusChrome}
-      onPointerDownCapture={() => onPaneFocus(leaf.id)}
+      onPointerDownCapture={() => { if (!isFocused) onPaneFocus(leaf.id) }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -950,11 +970,15 @@ function LeafPane({
         {/*-- 仅标签滚动，动作区保持为不可收缩的兄弟节点，窄 pane 与多 tab 不会把按钮滚出视口。 --*/}
         <div
           data-tab-strip={leaf.id}
+          ref={tabStripRef}
           onDragOver={handleTabStripDragOver}
           onDragLeave={handleTabStripDragLeave}
           onDrop={handleTabStripDrop}
           className={styles.strip}
         >
+          <SlidingSelection containerRef={tabStripRef} activeId={activeTabId} itemAttribute="data-tab-id"
+            layoutKey={leaf.tabs.map((tab) => tab.id).join(',')} hidden={tabDragInFlight || tabInsertIndex !== null}
+            className={styles.tabIndicator} testId="pane-tab-indicator" />
           {(() => {
             /*-- 排序占位：同 pane 拖拽先摘除源 tab，异 pane 全量保留；
                  占位与 tab 同宽（basis 144px），兄弟 tab 被 flex 自然挤开即让位。

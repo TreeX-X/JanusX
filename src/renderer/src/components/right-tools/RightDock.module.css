@@ -105,6 +105,7 @@
 }
 
 .tabs {
+  position: relative;
   display: flex;
   min-width: 0;
   flex: 1;
@@ -118,6 +119,19 @@
 .tabs::-webkit-scrollbar {
   display: none;
 }
+
+.tabIndicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 26px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+  pointer-events: none;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), width 160ms ease;
+}
+
+.tabIndicator[data-visible='false'] { visibility: hidden; }
 
 .tab {
   position: relative;
@@ -148,7 +162,6 @@
 
 .tab[data-active='true'] {
   color: var(--shell-text);
-  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
   font-weight: 600;
 }
 
@@ -337,10 +350,24 @@
     visibility 0s linear 320ms;
 }
 
+.railIndicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+  pointer-events: none;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), width 160ms ease, height 160ms ease;
+}
+
+.railIndicator[data-visible='false'] { visibility: hidden; }
+
 @media (prefers-reduced-motion: reduce) {
   .workbenchGrid,
   .panel,
   .tab,
+  .tabIndicator,
+  .railIndicator,
   .tabClose,
   .tabsWrap::before,
   .tabsWrap::after,
@@ -351,7 +378,7 @@
 }
 
 .dock[data-collapsed='true'] .rail { border-left-color: transparent; }
-.railTools { display: flex; flex-direction: column; gap: 4px; }
+.railTools { position: relative; display: flex; flex-direction: column; gap: 4px; }
 
 .railButton {
   position: relative;
@@ -364,10 +391,10 @@
   transition: color 140ms ease, background 140ms ease;
 }
 
-.railButton:hover:not(:disabled) { color: var(--shell-text); background: var(--shell-active); }
+.railButton:hover:not(:disabled):not([data-visual-active='true']) { color: var(--shell-text); background: var(--shell-active); }
 .railButton:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: 1px; }
 .railButton:disabled { opacity: 0.25; }
-.railButton[data-state='active'] { color: var(--shell-text); background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas)); }
+.railButton[data-visual-active='true'] { color: var(--shell-text); }
 
 .railIcon { display: block; }
 

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type WheelEvent } from 'react'
 import { getRightToolDefinitions, rightToolLabel } from '@/right-tools/registry'
 import { useExtensionViews } from '@/extensions/react'
 import type { RightToolId } from '@/right-tools/types'
 import { useI18n } from '@/i18n/useI18n'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
+import { usePendingToolActivation } from './usePendingToolActivation'
 import styles from './RightDock.module.css'
 
 interface RightToolTabsProps {
@@ -11,36 +12,50 @@ interface RightToolTabsProps {
   activeToolId: RightToolId | null
   onActivate: (toolId: RightToolId) => void
   onClose: (toolId: RightToolId) => void
+  disabled?: boolean
 }
 
-export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }: RightToolTabsProps) {
+export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose, disabled = false }: RightToolTabsProps) {
   const { t } = useI18n('common')
   useExtensionViews()
   const [focusedToolId, setFocusedToolId] = useState<RightToolId | null>(activeToolId)
   const tabRefs = useRef(new Map<RightToolId, HTMLDivElement>())
   const tablistRef = useRef<HTMLDivElement>(null)
   const [overflow, setOverflow] = useState({ left: false, right: false })
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null)
+  const { pendingToolId, visualToolId, requestActivate, cancelPending } = usePendingToolActivation({
+    activeToolId, validToolIds: openToolIds, onActivate, disabled,
+  })
   const tools = getRightToolDefinitions().filter(({ id }) => openToolIds.includes(id))
 
-  const updateOverflow = () => {
-    const tablist = tablistRef.current
-    if (!tablist) return
-    setOverflow({
-      left: tablist.scrollLeft > 1,
-      right: tablist.scrollLeft + tablist.clientWidth < tablist.scrollWidth - 1,
-    })
+  const closeTab = (toolId: RightToolId) => {
+    cancelPending()
+    onClose(toolId)
   }
 
-  useEffect(() => {
-    updateOverflow()
-    const observer = new ResizeObserver(updateOverflow)
-    if (tablistRef.current) observer.observe(tablistRef.current)
-    window.addEventListener('resize', updateOverflow)
-    return () => {
-      observer.disconnect()
-      window.removeEventListener('resize', updateOverflow)
+  const updateOverflow = useCallback(() => {
+    const tablist = tablistRef.current
+    if (!tablist) return
+    const next = {
+      left: tablist.scrollLeft > 1,
+      right: tablist.scrollLeft + tablist.clientWidth < tablist.scrollWidth - 1,
     }
-  }, [openToolIds])
+    setOverflow((current) => current.left === next.left && current.right === next.right ? current : next)
+  }, [])
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const tab = visualToolId ? tabRefs.current.get(visualToolId) : null
+      const next = tab ? { left: tab.offsetLeft, width: tab.offsetWidth } : null
+      setIndicator((current) => current?.left === next?.left && current?.width === next?.width ? current : next)
+      updateOverflow()
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    if (tablistRef.current) observer.observe(tablistRef.current)
+    for (const tab of tabRefs.current.values()) observer.observe(tab)
+    return () => observer.disconnect()
+  }, [visualToolId, openToolIds, updateOverflow])
 
   useEffect(() => {
     if (focusedToolId && openToolIds.includes(focusedToolId)) return
@@ -50,9 +65,9 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
   }, [activeToolId, focusedToolId, openToolIds])
 
   useEffect(() => {
-    if (!activeToolId) return
-    tabRefs.current.get(activeToolId)?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
-  }, [activeToolId])
+    if (!visualToolId) return
+    tabRefs.current.get(visualToolId)?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  }, [visualToolId])
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
@@ -74,10 +89,10 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
       return
     }
     if (event.key === 'Enter' || event.key === ' ') {
-      onActivate(toolId)
+      requestActivate(toolId)
       event.preventDefault()
     } else if (event.key === 'Delete') {
-      onClose(toolId)
+      closeTab(toolId)
       event.preventDefault()
     }
   }
@@ -88,10 +103,18 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
         ref={tablistRef}
         className={styles.tabs}
         role="tablist"
+        aria-busy={pendingToolId !== null}
         aria-label={t('common:rightTool.openTabsAria')}
         onWheel={handleWheel}
         onScroll={updateOverflow}
       >
+      <span
+        aria-hidden="true"
+        className={styles.tabIndicator}
+        data-testid="right-tool-tab-indicator"
+        data-visible={indicator !== null}
+        style={{ width: indicator?.width ?? 0, transform: `translateX(${indicator?.left ?? 0}px)` }}
+      />
       {tools.map((tool) => {
         const selected = activeToolId === tool.id
         return (
@@ -107,8 +130,9 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
             aria-controls={`right-tool-panel-${tool.id}`}
             tabIndex={focusedToolId === tool.id ? 0 : -1}
             className={styles.tab}
-            data-active={selected}
-            onClick={() => onActivate(tool.id)}
+            data-active={visualToolId === tool.id}
+            data-pending={pendingToolId === tool.id}
+            onClick={() => requestActivate(tool.id)}
             onFocus={() => setFocusedToolId(tool.id)}
             onKeyDown={(event) => handleKeyDown(event, tool.id)}
           >
@@ -120,7 +144,7 @@ export function RightToolTabs({ openToolIds, activeToolId, onActivate, onClose }
               aria-label={t('common:rightTool.closeAria', { title: rightToolLabel(tool, t) })}
               onClick={(event) => {
                 event.stopPropagation()
-                onClose(tool.id)
+                closeTab(tool.id)
               }}
             />
             </ThemedTooltip>
