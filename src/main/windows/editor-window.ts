@@ -12,6 +12,7 @@ export interface EditorWindowPayload { filePath?: string; workspacePath?: string
 interface EditorWindowEntry {
   window: BrowserWindow
   ready: boolean
+  allowClose: boolean
   pending: EditorWindowPayload[]
 }
 
@@ -34,6 +35,13 @@ export class EditorWindowManager {
       if (!entry.window.isDestroyed()) entry.window.destroy()
     }
     this.windows.clear()
+  }
+
+  confirmClose(sender: WebContents): void {
+    const entry = [...this.windows.values()].find(item => item.window.webContents === sender)
+    if (!entry || entry.window.isDestroyed()) return
+    entry.allowClose = true
+    entry.window.close()
   }
 
   ready(sender: WebContents): void {
@@ -92,6 +100,12 @@ export class EditorWindowManager {
     window.once('ready-to-show', () => {
       if (!window.isDestroyed()) window.show()
     })
+    window.on('close', event => {
+      const entry = this.windows.get(workspaceKey)
+      if (!entry || !entry.ready || entry.allowClose) return
+      event.preventDefault()
+      window.webContents.send(SYSTEM_CHANNELS.requestEditorClose)
+    })
     window.on('closed', () => {
       if (this.windows.get(workspaceKey)?.window === window) this.windows.delete(workspaceKey)
     })
@@ -99,7 +113,7 @@ export class EditorWindowManager {
       void shell.openExternal(details.url)
       return { action: 'deny' }
     })
-    this.windows.set(workspaceKey, { window, ready: false, pending: [] })
+    this.windows.set(workspaceKey, { window, ready: false, allowClose: false, pending: [] })
     void loadRendererWindow(
       window,
       (url) => {

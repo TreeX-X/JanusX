@@ -128,6 +128,7 @@ test('run-config assistant edits via launch-config tools and applies through the
     const saved = await page.evaluate(async (baseURL) => (window as DesktopWindow).electron.llm.saveTerminalProvider('janus', {
       id: 'openai-compatible', name: 'Local fixture', authType: 'api-key' as never, enabled: true,
       apiKey: 'fixture-key', baseURL, modelId: 'fixture-model', models: ['fixture-model'],
+      extra: { protocol: 'responses', chatModelLimits: { 'fixture-model': { contextWindow: 64000, maxOutputTokens: 8192 } } },
     }), `http://127.0.0.1:${port}/v1`)
     expect(saved.success).toBe(true)
 
@@ -178,6 +179,7 @@ test('run-config assistant edits via launch-config tools and applies through the
     await expect(launchModal.locator('[data-config-state="applied"]')).toHaveCount(0)
     await page.screenshot({ path: test.info().outputPath('run-config-assistant-streaming.png') })
     await launchModal.getByRole('button', { name: '批准' }).click()
+    await expect(launchModal.getByText('Janus 请求写入运行配置', { exact: true })).toBeHidden()
 
     // 4. The config file lands on disk and the baseline settles (diff cleared).
     const configPath = join(workspacePath, '.janusX', 'janusX.launch.json')

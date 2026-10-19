@@ -1,111 +1,186 @@
-// Note: asserted current-source recording — see .agents/notes/desktop/readme-showcase.md
-import { expect } from '@playwright/test';
+// B1: browse modules, then maintain one existing Note through real host tools.
+import { expect } from 'playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { parseNote, validateNote } from '@janus-agent/harness-core';
 import { buildNoteIndex, SUPPORTED_HARNESS_PROFILE, validateModuleStructure } from '@janus-agent/harness-node';
 import { blueprintModel } from './blueprint-model.mjs';
-import { prepareRepo, launchApp, skipGate, ensureWorkspace, ensureSidebarExpanded, openWorkspace, snapper, saveManifest, runRecord, git } from './record-lib.mjs';
+import { style } from './showcase-config.mjs';
+import { prepareRepo, launchApp, skipGate, ensureWorkspace, ensureSidebarExpanded,
+  openWorkspace, snapper, saveManifest, runRecord, sleep, AW, AH, git } from './record-lib.mjs';
 
 const captions = {
-  'bp-1': { badge: '1', text: '根模块页 · 文档与子模块同层共存' },
-  'bp-2': { badge: '2', text: '单击预览 · 双击进入，保留当前父节点' },
-  'bp-3': { badge: '3', text: '进入子模块 · 文件按类型分组，逐层返回' },
-  'bp-4': { badge: '4', text: '跨模块关注与定位 · 本地脚本模型驱动真实工具' },
-  'bp-5': { badge: '5', text: 'xdo 原位维护同一 Note · 刷新 updated，不新建 Task' },
-  'bp-6': { badge: '6', text: 'Task 交接示例 · 主 Agent 维护，子智能体只读' },
+  overview: { badge: '1', text: '从项目结构进入搜索模块' },
+  module: { badge: '2', text: '预览模块，阅读现有约定' },
+  before: { badge: '3', text: '在右侧对话中维护当前 Note' },
+  request: { badge: '4', text: '根据实现补充搜索规则' },
+  updating: { badge: '5', text: '真实读取代码与 Note，原位更新' },
+  updated: { badge: '6', text: '原文刷新，保留同一篇约定' },
+  diff: { badge: '6', text: '查看实际写入的修改差异' },
+  result: { badge: '6', text: '对照原文，继续工作' },
 };
-async function authorNotes(repoPath) {
-  const repoId = randomUUID(), keys = ['root', 'files', 'parser', 'overview', 'guide', 'requirement', 'decision', 'idea', 'task'];
-  const ids = Object.fromEntries(keys.map(key => [key, randomUUID()])), uri = key => `note://${repoId}/${ids[key]}`;
-  const rows = [
-    ['root', 'module.md', '项目工作台', 'module', null, '## Responsibility\n\n组织项目约定与文件阅读能力。\n\n## Design\n\n模块入口说明整体设计，主题文档和子模块共同维护项目事实。'],
-    ['files', 'files/module.md', '文件阅读', 'module', 'root', '## Responsibility\n\n在工作台中阅读项目文件，保留当前工作区与阅读位置。\n\n## Design\n\n阅读约定保留在本层；解析与失败提示由子模块负责。'],
-    ['parser', 'files/parser/module.md', '解析与提示', 'module', 'files', '## Responsibility\n\n解析文档并给出可操作的读取提示。\n\n## Design\n\n需求、决策、想法和 Task 各自保留职责，不复制为另一份模块正文。'],
-    ['overview', 'project-guide.md', '项目约定', 'note', 'root', '## Design\n\n先阅读模块职责，再定位相关主题。所有模块共用稳定文档身份。'],
-    ['guide', 'files/reading-guide.md', '阅读约定', 'note', 'files', '## Design\n\n打开文件时保留工作区上下文。'],
-    ['requirement', 'files/parser/requirements/read-errors.md', '读取失败提示', 'requirement', 'parser', '## Expected behavior\n\n读取失败时保留当前位置，说明原因并允许重试。\n\n## Acceptance criteria\n\n- [ ] AC-1: 文件不可用时保留当前位置，并显示重试入口。'],
-    ['decision', 'files/parser/error-context.md', '错误保留上下文', 'decision', 'parser', '## Problem\n\n空白预览会让用户失去阅读位置。\n\n## Decision\n\n失败时保留上下文与重试入口。\n\n## Alternatives considered\n\n关闭预览更简单，但会丢失位置。\n\n## Consequences\n\n需要明确显示错误状态，避免把旧内容当作最新结果。'],
-    ['idea', 'files/parser/batch-import.md', '批量导入建议', 'idea', 'parser', '## Intent\n\n探索批量导入时逐项显示来源和读取结果。\n\n## Open questions\n\n优先验证单文件读取，批量操作尚未排期。'],
-    ['task', 'files/parser/tasks/read-errors.md', '补齐失败提示', 'task', 'parser', '## Scope\n\n补充文件不可用时的重试入口。\n\n## Acceptance criteria\n\n按 work.acceptanceRefs 的固定 AC-1 验收。\n\n## Verification\n\n增加失败场景测试并运行。\n\n## Progress\n\n演示待办，尚未派发。\n\n## Evidence\n\n尚无执行结果或独立评估。\n\n## Handoff\n\n主 Agent 在交接前维护本段：先读 AC-1，再派发 coderX。子智能体只读本 Task，返回 Change Summary 与 Note 草稿；xflow 的 evaluatorX 独立返回 Evaluation Result。'],
-  ];
-  await mkdir(join(repoPath, '.agents/notes'), { recursive: true });
-  await writeFile(join(repoPath, '.agents/harness.json'), JSON.stringify({ schemaVersion: 1, repoId, name: 'demo-blueprint', profile: SUPPORTED_HARNESS_PROFILE }, null, 2));
-  for (const [key, path, title, kind, owner, body] of rows) {
-    const meta = { schema: 'harness-note/2', id: ids[key], kind, lifecycle: kind === 'decision' ? 'implemented' : kind === 'idea' ? 'proposed' : 'accepted', created: '2026-10-08', updated: '2026-10-08T00:00:00Z',
-      ...(kind === 'module' ? { moduleState: 'partial', ...(owner ? { parent: uri(owner) } : { role: 'project' }) } : { module: uri(owner) }),
-      ...(kind === 'task' ? { work: { scope: [{ repoId, paths: ['src/'] }], acceptanceRefs: [{ uri: uri('requirement'), criterionId: 'AC-1' }], verification: [{ id: 'V-1', kind: 'command', required: true, repoId, cwd: '.', program: 'node', args: ['--test'] }], review: 'independent' } } : {}) };
-    const raw = `---\n${JSON.stringify(meta, null, 2)}\n---\n\n# ${title}\n\n${body}\n`;
-    expect(validateNote(parseNote(raw)), path).toEqual([]);
-    await mkdir(dirname(join(repoPath, '.agents/notes', path)), { recursive: true });
-    await writeFile(join(repoPath, '.agents/notes', path), raw);
-  }
-  const index = await buildNoteIndex(repoPath);
-  expect(validateModuleStructure(index.entries, index.repoId)).toEqual([]);
-  expect(index.readDiagnostics).toEqual([]);
-  expect(new Set(index.entries.map(entry => entry.note.meta.kind)).size).toBe(6);
-  return { uri, guidePath: join(repoPath, '.agents/notes/files/reading-guide.md') };
-}
+const prompt = '核对搜索实现，把至少两个字符才筛选补进搜索约定，并查看更新后的原文。';
+const answer = '已核对 `src/search.mjs`，并更新现有《搜索约定》：\n\n- 去除首尾空格后，至少两个字符才筛选。\n- 不足两个字符时显示全部任务，结果保持原顺序。\n\n原文已刷新，源码未改动。';
+import { beforeDesign, afterDesign, files, authorNotes, buildEvidence } from './blueprint-fixture.mjs';
 
 const model = await blueprintModel();
 try { await runRecord(async ctx => {
-  const { recordingRoot, rawDir, repoPath } = await prepareRepo('blueprint'); ctx.recordingRoot = recordingRoot;
+  const parent = process.platform === 'win32' ? process.env.PUBLIC ?? tmpdir() : tmpdir();
+  ctx.fixtureRoot = await mkdtemp(join(parent, 'janusx-blueprint-'));
+  const claudeConfig = join(ctx.fixtureRoot, 'claude-config');
+  const opencodeHome = join(ctx.fixtureRoot, '.config/opencode');
+  await mkdir(claudeConfig); await mkdir(opencodeHome, { recursive: true });
+  await writeFile(join(opencodeHome, 'opencode.json'), JSON.stringify({
+    $schema: 'https://opencode.ai/config.json', theme: 'system', model: 'demo/demo', autoupdate: false,
+    provider: { demo: { npm: '@ai-sdk/openai-compatible', name: 'Local demo',
+      options: { apiKey: 'demo-unused', baseURL: 'http://127.0.0.1:9/v1' }, models: { demo: { name: 'Local demo' } } } },
+  }));
+  const { recordingRoot, rawDir, repoPath } = await prepareRepo('blueprint', { repoParent: ctx.fixtureRoot, repoName: 'Atlas' });
+  ctx.recordingRoot = recordingRoot;
+  for (const [path, content] of Object.entries(files)) {
+    await mkdir(dirname(join(repoPath, path)), { recursive: true });
+    await writeFile(join(repoPath, path), content);
+  }
   const notes = await authorNotes(repoPath);
-  git(repoPath, 'add', '-A'); git(repoPath, 'commit', '-m', 'demo maintained module documents');
-  ctx.fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-blueprint-'));
-  const claudeConfig = join(ctx.fixtureRoot, 'claude-config'); await mkdir(claudeConfig, { recursive: true });
-  const { application, page } = await launchApp(ctx.fixtureRoot, claudeConfig); ctx.application = application; ctx.page = page;
+  git(repoPath, 'add', '-A'); git(repoPath, 'commit', '-m', 'Prepare Atlas Note maintenance');
+  const testOutput = execFileSync(process.execPath, ['--test', '--test-reporter=tap', 'tests/search.test.mjs'], { cwd: repoPath, encoding: 'utf8' });
+  expect(testOutput).toContain('# pass 3');
+  const { application, page } = await launchApp(ctx.fixtureRoot, claudeConfig, { env: { OPENCODE_DISABLE_AUTOUPDATE: 'true' } });
+  Object.assign(ctx, { application, page });
+  const host = await application.browserWindow(page);
+  await host.evaluate((win, size) => { win.setContentSize(size.width, size.height); win.center(); }, { width: AW, height: AH });
   await page.evaluate(async baseURL => {
     await window.electron.experimental.update({ blueprint: true });
-    const saved = await window.electron.llm.saveTerminalProvider('janus', { id: 'openai-compatible', name: '本地脚本演示', authType: 'api-key', enabled: true, apiKey: 'demo-local-only', baseURL, modelId: 'demo-model', models: ['demo-model'] });
+    const saved = await window.electron.llm.saveTerminalProvider('janus', { id: 'openai-compatible', name: '本地脚本演示',
+      authType: 'api-key', enabled: true, apiKey: 'demo-local-only', baseURL, modelId: 'atlas-demo', models: ['atlas-demo'],
+      extra: { protocol: 'responses', chatModelLimits: { 'atlas-demo': { contextWindow: 64000, maxOutputTokens: 8192 } } } });
     if (!saved.success) throw new Error('Demo provider setup failed');
     await window.electron.llm.setTerminalDefault('janus', 'openai-compatible');
   }, model.baseURL);
-  await skipGate(page); await ensureWorkspace(page, 'demo-blueprint', repoPath);
-  await ensureSidebarExpanded(page); await openWorkspace(page, 'demo-blueprint');
+  await skipGate(page);
+  const learning = page.getByRole('dialog').filter({ hasText: '首次入门' });
+  if (await learning.count()) await learning.getByRole('button', { name: '关闭', exact: true }).click();
+  await ensureWorkspace(page, 'Atlas', repoPath); await ensureSidebarExpanded(page); await openWorkspace(page, 'Atlas');
+  await page.getByRole('main').getByRole('button', { name: 'OpenCode', exact: true }).click();
+  await expect.poll(() => page.locator('.xterm-rows:visible').innerText(), { timeout: 90_000 }).toMatch(/tab agents|ctrl\+p commands/);
+  await page.locator('.xterm-helper-textarea:visible').focus();
+  await page.keyboard.insertText('Review the minimum search length.');
+  const workspace = (await page.evaluate(() => window.electron.workspace.list())).find(w => w.name === 'Atlas');
+  expect(workspace?.id).toBeTruthy();
   await page.evaluate(cwd => window.electron.harness.rescan(cwd), repoPath);
-  const frames = [], { clickSnap, typeSnap, rest } = snapper(page, rawDir, frames);
   const card = title => page.locator('.react-flow__node').filter({ has: page.locator('.bp-node-card__title', { hasText: new RegExp(`^${title}$`) }) });
   const nav = page.getByRole('navigation', { name: '模块导航' }), current = nav.locator('[aria-current="page"]');
   const detail = page.locator('.blueprint-workbench-detail-slot'), panel = page.locator('.bp-maintenance-panel');
-  await clickSnap(page.getByRole('button', { name: /打开蓝图工作台/ }).first(), 'bp-1');
-  await expect(current).toHaveText('项目工作台'); await expect(page.locator('.react-flow__node')).toHaveCount(3); await rest('bp-1', 200);
-  await clickSnap(card('文件阅读'), 'bp-2'); await expect(detail).toContainText('阅读约定保留在本层');
-  await expect(current).toHaveText('项目工作台'); await rest('bp-2', 180);
-  await clickSnap(card('文件阅读'), 'bp-2', { double: true }); await expect(current).toHaveText('文件阅读');
-  await expect(card('文件阅读')).toBeAttached(); await expect(card('阅读约定')).toBeAttached(); await rest('bp-2', 180);
-  await clickSnap(card('解析与提示'), 'bp-3', { double: true }); await expect(current).toHaveText('解析与提示');
-  await expect(page.locator('.react-flow__node')).toHaveCount(5); await rest('bp-3', 220);
-  await clickSnap(nav.getByRole('button', { name: '返回', exact: true }), 'bp-3'); await expect(current).toHaveText('文件阅读');
-  const refs = ['requirement', 'guide'].map((key, i) => ({ uri: notes.uri(key), role: i ? 'reference' : 'target', reason: i ? '上级模块阅读约定' : '当前需求' }));
-  model.enqueue({ tool: 'note_scope', args: { reason: '一起讨论读取体验', notes: refs } }, { tool: 'note_focus', args: { reason: '查看失败提示需求', action: 'locate', notes: refs } }, { text: '已关注两份文档，并定位到读取失败提示。' });
-  const composer = panel.locator('textarea').first();
-  await typeSnap(composer, '请关注阅读约定和读取失败提示，定位读取失败提示。', 'bp-4'); await composer.press('Enter');
-  await expect(panel).toContainText('已关注两份文档', { timeout: 30_000 });
-  await expect(panel.locator('.janus-chat-stop')).toHaveCount(0, { timeout: 30_000 });
-  await expect(panel.locator('.janus-chat-error-card')).toHaveCount(0);
-  await expect(current).toHaveText('解析与提示'); await expect(detail).toContainText('文件不可用时保留当前位置');
-  await expect(card('解析与提示')).toBeInViewport(); await rest('bp-4', 220);
-  const scope = panel.locator('.bp-note-scope');
-  await clickSnap(scope.locator('details > summary'), 'bp-4'); await expect(scope.locator('.bp-note-group')).toHaveCount(2);
-  await clickSnap(scope.getByRole('button', { name: '阅读约定', exact: true }), 'bp-4'); await expect(current).toHaveText('文件阅读');
+  const frames = [], checkpoints = [], streaming = [];
+  const motion = snapper(page, rawDir, frames, null,
+    { motion: 4, hover: 30, click: 8, typing: 7, settleMs: 160, travelPixelsPerStep: 40 });
+  async function checkpoint(stage, delay = 180) {
+    await motion.rest(stage, delay);
+    const point = { stage, frame: frames.length - 1, theme: await page.locator('html').getAttribute('data-theme'),
+      module: await current.innerText(), nodes: await page.locator('.bp-node-card__title').allTextContents(),
+      document: await detail.innerText(), panel: await panel.count() ? await panel.innerText() : '',
+      tools: await panel.locator('.janus-tool-card-name').allTextContents(),
+      ...(stage === 'diff' ? { writtenDiff: await panel.locator('pre[aria-label="变更后"]').innerText(),
+        diffScroll: await panel.locator('pre[aria-label="变更后"]').evaluate(el => ({ top: el.scrollTop,
+          height: el.clientHeight, contentHeight: el.scrollHeight })) } : {}) };
+    expect(point.theme).toBe(style.theme); checkpoints.push(point); console.log(`${stage}: verified frame ${point.frame}`);
+  }
+  await page.mouse.move(AW - 80, AH - 45);
+  await motion.snap({ x: AW - 80, y: AH - 45 }, false, 100, 'overview');
+  await motion.clickSnap(page.getByRole('button', { name: /打开蓝图工作台/ }).first(), 'overview');
+  await expect(current).toHaveText('Atlas');
+  await expect(page.locator('.react-flow__node')).toHaveCount(4);
+  await sleep(800); await checkpoint('overview', 200);
+  await motion.clickSnap(card('任务搜索'), 'module');
+  await expect(detail).toContainText('实现位于 src/search.mjs');
+  await checkpoint('module', 180);
+  await motion.clickSnap(card('任务搜索'), 'module', { double: true });
+  await expect(current).toHaveText('任务搜索');
+  await motion.clickSnap(card('搜索约定'), 'before');
+  await expect(detail).toContainText('搜索在本地完成');
+  await motion.clickSnap(page.locator('.blueprint-janus-capsule'), 'before');
+  await expect(panel.locator('textarea')).toBeEnabled();
+  await sleep(650);
+  await motion.clickSnap(page.getByRole('button', { name: '适应画布', exact: true }), 'before');
+  await sleep(250); await checkpoint('before', 240);
   const before = await readFile(notes.guidePath, 'utf8'), meta = parseNote(before).meta;
-  model.enqueue({ tool: 'note_read', args: { uri: notes.uri('guide') } }, { tool: 'note_write', args: { reason: '补充失败时的阅读行为', operations: [{ type: 'update', uri: notes.uri('guide'), expectedHash: createHash('sha256').update(before).digest('hex'), sections: { Design: '打开文件时保留工作区上下文。读取失败时保留当前位置，并提供重试入口。' } }] } }, { text: '已原位更新阅读约定，保留文档身份并刷新更新时间；没有新建 Task。' });
-  await typeSnap(composer, 'xdo 更新阅读约定：读取失败时保留当前位置，并提供重试入口。', 'bp-5'); await composer.press('Enter');
-  await expect(panel).toContainText('已原位更新阅读约定', { timeout: 30_000 });
-  await expect(panel.locator('.janus-chat-stop')).toHaveCount(0, { timeout: 30_000 });
+  model.enqueue(
+    { tool: 'workspace_read', args: { workspaceId: workspace.id, path: 'src/search.mjs' } },
+    { tool: 'note_read', args: { uri: notes.uri('guide') }, expectsOutput: ['needle.length < 2'] },
+    { tool: 'note_scope', args: { reason: '维护搜索规则', notes: [{ uri: notes.uri('guide'), role: 'target', reason: '补充最小搜索长度' }] }, expectsOutput: ['搜索在本地完成'] },
+    { tool: 'note_write', args: { reason: '同步现有实现的最小搜索长度', operations: [{ type: 'update', uri: notes.uri('guide'),
+      expectedHash: createHash('sha256').update(before).digest('hex'), sections: { Design: afterDesign } }] }, expectsOutput: ['搜索在本地完成'] },
+    { tool: 'note_focus', args: { reason: '查看更新后的搜索约定', action: 'locate', notes: [{ uri: notes.uri('guide'), role: 'target', reason: '已补充最小搜索长度' }] }, expectsOutput: ['applied'] },
+    { text: answer },
+  );
+  await motion.typeSnap(panel.locator('textarea'), prompt, 'request');
+  await motion.clickSnap(panel.getByRole('button', { name: '发送消息', exact: true }), 'request');
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    await motion.rest('updating', 8);
+    const text = await panel.innerText(), active = await panel.locator('.janus-chat-stop').count() > 0;
+    streaming.push({ frame: frames.length - 1, chars: text.length, active });
+    if (text.includes('原文已刷新，源码未改动。') && !active) break;
+    if (text.includes('Demo model failed')) throw new Error('Demo model failed');
+    await sleep(25);
+  }
+  await expect(panel).toContainText('原文已刷新，源码未改动。');
+  await expect(panel.locator('.janus-chat-stop')).toHaveCount(0);
   await expect(panel.locator('.janus-chat-error-card')).toHaveCount(0);
-  await expect(detail).toContainText('读取失败时保留当前位置'); await rest('bp-5', 220);
-  const after = parseNote(await readFile(notes.guidePath, 'utf8'));
-  expect(after.meta.id).toBe(meta.id); expect(after.meta.created).toBe(meta.created); expect(after.meta.updated).not.toBe(meta.updated);
-  const index = await buildNoteIndex(repoPath); expect(index.entries).toHaveLength(9);
-  expect(index.entries.filter(entry => entry.note.meta.kind === 'task')).toHaveLength(1);
-  await clickSnap(card('解析与提示'), 'bp-6', { double: true });
-  await clickSnap(page.getByRole('button', { name: '适应画布', exact: true }), 'bp-6');
-  await clickSnap(card('补齐失败提示'), 'bp-6');
-  await expect(detail).toContainText('主 Agent 在交接前维护本段'); await rest('bp-6', 260); model.verify();
-  await saveManifest(recordingRoot, { captions, name: 'feature-blueprint-workbench', frames, createdAt: new Date().toISOString(),
-    evidence: { entry: resolve(process.env.SHOWCASE_ENTRY ?? 'out/main/index.js'), sourceCommit: process.env.SHOWCASE_SOURCE_COMMIT ?? git(process.cwd(), 'rev-parse', 'HEAD').trim(), agentSourceCommit: process.env.SHOWCASE_AGENT_COMMIT ?? null, model: 'local deterministic Responses server', calls: model.calls, documents: index.entries.length, preservedId: after.meta.id, created: after.meta.created, updatedBefore: meta.updated, updatedAfter: after.meta.updated } });
+  await expect(panel.locator('.janus-tool-card--failed')).toHaveCount(0);
+  await expect(detail).toContainText('至少两个字符才筛选');
+  await expect(current).toHaveText('任务搜索');
+  await motion.clickSnap(page.getByRole('button', { name: '适应画布', exact: true }), 'updated');
+  await sleep(250); await checkpoint('updated', 180);
+  const changes = panel.locator('summary').filter({ hasText: /^查看修改$/ });
+  await motion.clickSnap(changes, 'diff');
+  const writtenDiff = panel.locator('pre[aria-label="变更后"]');
+  await expect(writtenDiff).toContainText('至少两个字符才筛选');
+  // Capture the browser's real smooth scroll, including the nested diff viewer.
+  // No CSS, document content or tool result is altered for presentation.
+  async function scrollFrames(cap) {
+    for (let i = 0; i < 8; i++) { await sleep(40); await motion.rest(cap, 4); }
+  }
+  await writtenDiff.evaluate(el => el.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  await scrollFrames('diff');
+  await writtenDiff.evaluate(el => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }));
+  await scrollFrames('diff');
+  await expect(writtenDiff).toBeInViewport();
+  expect(await writtenDiff.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+  await checkpoint('diff', 220);
+  await changes.evaluate(el => el.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  await scrollFrames('result');
+  await motion.clickSnap(changes, 'result');
+  await panel.locator('.janus-chat-messages').evaluate(el => el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }));
+  await scrollFrames('result');
+  await expect(panel.getByText('原文已刷新，源码未改动。', { exact: true })).toBeInViewport();
+  await checkpoint('result', 320);
+  const posterFrame = frames.length - 1;
+  const afterRaw = await readFile(notes.guidePath, 'utf8'), after = parseNote(afterRaw);
+  expect(validateNote(after)).toEqual([]);
+  expect(after.meta.id).toBe(meta.id); expect(after.meta.created).toBe(meta.created);
+  expect(after.meta.updated).not.toBe(meta.updated);
+  expect(afterRaw).toContain(afterDesign);
+  for (const key of ['module', 'kind', 'lifecycle']) expect(after.meta[key]).toEqual(meta[key]);
+  const index = await buildNoteIndex(repoPath);
+  expect(index.entries).toHaveLength(7); expect(index.readDiagnostics).toEqual([]);
+  expect(validateModuleStructure(index.entries, index.repoId)).toEqual([]);
+  expect(index.entries.filter(entry => entry.note.meta.kind === 'task')).toHaveLength(0);
+  for (const [path, content] of Object.entries(files)) expect(await readFile(join(repoPath, path), 'utf8')).toBe(content);
+  for (const [path, content] of Object.entries(notes.originals)) if (path !== 'search/search-guide.md')
+    expect(await readFile(join(repoPath, '.agents/notes', path), 'utf8')).toBe(content);
+  model.verify();
+  const last = frames.at(-1), first = frames[0];
+  for (const opacity of [.8, .6, .4, .2, 0]) frames.push({ ...last, delay: 80, click: false, opacity, transition: 'loop-reset' });
+  for (const opacity of [.2, .4, .6, .8, 1]) frames.push({ ...first, delay: 80, click: false, opacity, transition: 'loop-reset' });
+  await saveManifest(recordingRoot, { captions, name: 'feature-blueprint-workbench', frames, posterFrame, createdAt: new Date().toISOString(),
+    presentation: { framing: 'compact', theme: style.theme, background: style.background.asset, border: 12 },
+    evidence: { ...await buildEvidence(), checkpoints, streaming, prompt, answer, workspaceId: workspace.id, calls: model.calls,
+      model: 'local scripted Responses server', documents: index.entries.length, tasks: 0, before, after: afterRaw,
+      preservedId: after.meta.id, created: after.meta.created, updatedBefore: meta.updated, updatedAfter: after.meta.updated,
+      fixtureTests: 3, testOutput, sourceUnchanged: true, otherNotesUnchanged: true, promptsSubmitted: 1,
+      accountsCopied: false, loopTransitionMs: 800 } });
 }); } finally { await model.close(); }

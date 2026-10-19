@@ -16,7 +16,7 @@
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/index.ts","role":"entry"},
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/ipc/register.ts","role":"implementation"}
   ],
-  "updated": "2026-10-16T03:22:03Z",
+  "updated": "2026-10-19T01:31:30Z",
   "moduleState": "partial"
 }
 ---
@@ -31,13 +31,15 @@
 
 ## Design
 
+README 的内容架构、像素品牌形象与新 UI 多主题演示，见[展示与录制计划](./readme-presentation-plan.md)；10 条功能 GIF 已全部重录并接入，覆盖分屏两部曲、Island、运行配置、蓝图维护/自动审核、用量、会话、Worktree 与产物。八组静态素材齐备，工具四格、用量明细和外部会话补图已接入；录制机制、构建来源、数据边界及验证由 [readme-showcase](./readme-showcase.md) 维护。
+
 免安装版配置使用用户目录下独立的 `JanusX-Portable`，不提供随身模式；旧同级 `data` 在应用数据服务打开前完成校验迁移，并清理已迁移文件及明确可重建的缓存。路径隔离、失败保护和重试语义见 [application-profile](./application-profile.md)。
 
 桌面执行史：[implementation-history](../agent/desktop-implementation-history.md)、[delegated-modes](../agent/desktop-delegated-modes.md)、[task-implementation](../agent/desktop-task-implementation.md)、[ade-survey](./desktop-ade-mit-survey.md)。
 
 打包与发布：[hoisted-deps](./packaged-hoisted-deps.md)、[runtime-size](./packaged-runtime-size.md)、[cli-publish](./janus-cli-npm-publish.md)、[officecli](./officecli-bundled.md)、[runner-backflow](../agent/external-runner-backflow.md)、[ci-order](./ci-sibling-build-order.md)、[verify-repair](./release-verify-repair.md)（v0.8.8 双管线修复）。
 
-流程治理：[development-branch](./development-branch.md)、[reproducible-verification](./reproducible-verification.md)（两篇已补 `--uuid` 后缀正名）、[github-maintenance](./github-maintenance.md)归属产品面而不属本域。
+协作入口由 [CONTRIBUTING](../../../CONTRIBUTING.md)、[开发环境](../../../docs/development.md)和[维护者指南](../../../docs/maintainers.md)分别承担：功能 PR 进入 develop，晋级 PR 进入 main，两者均运行 Windows 验证；发布由维护者负责。分支、验证和反馈取舍分别见 [development-branch](./development-branch.md)、[reproducible-verification](./reproducible-verification.md)及 [github-maintenance](./github-maintenance.md)。
 
 早期基石（均保留，无孤儿）：[toast](./desktop-toast.md)、[model-registry](../agent/model-registry.md)、[llm-runtime](../agent/llm-tool-runtime.md)、[browser-surface](./browser-surface.md)、[auto-update](./app-auto-update-win.md)、[cli-scope](./cli-manager-scope.md)、[i18n](./i18n-pipeline.md)、[statusbar](./runtime-statusbar.md)。
 

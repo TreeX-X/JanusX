@@ -3,7 +3,8 @@ import { SYSTEM_CHANNELS } from '../../src/shared/ipc/system'
 
 interface MockEditorWindow {
   destroyed: boolean
-  callbacks: Map<string, () => void>
+  callbacks: Map<string, (event?: { preventDefault(): void }) => void>
+  close: ReturnType<typeof vi.fn>
   focus: ReturnType<typeof vi.fn>
   restore: ReturnType<typeof vi.fn>
   show: ReturnType<typeof vi.fn>
@@ -14,7 +15,7 @@ interface MockEditorWindow {
     send: ReturnType<typeof vi.fn>
     setWindowOpenHandler: ReturnType<typeof vi.fn>
   }
-  on: (event: string, callback: () => void) => void
+  on: (event: string, callback: (event?: { preventDefault(): void }) => void) => void
   once: (event: string, callback: () => void) => void
 }
 
@@ -23,10 +24,11 @@ const mocks = vi.hoisted(() => {
   const loadRendererWindow = vi.fn(async () => {})
   const getTheme = vi.fn(async () => 'planche')
   const BrowserWindow = vi.fn(function BrowserWindowMock() {
-    const callbacks = new Map<string, () => void>()
+    const callbacks = new Map<string, (event?: { preventDefault(): void }) => void>()
     const window: MockEditorWindow = {
       destroyed: false,
       callbacks,
+      close: vi.fn(),
       focus: vi.fn(),
       restore: vi.fn(),
       show: vi.fn(),
@@ -102,6 +104,24 @@ describe('EditorWindowManager', () => {
 
     await manager.open({ filePath: 'C:\\One\\again.ts', workspacePath: 'C:\\One' })
     expect(mocks.BrowserWindow).toHaveBeenCalledTimes(3)
+  })
+
+  it('routes native close to its renderer and only accepts confirmation from that editor', async () => {
+    const manager = new EditorWindowManager()
+    await manager.open({ filePath: 'C:/One/file.ts', workspacePath: 'C:/One' })
+    const window = mocks.windows[0]
+    manager.ready(window.webContents as never)
+    const event = { preventDefault: vi.fn() }
+    window.callbacks.get('close')?.(event)
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(window.webContents.send).toHaveBeenCalledWith(SYSTEM_CHANNELS.requestEditorClose)
+    manager.confirmClose({} as never)
+    expect(window.close).not.toHaveBeenCalled()
+    manager.confirmClose(window.webContents as never)
+    expect(window.close).toHaveBeenCalledOnce()
+    event.preventDefault.mockClear()
+    window.callbacks.get('close')?.(event)
+    expect(event.preventDefault).not.toHaveBeenCalled()
   })
 
   it.each([['dark', '#151517'], ['planche', '#EFE4C5']])('seeds %s before loading and keeps concurrent opens hidden until first paint', async (theme, background) => {

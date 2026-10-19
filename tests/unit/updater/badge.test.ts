@@ -21,6 +21,7 @@ describe('resolveUpdaterBadge', () => {
     }
     expect(resolveUpdaterBadge({ ...BASE, phase: 'downloaded', supported: false })).toBeNull()
     expect(resolveUpdaterBadge({ ...BASE, phase: 'unsupported' })).toBeNull()
+    expect(resolveUpdaterBadge({ ...BASE, phase: 'error', availableVersion: '0.8.7' })).toEqual({ kind: 'available', version: '0.8.7', percent: null })
   })
 
   it('有新版动作时出现并携带展示字段', () => {
@@ -41,26 +42,16 @@ describe('resolveUpdaterBadge', () => {
 })
 
 describe('applyUpdaterEvent', () => {
-  it('空状态从 idle 基座起步', () => {
-    const next = applyUpdaterEvent(null, { type: 'available', version: '0.8.7' })
-    expect(next.phase).toBe('available')
-    expect(next.availableVersion).toBe('0.8.7')
-    expect(next.supported).toBe(true)
-  })
-
-  it('下载完成链路保持版本与进度', () => {
-    const downloading = applyUpdaterEvent(BASE, { type: 'progress', percent: 42 })
-    expect(downloading.phase).toBe('downloading')
-    expect(downloading.downloadPercent).toBe(42)
-    const done = applyUpdaterEvent(downloading, { type: 'downloaded', version: '0.8.7' })
-    expect(done.phase).toBe('downloaded')
-    expect(done.downloadPercent).toBe(100)
+  it('首次事件包含完整的版本、进度和说明，不依赖旧快照', () => {
+    const state = { ...BASE, phase: 'downloaded' as const, availableVersion: '0.8.7', downloadPercent: 100, releaseNotes: 'New release' }
+    expect(applyUpdaterEvent(null, { type: 'state', state })).toEqual(state)
+    expect(applyUpdaterEvent(BASE, { type: 'state', state })).toEqual(state)
   })
 
   it('无新版清掉残留版本与进度', () => {
     const next = applyUpdaterEvent(
       { ...BASE, phase: 'downloading', availableVersion: '0.8.7', downloadPercent: 42 },
-      { type: 'not-available', version: '0.8.6' },
+      { type: 'state', state: { ...BASE, phase: 'up-to-date' } },
     )
     expect(next.phase).toBe('up-to-date')
     expect(next.availableVersion).toBeNull()

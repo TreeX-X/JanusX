@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEditorCloseDialog } from './EditorCloseDialog'
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { getEditorFileId, invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useThemeStore } from '@/stores/theme'
-import { Maximize2, PanelRightOpen, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
+import { GitCompareArrows, Maximize2, PanelRightOpen, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
 import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
 import type { DefinitionTarget } from '@/lib/monaco-definition'
@@ -11,8 +12,6 @@ interface EditorWindowParams {
   filePath: string
   workspacePath: string
 }
-
-const baselineCache = new Map<string, string | undefined>()
 
 function getEditorWindowParams(): EditorWindowParams | null {
   const params = new URLSearchParams(window.location.search)
@@ -69,6 +68,9 @@ export function StandaloneFileEditor() {
   const navigationTarget = useEditorStore((state) => state.navigationTarget)
   const consumeNavigationTarget = useEditorStore((state) => state.consumeNavigationTarget)
   const activeFile = openFiles.find((file) => file.id === activeFileId) ?? null
+  const { confirmClose, closeDialog } = useEditorCloseDialog()
+  const [diffFileId, setDiffFileId] = useState<string | null>(null)
+  const [baselineStatus, setBaselineStatus] = useState<'loading' | 'unavailable' | null>(null)
   const [baselineContent, setBaselineContent] = useState<string | undefined>(undefined)
   const [baselineFileId, setBaselineFileId] = useState<string | null>(null)
   const [isPinned, setIsPinned] = useState(false)
@@ -135,47 +137,32 @@ export function StandaloneFileEditor() {
     })
   }, [editorParams])
 
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      const dirtyFiles = openFiles.filter((f) => f.isDirty && f.viewType !== 'image' && f.viewType !== 'binary')
-      if (dirtyFiles.length > 0) {
-        e.preventDefault()
-        e.returnValue = ''
-      }
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [openFiles])
+  const closeWindow = useCallback(() => {
+    void window.electron.window.confirmEditorClose()
+  }, [])
+
+  const handleWindowClose = useCallback(() => {
+    confirmClose(useEditorStore.getState().openFiles.map(file => file.id), closeWindow)
+  }, [confirmClose, closeWindow])
+
+  useEffect(() => window.electron.window.onEditorCloseRequested(handleWindowClose), [handleWindowClose])
 
   useEffect(() => {
     let cancelled = false
-    if (!activeFile || !editorParams || activeFile.viewType === 'image' || activeFile.viewType === 'binary') {
-      if (activeFile) setBaselineFileId(activeFile.id)
-      return
-    }
-    if (baselineCache.has(activeFile.id)) {
-      setBaselineContent(baselineCache.get(activeFile.id))
-      setBaselineFileId(activeFile.id)
-      return
-    }
+    const file = useEditorStore.getState().openFiles.find(item => item.id === activeFileId)
+    if (!file || !editorParams || diffFileId !== file.id) return
+    setBaselineStatus('loading')
     setBaselineFileId(null)
-    void window.electron.git.fileBaseline(editorParams.workspacePath, activeFile.path)
-      .then((baseline) => {
-        if (!cancelled) {
-          const content = baseline?.available ? baseline.content : undefined
-          baselineCache.set(activeFile.id, content)
-          setBaselineContent(content)
-          setBaselineFileId(activeFile.id)
-        }
+    void window.electron.git.fileBaseline(editorParams.workspacePath, file.path)
+      .then(baseline => {
+        if (cancelled) return
+        setBaselineContent(baseline?.available ? baseline.content : undefined)
+        setBaselineFileId(file.id)
+        setBaselineStatus(baseline?.available ? null : 'unavailable')
       })
-      .catch(() => {
-        if (!cancelled) {
-          baselineCache.set(activeFile.id, undefined)
-          setBaselineFileId(activeFile.id)
-        }
-      })
+      .catch(() => { if (!cancelled) setBaselineStatus('unavailable') })
     return () => { cancelled = true }
-  }, [activeFile?.id, activeFile?.mtime, activeFile?.path, activeFile?.viewType, editorParams])
+  }, [activeFileId, activeFile?.mtime, diffFileId, editorParams])
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -197,7 +184,7 @@ export function StandaloneFileEditor() {
 
   useEffect(() => {
     document.title = activeFile ? t('editor:fileEditor.documentTitle', { prefix: activeFile.isDirty ? '* ' : '', name: activeFile.name }) : t('editor:fileEditor.windowTitle')
-  }, [activeFile])
+  }, [activeFile, t])
 
   const handleDefinitionNavigate = useCallback((target: DefinitionTarget) => {
     if (editorParams) void openFileAt(target.absolutePath, editorParams.workspacePath, target.selection)
@@ -218,31 +205,10 @@ export function StandaloneFileEditor() {
     })
   }, [activeFile, editorParams])
 
-  const handleWindowClose = useCallback(async () => {
-    const dirtyFiles = openFiles.filter((f) => f.isDirty && f.viewType !== 'image' && f.viewType !== 'binary')
-    if (dirtyFiles.length > 0) {
-      const names = dirtyFiles.map((f) => f.name).join(', ')
-      const result = await window.electron.dialog.showMessageBox({
-        message: `Save changes to ${names}?`,
-        detail: 'You have unsaved changes that will be lost.',
-        buttons: ['Save All', "Don't Save", 'Cancel'],
-        defaultId: 0,
-        cancelId: 2,
-      })
-      if (result.response === 2) return
-      if (result.response === 0) {
-        for (const f of dirtyFiles) await saveFile(f.id)
-      }
-    }
-    void window.electron.window.close()
-  }, [openFiles, saveFile])
-
   const titlebarDrag = { WebkitAppRegion: 'drag' } as CSSProperties
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
-  const hasBaseline = Boolean(activeFile && (baselineFileId === activeFile.id || baselineCache.has(activeFile.id)))
-  const activeBaselineContent = activeFile && baselineCache.has(activeFile.id)
-    ? baselineCache.get(activeFile.id)
-    : baselineContent
+  const diffEnabled = Boolean(activeFile && diffFileId === activeFile.id)
+  const activeBaselineContent = diffEnabled && baselineFileId === activeFile?.id ? baselineContent : undefined
   const canSave = Boolean(activeFile && activeFile.viewType !== 'image' && activeFile.viewType !== 'binary')
   const canFind = activeFile?.viewType === 'code' || activeFile?.viewType === 'markdown' || activeFile?.viewType === 'html'
 
@@ -297,21 +263,12 @@ export function StandaloneFileEditor() {
                   aria-label={t('editor:fileEditor.closeTab', { name: file.name })}
                   className="ml-1 shrink-0 border-0 bg-transparent p-0 hover:opacity-100"
                   style={{ color: 'var(--shell-dim)', opacity: 0.7 }}
-                  onClick={async (event) => {
+                  onClick={(event) => {
                     event.stopPropagation()
-                    if (file.isDirty && file.viewType !== 'image' && file.viewType !== 'binary') {
-                      const result = await window.electron.dialog.showMessageBox({
-                        message: `Save changes to ${file.name}?`,
-                        detail: 'You have unsaved changes that will be lost.',
-                        buttons: ['Save', "Don't Save", 'Cancel'],
-                        defaultId: 0,
-                        cancelId: 2,
-                      })
-                      if (result.response === 2) return
-                      if (result.response === 0) await saveFile(file.id)
-                    }
-                    closeFile(file.id)
-                    if (openFiles.length === 1) void window.electron.window.close()
+                    confirmClose([file.id], () => {
+                      closeFile(file.id)
+                      if (useEditorStore.getState().openFiles.length === 0) closeWindow()
+                    })
                   }}
                 >
                   ×
@@ -322,6 +279,13 @@ export function StandaloneFileEditor() {
           })}
         </div>
         <div className="relative z-10 flex shrink-0 items-center gap-1.5" style={noDrag}>
+          {canFind && <button type="button" aria-pressed={diffEnabled}
+            aria-label={t('editor:fileEditor.compareHead')} title={t('editor:fileEditor.compareHead')}
+            onClick={() => setDiffFileId(diffEnabled ? null : activeFileId)}
+            className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)]"
+            style={{ color: diffEnabled ? 'var(--shell-accent-strong)' : 'var(--shell-muted)', background: diffEnabled ? 'var(--shell-accent-soft)' : 'transparent' }}>
+            <GitCompareArrows size={14} strokeWidth={1.8} />
+          </button>}
           {canFind && (
             <button
               type="button"
@@ -391,8 +355,11 @@ export function StandaloneFileEditor() {
           </button>
         )}
       </div>
+      {diffEnabled && baselineStatus && <div role="status" className="px-3 py-1 text-xs" style={{ color: 'var(--shell-muted)' }}>
+        {t(baselineStatus === 'loading' ? 'editor:fileEditor.diffLoading' : 'editor:fileEditor.diffUnavailable')}
+      </div>}
       <div className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>
-        {activeFile && hasBaseline ? (
+        {activeFile ? (
           <FileViewerContent
             key={`${activeFile.id}:${activeFile.absolutePath}`}
             file={activeFile}
@@ -406,14 +373,13 @@ export function StandaloneFileEditor() {
             onContentChange={(content) => updateContent(activeFile.id, content)}
             onEditorMount={handleEditorMount}
           />
-        ) : activeFile ? (
-          <div className="flex h-full items-center justify-center text-xs" style={{ color: 'var(--shell-dim)' }}>Loading</div>
         ) : (
           <div className="flex h-full items-center justify-center text-xs" style={{ color: 'var(--shell-dim)' }}>
             {t('editor:fileEditor.missingFileInfo')}
           </div>
         )}
       </div>
+      {closeDialog}
     </div>
   )
 }

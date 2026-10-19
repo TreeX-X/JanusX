@@ -161,23 +161,28 @@
     "check": "Check for updates",
     "checking": "Checking...",
     "upToDate": "Already on the latest version",
-    "available": "New version {{version}} found, downloading in the background...",
+    "available": "Version {{version}} is available. Click to download the update.",
+    "download": "Download update",
+    "retryDownload": "Retry download",
     "downloading": "Downloading {{percent}}%",
-    "downloaded": "Version {{version}} is ready, restart to install",
+    "downloaded": "Version {{version}} is downloaded. Click Restart and install.",
     "restart": "Restart and install",
     "error": {
       "update": "Update failed: {{message}}",
       "load": "Failed to load update settings",
+      "check": "Could not check for updates. Please try again.",
+      "download": "Could not download the update. Please try again.",
+      "install": "Could not start installation. Click Restart and install to try again.",
       "save": "Failed to save update settings"
     },
     "autoCheck": {
       "label": "Check for updates automatically",
-      "hint": "Checks shortly after launch and every 6 hours. Manual checks always work."
+      "hint": "Checks shortly after launch and every 6 hours. Downloads and installation require your confirmation."
     },
     "badge": {
       "available": "New version {{version}} found, click to view",
       "downloading": "Downloading update {{percent}}%, click to view",
-      "downloaded": "Version {{version}} is ready, click to restart and install"
+      "downloaded": "Version {{version}} is ready, click to view and install"
     },
     "releaseNotes": {
       "label": "What's new"

@@ -26,6 +26,7 @@ describe('file editor tabs', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
@@ -86,6 +87,37 @@ describe('file editor tabs', () => {
       isEmbedded: true,
       embeddedWidth: 640,
     })
+  })
+
+  it('keeps changes dirty when save IPC returns an error or rejects', async () => {
+    const editor = useEditorStore.getState()
+    await editor.openFile('C:/workspace/test.ts', 'C:/workspace')
+    const id = useEditorStore.getState().activeFileId!
+    editor.updateContent(id, 'unsaved')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    window.electron.file.save = vi.fn().mockResolvedValue({ error: 'Permission denied' })
+    expect(await editor.saveFile(id)).toBe(false)
+    expect(useEditorStore.getState().openFiles[0].isDirty).toBe(true)
+    window.electron.file.save = vi.fn().mockRejectedValue(new Error('Disk full'))
+    expect(await editor.saveFile(id)).toBe(false)
+    expect(useEditorStore.getState().openFiles[0].content).toBe('unsaved')
+  })
+
+  it('does not clear edits made while an earlier version is being saved', async () => {
+    const editor = useEditorStore.getState()
+    await editor.openFile('C:/workspace/test.ts', 'C:/workspace')
+    const id = useEditorStore.getState().activeFileId!
+    editor.updateContent(id, 'first edit')
+    let complete!: (result: { success: boolean }) => void
+    window.electron.file.save = vi.fn(() => new Promise(resolve => { complete = resolve }))
+    const saving = editor.saveFile(id)
+    editor.updateContent(id, 'second edit')
+    complete({ success: true })
+    expect(await saving).toBe(true)
+    expect(useEditorStore.getState().openFiles[0]).toMatchObject({ content: 'second edit', isDirty: true })
+    window.electron.file.save = vi.fn().mockResolvedValue({ success: true })
+    expect(await editor.saveFile(id)).toBe(true)
+    expect(useEditorStore.getState().openFiles[0].isDirty).toBe(false)
   })
 
   it('opens a definition target in a reused tab and exposes its selection once', async () => {
@@ -164,8 +196,5 @@ describe('file editor tabs', () => {
     expect(previewScrollSource).toContain('preview-scrollbar-thumb')
     expect(previewScrollSource).toContain('setPointerCapture')
     expect(monacoViewerSource).toContain('modelPath')
-    expect(standaloneEditorSource).toContain('baselineFileId === activeFile.id || baselineCache.has(activeFile.id)')
-    expect(standaloneEditorSource).toContain('baselineCache.has(activeFile.id)')
-    expect(standaloneEditorSource).toContain('baselineCache.set(activeFile.id, content)')
   })
 })

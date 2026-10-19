@@ -161,23 +161,28 @@
     "check": "检查更新",
     "checking": "正在检查...",
     "upToDate": "已是最新版本",
-    "available": "发现新版本 {{version}}，正在后台下载...",
+    "available": "发现新版本 {{version}}，点击下载更新",
+    "download": "下载更新",
+    "retryDownload": "重试下载",
     "downloading": "正在下载 {{percent}}%",
-    "downloaded": "新版本 {{version}} 已就绪，重启后安装",
+    "downloaded": "新版本 {{version}} 已下载，点击重启并安装",
     "restart": "重启并安装",
     "error": {
       "update": "更新失败：{{message}}",
       "load": "更新设置加载失败",
+      "check": "检查更新失败，请重试",
+      "download": "下载更新失败，请重试",
+      "install": "启动安装失败，请点击重启并安装重试",
       "save": "更新设置保存失败"
     },
     "autoCheck": {
       "label": "自动检查更新",
-      "hint": "启动后不久检查一次，之后每 6 小时检查一次。手动检查不受影响。"
+      "hint": "启动后不久及每 6 小时检查一次，仅提示新版本；下载和安装均需点击确认。"
     },
     "badge": {
       "available": "发现新版本 {{version}}，点击查看",
       "downloading": "正在下载更新 {{percent}}%，点击查看",
-      "downloaded": "新版本 {{version}} 已就绪，点击重启安装"
+      "downloaded": "新版本 {{version}} 已就绪，点击查看并安装"
     },
     "releaseNotes": {
       "label": "更新内容"

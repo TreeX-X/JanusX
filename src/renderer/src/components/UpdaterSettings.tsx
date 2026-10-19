@@ -14,7 +14,7 @@ const UNSUPPORTED_KEY: Record<string, string> = {
 
 /**
  * 设置中心关于页的应用更新区（Win P0）。
- * 状态机归主进程，UI 只做展示与触发：自动检查开关（即时保存）/ 手动检查 / 重启安装。
+ * 自动检查只提示；用户分别点击下载和重启安装，失败后可重试。
  */
 export function UpdaterSettings() {
   const { t } = useI18n('settings')
@@ -71,7 +71,21 @@ export function UpdaterSettings() {
       const next = await api.check()
       setState(next)
     } catch {
-      setError(t('settings:updater.error.save'))
+      setError(t('settings:updater.error.check'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const download = async () => {
+    const api = window.electron?.updater
+    if (!api || busy) return
+    setBusy(true)
+    setError('')
+    try {
+      setState(await api.download())
+    } catch {
+      setError(t('settings:updater.error.download'))
     } finally {
       setBusy(false)
     }
@@ -81,8 +95,12 @@ export function UpdaterSettings() {
     const api = window.electron?.updater
     if (!api || busy) return
     setBusy(true)
+    setError('')
     try {
-      await api.install()
+      const result = await api.install()
+      if (!result.ok) setError(t('settings:updater.error.install'))
+    } catch {
+      setError(t('settings:updater.error.install'))
     } finally {
       setBusy(false)
     }
@@ -143,6 +161,16 @@ export function UpdaterSettings() {
               >
                 {state?.phase === 'checking' ? t('settings:updater.checking') : t('settings:updater.check')}
               </button>
+              {state?.availableVersion && (state.phase === 'available' || state.phase === 'error') && (
+                <button
+                  type="button"
+                  className={`${styles.button} ${styles.primaryButton}`}
+                  onClick={() => void download()}
+                  disabled={busy}
+                >
+                  {state.phase === 'error' ? t('settings:updater.retryDownload') : t('settings:updater.download')}
+                </button>
+              )}
               {state?.phase === 'downloaded' && (
                 <button
                   type="button"
@@ -157,6 +185,7 @@ export function UpdaterSettings() {
           </>
         )}
       {error && <div className={`${styles.status} ${styles.statusError}`}>{error}</div>}
+      {state?.error && <div className={`${styles.status} ${styles.statusError}`}>{t('settings:updater.error.update', { message: state.error })}</div>}
     </div>
   )
 }
@@ -168,6 +197,8 @@ function StatusLine({ state }: { state: UpdaterState | null }) {
     case 'up-to-date':
       return <div className={`${styles.status} ${styles.statusSuccess}`}>{t('settings:updater.upToDate')}</div>
     case 'available':
+    case 'error':
+      if (!state.availableVersion) return null
       return (
         <>
           <div className={styles.status}>{t('settings:updater.available', { version: state.availableVersion ?? '' })}</div>
@@ -183,8 +214,6 @@ function StatusLine({ state }: { state: UpdaterState | null }) {
           <ReleaseNotes notes={state.releaseNotes} />
         </>
       )
-    case 'error':
-      return <div className={`${styles.status} ${styles.statusError}`}>{t('settings:updater.error.update', { message: state.error ?? '' })}</div>
     default:
       return null
   }

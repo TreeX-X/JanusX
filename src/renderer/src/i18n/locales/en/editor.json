@@ -146,6 +146,17 @@
     "send": "Send"
   },
   "fileEditor": {
+    "unsavedTitle": "Save changes?",
+    "unsavedDescription": "These files have unsaved changes that will be lost when closed.",
+    "cancelClose": "Cancel",
+    "discardClose": "Don't save",
+    "saveClose": "Save and close",
+    "saving": "Saving…",
+    "saveFailed": "Could not save {{name}}. Check file permissions and retry. The editor will stay open.",
+    "compareHead": "Compare with HEAD",
+    "diffLoading": "Loading HEAD baseline…",
+    "diffUnavailable": "No HEAD baseline is available for this file. Using the normal editor.",
+    "syncScroll": "Sync scrolling",
     "title": "Editor",
     "find": "Find",
     "findTitle": "Find (Ctrl+F)",
@@ -168,6 +179,12 @@
     "cppDefinitionInstallComplete": "clangd installed. C/C++ navigation is ready."
   },
   "htmlViewer": {
+    "viewport": "Preview viewport",
+    "responsive": "Responsive (follow panel)",
+    "zoom": "Preview zoom",
+    "fitWindow": "Fit window",
+    "reload": "Reload HTML preview",
+    "resourcesUnavailable": "Local resource preview is unavailable. Using embedded preview; some relative resources may not load.",
     "htmlLabel": "HTML",
     "editorLabel": "EDITOR",
     "previewLabel": "PREVIEW",

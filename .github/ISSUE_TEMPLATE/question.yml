@@ -1,0 +1,26 @@
+name: 使用疑问 / 文档问题
+description: 咨询操作方式，或反馈文档缺失、错误和不清楚的地方
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: 请先搜索已有 Issue 和贡献指南。每次描述一个问题；截图和配置片段请移除凭据及个人信息。
+  - type: textarea
+    id: goal
+    attributes:
+      label: 想完成什么
+      description: 描述你的目标；文档问题请附对应页面链接或章节
+    validations:
+      required: true
+  - type: textarea
+    id: attempts
+    attributes:
+      label: 已尝试的方法与卡住的位置
+      description: 你参考了什么、做过哪些操作，哪一步不清楚或与文档不符
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 版本与系统（可选）
+      placeholder: 应用版本、安装来源和操作系统；开发问题可附提交 SHA

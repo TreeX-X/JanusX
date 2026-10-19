@@ -11,6 +11,7 @@ export function registerUpdaterHandlers(): void {
   updaterIpcRegistered = true
   ipcMain.handle(UPDATER_CHANNELS.getState, () => updateService.getState())
   ipcMain.handle(UPDATER_CHANNELS.check, () => updateService.checkForUpdates())
+  ipcMain.handle(UPDATER_CHANNELS.download, () => updateService.downloadUpdate())
   ipcMain.handle(UPDATER_CHANNELS.install, () => updateService.quitAndInstall())
   ipcMain.handle(UPDATER_CHANNELS.getSettings, () => configService.getUpdaterSettings())
   // 固定下载页，不接受渲染端传入的 URL，开新窗口不经过 updater 状态机。

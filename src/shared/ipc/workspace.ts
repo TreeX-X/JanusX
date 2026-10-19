@@ -25,6 +25,8 @@ export const FILE_CHANNELS = {
   readBinary: 'file:readBinary',
   stat: 'file:stat',
   sourceFiles: 'file:sourceFiles',
+  openHtmlPreview: 'file:html-preview:open', updateHtmlPreview: 'file:html-preview:update', closeHtmlPreview: 'file:html-preview:close',
+  openPreviewLink: 'file:preview:open-link',
 } as const
 
 export interface CLIConfig {
@@ -161,7 +163,14 @@ export interface FileTreeAPI {
   onChanged(callback: (payload: { workspacePath: string; changedFilePath?: string | null }) => void): () => void
 }
 
+export interface HtmlPreviewRequest { workspacePath: string; documentPath: string; content: string }
+export interface HtmlPreviewLease { id: string; url: string }
+
 export interface FileAPI {
+  openPreviewLink(url: string): Promise<void>
+  openHtmlPreview(request: HtmlPreviewRequest): Promise<HtmlPreviewLease>
+  updateHtmlPreview(id: string, content: string): Promise<void>
+  closeHtmlPreview(id: string): Promise<void>
   read(filePath: string): Promise<FileReadResult>
   save(filePath: string, content: string): Promise<FileSaveResult>
   readBinary(filePath: string): Promise<FileBinaryResult>

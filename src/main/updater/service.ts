@@ -17,6 +17,8 @@ export class UpdateService {
   private autoCheck = true
   private timer: ReturnType<typeof setTimeout> | null = null
   private mainWindow: BrowserWindow | null = null
+  private checking = false
+  private downloadedUpdate: Pick<UpdaterState, 'availableVersion' | 'releaseNotes' | 'downloadPercent'> | null = null
   private state: UpdaterState = {
     phase: 'idle',
     supported: false,
@@ -83,11 +85,34 @@ export class UpdateService {
   async checkForUpdates(): Promise<UpdaterState> {
     this.refreshSupport()
     if (!this.state.supported) return this.getState()
+    // 下载期间不刷新 provider 的目标版本，避免把进行中的安装包与新清单混用。
+    if (this.checking || this.state.phase === 'downloading') return this.getState()
+    this.checking = true
+    try {
+      const updater = await this.loadUpdater()
+      if (!updater) return this.getState()
+      this.patch({ phase: 'checking', error: null })
+      await updater.checkForUpdates()
+    } catch (error) {
+      this.fail(error)
+    } finally {
+      this.checking = false
+    }
+    return this.getState()
+  }
+
+  /** 仅用户点击才下载；失败保留版本信息，允许再次点击重试。 */
+  async downloadUpdate(): Promise<UpdaterState> {
+    this.refreshSupport()
+    if (!this.state.supported || this.downloadedUpdate || this.state.phase === 'downloading') return this.getState()
+    if (!this.state.availableVersion || this.checking) return this.getState()
     const updater = await this.loadUpdater()
     if (!updater) return this.getState()
-    this.patch({ phase: 'checking', error: null })
+    // loadUpdater 是异步入口，重复点击可能同时等待它。
+    if (this.downloadedUpdate || this.checking || this.getState().phase === 'downloading') return this.getState()
+    this.patch({ phase: 'downloading', downloadPercent: 0, error: null })
     try {
-      await updater.checkForUpdates()
+      await updater.downloadUpdate()
     } catch (error) {
       this.fail(error)
     }
@@ -97,12 +122,17 @@ export class UpdateService {
   async quitAndInstall(): Promise<{ ok: boolean; error?: string }> {
     this.refreshSupport()
     if (!this.state.supported) return { ok: false, error: 'unsupported' }
-    if (this.state.phase !== 'downloaded') return { ok: false, error: 'not-downloaded' }
+    if (!this.downloadedUpdate) return { ok: false, error: 'not-downloaded' }
     const updater = await this.loadUpdater()
     if (!updater) return { ok: false, error: 'unavailable' }
     // nsis 非一键安装：保留安装向导可见，装完自动重启。
-    updater.quitAndInstall(false, true)
-    return { ok: true }
+    this.patch({ error: null })
+    try {
+      updater.quitAndInstall(false, true)
+    } catch (error) {
+      this.fail(error)
+    }
+    return this.state.error ? { ok: false, error: this.state.error } : { ok: true }
   }
 
   private refreshSupport(): void {
@@ -132,8 +162,8 @@ export class UpdateService {
     }
     try {
       const { autoUpdater } = await import('electron-updater')
-      autoUpdater.autoDownload = true
-      autoUpdater.autoInstallOnAppQuit = true
+      autoUpdater.autoDownload = false
+      autoUpdater.autoInstallOnAppQuit = false
       // 现场排障唯一依据：file transport 落 userData/logs，console 同步一份。
       autoUpdater.logger = log
       this.wireEvents(autoUpdater)
@@ -151,33 +181,30 @@ export class UpdateService {
     this.wired = true
     updater.on('checking-for-update', () => {
       this.patch({ phase: 'checking', error: null })
-      this.emit({ type: 'checking' })
     })
     updater.on('update-available', (info) => {
       this.patch({
         phase: 'available',
         availableVersion: info?.version ?? null,
         releaseNotes: formatReleaseNotes(info?.releaseNotes),
+        downloadPercent: null,
+        error: null,
       })
-      this.emit({ type: 'available', version: info?.version ?? '' })
     })
-    updater.on('update-not-available', (info) => {
-      this.patch({ phase: 'up-to-date', availableVersion: null, downloadPercent: null, releaseNotes: null })
-      this.emit({ type: 'not-available', version: info?.version ?? this.state.currentVersion })
+    updater.on('update-not-available', () => {
+      this.patch({ phase: 'up-to-date', availableVersion: null, downloadPercent: null, releaseNotes: null, error: null })
     })
     updater.on('download-progress', (progress) => {
       const percent = typeof progress?.percent === 'number' ? Math.round(progress.percent) : null
-      this.patch({ phase: 'downloading', downloadPercent: percent })
-      if (percent !== null) this.emit({ type: 'progress', percent })
+      this.patch({ phase: 'downloading', downloadPercent: percent, error: null })
     })
     updater.on('update-downloaded', (info) => {
-      this.patch({
-        phase: 'downloaded',
+      this.downloadedUpdate = {
         availableVersion: info?.version ?? this.state.availableVersion,
         downloadPercent: 100,
         releaseNotes: formatReleaseNotes(info?.releaseNotes) ?? this.state.releaseNotes,
-      })
-      this.emit({ type: 'downloaded', version: info?.version ?? '' })
+      }
+      this.patch({ phase: 'downloaded', error: null })
     })
     updater.on('error', (error) => {
       this.fail(error)
@@ -186,13 +213,15 @@ export class UpdateService {
 
   private patch(partial: Partial<UpdaterState>): void {
     this.state = { ...this.state, ...partial }
+    // 已校验的安装包独立于后续网络检查；新清单或错误都不能抹掉安装资格。
+    if (this.downloadedUpdate) this.state = { ...this.state, ...this.downloadedUpdate, phase: 'downloaded' }
+    this.emit({ type: 'state', state: this.getState() })
   }
 
   private fail(error: unknown): void {
     const message = error instanceof Error ? error.message : '未知错误'
     log.error('[updater] update failed:', message)
     this.patch({ phase: 'error', error: message })
-    this.emit({ type: 'error', message })
   }
 
   private emit(event: UpdaterEvent): void {

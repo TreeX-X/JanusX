@@ -1,105 +1,121 @@
-<!-- Note: Janus uses one flat-top frame; eye motion never redraws its silhouette. Prompt/Star states share a 5.2s timeline; see note://972afef3-2fc7-49de-a3ee-7e041225d28c/a162efb4-23a7-4468-95e6-7163fe7efdc0 -->
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="180" viewBox="0 0 760 180" role="img" aria-labelledby="jhTitle jhDesc">
-<title id="jhTitle">JanusX pixel header</title>
-<desc id="jhDesc">Pixel Janus with a flat-top rectangular frame, warm shell highlights, two eyes glancing and blinking, and a small happy eye shimmy with floating hearts.</desc>
+<!-- Original rounded Janus Island capsule; pixel wordmark uses JanusChat PIXEL_WORDMARK. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="180" viewBox="0 0 640 180" role="img" aria-labelledby="title desc">
+<title id="title">JanusX — 胶囊与像素字标</title>
+<desc id="desc">圆角双眼胶囊搭配方格像素 JANUSX 字标。星星点亮时，双眼平滑展开为电子屏条带，快速的脉冲从左向右连续扫过两次，再平滑合回矩形眼睛。装饰动画不代表实际账号的 Star 状态。</desc>
 <style>
-text{letter-spacing:0}
-text{font-family:"Cascadia Code","SFMono-Regular",Consolas,"Liberation Mono","PingFang SC","Hiragino Sans GB","Microsoft YaHei",monospace}
-/* Janus is drawn in display pixels; only eyes and celebration marks move. */
-.janus-rim,.janus-eye{fill:#1C343B}
-.janus-face{fill:#EFE4C5}
-.janus-edge-light{fill:#FFF4D2}
-.janus-edge-shade{fill:#D4C7A5}
-.janus-normal{visibility:visible;animation:janusNormal 5200ms step-end infinite}
-.janus-happy{visibility:hidden;animation:janusHappy 5200ms step-end infinite}
-.janus-gaze{animation:janusGaze 5200ms ease-in-out infinite}
-.janus-blink{transform-box:fill-box;transform-origin:center;animation:janusBlink 5200ms linear infinite}
-.janus-happy-eye{animation:janusWiggle 5200ms steps(1,end) infinite}
-.janus-happy-eye-right{animation-delay:100ms}
-.janus-cheer{opacity:0;animation:janusCheer 5200ms ease-in-out infinite}
-.janus-heart-rise{animation:janusFloat 1400ms ease-in-out infinite}
-.janus-heart-rise-late{animation-delay:-700ms}
-@keyframes janusNormal{0%{visibility:visible}52%{visibility:hidden}96%,100%{visibility:visible}}
-@keyframes janusHappy{0%{visibility:hidden}52%{visibility:visible}96%,100%{visibility:hidden}}
-@keyframes janusGaze{0%,12%,30%,35%,49%,100%{transform:translateX(0)}18%,24%{transform:translateX(-4px)}40%,45%{transform:translateX(4px)}}
-@keyframes janusBlink{0%,8%,12%,43%,47%,100%{transform:scaleY(1)}10%,45%{transform:scaleY(.14)}}
-@keyframes janusWiggle{0%,54%,65%,78%,89%,100%{transform:translate(0,0)}55%,59%,79%,83%{transform:translate(1px,-1px)}57%,61%,81%,85%{transform:translate(-1px,1px)}63%,87%{transform:translate(0,-1px)}}
-@keyframes janusCheer{0%,52%,100%{opacity:0}58%,90%{opacity:1}96%{opacity:0}}
-@keyframes janusFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-@media (prefers-reduced-motion:reduce){
-  #janus-mascot *{animation:none!important}
-}
-.loop{opacity:0;animation-duration:5200ms;animation-timing-function:ease-in-out;animation-iteration-count:infinite}
-.t-tag{animation-name:tTag}.t-ask{animation-name:tAsk}.t-thanks{animation-name:tThanks}
-.s-idle{animation-name:sIdle}.s-lit{animation-name:sLit}
-@keyframes tTag{0%{opacity:0;transform:translateY(6px)}6%,19%{opacity:1;transform:translateY(0)}25%,100%{opacity:0;transform:translateY(-4px)}}
-@keyframes tAsk{0%,25%{opacity:0;transform:translateY(6px)}31%,44%{opacity:1;transform:translateY(0)}50%,100%{opacity:0;transform:translateY(-4px)}}
-@keyframes tThanks{0%,50%{opacity:0;transform:translateY(6px)}56%,69%{opacity:1;transform:translateY(0)}75%,100%{opacity:0;transform:translateY(-4px)}}
-@keyframes sIdle{0%,25%{opacity:0;transform:translateY(6px)}31%,44%{opacity:1;transform:translateY(0)}50%,100%{opacity:0}}
-@keyframes sLit{0%,75%{opacity:0;transform:translateY(6px)}81%,94%{opacity:1;transform:translateY(0)}100%{opacity:0}}
-.word{fill:#1C343B}.desc{fill:#5A6B6E}.rule{stroke:#C9BFA4}
-.bubble{fill:#1B2F35}.bubble-t{fill:#F1E7CB}
-.star-idle{fill:#FFFFFF;stroke:#1C343B;stroke-width:2}.star-idle-t{fill:#1C343B}
-.star-lit{fill:#E3B341}.star-lit-t{fill:#1F2328}
-.xc2{fill:#1C343B}
-@media (prefers-color-scheme:dark){
-.word{fill:#F1E7CB}.desc{fill:#9AA4AD}.rule{stroke:#3A4A4F}
-.bubble{stroke:#F1E7CB;stroke-width:1.5}
-.star-idle{fill:none;stroke:#F1E7CB}.star-idle-t{fill:#F1E7CB}
-.xc2{fill:#F1E7CB}
-}
+.shell{fill:#EFE4C5;stroke:#1C343B;stroke-width:3}
+.ink,.word{fill:#1C343B}.paper{fill:#EFE4C5}.accent{fill:#D43D2A}
+.label{fill:#1C343B;font:500 14px 'Segoe UI',Arial,sans-serif}
+.hint{fill:#647579;font:13px 'Segoe UI','Microsoft YaHei',sans-serif}
+.button{fill:#F8F5EB;stroke:#C8C9BA;stroke-width:1.2}
+.press{transform-box:fill-box;transform-origin:center;animation:press 9s ease infinite}
+.pointer{fill:#1C343B;stroke:#fff;stroke-width:1.3;stroke-linejoin:round;opacity:0;animation:pointer 9s cubic-bezier(.4,0,.2,1) infinite}
+.invite{opacity:1;animation:invite 9s ease infinite}.thanks{opacity:0;animation:thanks 9s ease infinite}
+.open{animation:open 9s steps(1,end) infinite}.closed{opacity:0;animation:closed 9s steps(1,end) infinite}
+.smile{opacity:0;animation:smile 9s steps(1,end) infinite}
+.happy-eye{transform-box:fill-box;transform-origin:center;animation:happy-pulse 9s cubic-bezier(.22,.7,.3,1) infinite,led-gap 9s ease-in-out infinite;animation-delay:var(--pulse-delay),0s}
+.star{fill:transparent;stroke:#647579;stroke-width:1.7;stroke-linejoin:round;animation:star 9s ease infinite}
+@keyframes open{0%,12%,17%,58%,100%{opacity:1}10%,15%,38%{opacity:0}}
+@keyframes closed{0%,12%,17%,100%{opacity:0}10%,15%{opacity:1}}
+@keyframes smile{0%,58%,100%{opacity:0}38%{opacity:1}}
+@keyframes star{0%,34%,86%,100%{fill:transparent;stroke:#647579}38%,75%{fill:#D43D2A;stroke:#D43D2A}}
+@keyframes press{0%,33%,40%,100%{transform:scale(1)}36%{transform:scale(.985)}}
+@keyframes pointer{0%,18%{opacity:0;transform:translate(50px,25px)}23%{opacity:1}33%,37%{opacity:1;transform:translate(0,0)}44%{opacity:1;transform:translate(14px,10px)}51%,100%{opacity:0;transform:translate(28px,20px)}}
+@keyframes invite{0%,36%,84%,100%{opacity:1}43%,76%{opacity:0}}
+@keyframes thanks{0%,36%,84%,100%{opacity:0}44%,74%{opacity:1}}
+@keyframes led-gap{0%,38%,58%,100%{width:var(--solid-width)}40%,55%{width:3px}}
+@keyframes happy-pulse{0%,40%,41.8%,48%,49.8%,100%{transform:scaleY(1)}40.6%,48.6%{transform:scaleY(.5)}}
+@media(prefers-color-scheme:dark){.word{fill:#EFE4C5}.accent{fill:#E77B65}.button{fill:#191F24;stroke:#465054}.label{fill:#E8E4D9}.hint{fill:#9BA7AC}.pointer{fill:#EFE4C5;stroke:#1C343B}}
+@media(prefers-reduced-motion:reduce){.happy-eye,.open,.closed,.smile,.star,.press,.pointer,.invite,.thanks{animation:none}.closed,.smile,.pointer,.thanks{display:none}.open,.invite{opacity:1}}
 </style>
-<g transform="translate(214,22)"><rect x="20" y="0" width="20" height="10" class="word"/><rect x="30" y="10" width="10" height="10" class="word"/><rect x="30" y="20" width="10" height="10" class="word"/><rect x="0" y="30" width="10" height="10" class="word"/><rect x="30" y="30" width="10" height="10" class="word"/><rect x="10" y="40" width="20" height="10" class="word"/><rect x="60" y="0" width="20" height="10" class="word"/><rect x="50" y="10" width="10" height="10" class="word"/><rect x="80" y="10" width="10" height="10" class="word"/><rect x="50" y="20" width="40" height="10" class="word"/><rect x="50" y="30" width="10" height="10" class="word"/><rect x="80" y="30" width="10" height="10" class="word"/><rect x="50" y="40" width="10" height="10" class="word"/><rect x="80" y="40" width="10" height="10" class="word"/><rect x="100" y="0" width="10" height="10" class="word"/><rect x="130" y="0" width="10" height="10" class="word"/><rect x="100" y="10" width="20" height="10" class="word"/><rect x="130" y="10" width="10" height="10" class="word"/><rect x="100" y="20" width="10" height="10" class="word"/><rect x="120" y="20" width="20" height="10" class="word"/><rect x="100" y="30" width="10" height="10" class="word"/><rect x="130" y="30" width="10" height="10" class="word"/><rect x="100" y="40" width="10" height="10" class="word"/><rect x="130" y="40" width="10" height="10" class="word"/><rect x="150" y="0" width="10" height="10" class="word"/><rect x="180" y="0" width="10" height="10" class="word"/><rect x="150" y="10" width="10" height="10" class="word"/><rect x="180" y="10" width="10" height="10" class="word"/><rect x="150" y="20" width="10" height="10" class="word"/><rect x="180" y="20" width="10" height="10" class="word"/><rect x="150" y="30" width="10" height="10" class="word"/><rect x="180" y="30" width="10" height="10" class="word"/><rect x="160" y="40" width="20" height="10" class="word"/><rect x="210" y="0" width="30" height="10" class="word"/><rect x="200" y="10" width="10" height="10" class="word"/><rect x="210" y="20" width="20" height="10" class="word"/><rect x="230" y="30" width="10" height="10" class="word"/><rect x="200" y="40" width="30" height="10" class="word"/><rect x="250" y="0" width="10" height="10" class="xc1" fill="#D43D2A"/><rect x="290" y="0" width="10" height="10" class="xc2" fill="#1C343B"/><rect x="260" y="10" width="10" height="10" class="xc1" fill="#D43D2A"/><rect x="280" y="10" width="10" height="10" class="xc2" fill="#1C343B"/><rect x="270" y="20" width="10" height="10" class="xc1" fill="#D43D2A"/><rect x="260" y="30" width="10" height="10" class="xc2" fill="#1C343B"/><rect x="280" y="30" width="10" height="10" class="xc1" fill="#D43D2A"/><rect x="250" y="40" width="10" height="10" class="xc2" fill="#1C343B"/><rect x="290" y="40" width="10" height="10" class="xc1" fill="#D43D2A"/></g>
-<text class="desc" x="214" y="92" font-size="15" font-family="Cascadia Code,SFMono-Regular,Consolas,Liberation Mono,monospace">PROJECTS  TERMINALS  AI  IN ONE DESKTOP</text>
-<line class="rule" x1="214" y1="103" x2="742" y2="103" stroke-width="1"/>
-<g>
-<rect class="bubble" x="214" y="113" width="252" height="34" rx="9"/>
-<path class="bubble" d="M266 147l8 8 8-8z"/>
-<text class="bubble-t loop t-tag" x="340" y="130" font-size="14" text-anchor="middle" dominant-baseline="central" font-family="Cascadia Code,SFMono-Regular,Consolas,Liberation Mono,monospace">BUILD WITH JANUSX</text>
-<text class="bubble-t loop t-ask" x="340" y="130" font-size="13" text-anchor="middle" dominant-baseline="central" font-family="Cascadia Code,SFMono-Regular,Consolas,Liberation Mono,monospace">LIKE IT? GIVE US A STAR</text>
-<text class="bubble-t loop t-thanks" x="340" y="130" font-size="13" text-anchor="middle" dominant-baseline="central" font-family="Cascadia Code,SFMono-Regular,Consolas,Liberation Mono,monospace">THANKS, STAR RECEIVED</text>
+<g class="mascot">
+<rect class="shell" x="66" y="51" width="156" height="78" rx="39"/>
+<g class="open"><rect class="ink" x="115.5" y="75" width="24" height="30"/><rect class="ink" x="148.5" y="75" width="24" height="30"/></g>
+<g class="closed"><rect class="ink" x="115.5" y="88" width="24" height="4"/><rect class="ink" x="148.5" y="88" width="24" height="4"/></g>
+<g class="smile">
+<g transform="translate(115.5 75)">
+<rect class="ink happy-eye" x="0.0" y="0" width="4.2" height="30" style="--pulse-delay:0.0ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="4.2" y="0" width="4.2" height="30" style="--pulse-delay:37.8ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="8.4" y="0" width="4.2" height="30" style="--pulse-delay:75.6ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="12.6" y="0" width="4.2" height="30" style="--pulse-delay:113.4ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="16.8" y="0" width="4.2" height="30" style="--pulse-delay:151.2ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="21.0" y="0" width="3" height="30" style="--pulse-delay:189.0ms;--solid-width:3px"/>
 </g>
-<a href="https://github.com/TreeX-X/JanusX"><g>
-<g class="loop s-idle"><rect class="star-idle" x="492" y="111" width="250" height="38" rx="9"/><path d="M511 117l3.6 7.3 8.1 1.2-5.9 5.7 1.4 8.1-7.2-3.8-7.2 3.8 1.4-8.1-5.9-5.7 8.1-1.2z" fill="none" stroke="#5A6B6E" stroke-width="1.8"/><text class="star-idle-t" x="625" y="130" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="Cascadia Code,SFMono-Regular,Consolas,Liberation Mono,monospace">STAR JANUSX</text></g>
-<g class="loop s-lit"><rect class="star-lit" x="492" y="111" width="250" height="38" rx="9"/><path d="M511 117l3.6 7.3 8.1 1.2-5.9 5.7 1.4 8.1-7.2-3.8-7.2 3.8 1.4-8.1-5.9-5.7 8.1-1.2z" fill="#D43D2A" stroke="#A92E20" stroke-width="1"/><text class="star-lit-t" x="625" y="130" font-size="14" font-weight="700" text-anchor="middle" dominant-baseline="central" font-family="Cascadia Code,SFMono-Regular,Consolas,Liberation Mono,monospace">STARRED +1</text></g>
-</g></a>
-<g id="janus-mascot" shape-rendering="crispEdges" aria-hidden="true">
-  <g id="janus-shell">
-    <rect id="janus-frame" class="janus-rim" x="8" y="55" width="160" height="110"/>
-    <rect class="janus-face" x="16" y="63" width="144" height="94"/>
-    <path class="janus-edge-light" d="M18 65H158V67H20V153H18Z"/>
-    <path class="janus-edge-shade" d="M158 67H160V157H18V155H158Z"/>
-  </g>
-  <g id="janus-eyes-normal" class="janus-normal">
-    <g class="janus-gaze">
-      <g class="janus-blink janus-eye">
-        <path d="M60 94H72V96H74V120H72V122H60V120H58V96H60Z"/>
-        <path d="M104 94H116V96H118V120H116V122H104V120H102V96H104Z"/>
-      </g>
-    </g>
-  </g>
-  <g id="janus-eyes-happy" class="janus-happy janus-eye">
-    <g class="janus-happy-eye">
-      <path d="M56 112V106H58V104H60V102H72V104H74V106H76V112H72V108H70V106H62V108H60V112Z"/>
-    </g>
-    <g class="janus-happy-eye janus-happy-eye-right">
-      <path d="M100 112V106H102V104H104V102H116V104H118V106H120V112H116V108H114V106H106V108H104V112Z"/>
-    </g>
-  </g>
-  <g id="janus-celebration" class="janus-cheer">
-    <g transform="translate(44 26)">
-      <g class="janus-heart-rise">
-        <path fill="#D43D2A" d="M4 0H10V2H12V0H18V2H20V4H22V10H20V12H18V14H16V16H14V18H12V20H10V18H8V16H6V14H4V12H2V10H0V4H2V2H4Z"/>
-        <path fill="#F28B75" d="M4 4H8V6H4ZM2 6H4V8H2Z"/>
-      </g>
-    </g>
-    <g transform="translate(110 20)">
-      <g class="janus-heart-rise janus-heart-rise-late">
-        <path fill="#D43D2A" d="M4 0H10V2H12V0H18V2H20V4H22V10H20V12H18V14H16V16H14V18H12V20H10V18H8V16H6V14H4V12H2V10H0V4H2V2H4Z"/>
-        <path fill="#F28B75" d="M4 4H8V6H4ZM2 6H4V8H2Z"/>
-      </g>
-    </g>
-    <path fill="#E3B341" d="M32 32H34V34H36V36H34V38H32V36H30V34H32ZM146 24H148V26H150V28H148V30H146V28H144V26H146Z"/>
-  </g>
+<g transform="translate(148.5 75)">
+<rect class="ink happy-eye" x="0.0" y="0" width="4.2" height="30" style="--pulse-delay:226.8ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="4.2" y="0" width="4.2" height="30" style="--pulse-delay:264.6ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="8.4" y="0" width="4.2" height="30" style="--pulse-delay:302.4ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="12.6" y="0" width="4.2" height="30" style="--pulse-delay:340.2ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="16.8" y="0" width="4.2" height="30" style="--pulse-delay:378.0ms;--solid-width:4.2px"/>
+<rect class="ink happy-eye" x="21.0" y="0" width="3" height="30" style="--pulse-delay:415.8ms;--solid-width:3px"/>
 </g>
-</svg>
+</g>
+</g>
+<g shape-rendering="crispEdges">
+<rect class="word" x="296" y="48" width="8" height="8"/>
+<rect class="word" x="305" y="48" width="8" height="8"/>
+<rect class="word" x="305" y="57" width="8" height="8"/>
+<rect class="word" x="305" y="66" width="8" height="8"/>
+<rect class="word" x="278" y="75" width="8" height="8"/>
+<rect class="word" x="305" y="75" width="8" height="8"/>
+<rect class="word" x="287" y="84" width="8" height="8"/>
+<rect class="word" x="296" y="84" width="8" height="8"/>
+<rect class="word" x="332" y="48" width="8" height="8"/>
+<rect class="word" x="341" y="48" width="8" height="8"/>
+<rect class="word" x="323" y="57" width="8" height="8"/>
+<rect class="word" x="350" y="57" width="8" height="8"/>
+<rect class="word" x="323" y="66" width="8" height="8"/>
+<rect class="word" x="332" y="66" width="8" height="8"/>
+<rect class="word" x="341" y="66" width="8" height="8"/>
+<rect class="word" x="350" y="66" width="8" height="8"/>
+<rect class="word" x="323" y="75" width="8" height="8"/>
+<rect class="word" x="350" y="75" width="8" height="8"/>
+<rect class="word" x="323" y="84" width="8" height="8"/>
+<rect class="word" x="350" y="84" width="8" height="8"/>
+<rect class="word" x="368" y="48" width="8" height="8"/>
+<rect class="word" x="395" y="48" width="8" height="8"/>
+<rect class="word" x="368" y="57" width="8" height="8"/>
+<rect class="word" x="377" y="57" width="8" height="8"/>
+<rect class="word" x="395" y="57" width="8" height="8"/>
+<rect class="word" x="368" y="66" width="8" height="8"/>
+<rect class="word" x="386" y="66" width="8" height="8"/>
+<rect class="word" x="395" y="66" width="8" height="8"/>
+<rect class="word" x="368" y="75" width="8" height="8"/>
+<rect class="word" x="395" y="75" width="8" height="8"/>
+<rect class="word" x="368" y="84" width="8" height="8"/>
+<rect class="word" x="395" y="84" width="8" height="8"/>
+<rect class="word" x="413" y="48" width="8" height="8"/>
+<rect class="word" x="440" y="48" width="8" height="8"/>
+<rect class="word" x="413" y="57" width="8" height="8"/>
+<rect class="word" x="440" y="57" width="8" height="8"/>
+<rect class="word" x="413" y="66" width="8" height="8"/>
+<rect class="word" x="440" y="66" width="8" height="8"/>
+<rect class="word" x="413" y="75" width="8" height="8"/>
+<rect class="word" x="440" y="75" width="8" height="8"/>
+<rect class="word" x="422" y="84" width="8" height="8"/>
+<rect class="word" x="431" y="84" width="8" height="8"/>
+<rect class="word" x="467" y="48" width="8" height="8"/>
+<rect class="word" x="476" y="48" width="8" height="8"/>
+<rect class="word" x="485" y="48" width="8" height="8"/>
+<rect class="word" x="458" y="57" width="8" height="8"/>
+<rect class="word" x="467" y="66" width="8" height="8"/>
+<rect class="word" x="476" y="66" width="8" height="8"/>
+<rect class="word" x="485" y="75" width="8" height="8"/>
+<rect class="word" x="458" y="84" width="8" height="8"/>
+<rect class="word" x="467" y="84" width="8" height="8"/>
+<rect class="word" x="476" y="84" width="8" height="8"/>
+<rect class="accent" x="503" y="48" width="8" height="8"/>
+<rect class="word" x="539" y="48" width="8" height="8"/>
+<rect class="accent" x="512" y="57" width="8" height="8"/>
+<rect class="word" x="530" y="57" width="8" height="8"/>
+<rect class="accent" x="521" y="66" width="8" height="8"/>
+<rect class="word" x="512" y="75" width="8" height="8"/>
+<rect class="accent" x="530" y="75" width="8" height="8"/>
+<rect class="word" x="503" y="84" width="8" height="8"/>
+<rect class="accent" x="539" y="84" width="8" height="8"/>
+</g>
+<g class="press"><rect class="button" x="278" y="108" width="154" height="32" rx="7"/>
+<path class="star" d="M301 114l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5-4.7-4.6 6.5-.9z"/>
+<text class="label" x="320" y="129">Star on GitHub</text></g>
+<path class="pointer" d="M311 130l1 20 5-5 4 8 4-2-4-8 7-1z"/>
+<text class="hint invite" x="278" y="162">喜欢的话，给 Janus 一颗星。</text><text class="hint thanks" x="278" y="162">谢谢支持。</text></svg>

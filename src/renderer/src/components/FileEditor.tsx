@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
+import { useEditorCloseDialog } from './EditorCloseDialog'
 import { useEditorStore } from '@/stores/editor'
 import { FloatingPanel } from '@/components/FloatingPanel'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -120,6 +121,7 @@ function TabItem({
 }
 
 export function FileEditor() {
+  const { confirmClose, closeDialog } = useEditorCloseDialog()
   const { t } = useI18n('editor')
   const findEditorRef = useRef<FindableEditor | null>(null)
   const unwatchFindControlsRef = useRef<(() => void) | null>(null)
@@ -183,45 +185,18 @@ export function FileEditor() {
     findEditorRef.current = null
   }, [activeFileId])
 
-  const handleClose = useCallback(async () => {
-    const dirtyFiles = openFiles.filter((f) => f.isDirty && f.viewType !== 'image' && f.viewType !== 'binary')
-    if (dirtyFiles.length > 0) {
-      const names = dirtyFiles.map((f) => f.name).join(', ')
-      const result = await window.electron.dialog.showMessageBox({
-        message: `Save changes to ${names}?`,
-        detail: 'You have unsaved changes that will be lost.',
-        buttons: ['Save All', "Don't Save", 'Cancel'],
-        defaultId: 0,
-        cancelId: 2,
-      })
-      if (result.response === 2) return
-      if (result.response === 0) {
-        for (const f of dirtyFiles) await saveFile(f.id)
-      }
-    }
-    closePanel()
-  }, [closeFile, closePanel, openFiles, saveFile])
+  const handleClose = useCallback(() => {
+    confirmClose(useEditorStore.getState().openFiles.map(file => file.id), closePanel)
+  }, [confirmClose, closePanel])
 
-  const handleTabClose = useCallback(async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    const file = openFiles.find((f) => f.id === id)
-    if (file?.isDirty && file.viewType !== 'image' && file.viewType !== 'binary') {
-      const result = await window.electron.dialog.showMessageBox({
-        message: `Save changes to ${file.name}?`,
-        detail: 'You have unsaved changes that will be lost.',
-        buttons: ['Save', "Don't Save", 'Cancel'],
-        defaultId: 0,
-        cancelId: 2,
-      })
-      if (result.response === 2) return
-      if (result.response === 0) await saveFile(id)
-    }
-    closeFile(id)
-  }, [closeFile, openFiles, saveFile])
+  const handleTabClose = useCallback((id: string, event: React.MouseEvent) => {
+    event.stopPropagation()
+    confirmClose([id], () => closeFile(id))
+  }, [confirmClose, closeFile])
 
   const detachEditor = useCallback(async () => {
     if (!activeFile || !activeWorkspacePath) return
-    if (activeFile.isDirty && canSave) await saveFile(activeFile.id)
+    if (activeFile.isDirty && canSave && !await saveFile(activeFile.id)) return
     const result = await window.electron.window.openEditor({
       filePath: activeFile.absolutePath,
       workspacePath: activeWorkspacePath,
@@ -237,6 +212,8 @@ export function FileEditor() {
   const title = activeFile ? activeFile.name : t('editor:fileEditor.title')
 
   return (
+    <>
+    {closeDialog}
     <FloatingPanel
       visible={isVisible}
       title={title}
@@ -319,5 +296,6 @@ export function FileEditor() {
         {activeFile && <ViewerContent key={`${activeFile.id}:${activeFile.absolutePath}`} file={activeFile} workspacePath={activeWorkspacePath} onEditorMount={handleEditorMount} />}
       </div>
     </FloatingPanel>
+    </>
   )
 }

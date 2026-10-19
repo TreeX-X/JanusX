@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createDesktopTestEnv } from './desktop-test-env'
@@ -140,5 +140,117 @@ test('file opens share one workspace editor window and switch existing tabs', as
   } finally {
     if (application) await application.close().catch(() => undefined)
     if (root) await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('native editor close uses the themed dialog and respects save failure and discard', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'janusx-editor-close-'))
+  let application: ElectronApplication | undefined
+  try {
+    const workspacePath = join(root, 'workspace')
+    const filePath = join(workspacePath, 'close.ts')
+    await mkdir(workspacePath, { recursive: true })
+    await writeFile(filePath, 'export const original = true\n')
+    application = await electron.launch({ args: [resolve('out/main/index.js'), `--user-data-dir=${join(root, 'user-data')}`], env: createDesktopTestEnv(root) })
+    const main = await application.firstWindow()
+    await main.waitForFunction(() => !!(window as any).electron?.window?.openEditor)
+    const open = async () => {
+      await main.evaluate(payload => (window as any).electron.window.openEditor(payload), { filePath, workspacePath })
+      await expect.poll(() => editorWindows(application!).length).toBe(1)
+      const page = editorWindows(application!)[0]
+      await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 30_000 })
+      return page
+    }
+    const nativeClose = () => application!.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows().find(window => new URL(window.webContents.getURL()).searchParams.get('editorWindow') === '1')?.close()
+    })
+    let page = await open()
+    await page.locator('.monaco-editor').click()
+    await page.keyboard.press('Control+End')
+    await page.keyboard.type('// saved edit')
+    await nativeClose()
+    let dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(dialog).not.toBeVisible()
+    expect(editorWindows(application)).toHaveLength(1)
+    await nativeClose()
+    await dialog.getByRole('button', { name: /^(保存并关闭|Save and close)$/ }).click()
+    await expect.poll(() => editorWindows(application!).length).toBe(0)
+    expect(await readFile(filePath, 'utf8')).toContain('// saved edit')
+
+    page = await open()
+    await page.locator('.monaco-editor').click()
+    await page.keyboard.press('Control+End')
+    await page.keyboard.type('// must stay unsaved')
+    await application.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('file:save')
+      ipcMain.handle('file:save', () => ({ error: 'Fixture permission denied' }))
+    })
+    await nativeClose()
+    dialog = page.getByRole('dialog')
+    await expect(dialog).toBeVisible()
+    await dialog.getByRole('button', { name: /^(保存并关闭|Save and close)$/ }).click()
+    await expect(dialog.getByRole('alert')).toBeVisible()
+    expect(editorWindows(application)).toHaveLength(1)
+    await Promise.all([
+      page.waitForEvent('close'),
+      dialog.getByRole('button', { name: /^(不保存|Don't save)$/ }).click({ noWaitAfter: true }).catch(error => {
+        // Discard can destroy the renderer before Playwright receives mouseup.
+        if (!page.isClosed()) throw error
+      }),
+    ])
+    await expect.poll(() => editorWindows(application!).length).toBe(0)
+    expect(await readFile(filePath, 'utf8')).not.toContain('// must stay unsaved')
+  } finally {
+    if (application) await application.close().catch(() => undefined)
+    // `root` is the exact directory returned by mkdtemp for this test.
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test('HTML editor serves local styles, modules and images and previews unsaved changes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'janusx-html-editor-'))
+  let application: ElectronApplication | undefined
+  try {
+    const workspacePath = join(root, 'workspace')
+    await Promise.all(['docs/modules', 'styles', 'assets'].map(path => mkdir(join(workspacePath, path), { recursive: true })))
+    const filePath = join(workspacePath, 'docs', 'page.html')
+    const original = '<!doctype html><meta charset="UTF-8"><link rel="stylesheet" href="/styles/theme.css"><main id="page"><h1>Local preview</h1><img alt="Local SVG" src="../assets/bg.svg"></main><script type="module" src="./modules/page.js"></script>'
+    await Promise.all([
+      writeFile(filePath, original),
+      writeFile(join(workspacePath, 'styles', 'theme.css'), 'html,body{margin:0}#page{width:100vw;height:100vh;color:white;background:#123456 url("../assets/bg.svg") no-repeat right bottom}'),
+      writeFile(join(workspacePath, 'assets', 'bg.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="orange"/></svg>'),
+      writeFile(join(workspacePath, 'root.js'), 'export const marker="module-"'),
+      writeFile(join(workspacePath, 'data.json'), '{"value":"ready"}'),
+      writeFile(join(workspacePath, 'docs', 'modules', 'page.js'), 'import {marker} from "../../root.js"; const data=await fetch("/data.json").then(r=>r.json()); const page=document.getElementById("page");page.dataset.ready=marker+data.value;try{page.dataset.parent=typeof parent.electron}catch{page.dataset.parent="isolated"}'),
+    ])
+    application = await electron.launch({ args: [resolve('out/main/index.js'), `--user-data-dir=${join(root, 'user-data')}`], env: createDesktopTestEnv(root) })
+    const main = await application.firstWindow()
+    await main.waitForFunction(() => !!(window as any).electron?.window?.openEditor)
+    await main.evaluate(payload => (window as any).electron.window.openEditor(payload), { filePath, workspacePath })
+    await expect.poll(() => editorWindows(application!).length).toBe(1)
+    const page = editorWindows(application)[0]
+    const frame = page.frameLocator('iframe')
+    await expect(frame.locator('#page')).toHaveAttribute('data-ready', 'module-ready', { timeout: 30_000 })
+    await expect(frame.locator('#page')).toHaveAttribute('data-parent', 'isolated')
+    await expect(frame.locator('#page')).toHaveCSS('background-color', 'rgb(18, 52, 86)')
+    await expect.poll(() => frame.locator('img').evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(120)
+    await expect.poll(() => frame.locator('html').evaluate(() => innerWidth)).toBe(1280)
+    expect(await frame.locator('html').evaluate(() => typeof (window as any).electron)).toBe('undefined')
+    const url = await page.locator('iframe').getAttribute('src')
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:/)
+    await page.locator('.monaco-editor').click()
+    await page.keyboard.press('Control+End')
+    await page.keyboard.type('<p id="draft">Unsaved preview</p>')
+    await expect(frame.locator('#draft')).toHaveText('Unsaved preview')
+    expect(await readFile(filePath, 'utf8')).toBe(original)
+    await page.getByRole('button', { name: /^(代码|Code)$/ }).click()
+    await expect(page.locator('iframe')).toHaveCount(0)
+    await expect.poll(async () => (await fetch(url!)).status).toBe(404)
+  } finally {
+    if (application) await application.close().catch(() => undefined)
+    // Exact temporary directory created for this test.
+    await rm(root, { recursive: true, force: true })
   }
 })

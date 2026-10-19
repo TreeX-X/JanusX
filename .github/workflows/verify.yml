@@ -1,12 +1,12 @@
 # PR 统一门禁：在 Windows runner 上跑仓库的 `verify` 全链。
 # release-win 只管发版，这条管合入质量；分支保护要求 `verify` 变绿。
-# Note: reproducible inputs and clean-checkout tests — see .agents/notes/2026-09-20-reproducible-verification.md
-# Note: development promotion — see .agents/notes/2026-09-20-development-branch.md
+# Note: reproducible inputs and clean-checkout tests — see .agents/notes/desktop/reproducible-verification.md
+# Note: development promotion — see .agents/notes/desktop/development-branch.md
 name: verify
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   push:
     branches: [main, develop]
   workflow_dispatch:
@@ -31,7 +31,7 @@ jobs:
       - name: Checkout sibling janus-agentX
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/janus-agentX
+          repository: TreeX-X/janus-agentX
           ref: 8baa18e5db8ca641871c139a5b76904bedc88dda
           path: janus-agentX
 
@@ -41,7 +41,7 @@ jobs:
       - name: Checkout sibling WorkFlowX
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/WorkFlowX
+          repository: TreeX-X/WorkFlowX
           ref: efaf5ae7aac24362286251dc931487d5cfd2e2a5
           path: WorkFlowX
 
@@ -86,6 +86,10 @@ jobs:
 
       # 下述步骤与 package.json 的 verify 同序，拆步只为失败归因；
       # 改链时以 package.json 为准并同步此处。
+      - name: Theme check
+        working-directory: JanusX
+        run: npm run theme:check
+
       - name: Typecheck
         working-directory: JanusX
         run: npm run typecheck
@@ -122,6 +126,10 @@ jobs:
       - name: Boundary check
         working-directory: JanusX
         run: npm run check:package-boundary
+
+      - name: Packaging exclusions check
+        working-directory: JanusX
+        run: npm run exclusions:check
 
       - name: i18n check
         working-directory: JanusX

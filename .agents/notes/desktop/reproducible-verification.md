@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-15T15:05:16.125Z",
+  "updated": "2026-10-18T05:57:21Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -23,6 +23,8 @@ A live Electron process retains hashed chunk paths from its startup build. If de
 On Windows, libuv's short-path directory watcher assertion terminates the worker before Vitest can report all failures. The native failure reproduces under Node 24.20.0/libuv 1.52.1 when a short directory alias and a short file alias are used together. The same probe completes under Node 24.15.0/libuv 1.51.0, or with the watched directory expanded by `realpathSync.native`. Upstream [libuv issue 5010](https://github.com/libuv/libuv/issues/5010) documents the same assertion and GitHub runner temporary paths.
 
 ## Decision
+
+Contributor setup is documented in the [development guide](../../../docs/development.md): Node from `.node-version`, a per-checkout dependency install, both sibling revisions from the current verify workflow, ordered agentX builds, package refresh and Chromium installation. Workflow checkouts use the explicit upstream TreeX-X repositories so Forks do not need their own siblings. Verification covers PRs into both develop and main. The split Windows job includes theme and packaging-exclusion checks in the same order as package.json's verify chain; future check-chain changes must update both owners.
 
 `vitest.config.ts` expands Windows temporary directories before worker creation, so real filesystem tests retain their watchers without passing short directory aliases to libuv. CI and release use the exact Node version in `.node-version` and the same sibling repository commit. Sibling build commands stop at the first failure instead of allowing a later successful command to hide it.
 

@@ -7,8 +7,8 @@ export const layout = {
 
 export const style = {
   theme: 'planche',
-  background: { top: [248, 241, 222], bottom: [232, 217, 184], glow: true, grid: true, vignette: 0.12 },
-  ink: [28, 52, 59], accent: [200, 48, 32], misprint: [196, 120, 92],
+  background: { asset: 'wiki/assets/readme/showcase-background.png' },
+  ink: [28, 52, 59], accent: [212, 61, 42],
   cursor: { scale: 1.3, fill: [255, 255, 255], stroke: [28, 52, 59], ringRadius: 24 },
 };
 
@@ -21,13 +21,17 @@ export const timing = {
 
 export const demos = {
   hero: { script: 'record-hero.mjs', asset: 'hero-planche', title: '总览' },
-  worktree: { script: 'record-worktree.mjs', asset: 'feature-worktree', title: 'Worktree 管理' },
-  session: { script: 'record-session.mjs', asset: 'feature-session', title: '会话管理' },
+  worktree: { script: 'record-worktree.mjs', asset: 'feature-worktree', title: 'Worktree 管理', framing: 'compact', assetDirectory: 'readme/features' },
+  session: { script: 'record-session.mjs', asset: 'feature-session', title: '会话管理', framing: 'compact', assetDirectory: 'readme/features' },
   filetree: { script: 'record-filetree.mjs', asset: 'feature-filetree', title: '文件树' },
-  split: { script: 'record-split-quad.mjs', asset: 'feature-split', title: '终端分屏' },
+  split: { script: 'record-split-quad.mjs', asset: 'feature-split', title: '终端分屏', framing: 'compact', assetDirectory: 'readme/features' },
+  workspace: { script: 'record-workspace-layout.mjs', asset: 'feature-workspace-layout', title: '特色协同分屏', framing: 'compact', assetDirectory: 'readme/features' },
   browser: { script: 'record-browser.mjs', asset: 'feature-browser', title: '内置浏览器' },
   markdown: { script: 'record-markdown.mjs', asset: 'feature-markdown', title: 'Quick Note' },
-  blueprint: { script: 'record-blueprint.mjs', asset: 'feature-blueprint-workbench', title: '蓝图' },
-  island: { script: 'record-island.mjs', asset: 'feature-island', title: 'Island' },
-  product: { script: 'record-product.mjs', asset: 'feature-product', title: '产物工作区' },
+  blueprint: { script: 'record-blueprint.mjs', asset: 'feature-blueprint-workbench', title: '蓝图对话维护', framing: 'compact', assetDirectory: 'readme/features' },
+  review: { script: 'record-blueprint-review.mjs', asset: 'feature-blueprint-review', title: '蓝图自动审核与修复', framing: 'compact', assetDirectory: 'readme/features' },
+  usage: { script: 'record-usage.mjs', asset: 'feature-usage', title: '终端与历史用量', framing: 'compact', assetDirectory: 'readme/features' },
+  island: { script: 'record-island.mjs', asset: 'feature-island-chat', title: 'Island 对话', framing: 'compact', assetDirectory: 'readme/features' },
+  launch: { script: 'record-launch.mjs', asset: 'feature-run-config', title: '运行配置对话生成', framing: 'compact', assetDirectory: 'readme/features' },
+  product: { script: 'record-product.mjs', asset: 'feature-product', title: '产物工作区', framing: 'compact', assetDirectory: 'readme/features' },
 };

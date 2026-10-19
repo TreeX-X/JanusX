@@ -146,6 +146,17 @@
     "send": "发送"
   },
   "fileEditor": {
+    "unsavedTitle": "是否保存更改？",
+    "unsavedDescription": "以下文件包含未保存的修改，关闭后将丢失。",
+    "cancelClose": "取消",
+    "discardClose": "不保存",
+    "saveClose": "保存并关闭",
+    "saving": "正在保存…",
+    "saveFailed": "无法保存「{{name}}」，请检查文件权限后重试。窗口将保持打开。",
+    "compareHead": "与 HEAD 比较",
+    "diffLoading": "正在读取 HEAD 基线…",
+    "diffUnavailable": "当前文件没有可用的 HEAD 基线，继续使用普通编辑器。",
+    "syncScroll": "同步滚动",
     "title": "Editor",
     "find": "查找",
     "findTitle": "查找 (Ctrl+F)",
@@ -168,6 +179,12 @@
     "cppDefinitionInstallComplete": "clangd 已安装。C/C++ 导航已就绪。"
   },
   "htmlViewer": {
+    "viewport": "预览视口",
+    "responsive": "响应式（跟随面板）",
+    "zoom": "预览缩放",
+    "fitWindow": "适合窗口",
+    "reload": "刷新 HTML 预览",
+    "resourcesUnavailable": "本地资源预览服务不可用，当前使用内嵌预览，部分相对资源可能无法加载。",
     "htmlLabel": "HTML",
     "editorLabel": "EDITOR",
     "previewLabel": "PREVIEW",

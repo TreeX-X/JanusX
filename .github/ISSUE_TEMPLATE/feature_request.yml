@@ -2,22 +2,30 @@ name: 功能建议
 description: 描述场景与提案
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: 请先搜索已有建议，每次讨论一个问题。内测版也使用此模板；不确定如何实现不影响提交。
   - type: textarea
     id: scene
     attributes:
       label: 使用场景
-      description: 你在做什么时觉得缺这个功能
+      description: 你在完成什么任务，当前遇到什么困难
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 期望结果
+      description: 希望完成什么、怎样算解决了问题；无需提供技术方案
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: 提案
-      description: 希望做成什么样
-    validations:
-      required: true
+      label: 方案建议（可选）
+      description: 如果已有想法，可补充交互、示例或参考链接
   - type: textarea
     id: alternatives
     attributes:
-      label: 替代方案
+      label: 替代方案（可选）
       description: 不做这个功能时你现在的 workaround

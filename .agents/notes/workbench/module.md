@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-18T10:29:29Z",
+  "updated": "2026-10-19T02:23:35Z",
   "moduleState": "partial"
 }
 ---
@@ -109,7 +109,7 @@ Note 工具链三件各司其职：[drawer-toolbar](./note-drawer-markdown-toolb
 
 运行与测试目标探索：[按当前 worktree 运行与测试项目](./worktree-run-test-target.md)记录现有快捷启动使用工作区根目录的限制，以及目标跟随、进程归属和测试结果标识的建议，作为 0.9.2 候选，尚未实现。
 
-渲染与编辑器：[emphasis](./markdown-emphasis-orange-text.md)（强调色去填充块）、[standalone-refresh](./standalone-editor-auto-refresh.md)（独立编辑器外部变更自刷新）。
+渲染与编辑器：[emphasis](./markdown-emphasis-orange-text.md)（强调色去填充块）、[standalone-refresh](./standalone-editor-auto-refresh.md)（独立编辑器外部变更自刷新）。[文件编辑窗口与预览体验](./file-editor-experience.md)记录普通编辑默认、按需 HEAD 对比、自定义关闭确认、Markdown 单向同步滚动与安全 HTML 图片预览，以及 HTML 虚拟视口、缩放和工作区只读资源服务。
 
 ## Acceptance criteria
 

@@ -1,8 +1,8 @@
 # Win P0 发版：tag 推送即打 nsis 安装包并发布到本仓库 GitHub Releases，
 # electron-builder 同步生成 latest.yml，桌面端 updater 拉该 feed。
 # 前提：package.json 用 file: 引用 ../janus-agentX，先把它检出到同级目录
-#（仓库名取自 file:../janus-agentX 路径，owner 跟随当前仓库）。
-# Note: reproducible inputs and release naming — see .agents/notes/2026-09-20-reproducible-verification.md
+#（固定上游仓库，Fork 无需复制 sibling 仓库）。
+# Note: reproducible inputs and release naming — see .agents/notes/desktop/reproducible-verification.md
 name: release-win
 
 on:
@@ -43,7 +43,7 @@ jobs:
       - name: Checkout sibling janus-agentX
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/janus-agentX
+          repository: TreeX-X/janus-agentX
           ref: 8baa18e5db8ca641871c139a5b76904bedc88dda
           path: janus-agentX
 

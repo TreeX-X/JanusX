@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ProductKind } from '../../../../shared/product'
-import { MARKDOWN_COMPONENTS } from '../viewers/markdown-components'
-import { MarkdownAssetContext, useResolvedHtmlSrcDoc } from '../viewers/local-asset'
+import { FILE_MARKDOWN_COMPONENTS } from '../viewers/markdown-components'
+import { fileMarkdownPlugins, previewUrlTransform } from '@/lib/markdown-preview'
+import { MarkdownAssetContext } from '../viewers/local-asset'
 import { dirnameOfAbsolutePath } from '@/lib/local-asset-resolver'
 import { PreviewScrollArea } from '../viewers/PreviewScrollArea'
+import { HtmlPreviewFrame } from '../viewers/HtmlPreviewFrame'
 import { ImageViewer } from '../viewers/ImageViewer'
 import { useI18n } from '@/i18n/useI18n'
 
@@ -36,7 +38,6 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
     () => ({ workspacePath, documentDir }),
     [workspacePath, documentDir],
   )
-  const resolvedHtml = useResolvedHtmlSrcDoc(content ?? '', assetScope)
 
   useEffect(() => {
     let disposed = false
@@ -100,7 +101,7 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
       <div className="flex-1" style={{ padding: 16, background: 'var(--shell-canvas)', color: 'var(--shell-text)', minHeight: '100%' }}>
         <div className="markdown-preview">
           <MarkdownAssetContext.Provider value={assetScope}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={fileMarkdownPlugins} urlTransform={previewUrlTransform} components={FILE_MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
           </MarkdownAssetContext.Provider>
         </div>
       </div>
@@ -116,13 +117,5 @@ export function LocalFileStage({ workspacePath, relPath, kind, revision }: {
       </div>
     </PreviewScrollArea>
   }
-  return <iframe
-    title={t('editor:product.iframeTitle')}
-    srcDoc={resolvedHtml}
-    // allow-forms/modals/popups：生成的 HTML 页面内可点击、可交互；
-    // 仍不授 allow-top-navigation，预览不能劫持主窗口。
-    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
-    referrerPolicy="no-referrer"
-    className="h-full w-full border-0 bg-white"
-  />
+  return <HtmlPreviewFrame content={content} workspacePath={workspacePath} documentPath={absolutePath} title={t('editor:product.iframeTitle')} />
 }

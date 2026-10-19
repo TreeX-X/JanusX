@@ -171,7 +171,7 @@ interface EditorStore {
   setActiveFile: (id: string) => void
   markDirty: (id: string) => void
   updateContent: (id: string, content: string) => void
-  saveFile: (id: string) => Promise<void>
+  saveFile: (id: string) => Promise<boolean>
   reloadOpenFile: (absolutePath: string) => Promise<void>
   reloadOpenFiles: (workspacePath: string, changedFilePath?: string | null) => Promise<void>
   hasDirtyFiles: () => boolean
@@ -294,16 +294,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateContent: (id, content) => {
     set(s => ({
       openFiles: s.openFiles.map(f =>
-        f.id === id ? { ...f, content, isDirty: true } : f
+        f.id === id && f.content !== content ? { ...f, content, isDirty: true } : f
       ),
     }))
   },
 
   saveFile: async (id) => {
     const file = get().openFiles.find(f => f.id === id)
-    if (!file) return
+    if (!file) return false
     try {
-      await window.electron.file.save(file.absolutePath, file.content)
+      const result = await window.electron.file.save(file.absolutePath, file.content)
+      if (!result.success) throw new Error(result.error || 'Failed to save file')
       loadedFileCache.set(file.id, {
         viewType: file.viewType,
         content: file.content,
@@ -313,10 +314,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         mtime: Date.now(),
       })
       set(s => ({
-        openFiles: s.openFiles.map(f => f.id === id ? { ...f, isDirty: false, mtime: Date.now() } : f),
+        openFiles: s.openFiles.map(f => f.id === id ? { ...f, isDirty: f.content !== file.content, mtime: Date.now() } : f),
       }))
+      return true
     } catch (err: any) {
       console.error('Save failed:', err)
+      return false
     }
   },
 

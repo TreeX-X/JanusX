@@ -6,6 +6,13 @@ export const LOCAL_ASSET_MAX_BYTES = 8 * 1024 * 1024
 
 export const LOCAL_ASSET_DOC_LIMIT = 30
 
+export function isPreviewImageUrl(value: string): boolean {
+  const url = value.trim()
+  if (/^data:/i.test(url)) return /^data:image\/(?:png|jpe?g|gif|webp|avif|svg\+xml|bmp|x-icon)[;,]/i.test(url)
+  if (/^(?:https?:|file:|[a-z]:[\\/])/i.test(url)) return true
+  return !/^[\w+.-]+:/.test(url.replace(/[\u0000-\u0020]/g, ''))
+}
+
 const REMOTE_SCHEMES = ['http://', 'https://', 'data:', 'blob:', 'mailto:', 'tel:', 'javascript:']
 
 export function isRemoteOrSpecialSrc(src: string | undefined | null): boolean {

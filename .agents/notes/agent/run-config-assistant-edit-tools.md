@@ -29,7 +29,7 @@
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"tests/unit/launch-config-chat.test.ts","role":"test"},
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"tests/e2e/run-config-assistant.spec.ts","role":"test"}
   ],
-  "updated": "2026-10-16T09:17:15.532Z",
+  "updated": "2026-10-18T13:03:08Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -118,6 +118,8 @@
 ## Consequences
 
 过程展示现使用[共享 Chat 工作时间线](./requirements/chat-work-timeline.md)：读取、修改与写盘回执按调用原位展示，完整草稿只由 controller 回填表单。按 checkout/project 保存的展示历史不会重放配置变更、审批或写盘；容量与恢复规则由该需求维护。
+
+2026-10-18 的 README 实录发现：助手触发的审批在批准并写盘后仍留在中栏，手动保存路径则由 finally 清除。`resolvePendingApproval` 现于 IPC 正常返回后清除对应 ID 的审批，保留其间新到达的其他请求；IPC 拒绝时保留审批并显示错误。桌面 e2e 增加批准后审批栏消失断言，并显式配置脚本模型的 Responses 协议与容量。隔离构建上的 `run-config-assistant.spec.ts --project=desktop --workers=1` 一项通过，覆盖真实 edit、审批、写盘及最终回复；不代表已验证所有审批失败情形。
 
 - **Gains**: 运行配置生成获得与 chat 板块同款的工作区理解能力，文件随聊随读；配置编辑有粒度、有校验闭环、有审批落盘；助手轮次退出个人画像；能力边界以工具面形式可执行、可审计。
 - **Costs and limits**: 专属工具族与事件桥是一套新接缝（照 `attachNoteChatTools` 复制其形）；`toolTraces` 回放成为助手历史自持的必要附件；`ChatStreamRequest` 公共契约扩型三处同步；run/test/stop 的模型触发被移除（除非待确认点 1 改判）；工具循环使单轮时延高于纯流式。

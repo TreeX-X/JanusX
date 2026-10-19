@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-07",
   "class": "process",
-  "updated": "2026-10-09T01:34:00Z",
+  "updated": "2026-10-19T04:32:13Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -22,6 +22,10 @@ The 0.9.0 portable line needs a shareable no-install build that identifies when 
 A dated preview portable is delivered as `release/preview-<date>/JanusX-<version>-preview-<date>-x64-portable.exe` with three companions in the same folder: `README-preview.txt` stating what the preview contains, `SHA256SUMS.txt` over the delivered executable, and `preview-manifest.json` recording `date`, `version`, `sourceCommit`, per-file sha256 of the packaged `out` tree, `scratchRoots`, `preservedWorktree` (sha256 of each dirty worktree file present at build time), the portable's own path/bytes/sha256, and a `verification` block naming the logs. The builder config lives at `artifacts/preview-<date>-builder.cjs` and only redirects `directories.output` and drops `playwright.desktop.config.ts`; the shipped `electron-builder.yml` exclusions apply as-is. The cut runs: build → `check:package-boundary` → `exclusions:sync` → `electron-builder --config … --win portable --x64 --publish never` → `check-packaged-runtime.mjs --release-dir … --portable` → packaged `knowledge-pipeline.spec.ts` under `JANUSX_DESKTOP_EXECUTABLE` → copy, rename, hash, manifest. The 2026-10-07 delivery follows this shape exactly: source commit `d86de88ff5692d437e3d17cc26d9d0f306d9230a`, executable 112122226 bytes, sha256 `536a2949feefaf2b7b045caec6ac42ed8d5f3bcaf1e7126c21dfc467a527bea0`, 210 build files hashed, runtime gate exit 0, 2 packaged e2e tests passed. The date marker identifies the artifact only; the program base version stays 0.9.0.
 
 For the explicitly requested v0.9.0 replacement, use `release/0.9.0/JanusX-0.9.0-x64-portable.exe` as the delivery location. Build from the committed release candidate in an isolated checkout, run the packaged-runtime checks before copying the replacement, and refresh `BUILDINFO.json`, `SHA256SUMS.txt` and the preview README with the actual source and verification results. Preserve the existing `data` directory. This authorized replacement is an exception to the dated-cut default; it neither changes the application version nor rewrites the older dated preview directories.
+
+The 2026-10-17 delivery follows this shape on the 0.9.2 line: source commit `454f33501e4fc7cf014e83b644e63659e73c2ada` on a clean worktree, executable 112764920 bytes, sha256 `c72b9d0b228630d4f86b8fdcb5048b6d68e339f6289ae4ac7f42f48d3e9f685c`, 228 packaged `out` files hashed, runtime gate exit 0 with unpacked/portable/stub smokes. Its step-5 packaged `tests/e2e/knowledge-pipeline.spec.ts` run is an unresolved reference — that spec was removed in c376a8d, so the cut ran the packaged-runtime gate alone until a successor packaged spec is named.
+
+For a dated delivery requesting both Windows formats (the 2026-10-19 cut), retain the base package version and build the configured NSIS setup and portable targets together into an isolated staging directory. Run `check-packaged-runtime.mjs --portable --release-dir <staging>` before delivery. Copy the verified executables into `release/<date>/` with `<date>` in both filenames, accompanied by `README.txt`, `SHA256SUMS.txt` and `BUILDINFO.json` identifying the source commit, packaged output hashes, verification results and known failures. These local artifacts do not create a version tag, publish a GitHub Release or replace the public update feed. Keep original staging filenames for the runtime checker and omit stale update metadata referring to renamed files. The setup target is the standard installed application; the portable target retains the separate application profile described by `application-profile.md`.
 
 ## Alternatives considered
 

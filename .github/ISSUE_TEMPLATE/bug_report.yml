@@ -1,13 +1,23 @@
 name: Bug 反馈
-description: 报告可复现的问题
+description: 报告异常、崩溃或偶发问题，内测版也使用此模板
 labels: [bug]
 body:
+  - type: markdown
+    attributes:
+      value: 请先搜索已有 Issue，每次反馈一个问题。截图和日志请移除 API Key、Token、私人对话及敏感路径，不要上传整个用户数据目录。
   - type: input
     id: version
     attributes:
       label: 版本
       description: 设置页或安装包显示的版本号
-      placeholder: v0.8.6
+      placeholder: 完整版本号；源码运行请附提交 SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 系统环境
+      placeholder: 例如 Windows 11 23H2，x64
     validations:
       required: true
   - type: dropdown
@@ -18,26 +28,30 @@ body:
         - 安装版 setup.exe
         - 便携版 portable.exe
         - 源码运行
+    validations:
+      required: true
   - type: textarea
     id: repro
     attributes:
       label: 复现步骤
-      description: 一步一步写清楚，不可复现的问题很难修
+      description: 逐步描述触发操作；若不能稳定复现，请写发生频率和最后一次出现前的操作。涉及 AI CLI 时请附 CLI 名称与版本。
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
       label: 期望行为
+      description: 正常情况下你希望看到什么
   - type: textarea
     id: actual
     attributes:
       label: 实际行为
+      description: 实际发生了什么；可附截图、录像或报错文字
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
       label: 日志
-      description: userData/logs 下的相关片段
+      description: 可选，粘贴相关报错片段；若找不到日志，先提供截图或错误文字即可。提交前请脱敏。
       render: text

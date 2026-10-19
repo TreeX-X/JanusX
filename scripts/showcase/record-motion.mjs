@@ -11,6 +11,7 @@ export const easeOutExpo = (t) => t >= 1 ? 1 : 1 - 2 ** (-10 * t);
 export function snapper(page, rawDir, frames, shot = null, overrides = {}) {
   const pace = { ...timing, ...overrides };
   let lastMouse = null;
+  let pressed = false;
   const take = shot ?? ((pg) => pg.screenshot({ type: 'png' }));
   const box = async (loc) => {
     const rect = await loc.boundingBox();
@@ -23,7 +24,7 @@ export function snapper(page, rawDir, frames, shot = null, overrides = {}) {
     if (mouse) lastMouse = { x: mouse.x, y: mouse.y };
     const file = `p-${String(frames.length).padStart(4, '0')}.png`;
     await writeFile(join(rawDir, file), await take(page));
-    frames.push({ file, mouse: lastMouse && { ...lastMouse }, click: !!click,
+    frames.push({ file, mouse: lastMouse && { ...lastMouse }, click: !!click, ...(pressed ? { pressed: true } : {}),
       delay: Math.max(10, Math.round(delay * 10 * pace.tempo)), cap });
   }
 
@@ -39,7 +40,11 @@ export function snapper(page, rawDir, frames, shot = null, overrides = {}) {
     }
   }
   async function travel(c, cap) {
-    await glideTo(c.x, c.y, c.x, c.y, pace.travelSteps, cap);
+    const distance = lastMouse ? Math.hypot(c.x - lastMouse.x, c.y - lastMouse.y) : 0;
+    const steps = pace.travelPixelsPerStep > 0
+      ? Math.max(8, Math.min(40, Math.ceil(distance / pace.travelPixelsPerStep)))
+      : pace.travelSteps;
+    await glideTo(c.x, c.y, c.x, c.y, steps, cap);
   }
   async function moveSnap(loc, cap, delay = pace.hover) {
     const c = center(await box(loc));
@@ -72,6 +77,7 @@ export function snapper(page, rawDir, frames, shot = null, overrides = {}) {
     await travel({ x: x1, y: y1 }, cap);
     await snap(null, false, pace.hover, cap);
     await page.mouse.down();
+    pressed = true;
     try {
       for (let i = 1; i <= steps; i++) {
         const t = easeInOut(i / steps);
@@ -81,8 +87,9 @@ export function snapper(page, rawDir, frames, shot = null, overrides = {}) {
       }
     } finally {
       await page.mouse.up();
+      pressed = false;
     }
-    await snap(null, true, pace.click, cap);
+    await snap(null, false, pace.click, cap);
     await sleep(pace.settleMs);
     await snap(null, false, pace.motion, cap);
   }

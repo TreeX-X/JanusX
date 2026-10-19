@@ -11,6 +11,7 @@ export function registerWindowIpc(editorWindows: EditorWindowManager, getMainWin
   ipcMain.handle(SYSTEM_CHANNELS.close, () => BrowserWindow.getFocusedWindow()?.close())
   ipcMain.handle(SYSTEM_CHANNELS.openEditor, (_event, payload: EditorWindowPayload) => editorWindows.open(payload))
   ipcMain.on(SYSTEM_CHANNELS.editorReady, (event) => editorWindows.ready(event.sender))
+  ipcMain.handle(SYSTEM_CHANNELS.confirmEditorClose, event => editorWindows.confirmClose(event.sender))
   // Note: learning verifies a loaded file, not merely creation of an editor window — see .agents/notes/workbench/first-run-learning.md
   ipcMain.on(SYSTEM_CHANNELS.editorViewed, (event, payload: { filePath?: unknown; workspacePath?: unknown }) => {
     if (!editorWindows.list().some(window => window.webContents === event.sender)) return
@@ -36,7 +37,8 @@ export function registerWindowIpc(editorWindows: EditorWindowManager, getMainWin
     if (!target) return { success: false }
     target.webContents.send(SYSTEM_CHANNELS.editorEmbedded, payload)
     target.focus()
-    source.close()
+    // The renderer has transferred its draft; closing must not ask to discard it.
+    editorWindows.confirmClose(event.sender)
     return { success: true }
   })
 }

@@ -2,6 +2,7 @@
 export const UPDATER_CHANNELS = {
   getState: 'updater:get-state',
   check: 'updater:check',
+  download: 'updater:download',
   install: 'updater:install',
   getSettings: 'updater:get-settings',
   updateSettings: 'updater:update-settings',
@@ -42,17 +43,16 @@ export interface UpdaterState {
   error: string | null
 }
 
-export type UpdaterEvent =
-  | { type: 'checking' }
-  | { type: 'available'; version: string }
-  | { type: 'not-available'; version: string }
-  | { type: 'progress'; percent: number }
-  | { type: 'downloaded'; version: string }
-  | { type: 'error'; message: string }
+/** 完整快照让后台事件与首次读取保持相同的版本、说明和安装状态。 */
+export interface UpdaterEvent {
+  type: 'state'
+  state: UpdaterState
+}
 
 export interface UpdaterAPI {
   getState(): Promise<UpdaterState>
   check(): Promise<UpdaterState>
+  download(): Promise<UpdaterState>
   install(): Promise<{ ok: boolean; error?: string }>
   onEvent(callback: (event: UpdaterEvent) => void): () => void
   getSettings(): Promise<UpdaterSettings>

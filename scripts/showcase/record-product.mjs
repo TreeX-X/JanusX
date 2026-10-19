@@ -1,11 +1,14 @@
 // Real file discovery and previews, using authored local files; no model calls.
 import { expect } from '@playwright/test';
-import { mkdtemp, writeFile, appendFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { mkdir, writeFile, appendFile, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { createFixture } from './cli-fixture.mjs';
+import { files, buildEvidence } from './blueprint-fixture.mjs';
+import { style } from './showcase-config.mjs';
 import {
   prepareRepo, launchApp, skipGate, ensureWorkspace, ensureSidebarExpanded,
-  openWorkspace, newShell, snapper, saveManifest, runRecord,
+  openWorkspace, snapper, saveManifest, runRecord, sleep, AW, AH,
 } from './record-lib.mjs';
 
 const captions = {
@@ -24,66 +27,83 @@ small{color:#a24732;letter-spacing:2px}h1{font-size:30px;line-height:1.3;margin:
 h2{font-size:20px}hr{border:0;border-top:1px solid #b8baa7;margin:24px 0}
 button{background:#1c343b;color:#f6f0df;border:0;padding:12px 18px;cursor:pointer;font:inherit}
 strong{font-size:32px}p{margin:12px 0}#detail{border-left:3px solid #c83020;padding-left:16px}
-</style><small>DEMO / 项目交付</small><h1>登录流程验收报告</h1>
+</style><small>ATLAS / 本地脚本生成</small><h1>搜索功能验证报告</h1>
 <p>页面、文档与结果，留在当前工作区。</p><hr>
-<strong>${updated ? '8 / 8' : '6 / 6'}</strong><p>${updated ? '新增：会话续期与退出测试通过' : '登录、鉴权与错误提示已检查'}</p>
+<strong>${updated ? '4 / 4' : '3 / 3'}</strong><p>${updated ? '新增：空任务列表测试通过' : '最小字符数、大小写与空结果测试通过'}</p>
 <button onclick="document.querySelector('#detail').hidden = !document.querySelector('#detail').hidden">查看验收明细</button>
-<div id="detail" hidden><h2>验收明细</h2><p>✓ 正常登录<br>✓ 无效凭证提示<br>✓ Token 过期处理</p></div>
+<div id="detail" hidden><h2>验收明细</h2><p>✓ 不足两个字符显示全部<br>✓ 忽略大小写<br>✓ 保持顺序与空结果</p></div>
 <hr><p>${updated ? '第二版 · 文件修改后重新加载' : '第一版 · 本地 HTML 演示文件'}</p></html>`;
 
 await runRecord(async (ctx) => {
-  const { recordingRoot, rawDir, repoPath } = await prepareRepo('product');
+  const fixture = await createFixture(ctx);
+  const { recordingRoot, rawDir, repoPath } = await prepareRepo('product', { repoParent: fixture.fixtureRoot, repoName: 'Atlas' });
   ctx.recordingRoot = recordingRoot;
+  for (const [path, content] of Object.entries(files)) { await mkdir(dirname(join(repoPath, path)), { recursive: true }); await writeFile(join(repoPath, path), content); }
+  const testBefore = execFileSync(process.execPath, ['--test', '--test-reporter=tap', 'tests/search.test.mjs'], { cwd: repoPath, encoding: 'utf8' });
+  expect(testBefore).toContain('# pass 3');
   const resultPath = join(repoPath, '验收结果.json');
   await writeFile(resultPath, JSON.stringify({
-    project: '登录模块', status: '通过', passed: 6, failed: 0,
-    checks: ['正常登录', '无效凭证', 'Token 过期'],
-    source: '本地示例数据',
+    project: 'Atlas search', status: 'passed', passed: 3, failed: 0,
+    checks: ['minimum length', 'case insensitive', 'order and empty results'],
+    source: 'Local node --test output',
   }, null, 2));
-  const fixtureRoot = await mkdtemp(join(tmpdir(), 'janusx-product-'));
-  ctx.fixtureRoot = fixtureRoot;
-  const { application, page } = await launchApp(fixtureRoot, fixtureRoot);
+  const { application, page } = await launchApp(fixture.fixtureRoot, fixture.claudeConfig, { env: fixture.env });
   Object.assign(ctx, { application, page });
+  const host = await application.browserWindow(page); await host.evaluate((win, size) => win.setContentSize(size.width, size.height), { width: AW, height: AH });
+  await page.evaluate(() => window.electron.theme.update('dark'));
   await skipGate(page);
-  await ensureWorkspace(page, 'demo-product', repoPath);
+  await ensureWorkspace(page, 'Atlas', repoPath);
   await ensureSidebarExpanded(page);
-  await openWorkspace(page, 'demo-product');
-  await newShell(page);
+  await openWorkspace(page, 'Atlas');
+  await page.getByRole('main').getByRole('button', { name: 'OpenCode', exact: true }).click();
+  await expect.poll(() => page.locator('.xterm-rows:visible').innerText(), { timeout: 90000 }).toMatch(/tab agents|ctrl\+p commands/);
+  await page.locator('.xterm-helper-textarea:visible').focus(); await page.keyboard.insertText('Review the search validation report.');
   const discovery = await page.evaluate(async () => {
     const workspaces = await window.electron.workspace.list();
-    const workspace = workspaces.find((entry) => entry.name === 'demo-product');
+    const workspace = workspaces.find((entry) => entry.name === 'Atlas');
     return window.electron.office.listFiles({ workspaceId: workspace.id });
   });
   if (!discovery.ok) throw new Error(`Product discovery failed: ${JSON.stringify(discovery)}`);
 
   const frames = [];
-  const { rest, clickSnap, box, center, dragTo } = snapper(page, rawDir, frames);
+  const points = [];
+  const { snap, rest, moveSnap, clickSnap, box, center, dragTo } = snapper(page, rawDir, frames, null, { motion: 4, hover: 25, click: 8, hold: 110, settleMs: 160, travelPixelsPerStep: 40 });
+  async function point(stage) { points.push({ stage, frame: frames.length - 1, text: await page.locator('body').innerText() }); }
   const island = page.locator('.janus-island').first();
+  async function toggleIsland(cap) {
+    const c = cap ? await moveSnap(island, cap, 20) : center(await box(island));
+    await page.mouse.dblclick(c.x, c.y);
+    if (cap) await snap(c, true, 8, cap);
+    await sleep(450);
+  }
   const panel = page.locator('.product-panel-enter');
   const tab = (name) => panel.locator('button[aria-selected]').filter({ hasText: name });
   const preview = page.frameLocator('iframe[title="生成文档预览"]');
   // Products are session-scoped: baseline files surface only after modification.
   await appendFile(resultPath, '\n');
-  await island.dblclick();
+  await toggleIsland();
   await expect(page.locator('.janus-office-artifact-list')).toContainText('验收结果.json', { timeout: 15000 });
-  await island.dblclick();
-  await rest('product-1');
+  await toggleIsland();
+  await snap({ x: AW - 80, y: AH - 45 }, false, 140, 'product-1');
   await writeFile(join(repoPath, '验收报告.html'), report());
   const notice = page.getByRole('button', { name: '打开 验收报告.html 的产物预览', exact: true });
   await expect(notice).toBeVisible({ timeout: 20000 });
   await rest('product-1', 180);
   await clickSnap(notice, 'product-2');
-  await expect(preview.getByRole('heading', { name: '登录流程验收报告' })).toBeVisible();
+  await expect(preview.getByRole('heading', { name: '搜索功能验证报告' })).toBeVisible();
   const separator = page.getByRole('separator', { name: 'Resize product workspace' });
   const handle = center(await box(separator));
   await dragTo(handle.x, handle.y, handle.x - 280, handle.y, 20, 'product-2');
+  await sleep(800);
   await rest('product-2', 200);
+  await point('opened');
 
   await clickSnap(preview.getByRole('button', { name: '查看验收明细' }), 'product-3');
   await expect(preview.getByRole('heading', { name: '验收明细', exact: true })).toBeVisible();
   await rest('product-3', 180);
+  await point('interactive');
 
-  await clickSnap(island, 'product-4', { double: true });
+  await toggleIsland('product-4');
   const document = page.locator('.janus-office-artifact-list').getByRole('button', { name: '验收结果.json json', exact: true });
   await expect(document).toBeVisible();
   await rest('product-4');
@@ -92,18 +112,28 @@ await runRecord(async (ctx) => {
   await rest('product-4', 200);
 
   await clickSnap(tab('验收报告.html'), 'product-5');
-  await expect(preview.getByRole('heading', { name: '登录流程验收报告' })).toBeVisible();
+  await expect(preview.getByRole('heading', { name: '搜索功能验证报告' })).toBeVisible();
   await rest('product-5');
   await clickSnap(tab('验收结果.json'), 'product-5');
   await expect(panel.locator('pre')).toBeVisible();
   await rest('product-5');
+  await point('json');
   await clickSnap(tab('验收报告.html'), 'product-6');
+  await appendFile(join(repoPath, 'tests/search.test.mjs'), "\ntest('handles an empty task list', () => { assert.deepEqual(filterTasks([], 'search'), []); });\n");
+  const testAfter = execFileSync(process.execPath, ['--test', '--test-reporter=tap', 'tests/search.test.mjs'], { cwd: repoPath, encoding: 'utf8' });
+  expect(testAfter).toContain('# pass 4');
   await writeFile(join(repoPath, '验收报告.html'), report(true));
   await clickSnap(panel.getByRole('button', { name: '从磁盘重新加载' }), 'product-6');
-  await expect(preview.getByText('8 / 8', { exact: true })).toBeVisible();
+  await expect(preview.getByText('4 / 4', { exact: true })).toBeVisible();
   await rest('product-6', 240);
+  await point('refreshed'); const posterFrame = frames.length - 1;
+  const last = frames.at(-1), first = frames[0];
+  for (const opacity of [.8,.6,.4,.2,0]) frames.push({ ...last, delay: 80, click: false, opacity, transition: 'loop-reset' });
+  for (const opacity of [.2,.4,.6,.8,1]) frames.push({ ...first, delay: 80, click: false, opacity, transition: 'loop-reset' });
   await saveManifest(recordingRoot, {
-    name: 'feature-product', captions, frames,
+    name: 'feature-product', captions, frames, posterFrame,
     createdAt: new Date().toISOString(),
+    presentation: { framing: 'compact', theme: 'dark', background: style.background.asset, border: 12 },
+    evidence: { ...await buildEvidence(), checkpoints: points, testBefore, testAfter, reportBefore: report(), reportAfter: report(true), resultJson: JSON.parse(await readFile(resultPath, 'utf8')), modelCalls: 0, promptsSubmitted: 0, accountsCopied: false, loopTransitionMs: 800 },
   });
 });

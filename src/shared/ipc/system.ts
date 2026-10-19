@@ -8,6 +8,7 @@ export const SYSTEM_CHANNELS = {
   openEditor: 'editor-window:open', refreshEditor: 'editor-window:refresh', editorReady: 'editor-window:ready', embedEditor: 'editor-window:embed', editorEmbedded: 'editor-window:embedded',
   setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get', usageLedger: 'usage-ledger:list',
   editorViewed: 'editor-window:viewed',
+  requestEditorClose: 'editor-window:request-close', confirmEditorClose: 'editor-window:confirm-close',
   toastReady: 'desktop-toast:ready', toastAction: 'desktop-toast:action', toastShow: 'desktop-toast:show', toastHide: 'desktop-toast:hide',
   getLanguage: 'app:getLanguage', setLanguage: 'app:setLanguage',
   openVSCode: 'system:openVSCode',
@@ -55,6 +56,8 @@ export interface WindowAPI {
   minimize(): Promise<void>; maximize(): Promise<void>; close(): Promise<void>
   openEditor(payload: { filePath?: string; workspacePath?: string }): Promise<{ success?: boolean }>
   editorReady(): void
+  onEditorCloseRequested(callback: () => void): () => void
+  confirmEditorClose(): Promise<void>
   reportEditorViewed(payload: { filePath: string; workspacePath: string }): void
   onEditorViewed(callback: (payload: { filePath: string; workspacePath: string }) => void): () => void
   embedEditor(payload: { filePath: string; workspacePath: string; content?: string; isDirty?: boolean }): Promise<{ success?: boolean }>

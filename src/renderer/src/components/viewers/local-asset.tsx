@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { parseSrcset, stringifySrcset } from 'srcset'
 import {
   LOCAL_ASSET_DOC_LIMIT,
   LOCAL_ASSET_MAX_BYTES,
+  isPreviewImageUrl,
   resolveLocalAssetAbsolutePath,
 } from '@/lib/local-asset-resolver'
 
@@ -103,6 +105,26 @@ export function useLocalAssetUrl(src: string | undefined): string | undefined {
 export interface HtmlAssetScope {
   workspacePath?: string
   documentDir?: string
+}
+
+export function useLocalAssetSrcSet(srcSet: string | undefined): string | undefined {
+  const { workspacePath, documentDir } = useContext(MarkdownAssetContext)
+  const key = JSON.stringify([srcSet, workspacePath, documentDir])
+  const candidates = useMemo(() => parseSrcset(srcSet ?? '').filter(candidate => isPreviewImageUrl(candidate.url)), [srcSet])
+  const [resolved, setResolved] = useState({ key: '', value: '' })
+  useEffect(() => {
+    let disposed = false
+    void Promise.all(candidates.map(async candidate => {
+      const path = resolveLocalAssetAbsolutePath(candidate.url, { workspacePath, documentDir })
+      if (!path) return candidate
+      const data = await loadLocalAssetDataUrl(path)
+      return data ? { ...candidate, url: data } : null
+    })).then(values => {
+      if (!disposed) setResolved({ key, value: stringifySrcset(values.filter(value => value !== null)) })
+    })
+    return () => { disposed = true }
+  }, [candidates, workspacePath, documentDir, key])
+  return (resolved.key === key ? resolved.value : stringifySrcset(candidates.filter(candidate => !resolveLocalAssetAbsolutePath(candidate.url, { workspacePath, documentDir })))) || undefined
 }
 
 function rewriteHtmlAssetUrls(html: string, rewrite: (src: string) => string | null): string {

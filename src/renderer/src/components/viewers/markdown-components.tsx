@@ -7,9 +7,11 @@
  *  markdown-preview.css 里的斑马纹 / hover / 滚动条增强。
  */
 
-import { isValidElement, useState, type CSSProperties, type ReactNode } from 'react'
+import { isValidElement, useState, type CSSProperties, type ReactNode, type ImgHTMLAttributes } from 'react'
 import type { Components } from 'react-markdown'
-import { useLocalAssetAbsolutePath, useLocalAssetUrl } from './local-asset'
+import { useLocalAssetAbsolutePath, useLocalAssetUrl, useLocalAssetSrcSet } from './local-asset'
+import { useThemeStore } from '@/stores/theme'
+import { getThemeDefinition } from '../../../../shared/theme/registry'
 
 const CODE_FONT = "'Cascadia Code', 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace"
 const PROSE_FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif"
@@ -126,9 +128,10 @@ const tdStyle: CSSProperties = {
   verticalAlign: 'top',
 }
 
-function ResolvedMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+function ResolvedMarkdownImage({ src, alt, srcSet, sizes, width, height, title }: Pick<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'srcSet' | 'sizes' | 'width' | 'height' | 'title'>) {
   const absolutePath = useLocalAssetAbsolutePath(src)
   const resolved = useLocalAssetUrl(src)
+  const resolvedSrcSet = useLocalAssetSrcSet(srcSet)
   // Local files load through `file:readBinary` into a `data:` URL because the
   // renderer cannot reach workspace paths directly. While a local asset is
   // still loading the `src` stays unset so a relative path never fires a
@@ -137,6 +140,11 @@ function ResolvedMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   return (
     <img
       src={pendingLocal ? undefined : resolved}
+      srcSet={resolvedSrcSet}
+      sizes={sizes}
+      width={width}
+      height={height}
+      title={title}
       alt={alt ?? ''}
       loading="lazy"
       style={{
@@ -150,6 +158,15 @@ function ResolvedMarkdownImage({ src, alt }: { src?: string; alt?: string }) {
       }}
     />
   )
+}
+
+function ResolvedMarkdownSource({ srcSet, media, type, sizes }: { srcSet?: string; media?: string; type?: string; sizes?: string }) {
+  const theme = useThemeStore(state => state.theme)
+  const scheme = getThemeDefinition(theme).base
+  const effectiveMedia = media?.replace(/\(prefers-color-scheme:\s*(dark|light)\)/gi,
+    (_query, value: string) => value.toLowerCase() === scheme ? '(min-width: 0px)' : '(max-width: 0px)')
+  const resolved = useLocalAssetSrcSet(srcSet)
+  return <source srcSet={resolved} media={effectiveMedia} type={type} sizes={sizes} />
 }
 
 // Note: emphasis renders as orange type with no fill blocks — see .agents/notes/workbench/markdown-emphasis-orange-text.md
@@ -203,7 +220,8 @@ export const MARKDOWN_COMPONENTS: Components = {
   del: ({ children }) => (
     <del style={{ color: 'var(--shell-muted)' }}>{children}</del>
   ),
-  img: ({ src, alt }) => <ResolvedMarkdownImage src={src} alt={alt ?? ''} />,
+  img: ({ src, alt, srcSet, sizes, width, height, title }) => <ResolvedMarkdownImage src={src} alt={alt ?? ''} srcSet={srcSet} sizes={sizes} width={width} height={height} title={title} />,
+  source: ({ srcSet, media, type, sizes }) => <ResolvedMarkdownSource srcSet={srcSet} media={media} type={type} sizes={sizes} />,
   input: ({ checked }) => (
     <input
       type="checkbox"
@@ -321,4 +339,20 @@ export const MARKDOWN_COMPONENTS: Components = {
   tr: ({ children }) => <tr className="md-tr">{children}</tr>,
   th: ({ children }) => <th style={thStyle}>{children}</th>,
   td: ({ children }) => <td style={tdStyle}>{children}</td>,
+}
+
+/** File previews may contain raw HTML; external links leave the editor intact. */
+export const FILE_MARKDOWN_COMPONENTS: Components = {
+  ...MARKDOWN_COMPONENTS,
+  a: ({ href, children, title }) => {
+    const external = Boolean(href && /^(?:https?:)?\/\//i.test(href))
+    return <a href={href} title={title} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}
+      style={{ color: 'var(--shell-accent-strong)', textDecoration: 'none', overflowWrap: 'break-word' }}
+      onClick={event => {
+        if (!external || !href) return
+        event.preventDefault()
+        const url = href.startsWith('//') ? `https:${href}` : href
+        void window.electron.file.openPreviewLink(url).catch(error => console.error('Could not open preview link', error))
+      }}>{children}</a>
+  },
 }

@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-19T01:43:20Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -33,7 +33,7 @@
 The right-side preview editor enters diff mode against the git baseline, and the gutter shows old and new line numbers side by side in one column. Unchanged lines repeat the same number, shifted lines show mismatched pairs, and both numbers share one color. Readers parse this as duplicated chrome rather than an old-to-new mapping, and the wide gutter steals space from the narrow preview window.
 
 ## Decision
-The diff viewer renders one line-number column per visible pane. Wide containers use side-by-side panes, each with its own single column, matching the opencode split view. Narrow containers fall back to the true inline view with a single column, matching the opencode unified view. The fallback breakpoint, the true inline flag, and the slim gutter live in `MonacoViewer`, and the inserted and removed tints live in the shared `janusx-dark` theme so code, markdown, and html previews stay consistent.
+The diff viewer renders one line-number column per visible pane. Wide containers use side-by-side panes, each with its own single column, matching the opencode split view. Narrow containers fall back to the true inline view with a single column, matching the opencode unified view. The fallback breakpoint, the true inline flag, and the slim gutter live in `MonacoViewer`, and the inserted and removed tints live in the shared `janusx-dark` theme so code, markdown, and html previews stay consistent. File-tree editing now defaults to the ordinary editor; these diff rules apply only after explicitly enabling HEAD comparison, as described in [file editor experience](../workbench/file-editor-experience.md).
 
 ## Alternatives considered
 - Keep forced inline with dual numbers and add a legend — strongest case is zero code churn, but the legend explains clutter instead of removing it, and the gutter stays wide in the 560px embedded window.

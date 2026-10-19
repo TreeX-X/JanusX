@@ -407,8 +407,12 @@ export function ProjectSettings({
       correlationId: pendingApproval.correlationId,
       toolName: pendingApproval.toolName,
       actionRisk: pendingApproval.actionRisk,
+    }).then(() => {
+      setPendingApproval(current => current?.id === pendingApproval.id ? null : current)
+    }).catch(reason => {
+      setError(reason instanceof Error ? reason.message : t('editor:project.saveFailed'))
     })
-  }, [pendingApproval])
+  }, [pendingApproval, t])
 
   if (loading) {
     return (

@@ -358,7 +358,6 @@ files:
   - "!node_modules/package-json-from-dist{,/**/*}"
   - "!node_modules/parse5-htmlparser2-tree-adapter{,/**/*}"
   - "!node_modules/parse5-parser-stream{,/**/*}"
-  - "!node_modules/parse5{,/**/*}"
   - "!node_modules/path-exists{,/**/*}"
   - "!node_modules/path-is-absolute{,/**/*}"
   - "!node_modules/path-parse{,/**/*}"

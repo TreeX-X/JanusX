@@ -1,5 +1,5 @@
 // Showcase v3 shared record helpers: fixture, launch, sidebar, terminals, mouse-tracked snaps.
-// Disposable TEMP fixture; each feature owns its model/credential setup and readiness checks.
+// Disposable fixture; each feature owns its model/credential setup and readiness checks.
 import { _electron as electron } from 'playwright';
 import { mkdir, mkdtemp, writeFile, copyFile, rm } from 'node:fs/promises';
 import { tmpdir, homedir } from 'node:os';
@@ -31,12 +31,12 @@ function testEnv(homeDir) {
 /** Demo repo with a few files (filetree/browser/markdown fixtures read these).
  *  `origin: true` adds a local bare remote so origin/main exists — the worktree
  *  composer defaults its start point to origin/main and refuses to create without it. */
-export async function prepareRepo(tag, { origin = false } = {}) {
+export async function prepareRepo(tag, { origin = false, repoParent, repoName = 'demo-repo' } = {}) {
   await mkdir(resolve('.cache/showcase'), { recursive: true });
   const recordingRoot = await mkdtemp(resolve(`.cache/showcase/${tag}-`));
   const rawDir = join(recordingRoot, 'frames');
   await mkdir(rawDir, { recursive: true });
-  const repoPath = join(recordingRoot, 'demo-repo');
+  const repoPath = join(repoParent ?? recordingRoot, repoName);
   await mkdir(join(repoPath, 'src'), { recursive: true });
   await writeFile(join(repoPath, 'a.txt'), 'hi\n');
   await writeFile(join(repoPath, 'src', 'main.ts'), 'export const app = "demo";\n');
@@ -84,7 +84,7 @@ export async function seedFixture() {
   return { fixtureRoot, claudeConfig };
 }
 
-export async function launchApp(fixtureRoot, claudeConfig) {
+export async function launchApp(fixtureRoot, claudeConfig, { env = {} } = {}) {
   const application = await electron.launch({
     args: [resolve(process.env.SHOWCASE_ENTRY ?? 'out/main/index.js'), `--user-data-dir=${join(fixtureRoot, 'user-data')}`],
     env: {
@@ -96,6 +96,7 @@ export async function launchApp(fixtureRoot, claudeConfig) {
       CLAUDE_CODE_SIMPLE: '1',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       DISABLE_AUTOUPDATER: '1',
+      ...env,
     },
     timeout: 60000,
   });
@@ -175,7 +176,9 @@ export async function saveManifest(recordingRoot, manifest) {
     if (frame.cap && !manifest.captions?.[frame.cap]) throw new Error('Missing caption: ' + frame.cap);
   }
   manifest = { ...manifest, schemaVersion: 1, feature: entry[0], delayUnit: 'ms',
-    viewport: { width: AW, height: AH }, canvas: { FW: layout.width, FH: layout.height },
+    viewport: { width: AW, height: AH },
+    canvas: manifest.presentation?.framing === 'compact'
+      ? { FW: AW + 24, FH: AH + 24 } : { FW: layout.width, FH: layout.height },
     count: manifest.frames.length };
   await writeFile(join(recordingRoot, 'manifest.json'), JSON.stringify(manifest, null, 2));
   await writeFile(resolve('.cache/showcase', entry[0] + '-latest.json'), JSON.stringify({ dir: recordingRoot }, null, 2));
@@ -186,11 +189,12 @@ export async function closeApp(application, fixtureRoot) {
   try { await application?.close(); } catch {}
   if (!fixtureRoot) return;
   const target = resolve(fixtureRoot);
-  const temp = resolve(tmpdir());
-  if (parse(target).dir !== temp || !parse(target).base.startsWith('janusx-')) {
-    throw new Error('Refusing fixture cleanup outside the JanusX TEMP directory: ' + target);
+  const parents = [resolve(tmpdir())];
+  if (process.platform === 'win32' && process.env.PUBLIC) parents.push(resolve(process.env.PUBLIC));
+  if (!parents.includes(parse(target).dir) || !parse(target).base.startsWith('janusx-')) {
+    throw new Error('Refusing fixture cleanup outside a JanusX demo directory: ' + target);
   }
-  await rm(target, { recursive: true, force: true });
+  await rm(target, { recursive: true, force: true, maxRetries: 6, retryDelay: 400 });
 }
 
 /** Wrap a record main(): error shot + cleanup. Returns recordingRoot on success. */

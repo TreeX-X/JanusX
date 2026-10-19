@@ -6,7 +6,7 @@ import { applyUpdaterEvent, resolveUpdaterBadge } from '@/lib/updater-badge'
 
 /**
  * 标题栏 JanusX 右侧的更新徽标：仅在有新版动作价值时出现。
- * 已就绪则点击直接重启安装，其余点击打开设置关于页查看进度。
+ * 点击打开设置关于页，查看更新说明并选择下载、重试或重启安装。
  */
 export function UpdaterBadge({ onOpenSettings }: { onOpenSettings: () => void }) {
   const { t } = useI18n('settings')
@@ -39,10 +39,6 @@ export function UpdaterBadge({ onOpenSettings }: { onOpenSettings: () => void })
 
   const handleClick = (event: MouseEvent) => {
     event.stopPropagation()
-    if (badge.kind === 'downloaded') {
-      void window.electron?.updater.install().catch(() => {})
-      return
-    }
     onOpenSettings()
   }
 

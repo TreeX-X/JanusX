@@ -1,10 +1,12 @@
-import { ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { extname, join, resolve, sep } from 'node:path'
 import { FILE_CHANNELS } from '../../shared/ipc/workspace'
 import type { WorkspaceSourceFile, WorkspaceSourceFilesResult } from '../../shared/ipc/workspace'
 import { authorizeRendererAction, type RendererActionAuthorizer } from '../agent/runtime/shell-runtime'
 import { janusWorkspaceFs } from '@janus-agent/agent-core'
+import { htmlPreviewServer } from '../preview/html-preview-server'
+import type { HtmlPreviewRequest } from '../../shared/ipc/workspace'
 
 const MIME_MAP: Record<string, string> = {
   '.png': 'image/png',
@@ -78,6 +80,28 @@ export async function loadWorkspaceSourceFiles(workspacePath: string): Promise<W
 }
 
 export function registerFileHandlers(authorize: RendererActionAuthorizer = authorizeRendererAction): void {
+  ipcMain.handle(FILE_CHANNELS.openPreviewLink, async (_event, value: string) => {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Invalid preview link')
+    await shell.openExternal(url.href)
+  })
+  const previewOwners = new Set<number>()
+  ipcMain.handle(FILE_CHANNELS.openHtmlPreview, async (event, request: HtmlPreviewRequest) => {
+    if (event.senderFrame !== event.sender.mainFrame) throw new Error('HTML previews require the application frame')
+    const owner = event.sender.id
+    if (!previewOwners.has(owner)) {
+      previewOwners.add(owner)
+      event.sender.once('destroyed', () => { htmlPreviewServer.releaseOwner(owner); previewOwners.delete(owner) })
+    }
+    const lease = await htmlPreviewServer.open(owner, request)
+    if (event.sender.isDestroyed()) { htmlPreviewServer.release(owner, lease.id); throw new Error('Preview window closed') }
+    return lease
+  })
+  ipcMain.handle(FILE_CHANNELS.updateHtmlPreview, (event, id: string, content: string) => {
+    if (event.senderFrame !== event.sender.mainFrame) throw new Error('Invalid preview frame')
+    htmlPreviewServer.update(event.sender.id, id, content)
+  })
+  ipcMain.handle(FILE_CHANNELS.closeHtmlPreview, (event, id: string) => htmlPreviewServer.release(event.sender.id, id))
   ipcMain.handle(FILE_CHANNELS.read, async (_event, filePath: string) => {
     const result = await janusWorkspaceFs.readText(filePath)
     return result.ok

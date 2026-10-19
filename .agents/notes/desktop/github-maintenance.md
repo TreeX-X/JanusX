@@ -26,7 +26,7 @@
       }
     }
   },
-  "updated": "2026-10-08T03:43:42.548Z",
+  "updated": "2026-10-18T05:57:21Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -39,18 +39,28 @@ JanusX heads for a beta cycle and a v1.0 launch with no written GitHub disciplin
 
 ## Decision
 
-Tag, release, branch, CI, and issue flow follow one written standard. Tags use lowercase `v` in `vX.Y.Z`, identical to the `package.json` version; the legacy uppercase `V*` tags stay frozen in history. Pushing a `v*` tag drives `release-win` end to end: version guard, Windows build, and automatic public Release with installer assets plus `latest.yml`; every `v*` tag therefore publishes publicly, and a pre-release needs an explicit `gh release edit <tag> --prerelease` after the run. Draft releases never enter the updater or landing-page feed. The `main` branch requires a pull request, one approval, and a green `verify` check; administrators bypass only for CI-outage emergencies with a written note. The `verify` workflow mirrors the release build graph (sibling `janus-agentX` checkout plus sibling `dist` build, `prepackage`, full `verify`) on `windows-latest` for pull requests and `main` pushes. Both workflows build the sibling first because `@janus-agent/*` ships compiled `dist`, which a fresh checkout lacks. The sibling build retries up to three passes because its workspace order ignores `file:` topology; ordering ownership stays with that repository. Issues arrive through three templates (bug, feature, beta feedback) with blank issues disabled, triage through `beta-feedback` and `release` labels, and schedule through the `Beta 内测` and `v1.0 正式版` milestones. The genuine beta version format `v1.0.0-beta.N` stays reserved for an explicit maintainer declaration. Process detail lives in a single home:
+Contributors create short-lived branches from `develop` and submit PRs to `develop`; maintainers promote bounded batches to `main` with merge commits. Both destinations receive Windows PR verification before merge. The policy requires a green check and a non-author approval; GitHub rulesets must be configured separately. Authors cannot approve their own PRs. A maintainer may explicitly authorize an exceptional merge for an emergency, infrastructure failure or unavailable reviewer, recording verification, remaining risk and follow-up in the PR; Agent execution does not imply bypass authority.
 
-- [CONTRIBUTING.md](../../../CONTRIBUTING.md) — branch, PR, tag, release, and issue rules for humans and agents.
+Tags use lowercase `v`, exactly matching the package version; old uppercase tags remain unchanged. Every `v*` tag triggers public Windows release automation. Prerelease versions are marked automatically. Publication validates artifacts, uploads into a temporary draft, then exposes the complete Release; drafts do not enter the update feed. The normal path uses a version PR before tagging the merged main commit. The existing tag helper creates a version commit directly on main; its push mode requires a documented maintainer release exception and compatible repository rules.
+
+Bug, feature and question/documentation forms cover both stable and beta versions; maintainers apply beta labels without asking users to choose an overlapping intake form. Small fixes need no preliminary Issue, and Notes are required only when the change affects lasting recorded facts. Feature proposals focus on scenarios and outcomes rather than requiring a technical design. Issue closure after development integration is distinguished from availability in a published version.
+
+Operational instructions have separate owners:
+
+- [CONTRIBUTING.md](../../../CONTRIBUTING.md) — contributor intake, branches, PRs and validation expectations.
+- [Development guide](../../../docs/development.md) — reproducible sibling setup and troubleshooting.
+- [Maintainer guide](../../../docs/maintainers.md) — review policy, promotion, release and recovery.
+
+Workflow dependency sources use explicit upstream repositories so Fork verification does not require copies of sibling repositories. Their revisions remain pinned, sibling builds stop on failure and follow dependency order, and the split CI steps include theme and packaging-exclusion checks from the local verify chain.
 
 ## Alternatives considered
 
 - Keep pushing `main` directly — strongest case is zero workflow friction for a solo maintainer, but every change then lands without a review trace or a guaranteed green gate, and agents inherit no enforceable handoff.
-- Adopt GitFlow with `develop` and release branches — strongest case is textbook isolation, but a second long-lived branch doubles merge overhead for a one-maintainer desktop app shipping from tags.
+- Use only feature branches into main — this reduces merge overhead, but loses the existing requested integration destination. Retain develop with explicit contribution and promotion paths; reconsider if batched acceptance no longer serves a purpose.
 - Manual Releases from the web UI — strongest case is full per-release control, but hand-built assets drift from CI builds and the updater feed depends on machine-made `latest.yml`.
 - Do nothing / reuse — staying put costs nothing today, but the uppercase-tag mismatch keeps silently producing tags that never release, which is the observed failure.
 
 ## Consequences
 
-- **Gains**: every version maps to exactly one tag and one CI-built Release; PRs carry review trace plus a green gate; beta feedback lands in triaged issues under visible milestones; a new agent reads `CONTRIBUTING.md` plus this Note and follows the same flow.
-- **Costs and limits**: solo review is self-review in practice, so the approval counts as a deliberate second look rather than independent scrutiny; the full `verify` gate (including the desktop smoke) runs minutes per PR on a Windows runner; pre-release marking stays a manual step until the workflow learns the prerelease signal. The gate opens red: `main` carries pre-existing office/harness unit failures plus a Windows-runner worker crash (tracked in issue #1), so merges use the documented admin bypass with a written reason each time until the owning workstream lands green. The `Beta 内测` milestone closes at launch, and the beta description clause in the repo About needs trimming after v1.0.
+- **Gains**: contributors can identify the target branch, prepare the same inputs as CI and report problems without understanding maintainer tooling. Review and release duties have separate entry points, and local/CI verification cover the same check chain.
+- **Costs and limits**: full Windows verification runs on feature PRs, branch pushes and promotion PRs, increasing CI use. Branch protection and availability of an independent reviewer remain external administrative concerns; this change does not configure or verify live GitHub settings. If develop no longer supports meaningful batched acceptance, simplify the branch model. New checks added to package.json still require updating the split workflow.

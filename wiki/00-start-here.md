@@ -25,7 +25,7 @@ JanusX is a desktop workspace manager for AI-assisted development. It combines:
 - Browser surface management (embedded panes and standalone windows),
 - i18n (en, zh-CN) with extraction, type generation, and completeness check.
 
-`package.json` identifies the app as `janusx` version `0.8.2`.
+`package.json` identifies the app as `janusx` and owns the current version. This page's analysis date marks an architecture snapshot. For current setup and PR instructions, use [CONTRIBUTING](../CONTRIBUTING.md) and the [development guide](../docs/development.md).
 
 ## Commands
 
