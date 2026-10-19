@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
-import { createDesktopTestEnv } from './desktop-test-env'
+import { createDesktopTestEnv, seedIntroducedLearning } from './desktop-test-env'
 
 test('real Chat UI sends memo tools through HTTP, persists edits and refreshes the selected node', async () => {
   const root = await mkdtemp(join(tmpdir(), 'janus-memo-review-'))
@@ -141,6 +141,7 @@ test('real Chat UI sends memo tools through HTTP, persists edits and refreshes t
       return window.electron.memo!.edit(created.id, { expectedRevision: 0, operations: [{ op: 'addNode', title: 'First' }, { op: 'addNode', title: 'Target' }] })
     })
     memoId = memo.id
+    await seedIntroducedLearning(page)
     await page.reload()
     await page.locator('.janus-island').dblclick()
     await page.getByRole('tab', { name: 'Chat', exact: true }).click()

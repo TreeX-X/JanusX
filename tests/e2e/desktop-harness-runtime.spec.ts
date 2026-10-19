@@ -39,9 +39,9 @@ for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'inde
       const chunks: Buffer[] = []
       for await (const chunk of request) chunks.push(Buffer.from(chunk))
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-      // Runtime status probes use Chat Completions before the task's Responses
-      // stream. Serve the health check without consuming a scripted task turn.
-      if (request.url === '/v1/chat/completions' && body.stream !== true) {
+      // Runtime status probes are non-streaming on the channel's declared
+      // protocol. Serve the health check without consuming a scripted task turn.
+      if (body.stream !== true) {
         response.writeHead(200, { 'Content-Type': 'application/json' })
         response.end(JSON.stringify({ id: 'health', object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content: 'OK' }, finish_reason: 'stop' }] }))
         return
@@ -140,6 +140,10 @@ for (const [mode, review] of [['xdo', 'self'], ['xdel', 'self'], ['xflow', 'inde
     const saved = await page.evaluate(async (baseURL) => (window as HarnessWindow).electron.llm.saveTerminalProvider('janus', {
       id: 'openai-compatible', name: 'Local fixture', authType: 'api-key' as never, enabled: true,
       apiKey: 'fixture-key', baseURL, modelId: 'fixture-model', models: ['fixture-model'],
+      // OpenAI-compatible channels declare their protocol; generic relays
+      // default to Chat Completions, while this fixture scripts a Responses
+      // stream. See .agents/notes/terminal/terminal-provider-collections.md.
+      extra: { protocol: 'responses' },
     }), `http://127.0.0.1:${address.port}/v1`)
     expect(saved.success).toBe(true)
     const prepared = await page.evaluate(async ({ cwd, taskUri, mode }) => {

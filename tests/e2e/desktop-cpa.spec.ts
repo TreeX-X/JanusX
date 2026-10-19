@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { createServer as createTcpServer } from 'node:net'
-import { createDesktopTestEnv } from './desktop-test-env'
+import { createDesktopTestEnv, seedIntroducedLearning } from './desktop-test-env'
 import { CPA_SURFACE_ID, type CpaAPI } from '../../src/shared/ipc/cpa'
 
 const fixtureHtml = `<!doctype html><meta charset="utf-8"><title>CPA test management</title>
@@ -29,6 +29,7 @@ async function boot(root: string, env: NodeJS.ProcessEnv = {}): Promise<{ app: E
   const page = await app.firstWindow()
   await page.waitForLoadState('domcontentloaded')
   await page.evaluate(() => (window as any).electron.system.setLanguage('en'))
+  await seedIntroducedLearning(page)
   await page.reload()
   return { app, page }
 }
@@ -286,7 +287,8 @@ test('CPA settings use themed controls, switch modes and retain a usable footer 
       const window = BrowserWindow.getAllWindows()[0]
       window.setMinimumSize(600, 600); window.setSize(680, 760)
     })
-    await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(680)
+    // Windows may round native window bounds by one CSS pixel at fractional scaling.
+    await expect.poll(async () => Math.abs(await page.evaluate(() => window.innerWidth) - 680)).toBeLessThanOrEqual(1)
     await expect.poll(() => panel.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true)
     await expect(panel.getByRole('button', { name: 'Save', exact: true })).toBeInViewport()
     await mode.click()

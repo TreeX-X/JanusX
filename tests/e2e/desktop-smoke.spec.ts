@@ -5,7 +5,7 @@ import { join, resolve } from 'path'
 import type { ProjectAPI } from '../../src/shared/ipc/project'
 import type { TerminalAPI } from '../../src/shared/ipc/terminal'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
-import { createDesktopTestEnv } from './desktop-test-env'
+import { createDesktopTestEnv, seedIntroducedLearning } from './desktop-test-env'
 import { createServer } from 'node:http'
 import type { BrowserAPI } from '../../src/shared/ipc/browser'
 
@@ -555,6 +555,7 @@ test('Browser start page stays visible in an independent window', async () => {
     const page = await application.firstWindow()
     await page.waitForLoadState('domcontentloaded')
     await page.evaluate(() => (window as DesktopWindow).electron.system.setLanguage('en'))
+    await seedIntroducedLearning(page)
     await page.reload()
     await page.locator('button[data-id="tool-menu"]').click()
     await page.locator('button[data-id="browser"]').click()
@@ -608,6 +609,7 @@ test('Browser load failure, retry, dialogs and close release native browser view
       const api = (window as DesktopWindow).electron
       await api.system.setLanguage('en')
     })
+    await seedIntroducedLearning(page)
     await page.reload()
 
     const nativeViews = () => application!.evaluate(({ BrowserWindow }) =>

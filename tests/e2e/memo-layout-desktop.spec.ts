@@ -2,7 +2,7 @@ import { _electron as electron, expect, test } from '@playwright/test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
-import { createDesktopTestEnv } from './desktop-test-env'
+import { createDesktopTestEnv, seedIntroducedLearning } from './desktop-test-env'
 
 test('real Titlebar keeps memo usable at native minimum size and renderer zoom', async () => {
   const root = await mkdtemp(join(tmpdir(), 'janus-memo-layout-'))
@@ -18,6 +18,7 @@ test('real Titlebar keeps memo usable at native minimum size and renderer zoom',
     await page.waitForFunction(() => Boolean(window.electron?.memo))
     await page.evaluate(() => window.electron.system.setLanguage('en'))
     await page.evaluate(() => window.electron.experimental.update({ memo: true }))
+    await seedIntroducedLearning(page)
     await page.reload()
     await page.waitForFunction(() => Boolean(window.electron?.memo))
     await page.evaluate(async () => {
