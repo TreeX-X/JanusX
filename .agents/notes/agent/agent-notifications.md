@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-19T06:35:15Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -44,6 +44,12 @@ A main-side notification service pairs hook-lifecycle collection with renderer f
 - Do nothing / reuse terminal output only — staying put ships zero notification surface. The cost is stalled approvals nobody sees.
 
 ## Consequences
+
+Desktop notifications default to enabled; remote notifications, the Feishu provider and inbound control default to disabled. Normalization preserves explicit user switches. These defaults already existed; the 2026-10-19 optimization changes loading rather than overwriting persisted preferences.
+
+`FeishuInboundRuntime` loads `sdk-channel` and the Feishu SDK only after remote notifications, provider App mode, inbound control and credentials pass the enablement gate. Desktop-only startup, disabled control and outbound-only webhook use do not load that SDK through the runtime. Async loading stays inside the existing serialized reconfiguration queue: disable/stop runs after a pending load and closes its client; loading failures become the existing redacted failure status and allow retry. Enabling once retains the imported module in Node's cache even after disconnect, so this primarily avoids cold-start cost for users who never enable control. Main-window setup now configures the runtime once rather than twice.
+
+Validation: 22 targeted tests passed across runtime, defaults/normalization, SDK adapter, settings IPC and outbound dispatch; TypeScript passed. The isolated production build emits the SDK adapter as a separate dynamically imported chunk. No real notifications were sent and no existing profile settings were changed.
 
 - **Gains**: Every terminal state needing attention raises a notification with a click path back to its terminal; hook normalization covers all three engines plus headless runs.
 - **Costs and limits**: Native delivery varies by platform packaging, so the fallback path must stay first-class; settings surface grows with each new toggle.

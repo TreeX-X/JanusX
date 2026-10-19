@@ -45,8 +45,8 @@ export function HtmlPreviewFrame({ content, workspacePath, documentPath, scripts
     title={title ?? t('editor:htmlViewer.iframeTitle')}
     className="border-0"
     style={responsive
-      ? { display: 'block', background: '#fff', width: '100%', height: '100%' }
-      : { position: 'absolute', left: 0, top: 0, width, height, transform: `scale(${scale})`, transformOrigin: 'top left', background: '#fff' }}
+      ? { display: 'block', background: 'var(--preview-paper)', width: '100%', height: '100%' }
+      : { position: 'absolute', left: 0, top: 0, width, height, transform: `scale(${scale})`, transformOrigin: 'top left', background: 'var(--preview-paper)' }}
   />
   const control = { background: 'var(--shell-canvas)', color: 'var(--shell-text)', border: '1px solid var(--control-border)', borderRadius: 4, padding: '3px 5px', maxWidth: '100%' }
   return <div className="flex h-full min-h-0 min-w-0 flex-col" data-html-preview>
@@ -69,7 +69,7 @@ export function HtmlPreviewFrame({ content, workspacePath, documentPath, scripts
     {error && <div role="status" className="px-2 py-1 text-xs" style={{ color: 'var(--shell-muted)' }}>{t('editor:htmlViewer.resourcesUnavailable')}</div>}
     <div ref={viewportRef} data-html-viewport className="min-h-0 min-w-0 flex-1" style={{ overflow: responsive ? 'hidden' : 'auto', background: 'var(--shell-void)' }}>
       {pending ? <div role="status" className="flex h-full items-center justify-center text-xs" style={{ color: 'var(--shell-muted)' }}>{t('editor:product.startingPreview')}</div> : responsive ? frame : <div style={{ width: Math.max(size.width, Math.ceil(width * scale) + 24), height: Math.max(size.height, Math.ceil(height * scale) + 24), display: 'grid', placeItems: 'center' }}>
-        <div style={{ width: Math.ceil(width * scale), height: Math.ceil(height * scale), position: 'relative', overflow: 'hidden', boxShadow: '0 1px 8px rgba(0,0,0,.15)' }}>{frame}</div>
+        <div style={{ width: Math.ceil(width * scale), height: Math.ceil(height * scale), position: 'relative', overflow: 'hidden', boxShadow: '0 1px 8px var(--preview-shadow)' }}>{frame}</div>
       </div>}
     </div>
   </div>

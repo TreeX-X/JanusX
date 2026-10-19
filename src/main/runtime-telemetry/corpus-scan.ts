@@ -17,6 +17,7 @@ import {
   type JsonlSourceRead,
 } from './history'
 import { collectCodexEvents } from './history-usage'
+import { isCodexAccountingRecord, readProjectedJsonl } from './projected-jsonl'
 import { OpenCodeUsageSource } from './opencode-source'
 import { resolveOpencodeDbPath } from '../sessions/opencode-store-path'
 import type { UsageLedger } from './usage-ledger'
@@ -181,6 +182,21 @@ export async function scanNativeSessionCorpus(options: {
       if (locked?.sourceSize !== undefined && locked.sourceSize === info.size) {
         summary.skipped += 1
         continue
+      }
+      // Event accounting needs metadata, model transitions and token counters,
+      // not retained assistant/tool bodies. Legacy cumulative baselines keep
+      // the full source/hash path below, including prefix-rewrite detection.
+      if (pathId && locked?.mode !== 'cumulative') {
+        const projected = await readProjectedJsonl(file.path, isCodexAccountingRecord, signal)
+        const meta = projected.values.find(value => value.type === 'session_meta')
+        const sessionId = readString((meta?.payload as Record<string, unknown> | undefined)?.id) ?? pathId
+        // Preserve the legacy fallback when a nonstandard file names a different session.
+        const mode = locked?.mode ?? ledger.sessionState('codex', codexHome, sessionId)?.mode
+        // With no selected rows, retain legacy empty/corrupt-source semantics.
+        if (projected.values.length > 0 && mode !== 'cumulative') {
+          record(collectCodexEvents(codexHome, sessionId, projected.values, now), projected.completeBytes)
+          continue
+        }
       }
       let source: JsonlSourceRead | undefined
       const read = await readJsonlLinesWithCursor(file.path, true, (buffer, info) => { source = { buffer, info } })

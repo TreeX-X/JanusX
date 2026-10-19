@@ -3,6 +3,28 @@
 
 /* Default (planche): Print-style light: paper/ink single-vermilion accent, flat fills, no gradients. */
 :root {
+  --support-star-stroke: #d99a0b;
+  --support-star-fill: #facc15;
+  --dialog-backdrop: rgba(0,0,0,.3);
+  --dialog-shadow: rgba(0,0,0,.45);
+  --run-bud-border: rgba(0, 255, 136, 0.35);
+  --run-bud-glow: rgba(0, 255, 136, 0.12);
+  --run-bud-skin-top: #1a1a1c;
+  --run-bud-skin-bottom: #0b0b0d;
+  --run-bud-text: #b8ffd9;
+  --run-bud-hover: rgba(0, 255, 136, 0.85);
+  --run-bud-active-ring: rgba(0, 255, 136, 0.45);
+  --run-bud-active-glow: rgba(0, 255, 136, 0.28);
+  --run-bud-stop-border: rgba(255, 95, 87, 0.8);
+  --run-bud-stop-text: #ffc9c4;
+  --run-bud-stop-glow: rgba(210, 72, 72, 0.35);
+  --run-scope-accent: #5b8def;
+  --usage-heatmap-mid: #238636;
+  --usage-heatmap-high: #40c463;
+  --preview-paper: #fff;
+  --preview-shadow: rgba(0,0,0,.15);
+  --font-mono: "Cascadia Mono", "SF Mono", Consolas, monospace;
+  --focus-progress: 0;
   --sidebar-codex-filter: none;
   --session-sheet-base-weight: 84%;
   --cli-logo-light: #f4f4f4;
@@ -82,6 +104,28 @@
 
 /* dark: Default. Surface ramp keeps canvas below chrome (~9pt gap) so panes read sunk, not punched. */
 [data-theme='dark'] {
+  --support-star-stroke: #d99a0b;
+  --support-star-fill: #facc15;
+  --dialog-backdrop: rgba(0,0,0,.3);
+  --dialog-shadow: rgba(0,0,0,.45);
+  --run-bud-border: rgba(0, 255, 136, 0.35);
+  --run-bud-glow: rgba(0, 255, 136, 0.12);
+  --run-bud-skin-top: #1a1a1c;
+  --run-bud-skin-bottom: #0b0b0d;
+  --run-bud-text: #b8ffd9;
+  --run-bud-hover: rgba(0, 255, 136, 0.85);
+  --run-bud-active-ring: rgba(0, 255, 136, 0.45);
+  --run-bud-active-glow: rgba(0, 255, 136, 0.28);
+  --run-bud-stop-border: rgba(255, 95, 87, 0.8);
+  --run-bud-stop-text: #ffc9c4;
+  --run-bud-stop-glow: rgba(210, 72, 72, 0.35);
+  --run-scope-accent: #5b8def;
+  --usage-heatmap-mid: #238636;
+  --usage-heatmap-high: #40c463;
+  --preview-paper: #fff;
+  --preview-shadow: rgba(0,0,0,.15);
+  --font-mono: "Cascadia Mono", "SF Mono", Consolas, monospace;
+  --focus-progress: 0;
   --sidebar-codex-filter: invert(1);
   --session-sheet-base-weight: 96%;
   --cli-logo-light: #f4f4f4;

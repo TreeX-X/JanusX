@@ -70,6 +70,9 @@
   box-shadow: none;
   background: transparent;
   transform: none;
+  /* Settings owns scrolling and clipping; allow control focus rings to extend
+     into its body padding instead of clipping them at this flush panel edge. */
+  overflow: visible;
 }
 
 .modalBackdrop.show .llmConfigPanel {

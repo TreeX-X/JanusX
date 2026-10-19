@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-18T11:49:40Z",
+  "updated": "2026-10-19T05:36:38Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -46,6 +46,8 @@ Verified installer metadata (version, notes, and completed progress) is stored i
 The release workflow guards the first-publish footguns: the tag must equal `v` plus the `package.json` version because the publisher derives the release tag and the feed version from the package, and the sibling `janus-agentX` checkout resolves to the public same-owner repository. Snapshots and background events carry the release body as tag-stripped plain text (`formatReleaseNotes` in the updater contract). The updater library and the service failures log through `electron-log` to `userData/logs` with a console mirror. Unsupported runtimes get a fixed download-page entry (`updater:openReleases`, URL allowlist of one) instead of a dead button. The allowlisted URL is `https://treex-x.github.io/JanusX/#downloads`, the gh-pages package chooser, so portable and dev users land on the designed install/portable selection rather than the raw Releases listing; the landing page's own changelog links still target Releases. The auto-check switch disables where no schedule exists.
 
 ## Verification status
+
+The 2026-10-19 installed-runtime report exposed an initialization gap in the earlier probes: native ESM does not synthesize the CommonJS `autoUpdater` getter as a named export. Destructuring it directly from `import('electron-updater')` produced `undefined` and failed while setting `autoDownload`, before any network check. The service now reads `autoUpdater` from the module's default export while retaining lazy loading. The service test mock exposes only that default shape, matching the real dependency. A native Node import confirms the named export is absent and the default export owns the getter; all 44 updater/publishing/shutdown regression tests pass after the fix. Existing installed binaries require a rebuilt installer; these checks do not establish a full packaged upgrade.
 
 The 2026-10-18 audit confirms version discovery against the real GitHub provider: an isolated Electron 35.7.5 host identifying as 0.9.1 discovers the published 0.9.2 installer, and a 0.9.2 host reports no update. The release contains `latest.yml`, the setup executable and its blockmap. The real `NsisUpdater` also completes a valid 64 KiB local fixture download, rejects a checksum mismatch, and dispatches the expected `--updated --force-run` installer arguments with process creation intercepted. No installation or replacement of the user's running application occurred. Downloading the complete 137,114,422-byte published installer reached 18,415,607 bytes before the audit's four-minute deadline; its complete SHA512 and an installed-version upgrade remain unverified.
 

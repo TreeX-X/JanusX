@@ -7,7 +7,7 @@
  * Note: 三栏改分体浮岛卡（错峰入场 + 框线定界 + 主题令牌收编）— see .agents/notes/workbench/run-config-island-cards.md
  */
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { lazy, Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Play, Save, ScanSearch, Square, SquareTerminal, TestTube2 } from 'lucide-react'
 import { ProjectType } from '@/types/project'
 import type { LaunchConfig, DetectResult, ProjectTypeSchema } from '@/types/project'
@@ -24,11 +24,13 @@ import {
 import { analyzeWorkspaceLaunch, type WorkspaceLaunchAnalysis } from '@/services/workspace-launch-assistant'
 import ProjectTypeSelector from './ProjectTypeSelector'
 import QuickConfigForm from './ProjectConfigForm/QuickConfigForm'
-import JsonEditor from './ProjectConfigForm/JsonEditor'
 import ProjectLaunchAssistant from './ProjectLaunchAssistant'
 import { cardIndexStyle } from '@/components/shared/CardFrame'
 import { useI18n } from '@/i18n/useI18n'
 import styles from './ProjectSettings.module.css'
+
+// The advanced tab must not pull Monaco into the application's startup graph.
+const JsonEditor = lazy(() => import('./ProjectConfigForm/JsonEditor'))
 
 interface ProjectSettingsProps {
   projectPath: string
@@ -484,7 +486,9 @@ export function ProjectSettings({
 
         <div className={styles.formContainer}>
           {activeView === 'advanced' ? (
-            <JsonEditor value={JSON.stringify(config, null, 2)} onChange={handleJsonChange} />
+            <Suspense fallback={<div role="status">{t('editor:config.loading')}</div>}>
+              <JsonEditor value={JSON.stringify(config, null, 2)} onChange={handleJsonChange} />
+            </Suspense>
           ) : activeView === 'diff' ? (
             <div className={styles.diffList} aria-label="Project configuration changes">
               {configDiff.length === 0 ? (

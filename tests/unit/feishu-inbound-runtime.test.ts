@@ -4,6 +4,11 @@ import { FEISHU_CONTROL_DEFAULTS } from '../../src/shared/notifications'
 import type { FeishuInboundChannel } from '../../src/main/remote-notifications/feishu-inbound/types'
 
 const { getUserDataPath } = vi.hoisted(() => ({ getUserDataPath: vi.fn(() => '.') }))
+const sdk = vi.hoisted(() => ({ loaded: vi.fn(), create: vi.fn() }))
+vi.mock('../../src/main/remote-notifications/feishu-inbound/sdk-channel', () => {
+  sdk.loaded()
+  return { createFeishuSdkChannel: sdk.create }
+})
 vi.mock('electron', () => ({ app: { getPath: getUserDataPath } }))
 vi.mock('../../src/main/ipc/terminal-handlers', () => ({ submitCompanionTerminalLine: vi.fn() }))
 
@@ -52,6 +57,54 @@ describe('FeishuInboundRuntime', () => {
       channels.push(channel)
       return channel
     })
+  })
+
+  it('loads the SDK only when inbound control is enabled, then disconnects when disabled', async () => {
+    const channel = makeChannel()
+    sdk.create.mockReturnValue(channel)
+    const runtime = new FeishuInboundRuntime()
+    runtime.configure({} as never)
+    await runtime.reconfigure(settings('app-1', false))
+    expect(sdk.loaded).not.toHaveBeenCalled()
+    expect(sdk.create).not.toHaveBeenCalled()
+    expect(runtime.getControlStatus().state).toBe('disabled')
+
+    await runtime.reconfigure(settings())
+    expect(sdk.loaded).toHaveBeenCalledOnce()
+    expect(channel.connect).toHaveBeenCalledOnce()
+    await runtime.reconfigure(settings('app-1', false))
+    expect(channel.disconnect).toHaveBeenCalledOnce()
+  })
+
+  it('serializes disabling behind a pending channel load', async () => {
+    const channel = makeChannel()
+    let finishLoad!: (channel: FeishuInboundChannel) => void
+    let started!: () => void
+    const loading = new Promise<void>((resolve) => { started = resolve })
+    const runtime = new FeishuInboundRuntime(() => {
+      started()
+      return new Promise((resolve) => { finishLoad = resolve })
+    })
+    runtime.configure({} as never)
+    const enabling = runtime.reconfigure(settings())
+    await loading
+    const disabling = runtime.reconfigure(settings('app-1', false))
+    finishLoad(channel)
+    await Promise.all([enabling, disabling])
+    expect(channel.disconnect).toHaveBeenCalledOnce()
+    expect(runtime.getStatus().state).toBe('disabled')
+  })
+
+  it('retries after an asynchronous channel load failure', async () => {
+    const channel = makeChannel()
+    const load = vi.fn().mockRejectedValueOnce(new Error('SDK unavailable')).mockResolvedValueOnce(channel)
+    const runtime = new FeishuInboundRuntime(load)
+    runtime.configure({} as never)
+    await runtime.reconfigure(settings())
+    expect(runtime.getStatus()).toEqual({ state: 'failed', error: 'SDK unavailable' })
+    await runtime.reconfigure(settings())
+    expect(channel.connect).toHaveBeenCalledOnce()
+    await runtime.stop()
   })
 
   it('starts once, reconfigures changed credentials, and stops idempotently', async () => {

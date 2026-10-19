@@ -4,10 +4,20 @@ import {
   FEISHU_CONTROL_LIMITS,
   isValidFeishuGroupPrefix,
   normalizeRemoteNotificationSettings,
+  normalizeAgentNotificationSettings,
   validateFeishuControlConfig,
 } from '../../src/shared/notifications'
 
 describe('Feishu control settings normalization', () => {
+  it('defaults to desktop notifications only and preserves explicit switches', () => {
+    expect(normalizeAgentNotificationSettings()).toMatchObject({
+      desktopEnabled: true,
+      remote: { enabled: false, providers: { feishu: { enabled: false, inboundControlEnabled: false } } },
+    })
+    expect(normalizeAgentNotificationSettings({ desktopEnabled: false, remote: { enabled: true } as never }))
+      .toMatchObject({ desktopEnabled: false, remote: { enabled: true } })
+  })
+
   it('migrates old outbound-only settings with control disabled and safe defaults', () => {
     const normalized = normalizeRemoteNotificationSettings({
       enabled: true,

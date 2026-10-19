@@ -2,7 +2,7 @@ let editorWarmupPromise: Promise<unknown> | null = null
 
 /**
  * P4: @monaco-editor/react 经动态 import 加载，Monaco 相关代码不进首屏 bundle；
- * 预热仍在空闲期触发（App 的 requestIdleCallback 路径），首次打开编辑器即热。
+ * 文件悬浮或打开意图触发预热；纯终端启动不主动加载编辑器。
  */
 export function warmupEditorRuntime(): Promise<unknown> {
   if (editorWarmupPromise) return editorWarmupPromise

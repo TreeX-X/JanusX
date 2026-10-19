@@ -41,6 +41,8 @@ beforeAll(async () => {
       window.show(window.mode)
     })
   ` }, loader: { '.svg': 'dataurl' }, bundle: true, write: false, outfile: 'assistant-ui.js', jsx: 'automatic', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' }, plugins: [{ name: 'i18n-fixture', setup(builder) {
+    builder.onResolve({ filter: /\/monaco-runtime$/ }, () => ({ path: 'monaco-runtime', namespace: 'test' }))
+    builder.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: 'export const initializeMonacoRuntime = async () => {}; export const configureMonacoRuntime = () => {}' }))
     builder.onLoad({ filter: /[/\\]i18n[/\\]index\.ts$/ }, () => ({ contents: "import i18n from 'i18next'; export default i18n;export const changeLanguage=()=>{}", loader: 'ts' }))
   } }] })
   script = result.outputFiles.find(file => file.path.endsWith('.js'))!.text

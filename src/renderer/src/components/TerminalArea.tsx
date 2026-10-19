@@ -1173,7 +1173,14 @@ function LeafPane({
 
 export function TerminalArea() {
   const { t } = useI18n('terminal')
-  const globalTools = useGlobalToolsStore()
+  // Geometry and collapse are owned by GlobalToolsLayout. Subscribing to them
+  // here rerenders every terminal/editor on each outer splitter movement.
+  const globalTools = useGlobalToolsStore(useShallow((s) => ({
+    paneTree: s.paneTree, focused: s.focused, focusedPaneId: s.focusedPaneId,
+    collapsePaneLayout: s.collapsePaneLayout, setFocusedPane: s.setFocusedPane,
+    setPaneTab: s.setPaneTab, reorderPaneTab: s.reorderPaneTab,
+    movePaneTabToIndex: s.movePaneTabToIndex, dropContent: s.dropContent, resizePane: s.resizePane,
+  })))
   // P5: useShallow 细粒度订阅——整 store 订阅会让任意无关字段变化都重渲染这棵大组件树
   const {
     workspaces,

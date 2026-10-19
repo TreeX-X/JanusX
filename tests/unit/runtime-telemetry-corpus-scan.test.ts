@@ -81,6 +81,16 @@ function readRecords() {
 }
 
 describe('corpus usage scan', () => {
+  it('retains legacy handling of valid Codex files containing no accounting records', async () => {
+    const id = 'aaaaaaaa-1111-4111-8111-111111111111'
+    const root = join(testContext.homeDir, '.codex', 'sessions')
+    await mkdir(root, { recursive: true })
+    await writeFile(join(root, `rollout-fixture-${id}.jsonl`), '{"type":"response_item","payload":{"text":"body only"}}\n')
+    const summary = await scanNativeSessionCorpus({ ledger })
+    expect(summary).toMatchObject({ scanned: 1, recorded: 1, unavailable: 0 })
+    expect(readRecords()).toEqual([])
+  })
+
   it('imports unbound OpenCode requests with native timestamps, cache counts and reasoning, then deduplicates replays', async () => {
     const root = join(testContext.homeDir, '.local', 'share', 'opencode')
     await mkdir(root, { recursive: true })

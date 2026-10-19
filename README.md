@@ -311,7 +311,7 @@ JanusX 是一个真实投入社区使用的开源实验项目，目标是让 AI 
 ## 联系与交流
 
 - **邮箱**：[740288105@qq.com](mailto:740288105@qq.com)
-- **QQ 交流群**：1125733779（JanusX 交流群一），扫描下方二维码加入。
+- **QQ 交流群**：1125733779（JanusX 交流群一），扫描下方二维码加入。进群反馈问题、交流 Agent 开发、讨论 JanusX 功能，以及得到第一手的更新内容与想法。
 
 <p align="center">
   <a href="wiki/assets/readme/qq-group-1.png">

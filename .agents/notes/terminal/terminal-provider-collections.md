@@ -27,7 +27,7 @@
       }
     }
   },
-  "updated": "2026-10-17T16:01:21Z",
+  "updated": "2026-10-19T09:59:08Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -51,6 +51,8 @@ A per-Agent journal in `janusx/llm-connections` records original and applied fie
 
 Native configuration uses the Agent's existing settings/sign-in; it does not create an OAuth session or copy subscription tokens. Start a new session after applying. The settings surface additionally probes whether the Agent holds local credentials and, when it does not, blocks apply until the user completes the Agent's own sign-in, triggered from settings in a background PTY so the browser pops directly — ownership and token handling are unchanged; see [native login-first](./native-login-first.md). Environment variables and project settings may override global configuration. Current native home overrides are respected; remote environments, routing, protocol conversion and failover belong to phase two. CPA remains responsible for accounts and quotas.
 
+The embedded LLM panel leaves overflow visible so channel controls can draw their 2px focus outline with a 2px offset into the settings body's padding. The settings body owns scrolling and the outer settings shell owns clipping; the standalone LLM dialog retains its own clipping.
+
 ## Migration and persistence
 
 v1 shared pools retain their bindings and model overrides. v2 collections fold matching copies of the same channel ID, union their model lists and keep each Agent's model choice. Conflicting same-ID connections get deterministic suffixed IDs; Janus IDs are retained first to preserve existing chat references. Different channel IDs are never folded merely because they share a model.
@@ -70,6 +72,8 @@ One catalog replaces repeated credential edits while each Agent keeps its own mo
 The phase-one verification covers shared-channel migration and deletion guards, independent model choices, direct protocol selection, all four external formats, JSONC preservation, native restoration, externally edited fields and rollback on binding failure. The focused command `npx vitest run tests/unit/llm tests/unit/development-llm-config-sync.test.ts tests/unit/llm-proxy-refresh.test.ts tests/unit/external-cli tests/unit/remaining-ipc-contract.test.ts` passed 169 tests across 20 files; `npm run test:llm-core` passed 80 tests across seven files. `npx playwright test tests/e2e/llm-configuration.spec.ts --project=island --workers=2` passed nine scenarios with `JANUS_E2E_PORT=41742` and local addresses excluded from the system proxy. UI tests use isolated mock IPC and projector tests use temporary homes. Light/dark screenshots at widths 1280 and 640 were inspected. Strict unused/type checks, locale checks and production build were run; theme audit retains unrelated existing findings.
 
 The installed official Codex CLI accepted an isolated configuration containing `model_provider`, `wire_api = "responses"`, `experimental_bearer_token` and `requires_openai_auth = false` via `codex features list` (exit 0). The online documentation host returned HTTP 403. Pi's custom-provider shape was checked against the published package's `docs/models.md`. No real provider credentials were used for end-to-end network validation.
+
+2026-10-19 focus-ring fix: `npx playwright test tests/e2e/llm-configuration.spec.ts --project=island --workers=2` passed all 15 scenarios with `JANUS_E2E_PORT=49872` and loopback excluded from the system proxy. An additional local Playwright geometry check focused 24 editor controls in each light/dark × 1280/640px combination, including expanded advanced controls; no horizontal ancestor clipping or body overflow remained. Focused endpoint screenshots were captured under `artifacts/llm-focus-*-after.png`; the light 640px image was visually inspected. These checks use mock IPC, not packaged Electron or real provider calls.
 
 ## Historical context
 

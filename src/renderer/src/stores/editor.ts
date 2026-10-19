@@ -7,8 +7,43 @@ type LoadedFileSnapshot = Pick<
   'viewType' | 'content' | 'base64' | 'mimeType' | 'size' | 'mtime'
 >
 
-const loadedFileCache = new Map<string, LoadedFileSnapshot>()
+// Evicting a cached disk snapshot never removes an open/dirty tab from openFiles.
+// Estimate strings conservatively as UTF-16; this is a payload budget, not heap size.
+const MAX_CACHED_BYTES = 16 * 1024 * 1024
+const MAX_CACHED_FILE_BYTES = 2 * 1024 * 1024
+const MAX_CACHED_FILES = 128
+const loadedFileCache = new Map<string, { snapshot: LoadedFileSnapshot; bytes: number }>()
+let cachedBytes = 0
 const pendingFileLoads = new Map<string, Promise<LoadedFileSnapshot>>()
+// Open and reload can overlap for the same tab; only the latest read may apply.
+const fileReadRequests = new WeakMap<OpenFile, Promise<LoadedFileSnapshot>>()
+
+function removeCachedFile(id: string): LoadedFileSnapshot | undefined {
+  const cached = loadedFileCache.get(id)
+  if (!cached) return undefined
+  cachedBytes -= cached.bytes
+  loadedFileCache.delete(id)
+  return cached.snapshot
+}
+
+function getCachedFile(id: string): LoadedFileSnapshot | undefined {
+  const cached = loadedFileCache.get(id)
+  if (!cached) return undefined
+  loadedFileCache.delete(id)
+  loadedFileCache.set(id, cached)
+  return cached.snapshot
+}
+
+function cacheFileSnapshot(id: string, snapshot: LoadedFileSnapshot): void {
+  removeCachedFile(id)
+  const bytes = 2 * (snapshot.content.length + (snapshot.base64?.length ?? 0) + id.length) + 512
+  if (bytes > MAX_CACHED_FILE_BYTES) return
+  loadedFileCache.set(id, { snapshot, bytes })
+  cachedBytes += bytes
+  while (cachedBytes > MAX_CACHED_BYTES || loadedFileCache.size > MAX_CACHED_FILES) {
+    removeCachedFile(loadedFileCache.keys().next().value!)
+  }
+}
 
 export function getEditorFileId(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -39,14 +74,18 @@ function remapAbsolutePath(target: string, base: string, newBase: string): strin
 export function invalidateEditorFileCache(workspacePath?: string): void {
   if (!workspacePath) {
     loadedFileCache.clear()
+    cachedBytes = 0
     pendingFileLoads.clear()
     return
   }
 
   for (const filePath of loadedFileCache.keys()) {
     if (isPathInWorkspace(filePath, workspacePath)) {
-      loadedFileCache.delete(filePath)
+      removeCachedFile(filePath)
     }
+  }
+  for (const filePath of pendingFileLoads.keys()) {
+    if (isPathInWorkspace(filePath, workspacePath)) pendingFileLoads.delete(filePath)
   }
 }
 
@@ -104,21 +143,16 @@ async function loadFileSnapshot(absolutePath: string, viewType: FileViewType): P
   pendingFileLoads.set(id, request)
   try {
     const snapshot = await request
-    loadedFileCache.set(id, snapshot)
+    if (pendingFileLoads.get(id) === request) cacheFileSnapshot(id, snapshot)
     return snapshot
   } finally {
-    pendingFileLoads.delete(id)
+    if (pendingFileLoads.get(id) === request) pendingFileLoads.delete(id)
   }
 }
 
-/** 文件树重命名后同步编辑器:迁移打开的 tab 路径与缓存键 */
+/** 文件树重命名后同步编辑器:迁移打开的 tab 路径并失效旧缓存 */
 export function remapEditorPaths(oldAbsolutePath: string, newAbsolutePath: string, workspacePath: string): void {
-  for (const key of [...loadedFileCache.keys()]) {
-    if (!isSameOrUnderPath(key, oldAbsolutePath)) continue
-    const snapshot = loadedFileCache.get(key)!
-    loadedFileCache.delete(key)
-    loadedFileCache.set(getEditorFileId(remapAbsolutePath(key, oldAbsolutePath, newAbsolutePath)), snapshot)
-  }
+  invalidateEditorFileCache(oldAbsolutePath)
 
   useEditorStore.setState((s) => {
     let changed = false
@@ -146,14 +180,11 @@ export function remapEditorPaths(oldAbsolutePath: string, newAbsolutePath: strin
 
 /** 文件树删除后同步编辑器:关闭指向已删除路径的 tab、清理缓存 */
 export function closeEditorFilesUnderPath(absolutePath: string): void {
-  for (const key of [...loadedFileCache.keys()]) {
-    if (isSameOrUnderPath(key, absolutePath)) loadedFileCache.delete(key)
-  }
-
   const store = useEditorStore.getState()
   for (const file of store.openFiles) {
     if (isSameOrUnderPath(file.absolutePath, absolutePath)) store.closeFile(file.id)
   }
+  invalidateEditorFileCache(absolutePath)
 }
 
 interface EditorStore {
@@ -217,7 +248,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const viewType = getFileViewType(absolutePath)
     const name = getFileName(absolutePath)
     const relativePath = absolutePath.replace(workspacePath, '').replace(/^[\\/]/, '')
-    const cached = loadedFileCache.get(id)
+    const cached = getCachedFile(id)
 
     const newFile: OpenFile = {
       id, name, path: relativePath, absolutePath, viewType,
@@ -234,17 +265,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     if (cached) return
 
+    const request = loadFileSnapshot(absolutePath, viewType)
+    fileReadRequests.set(newFile, request)
     try {
-      const snapshot = await loadFileSnapshot(absolutePath, viewType)
+      const snapshot = await request
+      if (fileReadRequests.get(newFile) !== request) return
       set(s => ({
         openFiles: s.openFiles.map(f =>
-          f.id === id ? { ...f, ...snapshot, isLoading: false } : f
+          f === newFile ? { ...f, ...snapshot, isLoading: false } : f
         ),
       }))
     } catch (err: any) {
+      if (fileReadRequests.get(newFile) !== request) return
       set(s => ({
         openFiles: s.openFiles.map(f =>
-          f.id === id ? { ...f, error: err.message || 'Failed to load file', isLoading: false } : f
+          f === newFile ? { ...f, error: err.message || 'Failed to load file', isLoading: false } : f
         ),
       }))
     }
@@ -266,6 +301,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   closeFile: (id) => {
+    pendingFileLoads.delete(id)
     set(s => {
       const filtered = s.openFiles.filter(f => f.id !== id)
       let newActive = s.activeFileId
@@ -305,7 +341,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     try {
       const result = await window.electron.file.save(file.absolutePath, file.content)
       if (!result.success) throw new Error(result.error || 'Failed to save file')
-      loadedFileCache.set(file.id, {
+      cacheFileSnapshot(file.id, {
         viewType: file.viewType,
         content: file.content,
         base64: file.base64,
@@ -338,19 +374,23 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return
     }
 
+    removeCachedFile(id)
+    const request = loadFileSnapshot(absolutePath, file.viewType)
+    fileReadRequests.set(file, request)
     try {
-      loadedFileCache.delete(id)
-      const snapshot = await loadFileSnapshot(absolutePath, file.viewType)
+      const snapshot = await request
+      if (fileReadRequests.get(file) !== request) return
       set(s => ({
         openFiles: s.openFiles.map(f =>
-          f.id === id ? { ...f, ...snapshot, externalChanged: false, isLoading: false } : f
+          f === file ? { ...f, ...snapshot, externalChanged: false, isLoading: false } : f
         ),
       }))
     } catch (err) {
+      if (fileReadRequests.get(file) !== request) return
       const msg = err instanceof Error ? err.message : String(err)
       set(s => ({
         openFiles: s.openFiles.map(f =>
-          f.id === id ? { ...f, error: msg } : f
+          f === file ? { ...f, error: msg } : f
         ),
       }))
     }
@@ -371,7 +411,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   hasDirtyFiles: () => get().openFiles.some(f => f.isDirty),
 
-  closePanel: () => set({ openFiles: [], activeFileId: null, isVisible: false, isEmbedded: false, navigationTarget: null }),
+  closePanel: () => {
+    pendingFileLoads.clear()
+    set({ openFiles: [], activeFileId: null, isVisible: false, isEmbedded: false, navigationTarget: null })
+  },
   hidePanel: () => set({ isVisible: false, isEmbedded: false }),
   showPanel: () => set(s => ({ isVisible: s.openFiles.length > 0 })),
   togglePanel: () => set(s => ({ isVisible: s.openFiles.length > 0 ? !s.isVisible : false })),

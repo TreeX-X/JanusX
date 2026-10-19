@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-07",
   "class": "process",
-  "updated": "2026-10-19T04:32:13Z",
+  "updated": "2026-10-19T08:26:49Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -26,6 +26,8 @@ For the explicitly requested v0.9.0 replacement, use `release/0.9.0/JanusX-0.9.0
 The 2026-10-17 delivery follows this shape on the 0.9.2 line: source commit `454f33501e4fc7cf014e83b644e63659e73c2ada` on a clean worktree, executable 112764920 bytes, sha256 `c72b9d0b228630d4f86b8fdcb5048b6d68e339f6289ae4ac7f42f48d3e9f685c`, 228 packaged `out` files hashed, runtime gate exit 0 with unpacked/portable/stub smokes. Its step-5 packaged `tests/e2e/knowledge-pipeline.spec.ts` run is an unresolved reference — that spec was removed in c376a8d, so the cut ran the packaged-runtime gate alone until a successor packaged spec is named.
 
 For a dated delivery requesting both Windows formats (the 2026-10-19 cut), retain the base package version and build the configured NSIS setup and portable targets together into an isolated staging directory. Run `check-packaged-runtime.mjs --portable --release-dir <staging>` before delivery. Copy the verified executables into `release/<date>/` with `<date>` in both filenames, accompanied by `README.txt`, `SHA256SUMS.txt` and `BUILDINFO.json` identifying the source commit, packaged output hashes, verification results and known failures. These local artifacts do not create a version tag, publish a GitHub Release or replace the public update feed. Keep original staging filenames for the runtime checker and omit stale update metadata referring to renamed files. The setup target is the standard installed application; the portable target retains the separate application profile described by `application-profile.md`.
+
+The 2026-10-19-r2 delivery extends that shape for a same-day re-cut: the date stays the identity of the cut and a revision suffix `-r2` (then `-r3`, and so on) joins it in both the folder name and both executable names — `release/2026-10-19-r2/JanusX-0.9.2-2026-10-19-r2-x64-setup.exe` and `release/2026-10-19-r2/JanusX-0.9.2-2026-10-19-r2-x64-portable.exe` — so the first cut folder, executables and `SHA256SUMS.txt` remain byte-identical for recipients already verifying against them. It was cut from source commit `efc913688e7bae3654d4d0424de1e787a726c98e` with 25 uncommitted worktree changes that `BUILDINFO.json` records verbatim in its `worktree` field (the first 10-19 cut shipped a clean tree at `20c3510d`); setup 137746355 bytes sha256 `b64d013986f9a955d1257ac0144a511963186aa69d3614631bd10abecae45ef9`, portable 137537064 bytes sha256 `848d79cc508c049c4ece51be29052b331e01adca4de3ce7d5b8a6209475d0056`, 233 packaged `out` files hashed. Its gates were package prepare (prepackage, build, package boundary, exclusions sync) and the packaged-runtime check covering the unpacked app, portable payload and portable stub, plus 79 targeted unit tests over the dirty-area suites; full verify, theme audit, desktop/preview e2e and installer upgrade were not run for this cut. Node was v24.15.0 against the repository pin 24.20.0.
 
 ## Alternatives considered
 

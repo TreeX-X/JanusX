@@ -21,10 +21,17 @@ import { listRegisteredWorkspaces, resolveRegisteredWorkspace } from '../../comp
 import { configureFeishuCardActionTokenIssuer, configureFeishuWorkspaceActionTokenIssuer } from '../providers/feishu-provider'
 import { redactErrorText } from '../secret-redaction'
 import { FeishuInboundClient } from './client'
-import { createFeishuSdkChannel, type FeishuSdkChannelConfig } from './sdk-channel'
+import type { FeishuSdkChannelConfig } from './sdk-channel'
 import type { FeishuConnectionStatus, FeishuInboundChannel } from './types'
 
-type ChannelFactory = (config: FeishuSdkChannelConfig) => FeishuInboundChannel
+type ChannelFactory = (config: FeishuSdkChannelConfig) => FeishuInboundChannel | Promise<FeishuInboundChannel>
+
+// Keep the SDK out of desktop-only startup. The serialized reconfigure queue
+// also owns asynchronous loading, so disabling/shutdown still closes the client.
+const createChannelOnDemand: ChannelFactory = async (config) => {
+  const { createFeishuSdkChannel } = await import('./sdk-channel')
+  return createFeishuSdkChannel(config)
+}
 
 export class FeishuInboundRuntime {
   private mainWindow: BrowserWindow | null = null
@@ -37,7 +44,7 @@ export class FeishuInboundRuntime {
   private statusUpdatedAt = Date.now()
   private controlEnabled = false
 
-  constructor(private readonly channelFactory: ChannelFactory = createFeishuSdkChannel) {}
+  constructor(private readonly channelFactory: ChannelFactory = createChannelOnDemand) {}
 
   configure(mainWindow: BrowserWindow): void {
     this.mainWindow = mainWindow
@@ -71,7 +78,7 @@ export class FeishuInboundRuntime {
       let client: FeishuInboundClient | null = null
       try {
         this.gateway = this.createGateway(config)
-        channel = this.channelFactory({ appId: config.appId.trim(), appSecret: config.appSecret.trim() })
+        channel = await this.channelFactory({ appId: config.appId.trim(), appSecret: config.appSecret.trim() })
         client = new FeishuInboundClient(
           channel,
           this.gateway,

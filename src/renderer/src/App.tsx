@@ -34,7 +34,6 @@ import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { AgentNotificationHost } from '@/components/AgentNotificationHost'
 import { JanusChatProvider } from '@/components/janus/JanusChatProvider'
-import { warmupEditorRuntime } from '@/lib/editor-warmup'
 import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
 import dockStyles from '@/components/right-tools/RightDock.module.css'
 import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
@@ -408,7 +407,6 @@ export default function App() {
   useEffect(() => {
     const idleWindow = window as IdleWindow
     const runWarmup = () => {
-      void warmupEditorRuntime()
       warmDefaultShellCache()
       warmTerminalCreatePath()
     }

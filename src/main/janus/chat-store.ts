@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { app } from 'electron'
 import { SerialQueue } from '../lib/atomic-file'
 import {
@@ -61,8 +63,7 @@ export class JanusChatStore {
 
   load(): Promise<JanusChatStorageSnapshot | null> {
     return this.writeQueue.run(async () => {
-      const entries = await this.readJournal()
-      const head = entries.at(-1)
+      const head = await this.readJournalHead()
       if (head) {
         this.headId = head.id
         return head.snapshot
@@ -80,7 +81,7 @@ export class JanusChatStore {
     const normalized = normalizeJanusChatSnapshot(snapshot)
     if (!normalized) return Promise.reject(new Error('Invalid Janus Chat snapshot'))
     return this.writeQueue.run(async () => {
-      if (this.headId === undefined) this.headId = (await this.readJournal()).at(-1)?.id ?? null
+      if (this.headId === undefined) this.headId = (await this.readJournalHead())?.id ?? null
       const entry: JanusChatJournalEntry = {
         type: 'snapshot',
         version: 1,
@@ -95,22 +96,42 @@ export class JanusChatStore {
     })
   }
 
-  private async readJournal(): Promise<JanusChatJournalEntry[]> {
-    let content: string
-    try { content = await readFile(this.paths.journalPath, 'utf8') }
-    catch { return [] }
-    const entries: JanusChatJournalEntry[] = []
+  private async readJournalHead(): Promise<JanusChatJournalEntry | null> {
+    let head: JanusChatJournalEntry | null = null
     const knownIds = new Set<string>()
-    for (const line of content.split('\n')) {
-      if (!line.trim()) continue
+    const accept = (line: string): void => {
+      if (!line.trim()) return
       let entry: JanusChatJournalEntry | null = null
-      try { entry = normalizeEntry(JSON.parse(line)) } catch { continue }
-      if (!entry || knownIds.has(entry.id)) continue
-      if (entry.parentId !== null && !knownIds.has(entry.parentId)) continue
-      entries.push(entry)
+      try { entry = normalizeEntry(JSON.parse(line)) } catch { return }
+      if (!entry || knownIds.has(entry.id)) return
+      if (entry.parentId !== null && !knownIds.has(entry.parentId)) return
+      head = entry
       knownIds.add(entry.id)
     }
-    return entries
+    // Keep one snapshot plus lineage IDs, rather than every historical copy.
+    // Fragments avoid repeatedly copying an unusually long JSONL row.
+    let pending: string[] = []
+    try {
+      const stream = createReadStream(this.paths.journalPath, { encoding: 'utf8', highWaterMark: 256 * 1024 })
+      for await (const chunk of stream) {
+        const text = chunk as string
+        let start = 0
+        for (let end = text.indexOf('\n', start); end >= 0; end = text.indexOf('\n', start)) {
+          const part = text.slice(start, end)
+          accept(pending.length ? pending.join('') + part : part)
+          pending = []
+          start = end + 1
+        }
+        if (start < text.length) pending.push(text.slice(start))
+        // Parsing still runs on main; yield between bounded input batches.
+        await yieldToEventLoop()
+      }
+      if (pending.length) accept(pending.join(''))
+      return head
+    } catch {
+      // As with the former readFile path, an unreadable journal uses legacy data.
+      return null
+    }
   }
 }
 

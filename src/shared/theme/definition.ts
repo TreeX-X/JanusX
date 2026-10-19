@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 主题契约（M1 统一结构的核心）。
  *
  * 一个主题 = 一份 ThemeDefinition：id + 语义令牌 + xterm palette + Monaco theme。
@@ -57,7 +57,34 @@ export interface ThemeDefinition {
 
 /* ── dark（经典黑，第二位）：值与历史 :root 逐字一致 ─────────────────────────── */
 
+// Shared visual constants preserve the existing component artwork.
+const SHARED_UI_TOKENS = {
+  'support-star-stroke': '#d99a0b',
+  'support-star-fill': '#facc15',
+  'dialog-backdrop': 'rgba(0,0,0,.3)',
+  'dialog-shadow': 'rgba(0,0,0,.45)',
+  'run-bud-border': 'rgba(0, 255, 136, 0.35)',
+  'run-bud-glow': 'rgba(0, 255, 136, 0.12)',
+  'run-bud-skin-top': '#1a1a1c',
+  'run-bud-skin-bottom': '#0b0b0d',
+  'run-bud-text': '#b8ffd9',
+  'run-bud-hover': 'rgba(0, 255, 136, 0.85)',
+  'run-bud-active-ring': 'rgba(0, 255, 136, 0.45)',
+  'run-bud-active-glow': 'rgba(0, 255, 136, 0.28)',
+  'run-bud-stop-border': 'rgba(255, 95, 87, 0.8)',
+  'run-bud-stop-text': '#ffc9c4',
+  'run-bud-stop-glow': 'rgba(210, 72, 72, 0.35)',
+  'run-scope-accent': '#5b8def',
+  'usage-heatmap-mid': '#238636',
+  'usage-heatmap-high': '#40c463',
+  'preview-paper': '#fff',
+  'preview-shadow': 'rgba(0,0,0,.15)',
+  'font-mono': '"Cascadia Mono", "SF Mono", Consolas, monospace',
+  'focus-progress': '0',
+}
+
 const DARK_TOKENS = {
+  ...SHARED_UI_TOKENS,
   'sidebar-codex-filter': 'invert(1)',
   'session-sheet-base-weight': '96%',
   'cli-logo-light': '#f4f4f4',
@@ -206,6 +233,7 @@ export const DARK_THEME_DEFINITION: ThemeDefinition = {
    来源 design/pelican-lithograph-style.md：纸 #EFE4C5 / 墨 #1C343B / 朱红 #D43D2A。 */
 
 const PLANCHE_TOKENS = {
+  ...SHARED_UI_TOKENS,
   'sidebar-codex-filter': 'none',
   'session-sheet-base-weight': '84%',
   'cli-logo-light': '#f4f4f4',

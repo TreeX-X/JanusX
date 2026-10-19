@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-18T05:57:21Z",
+  "updated": "2026-10-19T11:25:11.254Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -75,6 +75,12 @@ Strict unused checks remove dead imports, private helpers and unconsumed destruc
 Desktop fixtures explicitly set `JANUSX_KNOWLEDGE_ROOT`; changing Electron's user-data path or HOME alone does not isolate knowledge storage on Windows. Playwright also canonicalizes temporary paths, keeping opened editor model URIs consistent with source-file IPC's real paths. UI scenarios using Chinese labels persist that language through the system IPC before reloading. The scripted model server handles non-streaming connection probes separately from task Responses requests. Geometry assertions wait for finite workbench animations, and closed dock assertions check opacity plus inert and aria-hidden because the mounted shell deliberately retains its layout box. Failed desktop runs upload their traces for seven days.
 
 Release preparation installs Node before any build, verifies the pinned OfficeCLI checksum before bundling, and publishes prerelease versions with the matching GitHub release type. Tags remain lowercase and equal to the package version; historical tags are unchanged. Branch scope and cleanup rules live in `CONTRIBUTING.md`.
+
+### v0.9.3 release preparation
+
+The maintainer explicitly requested committing and pushing the current JanusX checkout, tagging v0.9.3, publishing release notes from the v0.9.2 range, and delivering Windows setup and portable packages. This authorizes the direct release path described in the maintainer guide; repository protections remain enabled and no independent review is claimed. Both workflows retain the published sibling pin `8baa18e5db8ca641871c139a5b76904bedc88dda`; release packaging uses that clean source rather than the sibling checkout's unrelated local edits.
+
+Release preflight found 26 new theme diagnostics. Existing star, run-orb, usage-heatmap, dialog and HTML-preview colors now live in shared theme tokens with their previous values; the missing monospace font and default focus progress variables are defined there. Theme generation and audit pass without expanding the legacy baseline. The assistant UI browser fixture stubs the Monaco initialization boundary because esbuild does not implement Vite worker imports; actual editor loading remains covered by the production build and desktop checks.
 
 ## Alternatives considered
 

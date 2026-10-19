@@ -127,8 +127,8 @@
 }
 
 /* Calendar activity uses one quiet green scale across terminal filters and themes. */
-.heatmapSection { --heat-color: #238636; --heat-empty: color-mix(in srgb, var(--shell-text) 6%, var(--shell-canvas)); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.panel[data-theme-base="dark"] .heatmapSection { --heat-color: #40c463; }
+.heatmapSection { --heat-color: var(--usage-heatmap-mid); --heat-empty: color-mix(in srgb, var(--shell-text) 6%, var(--shell-canvas)); display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel[data-theme-base="dark"] .heatmapSection { --heat-color: var(--usage-heatmap-high); }
 .heatmapTotal { font-size: 18px; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
 .heatmapTotal small { color: var(--shell-muted); font-size: 10px; letter-spacing: 0; }
 .heatmapScroll { overflow-x: auto; padding: 3px 2px 6px; scrollbar-width: thin; }

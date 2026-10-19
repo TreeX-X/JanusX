@@ -6,15 +6,18 @@ vi.mock('electron', () => ({ app: { getVersion: () => '0.9.1', isPackaged: true 
 vi.mock('electron-log', () => ({ default: { error: vi.fn() } }))
 vi.mock('electron-updater', async () => {
   const { EventEmitter } = await import('node:events')
-  return { autoUpdater: Object.assign(new EventEmitter(), {
+  // Match native ESM loading of the CommonJS package: autoUpdater is on default only.
+  return { default: { autoUpdater: Object.assign(new EventEmitter(), {
     checkForUpdates: vi.fn(), downloadUpdate: vi.fn(), quitAndInstall: vi.fn(),
     autoDownload: true, autoInstallOnAppQuit: true, logger: null,
-  }) }
+  }) } }
 })
 
-import { autoUpdater } from 'electron-updater'
+import updaterModule from 'electron-updater'
 import { UpdateService } from '../../../src/main/updater/service'
 import { applyUpdaterEvent } from '../../../src/renderer/src/lib/updater-badge'
+
+const { autoUpdater } = updaterModule
 
 const savedPortableDir = process.env.PORTABLE_EXECUTABLE_DIR
 const info = { version: '0.9.2', releaseNotes: '<p>Fix session recovery</p>' }

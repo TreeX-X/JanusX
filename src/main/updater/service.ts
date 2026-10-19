@@ -161,7 +161,9 @@ export class UpdateService {
       return null
     }
     try {
-      const { autoUpdater } = await import('electron-updater')
+      // CommonJS exposes autoUpdater through a getter; native ESM cannot infer it as a named export.
+      const { default: updaterModule } = await import('electron-updater')
+      const { autoUpdater } = updaterModule
       autoUpdater.autoDownload = false
       autoUpdater.autoInstallOnAppQuit = false
       // 现场排障唯一依据：file transport 落 userData/logs，console 同步一份。

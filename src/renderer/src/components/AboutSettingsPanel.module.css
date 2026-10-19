@@ -129,8 +129,8 @@
 }
 
 .starIcon {
-  color: #d99a0b;
-  fill: #facc15;
+  color: var(--support-star-stroke);
+  fill: var(--support-star-fill);
   flex-shrink: 0;
 }
 

@@ -3,7 +3,7 @@ import { getRightDockLayout } from '../../../src/renderer/src/components/right-t
 import { useRightToolStore } from '../../../src/renderer/src/stores/right-tools'
 import { useAppStore } from '../../../src/renderer/src/stores/app'
 import dockStyles from '../../../src/renderer/src/components/right-tools/RightDock.module.css'
-import React, { useEffect, useState } from 'react'
+import React, { Profiler, useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { TerminalArea } from '../../../src/renderer/src/components/TerminalArea'
 import { TitlebarToolGroup } from '../../../src/renderer/src/components/TitlebarToolGroup'
@@ -49,7 +49,14 @@ workspace.openMarkdownInWorkspace()
 const draft = useDraftCardStore.getState().addDraft('A')
 useDraftCardStore.getState().updateDraft('A', draft, { content: 'Document from project A', title: 'Project A notes' })
 useGlobalToolsStore.getState().attachBrowser('browser')
+const renderWork: number[] = []
+function MeasuredTerminalArea() {
+  return <Profiler id="terminal-area" onRender={(_id, _phase, duration) => { renderWork.push(duration) }}><TerminalArea /></Profiler>
+}
 Object.assign(window, { toolsFixture: {
+  resizeTools: (ratio: number) => useGlobalToolsStore.getState().setProjectRatio(ratio),
+  resetRenderWork: () => { renderWork.length = 0 },
+  renderWork: () => renderWork,
   state: () => ({ project: useWorkspaceStore.getState().paneTree, tools: useGlobalToolsStore.getState().paneTree,
     ratio: useGlobalToolsStore.getState().projectRatio, scope: useGlobalToolsStore.getState().markdownScopeId,
     bounds, collapsed: useGlobalToolsStore.getState().collapsed }),
@@ -89,7 +96,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <TitlebarToolGroup />
         {withDock && <button onClick={() => useAppStore.getState().togglePanel()}>Toggle right workspace</button>}
       </nav>
-      {withDock ? <WorkspaceWithDock /> : <div style={{ flex: 1, minHeight: 0 }}><TerminalArea /></div>}
+      {withDock ? <WorkspaceWithDock /> : <div style={{ flex: 1, minHeight: 0 }}><MeasuredTerminalArea /></div>}
     </div>
   </React.StrictMode>,
 )
