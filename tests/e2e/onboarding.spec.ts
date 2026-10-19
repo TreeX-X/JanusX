@@ -1,7 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const tour = (page: Page) => page.getByRole('region', { name: '首次入门', exact: true })
-const help = (page: Page) => page.locator('[data-onboarding="learning"]').first()
+async function openLearning(page: Page) {
+  await page.getByTitle('Settings', { exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '帮助与学习', exact: true }).click()
+}
 
 async function openIntro(page: Page, query = '') {
   await page.goto(`/onboarding.html${query}`)
@@ -72,7 +75,7 @@ test('cancel and failed terminal launches do not advance, and a reload resumes p
   await tour(page).getByRole('button', { name: '退出导引并保留进度' }).click()
   await page.reload()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await help(page).click()
+  await openLearning(page)
   await page.getByRole('button', { name: '继续学习', exact: true }).click()
   await expect(tour(page)).toHaveAttribute('data-onboarding-step', 'split')
   await page.evaluate(() => (window as any).onboardingFixture.removeProject())
@@ -84,7 +87,8 @@ test('existing users enter manually; skipped actions stay distinct; settings als
   await page.goto('/onboarding.html?existing')
   await expect(page.locator('[data-onboarding="shell"]')).toBeVisible()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await help(page).click()
+  await expect(page.locator('[data-onboarding="learning"]')).toHaveCount(0)
+  await openLearning(page)
   await page.getByRole('button', { name: '开始学习', exact: true }).click()
   for (let i = 0; i < 4; i++) await tour(page).getByRole('button', { name: '跳过这一步', exact: true }).click()
   await expect(page.getByText('本轮已验证 0 项，跳过 4 项。')).toBeVisible()
@@ -97,7 +101,7 @@ test('existing users enter manually; skipped actions stay distinct; settings als
 
 test('opening a standalone window with a failed file read does not verify the file step', async ({ page }) => {
   await page.goto('/onboarding.html?existing&failRead')
-  await help(page).click()
+  await openLearning(page)
   await page.getByRole('button', { name: '开始学习', exact: true }).click()
   for (let i = 0; i < 3; i++) await tour(page).getByRole('button', { name: '跳过这一步', exact: true }).click()
   await tour(page).getByRole('button', { name: '打开文件工具', exact: true }).click()

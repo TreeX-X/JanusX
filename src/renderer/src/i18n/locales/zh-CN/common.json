@@ -10,7 +10,7 @@
     "duration": "4 步 · 约 3 分钟 · 无需模型",
     "previouslyCompleted": "曾完成全部实操",
     "summary": "本轮已验证 {{completed}} 项，跳过 {{skipped}} 项。",
-    "returnHint": "右上角「帮助与学习」可随时继续或重学；设置中也有入口。",
+    "returnHint": "可随时从设置中的「帮助与学习」继续或重学。",
     "savedHint": "退出后保留进度，从「帮助与学习」继续。",
     "start": "开始学习",
     "resume": "继续学习",

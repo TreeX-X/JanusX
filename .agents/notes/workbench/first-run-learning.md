@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-18",
-  "updated": "2026-10-18T10:16:37Z",
+  "updated": "2026-10-19T03:15:35Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c",
   "codeRefs": [
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/renderer/src/components/onboarding/OnboardingHost.tsx","symbol":"OnboardingHost","role":"entry"},
@@ -21,7 +21,7 @@
 
 首次入门包含选择项目、启动终端、拖拽分屏和查看文件四步。它只使用本地工作区与 Shell，不要求配置模型、安装外部 AI CLI 或开启蓝图。特色功能的独立课程是后续方向，本次没有实现 Island、蓝图或运行配置课程，也不显示尚不可用的课程按钮。
 
-App 等待工作区初始化成功与创新功能开关加载，再决定首次介绍。无项目且没有学习记录时显示可关闭的欢迎页；已有项目的用户不自动弹窗。团队登录或组织挡板出现时让出界面，关闭后再介绍。右上角、空工作区页和设置侧栏的“帮助与学习”共用同一学习中心，可开始、继续和从头重学。
+App 等待工作区初始化成功与创新功能开关加载，再决定首次介绍。无项目且没有学习记录时显示可关闭的欢迎页；已有项目的用户不自动弹窗。团队登录或组织挡板出现时让出界面，关闭后再介绍。空工作区页和设置侧栏的“帮助与学习”共用同一学习中心，可开始、继续和从头重学。右上角不常驻学习入口，避免低频辅助功能挤占工作台工具空间；退出引导后不额外增加常驻提醒，续学提示指向设置入口。
 
 ## 实操与状态
 
@@ -44,6 +44,8 @@ App 等待工作区初始化成功与创新功能开关加载，再决定首次�
 复用静态教程的成本更低，但无法判断用户是否完成操作；全屏强制导览容易阻断开发流程。本方案保持主动操作与明确退出，代价是用户需要在完成后手动点击下一步，且拖拽不便时只能跳过。若后续观察到分屏步骤持续难以完成，应优先补充替代交互或短演示，再增加更多入门步骤。
 
 ## 验证
+
+移除标题栏学习入口后，`npx playwright test tests/e2e/onboarding.spec.ts --project=island --workers=1 --output artifacts/onboarding-settings-entry` 7/7 通过，覆盖已有项目无常驻入口、从设置手动进入、退出后重载续学、首次欢迎和重学；中英文续学提示均改指向设置。`npm run typecheck`、`npm run i18n:check`、Titlebar ESLint 与 `npm run check:notes` 通过（322 篇，0 错误、17 项既有外部链接诊断）。本次未修改学习状态逻辑，未重跑单元测试或安装包构建。
 
 高亮与确认按钮样式调整后，重跑 `npx playwright test tests/e2e/onboarding.spec.ts --project=island --workers=1 --output=artifacts/onboarding-style`，7 项通过；人工核对该目录的浅深色欢迎页和实操卡片截图，确认目标细框可辨、确认按钮层级与禁用状态清楚。`npm run check:notes` 为 0 错误、17 项既有外部链接诊断；`npm run theme:check` 仍报告原有 21 项审计问题，导引样式没有新增命中。此次仅调整 CSS，未重跑类型检查、单元测试或安装包构建。
 

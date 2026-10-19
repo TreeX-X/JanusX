@@ -24,7 +24,6 @@ import { useTeamStore } from '@/stores/team'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
 import { useWorkflowXDetection } from './janus/useWorkflowXDetection'
 import { useI18n } from '@/i18n/useI18n'
-import { LearningButton } from '@/components/onboarding/LearningButton'
 
 /*-- P4: 蓝图工作台（@xyflow 画布链）按需分包，未打开蓝图工作台时不加载 --*/
 const BlueprintWorkbench = lazy(() =>
@@ -347,9 +346,9 @@ export function Titlebar() {
       )}
 
       {/*-- 右侧两组：全局工具（浏览器/Markdown）与工作台（蓝图/知识库），
-           组间 12px 并由短竖分隔线隔开；无可见工作台时分隔线自动收起 --*/}
+           组间 12px 并由短竖分隔线隔开；无可见工作台时分隔线自动收起。
+           学习入口归属设置与空工作区，见 .agents/notes/workbench/first-run-learning.md --*/}
       <div className="absolute right-3.5 top-1/2 flex -translate-y-1/2 items-center gap-3 titlebar-no-drag">
-        <LearningButton />
         <TitlebarToolGroup />
         <TitlebarToolSeparator />
         <WorkbenchSwitcher />

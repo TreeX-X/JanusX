@@ -10,7 +10,7 @@
     "duration": "4 steps · About 3 minutes · No model needed",
     "previouslyCompleted": "All actions completed before",
     "summary": "This attempt: {{completed}} verified, {{skipped}} skipped.",
-    "returnHint": "Use Help & learning in the top right to continue or replay. It is also available in settings.",
+    "returnHint": "Use Help & learning in settings to continue or replay at any time.",
     "savedHint": "Leaving keeps your progress. Continue from Help & learning.",
     "start": "Start learning",
     "resume": "Continue learning",
