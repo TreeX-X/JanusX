@@ -234,7 +234,7 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
         <div
           data-editor-drag-region
           ref={tabStripRef}
-          className="relative flex min-w-0 flex-1 self-stretch items-center gap-1 overflow-x-auto"
+          className="filetab-strip relative flex min-w-0 flex-1 self-stretch items-center gap-1 overflow-x-auto"
           style={titlebarDrag}
         >
           <SlidingSelection containerRef={tabStripRef} activeId={activeFileId} itemAttribute="data-tab-id"

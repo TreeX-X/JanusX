@@ -32,6 +32,12 @@
 }
 .filetab-close:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: -1px; }
 /* 文件窗口标签 pill（preview-editor-display-style）：滑动指示块体系，激活仅文字提亮加粗 */
+.filetab-strip {
+  scrollbar-width: none;
+}
+.filetab-strip::-webkit-scrollbar {
+  display: none;
+}
 .filetab {
   color: var(--shell-muted);
   background: transparent;

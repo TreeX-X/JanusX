@@ -73,6 +73,10 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
 
   const handleBeforeMount = useCallback((monaco: any) => {
     defineJanusxThemes(monaco)
+    // 文件窗口无工程上下文：TS/JS 语义校验只产生假错误（导入解析/JSX 类型全线标红），只留语法校验
+    const diagnostics = { noSemanticValidation: true, noSyntaxValidation: false }
+    monaco.languages.typescript?.typescriptDefaults.setDiagnosticsOptions(diagnostics)
+    monaco.languages.typescript?.javascriptDefaults.setDiagnosticsOptions(diagnostics)
   }, [])
 
   const appTheme = useThemeStore((s) => s.theme)
