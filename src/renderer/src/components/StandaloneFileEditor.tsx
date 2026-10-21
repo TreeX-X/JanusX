@@ -2,6 +2,7 @@ import { WindowControls } from './WindowControls'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useEditorCloseDialog } from './EditorCloseDialog'
 import { FileViewerContent } from '@/components/FileViewerContent'
+import { SlidingSelection } from '@/components/shared/SlidingSelection'
 import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useThemeStore } from '@/stores/theme'
 import { GitCompareArrows, PanelRightOpen, PanelRightClose, X, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
@@ -25,6 +26,7 @@ function getEditorWindowParams(): EditorWindowParams | null {
 export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n('editor')
   const findEditorRef = useRef<FindableEditor | null>(null)
+  const tabStripRef = useRef<HTMLDivElement | null>(null)
   const scope = useEditorStore(state => state.workspacePath)
   const initialParams = useMemo(() => getEditorWindowParams(), [])
   const editorParams = useMemo(() => embedded ? (scope ? { filePath: '', workspacePath: scope } : null) : initialParams, [embedded, scope, initialParams])
@@ -209,20 +211,25 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
           aria-hidden="true"
         />}
         {!embedded && <WindowControls onClose={handleWindowClose} />}
+        {/*-- Note: 外壳标签收敛到工作台滑动指示块体系 — .agents/notes/workbench/preview-editor-display-style.md --*/}
         <div
           data-editor-drag-region
-          className="flex min-w-0 flex-1 self-stretch items-end overflow-x-auto"
+          ref={tabStripRef}
+          className="relative flex min-w-0 flex-1 self-stretch items-center gap-1 overflow-x-auto"
           style={titlebarDrag}
         >
+          <SlidingSelection containerRef={tabStripRef} activeId={activeFileId} itemAttribute="data-tab-id"
+            layoutKey={openFiles.map((file) => file.id).join(',')} className="filetab-indicator" testId="editor-tab-indicator" />
           {openFiles.map((file) => {
             const isActive = file.id === activeFileId
             return (
               <div
                 key={file.id}
                 data-editor-tab={file.absolutePath}
+                data-tab-id={file.id}
                 data-active={isActive ? 'true' : 'false'}
-                className="relative flex h-[31px] max-w-[180px] shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md px-3 font-mono text-[11px]"
-                style={{ ...noDrag, color: isActive ? 'var(--shell-text)' : 'var(--shell-dim)', background: isActive ? 'var(--shell-canvas)' : 'transparent' }}
+                className="filetab relative flex h-[31px] max-w-[180px] shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] px-3 font-mono text-[11px]"
+                style={noDrag}
                 onClick={() => setActiveFile(file.id)}
               >
                 {file.isDirty ? <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--shell-accent)' }} /> : null}
@@ -253,17 +260,16 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
                 >
                   ×
                 </button>
-                {isActive ? <span className="absolute inset-x-2 bottom-0 h-px" style={{ background: 'var(--shell-accent)' }} /> : null}
               </div>
             )
           })}
         </div>
         <div className="relative z-10 flex shrink-0 items-center gap-1.5" style={noDrag}>
-          {canFind && <button type="button" aria-pressed={diffEnabled}
+          {canFind && <button type="button" aria-pressed={diffEnabled} data-on={diffEnabled ? 'true' : undefined}
             aria-label={t('editor:fileEditor.compareHead')} title={t('editor:fileEditor.compareHead')}
             onClick={() => setDiffFileId(diffEnabled ? null : activeFileId)}
-            className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)]"
-            style={{ color: diffEnabled ? 'var(--shell-accent-strong)' : 'var(--shell-muted)', background: diffEnabled ? 'var(--shell-accent-soft)' : 'transparent' }}>
+            className="shell-icon-btn flex h-7 w-7 items-center justify-center rounded-md border border-[var(--control-border)] transition-colors"
+            style={{ color: diffEnabled ? 'var(--shell-accent-strong)' : 'var(--shell-muted)' }}>
             <GitCompareArrows size={14} strokeWidth={1.8} />
           </button>}
           {canFind && (
@@ -273,24 +279,20 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
               title={t('editor:fileEditor.findTitle')}
               onClick={() => void openEditorFind(findEditorRef.current)}
               onMouseDown={(event) => event.stopPropagation()}
-              className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors hover:border-[var(--shell-accent-border)] hover:text-[var(--shell-text)]"
+              className="shell-icon-btn flex h-7 w-7 items-center justify-center rounded-md border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors hover:border-[var(--shell-accent-border)] hover:text-[var(--shell-text)]"
             >
               <Search size={14} strokeWidth={1.8} />
             </button>
           )}
           {!embedded && <button
             type="button"
-            aria-pressed={isPinned}
+            aria-pressed={isPinned} data-on={isPinned ? 'true' : undefined}
             aria-label={isPinned ? t('editor:fileEditor.unpinWindow') : t('editor:fileEditor.pinWindow')}
             title={isPinned ? t('editor:fileEditor.unpinWindow') : t('editor:fileEditor.pinWindow')}
             onClick={() => void togglePinned()}
             onMouseDown={(event) => event.stopPropagation()}
-            className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors"
-            style={{
-              background: isPinned ? 'var(--shell-accent-soft)' : 'transparent',
-              border: isPinned ? '1px solid var(--shell-accent-border)' : '1px solid var(--control-border)',
-              color: isPinned ? 'var(--shell-accent-strong)' : 'var(--shell-muted)',
-            }}
+            className="shell-icon-btn relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[var(--control-border)] transition-colors"
+            style={{ color: isPinned ? 'var(--shell-accent-strong)' : 'var(--shell-muted)' }}
           >
             {isPinned ? <PinOff size={14} strokeWidth={1.8} /> : <Pin size={14} strokeWidth={1.8} />}
           </button>}
@@ -301,24 +303,23 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
             disabled={!activeFile || !editorParams || transferring || openFiles.some(file => file.isLoading)}
             onClick={() => void moveSession()}
             onMouseDown={(event) => event.stopPropagation()}
-            className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors enabled:hover:border-[var(--shell-accent-border)] enabled:hover:text-[var(--shell-text)] disabled:cursor-not-allowed disabled:opacity-35"
+            className="shell-icon-btn flex h-7 w-7 items-center justify-center rounded-md border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors enabled:hover:border-[var(--shell-accent-border)] enabled:hover:text-[var(--shell-text)] disabled:cursor-not-allowed disabled:opacity-35"
           >
             {embedded ? <PanelRightClose size={14} strokeWidth={1.8} /> : <PanelRightOpen size={14} strokeWidth={1.8} />}
           </button>
         </div>
-        {embedded && <button type="button" aria-label={t('editor:fileEditor.collapsePanel')} title={t('editor:fileEditor.collapsePanel')} onClick={() => useEditorStore.getState().hidePanel()} className="flex h-7 w-7 shrink-0 items-center justify-center text-[var(--shell-muted)]"><X size={14} /></button>}
+        {embedded && <button type="button" aria-label={t('editor:fileEditor.collapsePanel')} title={t('editor:fileEditor.collapsePanel')} onClick={() => useEditorStore.getState().hidePanel()} className="shell-icon-btn flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[var(--shell-muted)]"><X size={14} /></button>}
         {canSave && (
           <button
             type="button"
             onClick={() => activeFileId && void saveFile(activeFileId)}
             aria-label={t('editor:fileEditor.save')}
             title={t('editor:fileEditor.save')}
+            data-on={activeFile?.isDirty ? 'true' : undefined}
             onMouseDown={(event) => event.stopPropagation()}
-            className="flex h-7 w-7 items-center justify-center rounded transition-colors"
+            className="shell-icon-btn flex h-7 w-7 items-center justify-center rounded-md border border-[var(--control-border)] transition-colors"
             style={{
               ...noDrag,
-              background: activeFile?.isDirty ? 'var(--shell-accent-soft)' : 'transparent',
-              border: activeFile?.isDirty ? '1px solid var(--shell-accent-border)' : '1px solid var(--control-border)',
               color: activeFile?.isDirty ? 'var(--shell-accent-strong)' : 'var(--shell-dim)',
             }}
           >

@@ -17,6 +17,41 @@
 /* 文件 tab 关闭钮：平时只显形，悬浮转删除色 */
 .filetab-close { color: var(--shell-muted); }
 .filetab-close:hover { color: var(--shell-diff-del); opacity: 1 !important; }
+/* 文件窗口标签 pill（preview-editor-display-style）：滑动指示块体系，激活仅文字提亮加粗 */
+.filetab {
+  color: var(--shell-muted);
+  background: transparent;
+  transition: color 140ms ease, background-color 140ms ease;
+}
+.filetab[data-active='true'] { color: var(--shell-text); font-weight: 600; }
+.filetab:hover:not([data-active='true']) {
+  color: var(--shell-text);
+  background: color-mix(in srgb, var(--shell-text) 5%, var(--shell-canvas));
+}
+.filetab-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--shell-text) 8%, var(--shell-canvas));
+  pointer-events: none;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1), width 160ms ease;
+}
+.filetab-indicator[data-visible='false'] { visibility: hidden; }
+/* 文件窗口外壳图标钮（preview-editor-display-style）：28px 视觉 + ::before 命中膨胀到 30px
+   （workbench-close-hit-slop 同法），选中 = 文字提亮 + 底部 2px 强调条，不做填充块。 */
+.shell-icon-btn { position: relative; }
+.shell-icon-btn::before { content: ''; position: absolute; inset: -1px; }
+.shell-icon-btn[data-on='true']::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--shell-accent);
+}
 /* ── 终端 + 菜单分区标题 ─────────────────────────────────────────────
    Shell 区与 CLI 区分组陈列：标题用小号大写弱化，只作分隔不抢菜单项。 */
 .terminal-menu-section {

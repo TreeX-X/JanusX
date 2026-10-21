@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-20",
-  "updated": "2026-10-20T16:45:45Z",
+  "updated": "2026-10-21T02:34:47Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -14,7 +14,7 @@
 
 ## Intent
 
-用户认可 opencode 的文件编辑显示风格，希望双击预览编辑窗口（`StandaloneFileEditor` 双宿主）的编辑器与差异显示向其靠拢；同时窗口外壳自身的 tab 与控件设计和应用整体语言有出入，届时一并 UI 优化。本文记录 2026-10-21 的调研结论、差距清单与落地映射；实现尚未开始，不改动 [文件编辑窗口与预览体验](./file-editor-experience.md) 与 [统一文件窗口与内嵌／浮窗路由](./unified-file-window.md) 的已确认设计。
+用户认可 opencode 的文件编辑显示风格，希望双击预览编辑窗口（`StandaloneFileEditor` 双宿主）的编辑器与差异显示向其靠拢，正常编辑显示与差异显示同批适配、不只 diff；同时窗口外壳自身的 tab 与控件设计和应用整体语言有出入，一并 UI 优化。本文记录 2026-10-21 的调研结论、差距清单与落地映射。外壳 UI 对齐（tab、控件、MonacoViewer 主题字面量）已落地；显示风格学习（A–D）尚未开始。不改动 [文件编辑窗口与预览体验](./file-editor-experience.md) 与 [统一文件窗口与内嵌／浮窗路由](./unified-file-window.md) 的已确认设计。
 
 调研对象为 anomalyco/opencode（GitHub，dev 分支源码）的双端文件编辑显示实现：TUI 侧 `packages/tui/src/component/patch-diff.tsx` + `@opentui/core` 的 `DiffRenderable`；Web/Desktop 侧 `@pierre/diffs` + `packages/session-ui/src/pierre/index.ts` 风格覆写 + `packages/ui/src/data-display/diff-changes/`；主题推导在 `packages/tui/src/theme/system.ts`。
 
@@ -52,21 +52,25 @@
 
 ## 落地映射
 
+正常编辑显示与差异显示同批适配：B 档排版同时作用于两种模式，A/C/D 的变更色带、指示条与计数属于差异呈现，普通编辑沿用同一排版与令牌基础。
+
 - **A 纯主题 token**（`src/shared/theme/definition.ts`）：`diffEditor.inserted/removedLineBackground` 降至约 8%，`diffEditorGutter.*` 提至约 25–30%，形成"色带在 gutter、正文薄纱"；词强调按 1:4 微调。
-- **B Monaco 选项**（`MonacoViewer.tsx` diffOptions）：`hideUnchangedRegions`（contextLineCount/minimumLineCount/revealLineCount 取 20）对齐 hunk 折叠；diff 模式 `lineHeight: 24`、`tabSize: 2`。
+- **B Monaco 选项**（`MonacoViewer.tsx`）：`hideUnchangedRegions`（contextLineCount/minimumLineCount/revealLineCount 取 20）对齐 hunk 折叠；`lineHeight: 24`、`tabSize: 2` 同时作用于普通编辑与 diff，不只差异模式。
 - **C CSS/装饰注入**：增删行 2px 竖条（`linesDecorationsClassName` + 伪元素）、行号文字染色。
 - **D 组件层**（`StandaloneFileEditor`）：diff 激活时 tab/工具栏显示 +N −N（基线已在内存，计数现成）。
 
 与无色块方向同构：opencode 的 bars 指示条 + 行号色带 + 超淡行底色，正是"选中/变更 = 文字 + 2px 强调条、不靠加深填充"的 diff 表达。JanusX 现在的 diff 反而填充偏重、条缺失，此轮学习同时是把 diff 显示收敛进既有视觉语言。不搬的：TUI tree-sitter 虚拟化 PatchDiff（Monaco 自带虚拟化）、pierre 的 `!important` 语法色覆写（破坏主题语法一致性）、文件树 + reviewed 勾选的多文件审阅套件（属另一产品决策）。
 
-## 外壳 UI 出入（tab 与控件）
+## 外壳 UI 对齐（tab 与控件，已落地）
 
-窗口外壳当前与应用整体语言的断层，UI 优化时按既有规则收敛：
+窗口外壳与应用整体语言的断层已按既有规则收敛：
 
-1. **tab 形态（已裁决）**：`StandaloneFileEditor` 的标签是 `rounded-t-md` 折页形 + 激活填充 `--shell-canvas` + 底部 1px 强调线，是 VS Code 折页隐喻；折页填充正是无色块方向要消灭的色块。用户已裁决收敛到**滑动指示块体系**：工作台 pane tab 的浮动 pill + 滑动指示块（`TerminalArea.module.css` 的 `.tab`/`.tabIndicator`，指示块随选中项平移，激活项仅文字提亮加粗），不采用 configTab 的 2px 强调条方案。
-2. **控件选中态**：比较开关、钉住、保存按钮的激活态用 `--shell-accent-soft` 填充块表达，同样违反"选中 = 文字 + 2px 强调条"；图标钮统一 `h-7 w-7` + `rounded`（4px）描边盒，与卡片 6px/7px 圆角体系不一致，且 28px 无 hit slop，弱于 [Workbench close controls keep a stable 30px hit area](./workbench-close-hit-slop.md) 的 30px 命中策略。
-3. **主题字面量**：`MonacoViewer.tsx` 的加载态与容器硬编码 `#0a0a0a`/`#555`/`#d4d4d4`/`#202024`/`#45454d`，不走 `definition.ts` → 生成 CSS 的令牌管道；planche 浅色下会闪黑底深浮层，与运行配置当时记录的"主题字面量失控"同类缺陷。
-4. 一致的部分可保留：标题栏 38px 与主 `Titlebar` 同高、发丝线底边、`--shell-pane-chrome` 令牌用法正确。
+1. **tab 形态（已裁决并落地）**：`StandaloneFileEditor` 标签从 `rounded-t-md` 折页形 + 激活填充 `--shell-canvas` + 底部 1px 强调线，收敛到**滑动指示块体系**：浮动 pill（7px 圆角）配滑动指示块（`SlidingSelection` + `theme-hovers.css` 的 `.filetab-indicator`，与 `TerminalArea.module.css` 的 `.tab`/`.tabIndicator` 同参，指示块随选中项 160ms 平移），激活项仅文字提亮加粗。未采用 configTab 的 2px 强调条方案。
+2. **控件选中态（已落地）**：比较开关、钉住、保存按钮的 `--shell-accent-soft` 填充块已移除；激活 = 图标染 `--shell-accent-strong` + 底部 2px 强调条（`theme-hovers.css` 的 `.shell-icon-btn[data-on]::after`），即"选中 = 文字 + 2px 强调条"。图标钮统一 `h-7 w-7` + 6px 圆角，回归卡片圆角体系；`::before` 以 `inset: -1px` 把命中膨胀到约 30px，对齐 [Workbench close controls keep a stable 30px hit area](./workbench-close-hit-slop.md)。
+3. **主题字面量（已落地）**：`MonacoViewer.tsx` 加载态、容器与错误浮层不再硬编码 `#0a0a0a`/`#555`/`#d4d4d4`/`#202024`/`#45454d`（含加载点 `#ff7830`），改走 `definition.ts` → 生成 CSS 令牌：容器/加载底 `--shell-canvas`（与 Monaco `editor.background` 两主题一致）、浮层 `--popover-background`/`--shell-text`/`--shell-border`，planche 黑底闪断消除。planche 契约测试补上 MonacoViewer 无字面量断言与外壳图标钮契约。
+4. 一致的部分保留：标题栏 38px 与主 `Titlebar` 同高、发丝线底边、`--shell-pane-chrome` 令牌用法。
+
+验证：`npm run typecheck`、`npm run theme:check`（0 new）、`npm run check:notes` 与全量单测 3638 项通过（`npm run test:unit -- --run`）；planche 契约新增 MonacoViewer 无字面量与外壳图标钮断言。未跑桌面 e2e 与真实窗口视觉确认；滑动指示块与 2px 强调条在 planche 下的渲染效果待真机复核。
 
 ## Open questions
 

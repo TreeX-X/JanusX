@@ -123,12 +123,21 @@ describe('planche theme contract', () => {
       'components/viewers/PreviewModeToggle.tsx',
       'components/viewers/ImageViewer.tsx',
       'components/viewers/BinaryInfo.tsx',
+      'components/viewers/MonacoViewer.tsx',
       'components/FileViewerContent.tsx',
       'components/FileEditor.tsx',
     ]) {
       const source = read(viewer)
       expect(source, viewer).not.toMatch(/color:\s*'#(fff|d4d4d4|ddd|eee|aaa|888|777|555|666)'/)
     }
+    // Monaco 加载态/容器/错误浮层不写字面量色（preview-editor-display-style 外壳收敛）
+    expect(read('components/viewers/MonacoViewer.tsx')).not.toMatch(/(background|borderColor):\s*'#/)
+    // 文件窗口外壳图标钮：命中膨胀 + 选中 2px 强调条，不做 accent-soft 填充
+    const shellEditor = read('components/StandaloneFileEditor.tsx')
+    expect(shellEditor).toContain('shell-icon-btn')
+    expect(shellEditor).toContain('data-on=')
+    expect(shellEditor).not.toContain('shell-accent-soft')
+    expect(shellEditor).toContain('filetab-indicator')
     expect(read('components/viewers/MarkdownViewer.tsx')).toContain('viewer-divider')
     expect(read('components/viewers/HtmlViewer.tsx')).toContain('viewer-divider')
     expect(read('components/viewers/HtmlViewer.tsx')).toContain('tbtn-accent')

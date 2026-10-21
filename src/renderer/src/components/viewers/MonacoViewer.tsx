@@ -32,14 +32,15 @@ interface MonacoViewerProps {
 }
 
 function LoadingIndicator() {
+  // Note: 加载态与容器走 definition.ts 令牌管道，不写字面量 — .agents/notes/workbench/preview-editor-display-style.md
   return (
-    <div className="flex items-center justify-center h-full w-full" style={{ background: '#0a0a0a' }}>
+    <div className="flex items-center justify-center h-full w-full" style={{ background: 'var(--shell-canvas)' }}>
       <div className="flex items-center gap-2">
-        <span style={{ color: '#555', fontSize: 12 }}>Loading</span>
+        <span style={{ color: 'var(--shell-dim)', fontSize: 12 }}>Loading</span>
         <span
           className="inline-block w-1.5 h-1.5 rounded-full"
           style={{
-            background: '#ff7830',
+            background: 'var(--shell-accent)',
             animation: 'pulse-dot 1.2s ease-in-out infinite',
           }}
         />
@@ -194,12 +195,12 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden" style={{ background: '#0a0a0a' }}>
+    <div className="relative h-full w-full overflow-hidden" style={{ background: 'var(--shell-canvas)' }}>
       {definitionError && (
         <div
           role="status"
           className="absolute bottom-3 right-3 z-10 max-w-[min(360px,calc(100%-24px))] border px-3 py-2 text-xs shadow-lg"
-          style={{ color: '#d4d4d4', background: '#202024', borderColor: '#45454d' }}
+          style={{ color: 'var(--shell-text)', background: 'var(--popover-background)', borderColor: 'var(--shell-border)' }}
         >
           {definitionError}
         </div>
