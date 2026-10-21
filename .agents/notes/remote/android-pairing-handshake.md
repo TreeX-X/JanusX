@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-20",
-  "updated": "2026-10-21T11:17:26Z",
+  "updated": "2026-10-21T12:05:48Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
   "tags": ["remote", "android", "pairing", "verification"]
 }
@@ -42,6 +42,12 @@ Android 离线终端此前没有启动超时、资源错误或脚本失败反馈
 `npm run check:notes` 全仓存在 4 个断链，均指向工作树中已删除的 `wiki/assets/readme` 文件，与本次远程修改无关；保留现状，未纳入提交或声称全仓文档门禁通过。早期 smoke 因桌面新增第二处状态显示导致 locator 重复匹配，已将定位限定到底栏 span，并在最终运行复验。
 
 ## 当前入口与版本记录
+
+### 桌面配对面板视觉层级
+
+远程入口采用现有主题的中性色、细线图标与单一实心主操作，移除启动、批准和拒绝的大面积橙/绿/红背景；异常保留语义错误色。初始面板展示工作区、连接环境和生成二维码，信令、STUN 与 LAN 网卡位于可展开的「连接设置」；已运行时用一行摘要替代不可修改的工作区/环境控件。二维码保留最大 320px、白底和原留白，倒计时使用等宽数字。待审批请求优先于二维码，设备和终端分别分组；面板正文独立滚动，关闭远程留在固定页脚，小窗口仍可访问。Esc 关闭后焦点回到入口，点击面板外部也可关闭。风格以用户指定的 Codex 简约方向为参考，实际颜色复用 JanusX 主题变量，深浅主题均适配。
+
+验证：TypeScript、StatusBar ESLint、i18n 检查与桌面构建通过。真实 Electron 的 UI 检查覆盖深浅主题、默认折叠、非法地址、从按钮启动生成二维码、Esc 焦点返回、外部点击关闭及 900×650 小窗口边界，截图与报告在 `artifacts/android-lab/remote-ui-Xz33io/`。既有 Android 联调适配连接设置展开步骤后通过 19 项，证据 `artifacts/android-lab/desktop-smoke-yDJrwz/`，包括真实审批、新终端输出、本地 `/help` 返回、显示页同步、同终端重连及停用保活；没有以界面修改替代真机输出故障验收。
 
 当前免费入口已调整为 `wss://janusx-signal-entry.pages.dev/signal`。用户复制的 0.1.10 日志表明：App 系统 VPN 标记为 true，原 workers.dev 入口解析一个 IPv4，在 TLS 阶段超时；同一 App 对百度 TLS 成功并收到 HTTP 响应。证据指向该域名的 App 访问路径，未确定 DNS/VPN 的具体原因；本次不是已拿到证书后验证失败。Pages 高级模式通过 `SIGNAL_SERVICE` 服务绑定调用原 Worker，复用同一 Durable Object 和消息验证，不转发终端业务、不引入 TURN。2026-10-21 UTC 部署到已授权免费账号，稳定项目域名经电脑直连和代理分别通过八项 HTTPS/WSS 信令验证；本地九项 workerd 测试含服务绑定后真实握手/入房，桌面设置与信令十一项 Vitest 通过。证据 `artifacts/android-lab/pages-signaling-{direct,proxy}.json`。默认 JSON 及桌面旧官方完整地址迁移已更新，保留 LAN、自建地址/路径；现有 Android 0.1.10 默认包内仍是旧入口，电脑新二维码会覆盖，因此无需新 APK。手机新入口 WSS 与真实异网 UDP 尚待验证，不把电脑直连成功作为真机验收。
 

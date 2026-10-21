@@ -308,6 +308,12 @@
     "maximize": "最大化"
   },
   "mobileRemote": {
+    "pairingHint": "用手机扫描二维码，在此批准连接。",
+    "connectionSettings": "连接设置",
+    "starting": "正在开启…",
+    "devicesTitle": "已授权设备",
+    "terminalsTitle": "远程终端",
+    "localApproval": "由这台电脑确认授权",
     "title": "手机远程",
     "enable": "开启手机远程",
     "running": "远程已开启",

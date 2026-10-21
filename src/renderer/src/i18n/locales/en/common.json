@@ -308,6 +308,12 @@
     "maximize": "Maximize"
   },
   "mobileRemote": {
+    "pairingHint": "Scan with your phone, then approve the connection here.",
+    "connectionSettings": "Connection settings",
+    "starting": "Starting…",
+    "devicesTitle": "Authorized devices",
+    "terminalsTitle": "Remote terminals",
+    "localApproval": "Approved on this computer",
     "title": "Mobile remote",
     "enable": "Enable mobile remote",
     "running": "Remote enabled",
