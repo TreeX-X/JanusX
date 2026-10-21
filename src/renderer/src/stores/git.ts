@@ -39,6 +39,14 @@ function supersedePendingRefresh(cwd: string): string {
   return statusCwd
 }
 
+const IPC_INVOKE_PREFIX = /^Error invoking remote method 'git:[^']*':\s*/
+
+/** 去掉 Electron invoke 的 "Error invoking remote method 'git:*':" 包装，只保留 git 自身的错误文本。 */
+function toErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  return raw.replace(IPC_INVOKE_PREFIX, '').replace(/^Error:\s*/, '')
+}
+
 export const useGitStore = create<GitStore>((set) => ({
   status: null,
   statusCwd: null,
@@ -70,7 +78,7 @@ export const useGitStore = create<GitStore>((set) => ({
           set((state) => state.statusCwd === statusCwd ? { status, error: null } : {})
         } catch (err: any) {
           if (refresh.rerun) continue
-          set((state) => state.statusCwd === statusCwd ? { error: err.message } : {})
+          set((state) => state.statusCwd === statusCwd ? { error: toErrorMessage(err) } : {})
         }
       } while (refresh.rerun)
     })().finally(() => {
@@ -87,7 +95,7 @@ export const useGitStore = create<GitStore>((set) => ({
       const commits = await window.electron.git.log(cwd, maxCount)
       set({ commits })
     } catch (err: any) {
-      set({ error: err.message })
+      set({ error: toErrorMessage(err) })
     }
   },
 
@@ -98,7 +106,7 @@ export const useGitStore = create<GitStore>((set) => ({
       const statusCwd = supersedePendingRefresh(cwd)
       set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
     } catch (err: any) {
-      set({ error: err.message, loading: false })
+      set({ error: toErrorMessage(err), loading: false })
     }
   },
 
@@ -109,7 +117,7 @@ export const useGitStore = create<GitStore>((set) => ({
       const statusCwd = supersedePendingRefresh(cwd)
       set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
     } catch (err: any) {
-      set({ error: err.message, loading: false })
+      set({ error: toErrorMessage(err), loading: false })
     }
   },
 
@@ -121,7 +129,7 @@ export const useGitStore = create<GitStore>((set) => ({
       set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
       return true
     } catch (err: any) {
-      set({ error: err.message, loading: false })
+      set({ error: toErrorMessage(err), loading: false })
       return false
     }
   },
@@ -135,7 +143,7 @@ export const useGitStore = create<GitStore>((set) => ({
       set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
       return true
     } catch (err: any) {
-      set({ error: err.message, loading: false })
+      set({ error: toErrorMessage(err), loading: false })
       return false
     }
   },
@@ -149,7 +157,7 @@ export const useGitStore = create<GitStore>((set) => ({
       set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
       return true
     } catch (err: any) {
-      set({ error: err.message, loading: false })
+      set({ error: toErrorMessage(err), loading: false })
       return false
     }
   },
@@ -162,12 +170,12 @@ export const useGitStore = create<GitStore>((set) => ({
       set((state) => state.statusCwd === statusCwd ? { status, loading: false } : { loading: false })
       return true
     } catch (err: any) {
-      set({ error: err.message, loading: false })
+      set({ error: toErrorMessage(err), loading: false })
       return false
     }
   },
 
   commitChangesByHash: async (cwd, hash) => {
-    try { return await window.electron.git.commitChanges(cwd, hash) } catch (err: any) { set({ error: err.message }); return [] }
+    try { return await window.electron.git.commitChanges(cwd, hash) } catch (err: any) { set({ error: toErrorMessage(err) }); return [] }
   },
 }))

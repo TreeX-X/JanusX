@@ -1,5 +1,9 @@
 {
   "noWorkspace": "No workspace loaded",
+  "notRepository": {
+    "title": "This folder is not a Git repository",
+    "hint": "Run git init to start tracking branches, changes and commit history here."
+  },
   "branch": {
     "currentFallback": "Current branch",
     "upstreamUnset": "No upstream set"

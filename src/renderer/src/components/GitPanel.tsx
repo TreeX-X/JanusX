@@ -9,7 +9,7 @@ import type { GitCommitChange } from '../../../shared/ipc/git'
 import { ModalCloseButton } from './ModalCloseButton'
 import { PromptDialog } from './blueprint/PromptDialog'
 import styles from './GitPanel.module.css'
-import { Eye, Minus, Plus, RotateCcw } from 'lucide-react'
+import { Eye, GitBranch, Minus, Plus, RotateCcw } from 'lucide-react'
 import { useEditorStore } from '@/stores/editor'
 
 type GitRemoteAction = 'push' | 'pull'
@@ -171,8 +171,19 @@ export function GitPanel({ active = true }: { active?: boolean }) {
 
   if (!cwd) {
     return (
-      <div className="flex-1 flex items-center justify-center text-xs text-[var(--shell-dim)]">
-        {t('git:noWorkspace')}
+      <div className={styles.emptyState}>
+        <p className={styles.emptyTitle}>{t('git:noWorkspace')}</p>
+      </div>
+    )
+  }
+
+  // 工作区不是 Git 仓库：主进程返回结构化占位状态（isRepo: false），这里给出说明而不是错误文本。
+  if (status?.isRepo === false) {
+    return (
+      <div className={styles.emptyState}>
+        <GitBranch className={styles.emptyIcon} size={20} strokeWidth={1.25} aria-hidden="true" />
+        <p className={styles.emptyTitle}>{t('git:notRepository.title')}</p>
+        <p className={styles.emptyHint}>{t('git:notRepository.hint')}</p>
       </div>
     )
   }

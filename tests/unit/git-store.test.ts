@@ -61,6 +61,17 @@ describe('Git store actions', () => {
     expect(useGitStore.getState()).toMatchObject({ status: cleanStatus, error: 'temporary failure' })
   })
 
+  it('strips the Electron invoke wrapper before recording a git error', async () => {
+    const status = vi.fn().mockRejectedValue(
+      new Error("Error invoking remote method 'git:status': Error: git push failed"),
+    )
+    vi.stubGlobal('window', { electron: { git: { status } } })
+
+    await useGitStore.getState().fetchStatus('C:\\workspace')
+
+    expect(useGitStore.getState().error).toBe('git push failed')
+  })
+
   it('does not let a previous workspace overwrite the active workspace', async () => {
     let resolvePrevious!: (value: typeof cleanStatus) => void
     const previous = new Promise<typeof cleanStatus>((resolve) => { resolvePrevious = resolve })

@@ -58,6 +58,51 @@
 .branchToolbar { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 12px 4px; }
 .statusSummary { display: flex; flex-wrap: wrap; gap: 12px; padding: 2px 12px 8px; font-size: 11px; }
 
+/* ── 空态（未加载工作区 / 非 Git 仓库）：Codex 式居中留白。
+ * 宿主 .toolContent 是普通块容器，高度靠 height:100% 撑满，再在内部居中；
+ * 只写 flex-1 不会生效（父级不是 flex），必须自带 100% 高度。
+ * 灰阶只走 --shell-muted / --shell-dim 两级，不放任何填充色块。 */
+.emptyState {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px 28px;
+  text-align: center;
+  animation: git-empty-in 160ms ease-out;
+}
+
+.emptyIcon {
+  margin-bottom: 6px;
+  color: var(--shell-dim);
+  opacity: 0.7;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
+  color: var(--shell-muted);
+}
+
+.emptyHint {
+  margin: 0;
+  max-width: 250px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--shell-dim);
+}
+
+@keyframes git-empty-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* 文件行 hover：同上走令牌混色。 */
 .fileRow:hover {
   background: color-mix(in srgb, var(--shell-text) 5%, transparent);
@@ -98,7 +143,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .commitPreview,
-  .confirmDialog {
+  .confirmDialog,
+  .emptyState {
     animation: none;
   }
 }

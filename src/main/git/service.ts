@@ -2,13 +2,26 @@ import { execFile, spawn } from 'node:child_process'
 import { lstat, readFile, rm } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
-import type { GitFileChange } from '../../shared/ipc/git'
+import type { GitFileChange, GitStatus } from '../../shared/ipc/git'
 
 const execFileAsync = promisify(execFile)
 const LOCAL_GIT_TIMEOUT_MS = 10000
 const REMOTE_GIT_TIMEOUT_MS = 120000
 const DEFAULT_GIT_OUTPUT_BYTES = 1024 * 1024
 const CONFLICT_STATUS_PAIRS = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'])
+const NOT_A_REPOSITORY_PATTERN = /not a git repository/i
+
+/** 工作区不是 Git 仓库时的占位状态：用结构化返回代替抛错，避免 IPC 把原始 fatal 文本透给渲染进程。 */
+const NOT_A_REPOSITORY_STATUS: GitStatus = {
+  isRepo: false,
+  branch: { name: '', upstream: null, ahead: 0, behind: 0 },
+  changes: [],
+  clean: true,
+}
+
+function isNotARepositoryError(err: unknown): boolean {
+  return err instanceof Error && NOT_A_REPOSITORY_PATTERN.test(err.message)
+}
 
 async function runGit(
   cwd: string,
@@ -21,7 +34,10 @@ async function runGit(
     const { stdout } = await execFileAsync('git', args, { cwd, timeout, maxBuffer, signal, env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' } })
     return stdout
   } catch (err: any) {
-    throw new Error(err.stderr?.trim() || err.message)
+    const detail: string = err.stderr?.trim() || err.message
+    // 非仓库目录的 fatal 文案统一成稳定短句，渲染层不再暴露 git 原始输出。
+    if (NOT_A_REPOSITORY_PATTERN.test(detail)) throw new Error('This folder is not a Git repository yet')
+    throw new Error(detail)
   }
 }
 
@@ -37,15 +53,29 @@ async function remoteGit(cwd: string, args: string[], signal?: AbortSignal): Pro
   return (await runGit(cwd, args, REMOTE_GIT_TIMEOUT_MS, DEFAULT_GIT_OUTPUT_BYTES, signal)).trim()
 }
 
-export async function getStatus(cwd: string) {
-  const [branchLine, upstreamLine, aheadBehind, rawStatus, hasHead] = await Promise.all([
+type StatusProbes = [string, string, string, string, boolean]
+
+export async function getStatus(cwd: string): Promise<GitStatus> {
+  const probes: [Promise<string>, Promise<string>, Promise<string>, Promise<string>, Promise<boolean>] = [
     git(cwd, 'rev-parse', '--abbrev-ref', 'HEAD').catch(() => git(cwd, 'symbolic-ref', '--short', 'HEAD')),
     git(cwd, 'rev-parse', '--abbrev-ref', '@{upstream}').catch(() => ''),
     git(cwd, 'rev-list', '--left-right', '--count', 'HEAD...@{upstream}').catch(() => '0\t0'),
     rawGit(cwd, 'status', '--porcelain=v1', '-z', '--untracked-files=all'),
     git(cwd, 'rev-parse', '--verify', 'HEAD').then(() => true, () => false),
-  ])
+  ]
 
+  // 等全部探针退出再判断：Promise.all 提前 reject 会留下仍在运行的 git 子进程（Windows 下会锁住目录）。
+  const settled = await Promise.allSettled(probes)
+  const rejected = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+  if (rejected) {
+    // 工作区没有 Git 仓库：返回占位状态，而不是把 fatal 文本抛成 IPC 错误。
+    if (isNotARepositoryError(rejected.reason)) return NOT_A_REPOSITORY_STATUS
+    throw rejected.reason
+  }
+
+  const [branchLine, upstreamLine, aheadBehind, rawStatus, hasHead] = settled.map(
+    (result) => (result as PromiseFulfilledResult<StatusProbes[number]>).value,
+  ) as StatusProbes
   const [ahead, behind] = aheadBehind.split('\t').map(Number)
   const changes = parsePorcelainStatus(rawStatus)
   const rawNumstat = hasHead
@@ -63,6 +93,7 @@ export async function getStatus(cwd: string) {
   }
 
   return {
+    isRepo: true,
     branch: {
       name: branchLine,
       upstream: upstreamLine || null,
@@ -219,6 +250,7 @@ export async function discard(cwd: string, relativePath: string) {
     throw new Error('Git file path is outside the workspace')
   }
   const status = await getStatus(cwd)
+  if (status.isRepo === false) throw new Error('This folder is not a Git repository yet')
   const change = status.changes.find((item) => item.path === relativePath)
   if (!change) throw new Error('File is no longer changed')
   if (change.status === '??') {

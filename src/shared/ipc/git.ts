@@ -15,7 +15,13 @@ export interface GitFileChange {
 }
 export interface GitCommit { hash: string; shortHash: string; message: string; author: string; date: string }
 export interface GitCommitChange { path: string; status: 'M' | 'A' | 'D' | 'R'; additions: number | null; deletions: number | null }
-export interface GitStatus { branch: GitBranch; changes: GitFileChange[]; clean: boolean }
+export interface GitStatus {
+  /** false 表示该工作区不是 Git 仓库（结构化返回，不通过抛错传递）。 */
+  isRepo?: boolean
+  branch: GitBranch
+  changes: GitFileChange[]
+  clean: boolean
+}
 export interface GitFileBaseline { content: string; tracked: boolean; available: boolean }
 
 export interface GitAPI {

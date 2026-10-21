@@ -1,5 +1,9 @@
 {
   "noWorkspace": "未加载工作区",
+  "notRepository": {
+    "title": "当前目录不是 Git 仓库",
+    "hint": "执行 git init 初始化仓库后，这里会显示分支、更改和提交历史。"
+  },
   "branch": {
     "currentFallback": "当前分支",
     "upstreamUnset": "未设置 upstream"

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getFileBaseline, getStatus, push } from '../../src/main/git/service'
+import { getFileBaseline, getStatus, push, stage } from '../../src/main/git/service'
 
 const execFileAsync = promisify(execFile)
 
@@ -119,5 +119,18 @@ describe('Git service push', () => {
       tracked: false,
       available: false,
     })
+  })
+
+  it('returns a structured placeholder status when the workspace is not a Git repository', async () => {
+    await expect(getStatus(root)).resolves.toEqual({
+      isRepo: false,
+      branch: { name: '', upstream: null, ahead: 0, behind: 0 },
+      changes: [],
+      clean: true,
+    })
+  })
+
+  it('replaces git fatal output with a stable message outside a Git repository', async () => {
+    await expect(stage(root, ['README.md'])).rejects.toThrow('This folder is not a Git repository yet')
   })
 })
