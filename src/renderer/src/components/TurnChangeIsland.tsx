@@ -4,6 +4,7 @@ import { useTurnChangesStore, type TerminalTurnChangesEvent } from '@/stores/tur
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useWorktreeStore } from '@/stores/worktree'
 import { resolveTerminalEditorScope } from '@/lib/terminal-editor-scope'
+import { DiffCounts } from '@/components/shared/DiffCounts'
 import { useI18n } from '@/i18n/useI18n'
 import './TurnChangeIsland.css'
 
@@ -148,7 +149,7 @@ export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, foc
                   </div>
                   <div className="turn-change-card-summary">
                     <span>{summary}</span>
-                    <Counts additions={change.additions} deletions={change.deletions} />
+                    <DiffCounts additions={change.additions} deletions={change.deletions} />
                   </div>
                 </div>
                 <div className="turn-change-files">{renderFiles(change)}</div>
@@ -166,7 +167,7 @@ export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, foc
                 </div>
                 <div className="turn-change-card-summary">
                   <span>{t('terminal:turnChanges.files', { count: turn.fileCount })}</span>
-                  <Counts additions={turn.additions} deletions={turn.deletions} />
+                  <DiffCounts additions={turn.additions} deletions={turn.deletions} />
                 </div>
                 <div className="turn-change-files">{renderFiles(turn)}</div>
                 {turn.fileCount > turn.files.length && <div className="turn-change-more">
@@ -181,13 +182,6 @@ export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, foc
   )
 })
 
-function Counts({ additions, deletions }: { additions: number; deletions: number }) {
-  return <span className="turn-change-line-counts">
-    {additions > 0 && <span style={{ color: 'var(--shell-diff-add)' }}>+{additions.toLocaleString()}</span>}
-    {deletions > 0 && <span style={{ color: 'var(--shell-diff-del)' }}>−{deletions.toLocaleString()}</span>}
-  </span>
-}
-
 function FileRow({ file, canPreview, onOpen }: { file: FileChange; canPreview: boolean; onOpen: () => void }) {
   const { t } = useI18n('terminal')
   const slash = file.path.lastIndexOf('/')
@@ -199,7 +193,7 @@ function FileRow({ file, canPreview, onOpen }: { file: FileChange; canPreview: b
     onClick={onOpen} onMouseDown={event => event.stopPropagation()}
     title={`${file.path} · ${t(file.status === 'deleted' ? 'terminal:turnChanges.deletedNoPreview' : 'terminal:turnChanges.openFile')}`}>
     <span className="turn-change-file-name"><span>{name}</span>{directory && <small>{directory}</small>}</span>
-    {hasCounts ? <Counts additions={file.additions ?? 0} deletions={file.deletions ?? 0} />
+    {hasCounts ? <DiffCounts additions={file.additions ?? 0} deletions={file.deletions ?? 0} />
       : <span className="turn-change-file-status">{t(`terminal:turnChanges.status.${file.status}`)}</span>}
   </button>
 }

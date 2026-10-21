@@ -161,13 +161,21 @@ describe('planche theme contract', () => {
     expect(canvas).not.toContain('STATUS_VISUALS[')
     const edge = read('components/blueprint/BlueprintAdaptiveEdge.tsx')
     expect(edge).toContain('var(--shell-accent-strong)')
-    // 右缘 TurnChange 浮岛：收缩/展开同色走 chrome 底，文字走 shell 令牌，增减数走 diff 令牌
+    // 右缘 TurnChange 浮岛：收缩/展开同色走 chrome 底，文字走 shell 令牌，增减数走同源 DiffCounts 徽标
     const turn = read('components/TurnChangeIsland.tsx')
-    expect(turn).toContain('var(--shell-diff-add)')
-    expect(turn).toContain('var(--shell-diff-del)')
+    expect(turn).toContain('<DiffCounts')
     expect(turn).toContain('var(--shell-chrome)')
     expect(turn).not.toContain("background: '#000'")
     expect(turn).not.toContain("color: '#fff'")
+    const diffCounts = read('components/shared/DiffCounts.tsx')
+    expect(diffCounts).toContain('var(--shell-diff-add)')
+    expect(diffCounts).toContain('var(--shell-diff-del)')
+    // diff 呈现同源（preview-editor-display-style C/D）：文件窗口复用 DiffCounts，竖条/行号染色走 decoration 类
+    expect(read('components/StandaloneFileEditor.tsx')).toContain('<DiffCounts')
+    expect(hovers).toContain('.diff-bar-add::before')
+    expect(hovers).toContain('.diff-num-add')
+    expect(read('components/viewers/MonacoViewer.tsx')).toContain('linesDecorationsClassName')
+    expect(read('components/viewers/MonacoViewer.tsx')).toContain('lineNumberClassName')
     // diff 令牌双主题都有定义（M1 后唯一事实源为 definition.ts，CSS 由脚本生成）
     const css = readFileSync(resolve(__dirname, '../../src/renderer/src/styles/themes.generated.css'), 'utf8')
     expect(css).toContain('--shell-diff-add: #4ec9b0')

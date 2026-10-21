@@ -56,6 +56,11 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
   const diffChangeSubscriptionRef = useRef<{ dispose(): void } | null>(null)
   const viewStateSubscriptionRef = useRef<{ dispose(): void } | null>(null)
   const definitionActionRef = useRef<IDisposable | null>(null)
+  const diffIndicatorRef = useRef<{
+    original: MonacoEditor.IEditorDecorationsCollection
+    modified: MonacoEditor.IEditorDecorationsCollection
+    subscription: IDisposable
+  } | null>(null)
   const definitionErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [definitionError, setDefinitionError] = useState<string | null>(null)
   contentRef.current = content
@@ -137,12 +142,52 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
       const value = modifiedEditor.getValue()
       if (value !== contentRef.current) onChange(value)
     })
+    // Note: 变更竖条 + 行号染色走 decoration（裁决）— .agents/notes/workbench/preview-editor-display-style.md
+    diffIndicatorRef.current?.subscription.dispose()
+    diffIndicatorRef.current?.original.clear()
+    diffIndicatorRef.current?.modified.clear()
+    const originalIndicators = editor.getOriginalEditor().createDecorationsCollection([])
+    const modifiedIndicators = modifiedEditor.createDecorationsCollection([])
+    const updateDiffIndicators = () => {
+      const originalDecorations: MonacoEditor.IModelDeltaDecoration[] = []
+      const modifiedDecorations: MonacoEditor.IModelDeltaDecoration[] = []
+      for (const change of editor.getLineChanges() ?? []) {
+        if (change.originalEndLineNumber >= change.originalStartLineNumber && change.originalEndLineNumber > 0) {
+          for (let line = change.originalStartLineNumber; line <= change.originalEndLineNumber; line += 1) {
+            originalDecorations.push({
+              range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+              options: { isWholeLine: true, linesDecorationsClassName: 'diff-bar-del', lineNumberClassName: 'diff-num-del' },
+            })
+          }
+        }
+        if (change.modifiedEndLineNumber >= change.modifiedStartLineNumber && change.modifiedEndLineNumber > 0) {
+          for (let line = change.modifiedStartLineNumber; line <= change.modifiedEndLineNumber; line += 1) {
+            modifiedDecorations.push({
+              range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
+              options: { isWholeLine: true, linesDecorationsClassName: 'diff-bar-add', lineNumberClassName: 'diff-num-add' },
+            })
+          }
+        }
+      }
+      originalIndicators.set(originalDecorations)
+      modifiedIndicators.set(modifiedDecorations)
+    }
+    updateDiffIndicators()
+    diffIndicatorRef.current = {
+      original: originalIndicators,
+      modified: modifiedIndicators,
+      subscription: editor.onDidUpdateDiff(updateDiffIndicators),
+    }
   }, [handleMount, onChange])
 
   useEffect(() => () => {
     diffChangeSubscriptionRef.current?.dispose()
     viewStateSubscriptionRef.current?.dispose()
     definitionActionRef.current?.dispose()
+    diffIndicatorRef.current?.subscription.dispose()
+    diffIndicatorRef.current?.original.clear()
+    diffIndicatorRef.current?.modified.clear()
+    diffIndicatorRef.current = null
     if (definitionErrorTimerRef.current) clearTimeout(definitionErrorTimerRef.current)
     if (editorRef.current) {
       if (modelPath) {

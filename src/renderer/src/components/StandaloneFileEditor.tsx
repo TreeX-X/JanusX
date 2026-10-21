@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useEditorCloseDialog } from './EditorCloseDialog'
 import { FileViewerContent } from '@/components/FileViewerContent'
 import { SlidingSelection } from '@/components/shared/SlidingSelection'
+import { DiffCounts } from '@/components/shared/DiffCounts'
 import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useThemeStore } from '@/stores/theme'
 import { GitCompareArrows, PanelRightOpen, PanelRightClose, X, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
@@ -107,6 +108,24 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
       void useEditorStore.getState().reloadOpenFiles(workspacePath, payload.changedFilePath ?? null)
     })
   }, [editorParams, embedded])
+
+  // Note: +N/−N 徽标取 git 变更统计，零隐藏，与会话侧同源 — .agents/notes/workbench/preview-editor-display-style.md
+  const [changeStats, setChangeStats] = useState<ReadonlyMap<string, { additions: number; deletions: number }>>(new Map())
+  const refreshChangeStats = useCallback(() => {
+    const workspacePath = editorParams?.workspacePath
+    if (!workspacePath) { setChangeStats(new Map()); return }
+    void window.electron.git.status(workspacePath).then((status) => {
+      const next = new Map<string, { additions: number; deletions: number }>()
+      for (const change of status.changes) {
+        const additions = change.additions ?? 0
+        const deletions = change.deletions ?? 0
+        if (additions > 0 || deletions > 0) next.set(change.path, { additions, deletions })
+      }
+      setChangeStats(next)
+    }).catch(() => setChangeStats(new Map()))
+  }, [editorParams?.workspacePath])
+  useEffect(() => { refreshChangeStats() }, [refreshChangeStats])
+  useEffect(() => window.electron.fileTree.onChanged(() => { refreshChangeStats() }), [refreshChangeStats])
 
   const closeWindow = useCallback(() => {
     if (embedded) useEditorStore.getState().closePanel()
@@ -245,6 +264,7 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
                   </button>
                 ) : null}
                 <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{file.name}</span>
+                <DiffCounts additions={changeStats.get(file.path)?.additions ?? 0} deletions={changeStats.get(file.path)?.deletions ?? 0} />
                 <button
                   type="button"
                   aria-label={t('editor:fileEditor.closeTab', { name: file.name })}
@@ -265,6 +285,8 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
           })}
         </div>
         <div className="relative z-10 flex shrink-0 items-center gap-1.5" style={noDrag}>
+          <DiffCounts additions={activeFile ? changeStats.get(activeFile.path)?.additions ?? 0 : 0}
+            deletions={activeFile ? changeStats.get(activeFile.path)?.deletions ?? 0 : 0} />
           {canFind && <button type="button" aria-pressed={diffEnabled} data-on={diffEnabled ? 'true' : undefined}
             aria-label={t('editor:fileEditor.compareHead')} title={t('editor:fileEditor.compareHead')}
             onClick={() => setDiffFileId(diffEnabled ? null : activeFileId)}

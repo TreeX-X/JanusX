@@ -105,7 +105,6 @@
   animation: turn-change-content-in 0.24s cubic-bezier(0.175, 0.885, 0.32, 1.275) 70ms backwards;
 }
 .turn-change-summary { padding: 2px 2px 8px; }
-.turn-change-line-counts { display: inline-flex; gap: 7px; flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums; }
 .turn-change-file {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   border: 0; border-radius: 6px; background: transparent; text-align: left; padding: 4px 5px;

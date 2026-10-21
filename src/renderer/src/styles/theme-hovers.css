@@ -52,6 +52,17 @@
   border-radius: 1px;
   background: var(--shell-accent);
 }
+/* diff 呈现同源（preview-editor-display-style C/D）：计数徽标 + 2px 变更竖条 + 行号染色，全部走 --shell-diff-* 令牌 */
+.diff-counts { display: inline-flex; gap: 7px; flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums; }
+.diff-bar-add,
+.diff-bar-del { position: relative; }
+.diff-bar-add::before,
+.diff-bar-del::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; }
+.diff-bar-add::before { background: var(--shell-diff-add); }
+.diff-bar-del::before { background: var(--shell-diff-del); }
+/* 行号染色需覆盖 Monaco 主题注入的 .line-numbers 颜色，故限定在 .monaco-editor 内加权 */
+.monaco-editor .diff-num-add { color: var(--shell-diff-add) !important; }
+.monaco-editor .diff-num-del { color: var(--shell-diff-del) !important; }
 /* ── 终端 + 菜单分区标题 ─────────────────────────────────────────────
    Shell 区与 CLI 区分组陈列：标题用小号大写弱化，只作分隔不抢菜单项。 */
 .terminal-menu-section {
