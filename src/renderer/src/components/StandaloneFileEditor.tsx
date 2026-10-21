@@ -268,8 +268,7 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
                 <button
                   type="button"
                   aria-label={t('editor:fileEditor.closeTab', { name: file.name })}
-                  className="filetab-close ml-1 shrink-0 border-0 bg-transparent p-0 hover:opacity-100"
-                  style={{ color: 'var(--shell-dim)', opacity: 0.7 }}
+                  className="filetab-close ml-1 shrink-0 border-0 p-0"
                   onClick={(event) => {
                     event.stopPropagation()
                     confirmClose([file.id], () => {
@@ -278,7 +277,7 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
                     })
                   }}
                 >
-                  ×
+                  <X size={12} strokeWidth={2} aria-hidden="true" />
                 </button>
               </div>
             )

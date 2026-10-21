@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-20",
-  "updated": "2026-10-21T04:32:36Z",
+  "updated": "2026-10-21T05:40:11Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -56,10 +56,10 @@
 
 - **A 纯主题 token（已落地）**：`src/shared/theme/definition.ts` 两主题 monaco diff 色重排——正文行 tint 降至 8%（alpha `0x14`）、gutter 色带提至 30%（`0x4D`）、词强调 32%（`0x52`，行:词 = 1:4），形成"色带在 gutter、正文薄纱"。
 - **B Monaco 选项（已落地）**：`MonacoViewer.tsx` `lineHeight: 24`、`tabSize: 2`（配 `detectIndentation: false` 保证打开即生效）同时作用于普通编辑与 diff；diff 启用 `hideUnchangedRegions`（enabled，reveal/minimum/context 均 20）折叠不变区。
-- **C 装饰注入（已落地）**：`MonacoViewer` diff 以 Monaco decoration API 实现——`getLineChanges()` + `onDidUpdateDiff` 逐行生成装饰：`linesDecorationsClassName`（`.diff-bar-add/del` 伪元素 2px 竖条）与 `lineNumberClassName`（`.diff-num-add/del` 行号染色，增绿删红），全部走 `--shell-diff-*` 令牌。未注入 CSS 覆写 `.monaco-diff-editor`。
+- **C 装饰注入（已落地，竖条撤除）**：`MonacoViewer` diff 行号染色以 Monaco decoration API 实现（`getLineChanges()` + `onDidUpdateDiff` → `lineNumberClassName`，增绿删红，走 `--shell-diff-*` 令牌）。2px 变更竖条上线后经视觉复核**撤除**——文件预览界面不要竖线；变更信号由 gutter 色带、超淡行底色与行号染色承担。退出比较时主动清理装饰，避免残留到普通预览（模型在 diff 退出后仍被复用）。
 - **D 组件层（已落地）**：同源徽标 `shared/DiffCounts`（TurnChangeIsland 原 Counts 迁入共用；零变更隐藏、11px tabular、绿 `+N` 红 `−N`、`toLocaleString`）。落位**文件窗口外壳**：tab 内 per-file 常显 + 工具栏比较开关左侧跟随活动文件；数据取 git 变更统计（`git status` 行统计，随 fileTree 变更刷新），文件树红绿不被覆盖。
 
-A–D 与外壳 UI 验证：`npm run typecheck`、`npm run theme:check`（0 new）、planche 契约（同源徽标、装饰类、外壳图标钮断言）与全量单测通过（workflowx-v2 并发 `BLUEPRINT_SYNC_TIMEOUT` 复现一次，单独复跑 8/8 通过）。视觉效果均待应用内确认：planche 下的竖条/行号染色、滑动指示块与色带权重尤其需要真机复核。
+A–D 与外壳 UI 验证：`npm run typecheck`、`npm run theme:check`（0 new）、planche 契约（同源徽标、行号染色、无竖条防回潮、外壳图标钮与 filetab-close）与全量单测通过（workflowx-v2 在并行负载/跨进程 note 锁竞争下偶发失败，单独复跑 8/8 通过）。视觉复核已消化一条：竖条撤除；余下 planche 下的行号染色、滑动指示块与色带权重待真机过目。
 
 与无色块方向同构：opencode 的 bars 指示条 + 行号色带 + 超淡行底色，正是"选中/变更 = 文字 + 2px 强调条、不靠加深填充"的 diff 表达。JanusX 现在的 diff 反而填充偏重、条缺失，此轮学习同时是把 diff 显示收敛进既有视觉语言。不搬的：TUI tree-sitter 虚拟化 PatchDiff（Monaco 自带虚拟化）、pierre 的 `!important` 语法色覆写（破坏主题语法一致性）、文件树 + reviewed 勾选的多文件审阅套件（属另一产品决策）。
 
@@ -67,7 +67,7 @@ A–D 与外壳 UI 验证：`npm run typecheck`、`npm run theme:check`（0 new�
 
 窗口外壳与应用整体语言的断层已按既有规则收敛：
 
-1. **tab 形态（已裁决并落地）**：`StandaloneFileEditor` 标签从 `rounded-t-md` 折页形 + 激活填充 `--shell-canvas` + 底部 1px 强调线，收敛到**滑动指示块体系**：浮动 pill（7px 圆角）配滑动指示块（`SlidingSelection` + `theme-hovers.css` 的 `.filetab-indicator`，与 `TerminalArea.module.css` 的 `.tab`/`.tabIndicator` 同参，指示块随选中项 160ms 平移），激活项仅文字提亮加粗。未采用 configTab 的 2px 强调条方案。
+1. **tab 形态（已裁决并落地）**：`StandaloneFileEditor` 标签从 `rounded-t-md` 折页形 + 激活填充 `--shell-canvas` + 底部 1px 强调线，收敛到**滑动指示块体系**：浮动 pill（7px 圆角）配滑动指示块（`SlidingSelection` + `theme-hovers.css` 的 `.filetab-indicator`，与 `TerminalArea.module.css` 的 `.tab`/`.tabIndicator` 同参，指示块随选中项 160ms 平移），激活项仅文字提亮加粗。未采用 configTab 的 2px 强调条方案。标签关闭钮补齐可见性与悬浮反馈：常态清晰可见（Lucide X + 命中膨胀），悬浮转删除色并亮出底色反馈；内联 color/opacity 曾压制 hover 规则，已移除。
 2. **控件选中态（已落地）**：比较开关、钉住、保存按钮的 `--shell-accent-soft` 填充块已移除；激活 = 图标染 `--shell-accent-strong` + 底部 2px 强调条（`theme-hovers.css` 的 `.shell-icon-btn[data-on]::after`），即"选中 = 文字 + 2px 强调条"。图标钮统一 `h-7 w-7` + 6px 圆角，回归卡片圆角体系；`::before` 以 `inset: -1px` 把命中膨胀到约 30px，对齐 [Workbench close controls keep a stable 30px hit area](./workbench-close-hit-slop.md)。
 3. **主题字面量（已落地）**：`MonacoViewer.tsx` 加载态、容器与错误浮层不再硬编码 `#0a0a0a`/`#555`/`#d4d4d4`/`#202024`/`#45454d`（含加载点 `#ff7830`），改走 `definition.ts` → 生成 CSS 令牌：容器/加载底 `--shell-canvas`（与 Monaco `editor.background` 两主题一致）、浮层 `--popover-background`/`--shell-text`/`--shell-border`，planche 黑底闪断消除。planche 契约测试补上 MonacoViewer 无字面量断言与外壳图标钮契约。
 4. 一致的部分保留：标题栏 38px 与主 `Titlebar` 同高、发丝线底边、`--shell-pane-chrome` 令牌用法。

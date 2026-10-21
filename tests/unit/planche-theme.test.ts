@@ -170,12 +170,13 @@ describe('planche theme contract', () => {
     const diffCounts = read('components/shared/DiffCounts.tsx')
     expect(diffCounts).toContain('var(--shell-diff-add)')
     expect(diffCounts).toContain('var(--shell-diff-del)')
-    // diff 呈现同源（preview-editor-display-style C/D）：文件窗口复用 DiffCounts，竖条/行号染色走 decoration 类
+    // diff 呈现同源（preview-editor-display-style C/D）：文件窗口复用 DiffCounts，行号染色走 decoration；
+    // 变更竖条经视觉复核撤除——文件预览界面不得出现竖线
     expect(read('components/StandaloneFileEditor.tsx')).toContain('<DiffCounts')
-    expect(hovers).toContain('.diff-bar-add::before')
     expect(hovers).toContain('.diff-num-add')
-    expect(read('components/viewers/MonacoViewer.tsx')).toContain('linesDecorationsClassName')
+    expect(hovers).not.toContain('diff-bar')
     expect(read('components/viewers/MonacoViewer.tsx')).toContain('lineNumberClassName')
+    expect(read('components/viewers/MonacoViewer.tsx')).not.toContain('linesDecorationsClassName')
     // diff 令牌双主题都有定义（M1 后唯一事实源为 definition.ts，CSS 由脚本生成）
     const css = readFileSync(resolve(__dirname, '../../src/renderer/src/styles/themes.generated.css'), 'utf8')
     expect(css).toContain('--shell-diff-add: #4ec9b0')

@@ -262,7 +262,8 @@ export default function App() {
         className={`flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_28px] overflow-hidden ${dockStyles.workbenchGrid}`}
         data-resizing={rightDockResizing || editorResizing}
         style={{
-          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${isEditorEmbedded ? `${editorColumnWidth}px ` : ''}${rightDockLayout.dockWidth}px`,
+          // 文件窗口轨道常驻（隐藏时 0px）：双击打开时 workbenchGrid 的 240ms 过渡才能平滑展开
+          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${editorColumnWidth}px ${rightDockLayout.dockWidth}px`,
         }}
       >
         <Sidebar />

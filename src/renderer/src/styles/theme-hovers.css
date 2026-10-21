@@ -14,9 +14,23 @@
 /* 预览器分栏条：悬浮点睛（拖拽中保持由 JS 的 isDragging 语义退化为纯 CSS，接受拖拽中也高亮） */
 .viewer-divider:hover { background: #ff7830; }
 [data-theme='planche'] .viewer-divider:hover { background: #D43D2A; }
-/* 文件 tab 关闭钮：平时只显形，悬浮转删除色 */
-.filetab-close { color: var(--shell-muted); }
-.filetab-close:hover { color: var(--shell-diff-del); opacity: 1 !important; }
+/* 文件 tab 关闭钮：常态清晰可见，悬浮转删除色并亮出反馈（禁止内联 color/opacity 压掉本规则） */
+.filetab-close {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--shell-muted);
+  opacity: 1;
+}
+.filetab-close::before { content: ''; position: absolute; inset: -2px; }
+.filetab-close:hover {
+  color: var(--shell-diff-del);
+  background: var(--shell-hover);
+}
+.filetab-close:focus-visible { outline: 1px solid var(--shell-accent-border); outline-offset: -1px; }
 /* 文件窗口标签 pill（preview-editor-display-style）：滑动指示块体系，激活仅文字提亮加粗 */
 .filetab {
   color: var(--shell-muted);
@@ -52,14 +66,9 @@
   border-radius: 1px;
   background: var(--shell-accent);
 }
-/* diff 呈现同源（preview-editor-display-style C/D）：计数徽标 + 2px 变更竖条 + 行号染色，全部走 --shell-diff-* 令牌 */
+/* diff 呈现同源（preview-editor-display-style C/D）：计数徽标 + 行号染色走 --shell-diff-* 令牌；
+   变更竖条经视觉复核撤除（文件预览界面不要竖线）。 */
 .diff-counts { display: inline-flex; gap: 7px; flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums; }
-.diff-bar-add,
-.diff-bar-del { position: relative; }
-.diff-bar-add::before,
-.diff-bar-del::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; }
-.diff-bar-add::before { background: var(--shell-diff-add); }
-.diff-bar-del::before { background: var(--shell-diff-del); }
 /* 行号染色需覆盖 Monaco 主题注入的 .line-numbers 颜色，故限定在 .monaco-editor 内加权 */
 .monaco-editor .diff-num-add { color: var(--shell-diff-add) !important; }
 .monaco-editor .diff-num-del { color: var(--shell-diff-del) !important; }

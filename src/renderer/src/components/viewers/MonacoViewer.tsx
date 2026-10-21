@@ -142,7 +142,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
       const value = modifiedEditor.getValue()
       if (value !== contentRef.current) onChange(value)
     })
-    // Note: 变更竖条 + 行号染色走 decoration（裁决）— .agents/notes/workbench/preview-editor-display-style.md
+    // Note: 行号染色走 decoration；竖条经视觉复核撤除 — .agents/notes/workbench/preview-editor-display-style.md
     diffIndicatorRef.current?.subscription.dispose()
     diffIndicatorRef.current?.original.clear()
     diffIndicatorRef.current?.modified.clear()
@@ -156,7 +156,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           for (let line = change.originalStartLineNumber; line <= change.originalEndLineNumber; line += 1) {
             originalDecorations.push({
               range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
-              options: { isWholeLine: true, linesDecorationsClassName: 'diff-bar-del', lineNumberClassName: 'diff-num-del' },
+              options: { isWholeLine: true, lineNumberClassName: 'diff-num-del' },
             })
           }
         }
@@ -164,7 +164,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           for (let line = change.modifiedStartLineNumber; line <= change.modifiedEndLineNumber; line += 1) {
             modifiedDecorations.push({
               range: { startLineNumber: line, startColumn: 1, endLineNumber: line, endColumn: 1 },
-              options: { isWholeLine: true, linesDecorationsClassName: 'diff-bar-add', lineNumberClassName: 'diff-num-add' },
+              options: { isWholeLine: true, lineNumberClassName: 'diff-num-add' },
             })
           }
         }
@@ -179,6 +179,15 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
       subscription: editor.onDidUpdateDiff(updateDiffIndicators),
     }
   }, [handleMount, onChange])
+
+  // 模型在 diff 退出后仍被复用：主动清掉装饰，避免行号染色残留在普通预览。
+  useEffect(() => {
+    if (originalContent !== undefined) return
+    diffIndicatorRef.current?.subscription.dispose()
+    diffIndicatorRef.current?.original.clear()
+    diffIndicatorRef.current?.modified.clear()
+    diffIndicatorRef.current = null
+  }, [originalContent])
 
   useEffect(() => () => {
     diffChangeSubscriptionRef.current?.dispose()
