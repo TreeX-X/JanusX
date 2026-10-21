@@ -77,6 +77,8 @@ export interface GitCommit {
 }
 
 export interface GitStatus {
+  /** false 表示该工作区不是 Git 仓库（主进程结构化返回，不是错误）。 */
+  isRepo?: boolean
   branch: GitBranch
   changes: GitFileChange[]
   clean: boolean
@@ -84,21 +86,4 @@ export interface GitStatus {
 
 // ── File Editor types ──
 
-export type FileViewType = 'code' | 'markdown' | 'html' | 'image' | 'binary'
-
-export interface OpenFile {
-  id: string
-  name: string
-  path: string
-  absolutePath: string
-  viewType: FileViewType
-  content: string
-  base64?: string
-  mimeType?: string
-  size?: number
-  mtime?: number
-  isDirty: boolean
-  isLoading: boolean
-  error?: string
-  externalChanged?: boolean
-}
+export type { FileViewType, OpenFile } from '../../../shared/editor'

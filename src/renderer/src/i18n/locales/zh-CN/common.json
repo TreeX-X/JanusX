@@ -304,6 +304,7 @@
   "trafficLight": {
     "close": "关闭",
     "minimize": "最小化",
+    "restore": "还原",
     "maximize": "最大化"
   },
   "hosted": {

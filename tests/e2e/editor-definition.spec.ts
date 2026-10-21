@@ -7,7 +7,7 @@ import { createDesktopTestEnv } from './desktop-test-env'
 type EditorWindowAPI = Window & {
   electron: {
     window: {
-      openEditor(payload: { filePath: string; workspacePath: string }): Promise<{ success?: boolean }>
+      openEditor(payload: { filePath: string; workspacePath: string; floating?: boolean }): Promise<{ success?: boolean }>
     }
   }
 }
@@ -41,7 +41,7 @@ test('F12 opens an unopened TypeScript definition in the workspace editor', asyn
     const mainPage = await application.firstWindow({ timeout: 30_000 })
     await mainPage.waitForFunction(() => typeof (window as EditorWindowAPI).electron?.window?.openEditor === 'function')
     await mainPage.evaluate(
-      ({ filePath, workspace }) => (window as EditorWindowAPI).electron.window.openEditor({ filePath, workspacePath: workspace }),
+      ({ filePath, workspace }) => (window as EditorWindowAPI).electron.window.openEditor({ filePath, workspacePath: workspace, floating: true }),
       { filePath: usagePath, workspace: workspacePath },
     )
 

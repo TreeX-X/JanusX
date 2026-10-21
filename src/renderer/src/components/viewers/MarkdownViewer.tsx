@@ -1,3 +1,4 @@
+import { readFileViewState, saveFileViewState } from '@/lib/file-view-state'
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -32,7 +33,7 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
     onEditorMount?.(instance)
   }, [onEditorMount])
   const [splitRatio, setSplitRatio] = useState(50)
-  const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(() => readFileViewState(modelPath).previewMode ?? 'preview')
   const documentDir = useMemo(
     () => dirnameOfAbsolutePath(documentPath ?? modelPath),
     [documentPath, modelPath],
@@ -92,7 +93,7 @@ export function MarkdownViewer({ content, originalContent, onChange, onEditorMou
             <input type="checkbox" checked={syncScroll} onChange={event => setSyncScroll(event.target.checked)} style={{ accentColor: 'var(--shell-accent)' }} />
             {t('editor:fileEditor.syncScroll')}
           </label>}
-          <PreviewModeToggle value={previewMode} onChange={setPreviewMode} />
+          <PreviewModeToggle value={previewMode} onChange={mode => { setPreviewMode(mode); saveFileViewState(modelPath, { previewMode: mode }) }} />
         </div>
       </div>
       <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0 }}>

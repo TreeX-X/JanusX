@@ -85,7 +85,7 @@ void initI18n().then(async () => {
           border: '1px solid var(--shell-border-soft)', padding: 20,
         }}>
           <div style={{ color: 'var(--shell-muted)', fontSize: 12 }}>CODEX · {id === 'a' ? 'JanusX' : 'Second terminal'}</div>
-          <TurnChangeIsland terminalId={id} focused={false} />
+          <TurnChangeIsland terminalId={id} focused={id === 'a' && new URLSearchParams(location.search).has('focused')} />
         </div>)}
       </div>
     </div>,

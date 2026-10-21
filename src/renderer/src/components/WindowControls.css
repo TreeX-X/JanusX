@@ -1,0 +1,40 @@
+.window-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-self: stretch;
+  position: relative;
+  z-index: 30;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+
+.window-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--shell-text);
+  cursor: default;
+}
+
+.window-controls svg { display: block; width: 12px; height: 12px; stroke-width: 1.5; }
+.window-controls button:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: -3px; }
+
+.window-controls[data-platform='windows'] { order: 100; margin-right: -12px; margin-left: 8px; }
+.window-controls[data-platform='windows'] button { width: 46px; }
+.window-controls[data-platform='windows'] button:hover { background: color-mix(in srgb, var(--shell-text) 10%, transparent); }
+.window-controls[data-platform='windows'] button:active { background: color-mix(in srgb, var(--shell-text) 16%, transparent); }
+.window-controls[data-platform='windows'] [data-window-action='close']:hover { background: #c42b1c; color: #fff; }
+.window-controls[data-platform='windows'] [data-window-action='close']:active { background: #a92316; color: #fff; }
+
+.window-controls[data-platform='mac'] { order: -1; align-items: center; gap: 8px; margin-right: 12px; }
+.window-controls[data-platform='mac'] button { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 1px 1px rgb(255 255 255 / 18%); color: rgb(0 0 0 / 60%); }
+.window-controls[data-platform='mac'] [data-window-action='close'] { background: #ff5f57; }
+.window-controls[data-platform='mac'] [data-window-action='minimize'] { background: #ffbd2e; }
+.window-controls[data-platform='mac'] [data-window-action='maximize'] { background: #28c840; }
+.window-controls[data-platform='mac'] svg { width: 8px; height: 8px; stroke-width: 2; opacity: 0; }
+.window-controls[data-platform='mac']:hover svg,
+.window-controls[data-platform='mac'] button:focus-visible svg { opacity: 1; }
+.window-controls[data-platform='mac'] button:active { filter: brightness(0.85); }

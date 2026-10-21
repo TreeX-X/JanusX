@@ -1,6 +1,5 @@
+import { useWorktreeStore } from '@/stores/worktree'
 import {
-  lazy,
-  Suspense,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -13,9 +12,8 @@ import { useAppStore } from '@/stores/app'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useI18n } from '@/i18n/useI18n'
 import { useCheckpointStore } from '@/stores/checkpoint'
-import { useProductWorkspaceStore } from '@/stores/productWorkspace'
 import { useRightToolStore } from '@/stores/right-tools'
-import { useEditorStore } from '@/stores/editor'
+import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { Titlebar } from '@/components/Titlebar'
 import { Sidebar } from '@/components/Sidebar'
 import { TerminalArea } from '@/components/TerminalArea'
@@ -23,18 +21,12 @@ import { WorkbenchErrorBoundary } from '@/components/WorkbenchErrorBoundary'
 import { TerminalSelector } from '@/components/TerminalSelector'
 import { Panel, RightDockLayoutProvider } from '@/components/Panel'
 import { getRightDockLayout, CENTER_WORKSPACE_MIN_WIDTH } from '@/components/right-tools/layout'
-import {
-  clampProductWorkspaceWidth,
-  getProductWorkspaceMaxWidth,
-  PRODUCT_WORKSPACE_MAX_WIDTH,
-  PRODUCT_WORKSPACE_MIN_WIDTH,
-  reconcileProductWorkspaceWidth,
-} from '@/components/product-workspace/productResize'
 import { StatusBar } from '@/components/StatusBar'
 import { FileEditor } from '@/components/FileEditor'
 import { AgentNotificationHost } from '@/components/AgentNotificationHost'
 import { JanusChatProvider } from '@/components/janus/JanusChatProvider'
 import { warmDefaultShellCache, warmTerminalCreatePath } from '@/lib/terminal-launch'
+import { preloadBuiltinRightTools } from '@/extensions/builtins'
 import dockStyles from '@/components/right-tools/RightDock.module.css'
 import { useWorkspaceBootstrap } from '@/features/workspace/useWorkspaceBootstrap'
 // Terminal event subscriptions live at app level, not inside TerminalArea:
@@ -54,10 +46,6 @@ import { OnboardingHost } from '@/components/onboarding/OnboardingHost'
 import { LearningButton } from '@/components/onboarding/LearningButton'
 import styles from './App.module.css'
 
-/*-- P4: 重量级面板按需分包。产物工作区不进首屏 bundle，Suspense fallback 为 null。 --*/
-const ProductWorkspacePanel = lazy(() =>
-  import('@/components/product-workspace/ProductWorkspacePanel').then((m) => ({ default: m.ProductWorkspacePanel }))
-)
 
 type IdleWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
@@ -66,21 +54,12 @@ type IdleWindow = Window & {
 
 const SIDE_PANEL_WIDTH = 'clamp(252px, 15vw, 288px)'
 const SIDE_PANEL_COLLAPSED_WIDTH = '52px'
-const PRODUCT_WORKSPACE_WIDTH = 'clamp(320px, 32vw, 1200px)'
-const PRODUCT_CLOSE_DURATION_MS = 200
-const PRODUCT_CLOSE_EASING = 'cubic-bezier(0.4, 0, 0.2, 1)'
 const EMBEDDED_EDITOR_MIN_WIDTH = 360
 
 function clampEmbeddedEditorWidth(width: number, maxWidth: number): number {
   return Math.max(EMBEDDED_EDITOR_MIN_WIDTH, Math.min(maxWidth, width))
 }
 
-interface ProductResizeSession {
-  pointerId: number
-  target: HTMLDivElement
-  stageRightEdge: number
-  resizableWorkspaceWidth: number
-}
 
 interface EditorResizeSession {
   pointerId: number
@@ -103,7 +82,7 @@ export default function App() {
   const panelCollapsed = useAppStore((s) => s.panelCollapsed)
   const subscribeToCheckpointEvents = useCheckpointStore((s) => s.subscribeToEvents)
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
-  const workspaces = useWorkspaceStore((s) => s.workspaces)
+  const worktreePath = useWorktreeStore(s => activeWorkspaceId ? s.activePaths[activeWorkspaceId] : undefined)
   const hasWorkspacePane = useWorkspaceStore((s) => s.paneTree !== null)
   const hasRetainedWorkspacePane = useWorkspaceStore((s) =>
     Object.values(s.terminalSnapshots).some((snapshot) => snapshot.paneTree !== null)
@@ -111,57 +90,24 @@ export default function App() {
   const hasGlobalToolsPane = useGlobalToolsStore((s) => s.paneTree !== null)
   const showWorkspacePane = shouldRenderWorkspacePane(hasWorkspacePane || hasGlobalToolsPane)
   const mountWorkspacePane = showWorkspacePane || hasRetainedWorkspacePane
-  const visibleProductWorkspaceId = useProductWorkspaceStore((s) => s.visibleWorkspaceId)
   const rightToolPanelWidth = useRightToolStore((s) => s.panelWidth)
   const rightToolPanelWidths = useRightToolStore((s) => s.panelWidths)
   const rightToolActiveId = useRightToolStore((s) => s.activeToolId)
   const isEditorEmbedded = useEditorStore((s) => s.isEmbedded && s.isVisible)
   const embeddedEditorWidth = useEditorStore((s) => s.embeddedWidth)
-  const productVisible = visibleProductWorkspaceId !== null && visibleProductWorkspaceId === activeWorkspaceId
-  const [productClosing, setProductClosing] = useState(false)
-  const [productWidth, setProductWidth] = useState<number | null>(null)
-  const [productMeasuredWidth, setProductMeasuredWidth] = useState(PRODUCT_WORKSPACE_MIN_WIDTH)
-  const [productMaxWidth, setProductMaxWidth] = useState(PRODUCT_WORKSPACE_MAX_WIDTH)
-  const [productResizing, setProductResizing] = useState(false)
   const [rightDockResizing, setRightDockResizing] = useState(false)
   const [editorResizing, setEditorResizing] = useState(false)
-  const productCloseTimerRef = useRef<number | null>(null)
   const appGridRef = useRef<HTMLDivElement | null>(null)
   const centerWorkspaceRef = useRef<HTMLElement | null>(null)
-  const productWorkspaceRef = useRef<HTMLElement | null>(null)
   const editorWorkspaceRef = useRef<HTMLElement | null>(null)
-  const productResizeSessionRef = useRef<ProductResizeSession | null>(null)
   const editorResizeSessionRef = useRef<EditorResizeSession | null>(null)
-  const bodyInteractionStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
   const editorBodyStyleRef = useRef<{ cursor: string; userSelect: string } | null>(null)
-  const productRendered = productVisible || productClosing
-
-  // Reopening during the close animation cancels the pending close: without
-  // this, the close timer fires after showProductWorkspace and shuts the
-  // workspace the user just opened (e.g. a monitor file click mid-close).
-  useEffect(() => {
-    if (!productVisible) return
-    if (productCloseTimerRef.current !== null) {
-      window.clearTimeout(productCloseTimerRef.current)
-      productCloseTimerRef.current = null
-    }
-    setProductClosing(false)
-  }, [productVisible])
-  // 产物打开默认收起右侧（仅在打开瞬间写一次 manual 偏好），之后用户点 rail
-  // 可手动展开：effectiveCollapsed 已不再含 stageRendered。
-  useEffect(() => {
-    if (productVisible) useAppStore.getState().setPanelCollapsed(true)
-  }, [productVisible])
-  const productWorkspacePath = workspaces.find(({ id }) => id === activeWorkspaceId)?.path ?? null
   const [appGridWidth, setAppGridWidth] = useState(() => window.innerWidth)
   const sidebarWidth = sidebarCollapsed
     ? 52
     : Math.min(288, Math.max(252, appGridWidth * 0.15))
-  const productColumnWidth = productRendered && !productClosing
-    ? productWidth ?? productMeasuredWidth
-    : 0
   const rightDockLayout = getRightDockLayout({
-    availableWidth: appGridWidth - sidebarWidth - productColumnWidth
+    availableWidth: appGridWidth - sidebarWidth
       - (isEditorEmbedded ? EMBEDDED_EDITOR_MIN_WIDTH : 0),
     panelCollapsed,
     panelWidth: rightToolPanelWidth,
@@ -171,7 +117,7 @@ export default function App() {
   })
   const editorMaxWidth = Math.max(
     EMBEDDED_EDITOR_MIN_WIDTH,
-    appGridWidth - sidebarWidth - productColumnWidth
+    appGridWidth - sidebarWidth
       - rightDockLayout.dockWidth - CENTER_WORKSPACE_MIN_WIDTH,
   )
   const editorColumnWidth = isEditorEmbedded
@@ -186,115 +132,6 @@ export default function App() {
     const observer = new ResizeObserver(updateWidth)
     observer.observe(grid)
     return () => observer.disconnect()
-  }, [])
-
-  const reconcileProductLayout = useCallback(() => {
-    if (!productVisible || productClosing || !centerWorkspaceRef.current || !productWorkspaceRef.current) return
-    const stageRect = productWorkspaceRef.current.getBoundingClientRect()
-    const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
-    const resizableWorkspaceWidth = stageRect.width + centerRect.width
-    const maxWidth = getProductWorkspaceMaxWidth(resizableWorkspaceWidth)
-
-    setProductMeasuredWidth((current) => Math.abs(current - stageRect.width) < 0.5 ? current : stageRect.width)
-    setProductMaxWidth((current) => Math.abs(current - maxWidth) < 0.5 ? current : maxWidth)
-    setProductWidth((current) => {
-      const { width } = reconcileProductWorkspaceWidth(current, stageRect.width, resizableWorkspaceWidth)
-      return current !== null && Math.abs(current - width) < 0.5 ? current : width
-    })
-  }, [productClosing, productVisible])
-
-  useLayoutEffect(() => {
-    if (!productVisible || productClosing || !centerWorkspaceRef.current || !productWorkspaceRef.current) return
-    const centerWorkspace = centerWorkspaceRef.current
-    const stageWorkspace = productWorkspaceRef.current
-    let frameId: number | null = null
-    const observer = new ResizeObserver(() => {
-      if (frameId !== null) return
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null
-        reconcileProductLayout()
-      })
-    })
-
-    reconcileProductLayout()
-    observer.observe(centerWorkspace)
-    observer.observe(stageWorkspace)
-    return () => {
-      observer.disconnect()
-      if (frameId !== null) window.cancelAnimationFrame(frameId)
-    }
-  }, [productClosing, productVisible, reconcileProductLayout])
-
-  const finishProductResize = useCallback((updateState = true) => {
-    const session = productResizeSessionRef.current
-    if (session?.target.hasPointerCapture(session.pointerId)) {
-      session.target.releasePointerCapture(session.pointerId)
-    }
-    productResizeSessionRef.current = null
-    if (updateState) setProductResizing(false)
-    if (bodyInteractionStyleRef.current) {
-      document.body.style.cursor = bodyInteractionStyleRef.current.cursor
-      document.body.style.userSelect = bodyInteractionStyleRef.current.userSelect
-      bodyInteractionStyleRef.current = null
-    }
-  }, [])
-
-  const handleProductResizeStart = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (productClosing || event.button !== 0 || !centerWorkspaceRef.current || !productWorkspaceRef.current) return
-
-    finishProductResize()
-    const stageRect = productWorkspaceRef.current.getBoundingClientRect()
-    const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
-    productResizeSessionRef.current = {
-      pointerId: event.pointerId,
-      target: event.currentTarget,
-      stageRightEdge: stageRect.right,
-      resizableWorkspaceWidth: stageRect.width + centerRect.width,
-    }
-    setProductMaxWidth(getProductWorkspaceMaxWidth(stageRect.width + centerRect.width))
-    bodyInteractionStyleRef.current = {
-      cursor: document.body.style.cursor,
-      userSelect: document.body.style.userSelect,
-    }
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    event.currentTarget.setPointerCapture(event.pointerId)
-    setProductWidth(stageRect.width)
-    setProductResizing(true)
-    event.preventDefault()
-  }, [finishProductResize, productClosing])
-
-  const handleProductResizeMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const session = productResizeSessionRef.current
-    if (!session || session.pointerId !== event.pointerId) return
-    setProductWidth(clampProductWorkspaceWidth(
-      event.clientX,
-      session.stageRightEdge,
-      session.resizableWorkspaceWidth,
-    ))
-  }, [])
-
-  const handleProductResizeEnd = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (productResizeSessionRef.current?.pointerId !== event.pointerId) return
-    finishProductResize()
-  }, [finishProductResize])
-
-  const handleProductResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (!centerWorkspaceRef.current || !productWorkspaceRef.current) return
-    const stageRect = productWorkspaceRef.current.getBoundingClientRect()
-    const centerRect = centerWorkspaceRef.current.getBoundingClientRect()
-    const maxWidth = getProductWorkspaceMaxWidth(stageRect.width + centerRect.width)
-    const widthByKey: Partial<Record<string, number>> = {
-      ArrowLeft: Math.min(maxWidth, stageRect.width + 16),
-      ArrowRight: Math.max(PRODUCT_WORKSPACE_MIN_WIDTH, stageRect.width - 16),
-      Home: PRODUCT_WORKSPACE_MIN_WIDTH,
-      End: maxWidth,
-    }
-    const nextWidth = widthByKey[event.key]
-    if (nextWidth === undefined) return
-    setProductMaxWidth(maxWidth)
-    setProductWidth(nextWidth)
-    event.preventDefault()
   }, [])
 
   const finishEditorResize = useCallback((updateState = true) => {
@@ -363,30 +200,7 @@ export default function App() {
     event.preventDefault()
   }, [editorColumnWidth, editorMaxWidth])
 
-  const handleCloseProduct = useCallback(() => {
-    if (productCloseTimerRef.current !== null || visibleProductWorkspaceId === null) return
-
-    finishProductResize()
-    const closingWorkspaceId = visibleProductWorkspaceId
-    setProductClosing(true)
-    productCloseTimerRef.current = window.setTimeout(() => {
-      productCloseTimerRef.current = null
-      if (useProductWorkspaceStore.getState().visibleWorkspaceId === closingWorkspaceId) {
-        useProductWorkspaceStore.getState().closeProductWorkspace()
-      }
-      setProductClosing(false)
-    }, PRODUCT_CLOSE_DURATION_MS)
-  }, [finishProductResize, visibleProductWorkspaceId])
-
-  useEffect(() => {
-    return () => {
-      if (productCloseTimerRef.current !== null) {
-        window.clearTimeout(productCloseTimerRef.current)
-      }
-      finishProductResize(false)
-      finishEditorResize(false)
-    }
-  }, [finishEditorResize, finishProductResize])
+  useEffect(() => () => finishEditorResize(false), [finishEditorResize])
 
   /*-- P0: 翻转容器 ref，拖拽时 direct DOM 操作 transform --*/
 
@@ -394,21 +208,34 @@ export default function App() {
     return subscribeToCheckpointEvents()
   }, [subscribeToCheckpointEvents])
 
-  useEffect(() => window.electron.window.onEditorEmbedded(async (payload) => {
-    const editor = useEditorStore.getState()
-    const loading = editor.openFile(payload.filePath, payload.workspacePath)
-    useEditorStore.getState().setEmbedded(true)
-    await loading
-    if (payload.isDirty && payload.content !== undefined) {
-      useEditorStore.getState().updateContent(payload.filePath, payload.content)
+  // Note: .agents/notes/workbench/unified-file-window.md
+  useEffect(() => {
+    const unsubscribe = window.electron.window.onEditorEmbedded(async payload => {
+    try {
+      await useEditorStore.getState().acceptDelivery(payload)
+      if (payload.requestId) window.electron.window.editorReceived(payload.requestId, true)
+    } catch {
+      if (payload.requestId) window.electron.window.editorReceived(payload.requestId, false)
     }
+    })
+    window.electron.window.editorHostReady()
+    return unsubscribe
+  }, [])
+  useEffect(() => window.electron.fileTree.onChanged(payload => {
+    invalidateEditorFileCache(payload.workspacePath)
+    void useEditorStore.getState().reloadOpenFiles(payload.workspacePath, payload.changedFilePath ?? null)
   }), [])
+  useEffect(() => {
+    const workspace = useWorkspaceStore.getState().workspaces.find(item => item.id === activeWorkspaceId)
+    useEditorStore.getState().switchScope(worktreePath ?? workspace?.path ?? null)
+  }, [activeWorkspaceId, worktreePath])
 
   useEffect(() => {
     const idleWindow = window as IdleWindow
     const runWarmup = () => {
       warmDefaultShellCache()
       warmTerminalCreatePath()
+      preloadBuiltinRightTools()
     }
 
     if (idleWindow.requestIdleCallback) {
@@ -433,11 +260,9 @@ export default function App() {
       <div
         ref={appGridRef}
         className={`flex-1 min-h-0 grid grid-rows-[minmax(0,1fr)_28px] overflow-hidden ${dockStyles.workbenchGrid}`}
-        data-resizing={productResizing || rightDockResizing || editorResizing}
+        data-resizing={rightDockResizing || editorResizing}
         style={{
-          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${
-            productRendered ? `${productClosing ? '0px' : productWidth === null ? PRODUCT_WORKSPACE_WIDTH : `${productWidth}px`} ` : ''
-          }${isEditorEmbedded ? `${editorColumnWidth}px ` : ''}${rightDockLayout.dockWidth}px`,
+          gridTemplateColumns: `${sidebarCollapsed ? SIDE_PANEL_COLLAPSED_WIDTH : SIDE_PANEL_WIDTH} minmax(320px, 1fr) ${isEditorEmbedded ? `${editorColumnWidth}px ` : ''}${rightDockLayout.dockWidth}px`,
         }}
       >
         <Sidebar />
@@ -470,46 +295,6 @@ export default function App() {
           </div>
         </main>
 
-        {productRendered && (
-          <section
-            ref={productWorkspaceRef}
-            className="relative min-w-0 overflow-hidden border-l border-white/[0.07]"
-            aria-label="Product workspace"
-            {...(productClosing ? { inert: '' } : {})}
-            style={{
-              opacity: productClosing ? 0 : 1,
-              pointerEvents: productClosing ? 'none' : 'auto',
-              transition: `opacity ${PRODUCT_CLOSE_DURATION_MS}ms ${PRODUCT_CLOSE_EASING}`,
-            }}
-          >
-            {!productClosing && (
-              <div
-                role="separator"
-                aria-label="Resize product workspace"
-                aria-orientation="vertical"
-                aria-valuemin={PRODUCT_WORKSPACE_MIN_WIDTH}
-                aria-valuemax={Math.round(productMaxWidth)}
-                aria-valuenow={Math.round(productMeasuredWidth)}
-                tabIndex={0}
-                className={dockStyles.resizeHandle}
-                data-resizing={productResizing}
-                onPointerDown={handleProductResizeStart}
-                onPointerMove={handleProductResizeMove}
-                onPointerUp={handleProductResizeEnd}
-                onPointerCancel={handleProductResizeEnd}
-                onLostPointerCapture={handleProductResizeEnd}
-                onKeyDown={handleProductResizeKeyDown}
-              />
-            )}
-            <Suspense fallback={null}>
-              <ProductWorkspacePanel
-                workspaceId={visibleProductWorkspaceId}
-                workspacePath={productWorkspacePath}
-                onClose={handleCloseProduct}
-              />
-            </Suspense>
-          </section>
-        )}
         {isEditorEmbedded && (
           <section
             ref={editorWorkspaceRef}
@@ -549,7 +334,6 @@ export default function App() {
           <StatusBar />
         </div>
       </div>
-      {!isEditorEmbedded && <FileEditor />}
       <AgentNotificationHost />
       {/* ToB M2：未登录/无组织时全屏挡板 */}
       <TeamSetupGate />

@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-20T11:00:12.656Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -35,7 +35,7 @@ The right rail shows a collapse control with an empty tool set. The dock width o
 
 ## Decision
 
-`RightToolRail` in `src/renderer/src/components/right-tools/RightToolRail.tsx` renders the panel toggle only when `openToolIds` is non-empty. Rail-only stays the normal empty state, tool icons on the rail remain the single entry point, and the toggle returns with the first opened tool. The collapsed preference in `src/renderer/src/stores/app.ts` keeps its meaning for open tools and never gates the empty rail.
+`RightToolRail` renders no separate panel toggle in either empty or populated states. Rail-only stays the normal empty state. Each tool icon controls its own content: click opens or toggles the panel, while hover previews the real content without opening a tool in the store. The current interaction and dismissal rules are owned by [Right dock](./right-dock.md). The collapsed preference in `src/renderer/src/stores/app.ts` keeps its meaning for open tools and never gates the empty rail.
 
 ## Alternatives considered
 
@@ -45,5 +45,5 @@ The right rail shows a collapse control with an empty tool set. The dock width o
 
 ## Consequences
 
-- **Gains**: The rail exposes no ineffective action; screen readers meet no dangling panel reference in the empty state.
-- **Costs and limits**: Discovery of expand relies on opening a tool icon first; a future empty-state hint on the rail remains open when first-run telemetry shows hesitation.
+- **Gains**: The rail exposes no ineffective action; each icon announces its own expanded state.
+- **Costs and limits**: Discovery of expand relies on the tool icons; a future empty-state hint on the rail remains open when first-run telemetry shows hesitation.

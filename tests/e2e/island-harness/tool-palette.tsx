@@ -69,6 +69,8 @@ useRightToolStore.subscribe((state, previous) => {
   if (state.activeToolId !== previous.activeToolId) toolActivations.push(state.activeToolId)
 })
 Object.assign(window, { builtinExtensionFixture: {
+  close: (id: string) => useRightToolStore.getState().closeTool(id),
+  collapse: () => useAppStore.getState().setPanelCollapsed(true),
   disable: (id: string) => extensionRegistry.disable(`janusx.${id}`),
   enable: (id: string) => extensionRegistry.enable(`janusx.${id}`),
   open: (id: string) => openExtensionView(`extension:janusx.${id}/panel`),

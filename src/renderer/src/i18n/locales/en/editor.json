@@ -161,6 +161,8 @@
     "find": "Find",
     "findTitle": "Find (Ctrl+F)",
     "embedToWorkspace": "Embed into workspace",
+    "transferFailed": "Could not move the file window. Your files remain open here.",
+    "collapsePanel": "Collapse file panel",
     "detachToFloat": "Return to floating window",
     "save": "Save",
     "closeTab": "Close {{name}}",

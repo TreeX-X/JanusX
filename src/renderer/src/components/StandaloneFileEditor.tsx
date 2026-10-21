@@ -1,9 +1,10 @@
+import { WindowControls } from './WindowControls'
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useEditorCloseDialog } from './EditorCloseDialog'
 import { FileViewerContent } from '@/components/FileViewerContent'
-import { getEditorFileId, invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
+import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useThemeStore } from '@/stores/theme'
-import { GitCompareArrows, Maximize2, PanelRightOpen, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
+import { GitCompareArrows, PanelRightOpen, PanelRightClose, X, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
 import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
 import { useI18n } from '@/i18n/useI18n'
 import type { DefinitionTarget } from '@/lib/monaco-definition'
@@ -21,41 +22,14 @@ function getEditorWindowParams(): EditorWindowParams | null {
   return { filePath, workspacePath }
 }
 
-function WindowTrafficLights({ onClose }: { onClose: () => void }) {
-  const { t } = useI18n('common')
-  const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
-
-  return (
-    <div className="relative z-10 flex shrink-0 gap-2" style={noDrag}>
-      <button
-        type="button"
-        aria-label={t('common:trafficLight.close')}
-        title={t('common:trafficLight.close')}
-        onClick={onClose}
-        className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
-      />
-      <button
-        type="button"
-        aria-label={t('common:trafficLight.minimize')}
-        title={t('common:trafficLight.minimize')}
-        onClick={() => window.electron.window.minimize()}
-        className="h-3 w-3 rounded-full bg-[#ffbd2e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
-      />
-      <button
-        type="button"
-        aria-label={t('common:trafficLight.maximize')}
-        title={t('common:trafficLight.maximize')}
-        onClick={() => window.electron.window.maximize()}
-        className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
-      />
-    </div>
-  )
-}
-
-export function StandaloneFileEditor() {
+export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean }) {
   const { t } = useI18n('editor')
   const findEditorRef = useRef<FindableEditor | null>(null)
-  const editorParams = useMemo(() => getEditorWindowParams(), [])
+  const scope = useEditorStore(state => state.workspacePath)
+  const initialParams = useMemo(() => getEditorWindowParams(), [])
+  const editorParams = useMemo(() => embedded ? (scope ? { filePath: '', workspacePath: scope } : null) : initialParams, [embedded, scope, initialParams])
+  const [transferring, setTransferring] = useState(false)
+  const [transferError, setTransferError] = useState<string | null>(null)
   const openFiles = useEditorStore((state) => state.openFiles)
   const activeFileId = useEditorStore((state) => state.activeFileId)
   const openFile = useEditorStore((state) => state.openFile)
@@ -107,45 +81,42 @@ export function StandaloneFileEditor() {
   }, [])
 
   useEffect(() => {
-    if (!editorParams) return
+    if (embedded || !editorParams) return
     void openFile(editorParams.filePath, editorParams.workspacePath)
-    const unsubscribe = window.electron.window.onEditorRefresh((payload) => {
-      // The main process reuses this window for new files. Opening through the
-      // store activates an existing tab and only loads content for a new tab;
-      // reloading here would reset the current editor's scroll position.
-      void openFile(payload.filePath, payload.workspacePath).then(() => {
-        // Reopening the already active tab changes no effect dependencies.
-        const state = useEditorStore.getState()
-        const file = state.openFiles.find(item => item.id === getEditorFileId(payload.filePath) && item.id === state.activeFileId)
-        if (file && !file.isLoading && !file.error && file.viewType !== 'binary') {
-          window.electron.window.reportEditorViewed({ filePath: file.absolutePath, workspacePath: payload.workspacePath })
-        }
-      })
+    const unsubscribe = window.electron.window.onEditorRefresh(async (payload) => {
+      try {
+        await useEditorStore.getState().acceptDelivery(payload)
+        if (payload.requestId) window.electron.window.editorReceived(payload.requestId, true)
+      } catch {
+        if (payload.requestId) window.electron.window.editorReceived(payload.requestId, false)
+      }
     })
     window.electron.window.editorReady()
     return unsubscribe
-  }, [editorParams, openFile])
+  }, [editorParams, openFile, embedded])
 
   // Note: standalone editors auto-refresh clean tabs on external disk changes — see .agents/notes/workbench/standalone-editor-auto-refresh.md
   useEffect(() => {
-    if (!editorParams) return
+    if (embedded || !editorParams) return
     const workspacePath = editorParams.workspacePath
     return window.electron.fileTree.onChanged((payload) => {
       if (payload.workspacePath !== workspacePath) return
       invalidateEditorFileCache(workspacePath)
       void useEditorStore.getState().reloadOpenFiles(workspacePath, payload.changedFilePath ?? null)
     })
-  }, [editorParams])
+  }, [editorParams, embedded])
 
   const closeWindow = useCallback(() => {
-    void window.electron.window.confirmEditorClose()
-  }, [])
+    if (embedded) useEditorStore.getState().closePanel()
+    else void window.electron.window.confirmEditorClose()
+  }, [embedded])
 
   const handleWindowClose = useCallback(() => {
+    if (transferring) return
     confirmClose(useEditorStore.getState().openFiles.map(file => file.id), closeWindow)
-  }, [confirmClose, closeWindow])
+  }, [confirmClose, closeWindow, transferring])
 
-  useEffect(() => window.electron.window.onEditorCloseRequested(handleWindowClose), [handleWindowClose])
+  useEffect(() => embedded ? undefined : window.electron.window.onEditorCloseRequested(handleWindowClose), [handleWindowClose, embedded])
 
   useEffect(() => {
     let cancelled = false
@@ -171,6 +142,7 @@ export function StandaloneFileEditor() {
         void openEditorFind(findEditorRef.current)
         return
       }
+      if (transferring) return
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()
         if (activeFileId) void saveFile(activeFileId)
@@ -178,13 +150,14 @@ export function StandaloneFileEditor() {
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [activeFileId, saveFile])
+  }, [activeFileId, saveFile, transferring])
 
   useEffect(() => { findEditorRef.current = null }, [activeFileId])
 
   useEffect(() => {
+    if (embedded) return
     document.title = activeFile ? t('editor:fileEditor.documentTitle', { prefix: activeFile.isDirty ? '* ' : '', name: activeFile.name }) : t('editor:fileEditor.windowTitle')
-  }, [activeFile, t])
+  }, [activeFile, t, embedded])
 
   const handleDefinitionNavigate = useCallback((target: DefinitionTarget) => {
     if (editorParams) void openFileAt(target.absolutePath, editorParams.workspacePath, target.selection)
@@ -195,17 +168,23 @@ export function StandaloneFileEditor() {
     setIsPinned(result.value)
   }, [isPinned])
 
-  const embedInWorkspace = useCallback(async () => {
-    if (!activeFile || !editorParams) return
-    await window.electron.window.embedEditor({
-      filePath: activeFile.absolutePath,
-      workspacePath: editorParams.workspacePath,
-      content: activeFile.content,
-      isDirty: activeFile.isDirty,
-    })
-  }, [activeFile, editorParams])
+  const moveSession = useCallback(async () => {
+    if (!activeFile || !editorParams || transferring) return
+    setTransferring(true)
+    setTransferError(null)
+    try {
+      const payload = { filePath: activeFile.absolutePath, workspacePath: editorParams.workspacePath, session: useEditorStore.getState().exportSession() }
+      const result = embedded
+        ? await window.electron.window.openEditor({ ...payload, floating: true })
+        : await window.electron.window.embedEditor(payload)
+      if (!result.success) throw new Error(result.error)
+      if (embedded) useEditorStore.getState().releaseScope(editorParams.workspacePath)
+    } catch {
+      setTransferError(t('editor:fileEditor.transferFailed'))
+    } finally { setTransferring(false) }
+  }, [activeFile, editorParams, embedded, transferring, t])
 
-  const titlebarDrag = { WebkitAppRegion: 'drag' } as CSSProperties
+  const titlebarDrag = embedded ? {} : { WebkitAppRegion: 'drag' } as CSSProperties
   const noDrag = { WebkitAppRegion: 'no-drag' } as CSSProperties
   const diffEnabled = Boolean(activeFile && diffFileId === activeFile.id)
   const activeBaselineContent = diffEnabled && baselineFileId === activeFile?.id ? baselineContent : undefined
@@ -213,8 +192,9 @@ export function StandaloneFileEditor() {
   const canFind = activeFile?.viewType === 'code' || activeFile?.viewType === 'markdown' || activeFile?.viewType === 'html'
 
   return (
-    <div data-editor-window-state="ready" className="h-screen flex flex-col overflow-hidden" style={{ background: 'var(--shell-canvas)', color: 'var(--shell-text)' }}>
+    <div data-editor-window-state="ready" data-editor-host={embedded ? 'embedded' : 'floating'} aria-busy={transferring} className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--shell-canvas)', color: 'var(--shell-text)' }}>
       <div
+        {...(transferring ? { inert: '' } : {})}
         className="relative h-[38px] shrink-0 flex items-center gap-3 px-3 select-none"
         style={{
           ...titlebarDrag,
@@ -222,13 +202,13 @@ export function StandaloneFileEditor() {
           borderBottom: '1px solid var(--shell-border)',
         }}
       >
-        <div
+        {!embedded && <div
           data-editor-window-drag-strip
           className="absolute inset-x-0 top-0 z-20 h-2"
           style={titlebarDrag}
           aria-hidden="true"
-        />
-        <WindowTrafficLights onClose={handleWindowClose} />
+        />}
+        {!embedded && <WindowControls onClose={handleWindowClose} />}
         <div
           data-editor-drag-region
           className="flex min-w-0 flex-1 self-stretch items-end overflow-x-auto"
@@ -261,7 +241,7 @@ export function StandaloneFileEditor() {
                 <button
                   type="button"
                   aria-label={t('editor:fileEditor.closeTab', { name: file.name })}
-                  className="ml-1 shrink-0 border-0 bg-transparent p-0 hover:opacity-100"
+                  className="filetab-close ml-1 shrink-0 border-0 bg-transparent p-0 hover:opacity-100"
                   style={{ color: 'var(--shell-dim)', opacity: 0.7 }}
                   onClick={(event) => {
                     event.stopPropagation()
@@ -298,7 +278,7 @@ export function StandaloneFileEditor() {
               <Search size={14} strokeWidth={1.8} />
             </button>
           )}
-          <button
+          {!embedded && <button
             type="button"
             aria-pressed={isPinned}
             aria-label={isPinned ? t('editor:fileEditor.unpinWindow') : t('editor:fileEditor.pinWindow')}
@@ -313,29 +293,20 @@ export function StandaloneFileEditor() {
             }}
           >
             {isPinned ? <PinOff size={14} strokeWidth={1.8} /> : <Pin size={14} strokeWidth={1.8} />}
-          </button>
+          </button>}
           <button
             type="button"
-            aria-label={t('editor:fileEditor.maximizeWindow')}
-            title={t('editor:fileEditor.maximizeWindow')}
-            onClick={() => void window.electron.window.maximize()}
-            onMouseDown={(event) => event.stopPropagation()}
-            className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors hover:border-[var(--shell-accent-border)] hover:text-[var(--shell-text)]"
-          >
-            <Maximize2 size={14} strokeWidth={1.8} />
-          </button>
-          <button
-            type="button"
-            aria-label={t('editor:fileEditor.embedToMain')}
-            title={t('editor:fileEditor.embedToMain')}
-            disabled={!activeFile || !editorParams}
-            onClick={() => void embedInWorkspace()}
+            aria-label={t(embedded ? 'editor:fileEditor.detachToFloat' : 'editor:fileEditor.embedToMain')}
+            title={t(embedded ? 'editor:fileEditor.detachToFloat' : 'editor:fileEditor.embedToMain')}
+            disabled={!activeFile || !editorParams || transferring || openFiles.some(file => file.isLoading)}
+            onClick={() => void moveSession()}
             onMouseDown={(event) => event.stopPropagation()}
             className="flex h-7 w-7 items-center justify-center rounded border border-[var(--control-border)] bg-transparent text-[var(--shell-muted)] transition-colors enabled:hover:border-[var(--shell-accent-border)] enabled:hover:text-[var(--shell-text)] disabled:cursor-not-allowed disabled:opacity-35"
           >
-            <PanelRightOpen size={14} strokeWidth={1.8} />
+            {embedded ? <PanelRightClose size={14} strokeWidth={1.8} /> : <PanelRightOpen size={14} strokeWidth={1.8} />}
           </button>
         </div>
+        {embedded && <button type="button" aria-label={t('editor:fileEditor.collapsePanel')} title={t('editor:fileEditor.collapsePanel')} onClick={() => useEditorStore.getState().hidePanel()} className="flex h-7 w-7 shrink-0 items-center justify-center text-[var(--shell-muted)]"><X size={14} /></button>}
         {canSave && (
           <button
             type="button"
@@ -355,10 +326,11 @@ export function StandaloneFileEditor() {
           </button>
         )}
       </div>
+      {transferError && <div role="alert" className="px-3 py-1 text-xs text-[var(--shell-diff-del)]">{transferError}</div>}
       {diffEnabled && baselineStatus && <div role="status" className="px-3 py-1 text-xs" style={{ color: 'var(--shell-muted)' }}>
         {t(baselineStatus === 'loading' ? 'editor:fileEditor.diffLoading' : 'editor:fileEditor.diffUnavailable')}
       </div>}
-      <div className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+      <div {...(transferring ? { inert: '' } : {})} className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>
         {activeFile ? (
           <FileViewerContent
             key={`${activeFile.id}:${activeFile.absolutePath}`}

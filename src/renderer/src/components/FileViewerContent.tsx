@@ -1,3 +1,6 @@
+import { productKindForPath } from '../../../shared/product'
+import { OfficeFileViewer } from './office/OfficeFileViewer'
+import { useEditorStore } from '@/stores/editor'
 import { MonacoViewer, MarkdownViewer, HtmlViewer, ImageViewer, BinaryInfo } from '@/components/viewers'
 import { getMonacoLanguage } from '@/lib/file-utils'
 import type { FindableEditor } from '@/lib/editor-find'
@@ -51,6 +54,8 @@ export function FileViewerContent({ file, onContentChange, onEditorMount, diffOr
       </div>
     )
   }
+
+  if (productKindForPath(file.absolutePath) === 'office') return <OfficeFileViewer absolutePath={file.absolutePath} onClose={() => useEditorStore.getState().closeFile(file.id)} />
 
   switch (file.viewType) {
     case 'code':

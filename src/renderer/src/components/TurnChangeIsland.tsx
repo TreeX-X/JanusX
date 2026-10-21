@@ -8,6 +8,7 @@ import { useI18n } from '@/i18n/useI18n'
 import './TurnChangeIsland.css'
 
 const EMPTY_TURNS: TerminalTurnChangesEvent[] = []
+const AUTO_COLLAPSE_MS = 6000
 type FileChange = TerminalTurnChangesEvent['files'][number]
 type IslandView = 'latest' | 'history'
 
@@ -23,7 +24,6 @@ export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, foc
   const cwd = terminal?.cwd
   const [expanded, setExpanded] = useState(false)
   const [view, setView] = useState<IslandView>('latest')
-  const [pinned, setPinned] = useState(false)
   const [hovering, setHovering] = useState(false)
   const [focusWithin, setFocusWithin] = useState(false)
   const [narrow, setNarrow] = useState(false)
@@ -37,7 +37,6 @@ export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, foc
   useEffect(() => {
     setExpanded(Boolean(change) && focusedRef.current && !narrow)
     setView('latest')
-    setPinned(false)
   }, [turnKey, change, narrow])
   useEffect(() => {
     const parent = rootRef.current?.parentElement
@@ -47,10 +46,10 @@ export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, foc
     return () => observer.disconnect()
   }, [])
   useEffect(() => {
-    if (!expanded || pinned || hovering || focusWithin) return
-    const timer = setTimeout(() => setExpanded(false), 6000)
+    if (!expanded || hovering || focusWithin) return
+    const timer = setTimeout(() => setExpanded(false), AUTO_COLLAPSE_MS)
     return () => clearTimeout(timer)
-  }, [expanded, pinned, hovering, focusWithin, turnKey])
+  }, [expanded, hovering, focusWithin, turnKey])
   useEffect(() => {
     if (!expanded) return
     const outside = (event: PointerEvent) => {
@@ -59,10 +58,10 @@ export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, foc
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setExpanded(false)
     }
-    document.addEventListener('pointerdown', outside)
+    document.addEventListener('pointerdown', outside, true)
     document.addEventListener('keydown', escape)
     return () => {
-      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('pointerdown', outside, true)
       document.removeEventListener('keydown', escape)
     }
   }, [expanded])
@@ -75,7 +74,6 @@ export const TurnChangeIsland = memo(function TurnChangeIsland({ terminalId, foc
     if (narrow) return
     setView(nextView)
     setExpanded(true)
-    setPinned(true)
   }
   const openPreview = (file: FileChange) => {
     if (!terminal || !cwd || file.status === 'deleted') return

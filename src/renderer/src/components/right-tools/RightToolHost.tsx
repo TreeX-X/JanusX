@@ -34,8 +34,8 @@ export function RightToolHost({
           <section
             key={toolId}
             id={`right-tool-panel-${toolId}`}
-            role="tabpanel"
-            aria-labelledby={`right-tool-tab-${toolId}`}
+            role="region"
+            aria-labelledby={`right-tool-rail-${toolId}`}
             aria-hidden={!active}
             hidden={!active}
             {...(!active ? { inert: '' } : {})}

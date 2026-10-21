@@ -682,36 +682,31 @@ textarea::placeholder {
   100% { width: 250px; height: 250px; opacity: 0.3; }
 }
 
-/* ================= 弹窗红灯关闭按钮（macOS 红绿灯风格） ================= */
-/* 所有弹出小窗口统一使用：点击红灯关闭，点击遮罩/其他区域不会关闭。
-   交互约定：红灯本身即关闭 affordance，悬浮不冒叉、不变色，直接点即可。 */
-.modal-close-light {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #ff5f57;
+/* App dialog close controls: visible X on both platforms. */
+/* Note: .agents/notes/desktop/window-controls.md */
+.modal-close-light,
+.panel-header-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-muted);
   border: none;
   padding: 0;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
+  -webkit-app-region: no-drag;
 }
-
-.modal-close-light:active {
-  filter: brightness(0.9);
-}
-
+.modal-close-light { order: 100; margin-left: auto; }
+.modal-close-light:hover,
+.panel-header-action:hover { color: var(--shell-text); background: var(--shell-hover); }
+.modal-close-light:focus-visible,
+.panel-header-action:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 1px; }
 .modal-close-light::after,
-.modal-close-light:hover::after {
-  content: '\2715';
-  font-size: 7px;
-  line-height: 1;
-  color: transparent;
-  font-weight: bold;
-}
+.modal-close-light:hover::after { content: '\2715'; font-size: 16px; line-height: 1; color: currentColor; }
 
 /* ================= LLM 配置触发器神性动画 ================= */
 /* 参考 JanusX 原型设计的渐进式交互 */

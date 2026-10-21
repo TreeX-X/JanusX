@@ -34,15 +34,12 @@ export function getRightDockLayout({
   activeToolId,
   hasActiveTool,
 }: RightDockLayoutInput): RightDockLayout {
-  const minimum = rightToolPanelMinWidth(activeToolId)
   const effectiveMaxWidth = Math.min(
     rightToolPanelMaxWidth(activeToolId),
     availableWidth - CENTER_WORKSPACE_MIN_WIDTH - RIGHT_TOOL_RAIL_WIDTH,
   )
-  const responsiveAutoCollapsed = effectiveMaxWidth < minimum
-  // 产物工作区打开只做“默认收起”（由 App 在打开瞬间 setPanelCollapsed(true)），
-  // 不再强制 effectiveCollapsed：空间足够时用户点击 rail 仍可手动展开。
-  // forcedCollapsed 因此只保留响应式（空间不足）分支。
+  // Docked panels reserve space; floating previews use the rail only.
+  const responsiveAutoCollapsed = effectiveMaxWidth < rightToolPanelMinWidth(activeToolId)
   const effectiveCollapsed = panelCollapsed || responsiveAutoCollapsed
   const preferredWidth = preferredRightToolPanelWidth(panelWidth, panelWidths, activeToolId)
   const constrainedPanelWidth = clampRightToolPanelWidth(preferredWidth, effectiveMaxWidth, activeToolId)

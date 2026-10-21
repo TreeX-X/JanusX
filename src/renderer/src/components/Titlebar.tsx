@@ -1,3 +1,5 @@
+import { WindowControls } from './WindowControls'
+import type { IslandControllerAction } from '@/components/janus/islandController'
 import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -13,12 +15,7 @@ import { useJanusChatController } from '@/components/janus/JanusChatProvider'
 import { useGlobalRunning } from '@/components/janus/useGlobalRunning'
 import { JanusRunOrbs } from '@/components/janus/JanusRunOrbs'
 import { KNOWLEDGE_PEEK_TIMEOUT_MS } from '@/components/janus/islandKnowledgePeek'
-import { shouldPresentProductNotice, type IslandControllerAction } from '@/components/janus/islandController'
 import { useIslandStore } from '@/stores/island'
-import { getSingleActivationIntent } from '@/components/janus/islandInteraction'
-import { officeService } from '@/services/office'
-import { startProductDiscovery } from '@/components/product-workspace/productDiscovery'
-import { useProductWorkspaceStore } from '@/stores/productWorkspace'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useTeamStore } from '@/stores/team'
 import { useBlueprintMaintenanceStore } from '@/stores/blueprint-maintenance'
@@ -108,10 +105,6 @@ export function Titlebar() {
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId)
   const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
   const previousActiveWorkspaceId = useRef(activeWorkspaceId)
-  const productDiscoveryGeneration = useRef(0)
-  const productNotice = useProductWorkspaceStore((state) => state.productNotice)
-  const productsByWorkspace = useProductWorkspaceStore((state) => state.productsByWorkspace)
-  const workspaceProducts = activeWorkspaceId ? productsByWorkspace[activeWorkspaceId] ?? [] : []
   const initializeBlueprintMaintenance = useBlueprintMaintenanceStore((state) => state.initialize)
 
   useEffect(() => { void initializeBlueprintMaintenance() }, [initializeBlueprintMaintenance])
@@ -122,46 +115,10 @@ export function Titlebar() {
 
   useEffect(() => {
     if (previousActiveWorkspaceId.current === activeWorkspaceId) return
-    const previousWorkspaceId = previousActiveWorkspaceId.current
     previousActiveWorkspaceId.current = activeWorkspaceId
     dispatchIsland({ type: 'invalidate' })
-    if (previousWorkspaceId) {
-      useProductWorkspaceStore.getState().clearWorkspaceUi(previousWorkspaceId)
-      void useProductWorkspaceStore.getState().releaseWorkspace(previousWorkspaceId)
-    }
+
   }, [dispatchIsland, activeWorkspaceId])
-
-  useEffect(() => {
-    const generation = ++productDiscoveryGeneration.current
-    if (!activeWorkspaceId) return
-    return startProductDiscovery(activeWorkspaceId, officeService, {
-      initialize: (entries) => useProductWorkspaceStore.getState().initializeProducts(activeWorkspaceId, entries),
-      reconcile: (entries) => useProductWorkspaceStore.getState().reconcileProducts(activeWorkspaceId, entries),
-      isCurrent: () => generation === productDiscoveryGeneration.current
-        && useWorkspaceStore.getState().activeWorkspaceId === activeWorkspaceId,
-    })
-  }, [dispatchIsland, activeWorkspaceId])
-
-  // Product presentation dedupe (Note: 2026-09-13-island-notification-capsule.md):
-  // a sticky notice re-presents only once per id. After the capsule expires the
-  // notice stays alive — the next island click opens the product directly
-  // instead of an automatic re-peek.
-  const presentedProductNoticeIdRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!productNotice || productNotice.workspaceId !== activeWorkspaceId) {
-      presentedProductNoticeIdRef.current = null
-      return
-    }
-    // Notice matrix: only 'added' pops the island capsule; 'modified'
-    // (baseline file first change) surfaces in the tray/badge exclusively.
-    if (productNotice.kind !== 'added') return
-    const noticeId = productNotice.entry.relPath
-    if (presentedProductNoticeIdRef.current === noticeId) return
-    if (!shouldPresentProductNotice(islandStage, productNotice.workspaceId, activeWorkspaceId)) return
-    presentedProductNoticeIdRef.current = noticeId
-    dispatchIsland({ type: 'product-notice' })
-  }, [dispatchIsland, activeWorkspaceId, productNotice, islandStage])
 
   useEffect(() => {
     if (islandStage !== 'peek' || knowledgePeek.presentation === 'hidden') return
@@ -172,50 +129,10 @@ export function Titlebar() {
     return () => window.clearTimeout(timer)
   }, [dispatchIsland, islandStage, knowledgePeek.presentation, knowledgePeek.version])
 
-  useEffect(() => {
-    if (islandStage !== 'peek' || productNotice?.workspaceId !== activeWorkspaceId) return
-    const timer = window.setTimeout(() => {
-      // Capsule-only expiry: the notice itself stays sticky so that clicking
-      // the island afterwards still opens the product on the right side.
-      dispatchIsland({ type: 'product-expire' })
-    }, KNOWLEDGE_PEEK_TIMEOUT_MS)
-    return () => window.clearTimeout(timer)
-  }, [dispatchIsland, activeWorkspaceId, productNotice, islandStage])
-
-  const openProductFile = useCallback((relPath: string) => {
-    if (!activeWorkspaceId) return
-    const product = useProductWorkspaceStore.getState()
-    product.consumeProductNotice()
-    dispatchIsland({ type: 'dismiss' })
-    const { sidebarCollapsed, toggleSidebar } = useAppStore.getState()
-    if (!sidebarCollapsed) toggleSidebar()
-    // Direct preview: the tab and file read start immediately, the stage
-    // mounts in the same commit — no deferred open (Note: product-workspace).
-    product.showProductWorkspace(activeWorkspaceId)
-    void product.openPreview(activeWorkspaceId, relPath)
-  }, [activeWorkspaceId, dispatchIsland])
-
-  const handleIslandSingleActivate = useCallback(() => {
-    const productNoticeAlive = productNotice?.workspaceId === activeWorkspaceId
-    const intent = getSingleActivationIntent({
-      stage: islandStage,
-      productNoticeAlive,
-      knowledgePresenting: knowledgePeek.presentation !== 'hidden',
-    })
-    if (intent === 'open-product' && productNoticeAlive && productNotice) {
-      openProductFile(productNotice.entry.relPath)
-      return
-    }
-    dispatchIsland({ type: 'single-activate' })
-  }, [dispatchIsland, activeWorkspaceId, productNotice, islandStage, knowledgePeek.presentation, openProductFile])
-  const handleIslandDoubleActivate = useCallback(() => {
-    useProductWorkspaceStore.getState().consumeProductNotice()
-    dispatchIsland({ type: 'double-activate' })
-  }, [dispatchIsland])
-  const handleIslandDismiss = useCallback(() => {
-    useProductWorkspaceStore.getState().consumeProductNotice()
-    dispatchIsland({ type: 'dismiss' })
-  }, [dispatchIsland])
+  // Note: product discovery and jumps retired — .agents/notes/workbench/unified-file-window.md
+  const handleIslandSingleActivate = useCallback(() => dispatchIsland({ type: 'single-activate' }), [dispatchIsland])
+  const handleIslandDoubleActivate = useCallback(() => dispatchIsland({ type: 'double-activate' }), [dispatchIsland])
+  const handleIslandDismiss = useCallback(() => dispatchIsland({ type: 'dismiss' }), [dispatchIsland])
 
   const handleChatClearAndInvalidatePeek = useCallback(() => {
     handleChatClear()
@@ -257,7 +174,7 @@ export function Titlebar() {
 
   return (
     <div
-      className="h-[38px] flex items-center px-3.5 select-none titlebar-drag relative overflow-visible"
+      className="h-[38px] flex items-center px-3 select-none titlebar-drag relative overflow-visible"
       style={{
         background: 'var(--chrome-bg)',
         backdropFilter: 'blur(20px)',
@@ -265,25 +182,12 @@ export function Titlebar() {
         zIndex: 9999,
       }}
     >
-      {/* 红绿�?*/}
-      <div className="flex gap-2 titlebar-no-drag">
-        <div
-          onClick={handleCloseClick}
-          className="w-3 h-3 rounded-full bg-[#ff5f57] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] cursor-pointer hover:brightness-110 active:brightness-90"
-        />
-        <div
-          onClick={() => window.electron.window.minimize()}
-          className="w-3 h-3 rounded-full bg-[#ffbd2e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] cursor-pointer hover:brightness-110 active:brightness-90"
-        />
-        <div
-          onClick={() => window.electron.window.maximize()}
-          className="w-3 h-3 rounded-full bg-[#28c840] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] cursor-pointer hover:brightness-110 active:brightness-90"
-        />
-      </div>
+      {/* Platform window controls */}
+      <WindowControls onClose={handleCloseClick} />
 
       {/* Logo + 隐藏�?LLM 配置触发�?*/}
       <div
-        className="absolute left-[70px] flex items-center gap-2 titlebar-no-drag cursor-pointer group"
+        className="relative flex shrink-0 items-center gap-2 titlebar-no-drag cursor-pointer group"
         onClick={handleSettingsTriggerClick}
         title={t('common:titlebar.settings')}
       >
@@ -348,7 +252,7 @@ export function Titlebar() {
       {/*-- 右侧两组：全局工具（浏览器/Markdown）与工作台（蓝图/知识库），
            组间 12px 并由短竖分隔线隔开；无可见工作台时分隔线自动收起。
            学习入口归属设置与空工作区，见 .agents/notes/workbench/first-run-learning.md --*/}
-      <div className="absolute right-3.5 top-1/2 flex -translate-y-1/2 items-center gap-3 titlebar-no-drag">
+      <div className="ml-auto flex shrink-0 items-center gap-3 titlebar-no-drag">
         <TitlebarToolGroup />
         <TitlebarToolSeparator />
         <WorkbenchSwitcher />
@@ -394,9 +298,6 @@ export function Titlebar() {
           knowledgeTrace={knowledgePeek.trace}
           knowledgePeekActive={knowledgePeek.presentation !== 'hidden'}
           knowledgePeekEmpty={knowledgePeek.presentation === 'empty'}
-          productNotice={productNotice?.workspaceId === activeWorkspaceId ? { ...productNotice.entry, noticeKind: productNotice.kind } : null}
-          productFiles={workspaceProducts}
-          onOpenProductFile={openProductFile}
           onIslandPinnedChange={setIslandPinned}
         />
         <JanusRunOrbs />

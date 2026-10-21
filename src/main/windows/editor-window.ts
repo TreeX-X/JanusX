@@ -7,7 +7,7 @@ import { getThemeDefinition } from '../../shared/theme/registry'
 
 // Note: .agents/notes/workbench/standalone-editor-initial-theme.md
 
-export interface EditorWindowPayload { filePath?: string; workspacePath?: string }
+export type EditorWindowPayload = import('../../shared/editor').EditorDelivery
 
 interface EditorWindowEntry {
   window: BrowserWindow
@@ -23,6 +23,11 @@ function identityPath(value: string): string {
 
 export class EditorWindowManager {
   private windows = new Map<string, EditorWindowEntry>()
+
+  get(workspacePath: string): BrowserWindow | undefined {
+    const window = this.windows.get(identityPath(workspacePath))?.window
+    return window && !window.isDestroyed() ? window : undefined
+  }
 
   list(): BrowserWindow[] {
     return Array.from(this.windows.values())
@@ -113,7 +118,7 @@ export class EditorWindowManager {
       void shell.openExternal(details.url)
       return { action: 'deny' }
     })
-    this.windows.set(workspaceKey, { window, ready: false, allowClose: false, pending: [] })
+    this.windows.set(workspaceKey, { window, ready: false, allowClose: false, pending: payload.requestId ? [payload] : [] })
     void loadRendererWindow(
       window,
       (url) => {

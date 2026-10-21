@@ -29,7 +29,7 @@ import type { DesktopToastAPI, DialogAPI, SystemAPI, WindowAPI } from '../../../
 import type { TeamAPI } from '../../../shared/ipc/team'
 import type { ShellProfilesAPI } from '../../../shared/ipc/shell-profiles'
 import type { UpdaterAPI } from '../../../shared/ipc/updater'
-import type { PeerAPI, RemoteAPI } from '../../../shared/ipc/remote'
+import type { RemoteAPI } from '../../../shared/ipc/remote'
 
 interface ElectronAPI {
   /*-- 同步平台信息，构造 xterm windowsPty 用 --*/
@@ -69,7 +69,6 @@ interface ElectronAPI {
   subAgentRun: SubAgentRunAPI
   team: TeamAPI
   remote: RemoteAPI
-  peer: PeerAPI
   dialog: DialogAPI
   window: WindowAPI
   system: SystemAPI

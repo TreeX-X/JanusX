@@ -1,8 +1,7 @@
 import { useRef } from 'react'
 import { useAssistantPendingCount } from '@/components/knowledge/useAssistantPendingCount'
-import { useAnimatedOpen } from '@/components/shared/CardFrame'
 // Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/workbench/right-dock-empty-collapse.md
-import { PanelRightClose, PanelRightOpen, Puzzle } from 'lucide-react'
+import { Puzzle } from 'lucide-react'
 import { getRightToolDefinitions, isRightToolEnabled, rightToolLabel } from '@/right-tools/registry'
 import type { RightToolDefinition, RightToolId } from '@/right-tools/types'
 import { useExtensionViews } from '@/extensions/react'
@@ -20,27 +19,21 @@ interface RightToolRailProps {
   activeToolId: RightToolId | null
   onToggleTool: (toolId: RightToolId) => void
   collapsed?: boolean
-  onExpandPanel?: () => void
   forcedCollapsed?: boolean
-  onTogglePanel?: () => void
+  previewToolId?: RightToolId | null
+  onPreview?: (toolId: RightToolId) => void
+  onPreviewLeave?: () => void
 }
-
-/**
- * 折叠/展开控件的进出场时长（ms）。刻意慢于侧栏默认的 SIDE_PANEL_EXIT_MS（220ms），
- * 让"加载出来/退出"读得成一个过程而不是一次闪现。
- * RightDock.module.css 的 .railToggle 与 .panel 过渡必须与此一致，
- * 尤其 visibility 延时 = 这里的卸载定时器，改一个就要改另一个。
- */
-const RAIL_TOGGLE_MOTION_MS = 320
 
 export function RightToolRail({
   openToolIds,
   activeToolId,
   onToggleTool,
   collapsed = false,
-  onExpandPanel,
   forcedCollapsed = false,
-  onTogglePanel,
+  previewToolId = null,
+  onPreview,
+  onPreviewLeave,
 }: RightToolRailProps) {
   const { t } = useI18n('common')
   useExtensionViews()
@@ -49,26 +42,17 @@ export function RightToolRail({
   const knowledgeEnabled = useExperimentalStore((s) => s.knowledge)
   const sessionsEnabled = useExperimentalStore((s) => s.sessions)
   const pending = useAssistantPendingCount()
-  const panelToggle = onTogglePanel ?? onExpandPanel
   const visibleTools = getRightToolDefinitions().filter((tool) => isRightToolEnabled(tool.id, { persona: personaEnabled, knowledge: knowledgeEnabled, sessions: sessionsEnabled })
     && (extensionRegistry.getView(tool.id)?.scope !== 'project' || workspaceId))
   const toolsRef = useRef<HTMLDivElement>(null)
-  const { pendingToolId, visualToolId, requestActivate, cancelPending } = usePendingToolActivation({
+  const { pendingToolId, visualToolId, requestActivate } = usePendingToolActivation({
     activeToolId, validToolIds: visibleTools.map((tool) => tool.id), onActivate: onToggleTool,
     resetKey: `${collapsed}:${forcedCollapsed}:${workspaceId}:${openToolIds.join(',')}`, toggleCurrent: true,
   })
-  const hasOpenTools = openToolIds.length > 0
-  // 首次开 tab 时淡入展开、关掉最后一个 tab 时淡出收起，避免控件突然闪现/消失。
-  // useAnimatedOpen 在退出动画播完后再卸载，空栏仍然不渲染该控件。
-  const toggleVisible = hasOpenTools && Boolean(panelToggle)
-  const toggleAnim = useAnimatedOpen(toggleVisible, RAIL_TOGGLE_MOTION_MS)
-  const panelToggleLabel = collapsed
-    ? t('common:rightDock.expandAria')
-    : t('common:rightDock.collapseAria')
   return (
     <div className={styles.rail} role="toolbar" aria-busy={pendingToolId !== null} aria-label={t('common:rightTool.railAria')}>
       <div ref={toolsRef} className={styles.railTools}>
-        <SlidingSelection containerRef={toolsRef} activeId={visualToolId} itemAttribute="data-rail-tool"
+        <SlidingSelection containerRef={toolsRef} activeId={previewToolId ?? (!collapsed ? visualToolId : null)} itemAttribute="data-rail-tool"
           layoutKey={visibleTools.map((tool) => tool.id).join(',')} className={styles.railIndicator}
           testId="right-tool-rail-indicator" />
         {visibleTools.map((tool) => {
@@ -79,50 +63,33 @@ export function RightToolRail({
               ? t('common:rightTool.railStateOpen')
               : t('common:rightTool.railStateClosed')
           return (
-            <ThemedTooltip key={tool.id} label={rightToolLabel(tool, t)} placement="left">
+            <ThemedTooltip key={tool.id} label={rightToolLabel(tool, t)} placement="left" disabled={collapsed}>
             <button
+              id={`right-tool-rail-${tool.id}`}
               type="button"
               className={styles.railButton}
               data-state={state}
               data-rail-tool={tool.id}
-              data-visual-active={visualToolId === tool.id}
+              data-visual-active={(previewToolId ?? (!collapsed ? visualToolId : null)) === tool.id}
               data-pending={pendingToolId === tool.id}
               data-onboarding={tool.id === 'files' ? 'files' : undefined}
               aria-label={t('common:rightTool.railButtonAria', { label: rightToolLabel(tool, t, 'ariaLabel'), state: stateLabel })}
-              aria-pressed={state === 'active'}
-              onClick={() => requestActivate(tool.id)}
+              aria-pressed={!collapsed && state === 'active'}
+              aria-controls={`right-tool-panel-${tool.id}`}
+              aria-expanded={previewToolId === tool.id || (!collapsed && state === 'active')}
+              onPointerEnter={(event) => { if (event.pointerType !== 'touch') onPreview?.(tool.id) }}
+              onPointerLeave={onPreviewLeave}
+              onFocus={() => onPreview?.(tool.id)}
+              onClick={() => { onPreviewLeave?.(); requestActivate(tool.id) }}
             >
               <ToolIcon tool={tool} />
               {tool.id === 'assist' && pending !== null && pending > 0 && <span className={styles.railBadge}>{pending > 99 ? '99+' : pending}</span>}
-              <span className={styles.railState} aria-hidden="true" />
             </button>
             </ThemedTooltip>
           )
         })}
       </div>
-      {toggleAnim.rendered && panelToggle && (
-        <div
-          className={styles.railToggle}
-          data-visible={toggleAnim.visible ? 'true' : 'false'}
-          aria-hidden={toggleAnim.visible ? undefined : 'true'}
-        >
-          <ThemedTooltip label={panelToggleLabel} placement="left">
-          <button
-            type="button"
-            className={styles.railButton}
-            aria-label={panelToggleLabel}
-            aria-expanded={!collapsed}
-            aria-controls="right-tool-panel"
-            disabled={forcedCollapsed}
-            onClick={() => { cancelPending(); panelToggle() }}
-          >
-            {collapsed
-              ? <PanelRightOpen size={16} strokeWidth={1.6} aria-hidden="true" />
-              : <PanelRightClose size={16} strokeWidth={1.6} aria-hidden="true" />}
-          </button>
-          </ThemedTooltip>
-        </div>
-      )}
+
     </div>
   )
 }

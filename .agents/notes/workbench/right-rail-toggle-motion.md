@@ -10,12 +10,20 @@
     {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/9f855a20-5b26-5bcd-8fd8-225e93c1be62"}
   ],
   "tags": ["motion","right-dock","rail"],
-  "updated": "2026-10-15T08:27:30.635Z",
+  "updated": "2026-10-20T11:04:34.006Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
 
 # Right rail panel toggle fades in and out with the first and last tab
+
+## Current design
+
+The separate panel toggle has been removed together with the top tool tabs. Tool icons now own collapse/expand and show interactive cards while collapsed; [Right dock](./right-dock.md) owns that behavior. The old toggle-specific RAIL_TOGGLE_MOTION_MS coupling and railToggle styles no longer exist. useAnimatedOpen now owns the card's 320ms exit lifecycle, keeping visible content alive but immediately inert. The floating card retains its 240ms opacity / 320ms transform reveal and clicking a preview morphs it into a docked panel while reserving grid width over 240ms, with reduced-motion overrides. Tool entries stay fixed without a toggle mount lifecycle.
+
+## Historical implementation and evidence
+
+The following records describe the previous control and are retained as historical evidence, not current component contracts.
 
 ## Problem
 

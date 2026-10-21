@@ -7,7 +7,7 @@ import { createDesktopTestEnv } from './desktop-test-env'
 type EditorWindowAPI = Window & {
   electron: {
     window: {
-      openEditor(payload: { filePath: string; workspacePath: string }): Promise<{ success?: boolean }>
+      openEditor(payload: { filePath: string; workspacePath: string; floating?: boolean }): Promise<{ success?: boolean }>
     }
   }
 }
@@ -69,8 +69,8 @@ test('file opens share one workspace editor window and switch existing tabs', as
     await mainPage.evaluate(
       async ({ first, second, workspace }) => {
         await Promise.all([
-          (window as EditorWindowAPI).electron.window.openEditor({ filePath: first, workspacePath: workspace }),
-          (window as EditorWindowAPI).electron.window.openEditor({ filePath: second, workspacePath: workspace }),
+          (window as EditorWindowAPI).electron.window.openEditor({ filePath: first, workspacePath: workspace, floating: true }),
+          (window as EditorWindowAPI).electron.window.openEditor({ filePath: second, workspacePath: workspace, floating: true }),
         ])
       },
       { first: firstPath, second: secondPath, workspace: workspacePath },
@@ -128,7 +128,7 @@ test('file opens share one workspace editor window and switch existing tabs', as
     })).toBe(false)
 
     await mainPage.evaluate(
-      ({ first, workspace }) => (window as EditorWindowAPI).electron.window.openEditor({ filePath: first, workspacePath: workspace }),
+      ({ first, workspace }) => (window as EditorWindowAPI).electron.window.openEditor({ filePath: first, workspacePath: workspace, floating: true }),
       { first: firstPath, workspace: workspacePath },
     )
 
@@ -155,7 +155,7 @@ test('native editor close uses the themed dialog and respects save failure and d
     const main = await application.firstWindow()
     await main.waitForFunction(() => !!(window as any).electron?.window?.openEditor)
     const open = async () => {
-      await main.evaluate(payload => (window as any).electron.window.openEditor(payload), { filePath, workspacePath })
+      await main.evaluate(payload => (window as any).electron.window.openEditor(payload), { filePath, workspacePath, floating: true })
       await expect.poll(() => editorWindows(application!).length).toBe(1)
       const page = editorWindows(application!)[0]
       await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 30_000 })
@@ -228,7 +228,7 @@ test('HTML editor serves local styles, modules and images and previews unsaved c
     application = await electron.launch({ args: [resolve('out/main/index.js'), `--user-data-dir=${join(root, 'user-data')}`], env: createDesktopTestEnv(root) })
     const main = await application.firstWindow()
     await main.waitForFunction(() => !!(window as any).electron?.window?.openEditor)
-    await main.evaluate(payload => (window as any).electron.window.openEditor(payload), { filePath, workspacePath })
+    await main.evaluate(payload => (window as any).electron.window.openEditor(payload), { filePath, workspacePath, floating: true })
     await expect.poll(() => editorWindows(application!).length).toBe(1)
     const page = editorWindows(application)[0]
     const frame = page.frameLocator('iframe')

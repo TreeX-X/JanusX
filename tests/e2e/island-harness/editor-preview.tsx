@@ -30,6 +30,7 @@ const harness = {
     const path = `C:/fixture/${name}`
     if (content !== undefined) files[path] = content
     await useEditorStore.getState().openFile(path, 'C:/fixture')
+    useEditorStore.getState().updateViewState(useEditorStore.getState().activeFileId!, { previewMode: 'split' })
   },
 }
 ;(window as any).previewHarness = harness
@@ -61,4 +62,5 @@ Object.assign(window.electron.window, { confirmEditorClose: async () => { harnes
 applyThemeToDocument(params.get('theme') ?? 'dark')
 await initI18n()
 await changeLanguage('zh-CN')
+await harness.open('notes.md')
 ReactDOM.createRoot(document.getElementById('root')!).render(<StandaloneFileEditor />)

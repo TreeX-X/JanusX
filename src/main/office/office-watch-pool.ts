@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { execa } from 'execa'
 import type { OfficePreviewLease, OfficeWatchErrorCode, OfficeWatchEvictedEvent } from '../../shared/office'
 import { officecliManager } from './officecli-manager'
+import { createOfficePreviewProxy } from './office-preview-proxy'
 import type { ResolveWorkspaceRoot, TrustedOfficeFile } from './office-workspace-guard'
 import { resolveTrustedOfficeWorkspace } from './office-workspace-guard'
 import {
@@ -40,6 +41,7 @@ interface ReloadOperation {
 }
 
 interface OfficeWatchPoolDependencies {
+  decoratePreview(port: number): Promise<{ port: number; stop(): Promise<void> }>
   resolveProvider(): Promise<{ installed: boolean; compatible: boolean; path?: string }>
   allocatePort(): Promise<number>
   spawn(binary: string, filePath: string, port: number): WatchChild
@@ -124,6 +126,7 @@ async function defaultReach(port: number): Promise<boolean> {
 }
 
 const defaultDependencies: OfficeWatchPoolDependencies = {
+  decoratePreview: createOfficePreviewProxy,
   resolveProvider: () => officecliManager.detect(),
   allocatePort: allocateFreePort,
   spawn: spawnWatch,
@@ -332,9 +335,18 @@ export class OfficeWatchPool {
           now: this.deps.now,
           reach: this.deps.reach,
         })
+        const proxy = await this.deps.decoratePreview(port)
+        const source = child
+        let proxyStop: Promise<void> | undefined
+        const stopProxy = () => proxyStop ??= proxy.stop()
+        // The proxy shares the watch lifetime, including failed starts and crashes.
+        void source.exited.then(stopProxy)
+        child = { stdout: source.stdout, stderr: source.stderr, exited: source.exited,
+          isAlive: () => source.isAlive(), stop: async () => { await stopProxy(); await source.stop() } }
+        this.startingChildren.set(file.filePath, child)
         return {
           child,
-          port,
+          port: proxy.port,
           canonicalPath: file.filePath,
           relPath: file.relPath,
           rootPath: file.rootPath,

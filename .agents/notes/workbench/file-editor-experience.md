@@ -5,12 +5,14 @@
   "kind": "decision",
   "lifecycle": "implemented",
   "created": "2026-10-19",
-  "updated": "2026-10-19T02:23:35Z",
+  "updated": "2026-10-20T06:43:58Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
 
 # 文件编辑窗口与预览体验
+
+后续已确认、尚未实施的窗口统一与默认内嵌方向见[统一文件窗口与内嵌／浮窗路由](./unified-file-window.md)。下文保留当前实现与验证，不代表统一路由已交付。
 
 ## Problem
 

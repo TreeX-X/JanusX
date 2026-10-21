@@ -1,11 +1,13 @@
+import type { EditorDelivery, EditorOpenRequest, EditorOpenResult } from '../editor'
 import type { OperationResult } from './workspace'
 import type { UsageLedgerPage, UsageLedgerQuery } from '../usage'
 
 export const SYSTEM_CHANNELS = {
   defaultShell: 'system:getDefaultShell', platform: 'system:getPlatform',
   openDirectory: 'dialog:openDirectory', saveFile: 'dialog:saveFile', showMessageBox: 'dialog:showMessageBox',
+  getMaximized: 'window:get-maximized', maximizedChanged: 'window:maximized-changed',
   minimize: 'window:minimize', maximize: 'window:maximize', close: 'window:close',
-  openEditor: 'editor-window:open', refreshEditor: 'editor-window:refresh', editorReady: 'editor-window:ready', embedEditor: 'editor-window:embed', editorEmbedded: 'editor-window:embedded',
+  openEditor: 'editor-window:open', refreshEditor: 'editor-window:refresh', editorReady: 'editor-window:ready', editorReceived: 'editor-window:received', editorHostReady: 'editor-window:host-ready', embedEditor: 'editor-window:embed', editorEmbedded: 'editor-window:embedded',
   setAlwaysOnTop: 'editor-window:set-always-on-top', runtimeTelemetry: 'runtime-telemetry:get', usageLedger: 'usage-ledger:list',
   editorViewed: 'editor-window:viewed',
   requestEditorClose: 'editor-window:request-close', confirmEditorClose: 'editor-window:confirm-close',
@@ -53,17 +55,21 @@ export interface DialogAPI {
   showMessageBox(options: { message: string; detail?: string; buttons: string[]; defaultId?: number; cancelId?: number }): Promise<{ response: number }>
 }
 export interface WindowAPI {
+  getMaximized(): Promise<boolean>
+  onMaximizedChanged(callback: (maximized: boolean) => void): () => void
   minimize(): Promise<void>; maximize(): Promise<void>; close(): Promise<void>
-  openEditor(payload: { filePath?: string; workspacePath?: string }): Promise<{ success?: boolean }>
+  openEditor(payload: EditorOpenRequest): Promise<EditorOpenResult>
   editorReady(): void
+  editorHostReady(): void
   onEditorCloseRequested(callback: () => void): () => void
   confirmEditorClose(): Promise<void>
   reportEditorViewed(payload: { filePath: string; workspacePath: string }): void
   onEditorViewed(callback: (payload: { filePath: string; workspacePath: string }) => void): () => void
-  embedEditor(payload: { filePath: string; workspacePath: string; content?: string; isDirty?: boolean }): Promise<{ success?: boolean }>
+  embedEditor(payload: EditorOpenRequest): Promise<EditorOpenResult>
   setAlwaysOnTop(value: boolean): Promise<{ value: boolean }>
-  onEditorEmbedded(callback: (payload: { filePath: string; workspacePath: string; content?: string; isDirty?: boolean }) => void): () => void
-  onEditorRefresh(callback: (payload: { filePath: string; workspacePath: string }) => void): () => void
+  onEditorEmbedded(callback: (payload: EditorDelivery) => void): () => void
+  onEditorRefresh(callback: (payload: EditorDelivery) => void): () => void
+  editorReceived(requestId: string, success: boolean): void
 }
 export interface SystemAPI {
   getDefaultShell(): Promise<string>; getPlatform(): Promise<NodeJS.Platform>

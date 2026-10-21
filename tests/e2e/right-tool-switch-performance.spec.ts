@@ -33,18 +33,18 @@ test('repeated Git/session switches reuse recent data and the scan schedule', as
 test('a cached return catches up missed changes without a new event', async ({ page }) => {
   await page.clock.install()
   await page.goto('/tool-palette.html')
-  await page.locator('#right-tool-tab-sessions').click()
+  await page.locator('#right-tool-rail-sessions').click()
   const card = page.locator('[data-session-id="session-review"]')
   await expect(card).toBeVisible()
-  await page.locator('#right-tool-tab-git').click()
-  await expect(page.locator('#right-tool-tab-git')).toHaveAttribute('aria-selected', 'true')
+  await page.locator('#right-tool-rail-git').click()
+  await expect(page.locator('#right-tool-rail-git')).toHaveAttribute('aria-pressed', 'true')
   // Simulate a mutation while the inactive panel has no event subscriptions.
   await page.evaluate(() => {
     const original = window.electron.session.list
     window.electron.session.list = async (filter) => (await original(filter)).map((session) =>
       session.id === 'session-review' ? { ...session, firstPrompt: '后台更新后的标题' } : session)
   })
-  await page.locator('#right-tool-tab-sessions').click()
+  await page.locator('#right-tool-rail-sessions').click()
   await expect(card).toContainText('检查终端管理')
   await page.clock.fastForward(5100)
   await expect(card).toContainText('后台更新后的标题')

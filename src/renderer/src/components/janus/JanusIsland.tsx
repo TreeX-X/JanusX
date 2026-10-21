@@ -101,7 +101,6 @@ export function JanusIsland({
   knowledgePeekActive = false,
   knowledgePeekEmpty = false,
   productNotice = null,
-  productFiles = [],
   onOpenProductFile,
   onIslandPinnedChange,
 }: JanusIslandProps) {
@@ -768,8 +767,6 @@ export function JanusIsland({
           onNotificationAction={runNotificationAction}
           onBannerDismiss={() => setBannerId(null)}
           onTrayClear={() => { setClearedIds((ids) => [...ids, ...visibleNotifications.filter((n) => !ids.includes(n.id)).map((n) => n.id)]); setBannerId(null) }}
-          productFiles={productFiles}
-          onOpenProductFile={onOpenProductFile}
           messages={messages}
           pendingContent={pendingContent}
           isStreaming={isStreaming}

@@ -10,7 +10,6 @@ import {
 import type { RightToolId } from '@/right-tools/types'
 import { isRightToolEnabled } from '@/right-tools/registry'
 import { useExtensionViews } from '@/extensions/react'
-import { useAppStore } from '@/stores/app'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useRightToolStore } from '@/stores/right-tools'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -22,7 +21,7 @@ import {
 } from '@/right-tools/state'
 import { RightToolHost } from './RightToolHost'
 import { RightToolRail } from './RightToolRail'
-import { RightToolTabs } from './RightToolTabs'
+import { useAnimatedOpen } from '@/components/shared/CardFrame'
 import styles from './RightDock.module.css'
 
 export interface RightDockProps {
@@ -51,11 +50,9 @@ export function RightDock({
   const storedActiveToolId = useRightToolStore((state) => state.activeToolId)
   const panelWidth = useRightToolStore((state) => state.panelWidth)
   const panelWidths = useRightToolStore((state) => state.panelWidths)
-  const activateTool = useRightToolStore((state) => state.activateTool)
   const closeTool = useRightToolStore((state) => state.closeTool)
   const toggleFromRail = useRightToolStore((state) => state.toggleFromRail)
   const setPanelWidth = useRightToolStore((state) => state.setPanelWidth)
-  const togglePanel = useAppStore((state) => state.togglePanel)
   const personaEnabled = useExperimentalStore((state) => state.persona)
   const knowledgeEnabled = useExperimentalStore((state) => state.knowledge)
   const sessionsEnabled = useExperimentalStore((state) => state.sessions)
@@ -70,12 +67,89 @@ export function RightDock({
   const [resizing, setResizing] = useState(false)
   const workspacePath = workspaces.find(({ id }) => id === activeWorkspaceId)?.path ?? null
   const contentVisible = !effectiveCollapsed && activeToolId !== null
-  // Per-tab drag preference and responsive display width stay separate.
+  const dockRef = useRef<HTMLElement>(null)
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const focusPreviewRef = useRef(false)
+  const [previewToolId, setPreviewToolId] = useState<RightToolId | null>(null)
+  const railOnly = !contentVisible
+  const previewId = railOnly && previewToolId && isRightToolEnabled(previewToolId, features) ? previewToolId : null
+  const panelVisible = contentVisible || previewId !== null
+  const motion = useAnimatedOpen(panelVisible, 320)
+  const lastVisibleToolRef = useRef<RightToolId | null>(null)
+  const lastTransientRef = useRef(false)
+  // 工具在浮动卡片存活期内保持挂载：来回悬浮切换只是 hidden 翻转，不再整棵卸载重挂。
+  // 卡片退出（motion.rendered 变 false）后释放，与 right-dock.md 记录的退出释放语义一致。
+  const previewedToolIdsRef = useRef<RightToolId[]>([])
+  if (panelVisible) {
+    lastVisibleToolRef.current = previewId ?? activeToolId
+    lastTransientRef.current = previewId !== null
+  }
+  const displayedToolId = panelVisible ? previewId ?? activeToolId : motion.rendered ? lastVisibleToolRef.current : activeToolId
+  if (motion.rendered) {
+    if (displayedToolId && !openToolIds.includes(displayedToolId) && isRightToolEnabled(displayedToolId, features)
+      && !previewedToolIdsRef.current.includes(displayedToolId)) {
+      previewedToolIdsRef.current = [...previewedToolIdsRef.current, displayedToolId]
+    }
+  } else if (previewedToolIdsRef.current.length) {
+    previewedToolIdsRef.current = []
+  }
+  const hostToolIds = motion.rendered
+    ? [...openToolIds, ...previewedToolIdsRef.current.filter((id) => !openToolIds.includes(id) && isRightToolEnabled(id, features))]
+    : openToolIds
+  const cancelPreviewTimer = useCallback(() => {
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    previewTimer.current = null
+  }, [])
+  const dismissPreview = useCallback(() => {
+    cancelPreviewTimer()
+    focusPreviewRef.current = false
+    setPreviewToolId(null)
+  }, [cancelPreviewTimer])
+  const schedulePreview = (toolId: RightToolId) => {
+    cancelPreviewTimer()
+    if (!railOnly) return
+    previewTimer.current = setTimeout(() => setPreviewToolId(toolId), 220)
+  }
+  const scheduleDismiss = () => {
+    cancelPreviewTimer()
+    previewTimer.current = setTimeout(() => {
+      // Keep keyboard navigation inside the interactive card alive.
+      if (!dockRef.current?.querySelector('#right-tool-panel')?.contains(document.activeElement)) setPreviewToolId(null)
+    }, 180)
+  }
+  useEffect(() => dismissPreview(), [activeWorkspaceId, contentVisible, extensionViews, personaEnabled, knowledgeEnabled, sessionsEnabled, dismissPreview])
+  useEffect(() => cancelPreviewTimer, [cancelPreviewTimer])
+  useEffect(() => {
+    if (!focusPreviewRef.current || !panelVisible) return
+    focusPreviewRef.current = false
+    dockRef.current?.querySelector<HTMLElement>('#right-tool-panel section:not([hidden]) input, #right-tool-panel section:not([hidden]) button')?.focus()
+  }, [previewId, panelVisible])
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const focusedInside = dockRef.current?.querySelector('#right-tool-panel')?.contains(document.activeElement)
+      dismissPreview()
+      if (previewToolId && focusedInside && displayedToolId) document.getElementById(`right-tool-rail-${displayedToolId}`)?.focus()
+      cancelPreviewTimer()
+    }
+    const onOutside = (event: globalThis.PointerEvent) => {
+      if (!dockRef.current?.contains(event.target as Node)) dismissPreview()
+    }
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('pointerdown', onOutside)
+    window.addEventListener('resize', dismissPreview)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('pointerdown', onOutside)
+      window.removeEventListener('resize', dismissPreview)
+    }
+  }, [previewToolId, displayedToolId, contentVisible, dismissPreview, cancelPreviewTimer])
+  // Per-tool drag preference and responsive display width stay separate.
   // See .agents/notes/workbench/right-dock.md
   const minimum = rightToolPanelMinWidth(activeToolId)
   const maximum = Math.max(minimum, effectiveMaxWidth)
-  const preferredWidth = preferredRightToolPanelWidth(panelWidth, panelWidths, activeToolId)
-  const renderedPanelWidth = clampRightToolPanelWidth(preferredWidth, maximum, activeToolId)
+  const preferredWidth = preferredRightToolPanelWidth(panelWidth, panelWidths, displayedToolId)
+  const renderedPanelWidth = previewId ? preferredWidth : clampRightToolPanelWidth(preferredWidth, maximum, activeToolId)
 
   const finishResize = useCallback(() => {
     const session = resizeSessionRef.current
@@ -158,25 +232,46 @@ export function RightDock({
   }
 
   const handleRailTool = (toolId: RightToolId) => {
-    const manualCollapsed = useAppStore.getState().panelCollapsed
-    // 响应式强制收起（空间不足）下，已激活工具没有有意义的 toggle 动作。
-    // 保持 manual 偏好不动，避免同一次事件里 toggle 又恢复。
-    // 产物打开不再走 forcedCollapsed，允许用户手动展开。
-    if (forcedCollapsed && activeToolId === toolId) return
+    cancelPreviewTimer()
+    if (forcedCollapsed) {
+      setPreviewToolId(previewId === toolId ? null : toolId)
+      return
+    }
+    setPreviewToolId(null)
     toggleFromRail(toolId)
-    if (forcedCollapsed) useAppStore.getState().setPanelCollapsed(manualCollapsed)
   }
 
   return (
-    <aside className={styles.dock} data-collapsed={effectiveCollapsed} aria-label={t('common:rightDock.dockAria')}>
+    <aside ref={dockRef} className={styles.dock} data-collapsed={railOnly} data-preview={motion.rendered}
+      onKeyDown={(event) => {
+        const toolId = (event.target as HTMLElement).closest<HTMLElement>('[data-rail-tool]')?.dataset.railTool as RightToolId | undefined
+        if (event.key !== 'ArrowLeft' || !toolId) return
+        event.preventDefault()
+        cancelPreviewTimer()
+        if (contentVisible) {
+          dockRef.current?.querySelector<HTMLElement>('#right-tool-panel section:not([hidden]) input, #right-tool-panel section:not([hidden]) button')?.focus()
+        } else {
+          if (previewId === toolId) {
+            dockRef.current?.querySelector<HTMLElement>('#right-tool-panel section:not([hidden]) input, #right-tool-panel section:not([hidden]) button')?.focus()
+            return
+          }
+          focusPreviewRef.current = true
+          setPreviewToolId(toolId)
+        }
+      }}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) scheduleDismiss() }} aria-label={t('common:rightDock.dockAria')}>
       <div
         className={styles.panel}
         id="right-tool-panel"
         style={{ '--right-tool-content-width': `${renderedPanelWidth}px` } as CSSProperties}
-        data-visible={contentVisible}
+        data-visible={motion.visible}
+        data-preview={lastTransientRef.current}
+        data-transient={lastTransientRef.current}
+        onPointerEnter={cancelPreviewTimer}
+        onPointerLeave={scheduleDismiss}
         data-resizing={resizing}
-        aria-hidden={!contentVisible}
-        {...(!contentVisible ? { inert: '' } : {})}
+        aria-hidden={!panelVisible}
+        {...(!panelVisible ? { inert: '' } : {})}
         data-testid="right-tool-panel-shell"
       >
           <div
@@ -188,7 +283,7 @@ export function RightDock({
             aria-valuemin={minimum}
             aria-valuemax={Math.round(maximum)}
             aria-valuenow={Math.round(renderedPanelWidth)}
-            tabIndex={0}
+            tabIndex={previewId ? -1 : 0}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerEnd}
@@ -196,33 +291,24 @@ export function RightDock({
             onLostPointerCapture={handlePointerEnd}
             onKeyDown={handleResizeKeyDown}
           />
-          <div className={styles.panelHeader}>
-            <RightToolTabs
-              openToolIds={openToolIds}
-              activeToolId={activeToolId}
-              onActivate={activateTool}
-              onClose={closeTool}
-              disabled={!contentVisible}
-            />
-          </div>
           <RightToolHost
-            openToolIds={openToolIds}
-            activeToolId={activeToolId}
+            openToolIds={hostToolIds}
+            activeToolId={displayedToolId}
             workspaceId={activeWorkspaceId}
             workspacePath={workspacePath}
-            dockVisible={contentVisible}
-            onClose={closeTool}
+            dockVisible={motion.rendered}
+            onClose={(id) => { dismissPreview(); closeTool(id) }}
           />
       </div>
       <RightToolRail
         openToolIds={openToolIds}
         activeToolId={activeToolId}
         onToggleTool={handleRailTool}
-        collapsed={effectiveCollapsed}
+        collapsed={railOnly}
         forcedCollapsed={forcedCollapsed}
-        onTogglePanel={() => {
-          if (!forcedCollapsed) togglePanel()
-        }}
+        previewToolId={previewId}
+        onPreview={schedulePreview}
+        onPreviewLeave={scheduleDismiss}
       />
     </aside>
   )

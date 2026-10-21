@@ -71,6 +71,7 @@ function createHarness(options: {
   maxConcurrent?: number
   provider?: { installed: boolean; compatible: boolean; path?: string }
   allocatePort?: () => Promise<number>
+  decoratePreview?: (port: number) => Promise<{ port: number; stop(): Promise<void> }>
 } = {}) {
   const children: FakeChild[] = []
   const events: OfficeWatchEvictedEvent[] = []
@@ -81,6 +82,7 @@ function createHarness(options: {
   const pool = new OfficeWatchPool(
     async (workspaceId) => roots.get(workspaceId),
     {
+      decoratePreview: options.decoratePreview ?? (async port => ({ port, stop: async () => {} })),
       resolveProvider: async () => options.provider ?? {
         installed: true,
         compatible: true,
@@ -121,6 +123,23 @@ function codeOf(error: unknown): string | undefined {
 }
 
 describe('OfficeWatchPool', () => {
+  it.each(['release', 'crash'] as const)('closes the preview proxy exactly once on %s', async reason => {
+    const stop = vi.fn(async () => {})
+    const harness = createHarness({ decoratePreview: async port => ({ port: port + 100, stop }) })
+    const file = trustedFile('proxy')
+    harness.register(file)
+    const first = await harness.pool.acquire(file)
+    const second = await harness.pool.acquire(file)
+    expect(first.port).toBe(4200)
+    await harness.pool.release(first.previewLeaseId)
+    expect(stop).not.toHaveBeenCalled()
+    if (reason === 'release') await harness.pool.release(second.previewLeaseId)
+    else harness.children[0].crash()
+    await Promise.resolve()
+    expect(stop).toHaveBeenCalledOnce()
+    await harness.pool.stopAll()
+    expect(stop).toHaveBeenCalledOnce()
+  })
   it('uses the full execa lifecycle and signals only a healthy running child before awaiting exit', async () => {
     const healthy = { exitCode: null, signalCode: null, killed: false, kill: vi.fn() }
     const killed = { exitCode: null, signalCode: null, killed: true, kill: vi.fn() }

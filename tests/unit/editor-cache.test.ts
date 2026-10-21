@@ -105,6 +105,7 @@ describe('bounded editor disk snapshot cache', () => {
 
   it('respects workspace invalidation without evicting unrelated workspaces', async () => {
     await editor().openFile(path('a'), workspace)
+    editor().closePanel()
     await editor().openFile('D:/other/b.ts', 'D:/other')
     editor().closePanel()
     invalidateEditorFileCache(workspace)
@@ -113,7 +114,7 @@ describe('bounded editor disk snapshot cache', () => {
     expect(window.electron.file.read).toHaveBeenCalledTimes(2)
     await editor().openFile(path('a'), workspace)
     expect(window.electron.file.read).toHaveBeenCalledTimes(3)
-    expect(editor().openFiles[1].content).toBe('changed on disk')
+    expect(editor().openFiles[0].content).toBe('changed on disk')
   })
 
   it('invalidates deleted and renamed paths, including clean tabs cached by close', async () => {

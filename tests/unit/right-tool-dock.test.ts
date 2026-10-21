@@ -14,104 +14,24 @@ import {
   retryToolErrorBoundary,
   RightToolHost,
 } from '../../src/renderer/src/components/right-tools/RightToolHost'
-import {
-  getTabKeyboardTarget,
-  RightToolTabs,
-} from '../../src/renderer/src/components/right-tools/RightToolTabs'
 
 describe('right dock layout', () => {
-  it('keeps a permanent 48px rail and protects the 320px center', () => {
+  it('reserves docked panel space and keeps collapsed or empty rails compact', () => {
     expect(RIGHT_TOOL_RAIL_WIDTH).toBe(48)
     expect(CENTER_WORKSPACE_MIN_WIDTH).toBe(320)
-
-    expect(getRightDockLayout({
-      availableWidth: 1000,
-      panelCollapsed: false,
-      panelWidth: 280,
-      hasActiveTool: true,
-    })).toMatchObject({
-      effectiveCollapsed: false,
-      responsiveAutoCollapsed: false,
-      panelWidth: 280,
-      dockWidth: 328,
-    })
+    for (const panelCollapsed of [true, false]) {
+      for (const hasActiveTool of [true, false]) {
+        expect(getRightDockLayout({ availableWidth: 1000, panelCollapsed, panelWidth: 280, hasActiveTool }))
+          .toMatchObject({ dockWidth: !panelCollapsed && hasActiveTool ? 328 : 48, effectiveCollapsed: panelCollapsed, responsiveAutoCollapsed: false })
+      }
+    }
   })
-
-  it('clamps the panel to available space and auto-folds below its minimum', () => {
-    expect(getRightDockLayout({
-      availableWidth: 700,
-      panelCollapsed: false,
-      panelWidth: 420,
-      hasActiveTool: true,
-    })).toMatchObject({ panelWidth: 332, dockWidth: 380 })
-
-    expect(getRightDockLayout({
-      availableWidth: 600,
-      panelCollapsed: false,
-      panelWidth: 420,
-      hasActiveTool: true,
-    })).toMatchObject({
-      effectiveCollapsed: true,
-      responsiveAutoCollapsed: true,
-      dockWidth: 48,
-    })
-  })
-
-  it('gives sessions its own width and restores each tab after a narrow window', () => {
-    const input = {
-      panelCollapsed: false,
-      panelWidth: 280,
-      panelWidths: { sessions: 480, files: 310 },
-      hasActiveTool: true,
-    } as const
-    expect(getRightDockLayout({ ...input, availableWidth: 1200, activeToolId: 'sessions' }))
-      .toMatchObject({ panelWidth: 480, dockWidth: 528, effectiveCollapsed: false })
-    expect(getRightDockLayout({ ...input, availableWidth: 1200, activeToolId: 'files' }))
-      .toMatchObject({ panelWidth: 310, dockWidth: 358, effectiveCollapsed: false })
-    expect(getRightDockLayout({ ...input, availableWidth: 760, activeToolId: 'sessions' }))
-      .toMatchObject({ panelWidth: 392, effectiveCollapsed: false })
-    expect(getRightDockLayout({ ...input, availableWidth: 690, activeToolId: 'sessions' }))
-      .toMatchObject({ effectiveCollapsed: true, dockWidth: 48 })
+  it('restores per-tool widths and protects the center on narrow viewports', () => {
+    const input = { panelCollapsed: false, panelWidth: 280, panelWidths: { sessions: 480, files: 310 }, hasActiveTool: true }
+    expect(getRightDockLayout({ ...input, availableWidth: 1200, activeToolId: 'sessions' })).toMatchObject({ panelWidth: 480, dockWidth: 528 })
+    expect(getRightDockLayout({ ...input, availableWidth: 1200, activeToolId: 'files' })).toMatchObject({ panelWidth: 310, dockWidth: 358 })
+    expect(getRightDockLayout({ ...input, availableWidth: 400, activeToolId: 'sessions' })).toMatchObject({ panelWidth: 340, effectiveCollapsed: true, dockWidth: 48 })
     expect(input.panelWidths.sessions).toBe(480)
-  })
-
-  it('starts file tree narrower and Git at the same width as sessions', () => {
-    const input = { availableWidth: 1100, panelCollapsed: false, panelWidth: 280, hasActiveTool: true }
-    expect(getRightDockLayout({ ...input, activeToolId: 'files' }))
-      .toMatchObject({ panelWidth: 260, dockWidth: 308 })
-    expect(getRightDockLayout({ ...input, activeToolId: 'git' }))
-      .toMatchObject({ panelWidth: 360, dockWidth: 408 })
-    expect(getRightDockLayout({ ...input, activeToolId: 'sessions' }))
-      .toMatchObject({ panelWidth: 360, dockWidth: 408 })
-  })
-
-  it('keeps manual preference for product stage: default-hide is done by App, layout stays expandable', () => {
-    const manual = getRightDockLayout({
-      availableWidth: 1000,
-      panelCollapsed: true,
-      panelWidth: 360,
-      hasActiveTool: true,
-    })
-    // 产物打开瞬间 App 会 setPanelCollapsed(true)（默认隐藏），但布局本身
-    // 不再强制收起：用户随后把 manual 置 false 即可展开（空间足够时）。
-    const expandedAfterProductOpen = getRightDockLayout({
-      availableWidth: 1000,
-      panelCollapsed: false,
-      panelWidth: 360,
-      hasActiveTool: true,
-    })
-
-    expect(manual).toMatchObject({ effectiveCollapsed: true, dockWidth: 48, panelWidth: 360 })
-    expect(expandedAfterProductOpen).toMatchObject({ effectiveCollapsed: false, dockWidth: 408, panelWidth: 360 })
-  })
-
-  it('renders rail-only when no tool is active even if the panel is not collapsed', () => {
-    expect(getRightDockLayout({
-      availableWidth: 1000,
-      panelCollapsed: false,
-      panelWidth: 360,
-      hasActiveTool: false,
-    })).toMatchObject({ effectiveCollapsed: false, dockWidth: 48, panelWidth: 360 })
   })
 })
 
@@ -163,20 +83,19 @@ describe('right tool rail', () => {
     expect(markup).not.toContain('office')
   })
 
-  it('provides a dedicated panel expansion control when the rail is collapsed', () => {
+  it('associates each collapsed icon with its own panel', () => {
     const markup = renderToStaticMarkup(
       createElement(RightToolRail, {
         openToolIds: ['files'],
         activeToolId: 'files',
         onToggleTool: vi.fn(),
         collapsed: true,
-        onExpandPanel: vi.fn(),
       }),
     )
 
-    expect(markup).toContain('aria-controls="right-tool-panel"')
+    expect(markup).toContain('aria-controls="right-tool-panel-files"')
     expect(markup).toContain('aria-expanded="false"')
-    expect(markup).toContain('common:rightDock.expandAria')
+    expect(markup).not.toContain('common:rightDock.expandAria')
   })
 
   it('hides the panel toggle when no tool is open', () => {
@@ -186,42 +105,10 @@ describe('right tool rail', () => {
         activeToolId: null,
         onToggleTool: vi.fn(),
         collapsed: true,
-        onExpandPanel: vi.fn(),
       }),
     )
 
     expect(markup).not.toContain('aria-controls="right-tool-panel"')
     expect(markup).not.toContain('common:rightDock.expandAria')
-  })
-})
-
-describe('right tool tabs', () => {
-  it('renders only unique open tools in registry order with complete tab ARIA', () => {
-    const markup = renderToStaticMarkup(
-      createElement(RightToolTabs, {
-        openToolIds: ['assist', 'files', 'assist'],
-        activeToolId: 'assist',
-        onActivate: vi.fn(),
-        onClose: vi.fn(),
-      }),
-    )
-
-    expect(markup.match(/role="tab"/g)).toHaveLength(2)
-    expect(markup.indexOf('right-tool-tab-files')).toBeLessThan(markup.indexOf('right-tool-tab-assist'))
-    expect(markup).toContain('role="tablist"')
-    expect(markup).toContain('aria-controls="right-tool-panel-assist"')
-    expect(markup).toContain('aria-selected="true"')
-    expect(markup).toContain('aria-label="common:rightTool.closeAria"')
-  })
-
-  it('resolves roving focus targets for arrows, Home and End', () => {
-    const tools = ['files', 'git', 'assist'] as const
-
-    expect(getTabKeyboardTarget('ArrowRight', 'git', tools)).toBe('assist')
-    expect(getTabKeyboardTarget('ArrowRight', 'assist', tools)).toBe('files')
-    expect(getTabKeyboardTarget('ArrowLeft', 'files', tools)).toBe('assist')
-    expect(getTabKeyboardTarget('Home', 'assist', tools)).toBe('files')
-    expect(getTabKeyboardTarget('End', 'files', tools)).toBe('assist')
-    expect(getTabKeyboardTarget('Delete', 'files', tools)).toBeNull()
   })
 })

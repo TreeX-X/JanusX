@@ -304,6 +304,7 @@
   "trafficLight": {
     "close": "Close",
     "minimize": "Minimize",
+    "restore": "Restore",
     "maximize": "Maximize"
   },
   "hosted": {

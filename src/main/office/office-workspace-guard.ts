@@ -80,7 +80,18 @@ export async function resolveTrustedOfficeFile(
   }
 
   try {
-    const { rootPath } = await resolveTrustedOfficeWorkspace(input.workspaceId, resolveWorkspaceRoot)
+    let { rootPath } = await resolveTrustedOfficeWorkspace(input.workspaceId, resolveWorkspaceRoot)
+    if (input.scopePath) {
+      const scope = await realpath(input.scopePath)
+      if (relative(rootPath, scope) !== '') {
+        // A sibling checkout must be an actual registered Git worktree; never trust a renderer root.
+        const { listWorktrees } = await import('../git/worktrees')
+        const worktrees = await listWorktrees(input.workspaceId, rootPath)
+        const known = await Promise.all(worktrees.map(item => realpath(item.path).catch(() => '')))
+        if (!known.some(path => path && relative(path, scope) === '')) throw new OfficeWorkspaceGuardError('OUTSIDE_ROOT', 'Unregistered worktree')
+      }
+      rootPath = scope
+    }
     const filePath = await realpath(resolve(rootPath, input.relPath))
     const relativePath = relative(rootPath, filePath)
     if (!relativePath || isOutsideRoot(relativePath)) {

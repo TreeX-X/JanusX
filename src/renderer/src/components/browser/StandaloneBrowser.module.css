@@ -20,39 +20,6 @@
   border-bottom: 1px solid var(--shell-border-soft);
 }
 
-.traffic {
-  display: flex;
-  gap: 8px;
-  -webkit-app-region: no-drag;
-}
-
-.traffic button {
-  width: 12px;
-  height: 12px;
-  border: 0;
-  border-radius: 50%;
-  padding: 0;
-  cursor: pointer;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15);
-  transition: filter 120ms ease;
-}
-
-.traffic button:hover {
-  filter: brightness(1.1);
-}
-
-.close {
-  background: #ff5f57;
-}
-
-.minimize {
-  background: #ffbd2e;
-}
-
-.maximize {
-  background: #28c840;
-}
-
 .title {
   flex: 1 1 auto;
   min-width: 0;

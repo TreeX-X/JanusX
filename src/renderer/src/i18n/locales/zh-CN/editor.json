@@ -161,6 +161,8 @@
     "find": "查找",
     "findTitle": "查找 (Ctrl+F)",
     "embedToWorkspace": "嵌入内部工作区",
+    "transferFailed": "文件窗口切换失败，文件与草稿仍保留在原处。",
+    "collapsePanel": "收起文件面板",
     "detachToFloat": "返回独立浮窗",
     "save": "保存",
     "closeTab": "关闭 {{name}}",

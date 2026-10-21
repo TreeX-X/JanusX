@@ -35,7 +35,7 @@ export function getOfficeErrorCopy(errorCode: OfficeErrorCode, t?: TFunction): s
 }
 
 export function OfficePreviewFrame({ port, status, errorCode, onRetry, onClose }: Props) {
-  const { t } = useI18n('editor')
+  const { t, currentLanguage } = useI18n('editor')
   const src = buildOfficePreviewUrl(port)
   if (status === 'error' || !src) {
     if (status !== 'error') return <div className="flex h-full flex-col items-center justify-center gap-3 text-xs text-[var(--shell-dim)]">
@@ -52,6 +52,6 @@ export function OfficePreviewFrame({ port, status, errorCode, onRetry, onClose }
   }
   return <div className="relative h-full">
     {status === 'reloading' && <div className="absolute inset-x-0 top-0 z-10 bg-[var(--shell-chrome)] py-1 text-center text-[10px] text-[var(--shell-muted)]">{t('editor:office.reloading')}</div>}
-    <iframe title={t('editor:office.iframeTitle')} className="h-full w-full border-0 bg-white" src={src} sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer" />
+    <iframe title={t('editor:office.iframeTitle')} className="h-full w-full border-0 bg-white" src={`${src}?janusLanguage=${encodeURIComponent(currentLanguage)}`} sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer" />
   </div>
 }

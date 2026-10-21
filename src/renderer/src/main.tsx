@@ -1,3 +1,4 @@
+import { WindowControls } from './components/WindowControls'
 import React, { lazy, Suspense, type ErrorInfo, type ReactNode } from 'react'
 import ReactDOM from 'react-dom/client'
 import { installElectronApiFallback } from './lib/electron-api-fallback'
@@ -53,12 +54,9 @@ function EditorWindowLoading() {
       role="status"
       aria-label="Loading editor"
     >
-      <div className="h-[38px] shrink-0 px-3" style={{ borderBottom: '1px solid var(--shell-border)', background: 'var(--shell-pane-chrome)' }}>
-        <div className="flex h-full items-center gap-2" aria-hidden="true">
-          <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-          <span className="h-3 w-3 rounded-full bg-[#ffbd2e]" />
-          <span className="h-3 w-3 rounded-full bg-[#28c840]" />
-        </div>
+      <div className="titlebar-drag flex h-[38px] shrink-0 items-center px-3" style={{ borderBottom: '1px solid var(--shell-border)', background: 'var(--shell-pane-chrome)' }}>
+        <span className="flex-1" />
+        <WindowControls />
       </div>
       <div className="flex flex-1 items-center justify-center gap-2 text-xs" style={{ color: 'var(--shell-dim)' }}>
         <span>Loading editor</span>

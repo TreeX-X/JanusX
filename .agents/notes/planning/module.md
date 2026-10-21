@@ -5,7 +5,7 @@
   "kind": "module",
   "lifecycle": "accepted",
   "created": "2026-10-15",
-  "updated": "2026-10-16T05:56:00Z",
+  "updated": "2026-10-20T14:23:55Z",
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a",
   "moduleState": "partial"
 }
@@ -18,6 +18,8 @@
 维护 JanusX 跨模块的版本节点、工程排期与事项归入，为项目提供共同的节奏入口。各功能的设计、实现状态和验收仍由所属模块、需求与 Task 维护；排期条目不代替验收结论。
 
 ## Design
+
+[个人开发工作台与团队产品的演进方向](product-growth-direction.md)记录个人优先、小团队上下文共享试点及 ToB 投入条件的策略探索，同时讨论工具箱扩展和 Notion 接入层次。该文属于待确认 idea，不改变既有排期或代表团队功能已交付。
 
 [工程排期里程碑备忘录](engineering-milestones.md)集中保存版本节点与散点，按讨论结果持续调整。它属于当前规划资料，保留 draft 生命周期；版本号或经过时间不构成完成、失效或归档依据。
 

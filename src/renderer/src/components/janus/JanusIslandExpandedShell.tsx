@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pin, PinOff, X } from 'lucide-react'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'
 import type { SubAgentRun } from '../../../../shared/subAgentRun'
-import type { ProductFileEntry } from '../../../../shared/product'
 import type { AgentResultCard } from '../../../../shared/roundtable/events'
 import type { RoundtableState } from '../../../../shared/roundtable/events'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -71,8 +70,6 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   onNotificationAction: (notificationId: string, actionId: IslandNotificationActionId) => void
   onBannerDismiss: () => void
   onTrayClear: () => void
-  productFiles: ProductFileEntry[]
-  onOpenProductFile?: (relPath: string) => void
   /** Island window persistence: a pinned window survives outside click / Esc. */
   islandPinned?: boolean
   onToggleIslandPin?: () => void
@@ -89,7 +86,7 @@ export function JanusIslandExpandedShell({
   onRequestAuxiliaryClose,
   notifications, bannerNotification, trayOpen, notifyPulse,
   onToggleTray, onNotificationAction, onBannerDismiss, onTrayClear,
-  productFiles, onOpenProductFile, messages, pendingContent,
+  messages, pendingContent,
   isStreaming, error, modelOptions, activeModel, modelNotice,
   onChatSelectModel, onChatSend, onChatRewrite, onChatStop, onChatRetry,
   onChatClear, conversationController,
@@ -414,20 +411,6 @@ export function JanusIslandExpandedShell({
                       </div>
                     </div>
                     <div className="janus-monitor-right">
-                      <div className="janus-monitor-panel janus-office-artifacts">
-                        <div className="janus-monitor-section-title">
-                          <span>{t('janus:island.expanded.productFiles')}</span>
-                          <em>{t('janus:island.expanded.productAvailable', { count: productFiles.length })}</em>
-                        </div>
-                        <div className="janus-office-artifact-list">
-                          {productFiles.map((entry) => (
-                            <button key={entry.relPath} type="button" onClick={() => onOpenProductFile?.(entry.relPath)}>
-                              <span>{entry.relPath}</span>
-                              <em>{entry.ext.startsWith('.') ? entry.ext.slice(1) : entry.kind}</em>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
                       <div className="janus-monitor-panel janus-runtime-panel">
                         <div className="janus-monitor-section-title">
                           <span>{t('janus:island.expanded.subagentRuntimes')}</span>

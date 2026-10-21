@@ -9,6 +9,8 @@ describe('file editor tabs', () => {
   beforeEach(() => {
     invalidateEditorFileCache()
     useEditorStore.setState({
+      workspacePath: null,
+      sessions: {},
       openFiles: [],
       activeFileId: null,
       isVisible: false,
@@ -73,7 +75,7 @@ describe('file editor tabs', () => {
       openFiles: [],
       activeFileId: null,
       isVisible: false,
-      isEmbedded: false,
+      isEmbedded: true,
     })
   })
 
@@ -153,8 +155,8 @@ describe('file editor tabs', () => {
       'utf8',
     )
 
-    expect(editorSource).toContain('<PanelRightOpen')
-    expect(editorSource).toContain('onClick={() => setEmbedded(true)}')
+    expect(editorSource).toContain('<FileWindow embedded')
+    expect(standaloneEditorSource).toContain('void moveSession()')
     expect(appSource).toContain('aria-label="Embedded file editor"')
     expect(appSource).toContain('aria-label="Resize embedded editor"')
     expect(appSource).toContain("- (isEditorEmbedded ? EMBEDDED_EDITOR_MIN_WIDTH : 0)")
@@ -163,8 +165,8 @@ describe('file editor tabs', () => {
     expect(standaloneEditorSource).toContain("t('editor:fileEditor.pinWindow')")
     expect(standaloneEditorSource).toContain("t('editor:fileEditor.unpinWindow')")
     expect(standaloneEditorSource).toContain('window.electron.window.editorReady()')
-    expect(standaloneEditorSource).toContain('window.electron.window.onEditorRefresh((payload) =>')
-    expect(standaloneEditorSource).toContain('void openFile(payload.filePath, payload.workspacePath)')
+    expect(standaloneEditorSource).toContain('window.electron.window.onEditorRefresh(async (payload) =>')
+    expect(standaloneEditorSource).toContain('acceptDelivery(payload)')
 
     const monacoViewerSource = readFileSync(
       new URL('../../src/renderer/src/components/viewers/MonacoViewer.tsx', import.meta.url),

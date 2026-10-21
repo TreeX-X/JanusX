@@ -1,3 +1,4 @@
+import type { EditorDelivery, EditorSession, FileViewState } from '../../../shared/editor'
 import { create } from 'zustand'
 import type { OpenFile, FileViewType } from '@/types'
 import { getFileViewType, getFileName } from '@/lib/file-utils'
@@ -188,6 +189,14 @@ export function closeEditorFilesUnderPath(absolutePath: string): void {
 }
 
 interface EditorStore {
+  workspacePath: string | null
+  sessions: Record<string, EditorSession & { visible: boolean }>
+  switchScope: (workspacePath: string | null) => void
+  acceptDelivery: (payload: EditorDelivery) => Promise<void>
+  releaseScope: (workspacePath: string) => void
+  exportSession: () => EditorSession
+  updateViewState: (id: string, state: Partial<FileViewState>) => void
+
   openFiles: OpenFile[]
   activeFileId: string | null
   isVisible: boolean
@@ -227,17 +236,61 @@ export interface EditorNavigationTarget {
   selection: EditorSelection
 }
 
+function replaceLoadedFile(state: EditorStore, target: OpenFile, patch: Partial<OpenFile>) {
+  const replace = (files: OpenFile[]) => files.map(file => file === target ? { ...file, ...patch } : file)
+  return { openFiles: replace(state.openFiles), sessions: Object.fromEntries(Object.entries(state.sessions).map(([key, session]) => [key, { ...session, files: replace(session.files) }])) }
+}
+
 let navigationRequestId = 0
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
+  workspacePath: null,
+  sessions: {},
+  switchScope: (workspacePath) => {
+    const current = get()
+    if (getEditorFileId(current.workspacePath ?? '') === getEditorFileId(workspacePath ?? '')) return
+    const sessions = { ...current.sessions }
+    if (current.workspacePath) sessions[getEditorFileId(current.workspacePath)] = {
+      files: current.openFiles, activeFileId: current.activeFileId, visible: current.isVisible,
+    }
+    const session = workspacePath ? sessions[getEditorFileId(workspacePath)] : undefined
+    set({ workspacePath, sessions, openFiles: session?.files ?? [], activeFileId: session?.activeFileId ?? null,
+      isVisible: session?.visible ?? false, isEmbedded: true, navigationTarget: null })
+  },
+  releaseScope: (workspacePath) => {
+    const key = getEditorFileId(workspacePath)
+    set(s => {
+      const { [key]: released, ...sessions } = s.sessions
+      void released
+      return getEditorFileId(s.workspacePath ?? '') === key
+        ? { sessions, openFiles: [], activeFileId: null, isVisible: false, navigationTarget: null }
+        : { sessions }
+    })
+  },
+  exportSession: () => ({ files: get().openFiles, activeFileId: get().activeFileId }),
+  acceptDelivery: async (payload) => {
+    if (!payload.filePath || !payload.workspacePath) throw new Error('Missing editor scope')
+    if (payload.session && (!payload.session.files.length || payload.session.files.some(file => file.isLoading))) throw new Error('Editor session is still loading')
+    get().switchScope(payload.workspacePath)
+    if (payload.session) {
+      const files = payload.session.files
+      set({ openFiles: files, activeFileId: payload.session.activeFileId ?? files[0].id, isVisible: true, isEmbedded: true })
+    } else {
+      await get().openFile(payload.filePath, payload.workspacePath)
+      if (payload.isDirty && payload.content !== undefined) get().updateContent(getEditorFileId(payload.filePath), payload.content)
+      set({ isEmbedded: true })
+    }
+  },
+  updateViewState: (id, state) => set(s => ({ openFiles: s.openFiles.map(file => file.id === id ? { ...file, viewState: { ...file.viewState, ...state } } : file) })),
   openFiles: [],
   activeFileId: null,
   isVisible: false,
-  isEmbedded: false,
+  isEmbedded: true,
   embeddedWidth: 560,
   navigationTarget: null,
 
   openFile: async (absolutePath, workspacePath) => {
+    get().switchScope(workspacePath)
     const id = getEditorFileId(absolutePath)
     const existing = get().openFiles.find(f => f.id === id)
     if (existing) {
@@ -270,18 +323,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     try {
       const snapshot = await request
       if (fileReadRequests.get(newFile) !== request) return
-      set(s => ({
-        openFiles: s.openFiles.map(f =>
-          f === newFile ? { ...f, ...snapshot, isLoading: false } : f
-        ),
-      }))
+      set(s => replaceLoadedFile(s, newFile, { ...snapshot, isLoading: false }))
     } catch (err: any) {
       if (fileReadRequests.get(newFile) !== request) return
-      set(s => ({
-        openFiles: s.openFiles.map(f =>
-          f === newFile ? { ...f, error: err.message || 'Failed to load file', isLoading: false } : f
-        ),
-      }))
+      set(s => replaceLoadedFile(s, newFile, { error: err.message || 'Failed to load file', isLoading: false }))
     }
   },
 
@@ -313,7 +358,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         openFiles: filtered,
         activeFileId: newActive,
         isVisible: filtered.length > 0 ? s.isVisible : false,
-        isEmbedded: filtered.length > 0 ? s.isEmbedded : false,
+        isEmbedded: true,
         navigationTarget: s.navigationTarget?.fileId === id ? null : s.navigationTarget,
       }
     })
@@ -362,15 +407,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   reloadOpenFile: async (absolutePath) => {
     const id = getEditorFileId(absolutePath)
-    const file = get().openFiles.find(f => f.id === id)
+    const file = get().openFiles.find(f => f.id === id) ?? Object.values(get().sessions).flatMap(session => session.files).find(f => f.id === id)
     if (!file) return
 
     if (file.isDirty) {
-      set(s => ({
-        openFiles: s.openFiles.map(f =>
-          f.id === id ? { ...f, externalChanged: true } : f
-        ),
-      }))
+      set(s => replaceLoadedFile(s, file, { externalChanged: true }))
       return
     }
 
@@ -380,19 +421,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     try {
       const snapshot = await request
       if (fileReadRequests.get(file) !== request) return
-      set(s => ({
-        openFiles: s.openFiles.map(f =>
-          f === file ? { ...f, ...snapshot, externalChanged: false, isLoading: false } : f
-        ),
-      }))
+      set(s => replaceLoadedFile(s, file, { ...snapshot, error: undefined, externalChanged: false, isLoading: false }))
     } catch (err) {
       if (fileReadRequests.get(file) !== request) return
       const msg = err instanceof Error ? err.message : String(err)
-      set(s => ({
-        openFiles: s.openFiles.map(f =>
-          f === file ? { ...f, error: msg } : f
-        ),
-      }))
+      set(s => replaceLoadedFile(s, file, { error: msg }))
     }
   },
 
@@ -401,8 +434,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       await get().reloadOpenFile(changedFilePath)
       return
     }
-    const files = get().openFiles.filter(f =>
-      !f.isDirty && isPathInWorkspace(f.absolutePath, workspacePath)
+    const files = [...get().openFiles, ...Object.values(get().sessions).flatMap(session => session.files)].filter(f =>
+      isPathInWorkspace(f.absolutePath, workspacePath)
     )
     for (const file of files) {
       await get().reloadOpenFile(file.absolutePath)
@@ -413,9 +446,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   closePanel: () => {
     pendingFileLoads.clear()
-    set({ openFiles: [], activeFileId: null, isVisible: false, isEmbedded: false, navigationTarget: null })
+    if (get().workspacePath) get().releaseScope(get().workspacePath!)
+    else set({ openFiles: [], activeFileId: null, isVisible: false, isEmbedded: true, navigationTarget: null })
   },
-  hidePanel: () => set({ isVisible: false, isEmbedded: false }),
+  hidePanel: () => set({ isVisible: false }),
   showPanel: () => set(s => ({ isVisible: s.openFiles.length > 0 })),
   togglePanel: () => set(s => ({ isVisible: s.openFiles.length > 0 ? !s.isVisible : false })),
   setEmbedded: (isEmbedded) => set({ isEmbedded }),

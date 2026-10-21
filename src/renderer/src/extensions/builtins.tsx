@@ -9,10 +9,18 @@ interface BuiltinRightExtension {
   tool: RightToolDefinition
 }
 
+const builtinRightLoaders: Array<() => Promise<unknown>> = []
+
+/** 空闲时预热右侧工具的懒加载 chunk：首次悬浮不再露出空白卡。 */
+export function preloadBuiltinRightTools(): void {
+  for (const load of builtinRightLoaders) void load().catch(() => {})
+}
+
 function builtinRightExtension(
   tool: RightToolDefinition & { title: string },
   load: () => Promise<{ default: ComponentType<{ active?: boolean }> }>,
 ): BuiltinRightExtension {
+  builtinRightLoaders.push(load)
   // Defer tool imports: stores consult contribution metadata during hydration.
   const Tool = lazy(load)
   function View({ active }: ExtensionViewProps) {

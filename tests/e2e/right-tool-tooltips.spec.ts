@@ -15,7 +15,7 @@ for (const theme of ['planche', 'dark']) {
     expect(tipBox.x + tipBox.width).toBeLessThanOrEqual(buttonBox.x - 6)
     expect(Math.abs(tipBox.y + tipBox.height / 2 - buttonBox.y - buttonBox.height / 2)).toBeLessThan(3)
     await git.click()
-    await expect(page.locator('#right-tool-tab-git')).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('#right-tool-rail-git')).toHaveAttribute('aria-pressed', 'true')
     await expect(tooltip).toHaveCount(0)
     await page.waitForTimeout(500)
     await expect(tooltip).toHaveCount(0)
@@ -69,7 +69,7 @@ for (const theme of ['planche', 'dark']) {
     await page.mouse.move(400, 50)
     await commit.hover()
     await expect(tooltip).toBeVisible()
-    await page.locator('#right-tool-tab-files').click()
+    await page.locator('#right-tool-rail-files').click()
     await expect(tooltip).toHaveCount(0)
   })
 }

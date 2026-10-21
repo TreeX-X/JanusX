@@ -22,29 +22,26 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-20T10:35:14.505Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
-# Workbench close controls keep a 30px hit area on a 14px visual
-
+# Workbench close controls keep a stable 30px hit area
 
 ## Problem
 
-The blueprint and knowledge workbench topbars render the close control as a 14px red circle where the hit box equals the visual box. The `:active` rule contracts the box with `scale(0.9)` during the press, so an edge mousedown loses the mouseup outside the contracted box and the click cancels. The outer `0 0 0 1px` box-shadow ring paints outside the border box without extending hit-testing, so the outermost visual ring never closes. The reliable target collapses to the center of the red circle, matching the reported ~40% effective area. The knowledge stylesheet also holds two competing `.closeButton` definitions, with the 14px rule overriding a dead 30px rule.
+The original 14px red-circle close controls contracted during a press, allowing edge clicks to cancel. Enlarging the hit target fixed that behavior, but the red-circle appearance and left placement still resembled macOS window controls inside application panels.
 
 ## Decision
 
-`src/renderer/src/components/blueprint/blueprint.css` defines `.blueprint-workbench-close` as a 14px visual with `position: relative` and a `::before` layer at `inset: -8px`, so the hit area spans ~30px without shifting layout. `src/renderer/src/components/knowledge/KnowledgeWorkbench.module.css` defines a single 14px `.closeButton` with the same `::before` geometry. Both controls keep `filter: brightness` for hover and active feedback and never use `transform` on `:active`, so the box holds its size through the full press. Both controls reveal the `×` mark through `::after` on hover in parity with `.modal-close-light`, and both expose a `:focus-visible` outline for keyboard operation.
+Blueprint .blueprint-workbench-close and knowledge .closeButton now render a visible close mark in a 28px button at the right of their headers. A positioned ::before layer with inset: -1px keeps a roughly 30px hit area. Hover and active feedback use theme colors without scaling the target. A focus-visible outline supports keyboard navigation. This follows the shared [window-controls](../desktop/window-controls.md) policy for internal dialogs on both platforms.
 
 ## Alternatives considered
 
-- Do nothing and keep hit equal to the 14px visual: zero churn, but edge presses keep cancelling under the active contraction and the control stays below the 24px minimum target.
-- Expand the hit area with a wrapper button carrying transparent padding: strongest case keeps the stylesheet free of pseudo-element geometry, but the wrapper changes flex sizing and gap rhythm in both topbars and risks overlap with the adjacent capsule and refresh controls in narrow headers.
-- Drop the active scale without adding hit slop: strongest case removes the press-time contraction with a one-line change, but the target remains 14px and edge misses persist for pointer users.
+Keeping the 14px red circle with 8px hit slop retains the old visual rhythm but continues to imply a platform-specific window action. A padded wrapper adds unnecessary markup and changes flex sizing. The 28px button provides a visible target while retaining the established pseudo-element hit expansion.
 
 ## Consequences
 
-- **Gains**: Edge presses on the red circle close the workbench; hover shows the `×` affordance and keyboard focus shows a visible ring on both workbenches.
-- **Costs and limits**: The `::before` expansion relies on 8px of clearance around the 14px circle. Both headers provide it through 12px end padding and a 14px action gap, so reviewers keep that spacing when touching the topbar layout. The visual stays 14px and remains below the 24px WCAG target by design; the 30px hit area is the compensating mechanism.
-- **Verification**: `npx tsc --noEmit -p tsconfig.json` passes with no output; the `::before`/`::after`/`focus-visible` rules read back in both stylesheets with no `scale(0.9)` remaining.
+The visible close target is larger and stays the same size throughout a press. Headers must retain at least 1px clearance for hit slop. Both selectors use order: 100 and margin-left: auto to keep the action at the right without rearranging existing content. Revisit geometry if header spacing or wrapping changes.
+
+Verification: tests/unit/planche-theme.test.ts checks the visible mark, right placement, 28px box, 1px expansion and absence of active scaling. The shared dialog and floating-panel actions are exercised in tests/e2e/window-controls.spec.ts. The broader planche suite currently has an unrelated source assertion for the pre-existing FileEditor refactor.

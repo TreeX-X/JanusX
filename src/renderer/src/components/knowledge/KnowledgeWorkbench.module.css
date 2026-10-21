@@ -72,8 +72,7 @@
   to { opacity: 0; }
 }
 
-/* §9.1: blueprint-style pure-text topbar — an independent card, no logo/badge.
-   首位是关闭红灯（左上），随后面包屑，右侧只留刷新。 */
+/* Blueprint-style text header: breadcrumbs, refresh, and right-side close. */
 .header {
   min-height: 44px;
   display: flex;
@@ -123,7 +122,7 @@
 .bcSep { color: #4b4b52; }
 .bcCurrent { color: #fff; font-weight: 600; }
 
-/* 关闭红灯已移到顶栏首位，这里只留刷新一类动作，贴右边缘。 */
+/* Header actions precede the right-side close control. */
 .headerActions {
   display: flex;
   justify-content: flex-end;
@@ -410,52 +409,29 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/workbench/workbench-close-hit-slop.md */
-/* 交互约定（与 modal-close-light 统一）：红灯本身即关闭，悬浮不冒叉，直接点即可。
-   位置：顶栏首位（左上），与蓝图工作台同位。左边距靠 .header 的 padding-left 14px
-   留出，比 ::before 的 8px 命中外扩多 6px 余量，贴边点击不会溢出卡片。 */
+/* Note: .agents/notes/workbench/workbench-close-hit-slop.md */
 .closeButton {
   position: relative;
-  width: 14px;
-  height: 14px;
+  order: 100;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: #ff5f56;
-  color: transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.26),
-    0 0 0 1px rgba(0, 0, 0, 0.22);
 }
-
-.closeButton::before {
-  content: '';
-  position: absolute;
-  inset: -8px;
-  background: transparent;
-}
-
+.closeButton::before { content: ''; position: absolute; inset: -1px; }
 .closeButton::after,
-.closeButton:hover::after {
-  content: '\2715';
-  font-size: 7px;
-  line-height: 1;
-  color: transparent;
-  font-weight: bold;
-}
-
-.closeButton:active {
-  filter: brightness(0.9);
-}
-
-.closeButton:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.7);
-  outline-offset: 2px;
-}
+.closeButton:hover::after { content: '\2715'; font-size: 16px; line-height: 1; color: currentColor; }
+.closeButton:hover { background: var(--shell-hover); color: var(--shell-text); }
+.closeButton:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 1px; }
 
 /* §9.1: demo skeleton — three independent cards (210px 1fr 340px + gap 16px).
    The detail track stays in the grid at 0px when closed so its collapse and

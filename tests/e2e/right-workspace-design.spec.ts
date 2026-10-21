@@ -7,8 +7,8 @@ for (const theme of ['planche', 'dark']) {
     const rail = page.getByRole('toolbar')
     const filesButton = rail.getByRole('button', { name: /文件/ })
     const initialY = (await filesButton.boundingBox())!.y
-    await page.locator('#right-tool-tab-sessions').click()
-    const panel = page.getByRole('tabpanel', { name: /会话/ })
+    await page.locator('#right-tool-rail-sessions').click()
+    const panel = page.getByRole('region', { name: /会话/ })
     const row = panel.locator('[data-session-id="session-palette"]')
     await expect(row).toBeVisible()
     await expect.poll(() => panel.evaluate((element) => element.scrollWidth - element.clientWidth)).toBe(0)
@@ -39,19 +39,17 @@ for (const theme of ['planche', 'dark']) {
     await page.mouse.move(400, 20)
     await page.waitForTimeout(350)
     await page.screenshot({ path: test.info().outputPath(`right-sessions-${theme}-${width}.png`) })
-    await page.locator('#right-tool-tab-git').click()
+    await page.locator('#right-tool-rail-git').click()
     await expect(page.getByText('src/renderer/RightDock.tsx', { exact: true })).toBeVisible()
     await page.mouse.move(400, 20)
     await page.waitForTimeout(350)
     await page.screenshot({ path: test.info().outputPath(`right-git-${theme}-${width}.png`) })
-    // Closing the last tool keeps the permanent tool entries in place.
-    for (const tool of ['files', 'sessions', 'git']) {
-      await page.locator(`#right-tool-tab-${tool}`).getByRole('button').click()
-    }
-    await expect(page.locator('[aria-controls="right-tool-panel"]')).toHaveCount(0)
+    // The active icon collapses the panel without moving the rail.
+    await page.locator('#right-tool-rail-git').click()
+    await expect(page.getByTestId('right-tool-panel-shell')).toHaveAttribute('data-visible', 'false')
     expect((await filesButton.boundingBox())!.y).toBe(initialY)
     await filesButton.click()
-    await expect(page.getByRole('tabpanel', { name: /文件/ })).toBeVisible()
+    await expect(page.getByRole('region', { name: /文件/ })).toBeVisible()
     expect((await filesButton.boundingBox())!.y).toBe(initialY)
   })
   }

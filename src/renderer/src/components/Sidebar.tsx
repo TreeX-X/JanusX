@@ -1686,7 +1686,7 @@ export function Sidebar() {
         >
           {({ requestClose }) => (
             <>
-              {/* Header：顶栏卡——分体布局的一员，不是窗上的条。关闭红灯在左上角 */}
+              {/* Header：分体顶栏卡；关闭按钮通过共享样式排列在右侧 */}
               <div className="ws-config-head">
                 <ModalCloseButton onClose={requestClose} />
                 <div

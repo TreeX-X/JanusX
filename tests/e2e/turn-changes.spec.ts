@@ -7,6 +7,42 @@ type TurnFixture = Window & { turnFixture: {
   emitDeleted(): void
 } }
 
+test('new changes auto-expand, expire after six seconds, and outside clicks dismiss immediately', async ({ page }) => {
+  await page.clock.install()
+  await page.goto('/turn-changes.html?focused=1')
+  const island = page.locator('[data-turn-island][data-terminal-id="a"]')
+  await page.getByRole('button', { name: 'Change two files' }).click()
+  await expect(island).toHaveAttribute('data-stage', 'expanded')
+  await page.clock.runFor(5900)
+  await expect(island).toHaveAttribute('data-stage', 'expanded')
+  await page.clock.runFor(200)
+  await expect(island).toHaveAttribute('data-stage', 'collapsed')
+
+  await page.getByRole('button', { name: 'Change two files' }).click()
+  await expect(island).toHaveAttribute('data-stage', 'expanded')
+  // Terminal surfaces can stop propagation; capture must still dismiss the island.
+  await page.getByTestId('pane-b').evaluate(element => {
+    element.addEventListener('pointerdown', event => event.stopPropagation())
+  })
+  await page.getByTestId('pane-b').click()
+  await expect(island).toHaveAttribute('data-stage', 'collapsed')
+})
+
+test('manual expansion also expires after interaction leaves the island', async ({ page }) => {
+  await page.clock.install()
+  await page.goto('/turn-changes.html')
+  const island = page.locator('[data-turn-island][data-terminal-id="a"]')
+  await page.getByRole('button', { name: 'Change two files' }).click()
+  await island.locator('.turn-change-dock').click()
+  await page.clock.runFor(300)
+  await expect(island).toHaveAttribute('data-stage', 'expanded')
+  await page.clock.runFor(6500)
+  await expect(island).toHaveAttribute('data-stage', 'expanded')
+  await page.mouse.move(0, 0)
+  await page.clock.runFor(6100)
+  await expect(island).toHaveAttribute('data-stage', 'collapsed')
+})
+
 for (const theme of ['dark', 'planche']) {
   test(`latest clears while history remains reachable in ${theme}`, async ({ page }) => {
     const errors: string[] = []

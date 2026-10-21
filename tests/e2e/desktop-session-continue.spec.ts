@@ -276,10 +276,10 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
     await expect(workspaceRow).toBeVisible({ timeout: 10_000 })
     await workspaceRow.click()
     await page.getByRole('button', { name: /打开会话工具/ }).click()
-    await expect(page.getByRole('tabpanel', { name: /会话/ })).toBeVisible()
+    await expect(page.getByRole('region', { name: /会话/ })).toBeVisible()
 
     // Count live cards, since actions are only rendered for the expanded card.
-    const sessionCards = page.getByRole('tabpanel', { name: /会话/ }).locator('[data-session-id]')
+    const sessionCards = page.getByRole('region', { name: /会话/ }).locator('[data-session-id]')
     await expect(sessionCards).toHaveCount(3, { timeout: 10_000 })
     const internalCard = page.locator('div[class*="cardSurface"]')
       .filter({ hasText: HANDOFF_MARKER }).first()

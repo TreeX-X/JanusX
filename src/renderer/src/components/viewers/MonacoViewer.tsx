@@ -1,3 +1,4 @@
+import { readFileViewState, saveFileViewState } from '@/lib/file-view-state'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import type { Monaco } from '@monaco-editor/react'
@@ -98,6 +99,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
       const saveViewState = () => {
         const viewState = editor.saveViewState()
         if (viewState) editorViewStates.set(modelPath, viewState)
+        saveFileViewState(modelPath, { scrollTop: editor.getScrollTop(), scrollLeft: editor.getScrollLeft(), cursor: editor.getPosition() ?? undefined })
       }
       const subscriptions = [editor.onDidScrollChange(saveViewState), editor.onDidChangeCursorPosition(saveViewState)]
       viewStateSubscriptionRef.current = { dispose: () => subscriptions.forEach((subscription) => subscription.dispose()) }
@@ -110,6 +112,12 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
           editor.restoreViewState(viewState)
         })
       }
+    }
+    if (!navigationTarget) {
+      const state = readFileViewState(modelPath)
+      if (state.cursor) editor.setPosition(state.cursor)
+      if (state.scrollTop !== undefined) editor.setScrollTop(state.scrollTop)
+      if (state.scrollLeft !== undefined) editor.setScrollLeft(state.scrollLeft)
     }
     const model = editor.getModel()
     if (model && model.getValue() !== contentRef.current) model.setValue(contentRef.current)

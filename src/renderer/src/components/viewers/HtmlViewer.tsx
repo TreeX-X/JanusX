@@ -1,3 +1,4 @@
+import { readFileViewState, saveFileViewState } from '@/lib/file-view-state'
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PreviewModeToggle, type PreviewMode } from './PreviewModeToggle'
 import { MonacoViewer } from './MonacoViewer'
@@ -19,7 +20,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount, 
   const { t } = useI18n('editor')
   const [splitRatio, setSplitRatio] = useState(50)
   const [scriptsEnabled, setScriptsEnabled] = useState(true)
-  const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(() => readFileViewState(modelPath).previewMode ?? 'preview')
   const [previewContent, setPreviewContent] = useState(content)
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -99,7 +100,7 @@ export function HtmlViewer({ content, originalContent, onChange, onEditorMount, 
               {scriptsEnabled ? t('editor:htmlViewer.disableScripts') : t('editor:htmlViewer.enableScripts')}
             </button>
           )}
-          <PreviewModeToggle value={previewMode} onChange={setPreviewMode} />
+          <PreviewModeToggle value={previewMode} onChange={mode => { setPreviewMode(mode); saveFileViewState(modelPath, { previewMode: mode }) }} />
         </div>
       </div>
 

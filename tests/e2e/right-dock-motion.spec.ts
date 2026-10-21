@@ -1,75 +1,64 @@
 import { expect, test } from '@playwright/test'
 
 for (const theme of ['planche', 'dark']) {
-  test(`width changes reveal stable content in ${theme}`, async ({ page }) => {
+  test(`docked panels reserve workspace space and animate exit in ${theme}`, async ({ page }) => {
     await page.goto(`/tool-palette.html?theme=${theme}&panel=520`)
-    await expect(page.locator('#right-tool-panel-files')).toBeVisible()
-    const samples = await page.evaluate(async () => {
-      const shell = document.querySelector<HTMLElement>('[data-testid="right-tool-panel-shell"]')!
-      const dock = shell.parentElement!
-      const rail = dock.querySelector('[role="toolbar"]')!
-      const samples: { shell: number; dock: number; content: number; railX: number }[] = []
-      document.getElementById('right-tool-tab-sessions')!.click()
-      const started = performance.now()
-      while (performance.now() - started < 360) {
-        await new Promise(requestAnimationFrame)
-        // Tab feedback starts before the coalesced panel activation.
-        if (document.getElementById('right-tool-panel-sessions')!.hidden) continue
-        samples.push({
-          shell: shell.getBoundingClientRect().width,
-          dock: dock.getBoundingClientRect().width,
-          content: document.getElementById('right-tool-panel-sessions')!.getBoundingClientRect().width,
-          railX: rail.getBoundingClientRect().x,
-        })
-      }
-      return samples
-    })
-    expect(samples.length).toBeGreaterThan(3)
-    expect(new Set(samples.map(({ shell }) => Math.round(shell))).size).toBeGreaterThan(3)
-    for (const sample of samples) {
-      expect(sample.content).toBeCloseTo(520, 0)
-      // One border pixel belongs to the dock; the permanent rail takes 48px.
-      expect(sample.dock - sample.shell).toBeCloseTo(49, 0)
-      expect(sample.railX).toBeCloseTo(samples[0].railX, 0)
-    }
-    expect(samples.at(-1)!.shell).toBeCloseTo(519, 0)
-    await page.locator('#right-tool-tab-files').click()
-    await expect.poll(() => page.locator('[data-testid="right-tool-panel-shell"]').evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(259)
+    const shell = page.getByTestId('right-tool-panel-shell')
+    const dock = shell.locator('..')
+    const files = page.locator('#right-tool-rail-files')
+    const sessions = page.locator('#right-tool-rail-sessions')
+    const center = page.locator('#preview-underlay').locator('..')
+    const beforeWidth = (await center.boundingBox())!.width
+    await sessions.click()
+    await expect(page.locator('#right-tool-panel-sessions')).toBeVisible()
+    await expect(shell).toHaveAttribute('data-transient', 'false')
+    await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(520)
+    await expect.poll(async () => Math.round((await dock.boundingBox())!.width)).toBe(568)
+    expect((await center.boundingBox())!.width).toBeCloseTo(beforeWidth - 260, 0)
+    await expect(page.locator('[class*="railState"]')).toHaveCount(0)
+    await expect(shell).toHaveCSS('border-radius', '0px')
+    await sessions.click()
+    await expect(shell).toHaveAttribute('data-visible', 'false')
+    // Contents survive the exit animation, but become inert immediately.
+    await expect(shell).toHaveAttribute('inert', '')
+    await expect(page.locator('#right-tool-panel-sessions')).not.toHaveAttribute('hidden')
+    await expect.poll(() => shell.evaluate(el => Number(getComputedStyle(el).opacity))).toBe(0)
+    await expect(page.locator('#right-tool-panel-sessions')).toHaveAttribute('hidden', '')
+    await files.click()
+    await expect(shell).toHaveAttribute('data-visible', 'true')
+    await expect(shell).toHaveCSS('opacity', '1')
+    await page.screenshot({ path: test.info().outputPath(`docked-panel-${theme}.png`) })
   })
 }
 
-test('rapid switches retain state and dragging follows the pointer without a transition', async ({ page }) => {
+test('panel resizing persists widths without moving the rail and tool switches preserve input', async ({ page }) => {
   await page.goto('/tool-palette.html')
-  await page.locator('#right-tool-tab-sessions').click()
+  await page.locator('#right-tool-rail-sessions').click()
   const search = page.locator('#right-tool-panel-sessions').getByRole('textbox')
   await search.fill('保留筛选')
-  await page.evaluate(() => {
-    for (const tool of ['files', 'git', 'sessions', 'files', 'sessions']) {
-      document.getElementById(`right-tool-tab-${tool}`)!.click()
-    }
-  })
-  await expect(search).toHaveValue('保留筛选')
-  await expect(page.getByRole('tabpanel')).toHaveCount(1)
   const shell = page.getByTestId('right-tool-panel-shell')
-  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(359)
   const handle = page.getByRole('separator')
+  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(360)
+  await expect(shell).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)')
   const box = (await handle.boundingBox())!
   await page.mouse.move(box.x + 3, box.y + 100)
   await page.mouse.down()
-  await expect(page.locator('main').first()).toHaveCSS('transition-duration', '0s')
   await page.mouse.move(box.x - 57, box.y + 100)
-  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(419)
+  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(420)
   await page.mouse.up()
-  await page.locator('#right-tool-tab-files').click()
-  await page.locator('#right-tool-tab-sessions').click()
-  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(419)
+  await page.locator('#right-tool-rail-files').click()
+  await expect(page.locator('#right-tool-panel-files')).toBeVisible()
+  await page.locator('#right-tool-rail-sessions').click()
+  await expect(search).toHaveValue('保留筛选')
+  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(420)
+  await expect.poll(async () => Math.round((await shell.locator('..').boundingBox())!.width)).toBe(468)
 })
 
-test('reduced motion disables both width and content animation', async ({ page }) => {
+test('reduced motion disables card and selection transitions', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/tool-palette.html?panel=520')
-  await page.locator('#right-tool-tab-sessions').click()
-  await expect(page.locator('main').first()).toHaveCSS('transition-duration', '0s')
+  await page.locator('#right-tool-rail-sessions').click()
+  await expect(page.getByTestId('right-tool-panel-shell')).toHaveCSS('transition-duration', '0s')
   await expect(page.locator('#right-tool-panel-sessions')).toHaveCSS('animation-name', 'none')
-  await expect.poll(() => page.getByTestId('right-tool-panel-shell').evaluate(el => Math.round(el.getBoundingClientRect().width))).toBe(519)
+  await expect(page.getByTestId('right-tool-rail-indicator')).toHaveCSS('transition-duration', '0s')
 })

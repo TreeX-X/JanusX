@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-18T03:55:20Z",
+  "updated": "2026-10-20T07:37:38Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -43,6 +43,10 @@ The renderer shares one reference-counted IPC subscription. Turn identity and se
 File paths remain relative to the terminal cwd. The editor window identity uses the most specific containing root among the terminal's owning workspace, its active scope and its known worktrees. Windows drive and UNC paths compare without case or separator differences; POSIX paths preserve case. This groups subdirectory terminals with their file tree window, keeps nested and sibling worktrees separate, and resolves background terminal snapshots by their owning workspace rather than the visible workspace. A cwd outside all known roots remains its own editor scope. Worktree discovery is not triggered by a click; a missing worktree listing can therefore prevent reuse until that scope is known.
 
 The right-edge dock is 32 px wide and 64 px tall when collapsed, with 2 px horizontal padding to keep the 99+ badge readable while covering less terminal content. It displays only the latest nonzero file count, caps its compact label at 99+, and keeps the exact count in the accessible label. A quiet dock hides the number and remains operable for latest and history. Single click opens latest; double click opens history; keyboard activation and explicit view buttons provide the same access. Expanded views are fixed-size and scroll inside: latest is 340 × 320 px and history is 370 × 420 px, each height capped at 78% and 84% of the pane, so switching views shrinks and grows the shell instead of hugging content. History renders one card per batch (1 px `--shell-border-soft` hairline, 6 px radius, `color-mix` of `--shell-chrome` toward `--shell-text`, the session turn-card material), while latest stays a flat current-turn list. Cards emphasize filenames over directory paths, align line counts, use localized status and timestamps, and share dark/paper theme tokens with reduced-motion support. The morph is owned by `TurnChangeIsland.css`: width and height animate on the elastic overshoot curve when expanding or switching views and on a snappy curve when collapsing, the body fades in behind the shell, and the superseded `turn-island-*` block in `globals.css` (dead class names plus a transition the component had overridden) is removed.
+
+The focused terminal auto-expands latest on a nonempty turn result when its pane is at least 240 px wide. Automatic and manual expansion both collapse after six seconds outside pointer hover and keyboard focus; leaving the island restarts the timer. Outside pointer-down collapses immediately, including when the terminal stops event propagation, because dismissal listens in capture phase. Escape and the collapse button remain available. Background terminals retain counts without stealing focus.
+
+Verification on 2026-10-20: `npx playwright test tests/e2e/turn-changes.spec.ts --project=island --workers=1 --output=artifacts/turn-island-auto-collapse` passed 10 browser cases, including timed automatic expansion/collapse, manual expansion with hover pause, and outside dismissal through stopped event propagation. Existing history, theme, keyboard and editor-routing cases also passed. This uses production React components with simulated IPC, not packaged desktop acceptance.
 
 ## Alternatives considered
 

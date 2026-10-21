@@ -81,6 +81,8 @@ export interface OfficeWorkspaceRequest {
 }
 
 export interface OfficeFileRequest extends OfficeWorkspaceRequest {
+  /** Optional registered Git worktree root, verified by the host. */
+  scopePath?: string
   relPath: string
 }
 
@@ -173,15 +175,16 @@ export function validateOfficeInvokeRequest<C extends OfficeInvokeChannel>(
   }
 
   if (!isRelPath(input.relPath)) return { ok: false }
+  if (input.scopePath !== undefined && (typeof input.scopePath !== 'string' || !input.scopePath.length || input.scopePath.length > 4096)) return { ok: false }
 
   if (channel === OFFICE_INVOKE_CHANNELS.startPreview) {
-    return hasOnlyKeys(input, ['workspaceId', 'relPath'])
+    return hasOnlyKeys(input, ['workspaceId', 'relPath', 'scopePath'])
       ? { ok: true, value: input as unknown as OfficeInvokeRequestMap[C] }
       : { ok: false }
   }
 
   if (channel === OFFICE_INVOKE_CHANNELS.stopPreview || channel === OFFICE_INVOKE_CHANNELS.reloadPreview) {
-    return hasOnlyKeys(input, ['workspaceId', 'relPath', 'previewLeaseId']) &&
+    return hasOnlyKeys(input, ['workspaceId', 'relPath', 'scopePath', 'previewLeaseId']) &&
       typeof input.previewLeaseId === 'string' && input.previewLeaseId.length > 0
       ? { ok: true, value: input as unknown as OfficeInvokeRequestMap[C] }
       : { ok: false }

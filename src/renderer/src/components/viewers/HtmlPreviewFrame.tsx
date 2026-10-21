@@ -1,3 +1,4 @@
+import { readFileViewState, saveFileViewState } from '@/lib/file-view-state'
 import { useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
@@ -15,8 +16,8 @@ interface HtmlPreviewFrameProps {
 
 export function HtmlPreviewFrame({ content, workspacePath, documentPath, scriptsEnabled = true, title }: HtmlPreviewFrameProps) {
   const { t } = useI18n('editor')
-  const [viewport, setViewport] = useState('1280x800')
-  const [zoom, setZoom] = useState('fit')
+  const [viewport, setViewport] = useState(() => readFileViewState(documentPath).viewport ?? '1280x800')
+  const [zoom, setZoom] = useState(() => readFileViewState(documentPath).zoom ?? 'fit')
   const [reload, setReload] = useState(0)
   const [size, setSize] = useState({ width: 1, height: 1 })
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -51,14 +52,14 @@ export function HtmlPreviewFrame({ content, workspacePath, documentPath, scripts
   const control = { background: 'var(--shell-canvas)', color: 'var(--shell-text)', border: '1px solid var(--control-border)', borderRadius: 4, padding: '3px 5px', maxWidth: '100%' }
   return <div className="flex h-full min-h-0 min-w-0 flex-col" data-html-preview>
     <div className="flex shrink-0 flex-wrap items-center gap-2 px-2 py-1.5 text-[11px]" style={{ background: 'var(--shell-chrome)', borderBottom: '1px solid var(--shell-border)' }}>
-      <select aria-label={t('editor:htmlViewer.viewport')} value={viewport} onChange={event => setViewport(event.target.value)} style={control}>
+      <select aria-label={t('editor:htmlViewer.viewport')} value={viewport} onChange={event => { setViewport(event.target.value); saveFileViewState(documentPath, { viewport: event.target.value }) }} style={control}>
         <option value="responsive">{t('editor:htmlViewer.responsive')}</option>
         <option value="1280x800">1280 × 800</option>
         <option value="1440x900">1440 × 900</option>
         <option value="1920x1080">1920 × 1080</option>
         <option value="390x844">390 × 844</option>
       </select>
-      <select aria-label={t('editor:htmlViewer.zoom')} value={zoom} disabled={responsive} onChange={event => setZoom(event.target.value)} style={control}>
+      <select aria-label={t('editor:htmlViewer.zoom')} value={zoom} disabled={responsive} onChange={event => { setZoom(event.target.value); saveFileViewState(documentPath, { zoom: event.target.value }) }} style={control}>
         <option value="fit">{t('editor:htmlViewer.fitWindow')} ({Math.round(scale * 100)}%)</option>
         {[50, 75, 100, 125, 150].map(value => <option key={value} value={value}>{value}%</option>)}
       </select>

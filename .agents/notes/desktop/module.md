@@ -16,7 +16,7 @@
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/index.ts","role":"entry"},
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/ipc/register.ts","role":"implementation"}
   ],
-  "updated": "2026-10-19T01:31:30Z",
+  "updated": "2026-10-20T10:35:14.505Z",
   "moduleState": "partial"
 }
 ---
@@ -30,6 +30,8 @@
 下列链接保留已有决策、阶段需求和交付记录的阅读路径；正文及生命周期由原 Note 负责。历史 parent 仅组织文档，跨模块关联由本声明的 related-to 补充。模块声明只在职责、接口、明确依赖或代码入口变化时维护。
 
 ## Design
+
+Window chrome follows the host platform: Windows uses right-side minimize/maximize/close and macOS uses left-side traffic lights. Internal dialogs keep a right-side close action; floating panels expose only supported actions. Shared state synchronization and limits are described in [window-controls](./window-controls.md).
 
 README 的内容架构、像素品牌形象与新 UI 多主题演示，见[展示与录制计划](./readme-presentation-plan.md)；10 条功能 GIF 已全部重录并接入，覆盖分屏两部曲、Island、运行配置、蓝图维护/自动审核、用量、会话、Worktree 与产物。八组静态素材齐备，工具四格、用量明细和外部会话补图已接入；录制机制、构建来源、数据边界及验证由 [readme-showcase](./readme-showcase.md) 维护。
 

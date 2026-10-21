@@ -1,3 +1,6 @@
+import { Maximize2, Minimize2 } from 'lucide-react'
+import { ModalCloseButton } from './ModalCloseButton'
+import { useI18n } from '@/i18n/useI18n'
 import { useState, useRef, useEffect, useCallback, type CSSProperties } from 'react'
 import { useThemeStore } from '@/stores/theme'
 
@@ -28,6 +31,7 @@ export function FloatingPanel({
   minHeight = 300,
   embedded = false,
 }: FloatingPanelProps) {
+  const { t } = useI18n('common')
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [size, setSize] = useState({ width: initialWidth, height: initialHeight })
   const [initialized, setInitialized] = useState(false)
@@ -190,32 +194,6 @@ export function FloatingPanel({
         }}
         onMouseDown={handleDragStart}
       >
-        <div
-          className="flex shrink-0 gap-2"
-          data-floating-panel-interactive
-          style={interactiveTitlebar}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            aria-label="Close panel"
-            onClick={onClose}
-            className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
-          />
-          <button
-            type="button"
-            aria-label="Minimize panel"
-            onClick={onClose}
-            className="h-3 w-3 rounded-full bg-[#ffbd2e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
-          />
-          <button
-            type="button"
-            aria-label={isMaximized ? 'Restore panel' : 'Maximize panel'}
-            onClick={handleToggleMaximize}
-            disabled={embedded}
-            className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)] transition hover:brightness-110 active:brightness-90"
-          />
-        </div>
         <div className="min-w-0 flex-1 overflow-hidden">
           {titlebarContent ?? (
             <span
@@ -236,6 +214,16 @@ export function FloatingPanel({
             {titlebarActions}
           </div>
         )}
+        <div className="flex shrink-0 items-center gap-1" data-floating-panel-interactive
+          style={interactiveTitlebar} onMouseDown={event => event.stopPropagation()}>
+          {!embedded && <button type="button" className="panel-header-action"
+            aria-label={t(isMaximized ? 'common:trafficLight.restore' : 'common:trafficLight.maximize')}
+            title={t(isMaximized ? 'common:trafficLight.restore' : 'common:trafficLight.maximize')}
+            onClick={handleToggleMaximize}>
+            {isMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>}
+          <ModalCloseButton onClose={() => { void onClose() }} />
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden" style={{ height: '100%' }}>

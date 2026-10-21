@@ -1,9 +1,9 @@
-import { memo, useState, useEffect, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from 'react'
+import { ModalCloseButton } from './ModalCloseButton'
+import { memo, useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronDown } from 'lucide-react'
 import { useSessionStore, type AgentSessionDetail, type AgentSessionSummary } from '@/stores/session'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useThemeStore } from '@/stores/theme'
 import { EMPTY_WORKTREE_LIST, useWorktreeStore } from '@/stores/worktree'
 import { useI18n } from '@/i18n/useI18n'
 import { ThemedTooltip } from '@/components/ui/ThemedTooltip'
@@ -338,7 +338,7 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
                 boxShadow: '0 24px 60px rgba(0,0,0,0.72)',
               }}
             >
-              <TrafficBar
+              <SessionDialogHeader
                 heading={t('terminal:agentSession.continueTitle')}
                 onClose={() => setContinueTarget(null)}
               />
@@ -424,73 +424,14 @@ function promptTitle(prompt: string): string {
   return first.length > 24 ? `${first.slice(0, 24)}…` : first
 }
 
-/**
- * Traffic-light title bar shared by the session modals. Matches the
- * StandaloneFileEditor / StandaloneBrowser spec: 38px bar on
- * rgba(6,6,6,0.96), three 12px lights on the left, mono centered title.
- * Only the red light acts (close); yellow/green hold the layout so the
- * title stays centered like a real window.
- */
-function TrafficBar({ heading, onClose }: { heading: ReactNode; onClose: () => void }) {
-  const { t } = useI18n('common')
-  // planche 纸面主题：标题栏走 shell 语义令牌，不再是写死的近黑色
-  const planche = useThemeStore((s) => s.theme) === 'planche'
-  const light = (background: string): CSSProperties => ({
-    width: 12,
-    height: 12,
-    border: 0,
-    borderRadius: '50%',
-    padding: 0,
-    background,
-    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.15)',
-  })
+/** In-app dialogs expose only the close operation they support. */
+function SessionDialogHeader({ heading, onClose }: { heading: ReactNode; onClose: () => void }) {
   return (
-    <div
-      className="flex items-center"
-      style={{
-        gap: 12,
-        height: 38,
-        flexShrink: 0,
-        padding: '0 12px',
-        userSelect: 'none',
-        background: planche ? 'var(--shell-pane-chrome)' : 'rgba(6, 6, 6, 0.96)',
-        borderBottom: planche ? '1px solid var(--shell-border)' : '1px solid var(--shell-border-soft)',
-      }}
-    >
-      <div className="flex" style={{ gap: 8, flexShrink: 0 }}>
-        <ThemedTooltip label={t('common:trafficLight.close')}>
-        <button
-          type="button"
-          aria-label={t('common:trafficLight.close')}
-          onClick={onClose}
-          className="cursor-pointer"
-          style={light('#ff5f57')}
-        />
-        </ThemedTooltip>
-        <ThemedTooltip label={t('common:trafficLight.minimize')}>
-        <button
-          type="button"
-          aria-label={t('common:trafficLight.minimize')}
-          disabled
-          style={{ ...light('#ffbd2e'), opacity: 0.5, cursor: 'default' }}
-        />
-        </ThemedTooltip>
-        <ThemedTooltip label={t('common:trafficLight.maximize')}>
-        <button
-          type="button"
-          aria-label={t('common:trafficLight.maximize')}
-          disabled
-          style={{ ...light('#28c840'), opacity: 0.5, cursor: 'default' }}
-        />
-        </ThemedTooltip>
-      </div>
-      <div
-        className="flex-1 min-w-0 overflow-hidden overflow-ellipsis whitespace-nowrap"
-        style={{ fontFamily: "'SF Mono', monospace", fontSize: 12, color: 'var(--shell-muted)', textAlign: 'center' }}
-      >
-        {heading}
-      </div>
-      <div style={{ width: 52, flexShrink: 0 }} />
+    <div className="flex shrink-0 items-center gap-3 px-3 select-none" style={{
+      height: 38, background: 'var(--shell-pane-chrome)', borderBottom: '1px solid var(--shell-border-soft)',
+    }}>
+      <div className="min-w-0 flex-1 truncate text-xs" style={{ color: 'var(--shell-muted)' }}>{heading}</div>
+      <ModalCloseButton onClose={onClose} />
     </div>
   )
 }
@@ -963,7 +904,7 @@ function SessionDetailWindow({
           boxShadow: '0 24px 60px rgba(0,0,0,0.72)',
         }}
       >
-        <TrafficBar
+        <SessionDialogHeader
           heading={
             <>
               <TerminalPresetIcon preset={iconPreset} alt={session.engine} style={{ width: 12, height: 12, display: 'inline-block', verticalAlign: -1, marginRight: 6 }} />

@@ -132,7 +132,7 @@ describe('planche theme contract', () => {
     expect(read('components/viewers/MarkdownViewer.tsx')).toContain('viewer-divider')
     expect(read('components/viewers/HtmlViewer.tsx')).toContain('viewer-divider')
     expect(read('components/viewers/HtmlViewer.tsx')).toContain('tbtn-accent')
-    expect(read('components/FileEditor.tsx')).toContain('filetab-close')
+    expect(read('components/StandaloneFileEditor.tsx')).toContain('filetab-close')
     expect(read('components/viewers/markdown-preview.css')).toContain('var(--shell-accent-soft)')
     expect(hovers).toContain('.viewer-divider:hover')
     expect(hovers).toContain('.filetab-close:hover')
@@ -184,7 +184,7 @@ describe('planche theme contract', () => {
     }
     expect(session).toContain('var(--shell-diff-del)')
     // 会话表面（列表卡片、详情 turn 卡片、轮次导航、输入框）
-    // 全部由 --shell-chrome 朝 --shell-text 混出的两档承担，弹窗遮罩与红绿灯除外。
+    // Session surfaces use theme tokens; modal scrims remain independent.
     // plankhe 的 --shell-void/canvas/pane/chrome/card 全是 #EFE4C5，纸面里没有更深的
     // 台阶：写死 rgba(0,0,0,.2x) 是冷灰油渍，写死 rgba(255,255,255,.0x) 等于没画，
     // 硬编码的 #8ab4ff 蓝在朱红纸面上完全跑调。三条都不许回来。
@@ -331,10 +331,10 @@ describe('planche theme contract', () => {
     expect(island.replaceAll('repeating-linear-gradient', '')).not.toMatch(/linear-gradient/)
   })
 
-  it('keeps close controls X-free on hover and papers menus/selects', () => {
+  it('keeps close marks visible without red hover and papers menus/selects', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
     const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
-    // 红灯关闭：悬浮不冒叉（双主题统一交互），命中判定保留
+    // Close marks stay visible across both themes.
     const globals = read('styles/globals.css')
     expect(globals).toContain('.modal-close-light::after,')
     expect(globals).toContain('.modal-close-light:hover::after')
@@ -496,22 +496,24 @@ describe('planche theme contract', () => {
     expect(knowledge).not.toContain('modal-frame-backdrop')
   })
 
-  it('puts the knowledge workbench close light at the top-left, like blueprint', () => {
+  it('keeps knowledge workbench close visible at the right with a stable 30px target', () => {
     const root = resolve(__dirname, '../../src/renderer/src')
     const read = (p: string) => readFileSync(resolve(root, p), 'utf8').replace(/\r\n/g, '\n')
     const tsx = read('components/knowledge/PersonalMemoryWorkbench.tsx')
     const css = read('components/knowledge/KnowledgeWorkbench.module.css')
-    // 红灯必须是 .header 的第一个子节点（标题之前），不是右侧动作组的末位
+    // The existing DOM selector stays stable; flex order places the close action at the right.
     const header = tsx.slice(tsx.indexOf('<header className={styles.header}'), tsx.indexOf('</header>', tsx.indexOf('<header className={styles.header}')))
     expect(header.indexOf('styles.closeButton')).toBeGreaterThan(-1)
     expect(header.indexOf('styles.closeButton')).toBeLessThan(header.indexOf('styles.breadcrumb'))
     // 关闭从动作组里移走，那一组只剩刷新一类动作
     const actions = header.slice(header.indexOf('styles.headerActions'))
     expect(actions).not.toContain('styles.closeButton')
-    // 与蓝图同位：14px 圆点不参与收缩，靠 .header 的左内边距留出 ::before 的 8px 外扩余量
+    // A 28px button with 1px hit slop preserves a 30px target without press-time scaling.
     expect(css).toMatch(/\.closeButton \{[^}]*flex: 0 0 auto;/)
+    expect(css).toMatch(/\.closeButton \{[^}]*order: 100;/)
+    expect(css).toMatch(/\.closeButton \{[^}]*width: 28px;/)
     expect(css).toMatch(/\.header \{[^}]*padding: 0 12px 0 14px;/)
-    expect(css).toMatch(/\.closeButton::before \{[^}]*inset: -8px;/)
+    expect(css).toMatch(/\.closeButton::before \{[^}]*inset: -1px;/)
   })
 
   it('serves left-rail hover hints from ThemedTooltip, not native title', () => {
@@ -538,7 +540,6 @@ describe('planche theme contract', () => {
     // 右侧同样：dock 栏/页签/会话面板提示走 ThemedTooltip
     for (const file of [
       'components/right-tools/RightToolRail.tsx',
-      'components/right-tools/RightToolTabs.tsx',
       'components/SessionPanel.tsx',
     ]) {
       const source = read(file)

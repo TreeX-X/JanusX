@@ -1780,47 +1780,29 @@
   box-shadow: none;
 }
 
-/* Note: 14px visual keeps a ~30px hit area via ::before so edge presses close — see .agents/notes/2026-09-21-workbench-close-hit-slop--8688b5ab.md */
-/* 交互约定（与 modal-close-light 统一）：红灯本身即关闭，悬浮不冒叉，直接点即可。 */
+/* Note: .agents/notes/workbench/workbench-close-hit-slop.md */
 .blueprint-workbench-close {
   position: relative;
-  justify-self: end;
-  width: 14px;
-  height: 14px;
+  order: 100;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
   flex: 0 0 auto;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: #ff5f56;
-  color: transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--shell-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.26),
-    0 0 0 1px rgba(0, 0, 0, 0.22);
 }
-
-.blueprint-workbench-close::before {
-  content: '';
-  position: absolute;
-  inset: -8px;
-  background: transparent;
-}
-
+.blueprint-workbench-close::before { content: ''; position: absolute; inset: -1px; }
 .blueprint-workbench-close::after,
-.blueprint-workbench-close:hover::after {
-  content: '\2715';
-  font-size: 8px;
-  line-height: 1;
-  font-weight: bold;
-  color: transparent;
-}
-
-.blueprint-workbench-close:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.6);
-  outline-offset: 2px;
-}
+.blueprint-workbench-close:hover::after { content: '\2715'; font-size: 16px; line-height: 1; color: currentColor; }
+.blueprint-workbench-close:hover { background: var(--shell-hover); color: var(--shell-text); }
+.blueprint-workbench-close:focus-visible { outline: 2px solid var(--shell-accent); outline-offset: 1px; }
 
 .blueprint-workbench-actions { display: flex; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 7px 14px; min-width: 0; max-width: 100%; }
 
