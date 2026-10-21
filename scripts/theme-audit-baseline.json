@@ -60,6 +60,18 @@
       "key": "literal-color:bg-white",
       "count": 1,
       "reason": "HTML/Office document canvas keeps its own page colors; only application chrome follows the theme."
+    },
+    {
+      "path": "src/renderer/src/components/StatusBar.tsx",
+      "key": "literal-color:bg-white",
+      "count": 1,
+      "reason": "The pairing QR quiet zone keeps a theme-independent light backing for camera scan contrast."
+    },
+    {
+      "path": "src/renderer/src/components/StatusBar.tsx",
+      "key": "literal-color:text-white",
+      "count": 3,
+      "reason": "Mobile host action buttons keep white labels on fixed positive/destructive palette fills until the remote panel UI polish restyles them to theme tokens."
     }
   ],
   "legacy": {

@@ -27,8 +27,8 @@ export function StatusBar() {
   }
   return <footer className="relative col-span-3 flex items-center justify-between px-3.5 text-[10px]" style={{ background: 'var(--shell-chrome)', borderTop: '1px solid var(--shell-border)', color: 'var(--shell-dim)' }}>
     <span><span className="mr-1.5 inline-block h-[5px] w-[5px] rounded-full" style={{ background: 'var(--shell-accent)' }} />{labels[load] ?? t('common:statusBar.ready')}</span>
-    <button type="button" onClick={() => setOpen(v => !v)} className="rounded px-2 py-1 hover:bg-white/[.06]">{remote?.running ? '远程已开启' : '开启手机远程'}</button>
-    {open && <div className="absolute bottom-7 right-2 z-50 w-[min(90vw,24rem)] rounded border border-white/10 bg-[#181818] p-3 text-xs text-white shadow-xl">
+    <button type="button" onClick={() => setOpen(v => !v)} className="rounded px-2 py-1 hover:bg-[var(--popover-hover)]">{remote?.running ? '远程已开启' : '开启手机远程'}</button>
+    {open && <div className="absolute bottom-7 right-2 z-50 w-[min(90vw,24rem)] rounded border border-[var(--shell-border)] bg-[var(--popover-background)] p-3 text-xs text-[var(--shell-text)] shadow-xl">
       <div className="mb-2 flex justify-between"><b>手机远程</b><button onClick={() => setOpen(false)}>×</button></div>
       <p role="status" className="mb-2">{remote?.pending ? '手机已连接，等待你批准' : remote?.state}</p>
       {error && <p role="alert" className="mb-2 text-red-400">{error}</p>}
@@ -38,7 +38,7 @@ export function StatusBar() {
         <button className="ml-1 rounded bg-red-700 px-2 py-1 text-white" onClick={() => void act(() => window.electron.remote.reject())}>拒绝</button>
       </div>}
       {remote?.devices.map(device => <div key={device.id} className="mt-2">已授权：{device.name}</div>)}
-      {remote?.running && <button className="mt-2 rounded bg-white/10 px-2 py-1" onClick={() => void act(() => window.electron.remote.stop())}>关闭远程</button>}
+      {remote?.running && <button className="mt-2 rounded bg-[var(--popover-hover)] px-2 py-1" onClick={() => void act(() => window.electron.remote.stop())}>关闭远程</button>}
     </div>}
   </footer>
 }
