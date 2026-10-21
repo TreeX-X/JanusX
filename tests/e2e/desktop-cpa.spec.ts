@@ -316,6 +316,16 @@ for (const tool of ['Browser', 'Markdown']) {
         await trigger.click()
         await page.getByRole('menuitem', { name: tool === 'Browser' ? 'Open the workspace browser' : 'Open a Markdown document', exact: true }).click()
         await expect(tab).toHaveCount(1)
+        if (tool === 'Browser') {
+          // Wait for the surface state to replace the provisional tab label;
+          // the built-in start page intentionally has no attached native view.
+          const id = (await tab.getAttribute('data-tab-id'))!.slice('browser:'.length)
+          await expect(page.locator('[data-browser-start-page]')).toBeVisible()
+          await expect.poll(() => page.evaluate(async id => {
+            const state = await (window as any).electron.browser.getState(id)
+            return state?.tabs.length > 0 && state.tabs.every((item: { isLoading: boolean }) => !item.isLoading)
+          }, id)).toBe(true)
+        }
       }
       await open()
       const tabId = await tab.getAttribute('data-tab-id')
@@ -341,7 +351,7 @@ for (const tool of ['Browser', 'Markdown']) {
       }
       await open()
       await tab.hover()
-      await close.click({ delay: 1100 })
+      await close.click({ delay: 1500 })
       await expect(tab).toHaveCount(0)
     } finally {
       if (app) await app.close()

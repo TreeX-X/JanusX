@@ -148,10 +148,10 @@ test('run-config assistant edits via launch-config tools and applies through the
 
     const launchModal = page.locator('.ws-config-modal')
     await expect(launchModal).toBeVisible()
-    // 红色关闭控件跳到左上角（落在弹窗左上区域）。
+    // Internal dialogs keep a localized close action in the upper-right corner.
     const modalBox = await launchModal.boundingBox()
-    const closeBox = await launchModal.getByRole('button', { name: 'Close' }).boundingBox()
-    expect(closeBox!.x).toBeLessThan(modalBox!.x + modalBox!.width / 3)
+    const closeBox = await launchModal.getByRole('button', { name: '关闭', exact: true }).boundingBox()
+    expect(closeBox!.x).toBeGreaterThan(modalBox!.x + modalBox!.width * 2 / 3)
     expect(closeBox!.y).toBeLessThan(modalBox!.y + modalBox!.height / 3)
     const composer = launchModal.locator('textarea[placeholder*="生成"]')
     await expect(composer).toBeVisible()

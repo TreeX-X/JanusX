@@ -296,10 +296,12 @@ test('Continue in New Session mints one card, delivers one handoff, and fails wi
       .poll(async () => page.locator('.xterm-rows').count(), { timeout: 15_000 })
       .toBeGreaterThan(xtermsBeforeUiContinue)
 
-    // Note: closing an extension view must leave its host-owned PTY alive — see
+    // Note: collapsing an extension view must leave its host-owned PTY alive — see
     // .agents/notes/workbench/requirements/plugin-architecture-forms.md (AC-6).
-    await page.getByRole('button', { name: '关闭 会话', exact: true }).click()
-    await expect(page.locator('#right-tool-panel-sessions')).toHaveCount(0)
+    await page.locator('#right-tool-rail-sessions').click()
+    await page.mouse.move(0, 0)
+    await expect(page.getByTestId('right-tool-panel-shell')).toHaveAttribute('aria-hidden', 'true')
+    await expect(page.getByTestId('right-tool-panel-shell')).toHaveAttribute('inert', '')
     const liveMarker = 'extension-panel-closed-still-running'
     await page.evaluate(({ terminalId, marker }) => {
       (window as DesktopWindow).electron.terminal.input(terminalId, `${marker}\r`)

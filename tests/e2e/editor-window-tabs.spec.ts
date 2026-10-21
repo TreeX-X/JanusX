@@ -240,6 +240,7 @@ test('HTML editor serves local styles, modules and images and previews unsaved c
     expect(await frame.locator('html').evaluate(() => typeof (window as any).electron)).toBe('undefined')
     const url = await page.locator('iframe').getAttribute('src')
     expect(url).toMatch(/^http:\/\/127\.0\.0\.1:/)
+    await page.getByRole('button', { name: /^(双栏|Split)$/ }).click()
     await page.locator('.monaco-editor').click()
     await page.keyboard.press('Control+End')
     await page.keyboard.type('<p id="draft">Unsaved preview</p>')

@@ -2,7 +2,7 @@ import { _electron as electron, expect, test, type ElectronApplication } from '@
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createDesktopTestEnv } from './desktop-test-env'
+import { createDesktopTestEnv, seedIntroducedLearning } from './desktop-test-env'
 
 test('default embedded opens, whole-session float and re-embed preserve drafts and subsequent routing', async ({}, testInfo) => {
   const root = await mkdtemp(join(tmpdir(), 'janusx-unified-files-'))
@@ -24,7 +24,9 @@ test('default embedded opens, whole-session float and re-embed preserve drafts a
     const main = await app.firstWindow()
     main.on('pageerror', error => console.log('Main page:', error.message))
     await main.waitForFunction(() => typeof (window as any).electron?.window?.openEditor === 'function')
-    await expect(main.locator('header').first()).toBeVisible({ timeout: 40_000 })
+    await seedIntroducedLearning(main)
+    await main.reload()
+    await expect(main.locator('button[data-id="tool-menu"]')).toBeVisible({ timeout: 40_000 })
     await main.evaluate(async path => { await (window as any).electron.workspace.create({ path, name: 'Files' }) }, workspacePath)
     // Exercise the production Office component and lease handoff without depending on a local OfficeCLI installation.
     await app.evaluate(({ ipcMain }) => {

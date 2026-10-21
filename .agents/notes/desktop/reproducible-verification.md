@@ -7,7 +7,7 @@
   "created": "2026-09-20",
   "class": "testing",
   "tags": ["ci","windows","electron","build-isolation"],
-  "updated": "2026-10-21T08:31:04Z",
+  "updated": "2026-10-21T17:28:34Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -23,6 +23,8 @@ A live Electron process retains hashed chunk paths from its startup build. If de
 On Windows, libuv's short-path directory watcher assertion terminates the worker before Vitest can report all failures. The native failure reproduces under Node 24.20.0/libuv 1.52.1 when a short directory alias and a short file alias are used together. The same probe completes under Node 24.15.0/libuv 1.51.0, or with the watched directory expanded by `realpathSync.native`. Upstream [libuv issue 5010](https://github.com/libuv/libuv/issues/5010) documents the same assertion and GitHub runner temporary paths.
 
 ## Decision
+
+For v0.9.4, the maintainer explicitly authorized committing all pending JanusX changes and pushing main and the release tag directly. The local Windows build uses an isolated JanusX worktree and a clean agentX worktree at the workflow's pinned `8baa18e5db8ca641871c139a5b76904bedc88dda`; the developer's sibling edits remain untouched. The serial CI-style unit run passed 3,685 tests with 23 configured skips, and llm-core passed 80 tests. Unpacked and portable runtime checks passed before tagging. Desktop fixtures follow the current rail collapse contract, localized upper-right dialog close action, platform window control attributes, embedded-first file opening and preview-first HTML mode. The Git interaction fixture creates a real repository; non-repository workspaces correctly omit Git actions. Startup waits for the actual tool-menu control rather than the hidden, persistently mounted conversation header. Browser holds wait for the start-page surface state and leave scheduling tolerance above the one-second threshold while retaining short-click, cancellation, keyboard, teardown and reopen assertions. These fixture updates do not change the packaged application code.
 
 Workspace outputs follow the [development guide](../../../docs/development.md#工作区文件归属): retain source and tracked fixtures, keep generated reports under artifacts, deliveries under release, and manual samples under artifacts/manual-fixtures. Cleanup checks resolved paths, tracked files, running processes and Git worktree registrations before changing anything. A cache name or ignore rule does not authorize deleting live output, application data or a registered checkout.
 

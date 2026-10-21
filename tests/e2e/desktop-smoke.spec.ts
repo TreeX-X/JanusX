@@ -7,6 +7,7 @@ import type { TerminalAPI } from '../../src/shared/ipc/terminal'
 import type { WorkspaceAPI } from '../../src/shared/ipc/workspace'
 import { createDesktopTestEnv, seedIntroducedLearning } from './desktop-test-env'
 import { createServer } from 'node:http'
+import { execFileSync } from 'node:child_process'
 import type { BrowserAPI } from '../../src/shared/ipc/browser'
 
 interface DesktopAPI {
@@ -161,6 +162,8 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
       ),
       writeFile(join(projectPath, 'vite.config.ts'), 'export default {}\n'),
     ])
+    execFileSync('git', ['init', '-b', 'main'], { cwd: workspacePath })
+    execFileSync('git', ['-c', 'user.name=Desktop Test', '-c', 'user.email=desktop-test@example.invalid', 'commit', '--allow-empty', '-m', 'fixture'], { cwd: workspacePath })
 
     application = await electron.launch({
       args: [entry, `--user-data-dir=${userDataDir}`],
@@ -295,13 +298,14 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     expect(modalBox?.width).toBeGreaterThan(900)
     expect(modalBox?.height).toBeLessThanOrEqual(760)
     await page.screenshot({ path: test.info().outputPath('workspace-launch-window.png') })
-    await launchModal.getByRole('button', { name: 'Close' }).click()
+    await launchModal.getByRole('button', { name: '关闭', exact: true }).click()
     await expect(launchModal).toHaveCount(0)
 
     const dock = page.locator('[aria-label="右侧工具 Dock"]')
     const rail = page.getByRole('toolbar', { name: '右侧工具' })
     const panelShell = page.getByTestId('right-tool-panel-shell')
     const expectPanelClosed = async () => {
+      await page.mouse.move(0, 0)
       await expect(panelShell).toHaveAttribute('aria-hidden', 'true')
       await expect(panelShell).toHaveAttribute('inert', '')
       await expect(panelShell).toHaveCSS('opacity', '0')
@@ -351,12 +355,11 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await page.getByRole('button', { name: /打开文件工具/ }).evaluate((element: HTMLElement) => element.click())
     await expect(page.getByRole('button', { name: '取消', exact: true })).toHaveCount(0)
 
-    await page.getByRole('button', { name: '关闭 Git' }).click()
-    await page.getByRole('button', { name: '关闭 文件' }).click()
-    expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(false)
+    await filesRailButton.click()
+    expect(await originalFilesPanel?.evaluate((element) => element.isConnected)).toBe(true)
     await expectPanelClosed()
     await expect(rail).toBeVisible()
-    await page.getByRole('button', { name: /打开文件工具，已关闭/ }).click()
+    await filesRailButton.click()
     await expect(panelShell).toBeVisible()
 
     const separator = page.getByRole('separator', { name: '调整右侧工具面板宽度' })
@@ -384,8 +387,11 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
 
     const fileRow = filesPanel.locator('[data-file-path="dock-file.txt"]')
     await expect(fileRow).toBeVisible()
-    const initialEditorWindowPromise = application.waitForEvent('window')
     await fileRow.dblclick()
+    const embeddedEditor = page.getByRole('region', { name: 'Embedded file editor' })
+    await expect(embeddedEditor).toBeVisible()
+    const initialEditorWindowPromise = application.waitForEvent('window')
+    await embeddedEditor.getByRole('button', { name: '返回独立浮窗' }).click()
     const initialEditorWindow = await initialEditorWindowPromise
     await initialEditorWindow.waitForLoadState('domcontentloaded')
     const initialPinButton = initialEditorWindow.getByRole('button', { name: '锁定窗口置顶' })
@@ -394,7 +400,6 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await expect(initialEditorWindow.getByRole('button', { name: '取消窗口置顶' })).toHaveAttribute('aria-pressed', 'true')
     await initialEditorWindow.getByRole('button', { name: '嵌入主窗口工作区' }).click()
 
-    const embeddedEditor = page.getByRole('region', { name: 'Embedded file editor' })
     await expect(embeddedEditor).toBeVisible()
     await expectPanelClosed()
     expect((await page.getByRole('main').boundingBox())?.width).toBeGreaterThanOrEqual(320)
@@ -412,7 +417,7 @@ test('built desktop exposes typed Workspace, Terminal, and Project critical path
     await restoredEditorWindow.getByRole('button', { name: '嵌入主窗口工作区' }).click()
 
     await expect(embeddedEditor).toBeVisible()
-    await embeddedEditor.getByRole('button', { name: 'Close panel' }).click()
+    await embeddedEditor.getByRole('button', { name: '收起文件面板', exact: true }).click()
     await expect(embeddedEditor).toHaveCount(0)
     await expect(panelShell).toBeVisible()
 
@@ -677,7 +682,7 @@ test('Browser load failure, retry, dialogs and close release native browser view
 
     // A DOM visibility assertion alone cannot detect a WebContentsView covering a dialog.
     // Check Electron's native child tree as well, then click the real cancel button.
-    const closeButton = page.locator('[class*="bg-[#ff5f57]"]')
+    const closeButton = page.locator('[data-window-action="close"]')
     await closeButton.click()
     const confirmation = page.getByRole('dialog', { name: 'Confirm close', exact: true })
     await expect(confirmation).toBeVisible()
