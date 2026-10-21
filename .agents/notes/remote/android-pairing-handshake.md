@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-20",
-  "updated": "2026-10-21T05:31:52Z",
+  "updated": "2026-10-21T06:34:49Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
   "tags": ["remote", "android", "pairing", "verification"]
 }
@@ -14,6 +14,26 @@
 # Android 与桌面配对握手
 
 手机扫码后先连接信令，再交换经过二维码密钥认证的 SDP，建立 UDP DataChannel，最后提交设备申请。电脑收到申请后才显示批准按钮。`SIGNAL connected` 仅表示 WebSocket 打开；关闭电脑远程时手机收到信令断开，也不能证明此前建立过 P2P。主动重连产生的旧连接 CLOSED 日志不应混入新连接状态。
+
+## 当前直连重试与诊断
+
+真机异网反馈为 SDP 已验证、local=2、srflx=1、remote=3，测试电脑是仓库开发版。当前 Windows 为该开发 Electron 路径配置了 Public 入站 UDP 放行；电脑向多个 STUN 目的地探测得到响应，并在同一探测 socket 观察到相同映射。以上只证明此次电脑 STUN 可达和手机收到候选，不证明所有候选已应用、手机 NAT 类型、无 CGNAT、或双方能互通。尚无真实手机的候选对检查统计，不能把故障归因确定为某侧防火墙或运营商。
+
+0.1.6 修复建连阶段一遇 ICE/PEER FAILED 就由 Activity 销毁整个传输的行为。电脑在未打开数据通道时最多自动协商三轮，每轮 20 秒，重建 PeerConnection 取得新的 ICE 凭据；手机保留信令，在下一份验签成功的 offer 到达时清理旧 peer 并创建新 peer。手机总建连等待由 45 秒调为 75 秒，留出信令和三轮检查时间。已打开的通道沿用原授权、断线恢复和健康连接保护，不因定时重试替换。重新收集能覆盖瞬时路径变化，但也有多等候和重复探测成本，不保证受限 NAT 一定成功。
+
+最终联调曾出现快速重连在入房时被 1008 拒绝：旧 WebSocket 的优雅关闭尚未释放房间。Android 主动断开改为立即取消旧 socket；新连接仅在尚未入房且收到 1008 时，最多间隔 500ms 重试三次，仍受总超时约束，入房后的协议拒绝不自动重试。旧 socket 回调不能污染新连接。该问题与 UDP 打洞失败分开诊断，不通过放宽房间角色唯一性处理。
+
+双方本地 SDP 成功设置且签名消息送出后才发送缓存候选，避免候选早于 SDP 的时序依赖。候选携带 usernameFragment，answer 携带对应 offerUfrag；以 SDP 中的 ICE ufrag 拒绝旧轮次候选/应答，并检查候选文本内的 ufrag。异步 SDP、候选和关闭回调绑定具体 peer 代次，旧原生回调不能关闭或污染新连接。字段缺失仍兼容旧 v1 消息，但完整重试应同时更新桌面与 Android。
+
+候选应用失败不再直接清理整条桌面链路，继续检查其他候选并独立计数。Android 区分 remote 收到、applied 成功、rejected 拒绝，重试时重置当前轮次计数；记录本地 IPv6 候选数，显式保留所有网络、Wi-Fi IPv6 和持续收集策略。双方诊断可报告候选对数量、检查请求、应答和成功数量，Android 在等待八秒及原生失败时读取统计，电脑在重试前读取；不记录候选地址、SDP 或密钥。零应答不能单独确定阻塞发生在哪一侧。辅助 nat-probe 也移除“公网映射排除 CGNAT”等过度结论。
+
+信令继续拒绝 TCP、relay 和业务消息，只允许有界的 ICE 代次元数据；真实传输仍需验证选中 UDP 非 relay 路径，不引入 TURN。公网信令长期方案与临时隧道区别见[部署说明](../../../scripts/remote-lab/signaling.md)，当前尚无已运营的公共默认入口。
+
+0.1.6 验证：`npx vitest run tests/unit/mobile-ice-retry.test.ts tests/unit/mobile-signaling.test.ts tests/unit/mobile-handshake.test.ts tests/unit/mobile-network.test.ts tests/unit/mobile-host-feature-gate.test.ts tests/unit/mobile-terminal-stream.test.ts tests/unit/workspace-remote-terminal-sync.test.ts tests/unit/experimental-features.test.ts --maxWorkers=2` 通过 39 项，覆盖 SDP 先于候选、原生失败/超时最多三轮、旧 ICE 代次丢弃、旧 SDP 操作迟到失败不关闭新 peer、IPv6/代次元数据转发及 TCP/relay/业务消息拒绝。TypeScript、变更生产 TS 的 ESLint、桌面构建和独立信令构建通过。Android Build 通过 APK、6 项 Java 单测和 lint（0 errors、15 warnings）。
+
+最终 `$env:JANUSX_SMOKE_RETRY='1'; node scripts/android-lab/desktop-smoke.mjs` 对真实 Electron 与 Android 模拟器通过 17 项，证据为 `artifacts/android-lab/desktop-smoke-MP0nOA/`：首轮候选故意阻断后第二轮原生 UDP 成功；重连时故意占用 client 角色，手机短暂等待后入房；再次快速重连保持同一真实 Claude 终端；审批、VT 显示、同步及开关关闭保活复验通过。中间 `desktop-smoke-WH12Xc` 的 1008 快速重连失败已如上修复，不能作为通过证据。Android APK 为 0.1.6，需与桌面一起更新。
+
+临时 Node 信令已重建并在原端口重启，Cloudflare 隧道及地址保持不变；当前 PID 以 `artifacts/remote-signal/quick-tunnel/runtime.json` 为准。公网验证 `node artifacts/remote-signal/quick-tunnel/verify-public.mjs wss://programme-columbus-efficient-snap.trycloudflare.com/signal` 通过七项，包含新增双向 IPv6 UDP 候选及 ICE 代次透传；证据为同目录 `public-verification.json`。真实手机异网、实际 IPv6 路径、受限 NAT、弱网和长期可靠性仍未验收，不将上述回环或公网信令结果当作真机 UDP 问题已解决。
 
 ## 实现与修复
 
@@ -65,7 +85,7 @@ Android 将原生文本框替换为离线 WebView 中的 xterm 6，复用桌面�
 
 隐藏 WebRTC 窗口在 DataChannel 打开后最多约两秒重试读取选中候选对，避免统计稍晚出现导致已有 UDP 通道被误拒绝；确认前仍有界暂存 hello，未验证 UDP 或选中 relay/TCP 时仍拒绝。STUN 错误和本地 UDP/映射候选数量进入状态提示。自身信令失败/关闭时保留独立的已打开通道，重新加入不主动替换健康通道；若新手机已加入而旧通道随后关闭，则继续协商，避免快速重连漏掉 offer。信令明确通知对端离开房间时关闭通道，保证电脑停止远程后手机及时识别断开；这也意味着对端仅丢失信令时可能需要手动重连。失败原因在清理后上报，避免被通用“连接已断开”覆盖。
 
-Android 使用阶段和候选计数区分信令未连通、未加入会话、等待电脑 offer、SDP 已验证但 UDP 未建立。45 秒总建连超时给出当前阶段提示；即时信令错误记录异常类别和 HTTP 状态，不记录二维码/密钥或候选地址。ICE 失败指出 STUN 映射及对端候选是否到达，界面保留具体错误，数据通道打开后的信令丢失不杀终端。阶段计数帮助定位，不能单凭有无 srflx 推断所有网络的 NAT 类型或可达性。
+Android 使用阶段和候选计数区分信令未连通、未加入会话、等待电脑 offer、SDP 已验证但 UDP 未建立。总建连超时给出当前阶段提示；即时信令错误记录异常类别和 HTTP 状态，不记录二维码/密钥或候选地址。ICE 失败指出 STUN 映射及对端候选是否到达，界面保留具体错误，数据通道打开后的信令丢失不杀终端。阶段计数帮助定位，不能单凭有无 srflx 推断所有网络的 NAT 类型或可达性。
 
 本机桌面 STUN 探测收到 Google STUN 响应，仅证明该电脑在此次探测中能访问该 STUN，不证明真实手机 UDP 可达、无 CGNAT 或异网验收完成。无中继无法保证任意 NAT/蜂窝网络联通；需公网信令与双方日志继续真机验证，当前异网验收项保持未勾选。
 

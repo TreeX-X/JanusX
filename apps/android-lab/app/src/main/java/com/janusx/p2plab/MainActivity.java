@@ -242,7 +242,7 @@ public final class MainActivity extends Activity implements LabTransport.Listene
             });
             transport.connect(signalUrl.getText().toString().trim(), payload, stun.getText().toString().trim(), pairingSecret);
             onStatus("正在连接电脑，请稍候…");
-            handler.postDelayed(connectionTimeout, 45000);
+            handler.postDelayed(connectionTimeout, 75000);
         } catch (Exception e) { disconnect(); onStatus("CONNECT failed: " + e.getMessage()); }
     }
     private void disconnect() {

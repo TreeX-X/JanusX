@@ -28,4 +28,18 @@ public class ConnectionDiagnosticsTest {
         assertFalse(d.timeoutHint().contains("192.168.1.2"));
         assertFalse(d.timeoutHint().contains("203.0.113.1"));
     }
+
+    @Test public void separatesReceivedAppliedRejectedAndPathChecksForEachAttempt() {
+        ConnectionDiagnostics d = new ConnectionDiagnostics();
+        d.connected(); d.joined(); d.offer();
+        d.localCandidate("candidate:1 1 udp 123 2001:db8::1 2345 typ host");
+        d.remoteCandidate(); d.remoteCandidate(); d.applied(); d.rejected();
+        d.checks(3, 8, 0, 0);
+        assertTrue(d.timeoutHint().contains("applied=1 rejected=1 ipv6=1 round=1"));
+        assertTrue(d.timeoutHint().contains("pairs=3 checks=8 responses=0 succeeded=0"));
+        assertFalse(d.timeoutHint().contains("2001:db8"));
+        d.offer();
+        assertTrue(d.timeoutHint().contains("local=0 srflx=0 remote=0 applied=0 rejected=0 ipv6=0 round=2"));
+        assertFalse(d.timeoutHint().contains("checks=8"));
+    }
 }

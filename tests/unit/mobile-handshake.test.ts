@@ -96,7 +96,7 @@ describe('mobile pairing', () => {
     runInNewContext(source, {
       window: { remoteTransport: { send: (m: any) => messages.push(m), onMessage: (cb: any) => { bridgeCallback = cb } } },
       WebSocket: Socket, RTCPeerConnection: Peer, crypto: webcrypto, TextEncoder,
-      setTimeout: (callback: () => void, ms: number) => setTimeout(callback, Math.min(ms, 1)), clearTimeout,
+      setTimeout: (callback: () => void, ms: number) => ms >= 12000 ? undefined : setTimeout(callback, Math.min(ms, 1)), clearTimeout,
     })
     bridgeCallback({ type: 'start', signalUrl: 'ws://localhost', invite: 'a'.repeat(48), secret: 'b'.repeat(64), stun: '' })
     ws.onmessage({ data: JSON.stringify({ type: 'peer-ready' }) })

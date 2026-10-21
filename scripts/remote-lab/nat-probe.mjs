@@ -1,8 +1,8 @@
 // Minimal STUN binding probe (RFC 5389). The remote lab records only candidate types, never addresses, so a failed
 // cross-network run cannot tell "this host has no usable public address" from "it has one the peer cannot reach".
-// The mapped address a STUN server reports is the number that decides whether no-TURN hole punching can work at all:
-// an address in 100.64.0.0/10 is shared carrier-grade space, so the peer has nothing routable to send to and no
-// amount of ICE retrying will help. This is a diagnostic only; it sends one UDP packet and prints no terminal data.
+// A binding response proves reachability of this STUN destination only. Even a public mapping does not rule out
+// CGNAT or describe peer filtering. A shared address does not classify every potential IPv4/IPv6 peer path.
+// This diagnostic sends one UDP packet and prints no terminal data.
 import { createSocket } from 'node:dgram'
 import { lookup } from 'node:dns/promises'
 
@@ -36,8 +36,9 @@ socket.on('message', message => {
       console.log('STUN server       : ' + server + ' (' + addresses[0] + ')')
       console.log('Mapped address    : ' + address + ':' + mappedPort)
       console.log('Shared CGNAT space: ' + (shared
-        ? 'YES (100.64.0.0/10). The peer has no routable address to send to, so no-TURN hole punching cannot work on this network.'
-        : 'no. The mapped address is ordinary public space, so a failure here points at the router firewall, the peer side, or symmetric NAT.'))
+        ? 'YES (100.64.0.0/10). This mapping is not globally routable; inspect actual peer paths, including IPv6.'
+        : 'no. This does not rule out CGNAT, endpoint-dependent mappings or peer filtering.'))
+      console.log('Scope            : STUN binding only; not a NAT classification or proof of UDP P2P connectivity.')
     }
     offset += 4 + length + ((4 - (length % 4)) % 4)
   }

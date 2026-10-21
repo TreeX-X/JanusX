@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, writeFile, readdir } from 'node:fs/promises'
 import { delimiter, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
+import WebSocket from 'ws'
 
 const artifacts = resolve('artifacts/android-lab')
 await mkdir(artifacts, { recursive: true })
@@ -47,7 +48,7 @@ async function tap(text) {
 await build({ entryPoints: ['src/main/remote/signaling.ts'], outfile: join(root, 'signaling.mjs'), bundle: true, platform: 'node', format: 'esm', packages: 'external' })
 const { startSignaling } = await import(pathToFileURL(join(root, 'signaling.mjs')).href)
 const signaling = await startSignaling(0, '0.0.0.0')
-let app, page, terminalId, androidDevice
+let app, page, terminalId, androidDevice, occupiedSocket
 const report = { scope: 'Real Electron + Android emulator; local UDP, not Internet/optical scan validation', checks: [] }
 const passed = name => { report.checks.push(name); console.log(`PASS: ${name}`) }
 try {
@@ -91,6 +92,31 @@ try {
   await page.evaluate(options => window.electron.remote.start(options), { workspaceId: workspace.id, signalUrl: `ws://127.0.0.1:${signaling.port}/signal`, stunUrl: '' })
   await expect(page.getByRole('status').filter({ hasText: '信令已就绪' })).toBeVisible({ timeout: 15000 })
   passed('Sandboxed CJS preload loaded; desktop joined signaling')
+  if (process.env.JANUSX_SMOKE_RETRY === '1') {
+    // Test-only fault injection: neither side learns the first host's candidates.
+    // Production SDP signatures and the second native UDP attempt stay intact.
+    await app.evaluate(async ({ BrowserWindow }) => {
+      const host = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('remote-host.html'))
+      if (!host) throw Error('Remote host window missing')
+      await host.webContents.executeJavaScript(`(() => {
+        const NativePeer = window.RTCPeerConnection;
+        let peers = 0, offers = 0;
+        window.RTCPeerConnection = class extends NativePeer {
+          constructor(config) {
+            super(config);
+            if (++peers === 1) this.addIceCandidate = async () => {};
+          }
+        };
+        const send = WebSocket.prototype.send;
+        WebSocket.prototype.send = function(text) {
+          const message = JSON.parse(text);
+          if (message.type === 'offer') offers++;
+          if (offers === 1 && message.type === 'candidate') return;
+          return send.call(this, text);
+        };
+      })()`)
+    })
+  }
   const status = await page.evaluate(() => window.electron.remote.status())
   await writeFile(join(root, 'qr.png'), Buffer.from(status.qr.split(',')[1], 'base64'))
   const jdk = (await readdir(tools)).find(name => name.startsWith('jdk-17'))
@@ -117,9 +143,16 @@ try {
   adb('logcat', '-c')
   passed('Android reports an unreachable signal before attempting UDP and keeps the actionable error visible')
   adb('shell', 'am', 'start', '-n', 'com.janusx.p2plab/.MainActivity', '--es', 'invite', quoted, '--ez', 'autoconnect', 'true')
-  await until(async () => Boolean((await page.evaluate(() => window.electron.remote.status())).pending), 'Android pending approval')
+  await until(async () => Boolean((await page.evaluate(() => window.electron.remote.status())).pending), 'Android pending approval', 45000)
   await expect(page.getByText('设备申请：Android', { exact: false })).toBeVisible({ timeout: 5000 })
   passed('Authenticated SDP, UDP DataChannel and pending approval appear automatically')
+  if (process.env.JANUSX_SMOKE_RETRY === '1') {
+    const log = adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S')
+    expect(log.match(/SDP desktop verified/g)?.length).toBeGreaterThanOrEqual(2)
+    expect(log).toContain('round=2')
+    await writeFile(join(root, 'retry.log'), log)
+    passed('First UDP negotiation blocked; Android keeps signaling and second native UDP attempt succeeds')
+  }
   expect(dumpUi()).toMatch(/text="新建 Claude"[^>]*enabled="false"/)
   passed('Unapproved Android disables terminal creation')
   await page.getByRole('button', { name: '批准', exact: true }).click()
@@ -179,11 +212,31 @@ try {
   await tap('同步')
   await until(async () => /Claude\s*Code|Anthropic|Welcome|trust/i.test(await androidPage.locator('.xterm-rows').innerText()), 'resync restores real terminal after rendering fixture')
   passed('VT rendering fixture handles split erase/cursor sequences and Chinese/emoji, then restores real output')
-  await tap('断开'); await tap('连接')
+  await tap('断开')
+  if (process.env.JANUSX_SMOKE_RETRY === '1') {
+    // Hold the old room role deliberately to exercise native Android join retry.
+    occupiedSocket = new WebSocket(`ws://127.0.0.1:${signaling.port}/signal`)
+    await new Promise((resolve, reject) => {
+      occupiedSocket.once('error', reject)
+      occupiedSocket.once('close', code => reject(Error(`Room was not released: ${code}`)))
+      occupiedSocket.once('open', () => occupiedSocket.send(JSON.stringify({ type: 'join', role: 'client', invite: qr.invite })))
+      occupiedSocket.on('message', raw => { if (JSON.parse(String(raw)).type === 'joined') resolve() })
+    })
+  }
+  await tap('连接')
+  if (occupiedSocket) {
+    await until(() => adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S').includes('SIGNAL 尚未加入会话，正在自动重试'), 'temporary room occupancy retried', 5000)
+    occupiedSocket.terminate(); occupiedSocket = undefined
+    passed('Android waits and retries when the previous signaling role has not yet been released')
+  }
   await until(() => adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S').match(/RECV approved/g)?.length >= 2, 'device reconnect approved')
   await until(async () => /Claude\s*Code|Anthropic|Welcome|trust/i.test(await androidPage.locator('.xterm-rows').innerText()), 'same terminal restored on phone')
   expect((await page.evaluate(() => window.electron.remote.status())).terminals.map(t => t.id)).toEqual([terminalId])
   passed('Reconnect restores the same terminal and screen without creating another process')
+  await tap('断开'); await tap('连接')
+  await until(() => adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S').match(/RECV approved/g)?.length >= 3, 'second fast reconnect approved')
+  expect((await page.evaluate(() => window.electron.remote.status())).terminals.map(t => t.id)).toEqual([terminalId])
+  passed('Repeated fast reconnect releases the old socket and keeps the same terminal')
   const beforeStopLog = adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S')
   await page.evaluate(() => window.electron.experimental.update({ remoteControl: false }))
   expect((await page.evaluate(() => window.electron.remote.status())).running).toBe(false)
@@ -208,6 +261,7 @@ try {
   adb('shell', 'am', 'force-stop', 'com.janusx.p2plab')
   await androidDevice?.close()
   await app?.close()
+  occupiedSocket?.terminate()
   await signaling.close()
   console.log(`Evidence: ${root}`)
 }

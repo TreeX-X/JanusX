@@ -32,8 +32,10 @@ export async function startSignaling(port = 43821, listen = '127.0.0.1') {
         if (m.type === 'candidate') {
           if (typeof d?.candidate !== 'string' || d.candidate.length > 4096 || !/ udp /i.test(d.candidate)
             || / typ relay(?: |$)/i.test(d.candidate) || !Number.isInteger(d.sdpMLineIndex) || typeof d.sdpMid !== 'string') throw Error('candidate')
+          if (d.usernameFragment !== undefined && (typeof d.usernameFragment !== 'string' || d.usernameFragment.length > 256)) throw Error('generation')
         } else if (m.type === (role === 'host' ? 'offer' : 'answer')) {
           if (d?.type !== m.type || typeof d.sdp !== 'string' || d.sdp.length > 100000 || !/^[a-f0-9]{64}$/.test(d.mac)) throw Error('sdp')
+          if (d.offerUfrag !== undefined && (typeof d.offerUfrag !== 'string' || d.offerUfrag.length > 256)) throw Error('generation')
         } else throw Error('only SDP/ICE allowed')
         const other = rooms.get(room)?.get(role === 'host' ? 'client' : 'host')
         if (other?.readyState === WebSocket.OPEN) other.send(JSON.stringify({ type: m.type, data: d }))
