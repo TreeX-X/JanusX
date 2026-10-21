@@ -227,10 +227,39 @@ try {
   adb('pull', '/sdcard/janus-terminal.png', join(root, 'android-terminal.png'))
   await page.screenshot({ path: join(root, 'desktop-terminal.png') })
   passed('Bundled offline xterm paints real Claude screen without control codes or connection logs')
+  if (process.env.JANUSX_SMOKE_RENDER_FAILURE === '1') {
+    const log = adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S')
+    expect(log).toMatch(/TERMINAL WebView=.+; Android=.+; App=/)
+    expect(log).not.toContain('favicon.ico')
+    await androidPage.evaluate(() => {
+      const icon = document.createElement('img')
+      document.body.appendChild(icon)
+      icon.dispatchEvent(new Event('error'))
+      icon.remove()
+    })
+    expect(await androidPage.locator('#loading').isVisible()).toBe(false)
+    await androidPage.evaluate(() => window.dispatchEvent(new ErrorEvent('error', { message: 'Uncaught SyntaxError: Unexpected token ? [test fixture]' })))
+    await until(() => adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S').includes('Unexpected token ? [test fixture]'), 'script failure reaches native diagnostics')
+    // A known syntax failure must not be replaced by a later generic timeout.
+    await delay(21000)
+    expect(dumpUi()).toContain('Unexpected token ? [test fixture]')
+    await tap('同步')
+    await until(async () => /Claude\s*Code|Anthropic|Welcome|trust/i.test(await androidPage.locator('.xterm-rows').innerText()), 'sync recovers renderer after a reported script failure')
+    expect(await androidPage.locator('#loading').isVisible()).toBe(false)
+    expect((await page.evaluate(() => window.electron.remote.status())).terminals.map(t => t.id)).toEqual([terminalId])
+    passed('Icon errors stay nonfatal; script errors retain their cause past startup deadlines; sync restores the same PTY')
+  }
+  if (process.env.JANUSX_SMOKE_LEGACY_APIS === '1') {
+    await androidPage.addInitScript(() => {
+      delete window.queueMicrotask
+      delete Element.prototype.replaceChildren
+    })
+  }
   await androidPage.reload()
   await until(async () => /Claude\s*Code|Anthropic|Welcome|trust/i.test(await androidPage.locator('.xterm-rows').innerText()), 'renderer reload automatically restores real terminal', 30000)
   expect((await page.evaluate(() => window.electron.remote.status())).terminals.map(t => t.id)).toEqual([terminalId])
   passed('Reloading the Android terminal renderer automatically replays the same live PTY without creating a process')
+  if (process.env.JANUSX_SMOKE_LEGACY_APIS === '1') passed('Final APK restores real Claude output with queueMicrotask and replaceChildren removed before page initialization')
   if (process.env.JANUSX_SMOKE_QR === '1') {
     await until(async () => (await page.evaluate(() => window.electron.remote.status())).expiresAt > status.expiresAt, 'automatic pairing renewal while UDP remains connected', 150000)
     const renewed = await page.evaluate(() => window.electron.remote.status())

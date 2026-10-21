@@ -48,7 +48,7 @@ export class TerminalStream {
 
 declare global {
   interface Window {
-    AndroidTerminal: { ready(): void; resync(): void; status(text: string): void }
+    AndroidTerminal: { ready(): void; resync(): void; status(text: string): void; failed(text: string): void }
     mobileTerminal: { select(id: string): void; receive(m: unknown): void; font(delta: number): void; fit(): void; bottom(): void }
   }
 }

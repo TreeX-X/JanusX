@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-20",
-  "updated": "2026-10-21T12:05:48Z",
+  "updated": "2026-10-21T15:38:35Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
   "tags": ["remote", "android", "pairing", "verification"]
 }
@@ -17,7 +17,7 @@
 
 ## 真机反馈与下一步（2026-10-21）
 
-用户在 Pages 入口观察到信令入房、SDP 验签与候选应用成功。VPN 开启时三轮 UDP 检查均无应答，关闭 VPN 后报告连接成功，并确认手机发送输入可用；这是该次网络条件的用户反馈，不能据此确定加速器内部机制或覆盖其他 NAT/运营商。用户随后确认 Android 终端区域从一开始就空白，故连续输出与完整交互真机验收仍未通过，不能以“已连通”代替终端可用性。当前模拟器能绘制真实启动输出，尚未复现该手机的唯一根因。
+用户在 Pages 入口观察到信令入房、SDP 验签与候选应用成功。VPN 开启时三轮 UDP 检查均无应答，关闭 VPN 后报告连接成功，并确认手机发送输入可用；这是该次网络条件的用户反馈，不能据此确定加速器内部机制或覆盖其他 NAT/运营商。用户随后确认 Android 终端区域从一开始就空白，故连续输出与完整交互真机验收仍未通过，不能以“已连通”代替终端可用性。后续脚本错误已在旧版 Chromium 复现并修复；实际手机仍需安装 0.1.12 复验。
 
 用户确认的三项改进已进入实现，真机仍需使用新版复测：
 
@@ -42,6 +42,23 @@ Android 离线终端此前没有启动超时、资源错误或脚本失败反馈
 `npm run check:notes` 全仓存在 4 个断链，均指向工作树中已删除的 `wiki/assets/readme` 文件，与本次远程修改无关；保留现状，未纳入提交或声称全仓文档门禁通过。早期 smoke 因桌面新增第二处状态显示导致 locator 重复匹配，已将定位限定到底栏 span，并在最终运行复验。
 
 ## 当前入口与版本记录
+
+### 0.1.12 WebView 脚本兼容
+
+用户在新版诊断中报告 `Uncaught SyntaxError: Unexpected token ?`，同步后重复出现；同时出现自动请求 favicon.ico 被 `img-src 'none'` 拦截的控制台消息。构建实际使用 `target: chrome80`，完整 xterm bundle 保留 `??`，不支持该语法的 WebView 在初始化前即停止，解释终端从一开始空白及重载无效。旧诊断把所有 ERROR 级控制台消息称作脚本错误，导致图标 CSP 消息误导定位；它不证明 UDP、订阅或 PTY 输出失败。实际手机 WebView 版本尚未取得。
+
+终端 bundle 降为 Chrome 58 语法目标，与 minSdk 26 的较早 WebView 语法基线对齐；实际运行验证版本见下文，不声明所有旧引擎均已测试。浏览器专用构建将 xterm 的 globalThis 引用绑定为 window，避免仅降语法后仍因新全局接口启动失败。Acorn 作为显式开发依赖检查完整产物能以 ES2017 解析，并验证旧构建失败、新构建通过。没有更改桌面 xterm 或信令协议。
+
+实测旧引擎进一步发现 xterm 6 的 DOM 行渲染依赖 Element.replaceChildren，仅降级语法仍会失败。boot.js 在主 bundle 前为缺少 replaceChildren 的引擎提供节点/文本片段替换，为缺少 queueMicrotask 的引擎用 Promise 微任务补齐接口；原生支持时保留原实现。字符测量的 OffscreenCanvas 已由 xterm 自带 DOM 回退处理，不额外替换。`terminal-compat-smoke.mjs` 通过原生 CDP 加载完整离线资源，不使用现代 Playwright 注入来假装旧 JS 引擎。
+
+离线页提供白名单本地 favicon.svg，CSP 图片只允许自身来源，继续禁止外部连接、文件/content 访问和导航。boot.js 只将实际脚本异常和 script 资源失败提交为致命错误；原生控制台也仅接受 Uncaught 异常，不再把任意 CSP 图标消息归为终端脚本失败。首个脚本错误停止启动超时及无效自动重载，后续输出不再徒增缓存；「同步」仍可重新加载页面并订阅原 PTY。WebView 关闭缓存以保证升级后读取新脚本；启动日志记录实际 WebView 包名/版本、Android 和 App 版本。Android 版本为 0.1.12/code 13。
+
+2026-10-21 UTC 交付前执行两种环境验证：
+
+- `node scripts/android-lab/terminal-compat-smoke.mjs` 在真实 HeadlessChrome/72.0.3582.0 引擎通过四项检查。旧 chrome80 bundle 复现同一 `SyntaxError: Unexpected token ?`；新产物完成初始化、ANSI/中文/emoji 回放、实时输出及重载恢复，唯一异常是故意加载的旧构建。证据：`artifacts/android-lab/terminal-compat-KU6ikY/report.json` 与 `legacy-screen.png`。这是桌面旧引擎渲染 fixture，不是该手机的 WebView 或真实 CLI 验收。
+- 设置 `JANUSX_SMOKE_RENDER_FAILURE=1`、`JANUSX_SMOKE_LEGACY_APIS=1` 后运行 `node scripts/android-lab/desktop-smoke.mjs`，最终 0.1.12 APK 在 Android 15/WebView 124.0.6367.219 模拟器通过 21 项功能检查。覆盖本机真实 Electron/UDP、手机新建 Claude、桌面终端显示、启动输出、发送 `/help` 后的真实本地命令响应、同步及同 PTY 重连。注入脚本错误后等待 21 秒仍保留首因；同步恢复；移除 queueMicrotask/replaceChildren 后仍显示实际输出。证据：`artifacts/android-lab/desktop-smoke-wNZv8y/report.json`、`android-terminal.png`、`android-help-screen.txt` 和 `android.log`。API 缺失注入不能替代旧解析器测试；`/help` 不代表模型对话或公网跨网测试。
+
+十个远程相关 Vitest 文件共 50 项通过（包含四项新增兼容测试），`npm run typecheck` 通过；`scripts/android-lab/run.ps1 -Action Build` 构建、12 项 Java 测试和 lint 通过（0 errors、14 warnings），日志 `artifacts/android-lab/webview-compat-build.log`。交付副本 `artifacts/android-lab/JanusX-Android-0.1.12.apk` 通过 APK v2 签名验证；安装包和测试证据保持 Git 忽略。真实手机 WebView 版本、连续交互及跨网验收仍待新版复测。
 
 ### 桌面配对面板视觉层级
 

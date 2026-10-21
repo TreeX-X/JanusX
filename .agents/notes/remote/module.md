@@ -32,7 +32,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-21T11:17:26Z",
+  "updated": "2026-10-21T15:38:35Z",
   "moduleState": "partial"
 }
 ---
@@ -48,6 +48,8 @@
 配对握手专题维护 Android App 内 HTTPS/WSS 分别诊断、日志复制及其可观测边界。当前默认免费入口为 `wss://janusx-signal-entry.pages.dev/signal`，经服务绑定复用原 Worker/房间；用户在手机关闭 VPN 后报告连通且输入可发送，但终端从开始就空白，完整真机交互尚未验收。0.1.11 补充终端加载/脚本错误、启动超时重载、就绪后自动回放及同步恢复；桌面状态栏持续显示协商阶段，二维码显示倒计时，到期生成新邀请并保留已授权旧传输和终端。详见[配对体验改进](./android-pairing-handshake.md#0111-体验改进)和需求 AC-3/8/9/10。浏览器健康页成功不等于 App 的 WSS、VPN 路由或 UDP 已验证。
 
 模块覆盖已存在的受控网关与托管平台入口，不声明完整团队身份、服务端同步或 LaunchSurface 已实现。ToB 身份及传输文档保留原生命周期，其计划需要独立交付；下列历史 LAN 决策也不能替代对当前身份及授权实现的核验。远程对象是会话与工作流，不是整机桌面或任意键鼠控制。
+
+用户后续提供的 `Unexpected token ?` 将空白故障指向 WebView 无法解析 Chrome 80 目标 bundle；0.1.12 改为 Chrome 58 语法构建并避免 globalThis 运行时依赖，保留首个脚本错误并记录实际引擎版本。本地 favicon 不再产生 CSP 假故障，详见配对握手专题的 WebView 兼容记录；真机输出仍需更新包复验。
 
 当前实现是 Android 原生 App + Electron 隐藏 WebRTC 主机：扫码载荷包含信令地址、临时邀请和配对密钥，电脑审批设备后才允许单工作区终端控制。业务使用有序 WebRTC DataChannel，信令只转发 SDP/UDP ICE，TURN 和业务中继被拒绝。电脑端通过现有 terminal manager 真实创建 Claude Code，输出序号回放、输入请求去重和断线保活已落地。旧浏览器、LAN/账号远控、web-test gateway 和 remote-lab 验证代码已移除；scripts/android-lab 仅保留 Android 构建与底层链路工具，尚未替代真实异网手机验收。
 

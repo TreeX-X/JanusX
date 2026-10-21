@@ -21,18 +21,18 @@ public final class TerminalView extends WebView {
     public interface Listener { void resync(); void status(String text); }
     private static final String ORIGIN = "appassets.androidplatform.net";
     private final ArrayDeque<String> pending = new ArrayDeque<>();
-    private boolean ready, disposed, overflow;
+    private boolean ready, disposed, overflow, failed;
     private int pendingBytes;
     private String selectedId = "";
     private final Listener listener;
     private int reloads, received;
     private final Runnable startupTimeout = this::checkStartup;
     private void checkStartup() {
-        if (disposed || ready) return;
+        if (disposed || ready || failed) return;
         if (reloads++ == 0) {
             listener.status("终端页面启动超时，正在重新加载…");
             loadTerminal();
-        } else listener.status("终端页面未就绪（已收到 " + received + " 条输出消息）。请点「同步」重载；仍失败请更新 Android System WebView。");
+        } else listener.status("终端页面未就绪（已收到 " + received + " 条输出消息）。请复制日志中的 WebView 版本及终端错误。");
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -41,6 +41,7 @@ public final class TerminalView extends WebView {
         this.listener = listener;
         setBackgroundColor(Color.rgb(17, 21, 27));
         getSettings().setJavaScriptEnabled(true);
+        getSettings().setCacheMode(android.webkit.WebSettings.LOAD_NO_CACHE);
         getSettings().setAllowFileAccess(false);
         getSettings().setAllowContentAccess(false);
         getSettings().setBlockNetworkLoads(true);
@@ -49,7 +50,7 @@ public final class TerminalView extends WebView {
         addJavascriptInterface(new Object() {
             @JavascriptInterface public void ready() {
                 post(() -> {
-                    if (disposed) return;
+                    if (disposed || failed) return;
                     if (ready) return;
                     ready = true;
                     removeCallbacks(startupTimeout);
@@ -64,43 +65,59 @@ public final class TerminalView extends WebView {
             }
             @JavascriptInterface public void resync() { post(() -> { if (!disposed) listener.resync(); }); }
             @JavascriptInterface public void status(String text) { post(() -> { if (!disposed) listener.status(text); }); }
+            @JavascriptInterface public void failed(String text) { post(() -> fail(text)); }
         }, "AndroidTerminal");
         setWebChromeClient(new WebChromeClient() {
             @Override public boolean onConsoleMessage(ConsoleMessage message) {
-                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
-                    listener.status("终端页面脚本错误：" + message.message().substring(0, Math.min(180, message.message().length())) + "；请点「同步」或更新 Android System WebView");
+                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR && message.message().startsWith("Uncaught ")) {
+                    fail("终端显示脚本失败：" + message.message().substring(0, Math.min(180, message.message().length()))
+                        + "（行 " + message.lineNumber() + "）；请确认已安装最新版，并复制日志中的 WebView 版本。");
                 }
                 return true;
             }
         });
         setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
-                ready = false; pending.clear(); pendingBytes = 0; overflow = false;
+                ready = false; failed = false; pending.clear(); pendingBytes = 0; overflow = false;
                 removeCallbacks(startupTimeout); postDelayed(startupTimeout, 10000);
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                listener.status("终端页面资源加载失败（" + error.getErrorCode() + "），请点「同步」重试");
+                String path = request.getUrl().getPath();
+                if (request.isForMainFrame() || (path != null && (path.endsWith(".js") || path.endsWith(".css"))))
+                    fail("终端页面资源加载失败（" + error.getErrorCode() + "），请点「同步」重试");
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String path = uri.getPath();
                 if ("https".equals(uri.getScheme()) && ORIGIN.equals(uri.getHost()) && path != null
-                    && java.util.Arrays.asList("/terminal/index.html", "/terminal/boot.js", "/terminal/terminal.js", "/terminal/xterm.css", "/terminal/terminal.css").contains(path)) {
+                    && java.util.Arrays.asList("/terminal/index.html", "/terminal/boot.js", "/terminal/terminal.js", "/terminal/xterm.css", "/terminal/terminal.css", "/terminal/favicon.svg").contains(path)) {
                     try {
-                        String mime = path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "text/html";
+                        String mime = path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : path.endsWith(".svg") ? "image/svg+xml" : "text/html";
                         return new WebResourceResponse(mime, "UTF-8", context.getAssets().open(path.substring(1)));
                     } catch (java.io.IOException error) {
-                        post(() -> listener.status("终端内置资源缺失：" + path + "；请重新安装最新版"));
+                        if (!path.endsWith(".svg")) post(() -> fail("终端内置资源缺失：" + path + "；请重新安装最新版"));
                     }
                 }
                 return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
             }
         });
+        post(() -> {
+            if (disposed) return;
+            android.content.pm.PackageInfo engine = WebView.getCurrentWebViewPackage();
+            listener.status("WebView=" + (engine == null ? "unknown" : engine.packageName + "/" + engine.versionName)
+                + "; Android=" + android.os.Build.VERSION.RELEASE + "; App=" + BuildConfig.VERSION_NAME);
+        });
         loadTerminal();
     }
+    private void fail(String text) {
+        if (disposed || failed) return;
+        failed = true; ready = false; removeCallbacks(startupTimeout);
+        pending.clear(); pendingBytes = 0; overflow = true;
+        listener.status(text.substring(0, Math.min(400, text.length())));
+    }
     private void loadTerminal() {
-        ready = false; pending.clear(); pendingBytes = 0; overflow = false;
+        ready = false; failed = false; pending.clear(); pendingBytes = 0; overflow = false;
         removeCallbacks(startupTimeout);
         loadUrl("https://" + ORIGIN + "/terminal/index.html");
         postDelayed(startupTimeout, 10000);
@@ -112,7 +129,7 @@ public final class TerminalView extends WebView {
         reloads = 0; loadTerminal();
     }
     private void run(String script) {
-        if (disposed) return;
+        if (disposed || failed) return;
         if (ready) evaluateJavascript(script, null);
         else if (pendingBytes + script.length() <= 2 * 1024 * 1024) { pending.add(script); pendingBytes += script.length(); }
         else { pending.clear(); pendingBytes = 0; overflow = true; }
