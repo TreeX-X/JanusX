@@ -5,6 +5,7 @@ export const REMOTE_CHANNELS = {
 export interface MobileHostOptions { signalUrl: string; stunUrl: string; workspaceId: string; localAddress?: string }
 export interface MobileHostStatus {
   running: boolean; state: string; qr?: string; expiresAt?: number
+  qrError?: string
   workspaceId?: string
   signalUrl?: string
   localSignal?: boolean

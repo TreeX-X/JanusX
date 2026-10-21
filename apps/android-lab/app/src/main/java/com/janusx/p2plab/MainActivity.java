@@ -116,13 +116,13 @@ public final class MainActivity extends Activity implements LabTransport.Listene
         terminalStatus = label(page, "等待电脑授权后可新建或恢复 Claude Code");
         terminal = new TerminalView(this, new TerminalView.Listener() {
             public void resync() { subscribe(); }
-            public void status(String text) { terminalStatus.setText(text); }
+            public void status(String text) { terminalStatus.setText(text); onStatus("TERMINAL " + text); }
         });
         page.addView(terminal, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout tools = row(page);
         button(tools, "A−", v -> terminal.font(-1)); button(tools, "A+", v -> terminal.font(1));
         button(tools, "适宽", v -> terminal.fit());
-        button(tools, "到底部", v -> terminal.bottom()); button(tools, "同步", v -> subscribe());
+        button(tools, "到底部", v -> terminal.bottom()); button(tools, "同步", v -> terminal.sync());
         LinearLayout composer = row(page);
         input = field(composer, "输入发给 Claude Code 的内容", "");
         input.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1));
@@ -290,7 +290,7 @@ public final class MainActivity extends Activity implements LabTransport.Listene
             } else if (status.startsWith("DESKTOP approved")) connectionStatus.setText("电脑已授权 · UDP 直连");
             else if (status.startsWith("PAIRING pending")) connectionStatus.setText("手机已连接 · 等待电脑批准");
             else if (status.startsWith("TERMINAL created")) terminalStatus.setText("Claude Code 已启动 · 正在同步输出");
-            else if (!ready || !status.matches("^(ICE|PEER|GATHER|PATH|SDP|SIGNAL).*")) connectionStatus.setText(status);
+            else if (!status.startsWith("TERMINAL ") && (!ready || !status.matches("^(ICE|PEER|GATHER|PATH|SDP|SIGNAL).*"))) connectionStatus.setText(status);
             connectionLog.append(status).append('\n');
             if (connectionLog.length() > 24000) connectionLog.delete(0, connectionLog.indexOf("\n", connectionLog.length() - 24000) + 1);
             output.setText("完整连接记录请点击顶部「日志」，支持滚动查看和复制");

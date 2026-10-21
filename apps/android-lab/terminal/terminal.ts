@@ -60,6 +60,11 @@ if (typeof document !== 'undefined') {
     theme: { background: '#11151b', foreground: '#e2e8f0', cursor: '#e2e8f0' },
     allowProposedApi: false, scrollOnUserInput: false })
   terminal.open(host)
+  const viewport = document.getElementById('viewport')!
+  let followOutput = true
+  viewport.addEventListener('scroll', () => {
+    followOutput = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 24
+  }, { passive: true })
   let fitWidth = true
   const layout = () => {
     // xterm owns the screen dimensions; the outer viewport pans without clipping.
@@ -67,7 +72,6 @@ if (typeof document !== 'undefined') {
     if (screen) {
       const width = parseFloat(screen.style.width), height = parseFloat(screen.style.height)
       if (!width || !height) return
-      const viewport = document.getElementById('viewport')!
       const scale = fitWidth ? Math.min(1, (viewport.clientWidth - 16) / width) : 1
       host.style.width = `${width}px`; host.style.height = `${height}px`
       host.style.transform = `scale(${scale})`
@@ -76,7 +80,14 @@ if (typeof document !== 'undefined') {
     }
   }
   const stream = new TerminalStream({
-    write: (data, callback) => terminal.write(data, callback),
+    write: (data, callback) => terminal.write(data, () => {
+      layout()
+      if (followOutput) {
+        terminal.scrollToBottom()
+        viewport.scrollTop = viewport.scrollHeight
+      }
+      callback?.()
+    }),
     resize: (cols, rows) => { if (terminal.cols !== cols || terminal.rows !== rows) { terminal.resize(cols, rows); layout() } },
   }, () => window.AndroidTerminal.resync(), text => window.AndroidTerminal.status(text))
   let fontSize = 12
@@ -84,9 +95,13 @@ if (typeof document !== 'undefined') {
     select: id => stream.select(id), receive: m => stream.receive(m),
     font: delta => { fitWidth = false; fontSize = Math.max(8, Math.min(24, fontSize + delta)); terminal.options.fontSize = fontSize; requestAnimationFrame(layout) },
     fit: () => { fitWidth = true; layout() },
-    bottom: () => terminal.scrollToBottom(),
+    bottom: () => { followOutput = true; terminal.scrollToBottom(); viewport.scrollTop = viewport.scrollHeight },
   }
   terminal.onRender(layout)
   window.addEventListener('resize', layout)
-  requestAnimationFrame(() => { layout(); window.AndroidTerminal.ready() })
+  // Signal readiness without waiting for animation frames, which WebView may
+  // suspend while the Activity is being laid out or resumed.
+  layout()
+  document.getElementById('loading')!.hidden = true
+  window.AndroidTerminal.ready()
 }

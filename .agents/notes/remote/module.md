@@ -32,7 +32,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-21T10:43:47Z",
+  "updated": "2026-10-21T11:17:26Z",
   "moduleState": "partial"
 }
 ---
@@ -45,7 +45,7 @@
 
 ## Design
 
-配对握手专题维护 Android App 内 HTTPS/WSS 分别诊断、日志复制及其可观测边界。当前默认免费入口为 `wss://janusx-signal-entry.pages.dev/signal`，经服务绑定复用原 Worker/房间；电脑直连和代理信令验证通过，用户在手机关闭 VPN 后报告连通且输入可发送，但 Android 看不到返回内容，完整交互尚未验收。优先修复输出，再补桌面连接状态及二维码倒计时/无干扰自动刷新，详见[真机反馈](./android-pairing-handshake.md#真机反馈与下一步2026-10-21)和需求 AC-3/8/9/10。浏览器健康页成功不等于 App 的 WSS、VPN 路由或 UDP 已验证。
+配对握手专题维护 Android App 内 HTTPS/WSS 分别诊断、日志复制及其可观测边界。当前默认免费入口为 `wss://janusx-signal-entry.pages.dev/signal`，经服务绑定复用原 Worker/房间；用户在手机关闭 VPN 后报告连通且输入可发送，但终端从开始就空白，完整真机交互尚未验收。0.1.11 补充终端加载/脚本错误、启动超时重载、就绪后自动回放及同步恢复；桌面状态栏持续显示协商阶段，二维码显示倒计时，到期生成新邀请并保留已授权旧传输和终端。详见[配对体验改进](./android-pairing-handshake.md#0111-体验改进)和需求 AC-3/8/9/10。浏览器健康页成功不等于 App 的 WSS、VPN 路由或 UDP 已验证。
 
 模块覆盖已存在的受控网关与托管平台入口，不声明完整团队身份、服务端同步或 LaunchSurface 已实现。ToB 身份及传输文档保留原生命周期，其计划需要独立交付；下列历史 LAN 决策也不能替代对当前身份及授权实现的核验。远程对象是会话与工作流，不是整机桌面或任意键鼠控制。
 

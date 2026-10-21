@@ -10,6 +10,8 @@ import remoteDefaults from '../../../shared/remote-defaults.json'
 export function StatusBar() {
   const { t } = useI18n(); const terminals = useWorkspaceStore((s) => s.terminals); const active = useWorkspaceStore((s) => s.activeTerminalId); const load = useAppStore((s) => s.loadState)
   const [remote, setRemote] = useState<MobileHostStatus | null>(null); const [open, setOpen] = useState(false)
+  const secondsLeft = Math.max(0, Math.ceil(((remote?.expiresAt ?? 0) - Date.now()) / 1000))
+  const qrCountdown = `${Math.floor(secondsLeft / 60).toString().padStart(2, '0')}:${(secondsLeft % 60).toString().padStart(2, '0')}`
   const [error, setError] = useState('')
   const enabled = useExperimentalStore(s => s.loaded && s.remoteControl)
   const activeWorkspaceId = useWorkspaceStore(s => s.activeWorkspaceId)
@@ -67,6 +69,7 @@ export function StatusBar() {
   return <footer className="relative col-span-3 flex items-center justify-between px-3.5 text-[10px]" style={{ background: 'var(--shell-chrome)', borderTop: '1px solid var(--shell-border)', color: 'var(--shell-dim)' }}>
     <span><span className="mr-1.5 inline-block h-[5px] w-[5px] rounded-full" style={{ background: 'var(--shell-accent)' }} />{labels[load] ?? t('common:statusBar.ready')}</span>
     {enabled && <div className="flex items-center gap-2">
+      {remote?.running && !remote.connectedDeviceId && !remote.pending && <span role="status" className="max-w-[40vw] truncate" title={remote.state}>{remote.state}</span>}
       {remote?.pending && <span className="text-orange-400">{t('common:mobileRemote.pending')}</span>}
       {remote?.connectedDeviceId && <span>{t('common:mobileRemote.connected', { count: remote.terminals.filter(item => item.alive).length })}</span>}
       <button type="button" aria-expanded={open} onClick={() => setOpen(v => !v)} className="rounded px-2 py-1 hover:bg-[var(--popover-hover)]">{t(remote?.running ? 'common:mobileRemote.running' : 'common:mobileRemote.enable')}</button>
@@ -99,7 +102,12 @@ export function StatusBar() {
         <input className="mt-1 w-full rounded border border-[var(--shell-border)] bg-transparent p-1" disabled={busy || remote?.running} value={stunUrl} onChange={event => setStunUrl(event.target.value)} placeholder="stun:stun.l.google.com:19302" spellCheck={false} />
       </label>
       {remote?.signalUrl && <p className="mb-2 break-all">{t('common:mobileRemote.actualSignal', { url: remote.signalUrl })}</p>}
-      {remote?.qr ? <img alt={t('common:mobileRemote.qrAlt')} className="mx-auto mb-2 h-auto w-full max-w-80 bg-white" style={{ imageRendering: 'pixelated' }} src={remote.qr} /> : <button disabled={busy} className="rounded bg-orange-500 px-3 py-1 text-white" onClick={start}>{t('common:mobileRemote.generateQr')}</button>}
+      {remote?.qr ? <>
+        <p role="timer" className="mb-2 text-center">{t(secondsLeft > 0 ? 'common:mobileRemote.qrCountdown' : 'common:mobileRemote.qrRefreshing', { time: qrCountdown })}</p>
+        {secondsLeft > 0 && <img alt={t('common:mobileRemote.qrAlt')} className="mx-auto mb-2 h-auto w-full max-w-80 bg-white" style={{ imageRendering: 'pixelated' }} src={remote.qr} />}
+        <p className="mb-2 text-[var(--shell-dim)]">{t('common:mobileRemote.qrRefreshHint')}</p>
+        {remote.qrError && <p role="alert" className="mb-2 text-red-400">{t('common:mobileRemote.qrRefreshFailed')}: {remote.qrError}</p>}
+      </> : <button disabled={busy} className="rounded bg-orange-500 px-3 py-1 text-white" onClick={start}>{t('common:mobileRemote.generateQr')}</button>}
       {remote?.pending && <div className="mt-2">{t('common:mobileRemote.request', { name: remote.pending.name })}
         <button disabled={busy} className="ml-2 rounded bg-green-600 px-2 py-1 text-white" onClick={() => void act(() => window.electron.remote.approve(remote.pending!.id))}>{t('common:mobileRemote.approve')}</button>
         <button disabled={busy} className="ml-1 rounded bg-red-700 px-2 py-1 text-white" onClick={() => void act(() => window.electron.remote.reject())}>{t('common:mobileRemote.reject')}</button>

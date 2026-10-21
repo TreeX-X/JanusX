@@ -94,8 +94,23 @@ try {
   await page.getByLabel('连接环境', { exact: true }).selectOption('lan')
   await expect(page.getByLabel('手机可访问的电脑网卡', { exact: true })).not.toHaveValue('')
   passed('Public signal URL required, network/STUN settings persist, and local interface selection is available')
+  if (process.env.JANUSX_SMOKE_QR === '1') {
+    // Accelerate the five-minute main-process clock only in this isolated app.
+    // Keep real WebRTC/Android clocks and production pairing code unchanged.
+    await app.evaluate(() => {
+      const now = Date.now, timeout = globalThis.setTimeout
+      let elapsed = 0
+      Date.now = () => now() + elapsed
+      globalThis.setTimeout = ((callback, milliseconds, ...args) => {
+        if (milliseconds >= 299000 && milliseconds <= 300000) {
+          return timeout(() => { elapsed += 300000; callback(...args) }, 120000)
+        }
+        return timeout(callback, milliseconds, ...args)
+      })
+    })
+  }
   await page.evaluate(options => window.electron.remote.start(options), { workspaceId: workspace.id, signalUrl: `ws://127.0.0.1:${signaling.port}/signal`, stunUrl: '' })
-  await expect(page.getByRole('status').filter({ hasText: '信令已就绪' })).toBeVisible({ timeout: 15000 })
+  await expect(page.locator('footer span[role="status"]').filter({ hasText: '信令已就绪' })).toBeVisible({ timeout: 15000 })
   passed('Sandboxed CJS preload loaded; desktop joined signaling')
   if (process.env.JANUSX_SMOKE_RETRY === '1') {
     // Test-only fault injection: neither side learns the first host's candidates.
@@ -123,6 +138,10 @@ try {
     })
   }
   const status = await page.evaluate(() => window.electron.remote.status())
+  await expect(page.getByRole('timer')).toContainText(/0[0-5]:[0-5][0-9]/)
+  const initialCountdown = await page.getByRole('timer').innerText()
+  await expect(page.getByRole('timer')).not.toHaveText(initialCountdown, { timeout: 4000 })
+  passed('Pairing QR shows a live expiry countdown')
   await writeFile(join(root, 'qr.png'), Buffer.from(status.qr.split(',')[1], 'base64'))
   const jdk = (await readdir(tools)).find(name => name.startsWith('jdk-17'))
   const core = await findJar(join(tools, 'gradle-cache/caches/modules-2/files-2.1/com.google.zxing/core/3.4.1'))
@@ -206,6 +225,33 @@ try {
   adb('pull', '/sdcard/janus-terminal.png', join(root, 'android-terminal.png'))
   await page.screenshot({ path: join(root, 'desktop-terminal.png') })
   passed('Bundled offline xterm paints real Claude screen without control codes or connection logs')
+  await androidPage.reload()
+  await until(async () => /Claude\s*Code|Anthropic|Welcome|trust/i.test(await androidPage.locator('.xterm-rows').innerText()), 'renderer reload automatically restores real terminal', 30000)
+  expect((await page.evaluate(() => window.electron.remote.status())).terminals.map(t => t.id)).toEqual([terminalId])
+  passed('Reloading the Android terminal renderer automatically replays the same live PTY without creating a process')
+  if (process.env.JANUSX_SMOKE_QR === '1') {
+    await until(async () => (await page.evaluate(() => window.electron.remote.status())).expiresAt > status.expiresAt, 'automatic pairing renewal while UDP remains connected', 150000)
+    const renewed = await page.evaluate(() => window.electron.remote.status())
+    expect(renewed.qr).not.toBe(status.qr)
+    expect(renewed.connectedDeviceId).toBeTruthy()
+    expect(renewed.terminals.map(t => t.id)).toEqual([terminalId])
+    passed('Accelerated pairing clock rotates QR credentials while the real approved UDP connection and PTY remain alive')
+  }
+  const beforeHelp = (await page.evaluate(id => window.electron.terminal.replay(id), terminalId)).seq
+  const editor = dumpUi().match(/<node[^>]*class="android.widget.EditText"[^>]*>/g)?.at(-1)
+  const bounds = editor?.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)
+  if (!bounds) throw Error('Android input field missing')
+  adb('shell', 'input', 'tap', String((+bounds[1] + +bounds[3]) >> 1), String((+bounds[2] + +bounds[4]) >> 1))
+  adb('shell', 'input', 'text', '/help')
+  await tap('发送')
+  await until(async () => {
+    const current = await page.evaluate(id => window.electron.terminal.replay(id), terminalId)
+    return current.seq > beforeHelp && /Help\s+General\s+Commands/.test(await androidPage.locator('.xterm-rows').innerText())
+  }, 'real Claude local help response after Android input', 30000)
+  await writeFile(join(root, 'android-help-screen.txt'), await androidPage.locator('.xterm-rows').innerText())
+  passed('Android sends /help to the real Claude PTY and paints the resulting local command output')
+  adb('shell', 'input', 'keyevent', '111')
+  await tap('Esc')
   await androidPage.evaluate(id => {
     window.mobileTerminal.receive({ type: 'replay-start', terminalId: id, cols: 80, rows: 24, seq: 100 })
     window.mobileTerminal.receive({ type: 'replay-data', terminalId: id, data: '\x1b[2J\x1b[Hdiscard\r\x1b[' })

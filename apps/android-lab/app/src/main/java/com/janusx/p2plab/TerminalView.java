@@ -9,6 +9,9 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebChromeClient;
+import android.webkit.ConsoleMessage;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayDeque;
 import org.json.JSONObject;
@@ -22,6 +25,15 @@ public final class TerminalView extends WebView {
     private int pendingBytes;
     private String selectedId = "";
     private final Listener listener;
+    private int reloads, received;
+    private final Runnable startupTimeout = this::checkStartup;
+    private void checkStartup() {
+        if (disposed || ready) return;
+        if (reloads++ == 0) {
+            listener.status("终端页面启动超时，正在重新加载…");
+            loadTerminal();
+        } else listener.status("终端页面未就绪（已收到 " + received + " 条输出消息）。请点「同步」重载；仍失败请更新 Android System WebView。");
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     public TerminalView(Context context, Listener listener) {
@@ -38,34 +50,66 @@ public final class TerminalView extends WebView {
             @JavascriptInterface public void ready() {
                 post(() -> {
                     if (disposed) return;
+                    if (ready) return;
                     ready = true;
+                    removeCallbacks(startupTimeout);
+                    listener.status(selectedId.isEmpty() ? "终端显示已就绪 · 等待选择或新建终端" : "终端页面已就绪，正在同步电脑输出");
+                    evaluateJavascript("window.mobileTerminal.select(" + JSONObject.quote(selectedId) + ")", null);
                     if (overflow) {
                         pending.clear(); overflow = false;
-                        evaluateJavascript("window.mobileTerminal.select(" + JSONObject.quote(selectedId) + ")", null);
-                        listener.resync();
                     } else while (!pending.isEmpty()) evaluateJavascript(pending.remove(), null);
                     pendingBytes = 0;
+                    if (!selectedId.isEmpty()) listener.resync();
                 });
             }
             @JavascriptInterface public void resync() { post(() -> { if (!disposed) listener.resync(); }); }
             @JavascriptInterface public void status(String text) { post(() -> { if (!disposed) listener.status(text); }); }
         }, "AndroidTerminal");
+        setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage message) {
+                if (message.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    listener.status("终端页面脚本错误：" + message.message().substring(0, Math.min(180, message.message().length())) + "；请点「同步」或更新 Android System WebView");
+                }
+                return true;
+            }
+        });
         setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                ready = false; pending.clear(); pendingBytes = 0; overflow = false;
+                removeCallbacks(startupTimeout); postDelayed(startupTimeout, 10000);
+            }
+            @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                listener.status("终端页面资源加载失败（" + error.getErrorCode() + "），请点「同步」重试");
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String path = uri.getPath();
                 if ("https".equals(uri.getScheme()) && ORIGIN.equals(uri.getHost()) && path != null
-                    && java.util.Arrays.asList("/terminal/index.html", "/terminal/terminal.js", "/terminal/xterm.css", "/terminal/terminal.css").contains(path)) {
+                    && java.util.Arrays.asList("/terminal/index.html", "/terminal/boot.js", "/terminal/terminal.js", "/terminal/xterm.css", "/terminal/terminal.css").contains(path)) {
                     try {
                         String mime = path.endsWith(".js") ? "application/javascript" : path.endsWith(".css") ? "text/css" : "text/html";
                         return new WebResourceResponse(mime, "UTF-8", context.getAssets().open(path.substring(1)));
-                    } catch (java.io.IOException ignored) { }
+                    } catch (java.io.IOException error) {
+                        post(() -> listener.status("终端内置资源缺失：" + path + "；请重新安装最新版"));
+                    }
                 }
                 return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
             }
         });
+        loadTerminal();
+    }
+    private void loadTerminal() {
+        ready = false; pending.clear(); pendingBytes = 0; overflow = false;
+        removeCallbacks(startupTimeout);
         loadUrl("https://" + ORIGIN + "/terminal/index.html");
+        postDelayed(startupTimeout, 10000);
+    }
+    public void sync() {
+        if (disposed) return;
+        // Rebuild only the local renderer, including a ready-but-blank page.
+        // The ready callback resubscribes to the existing desktop PTY.
+        reloads = 0; loadTerminal();
     }
     private void run(String script) {
         if (disposed) return;
@@ -74,9 +118,9 @@ public final class TerminalView extends WebView {
         else { pending.clear(); pendingBytes = 0; overflow = true; }
     }
     public void select(String id) { selectedId = id; run("window.mobileTerminal.select(" + JSONObject.quote(id) + ")"); }
-    public void receive(JSONObject message) { run("window.mobileTerminal.receive(" + message + ")"); }
+    public void receive(JSONObject message) { received++; run("window.mobileTerminal.receive(" + message + ")"); }
     public void font(int delta) { run("window.mobileTerminal.font(" + delta + ")"); }
     public void bottom() { run("window.mobileTerminal.bottom()"); }
     public void fit() { run("window.mobileTerminal.fit()"); }
-    @Override public void destroy() { disposed = true; pending.clear(); removeJavascriptInterface("AndroidTerminal"); super.destroy(); }
+    @Override public void destroy() { disposed = true; removeCallbacks(startupTimeout); pending.clear(); removeJavascriptInterface("AndroidTerminal"); super.destroy(); }
 }

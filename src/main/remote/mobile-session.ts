@@ -29,7 +29,7 @@ export class MobileSession {
   connect(send: (message: unknown) => void): void { this.disconnect(); this.send = send }
   disconnect(): void { this.device = undefined; this.pending = undefined; this.subscribed = undefined; this.send = () => {}; this.changed() }
   approve(id: string): void {
-    if (this.pending?.id !== id || Date.now() > this.expiresAt) throw Error('配对申请已过期，请重新开启远程')
+    if (this.pending?.id !== id || Date.now() >= this.expiresAt) throw Error('配对申请已过期，请扫描新二维码')
     const device = { ...this.pending, token: randomBytes(32).toString('hex') }
     this.devices.set(id, device); this.device = device; this.pending = undefined
     this.welcome(); this.changed()
@@ -57,7 +57,7 @@ export class MobileSession {
           if (typeof m.token !== 'string' || !equal(m.token, known.token)) throw Error('设备凭据无效')
           this.device = known; this.welcome(); this.changed(); return
         }
-        if (Date.now() > this.expiresAt || this.devices.size >= 8) throw Error('二维码已过期或设备数已满，请电脑重新开启远程')
+        if (Date.now() >= this.expiresAt || this.devices.size >= 8) throw Error('二维码已过期或设备数已满，请扫描新二维码或撤销旧设备')
         this.pending = { id: m.deviceId, name: m.name.slice(0, 80) }
         this.send({ type: 'pending' }); this.changed(); return
       }

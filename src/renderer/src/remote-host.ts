@@ -154,6 +154,7 @@ async function offer(round = 1, previous = '') {
 }
 let applyCandidate: (c: RTCIceCandidateInit) => Promise<void>
 function connectSignal() {
+  if (!verified) reportStatus('正在连接信令服务')
   socket = new WebSocket(config.signalUrl)
   const current = socket
   socket.onopen = () => current.send(JSON.stringify({ type: 'join', role: 'host', invite: config.invite }))
@@ -163,7 +164,7 @@ function connectSignal() {
       if (socket !== current) return
       const m = JSON.parse(event.data)
       if (m.type === 'joined' && !verified) reportStatus('信令已就绪，等待手机连接')
-      if (m.type === 'peer-ready') await offer()
+      if (m.type === 'peer-ready') { reportStatus('手机已接入，正在协商 UDP 直连'); await offer() }
       if (m.type === 'peer-left') {
         closePeer(); reportStatus('手机已离开信令，请在手机重新连接')
       }

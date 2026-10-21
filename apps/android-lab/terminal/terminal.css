@@ -1,5 +1,6 @@
 html, body { width: 100%; height: 100%; margin: 0; background: #11151b; color: #e2e8f0; overflow: hidden; }
 #viewport { box-sizing: border-box; height: 100%; width: 100%; overflow: auto; padding: 8px; }
+#loading { position: absolute; inset: 16px; z-index: 2; font: 14px/1.6 sans-serif; pointer-events: none; }
 #surface { position: relative; }
 #terminal { position: absolute; top: 0; left: 0; min-width: 1px; transform-origin: top left; }
 .xterm { padding: 0; }
