@@ -56,7 +56,7 @@ The separate [migration Task](../../.agents/notes/blueprint/documents/tasks/migr
 
 Managed parity passes with `node ../WorkFlowX/scripts/sync-harness-rules.mjs --check --repos .agents/.local/sync-janusx.list` (the list is local to WorkflowX and contains `../JanusX`). Repeated `--apply` leaves all 397 snapshotted entry/config/skill/standard files unchanged. `.codex/config.toml`, `.claude/settings.json` and `.claude/settings.local.json` match their pre-integration bytes. Managed AGENTS/CLAUDE text and teammate contracts intentionally changed. The shared dispatch adapter is checked for equality by `npm run check:skills-sync`; obsolete per-host marker expectations were removed.
 
-Eight original user files remain byte-for-byte unchanged and are excluded from the integration commit: three knowledge Notes, `electron-builder.yml`, existing `blueprint.css`, `WORKFLOWX-NOTE-REFACTOR-DISCUSSION.md`, `release-notes-v0.9.0.md`, and `scripts/card-shot.mjs`. Local backups and command logs are under ignored `.agents/.local/`.
+Eight original user files remain byte-for-byte unchanged and are excluded from the integration commit: three knowledge Notes, `electron-builder.yml`, existing `blueprint.css`, `WORKFLOWX-NOTE-REFACTOR-DISCUSSION.md` (superseded and removed 2026-10-22; content preserved in Git history), `release-notes-v0.9.0.md`, and `scripts/card-shot.mjs`. Local backups and command logs are under ignored `.agents/.local/`.
 
 ## Remaining acceptance
 

@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-20",
-  "updated": "2026-10-21T17:01:13Z",
+  "updated": "2026-10-21T17:19:58Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
   "tags": ["remote", "android", "pairing", "verification"]
 }
@@ -29,7 +29,7 @@ Android Gradle 和 `scripts/android-lab/run.ps1` 默认 `lan`，通过 `-Premote
 
 `JANUSX_SMOKE_SCOPE=lan node scripts/android-lab/desktop-smoke.mjs` 在真实 Electron 与 Android 15 模拟器通过 18 项检查，证据 `artifacts/android-lab/desktop-smoke-nbK57p/report.json`。覆盖 LAN 界面及 IPC 拒绝跨网、二维码倒计时、审批、真实新建 Claude、输出绘制、本地 `/help` 响应、显示页同步、同 PTY 重连及关闭服务保留电脑终端。首轮 `desktop-smoke-7DabFc` 的停止断言仅匹配信令关闭/DATA CLOSED，内置信令停止实际报告 EOF 后经 ICE FAILED 断开；最终断言验证通道终止与控件禁用后通过。关闭远程时手机可能等待原生 UDP 断开检测，未宣称即时通知。最终已安装 LAN APK 另外拒绝公网二维码和携带 STUN 的私网二维码，证据 `artifacts/android-lab/v094-android-lan-boundary.json`。这些结果不代表实体手机局域网、镜头扫码、模型对话或长期使用验收。
 
-交付 APK `artifacts/android-lab/JanusX-Android-0.1.13-lan.apk` 已通过 v2 签名校验；此路径是本地产物，不代表已经上传外部 Release。桌面版本号本轮仍为 0.9.3，v0.9.4 安装包与公开发布尚未执行。
+交付 APK `artifacts/android-lab/JanusX-Android-0.1.13-lan.apk` 已通过 v2 签名校验。用户随后明确授权提交 main 全部改动、推送 v0.9.4 标签并更新公开 Release；桌面版本已升级至 0.9.4，Windows 安装版/便携版与 APK 按同一版本说明交付，发布内容见[版本说明](../../../docs/releases/v0.9.4.md)。发布准备已将四个 README 历史资源断链改为固定版本存档链接，全仓 Note 检查恢复 0 errors。
 
 ## 真机反馈历史（2026-10-21）
 
