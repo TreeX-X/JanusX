@@ -328,6 +328,16 @@
     "alive": "Running",
     "exited": "Exited",
     "showTerminal": "View on desktop",
+    "network": "Network",
+    "lan": "Same local network",
+    "public": "Different networks",
+    "localAddress": "Computer interface reachable by phone",
+    "signalUrl": "Public signaling URL",
+    "signalRequired": "Enter a public wss:// signaling URL reachable by both devices",
+    "lanHint": "For the same LAN or mutually reachable virtual networks. Cellular phones cannot reach ordinary private LAN addresses. Check the interface and computer firewall if connecting fails.",
+    "publicHint": "Deploy a signaling service reachable by both devices. It only exchanges connection information; terminal data goes directly over UDP. Some NATs or networks blocking UDP may still prevent connection.",
+    "stunUrl": "STUN URL (UDP mapping)",
+    "actualSignal": "Current signaling: {{url}}",
     "stop": "Stop remote"
   },
   "hosted": {

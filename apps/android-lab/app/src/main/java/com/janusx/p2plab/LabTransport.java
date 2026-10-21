@@ -9,5 +9,6 @@ public interface LabTransport extends AutoCloseable {
     void connect(String signalUrl, String invitation, String stunUrl, String pairingSecret);
     boolean send(String message);
     void inspectPath();
+    String timeoutHint();
     void close();
 }

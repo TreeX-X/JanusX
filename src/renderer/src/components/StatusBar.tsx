@@ -4,6 +4,10 @@ import { useAppStore } from '@/stores/app'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import type { MobileHostStatus } from '../../../shared/ipc/remote'
+// Note: .agents/notes/remote/android-pairing-handshake.md
+const savedRemote = (key: string, fallback: string) => {
+  try { return localStorage.getItem(`remote.${key}`) ?? fallback } catch { return fallback }
+}
 export function StatusBar() {
   const { t } = useI18n(); const terminals = useWorkspaceStore((s) => s.terminals); const active = useWorkspaceStore((s) => s.activeTerminalId); const load = useAppStore((s) => s.loadState)
   const [remote, setRemote] = useState<MobileHostStatus | null>(null); const [open, setOpen] = useState(false)
@@ -12,6 +16,15 @@ export function StatusBar() {
   const activeWorkspaceId = useWorkspaceStore(s => s.activeWorkspaceId)
   const [workspaceId, setWorkspaceId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [network, setNetwork] = useState(() => savedRemote('network', 'lan'))
+  const [signalUrl, setSignalUrl] = useState(() => savedRemote('signalUrl', ''))
+  const [stunUrl, setStunUrl] = useState(() => savedRemote('stunUrl', 'stun:stun.l.google.com:19302'))
+  const [localAddress, setLocalAddress] = useState('')
+  useEffect(() => {
+    try {
+      for (const [key, value] of Object.entries({ network, signalUrl, stunUrl })) localStorage.setItem(`remote.${key}`, value)
+    } catch { /* The current configuration still works when storage is unavailable. */ }
+  }, [network, signalUrl, stunUrl])
   const focused = active ? terminals.find((terminal) => terminal.id === active) : null
   const labels: Record<string, string> = { 'no-workspace': t('common:statusBar.waitingWorkspace'), 'workspace-loaded': t('common:statusBar.workspaceLoaded'), 'no-terminal': t('common:statusBar.waitingTerminal'), 'terminal-active': focused ? t('common:statusBar.terminalActiveFocused', { name: focused.name, status: focused.status }) : t('common:statusBar.terminalActiveNoFocus', { count: terminals.length }) }
   useEffect(() => {
@@ -33,7 +46,14 @@ export function StatusBar() {
   const start = () => {
     const workspace = remote?.workspaces.find(item => item.id === selectedWorkspaceId)
     if (!workspace) { setError(t('common:mobileRemote.workspaceRequired')); return }
-    void act(() => window.electron.remote.start({ signalUrl: '', stunUrl: 'stun:stun.l.google.com:19302', workspaceId: workspace.id }))
+    if (network === 'public') {
+      try {
+        const url = new URL(signalUrl.trim())
+        if (url.protocol !== 'wss:' || url.username || url.password || url.hash) throw Error()
+      } catch { setError(t('common:mobileRemote.signalRequired')); return }
+    }
+    void act(() => window.electron.remote.start({ signalUrl: network === 'public' ? signalUrl.trim() : '', stunUrl: stunUrl.trim(),
+      workspaceId: workspace.id, localAddress: network === 'lan' ? localAddress || remote?.lanAddresses?.[0]?.address : undefined }))
   }
   const showTerminal = (id: string) => {
     if (!remote?.workspaceId) return
@@ -61,6 +81,24 @@ export function StatusBar() {
           {remote?.workspaces.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </label>
+      <label className="mb-2 block">{t('common:mobileRemote.network')}
+        <select aria-label={t('common:mobileRemote.network')} className="ml-2 bg-[var(--popover-background)]" disabled={busy || remote?.running} value={network} onChange={event => setNetwork(event.target.value)}>
+          <option value="lan">{t('common:mobileRemote.lan')}</option>
+          <option value="public">{t('common:mobileRemote.public')}</option>
+        </select>
+      </label>
+      {network === 'lan' ? <label className="mb-2 block">{t('common:mobileRemote.localAddress')}
+        <select aria-label={t('common:mobileRemote.localAddress')} className="mt-1 w-full bg-[var(--popover-background)]" disabled={busy || remote?.running} value={localAddress || remote?.lanAddresses?.[0]?.address || ''} onChange={event => setLocalAddress(event.target.value)}>
+          {remote?.lanAddresses?.map(item => <option key={`${item.name}-${item.address}`} value={item.address}>{item.name} · {item.address}</option>)}
+        </select>
+      </label> : <label className="mb-2 block">{t('common:mobileRemote.signalUrl')}
+        <input className="mt-1 w-full rounded border border-[var(--shell-border)] bg-transparent p-1" disabled={busy || remote?.running} value={signalUrl} onChange={event => setSignalUrl(event.target.value)} placeholder="wss://signal.example.com/signal" spellCheck={false} />
+      </label>}
+      <p className="mb-2 text-[var(--shell-dim)]">{t(network === 'public' ? 'common:mobileRemote.publicHint' : 'common:mobileRemote.lanHint')}</p>
+      <label className="mb-2 block">{t('common:mobileRemote.stunUrl')}
+        <input className="mt-1 w-full rounded border border-[var(--shell-border)] bg-transparent p-1" disabled={busy || remote?.running} value={stunUrl} onChange={event => setStunUrl(event.target.value)} placeholder="stun:stun.l.google.com:19302" spellCheck={false} />
+      </label>
+      {remote?.signalUrl && <p className="mb-2 break-all">{t('common:mobileRemote.actualSignal', { url: remote.signalUrl })}</p>}
       {remote?.qr ? <img alt={t('common:mobileRemote.qrAlt')} className="mx-auto mb-2 h-auto w-full max-w-80 bg-white" style={{ imageRendering: 'pixelated' }} src={remote.qr} /> : <button disabled={busy} className="rounded bg-orange-500 px-3 py-1 text-white" onClick={start}>{t('common:mobileRemote.generateQr')}</button>}
       {remote?.pending && <div className="mt-2">{t('common:mobileRemote.request', { name: remote.pending.name })}
         <button disabled={busy} className="ml-2 rounded bg-green-600 px-2 py-1 text-white" onClick={() => void act(() => window.electron.remote.approve(remote.pending!.id))}>{t('common:mobileRemote.approve')}</button>

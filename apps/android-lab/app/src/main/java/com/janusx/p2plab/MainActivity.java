@@ -40,7 +40,9 @@ public final class MainActivity extends Activity implements LabTransport.Listene
     private String deviceId;
     private String deviceToken = "";
     private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable connectionTimeout = () -> { if (!ready && transport != null) { disconnect(); onStatus("CONNECT timeout; direct UDP path not established. Retry or change network."); } };
+    private final Runnable connectionTimeout = () -> { if (!ready && transport != null) {
+        String hint = transport.timeoutHint(); disconnect(); onStatus("CONNECT timeout: " + hint);
+    } };
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -240,7 +242,7 @@ public final class MainActivity extends Activity implements LabTransport.Listene
             });
             transport.connect(signalUrl.getText().toString().trim(), payload, stun.getText().toString().trim(), pairingSecret);
             onStatus("正在连接电脑，请稍候…");
-            handler.postDelayed(connectionTimeout, 30000);
+            handler.postDelayed(connectionTimeout, 45000);
         } catch (Exception e) { disconnect(); onStatus("CONNECT failed: " + e.getMessage()); }
     }
     private void disconnect() {
@@ -257,9 +259,9 @@ public final class MainActivity extends Activity implements LabTransport.Listene
             if (status.equals("DATA OPEN")) {
                 ready = true; handler.removeCallbacks(connectionTimeout); connectionStatus.setText("UDP 已直连 · 正在请求电脑授权");
                 if (transport != null) transport.send(WebRtcTransport.json("type", "hello", "id", "hello-" + deviceId, "deviceId", deviceId, "name", "Android", "secret", pairingSecret, "token", deviceToken).toString());
-            } else if (status.contains("DATA CLOSED") || status.contains("PEER FAILED") || status.contains("Desktop left") || status.contains("SIGNAL failed") || status.contains("SIGNAL rejected")) {
+            } else if (status.contains("DATA CLOSED") || status.contains("PEER FAILED") || status.contains("ICE FAILED") || status.contains("Desktop left") || status.contains("SIGNAL failed") || status.contains("SIGNAL rejected") || status.startsWith("SIGNAL closed")) {
                 // Signaling can close while the independent DataChannel remains open.
-                if (!ready || !status.startsWith("SIGNAL")) { disconnect(); connectionStatus.setText("连接已断开 · 点击连接可恢复电脑终端"); }
+                if (!ready || !status.startsWith("SIGNAL")) { disconnect(); connectionStatus.setText(status + "\n点击连接可重试，电脑终端继续运行"); }
             } else if (status.startsWith("DESKTOP approved")) connectionStatus.setText("电脑已授权 · UDP 直连");
             else if (status.startsWith("PAIRING pending")) connectionStatus.setText("手机已连接 · 等待电脑批准");
             else if (status.startsWith("TERMINAL created")) terminalStatus.setText("Claude Code 已启动 · 正在同步输出");

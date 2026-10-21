@@ -1,7 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
-import { networkInterfaces } from 'node:os'
 import QRCode from 'qrcode'
 import { startSignaling } from './signaling'
 import { MobileSession } from './mobile-session'
@@ -10,6 +9,7 @@ import { createCompanionTerminal, submitCompanionTerminalLine } from '../ipc/ter
 import { listRegisteredWorkspaces, resolveRegisteredWorkspace } from '../companion/workspace-registry'
 import type { MobileHostOptions, MobileHostStatus } from '../../shared/ipc/remote'
 import { configService } from '../config/service'
+import { lanAddresses, validateSignalUrl } from './network'
 
 // Note: .agents/notes/remote/android-pairing-handshake.md
 
@@ -21,12 +21,14 @@ let state = '已关闭'
 let qr: string | undefined
 let starting = false
 let generation = 0
+let activeSignalUrl: string | undefined
 const workspacesRoot = () => join(app.getPath('userData'), 'janusx', 'workspaces')
 const sendTransport = (data: unknown) => {
   if (window && !window.isDestroyed()) window.webContents.send(BRIDGE, data)
 }
 export async function mobileHostStatus(): Promise<MobileHostStatus> {
   return { running: Boolean(window), state: session?.connectedDeviceId ? '手机已授权连接' : state, qr, expiresAt: session?.expiresAt, pending: session?.pending,
+    signalUrl: activeSignalUrl, localSignal: Boolean(localSignal), lanAddresses: lanAddresses(),
     workspaceId: session?.workspaceId, connectedDeviceId: session?.connectedDeviceId, terminals: session?.listTerminals() ?? [],
     devices: [...(session?.devices.values() ?? [])].map(({ id, name }) => ({ id, name })),
     workspaces: await listRegisteredWorkspaces(workspacesRoot()) }
@@ -35,6 +37,7 @@ function onOutput(id: string, data: string, seq: number) { session?.output(id, d
 export async function stopMobileHost(): Promise<void> {
   generation++
   const old = window; window = undefined
+  activeSignalUrl = undefined
   session?.disconnect(); session = undefined; qr = undefined; state = '已关闭'
   terminalOutputEvents.off('data', onOutput)
   if (old && !old.isDestroyed()) old.destroy()
@@ -53,12 +56,14 @@ export async function startMobileHost(options: MobileHostOptions): Promise<void>
     if (options.stunUrl && !/^stun:[^\s]+$/.test(options.stunUrl)) throw Error('只允许 STUN，不支持 TURN')
     let signalUrl = options.signalUrl.trim()
     if (!signalUrl) {
+      const addresses = lanAddresses()
+      const address = options.localAddress || addresses[0]?.address
+      if (!address || !addresses.some(a => a.address === address)) throw Error('请选择当前可用的局域网网卡，或配置公网信令')
       localSignal = await startSignaling(43821, '0.0.0.0')
-      const address = Object.values(networkInterfaces()).flat().find(a => a?.family === 'IPv4' && !a.internal)?.address ?? '127.0.0.1'
       signalUrl = `ws://${address}:${localSignal.port}/signal`
     }
-    const parsed = new URL(signalUrl)
-    if (!['ws:', 'wss:'].includes(parsed.protocol) || parsed.username || parsed.password || signalUrl.length > 2048) throw Error('请输入 ws:// 或 wss:// 信令地址')
+    validateSignalUrl(signalUrl)
+    activeSignalUrl = signalUrl
     const invite = randomBytes(24).toString('hex'), secret = randomBytes(32).toString('hex')
     const expiresAt = Date.now() + 5 * 60 * 1000
     const active = new MobileSession(options.workspaceId, expiresAt, secret, {

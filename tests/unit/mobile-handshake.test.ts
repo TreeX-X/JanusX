@@ -65,29 +65,38 @@ describe('mobile pairing', () => {
     expect(create).toHaveBeenCalledTimes(1)
   })
 
-  it('delivers early hello only after the desktop has verified the UDP path', async () => {
+  it.each(['immediate', 'delayed', 'relay', 'tcp', 'missing', 'stats-error'])('verifies the UDP path before delivering early hello: %s', async mode => {
     const messages: any[] = []
     let bridgeCallback: (m: any) => void = () => {}
     let ws: any, pc: any, resolveStats: (value: any) => void = () => {}
+    let statsCalls = 0, latestStats: any
     class Socket {
+      readyState = 1
       onmessage: any
       send() {}
       constructor() { ws = this }
     }
     class Peer {
       connectionState = 'connected'
-      dc: any = { bufferedAmount: 0 }
+      dc: any = { bufferedAmount: 0, readyState: 'open' }
       constructor() { pc = this }
       createDataChannel() { return this.dc }
       async createOffer() { return { type: 'offer', sdp: 'test-sdp' } }
       async setLocalDescription() {}
-      getStats() { return new Promise(resolve => { resolveStats = resolve }) }
+      getStats() {
+        statsCalls++
+        if (mode === 'delayed' && statsCalls === 1) return Promise.resolve(new Map())
+        if (statsCalls === (mode === 'delayed' ? 2 : 1)) return new Promise(resolve => { resolveStats = resolve })
+        if (mode === 'stats-error') return Promise.reject(Error('stats unavailable'))
+        return Promise.resolve(latestStats)
+      }
       close() {}
     }
     const source = transformSync(readFileSync('src/renderer/src/remote-host.ts', 'utf8'), { loader: 'ts' }).code
     runInNewContext(source, {
       window: { remoteTransport: { send: (m: any) => messages.push(m), onMessage: (cb: any) => { bridgeCallback = cb } } },
-      WebSocket: Socket, RTCPeerConnection: Peer, crypto: webcrypto, TextEncoder, setTimeout, clearTimeout,
+      WebSocket: Socket, RTCPeerConnection: Peer, crypto: webcrypto, TextEncoder,
+      setTimeout: (callback: () => void, ms: number) => setTimeout(callback, Math.min(ms, 1)), clearTimeout,
     })
     bridgeCallback({ type: 'start', signalUrl: 'ws://localhost', invite: 'a'.repeat(48), secret: 'b'.repeat(64), stun: '' })
     ws.onmessage({ data: JSON.stringify({ type: 'peer-ready' }) })
@@ -95,14 +104,32 @@ describe('mobile pairing', () => {
     const opening = pc.dc.onopen()
     pc.dc.onmessage({ data: '{"type":"hello"}' })
     expect(messages.some(m => m.type === 'message')).toBe(false)
-    resolveStats(new Map([
+    if (mode === 'delayed') await vi.waitFor(() => expect(statsCalls).toBe(2))
+    latestStats = new Map([
       ['transport', { type: 'transport', selectedCandidatePairId: 'pair' }],
       ['pair', { localCandidateId: 'local', remoteCandidateId: 'remote' }],
       ['local', { protocol: 'udp', candidateType: 'host' }],
-      ['remote', { protocol: 'udp', candidateType: 'prflx' }],
-    ]))
+      ['remote', { protocol: mode === 'tcp' ? 'tcp' : 'udp', candidateType: mode === 'relay' ? 'relay' : 'prflx' }],
+    ])
+    if (mode === 'missing' || mode === 'stats-error') latestStats = new Map()
+    resolveStats(latestStats)
     await opening
     const delivered = messages.filter(m => ['open', 'message'].includes(m.type))
-    expect(delivered).toEqual([{ type: 'open' }, { type: 'message', text: '{"type":"hello"}' }])
+    if (mode === 'immediate' || mode === 'delayed') {
+      expect(delivered).toEqual([{ type: 'open' }, { type: 'message', text: '{"type":"hello"}' }])
+      ws.onmessage({ data: JSON.stringify({ type: 'peer-ready' }) })
+      await new Promise(resolve => setTimeout(resolve, 10))
+      expect(messages.some(m => m.type === 'close')).toBe(false)
+      const previous = pc
+      previous.dc.readyState = 'closed'
+      previous.dc.onclose()
+      await vi.waitFor(() => expect(pc).not.toBe(previous))
+      ws.onmessage({ data: JSON.stringify({ type: 'peer-left' }) })
+      await vi.waitFor(() => expect(messages.at(-1).text).toContain('手机已离开信令'))
+    } else {
+      expect(delivered).toEqual([])
+      expect(messages.some(m => m.type === 'close')).toBe(true)
+      expect(messages.at(-1).text).toContain('未确认 UDP')
+    }
   })
 })

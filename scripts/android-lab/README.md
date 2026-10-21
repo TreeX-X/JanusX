@@ -2,9 +2,9 @@
 
 Android 原生测试 App 已接入 JanusX 桌面配对与真实 Claude Code 终端；本目录的合成主机仅验证 WebRTC DataChannel 的 UDP 消息往返。仅使用 ICE/STUN，不配置 TURN，不中继业务消息，手机配对不依赖账号。
 
-## 手机扫码配对（0.1.4）
+## 手机扫码配对（0.1.5）
 
-安装 `apps/android-lab/app/build/outputs/apk/debug/app-debug.apk`，标题应显示版本 0.1.4，可覆盖安装旧测试版。重启更新后的电脑 dev，在设置 → 创新功能 → 远程协作控制中开启开关，再从底部手机远程入口生成新二维码；默认选择当前工作区，也可在开启前选择其他工作区。手机点击「扫码配对」，首次允许相机权限，对准电脑二维码即可连接，然后在电脑批准设备。当前桌面默认使用局域网信令地址，先在同一 Wi-Fi 测试。
+安装 `apps/android-lab/app/build/outputs/apk/debug/app-debug.apk`，标题应显示版本 0.1.5，可覆盖安装旧测试版。重启更新后的电脑 dev，在设置 → 创新功能 → 远程协作控制中开启开关，再从底部手机远程入口生成新二维码；默认选择当前工作区，也可在开启前选择其他工作区。手机点击「扫码配对」，首次允许相机权限，对准电脑二维码即可连接，然后在电脑批准设备。同局域网选择手机可访问的网卡；异网需先配置公网信令，见下文。
 
 0.1.4 使用离线 xterm 显示真实终端屏幕，处理 ANSI/VT 光标、清屏、颜色及中英文，不再把原始控制序列和连接日志追加到同一个文本框。默认「适宽」显示全部列，A−/A+ 放大后可左右滑动；支持历史滚动、到底部、同步、常用控制键和软键盘输入。连接参数与日志折叠到「详情」。断开后点击「连接」恢复同一终端，新建按钮明确创建新进程；原生应用离开前台仍会断开连接。关闭创新功能会停止远程服务，但电脑终端继续运行。电脑状态栏显示手机连接和远程终端数，面板提供「在桌面查看」。详见[配对握手 Note](../../.agents/notes/remote/android-pairing-handshake.md)。
 
@@ -61,6 +61,8 @@ Smoke 调用 `desktop-smoke.mjs`，启动隔离 profile 的真实 Electron 和�
 APK 输出：`apps/android-lab/app/build/outputs/apk/debug/app-debug.apk`。Smoke 证据位于 `artifacts/android-lab/desktop-smoke-*/`，包括 `report.json`、`android.log` 和 `terminal-startup.txt`。二维码载荷与临时凭据仅在忽略目录保存。原 `server.mjs`、`host.html` 是历史合成 echo 对端，不支持新签名配对，不再作为 Android MVP 的 Smoke。
 
 ## 传输与边界
+
+Android 0.1.5 的异网测试需在桌面手机远程面板选择“异网连接”，配置双方可访问的公网 `wss://` 信令，然后重新扫码。默认 LAN 二维码不能供普通蜂窝网络访问，STUN 也不会公开 LAN 信令。独立信令构建、TLS 反向代理和按阶段排障见[信令部署说明](../remote-lab/signaling.md)。当前没有默认公共信令服务，需自行部署；无 TURN 仍无法保证所有 NAT 可达。
 
 Android 使用固定版本的 `io.github.webrtc-sdk:android` 原生 libwebrtc 构建和 OkHttp 信令。`LabTransport` 隔离连接、发送、路径检查及关闭。当前只有一个可靠有序通道，单次发送最多 16 KiB，缓冲量超过 256 KiB 时拒绝新消息。正式文件传输应分块并单独设计流控。
 

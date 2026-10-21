@@ -22,6 +22,7 @@ public final class WebRtcTransport implements LabTransport {
     private final PeerConnectionFactory factory;
     private final OkHttpClient http = new OkHttpClient.Builder().pingInterval(15, TimeUnit.SECONDS).build();
     private final List<IceCandidate> pending = new ArrayList<>();
+    private final ConnectionDiagnostics diagnostics = new ConnectionDiagnostics();
     private PeerConnection peer;
     private volatile DataChannel channel;
     private WebSocket socket;
@@ -53,12 +54,19 @@ public final class WebRtcTransport implements LabTransport {
         config.tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.DISABLED;
         peer = factory.createPeerConnection(config, new PeerConnection.Observer() {
             public void onSignalingChange(PeerConnection.SignalingState s) { }
-            public void onIceConnectionChange(PeerConnection.IceConnectionState s) { if (!closed) listener.onStatus("ICE " + s); }
+            public void onIceConnectionChange(PeerConnection.IceConnectionState s) {
+                if (!closed) listener.onStatus(s == PeerConnection.IceConnectionState.FAILED ? "ICE FAILED: " + diagnostics.timeoutHint() : "ICE " + s);
+            }
             public void onConnectionChange(PeerConnection.PeerConnectionState s) { if (!closed) listener.onStatus("PEER " + s); }
             public void onIceConnectionReceivingChange(boolean receiving) { }
-            public void onIceGatheringChange(PeerConnection.IceGatheringState s) { listener.onStatus("GATHER " + s); }
+            public void onIceGatheringChange(PeerConnection.IceGatheringState s) {
+                if (!closed) listener.onStatus("GATHER " + s + "; " + diagnostics.candidates());
+            }
             public void onIceCandidate(IceCandidate c) {
-                if (isUdp(c.sdp)) signal("candidate", json("candidate", c.sdp, "sdpMid", c.sdpMid, "sdpMLineIndex", c.sdpMLineIndex));
+                if (!closed && isUdp(c.sdp)) {
+                    diagnostics.localCandidate(c.sdp);
+                    signal("candidate", json("candidate", c.sdp, "sdpMid", c.sdpMid, "sdpMLineIndex", c.sdpMLineIndex));
+                }
             }
             public void onIceCandidatesRemoved(IceCandidate[] c) { }
             public void onAddStream(MediaStream s) { }
@@ -71,6 +79,7 @@ public final class WebRtcTransport implements LabTransport {
         socket = http.newWebSocket(new Request.Builder().url(signalUrl).build(), new WebSocketListener() {
             @Override public void onOpen(WebSocket ws, Response response) {
                 if (closed) { ws.close(1000, "cancelled"); return; }
+                diagnostics.connected();
                 ws.send(json("type", "join", "role", "client", "invite", invitation).toString());
                 listener.onStatus("SIGNAL connected; joining desktop session");
             }
@@ -82,10 +91,13 @@ public final class WebRtcTransport implements LabTransport {
                 });
             }
             @Override public void onFailure(WebSocket ws, Throwable error, Response response) {
-                if (!closed) listener.onStatus("SIGNAL failed (check address/network)");
+                if (!closed) listener.onStatus("SIGNAL failed (" + error.getClass().getSimpleName()
+                    + (response == null ? "" : ", HTTP " + response.code()) + "): "
+                    + (channel != null && channel.state() == DataChannel.State.OPEN ? "UDP 通道继续运行" : diagnostics.timeoutHint()));
             }
             @Override public void onClosed(WebSocket ws, int code, String reason) {
-                if (!closed) listener.onStatus("SIGNAL closed " + code + "; an open data channel can continue");
+                if (!closed) listener.onStatus("SIGNAL closed " + code + "; "
+                    + (channel != null && channel.state() == DataChannel.State.OPEN ? "UDP 通道继续运行" : diagnostics.timeoutHint()));
             }
             @Override public void onClosing(WebSocket ws, int code, String reason) { ws.close(code, reason); }
         });
@@ -97,6 +109,7 @@ public final class WebRtcTransport implements LabTransport {
             JSONObject data = message.getJSONObject("data");
             if (!PairingMac.verify(pairingSecret, invitation, "offer", data.getString("sdp"), data.optString("mac")))
                 throw new IllegalArgumentException("Invalid desktop signature");
+            diagnostics.offer();
             listener.onStatus("SDP desktop verified; negotiating UDP");
             peer.setRemoteDescription(new SdpAdapter() {
                 @Override public void onSetSuccess() {
@@ -127,10 +140,11 @@ public final class WebRtcTransport implements LabTransport {
         } else if (type.equals("candidate")) {
             JSONObject d = message.getJSONObject("data");
             if (!isUdp(d.getString("candidate"))) return;
+            diagnostics.remoteCandidate();
             IceCandidate candidate = new IceCandidate(d.optString("sdpMid", "0"), d.getInt("sdpMLineIndex"), d.getString("candidate"));
             if (remoteReady) peer.addIceCandidate(candidate);
             else if (pending.size() < 128) pending.add(candidate);
-        } else if (type.equals("joined")) listener.onStatus("SIGNAL joined; waiting for desktop offer");
+        } else if (type.equals("joined")) { diagnostics.joined(); listener.onStatus("SIGNAL joined; waiting for desktop offer"); }
         else if (type.equals("peer-left")) { listener.onStatus("Desktop left; scan the current desktop QR to reconnect"); close(); }
         else if (type.equals("error")) listener.onStatus("SIGNAL rejected: " + message.optString("code"));
     }
@@ -172,6 +186,8 @@ public final class WebRtcTransport implements LabTransport {
             && dc.bufferedAmount() < 262144 && dc.send(new DataChannel.Buffer(ByteBuffer.wrap(bytes), false));
     }
 
+    @Override public String timeoutHint() { return diagnostics.timeoutHint(); }
+
     @Override public synchronized void inspectPath() {
         if (peer == null || closed) return;
         peer.getStats(report -> {
@@ -187,7 +203,7 @@ public final class WebRtcTransport implements LabTransport {
                 String protocol = String.valueOf(local.getMembers().get("protocol"));
                 String left = String.valueOf(local.getMembers().get("candidateType"));
                 String right = String.valueOf(remote.getMembers().get("candidateType"));
-                if (!protocol.equals("udp") || left.equals("relay") || right.equals("relay")) {
+                if (!protocol.equals("udp") || !"udp".equals(remote.getMembers().get("protocol")) || left.equals("relay") || right.equals("relay")) {
                     listener.onStatus("PATH rejected: requires UDP without relay");
                     new android.os.Handler(android.os.Looper.getMainLooper()).post(this::close);
                     return;

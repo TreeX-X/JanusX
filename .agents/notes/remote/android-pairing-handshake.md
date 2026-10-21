@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-20",
-  "updated": "2026-10-21T03:25:21Z",
+  "updated": "2026-10-21T04:31:38Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
   "tags": ["remote", "android", "pairing", "verification"]
 }
@@ -56,3 +56,19 @@ Android 将原生文本框替换为离线 WebView 中的 xterm 6，复用桌面�
 `node scripts/android-lab/desktop-smoke.mjs` 对最终 APK 通过 12 项检查，证据在 `artifacts/android-lab/desktop-smoke-bt4ACk/`：真实 Electron 与 Android 模拟器完成配对审批、新启动 Claude、桌面侧栏/终端/状态栏出现、离线 xterm 绘制、适宽与放大后横向查看、同终端重连，以及关闭开关断连且保留进程。单独注入的 VT fixture 验证跨包擦行/光标序列、中文和 emoji，随后重新订阅恢复真实 CLI；fixture 不冒充模型响应。`android-terminal.png`、`desktop-terminal.png`、`android-screen.txt`、`android.log` 与 `report.json` 保留对应截图和机器证据。Note 检查为 0 errors。
 
 本机模拟器与构建验证不替代真实手机的字体、软键盘、触控滚动、旋转、异网、弱网和长期稳定性验收，也不宣称完整模型对话已验证。APK 为 `apps/android-lab/app/build/outputs/apk/debug/app-debug.apk`，桌面和 Android 必须一起更新。
+
+## 异网信令与失败诊断
+
+0.1.5 针对真机异网无法连接的反馈修复入口配置。此前桌面始终生成第一张非回环 IPv4 网卡的局域网信令地址，手机切换蜂窝网络后通常无法访问，甚至尚未开始 SDP/ICE；当前电脑同时存在 ZeroTier、物理以太网和 APIPA，第一网卡也不能代表正确 LAN 路径。桌面现在区分同局域网和异网：LAN 排除回环/APIPA，将常见虚拟网卡排后并允许手动选择；异网必须填写双方可访问的公网 `wss://` 信令，STUN 可配置，网络模式与服务地址保存在桌面 profile。主进程校验当前网卡及地址，公网拒绝明文 ws、URL 用户名/密码与 fragment；运行状态显示实际信令地址。网卡排序是启发式，未声称检测默认路由。
+
+现有 `src/main/remote-signal.ts` 原本没有构建入口。`npm run remote:signal:build` 将同一生产信令代码打包为 `artifacts/remote-signal/server.mjs`，可复制到 Node.js 22+ 服务器独立运行，经 TLS WebSocket 反向代理提供公网入口。部署步骤见[信令说明](../../../scripts/remote-lab/signaling.md)。信令继续只转发 SDP/UDP ICE，不承载终端业务、secret 或授权 token；无 TURN。当前没有已配置或已部署的公共默认服务，代码改动不能自行赋予 LAN 地址公网可达性。
+
+隐藏 WebRTC 窗口在 DataChannel 打开后最多约两秒重试读取选中候选对，避免统计稍晚出现导致已有 UDP 通道被误拒绝；确认前仍有界暂存 hello，未验证 UDP 或选中 relay/TCP 时仍拒绝。STUN 错误和本地 UDP/映射候选数量进入状态提示。自身信令失败/关闭时保留独立的已打开通道，重新加入不主动替换健康通道；若新手机已加入而旧通道随后关闭，则继续协商，避免快速重连漏掉 offer。信令明确通知对端离开房间时关闭通道，保证电脑停止远程后手机及时识别断开；这也意味着对端仅丢失信令时可能需要手动重连。失败原因在清理后上报，避免被通用“连接已断开”覆盖。
+
+Android 使用阶段和候选计数区分信令未连通、未加入会话、等待电脑 offer、SDP 已验证但 UDP 未建立。45 秒总建连超时给出当前阶段提示；即时信令错误记录异常类别和 HTTP 状态，不记录二维码/密钥或候选地址。ICE 失败指出 STUN 映射及对端候选是否到达，界面保留具体错误，数据通道打开后的信令丢失不杀终端。阶段计数帮助定位，不能单凭有无 srflx 推断所有网络的 NAT 类型或可达性。
+
+本机桌面 STUN 探测收到 Google STUN 响应，仅证明该电脑在此次探测中能访问该 STUN，不证明真实手机 UDP 可达、无 CGNAT 或异网验收完成。无中继无法保证任意 NAT/蜂窝网络联通；需公网信令与双方日志继续真机验证，当前异网验收项保持未勾选。
+
+0.1.5 验证通过 30 项 Vitest（上述五个文件加 `tests/unit/mobile-network.test.ts`），新增覆盖公网 QR/地址校验、指定网卡、延迟统计以及 TCP/relay/缺失统计拒绝、保留健康通道与后续协商。TypeScript、变更 TS 文件 ESLint、i18n 检查及桌面构建通过。Android Build 完成 APK、4 项 Java 单测和 lint，结果为 0 errors、15 warnings；新增阶段诊断测试覆盖信令/协商/UDP 分流，映射计数不冒充连通且不暴露地址。
+
+`npm run remote:signal:build` 产物复制到无 node_modules 的系统临时目录后，真实启动 Node 服务，验证健康检查、双端入房、SDP 转发及业务消息 1008 拒绝；证据为 `artifacts/android-lab/standalone-signal-report.json`。最终 `node scripts/android-lab/desktop-smoke.mjs` 通过本机 Electron/Android 全流程，证据为 `artifacts/android-lab/desktop-smoke-rUaagZ/`：新增公网地址必填、配置刷新保留、网卡选择及不可达信令的手机可见诊断，并复核审批、Claude 新启动、VT 显示、同终端重连、关闭开关断连保活。中间联调发现 peer-left 仍保留通道会延迟手机识别电脑停止，已修复并在最终运行复验；UIAutomator 自身偶发异常不作为 App 崩溃或真机证据。公网 TLS 部署、真实蜂窝异网、弱网及长期稳定性未执行。

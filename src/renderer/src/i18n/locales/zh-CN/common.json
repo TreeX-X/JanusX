@@ -328,6 +328,16 @@
     "alive": "运行中",
     "exited": "已退出",
     "showTerminal": "在桌面查看",
+    "network": "连接环境",
+    "lan": "同一局域网",
+    "public": "异网连接",
+    "localAddress": "手机可访问的电脑网卡",
+    "signalUrl": "公网信令地址",
+    "signalRequired": "请填写双方都可访问的 wss:// 公网信令地址",
+    "lanHint": "仅供同一局域网或可互访的虚拟网络使用。手机蜂窝网络无法访问普通局域网地址；连接失败时检查网卡及电脑防火墙。",
+    "publicHint": "需要自行部署、双方均可访问的信令服务，仅交换连接信息。终端通过 UDP 直传；部分 NAT 或禁用 UDP 的网络仍可能无法连接。",
+    "stunUrl": "STUN 地址（UDP 映射）",
+    "actualSignal": "当前信令：{{url}}",
     "stop": "关闭远程"
   },
   "hosted": {

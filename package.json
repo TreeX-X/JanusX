@@ -19,6 +19,7 @@
     "packages/*"
   ],
   "scripts": {
+    "remote:signal:build": "node scripts/remote-lab/build-signal.mjs",
     "showcase": "node scripts/showcase/run.mjs",
     "test:showcase": "node --test tests/showcase/motion.test.mjs",
     "predev": "node scripts/check-dev-environment.mjs",
