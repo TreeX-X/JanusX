@@ -197,12 +197,13 @@ const DARK_MONACO: MonacoThemeDefinition = {
     'editor.findMatchBackground': '#ff783059',
     'editor.findMatchBorder': '#ff7830',
     'editor.findMatchHighlightBackground': '#ff78302e',
-    'diffEditor.insertedLineBackground': '#37633f2e',
-    'diffEditor.removedLineBackground': '#713a3a2e',
-    'diffEditor.insertedTextBackground': '#4d8a5855',
-    'diffEditor.removedTextBackground': '#9a4d4d55',
-    'diffEditorGutter.insertedLineBackground': '#5a9d6433',
-    'diffEditorGutter.removedLineBackground': '#bd626233',
+    // preview-editor-display-style A：正文薄纱（8%）、gutter 色带（30%）、词强调 1:4（32%）
+    'diffEditor.insertedLineBackground': '#37633f14',
+    'diffEditor.removedLineBackground': '#713a3a14',
+    'diffEditor.insertedTextBackground': '#4d8a5852',
+    'diffEditor.removedTextBackground': '#9a4d4d52',
+    'diffEditorGutter.insertedLineBackground': '#5a9d644d',
+    'diffEditorGutter.removedLineBackground': '#bd62624d',
   },
 }
 
@@ -359,12 +360,13 @@ const PLANCHE_MONACO: MonacoThemeDefinition = {
     'editor.findMatchBackground': '#D43D2A59',
     'editor.findMatchBorder': '#D43D2A',
     'editor.findMatchHighlightBackground': '#D43D2A2E',
-    'diffEditor.insertedLineBackground': '#2E6B5E2E',
-    'diffEditor.removedLineBackground': '#D43D2A2E',
-    'diffEditor.insertedTextBackground': '#2E6B5E55',
-    'diffEditor.removedTextBackground': '#D43D2A55',
-    'diffEditorGutter.insertedLineBackground': '#2E6B5E33',
-    'diffEditorGutter.removedLineBackground': '#D43D2A33',
+    // preview-editor-display-style A：正文薄纱（8%）、gutter 色带（30%）、词强调 1:4（32%）
+    'diffEditor.insertedLineBackground': '#2E6B5E14',
+    'diffEditor.removedLineBackground': '#D43D2A14',
+    'diffEditor.insertedTextBackground': '#2E6B5E52',
+    'diffEditor.removedTextBackground': '#D43D2A52',
+    'diffEditorGutter.insertedLineBackground': '#2E6B5E4D',
+    'diffEditorGutter.removedLineBackground': '#D43D2A4D',
   },
 }
 

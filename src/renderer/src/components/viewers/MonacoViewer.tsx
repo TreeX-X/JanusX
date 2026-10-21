@@ -169,9 +169,13 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
   }, [content])
 
 
+  // Note: 排版与折叠对齐 opencode —— .agents/notes/workbench/preview-editor-display-style.md
   const commonOptions = {
     fontSize: 13,
     fontFamily: "'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace",
+    lineHeight: 24,
+    tabSize: 2,
+    detectIndentation: false,
     minimap: { enabled: false },
     scrollBeyondLastLine: false,
     wordWrap: 'on' as const,
@@ -192,6 +196,7 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
     useInlineViewWhenSpaceIsLimited: true,
     renderSideBySideInlineBreakpoint: 800,
     experimental: { useTrueInlineView: true },
+    hideUnchangedRegions: { enabled: true, revealLineCount: 20, minimumLineCount: 20, contextLineCount: 20 },
   }
 
   return (

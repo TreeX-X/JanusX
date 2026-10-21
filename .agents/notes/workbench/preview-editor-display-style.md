@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-20",
-  "updated": "2026-10-21T02:34:47Z",
+  "updated": "2026-10-21T03:29:50Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -14,7 +14,7 @@
 
 ## Intent
 
-用户认可 opencode 的文件编辑显示风格，希望双击预览编辑窗口（`StandaloneFileEditor` 双宿主）的编辑器与差异显示向其靠拢，正常编辑显示与差异显示同批适配、不只 diff；同时窗口外壳自身的 tab 与控件设计和应用整体语言有出入，一并 UI 优化。本文记录 2026-10-21 的调研结论、差距清单与落地映射。外壳 UI 对齐（tab、控件、MonacoViewer 主题字面量）已落地；显示风格学习（A–D）尚未开始。不改动 [文件编辑窗口与预览体验](./file-editor-experience.md) 与 [统一文件窗口与内嵌／浮窗路由](./unified-file-window.md) 的已确认设计。
+用户认可 opencode 的文件编辑显示风格，希望双击预览编辑窗口（`StandaloneFileEditor` 双宿主）的编辑器与差异显示向其靠拢，正常编辑显示与差异显示同批适配、不只 diff；同时窗口外壳自身的 tab 与控件设计和应用整体语言有出入，一并 UI 优化。本文记录 2026-10-21 的调研结论、差距清单、落地映射与裁决。外壳 UI 对齐（tab、控件、MonacoViewer 主题字面量）与显示风格 A/B 已落地；C/D 待 A/B 视觉确认后实施。不改动 [文件编辑窗口与预览体验](./file-editor-experience.md) 与 [统一文件窗口与内嵌／浮窗路由](./unified-file-window.md) 的已确认设计。
 
 调研对象为 anomalyco/opencode（GitHub，dev 分支源码）的双端文件编辑显示实现：TUI 侧 `packages/tui/src/component/patch-diff.tsx` + `@opentui/core` 的 `DiffRenderable`；Web/Desktop 侧 `@pierre/diffs` + `packages/session-ui/src/pierre/index.ts` 风格覆写 + `packages/ui/src/data-display/diff-changes/`；主题推导在 `packages/tui/src/theme/system.ts`。
 
@@ -52,12 +52,14 @@
 
 ## 落地映射
 
-正常编辑显示与差异显示同批适配：B 档排版同时作用于两种模式，A/C/D 的变更色带、指示条与计数属于差异呈现，普通编辑沿用同一排版与令牌基础。
+正常编辑显示与差异显示同批适配：B 档排版同时作用于两种模式，A/C/D 的变更色带、指示条与计数属于差异呈现，普通编辑沿用同一排版与令牌基础。会话流文件改动卡与 TurnChangeIsland 的 diff 呈现与编辑器同源；文件树既有红绿 git 状态设计保持独立，不被本风格覆盖。
 
-- **A 纯主题 token**（`src/shared/theme/definition.ts`）：`diffEditor.inserted/removedLineBackground` 降至约 8%，`diffEditorGutter.*` 提至约 25–30%，形成"色带在 gutter、正文薄纱"；词强调按 1:4 微调。
-- **B Monaco 选项**（`MonacoViewer.tsx`）：`hideUnchangedRegions`（contextLineCount/minimumLineCount/revealLineCount 取 20）对齐 hunk 折叠；`lineHeight: 24`、`tabSize: 2` 同时作用于普通编辑与 diff，不只差异模式。
-- **C CSS/装饰注入**：增删行 2px 竖条（`linesDecorationsClassName` + 伪元素）、行号文字染色。
-- **D 组件层**（`StandaloneFileEditor`）：diff 激活时 tab/工具栏显示 +N −N（基线已在内存，计数现成）。
+- **A 纯主题 token（已落地）**：`src/shared/theme/definition.ts` 两主题 monaco diff 色重排——正文行 tint 降至 8%（alpha `0x14`）、gutter 色带提至 30%（`0x4D`）、词强调 32%（`0x52`，行:词 = 1:4），形成"色带在 gutter、正文薄纱"。
+- **B Monaco 选项（已落地）**：`MonacoViewer.tsx` `lineHeight: 24`、`tabSize: 2`（配 `detectIndentation: false` 保证打开即生效）同时作用于普通编辑与 diff；diff 启用 `hideUnchangedRegions`（enabled，reveal/minimum/context 均 20）折叠不变区。
+- **C 装饰注入（待实施）**：增删行 2px 竖条与行号染色（增绿/删红）。实现载体已裁决：Monaco decoration API，不注入 CSS 覆写 `.monaco-diff-editor`。
+- **D 组件层（待实施）**：+N/−N 徽标，语义按 opencode 桌面 `DiffChanges`——有变更才显示（零变更隐去）、compact 小字绿 `+N` 红 `−N`、支持多文件聚合；落位文件窗口外壳，tab 内常显并在工具栏跟随活动文件，文件树红绿不被覆盖；计数数据可取 git 变更统计（working-tree 行统计已存在）。
+
+A/B 验证：`npm run typecheck`、`npm run theme:check`（0 new）与全量单测通过（并行负载下 workflowx-v2 一次 `BLUEPRINT_SYNC_TIMEOUT`，单独复跑 8/8 通过，属已知并发 flake）。视觉效果待应用内确认，确认后启动 C/D。
 
 与无色块方向同构：opencode 的 bars 指示条 + 行号色带 + 超淡行底色，正是"选中/变更 = 文字 + 2px 强调条、不靠加深填充"的 diff 表达。JanusX 现在的 diff 反而填充偏重、条缺失，此轮学习同时是把 diff 显示收敛进既有视觉语言。不搬的：TUI tree-sitter 虚拟化 PatchDiff（Monaco 自带虚拟化）、pierre 的 `!important` 语法色覆写（破坏主题语法一致性）、文件树 + reviewed 勾选的多文件审阅套件（属另一产品决策）。
 
@@ -72,9 +74,11 @@
 
 验证：`npm run typecheck`、`npm run theme:check`（0 new）、`npm run check:notes` 与全量单测 3638 项通过（`npm run test:unit -- --run`）；planche 契约新增 MonacoViewer 无字面量与外壳图标钮断言。未跑桌面 e2e 与真实窗口视觉确认；滑动指示块与 2px 强调条在 planche 下的渲染效果待真机复核。
 
-## Open questions
+## 裁决
 
-- C 档 2px 竖条与行号染色用 Monaco decoration 还是注入 CSS 覆写 `.monaco-diff-editor`，需在 planche 下分别验证。
-- +N/−N 放 tab 内还是工具栏；是否随普通编辑常态显示 HEAD 差异计数，还是仅比较模式内显示。
-- 显示风格学习是否延伸到会话流里的文件改动卡（[Post-turn changed-file card across external CLIs](./turn-change-card-external-cli.md)）与 TurnChangeIsland，保持两处 diff 呈现同源。
-- A/B 档先行、C/D 视觉确认后排期的顺序是否作为实施拆分。
+- C 档实现载体用 Monaco decoration API，不注入 CSS 覆写 `.monaco-diff-editor`。
+- +N/−N 跟随 opencode 桌面 `DiffChanges` 语义：有变更常显、零变更隐去，落位文件窗口外壳（tab 常显 + 工具栏跟随活动文件，微落位随 C/D 视觉确认微调）。JanusX 文件树的红绿 git 状态设计保持独立，任何情况下不被覆盖。
+- 显示风格延伸到会话流文件改动卡（[Post-turn changed-file card across external CLIs](./turn-change-card-external-cli.md)）与 TurnChangeIsland，两处 diff 呈现与编辑器同源。
+- 实施拆分：A/B 先行看效果，C/D 在视觉确认后排期。
+
+opencode 桌面 `DiffChanges` 参考事实（dev 分支源码核对）：组件渲染 `+N`/`−N` 两个 span，总变更为 0 时不渲染；`compact`（默认）11px 常规字重配 success/danger 前景色，`standard` 14px mono 配 diff 专用色；输入可为多文件变更数组并求和。桌面挂载点为 SessionReview 头部全局汇总（有 diff 常显）与逐文件行（状态徽标旁内联计数，changeSummary 模式移到展开汇总块）；v2 界面通过 `stats` 槽位挂在侧栏标题旁，侧栏收起时移入工具栏并附 n/m 文件计数。
