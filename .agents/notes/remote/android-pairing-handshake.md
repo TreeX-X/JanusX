@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-20",
-  "updated": "2026-10-21T04:31:38Z",
+  "updated": "2026-10-21T05:31:52Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
   "tags": ["remote", "android", "pairing", "verification"]
 }
@@ -72,3 +72,11 @@ Android 使用阶段和候选计数区分信令未连通、未加入会话、等
 0.1.5 验证通过 30 项 Vitest（上述五个文件加 `tests/unit/mobile-network.test.ts`），新增覆盖公网 QR/地址校验、指定网卡、延迟统计以及 TCP/relay/缺失统计拒绝、保留健康通道与后续协商。TypeScript、变更 TS 文件 ESLint、i18n 检查及桌面构建通过。Android Build 完成 APK、4 项 Java 单测和 lint，结果为 0 errors、15 warnings；新增阶段诊断测试覆盖信令/协商/UDP 分流，映射计数不冒充连通且不暴露地址。
 
 `npm run remote:signal:build` 产物复制到无 node_modules 的系统临时目录后，真实启动 Node 服务，验证健康检查、双端入房、SDP 转发及业务消息 1008 拒绝；证据为 `artifacts/android-lab/standalone-signal-report.json`。最终 `node scripts/android-lab/desktop-smoke.mjs` 通过本机 Electron/Android 全流程，证据为 `artifacts/android-lab/desktop-smoke-rUaagZ/`：新增公网地址必填、配置刷新保留、网卡选择及不可达信令的手机可见诊断，并复核审批、Claude 新启动、VT 显示、同终端重连、关闭开关断连保活。中间联调发现 peer-left 仍保留通道会延迟手机识别电脑停止，已修复并在最终运行复验；UIAutomator 自身偶发异常不作为 App 崩溃或真机证据。公网 TLS 部署、真实蜂窝异网、弱网及长期稳定性未执行。
+
+## 临时公网测试入口
+
+用户要求先提供一个可用地址后，已在当前开发电脑运行独立信令服务，绑定回环 `127.0.0.1:7683`，通过 Cloudflare Quick Tunnel 暴露 HTTPS/WSS。此次测试地址为 `wss://programme-columbus-efficient-snap.trycloudflare.com/signal`，仅用于当前临时运行，不写入产品默认配置。电脑、信令进程和 cloudflared 必须保持运行；关机、休眠或停止进程会使入口不可用，重建隧道会产生新地址，无长期可用性保证。正式公共默认服务仍未部署。
+
+cloudflared 2026.10.2 从官方 GitHub Release 下载到忽略目录，SHA256 与官方 asset digest 一致（`12c7c887f8aaab779aef1dfa9b60673530a5adb88ecc55dd6df8f56e0b70f199`），未安装系统服务、修改全局网络配置或捆绑进 App。隧道仅转发已有信令，仍不承载终端业务或启用 TURN。运行 PID、地址和日志保存在 `artifacts/remote-signal/quick-tunnel/runtime.json`、`address.txt`、`signal.*.log` 与 `tunnel.*.log`；停止时应先核对 runtime 中 PID 对应的程序再结束，避免误杀后续复用 PID 的进程。
+
+`node artifacts/remote-signal/quick-tunnel/verify-public.mjs <地址>` 经公网 HTTPS/WSS 对该服务完成六项检查：受信任 TLS 健康检查、host/client 入房、签名 offer、签名 answer、跨隧道心跳和业务消息 1008 拒绝。证据为 `artifacts/remote-signal/quick-tunnel/public-verification.json`。首次隧道注册前的 HTTP 1033 不计通过；隧道连接注册成功后完整检查通过。这是当前电脑经公网入口的真实信令验证，未覆盖真实手机蜂窝网络、UDP 跨网打洞、完整模型对话或长期稳定性，需求验收仍保持未勾选。
