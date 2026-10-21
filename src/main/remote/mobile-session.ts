@@ -6,6 +6,7 @@ export interface MobileTerminalPorts {
   resize(id: string, cols: number, rows: number): void
   replay(id: string): { data: string; seq: number } | null
   alive(id: string): boolean
+  geometry?(id: string): { cols: number; rows: number }
 }
 type Device = { id: string; name: string; token: string }
 type Request = { id: string; method: string; terminalId?: string; text?: string; key?: string; cols?: number; rows?: number }
@@ -20,6 +21,10 @@ export class MobileSession {
   private readonly terminals = new Map<string, { owner: string; pid: number }>()
   private readonly requests = new Map<string, { body: string; result: Promise<unknown> }>()
   private subscribed?: string
+  get connectedDeviceId(): string | undefined { return this.device?.id }
+  listTerminals(): { id: string; pid: number; alive: boolean }[] {
+    return [...this.terminals].map(([id, t]) => ({ id, pid: t.pid, alive: this.ports.alive(id) }))
+  }
   constructor(readonly workspaceId: string, readonly expiresAt: number, private pairingSecret: string, private ports: MobileTerminalPorts, private changed: () => void) {}
   connect(send: (message: unknown) => void): void { this.disconnect(); this.send = send }
   disconnect(): void { this.device = undefined; this.pending = undefined; this.subscribed = undefined; this.send = () => {}; this.changed() }
@@ -80,21 +85,22 @@ export class MobileSession {
       this.terminals.set(id, { owner, pid: 0 })
       try {
         const { pid } = await this.ports.create(id, this.workspaceId)
-        this.terminals.set(id, { owner, pid }); return { terminalId: id, pid }
+        this.terminals.set(id, { owner, pid }); this.changed(); return { terminalId: id, pid }
       } catch (error) { this.terminals.delete(id); throw error }
     }
     const id = m.terminalId
     if (!id || this.terminals.get(id)?.owner !== owner) throw Error('终端不属于此设备')
-    if (!this.ports.alive(id)) throw Error('终端进程已退出')
     if (m.method === 'subscribe') {
-      this.subscribed = id
       const replay = this.ports.replay(id)
       if (!replay) throw Error('终端已不可用')
-      this.send({ type: 'replay-start', terminalId: id, seq: replay.seq, truncated: replay.data.length >= 1000000 })
-      for (let i = 0; i < replay.data.length; i += 4000) this.send({ type: 'replay-data', terminalId: id, data: replay.data.slice(i, i + 4000) })
-      this.send({ type: 'replay-end', terminalId: id, seq: replay.seq })
+      this.subscribed = id
+      const geometry = this.ports.geometry?.(id)
+      this.send({ type: 'replay-start', terminalId: id, seq: replay.seq, ...geometry, truncated: replay.data.length >= 1000000 })
+      for (const data of chunks(replay.data)) this.send({ type: 'replay-data', terminalId: id, data })
+      this.send({ type: 'replay-end', terminalId: id, seq: replay.seq, alive: this.ports.alive(id) })
       return { terminalId: id, seq: replay.seq }
     }
+    if (!this.ports.alive(id)) throw Error('终端进程已退出')
     if (m.method === 'input') {
       if (typeof m.text !== 'string' || !m.text.trim() || m.text.length > 4000 || /[\x00-\x08\x0b-\x1f\x7f]/.test(m.text)) throw Error('请输入最多 4000 字的文本')
       this.ports.input(id, m.text); return { accepted: true }
@@ -112,9 +118,22 @@ export class MobileSession {
   }
   output(id: string, data: string, seq: number): void {
     if (this.subscribed !== id || !this.device) return
-    for (let i = 0; i < data.length; i += 4000) this.send({ type: 'output', terminalId: id, data: data.slice(i, i + 4000), seq, final: i + 4000 >= data.length })
+    const parts = chunks(data)
+    parts.forEach((part, index) => this.send({ type: 'output', terminalId: id, data: part, seq, final: index === parts.length - 1, ...this.ports.geometry?.(id) }))
   }
   exited(id: string, exitCode: number): void {
     if (this.subscribed === id && this.device) this.send({ type: 'exit', terminalId: id, exitCode })
   }
+}
+
+// Keep Unicode code points intact across independently encoded DataChannel messages.
+function chunks(data: string): string[] {
+  const parts: string[] = []
+  for (let i = 0; i < data.length;) {
+    let end = Math.min(i + 2000, data.length)
+    const last = data.charCodeAt(end - 1)
+    if (end < data.length && last >= 0xd800 && last <= 0xdbff) end--
+    parts.push(data.slice(i, end)); i = end
+  }
+  return parts
 }

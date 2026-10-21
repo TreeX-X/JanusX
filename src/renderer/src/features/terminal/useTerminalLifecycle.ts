@@ -51,5 +51,6 @@ export function useTerminalLifecycle(): void {
       shell: event.shell, name: `${event.preset} terminal`, autoCommand: event.preset,
       pid: event.pid, status: 'wait', updatedAt: Date.now(),
     })
-  }), [])
+    if (store.activeWorkspaceId === event.workspaceId) setLoadState('terminal-active')
+  }), [setLoadState])
 }

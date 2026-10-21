@@ -112,8 +112,8 @@
       },
       "remoteControl": {
         "label": "Remote collaboration",
-        "hint": "Show the status-bar remote entry and remote dialog (pairing, terminal tail, controlled submit, host service). Turning off hides the entry, disconnects, and stops the host service.",
-        "note": "Public-network connectivity is not yet implemented; remote control across networks is not guaranteed."
+        "hint": "Enable Android QR pairing and remote Claude Code terminals. Turning off hides the entry, disconnects the phone and stops the remote service while desktop terminals keep running.",
+        "note": "Devices require desktop approval. Uses direct UDP without a business relay; some networks may not connect."
       },
       "teamCollab": {
         "label": "Team collaboration",

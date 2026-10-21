@@ -109,6 +109,10 @@ export function registerSettingsHandlers(): void {
     EXPERIMENTAL_CHANNELS.update,
     async (_event, settings: Partial<ExperimentalFeatures>) => {
       const next = await configService.updateExperimentalFeatures(settings ?? {})
+      if (!next.remoteControl) {
+        const { stopMobileHost } = await import('../remote/mobile-host')
+        await stopMobileHost()
+      }
       if (!next.knowledge) await cancelKnowledgeLocalSetup()
       const { settleMemoryMutations } = await import('../knowledge/memory-domain-controls')
       await settleMemoryMutations()

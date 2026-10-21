@@ -6,6 +6,36 @@ import { webcrypto } from 'node:crypto'
 import { MobileSession } from '../../src/main/remote/mobile-session'
 
 describe('mobile pairing', () => {
+  it('preserves Unicode at message boundaries and restores terminal ownership after reconnect', async () => {
+    const replies: any[] = []
+    const create = vi.fn(async () => ({ pid: 321 }))
+    const alive = vi.fn(() => true)
+    const session = new MobileSession('workspace', Date.now() + 60000, 'secret', {
+      create, input: vi.fn(), keys: vi.fn(), resize: vi.fn(), alive,
+      geometry: () => ({ cols: 132, rows: 38 }), replay: () => ({ data: 'history', seq: 5 }),
+    }, vi.fn())
+    session.connect(message => replies.push(message))
+    await session.receive(JSON.stringify({ type: 'hello', secret: 'secret', deviceId: 'android-device-1234', name: 'Android' }))
+    session.approve('android-device-1234')
+    const token = replies.at(-1).token
+    await session.receive(JSON.stringify({ id: 'create-1', method: 'create' }))
+    const terminalId = replies.at(-1).value.terminalId
+    await session.receive(JSON.stringify({ id: 'sub-1', method: 'subscribe', terminalId }))
+    const output = 'a'.repeat(1999) + '😀中文' + '\x1b[2K'.repeat(2000)
+    session.output(terminalId, output, 6)
+    const packets = replies.filter(m => m.type === 'output')
+    expect(packets.map(m => JSON.parse(JSON.stringify(m)).data).join('')).toBe(output)
+    expect(packets.every(m => !/[\ud800-\udbff]$/.test(m.data))).toBe(true)
+    expect(packets.every(m => Buffer.byteLength(JSON.stringify(m)) <= 16384)).toBe(true)
+    expect(packets.at(-1)).toMatchObject({ seq: 6, final: true, cols: 132, rows: 38 })
+    session.disconnect(); session.connect(message => replies.push(message))
+    await session.receive(JSON.stringify({ type: 'hello', secret: 'secret', token, deviceId: 'android-device-1234', name: 'Android' }))
+    expect(replies.at(-1)).toMatchObject({ type: 'approved', terminals: [{ id: terminalId, pid: 321, alive: true }] })
+    expect(create).toHaveBeenCalledTimes(1)
+    alive.mockReturnValue(false)
+    await session.receive(JSON.stringify({ id: 'sub-exited', method: 'subscribe', terminalId }))
+    expect(replies.findLast(m => m.type === 'replay-end')).toMatchObject({ alive: false })
+  })
   it('rejects unapproved operations, then creates once and streams output after approval', async () => {
     const replies: any[] = []
     const create = vi.fn(async () => ({ pid: 123 }))

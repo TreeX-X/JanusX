@@ -2,9 +2,11 @@
 
 Android 原生测试 App 已接入 JanusX 桌面配对与真实 Claude Code 终端；本目录的合成主机仅验证 WebRTC DataChannel 的 UDP 消息往返。仅使用 ICE/STUN，不配置 TURN，不中继业务消息，手机配对不依赖账号。
 
-## 手机扫码配对（0.1.3）
+## 手机扫码配对（0.1.4）
 
-安装 `apps/android-lab/app/build/outputs/apk/debug/app-debug.apk`，标题应显示版本 0.1.3，可覆盖安装旧测试版。重启更新后的电脑 dev，开启手机远程并生成新二维码；手机点击「扫描电脑二维码 / Scan QR」，首次允许相机权限，对准电脑二维码即可自动填入并发起连接，然后在电脑批准设备。当前桌面默认使用局域网信令地址，先在同一 Wi-Fi 测试。
+安装 `apps/android-lab/app/build/outputs/apk/debug/app-debug.apk`，标题应显示版本 0.1.4，可覆盖安装旧测试版。重启更新后的电脑 dev，在设置 → 创新功能 → 远程协作控制中开启开关，再从底部手机远程入口生成新二维码；默认选择当前工作区，也可在开启前选择其他工作区。手机点击「扫码配对」，首次允许相机权限，对准电脑二维码即可连接，然后在电脑批准设备。当前桌面默认使用局域网信令地址，先在同一 Wi-Fi 测试。
+
+0.1.4 使用离线 xterm 显示真实终端屏幕，处理 ANSI/VT 光标、清屏、颜色及中英文，不再把原始控制序列和连接日志追加到同一个文本框。默认「适宽」显示全部列，A−/A+ 放大后可左右滑动；支持历史滚动、到底部、同步、常用控制键和软键盘输入。连接参数与日志折叠到「详情」。断开后点击「连接」恢复同一终端，新建按钮明确创建新进程；原生应用离开前台仍会断开连接。关闭创新功能会停止远程服务，但电脑终端继续运行。电脑状态栏显示手机连接和远程终端数，面板提供「在桌面查看」。详见[配对握手 Note](../../.agents/notes/remote/android-pairing-handshake.md)。
 
 0.1.3 修复沙箱 preload 格式/路径、构建后资源定位、安卓 SDP 签名缺失及过早 hello 丢失。电脑底部「远程已开启」面板自动显示连接阶段与待审批设备，点击批准后手机显示授权结果；创建 Claude Code 后自动订阅输出。详细原因、实现与验证边界见[配对握手 Note](../../.agents/notes/remote/android-pairing-handshake.md)。
 
@@ -74,6 +76,6 @@ npx vitest run tests/unit/mobile-handshake.test.ts
 node scripts/check-agent-notes.mjs
 ```
 
-原生编译、Android lint 与 Java HMAC 单测由 Build 执行；真实桌面/Android 本机链路由 Smoke 执行。server.test.mjs 仅是历史合成服务的测试。实际执行结果记录在配对握手 Note 中，未执行的真机跨网测试不计为通过。
+原生编译、Android lint 与 Java HMAC 单测由 Build 执行，Gradle preBuild 用 Node/esbuild 将已安装的 `@xterm/xterm` 打包成 APK 离线资源，因此构建前需在仓库根目录安装 Node 依赖。真实桌面/Android 本机链路由 Smoke 执行，覆盖开关门控、真实创建与桌面显示、WebView 终端绘制、适宽/字号、分片 VT/中文/emoji fixture、同终端重连和关闭服务保留进程。VT fixture 单独标注，不冒充真实 CLI 输出。server.test.mjs 仅是历史合成服务的测试。实际执行结果记录在配对握手 Note 中，未执行的真机跨网测试不计为通过。
 
 2026-10-20 本机执行结果：Build 成功，Android lint 为 0 errors、3 warnings（实验界面的翻译、图标和备份配置建议）；两项信令服务测试通过。Smoke 连续两次通过，手动 Disconnect → Connect 后再次收到 pong。ADB 点击发送中文 `你好 JanusX`，界面回显内容一致，选中路径为 UDP、host/prflx，无 relay。观察到的消息往返约 4–41 ms，仅作功能证据，不是性能基准。截图保存在 `artifacts/android-lab/emulator.png`。真机跨网、长期稳定性、弱网和网络切换测试尚未运行。

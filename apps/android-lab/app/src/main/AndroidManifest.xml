@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application android:label="JanusX P2P Lab" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:usesCleartextTraffic="false" android:supportsRtl="true">
         <activity android:name=".PairingCaptureActivity" android:exported="false" android:screenOrientation="fullSensor" />
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity" android:theme="@android:style/Theme.Material.NoActionBar" android:exported="true" android:windowSoftInputMode="adjustResize" android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

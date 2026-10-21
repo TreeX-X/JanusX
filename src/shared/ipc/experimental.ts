@@ -21,7 +21,7 @@ export interface ExperimentalFeatures {
   roundtable: boolean
   /** 个人记忆采集、处理与召回，以及画像、详细设置和个人审核。关闭保留数据。 */
   persona: boolean
-  /** 远程协作控制（状态栏远控胶囊 + 远控弹窗：配对/终端尾流/受控提交/被控服务）。 */
+  /** Android 手机配对与 Claude Code 远程终端。关闭入口并停止连接，保留电脑终端。 */
   remoteControl: boolean
   /** 团队协作（侧栏团队行 + 首屏登录挡板 + 设置中心 team 页；关闭仅隐藏入口，登录态数据保留）。 */
   teamCollab: boolean

@@ -9,6 +9,9 @@ import { terminalManager, terminalOutputEvents } from '../terminal/manager'
 import { createCompanionTerminal, submitCompanionTerminalLine } from '../ipc/terminal-handlers'
 import { listRegisteredWorkspaces, resolveRegisteredWorkspace } from '../companion/workspace-registry'
 import type { MobileHostOptions, MobileHostStatus } from '../../shared/ipc/remote'
+import { configService } from '../config/service'
+
+// Note: .agents/notes/remote/android-pairing-handshake.md
 
 const BRIDGE = 'remote:transport'
 let window: BrowserWindow | undefined
@@ -17,17 +20,20 @@ let session: MobileSession | undefined
 let state = '已关闭'
 let qr: string | undefined
 let starting = false
+let generation = 0
 const workspacesRoot = () => join(app.getPath('userData'), 'janusx', 'workspaces')
 const sendTransport = (data: unknown) => {
   if (window && !window.isDestroyed()) window.webContents.send(BRIDGE, data)
 }
 export async function mobileHostStatus(): Promise<MobileHostStatus> {
-  return { running: Boolean(window), state, qr, expiresAt: session?.expiresAt, pending: session?.pending,
+  return { running: Boolean(window), state: session?.connectedDeviceId ? '手机已授权连接' : state, qr, expiresAt: session?.expiresAt, pending: session?.pending,
+    workspaceId: session?.workspaceId, connectedDeviceId: session?.connectedDeviceId, terminals: session?.listTerminals() ?? [],
     devices: [...(session?.devices.values() ?? [])].map(({ id, name }) => ({ id, name })),
     workspaces: await listRegisteredWorkspaces(workspacesRoot()) }
 }
 function onOutput(id: string, data: string, seq: number) { session?.output(id, data, seq) }
 export async function stopMobileHost(): Promise<void> {
+  generation++
   const old = window; window = undefined
   session?.disconnect(); session = undefined; qr = undefined; state = '已关闭'
   terminalOutputEvents.off('data', onOutput)
@@ -41,6 +47,8 @@ export async function startMobileHost(options: MobileHostOptions): Promise<void>
   starting = true
   try {
     await stopMobileHost()
+    const activation = generation
+    if (!(await configService.getExperimentalFeatures()).remoteControl) throw Error('请先在设置 → 创新功能中开启远程协作控制')
     await resolveRegisteredWorkspace(workspacesRoot(), options.workspaceId)
     if (options.stunUrl && !/^stun:[^\s]+$/.test(options.stunUrl)) throw Error('只允许 STUN，不支持 TURN')
     let signalUrl = options.signalUrl.trim()
@@ -66,10 +74,12 @@ export async function startMobileHost(options: MobileHostOptions): Promise<void>
       resize: (id, cols, rows) => terminalManager.resize(id, cols, rows),
       replay: id => terminalManager.getOutputReplay(id),
       alive: id => { const t = terminalManager.getInstance(id); return Boolean(t && t.status !== 'exited') },
+      geometry: id => { const t = terminalManager.getInstance(id); return { cols: t?.lastCols ?? 80, rows: t?.lastRows ?? 30 } },
     }, () => {})
     session = active
     terminalOutputEvents.on('data', onOutput)
     qr = await QRCode.toDataURL(JSON.stringify({ v: 1, signalUrl, invite, secret, stun: options.stunUrl, expiresAt }), { scale: 8, margin: 4, errorCorrectionLevel: 'M' })
+    if (activation !== generation) throw Error('远程开启已取消')
     const hostWindow = new BrowserWindow({ show: false, webPreferences: {
       preload: join(app.getAppPath(), 'out/preload/remote.cjs'), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false,
     } })
@@ -83,6 +93,7 @@ export async function startMobileHost(options: MobileHostOptions): Promise<void>
     state = '等待手机扫码'
     if (process.env.ELECTRON_RENDERER_URL) await hostWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL}/remote-host.html`)
     else await hostWindow.loadFile(join(app.getAppPath(), 'out/renderer/remote-host.html'))
+    if (activation !== generation || !(await configService.getExperimentalFeatures()).remoteControl) throw Error('远程开启已取消')
   } catch (error) { await stopMobileHost(); throw error }
   finally { starting = false }
 }
