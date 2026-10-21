@@ -1,0 +1,65 @@
+<!doctype html><meta charset="utf-8"><title>JanusX synthetic desktop peer</title>
+<p>Local native-Android transport test host. No shell, files or production workspace access.</p>
+<script>
+window.report = { state: 'idle', generation: 0, messages: 0, errors: [], path: null }
+window.startHost = ({ invite, stun }) => {
+  const ws = new WebSocket(`ws://${location.host}/signal`)
+  let pc, dc, remoteReady = false, pending = [], statsTimer
+  let chain = Promise.resolve()
+  const send = (type, data) => ws.send(JSON.stringify({ type, data }))
+  const fail = () => { report.errors.push('connection-failed'); report.state = 'failed' }
+  const clean = () => { clearInterval(statsTimer); if (dc) dc.close(); if (pc) pc.close(); pc = null; dc = null; pending = []; remoteReady = false }
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'join', role: 'host', invite }))
+  ws.onmessage = event => {
+    chain = chain.then(async () => {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'peer-left') { clean(); report.state = 'waiting'; return }
+      if (msg.type === 'peer-ready') {
+        clean()
+        report.generation++; report.path = null; report.state = 'connecting'
+        pc = new RTCPeerConnection({ iceServers: stun ? [{ urls: stun }] : [] })
+        const connection = pc
+        pc.onicecandidate = e => {
+          if (e.candidate && / udp /i.test(e.candidate.candidate) && pc === connection) send('candidate', e.candidate.toJSON())
+        }
+        pc.onconnectionstatechange = () => { if (pc === connection) report.state = pc.connectionState }
+        dc = pc.createDataChannel('janusx-lab-v1', { ordered: true })
+        dc.onmessage = e => {
+          if (typeof e.data !== 'string' || e.data.length > 16384) return
+          const request = JSON.parse(e.data)
+          if (dc.bufferedAmount > 262144) return
+          report.messages++
+          if (request.method === 'ping') dc.send(JSON.stringify({ type: 'pong', id: request.id, sentAt: request.sentAt }))
+          if (request.method === 'echo' && typeof request.text === 'string') dc.send(JSON.stringify({ type: 'output', id: request.id, text: request.text }))
+        }
+        dc.onopen = () => {
+          dc.send(JSON.stringify({ type: 'output', text: 'Synthetic JanusX host connected. 你好，安卓。' }))
+          statsTimer = setInterval(async () => {
+            if (pc !== connection) return
+            const stats = await connection.getStats()
+            for (const t of stats.values()) {
+              if (t.type !== 'transport' || !t.selectedCandidatePairId) continue
+              const pair = stats.get(t.selectedCandidatePairId)
+              const local = stats.get(pair.localCandidateId), remote = stats.get(pair.remoteCandidateId)
+              report.path = { protocol: local.protocol, local: local.candidateType, remote: remote.candidateType, rtt: pair.currentRoundTripTime }
+              if (local.protocol !== 'udp' || [local.candidateType, remote.candidateType].includes('relay')) { fail(); clean() }
+            }
+          }, 1000)
+        }
+        await pc.setLocalDescription(await pc.createOffer())
+        send('offer', { type: 'offer', sdp: pc.localDescription.sdp })
+      } else if (msg.type === 'answer') {
+        await pc.setRemoteDescription(msg.data)
+        remoteReady = true
+        for (const candidate of pending) await pc.addIceCandidate(candidate)
+        pending = []
+      } else if (msg.type === 'candidate') {
+        if (!/ udp /i.test(msg.data.candidate)) return
+        if (remoteReady) await pc.addIceCandidate(msg.data)
+        else if (pending.length < 128) pending.push(msg.data)
+      }
+    }).catch(fail)
+  }
+  ws.onerror = fail
+}
+</script>

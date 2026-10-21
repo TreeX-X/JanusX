@@ -47,7 +47,7 @@ import { THEME_CHANNELS, type AppTheme, type ThemeAPI } from '../shared/ipc/them
 import { SYSTEM_CHANNELS, type DesktopToastAPI, type DialogAPI, type SystemAPI, type WindowAPI } from '../shared/ipc/system'
 import { TEAM_CHANNELS, type TeamAPI } from '../shared/ipc/team'
 import { UPDATER_CHANNELS, UPDATER_EVENT_CHANNELS, type UpdaterAPI } from '../shared/ipc/updater'
-import { PEER_CHANNELS, REMOTE_CHANNELS, type PeerAPI, type RemoteAPI } from '../shared/ipc/remote'
+import { REMOTE_CHANNELS, type RemoteAPI } from '../shared/ipc/remote'
 import { SHELL_PROFILE_CHANNELS, type ShellProfilesAPI } from '../shared/ipc/shell-profiles'
 
 const blueprintReviewAPI: BlueprintReviewAPI = {
@@ -533,32 +533,12 @@ const teamAPI: TeamAPI = {
 }
 
 const remoteAPI: RemoteAPI = {
-  issueCode: (token) => ipcRenderer.invoke(REMOTE_CHANNELS.issueCode, token),
-  redeemCode: (token, code, device) => ipcRenderer.invoke(REMOTE_CHANNELS.redeemCode, token, code, device),
-  listTerminals: (token, deviceId) => ipcRenderer.invoke(REMOTE_CHANNELS.listTerminals, token, deviceId),
-  tail: (token, deviceId, terminalId) => ipcRenderer.invoke(REMOTE_CHANNELS.tail, token, deviceId, terminalId),
-  execute: (token, deviceId, command, opts) =>
-    ipcRenderer.invoke(REMOTE_CHANNELS.execute, token, deviceId, command, opts),
-  issueActionToken: (token, deviceId, terminalId, action) =>
-    ipcRenderer.invoke(REMOTE_CHANNELS.issueActionToken, token, deviceId, terminalId, action),
-  listTrusted: (token) => ipcRenderer.invoke(REMOTE_CHANNELS.listTrusted, token),
-  revokeDevice: (token, deviceId) => ipcRenderer.invoke(REMOTE_CHANNELS.revokeDevice, token, deviceId),
-}
-
-const peerAPI: PeerAPI = {
-  hostStatus: () => ipcRenderer.invoke(PEER_CHANNELS.hostStatus),
-  startHost: (token, deviceName) => ipcRenderer.invoke(PEER_CHANNELS.startHost, token, deviceName),
-  stopHost: () => ipcRenderer.invoke(PEER_CHANNELS.stopHost),
-  discover: (timeoutMs) => ipcRenderer.invoke(PEER_CHANNELS.discover, timeoutMs),
-  pair: (token, deviceName, baseUrl, fingerprint, code, expectedDeviceId) =>
-    ipcRenderer.invoke(PEER_CHANNELS.pair, token, deviceName, baseUrl, fingerprint, code, expectedDeviceId),
-  peers: () => ipcRenderer.invoke(PEER_CHANNELS.peers),
-  listTerminals: (token, hostDeviceId) => ipcRenderer.invoke(PEER_CHANNELS.terminals, token, hostDeviceId),
-  tail: (token, hostDeviceId, terminalId) => ipcRenderer.invoke(PEER_CHANNELS.tail, token, hostDeviceId, terminalId),
-  execute: (token, hostDeviceId, command, opts) =>
-    ipcRenderer.invoke(PEER_CHANNELS.execute, token, hostDeviceId, command, opts),
-  disconnect: (hostDeviceId) => ipcRenderer.invoke(PEER_CHANNELS.disconnect, hostDeviceId),
-  forget: (hostDeviceId) => ipcRenderer.invoke(PEER_CHANNELS.forget, hostDeviceId),
+  status: () => ipcRenderer.invoke(REMOTE_CHANNELS.status),
+  start: (options) => ipcRenderer.invoke(REMOTE_CHANNELS.start, options),
+  stop: () => ipcRenderer.invoke(REMOTE_CHANNELS.stop),
+  approve: (id) => ipcRenderer.invoke(REMOTE_CHANNELS.approve, id),
+  reject: () => ipcRenderer.invoke(REMOTE_CHANNELS.reject),
+  revoke: (id) => ipcRenderer.invoke(REMOTE_CHANNELS.revoke, id),
 }
 
 const dialogAPI: DialogAPI = {
@@ -567,10 +547,14 @@ const dialogAPI: DialogAPI = {
   showMessageBox: (options) => ipcRenderer.invoke(SYSTEM_CHANNELS.showMessageBox, options),
 }
 const windowAPI: WindowAPI = {
+  getMaximized: () => ipcRenderer.invoke(SYSTEM_CHANNELS.getMaximized),
+  onMaximizedChanged: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.maximizedChanged, callback),
   minimize: () => ipcRenderer.invoke(SYSTEM_CHANNELS.minimize),
   maximize: () => ipcRenderer.invoke(SYSTEM_CHANNELS.maximize),
   close: () => ipcRenderer.invoke(SYSTEM_CHANNELS.close),
   openEditor: (payload) => ipcRenderer.invoke(SYSTEM_CHANNELS.openEditor, payload),
+  editorHostReady: () => ipcRenderer.send(SYSTEM_CHANNELS.editorHostReady),
+  editorReceived: (requestId, success) => ipcRenderer.send(SYSTEM_CHANNELS.editorReceived, { requestId, success }),
   editorReady: () => ipcRenderer.send(SYSTEM_CHANNELS.editorReady),
   onEditorCloseRequested: (callback) => subscribeIpcEvent(SYSTEM_CHANNELS.requestEditorClose, callback),
   confirmEditorClose: () => ipcRenderer.invoke(SYSTEM_CHANNELS.confirmEditorClose),
@@ -721,7 +705,6 @@ contextBridge.exposeInMainWorld('electron', {
   subAgentRun: subAgentRunAPI,
   team: teamAPI,
   remote: remoteAPI,
-  peer: peerAPI,
   dialog: dialogAPI,
   window: windowAPI,
   system: systemAPI,

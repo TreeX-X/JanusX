@@ -6,6 +6,9 @@ import { createRequire } from 'node:module'
 import { delimiter, dirname, join } from 'node:path'
 import type { TerminalConfig, TerminalInstance } from './types'
 import { logTerminalDiagnostic } from './diagnostics'
+import { EventEmitter } from 'node:events'
+
+export const terminalOutputEvents = new EventEmitter()
 
 const require = createRequire(import.meta.url)
 const CONPTY_FILES = ['conpty.dll', 'OpenConsole.exe'] as const
@@ -242,6 +245,7 @@ export class TerminalManager {
     if (instance.outputBuffer.length > TERMINAL_OUTPUT_BUFFER_LIMIT) {
       instance.outputBuffer = instance.outputBuffer.slice(-TERMINAL_OUTPUT_BUFFER_LIMIT)
     }
+    terminalOutputEvents.emit('data', id, data, instance.outputSeq)
     return instance.outputSeq
   }
 

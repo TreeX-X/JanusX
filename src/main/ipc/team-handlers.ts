@@ -7,8 +7,6 @@ import {
 } from '../../shared/ipc/team'
 import type { Membership, TeamRole, User } from '../../shared/team/types'
 import { TeamError, teamService } from '../team/service'
-import { notifyTeamDeviceRevoked } from '../remote/host'
-import { stopPeerRuntime } from '../remote/peer-runtime'
 
 function toPublic(user: User) {
   return { id: user.id, email: user.email, name: user.name, status: user.status, createdAt: user.createdAt }
@@ -36,11 +34,7 @@ export function registerTeamHandlers(): void {
   )
   ipcMain.handle(TEAM_CHANNELS.logout, (_event, token: string) =>
     envelope(async () => {
-      const me = await teamService.me(token).catch(() => null)
       const result = await teamService.logout(token)
-      if (me) await notifyTeamDeviceRevoked(me.user.id, me.session.deviceId)
-      // 退出即停双机远控：本机不再被发现/被连，对外控制连接一并断开。
-      await stopPeerRuntime().catch(() => undefined)
       return result
     }),
   )
@@ -81,8 +75,6 @@ export function registerTeamHandlers(): void {
     (_event, token: string, tenantId: string, userId: string, status: Membership['status']) =>
       envelope(async () => {
         const result = await teamService.setMemberStatus(token, tenantId, userId, status)
-        // 禁用即吊销该用户远控信任（逐调用重验已 fail-closed，此处加速清理绑定）。
-        if (status !== 'active') await notifyTeamDeviceRevoked(userId).catch(() => undefined)
         return result
       }),
   )

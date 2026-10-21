@@ -1,0 +1,7 @@
+{
+  "name": "janusx-android-p2p-lab",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.mjs", "test": "node --test server.test.mjs" },
+  "dependencies": { "@playwright/test": "1.60.0", "ws": "8.21.1" }
+}

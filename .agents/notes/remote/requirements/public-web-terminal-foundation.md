@@ -5,7 +5,7 @@
   "kind": "requirement",
   "lifecycle": "accepted",
   "created": "2026-10-11",
-  "updated": "2026-10-12T02:07:42Z",
+  "updated": "2026-10-20T14:48:49.425Z",
   "class": "feature",
   "tags": ["remote","web","public-network","cross-device"],
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
@@ -16,6 +16,8 @@
 ---
 
 # 公网 Web 终端连接基座
+
+> 当前方向已转为 Android 原生无中继 P2P 实验，见[实验决策](../android-p2p-lab.md)。本文保留历史讨论和原验收，不表示浏览器优先或中继方案仍在实施。历史 NAT 推断不应泛化为所有 CGNAT 网络均不能直连。
 
 ## Expected behavior
 

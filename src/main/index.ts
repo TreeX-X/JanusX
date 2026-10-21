@@ -158,7 +158,6 @@ async function runModuleGraphSmoke(): Promise<void> {
     await Promise.all([
       import('./updater/service'),
       import('./config/service'),
-      import('./web-test-gateway/starter'),
     ])
     console.log('[module-graph-smoke] ok')
     app.exit(0)
@@ -276,10 +275,6 @@ async function bootstrapApp(): Promise<void> {
       console.error('[updater] service init failed:', err)
     })
     void feishuInboundRuntime.reconfigure()
-    // 本地验证网关：JANUSX_WEB_TEST=1 时起 127.0.0.1 回环服务，默认关闭。
-    void import('./web-test-gateway/starter').then(({ startWebTestGateway }) => startWebTestGateway()).catch((err) => {
-      console.error('[web-test] gateway failed:', err)
-    })
   }
 
   app.on('second-instance', () => {
@@ -329,7 +324,8 @@ async function bootstrapApp(): Promise<void> {
   }
   const { resolveBundledOfficecliBinary } = await import('./office/office-bundled-path')
   officecliManager.configureBundledBinaryPath(
-    resolveBundledOfficecliBinary({ resourcesPath: process.resourcesPath }),
+    // Note: development assets live in the checkout — .agents/notes/desktop/officecli-bundled.md
+    resolveBundledOfficecliBinary({ resourcesPath: app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources') }),
   )
   await initializeOfficecliProvider()
   const { retireEngineeringAssets } = await import('./knowledge/retire-engineering-assets')

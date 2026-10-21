@@ -1,108 +1,44 @@
-// Note: bottom bar as application running-state layer — see .agents/notes/desktop/runtime-statusbar.md
 import { useEffect, useState } from 'react'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useAppStore } from '@/stores/app'
-import { useExperimentalStore } from '@/stores/experimental'
-import { useRemoteStore } from '@/stores/remote'
-import { useTeamStore } from '@/stores/team'
 import { useI18n } from '@/i18n/useI18n'
-import { RemoteModal } from '@/components/remote/RemoteModal'
-
+import type { MobileHostStatus } from '../../../shared/ipc/remote'
 export function StatusBar() {
-  const { t } = useI18n()
-  const terminals = useWorkspaceStore((s) => s.terminals)
-  const activeTerminalId = useWorkspaceStore((s) => s.activeTerminalId)
-  const loadState = useAppStore((s) => s.loadState)
-
-  const focusedTerminal = activeTerminalId ? terminals.find((terminal) => terminal.id === activeTerminalId) ?? null : null
-  const remoteStatus = useRemoteStore((s) => s.status)
-  const remotePeerName = useRemoteStore((s) => s.peerName)
-  const remoteHosting = useRemoteStore((s) => s.hostService.running)
-  const teamStatus = useTeamStore((s) => s.status)
-  const [remoteOpen, setRemoteOpen] = useState(false)
-  // 创新开关门控远控入口：默认关闭，关闭后隐藏胶囊并断开连接、停止被控服务。
-  const remoteControlEnabled = useExperimentalStore((s) => s.remoteControl)
-  const experimentalLoaded = useExperimentalStore((s) => s.loaded)
-  const loadExperimental = useExperimentalStore((s) => s.load)
-
+  const { t } = useI18n(); const terminals = useWorkspaceStore((s) => s.terminals); const active = useWorkspaceStore((s) => s.activeTerminalId); const load = useAppStore((s) => s.loadState)
+  const [remote, setRemote] = useState<MobileHostStatus | null>(null); const [open, setOpen] = useState(false)
+  const [error, setError] = useState('')
+  const focused = active ? terminals.find((terminal) => terminal.id === active) : null
+  const labels: Record<string, string> = { 'no-workspace': t('common:statusBar.waitingWorkspace'), 'workspace-loaded': t('common:statusBar.workspaceLoaded'), 'no-terminal': t('common:statusBar.waitingTerminal'), 'terminal-active': focused ? t('common:statusBar.terminalActiveFocused', { name: focused.name, status: focused.status }) : t('common:statusBar.terminalActiveNoFocus', { count: terminals.length }) }
   useEffect(() => {
-    void loadExperimental()
-  }, [loadExperimental])
-
-  useEffect(() => {
-    if (!experimentalLoaded || remoteControlEnabled) return
-    setRemoteOpen(false)
-    const { status, hostService, disconnect, stopHostService } = useRemoteStore.getState()
-    if (status !== 'disconnected') disconnect()
-    if (hostService.running) void stopHostService()
-  }, [experimentalLoaded, remoteControlEnabled])
-
-  const statusText: Record<string, string> = {
-    'no-workspace': t('common:statusBar.waitingWorkspace'),
-    'workspace-loaded': t('common:statusBar.workspaceLoaded'),
-    'no-terminal': t('common:statusBar.waitingTerminal'),
-    'terminal-active': focusedTerminal
-      ? t('common:statusBar.terminalActiveFocused', { name: focusedTerminal.name, status: focusedTerminal.status })
-      : t('common:statusBar.terminalActiveNoFocus', { count: terminals.length }),
+    let cancelled = false
+    const refresh = () => void window.electron.remote.status().then(value => { if (!cancelled) setRemote(value) }).catch(reason => { if (!cancelled) setError(String(reason)) })
+    refresh()
+    const timer = open ? setInterval(refresh, 1000) : undefined
+    return () => { cancelled = true; clearInterval(timer) }
+  }, [open])
+  const act = async (action: () => Promise<MobileHostStatus>) => {
+    setError('')
+    try { setRemote(await action()) } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
   }
-
-  const remoteConnected = remoteStatus === 'connected'
-  const remoteDotColor = remoteConnected ? '#58c98d' : remoteHosting ? '#ff7830' : '#55555b'
-  const remoteLabel =
-    teamStatus !== 'authed'
-      ? t('team:remote.title')
-      : remoteConnected
-        ? `${t('team:remote.connected')}${remotePeerName ? ` · ${remotePeerName}` : ''}`
-        : remoteHosting
-          ? `${t('team:remote.title')} · ${t('team:remote.hostServiceTitle')}`
-          : t('team:remote.title')
-
-  return (
-    <footer
-      className="col-span-3 flex items-center justify-between px-3.5 text-[10px]"
-      style={{
-        background: 'var(--shell-chrome)',
-        borderTop: '1px solid var(--shell-border)',
-        color: 'var(--shell-dim)',
-      }}
-    >
-      <div className="flex items-center gap-1.5">
-        <div
-          className="h-[5px] w-[5px] rounded-full animate-pulse"
-          style={{
-            background: 'var(--shell-accent)',
-            boxShadow: '0 0 6px rgba(255, 120, 48, 0.6)',
-          }}
-        />
-        <span>{statusText[loadState] ?? t('common:statusBar.ready')}</span>
-      </div>
-      {/* 远控入口：创新开关 remoteControl 关闭时隐藏；搬离侧栏左下角后这是唯一的常驻入口。 */}
-      {remoteControlEnabled && (
-        <button
-          type="button"
-          onClick={() => setRemoteOpen(true)}
-          title={t('team:remote.title')}
-          aria-label={t('team:remote.title')}
-          className="flex h-6 items-center gap-1.5 rounded-[4px] border border-transparent px-2 transition-colors hover:bg-[var(--shell-hover)]"
-          style={{ color: 'var(--shell-dim)' }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(255,120,48,0.28)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = 'transparent'
-          }}
-        >
-          <span
-            className="h-[6px] w-[6px] rounded-full"
-            style={{
-              background: remoteDotColor,
-              boxShadow: remoteConnected || remoteHosting ? `0 0 6px ${remoteDotColor}` : 'none',
-            }}
-          />
-          <span className="max-w-[260px] truncate font-mono">{remoteLabel}</span>
-        </button>
-      )}
-      {remoteControlEnabled && <RemoteModal open={remoteOpen} onClose={() => setRemoteOpen(false)} />}
-    </footer>
-  )
+  const start = () => {
+    const workspace = remote?.workspaces[0]
+    if (!workspace) { setError('请先打开一个工作区'); return }
+    void act(() => window.electron.remote.start({ signalUrl: '', stunUrl: 'stun:stun.l.google.com:19302', workspaceId: workspace.id }))
+  }
+  return <footer className="relative col-span-3 flex items-center justify-between px-3.5 text-[10px]" style={{ background: 'var(--shell-chrome)', borderTop: '1px solid var(--shell-border)', color: 'var(--shell-dim)' }}>
+    <span><span className="mr-1.5 inline-block h-[5px] w-[5px] rounded-full" style={{ background: 'var(--shell-accent)' }} />{labels[load] ?? t('common:statusBar.ready')}</span>
+    <button type="button" onClick={() => setOpen(v => !v)} className="rounded px-2 py-1 hover:bg-white/[.06]">{remote?.running ? '远程已开启' : '开启手机远程'}</button>
+    {open && <div className="absolute bottom-7 right-2 z-50 w-[min(90vw,24rem)] rounded border border-white/10 bg-[#181818] p-3 text-xs text-white shadow-xl">
+      <div className="mb-2 flex justify-between"><b>手机远程</b><button onClick={() => setOpen(false)}>×</button></div>
+      <p role="status" className="mb-2">{remote?.pending ? '手机已连接，等待你批准' : remote?.state}</p>
+      {error && <p role="alert" className="mb-2 text-red-400">{error}</p>}
+      {remote?.qr ? <img alt="Mobile pairing QR" className="mx-auto mb-2 h-auto w-full max-w-80 bg-white" style={{ imageRendering: 'pixelated' }} src={remote.qr} /> : <button className="rounded bg-orange-500 px-3 py-1 text-white" onClick={start}>开启并生成二维码</button>}
+      {remote?.pending && <div className="mt-2">设备申请：{remote.pending.name}
+        <button className="ml-2 rounded bg-green-600 px-2 py-1 text-white" onClick={() => void act(() => window.electron.remote.approve(remote.pending!.id))}>批准</button>
+        <button className="ml-1 rounded bg-red-700 px-2 py-1 text-white" onClick={() => void act(() => window.electron.remote.reject())}>拒绝</button>
+      </div>}
+      {remote?.devices.map(device => <div key={device.id} className="mt-2">已授权：{device.name}</div>)}
+      {remote?.running && <button className="mt-2 rounded bg-white/10 px-2 py-1" onClick={() => void act(() => window.electron.remote.stop())}>关闭远程</button>}
+    </div>}
+  </footer>
 }

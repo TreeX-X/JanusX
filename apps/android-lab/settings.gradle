@@ -1,0 +1,16 @@
+pluginManagement {
+    repositories {
+        if (System.getenv('JANUSX_ANDROID_GOOGLE_MIRROR')) maven { url = System.getenv('JANUSX_ANDROID_GOOGLE_MIRROR') }
+        google(); mavenCentral(); gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        if (System.getenv('JANUSX_ANDROID_GOOGLE_MIRROR')) maven { url = System.getenv('JANUSX_ANDROID_GOOGLE_MIRROR'); content { includeGroupByRegex 'com\\.android.*'; includeGroupByRegex 'androidx.*' } }
+        if (System.getenv('JANUSX_ANDROID_CENTRAL_MIRROR')) maven { url = System.getenv('JANUSX_ANDROID_CENTRAL_MIRROR') }
+        google { content { includeGroupByRegex 'com\\.android.*'; includeGroupByRegex 'androidx.*' } }; mavenCentral()
+    }
+}
+rootProject.name = 'JanusXP2PLab'
+include ':app'

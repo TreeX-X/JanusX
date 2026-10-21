@@ -1,6 +1,8 @@
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
+import { readFileSync } from 'node:fs'
+import { transformWithEsbuild } from 'vite'
 
 export default defineConfig({
   main: {
@@ -19,7 +21,15 @@ export default defineConfig({
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), {
+      name: 'sandboxed-remote-preload',
+      buildStart() { this.addWatchFile(resolve(__dirname, 'src/preload/remote.ts')) },
+      async generateBundle() {
+        const path = resolve(__dirname, 'src/preload/remote.ts')
+        const { code } = await transformWithEsbuild(readFileSync(path, 'utf8'), path, { format: 'cjs', target: 'es2022' })
+        this.emitFile({ type: 'asset', fileName: 'remote.cjs', source: code })
+      }
+    }],
     build: {
       rollupOptions: {
         input: {
@@ -44,7 +54,8 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/renderer/index.html')
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          'remote-host': resolve(__dirname, 'src/renderer/remote-host.html')
         }
       }
     }
