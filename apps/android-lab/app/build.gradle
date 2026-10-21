@@ -1,4 +1,5 @@
 plugins { id 'com.android.application' }
+def remoteDefaults = new groovy.json.JsonSlurper().parse(rootProject.file('../../src/shared/remote-defaults.json'))
 android {
     namespace 'com.janusx.p2plab'
     compileSdk 35
@@ -7,8 +8,10 @@ android {
         applicationId 'com.janusx.p2plab'
         minSdk 26
         targetSdk 35
-        versionCode 7
-        versionName '0.1.6'
+        versionCode 11
+        versionName '0.1.10'
+        buildConfigField 'String', 'DEFAULT_SIGNAL_URL', groovy.json.JsonOutput.toJson(remoteDefaults.signalUrl)
+        buildConfigField 'String', 'DEFAULT_STUN_URL', groovy.json.JsonOutput.toJson(remoteDefaults.stunUrl)
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildFeatures { buildConfig true }

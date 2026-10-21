@@ -4,6 +4,16 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class ConnectionDiagnosticsTest {
+    @Test public void reportsSignalStageWithoutAssumingLanOrUdpFailure() {
+        ConnectionDiagnostics d = new ConnectionDiagnostics();
+        d.signalStage("DNS 已完成，等待 TCP/TLS 或代理连接");
+        assertTrue(d.timeoutHint().contains("DNS 已完成"));
+        assertFalse(d.timeoutHint().contains("局域网 IP"));
+        assertFalse(d.timeoutHint().contains("UDP 未连通"));
+        d.connected();
+        assertFalse(d.timeoutHint().contains("DNS 已完成"));
+    }
+
     @Test public void distinguishesUnreachableSignalFromWaitingForDesktopAndUdpFailure() {
         ConnectionDiagnostics d = new ConnectionDiagnostics();
         assertTrue(d.timeoutHint().contains("信令未连通"));

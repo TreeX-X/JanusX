@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "janusx-signal",
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-21",
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [{ "name": "SIGNAL", "class_name": "Signaling" }]
+  },
+  "exports": {
+    "Signaling": { "type": "durable-object", "storage": "sqlite" }
+  },
+  "observability": { "enabled": false }
+}

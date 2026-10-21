@@ -1,5 +1,6 @@
 import http from 'node:http'
 import { WebSocketServer, WebSocket } from 'ws'
+import { parseSignalJoin, parseSignalMessage } from './signaling-protocol'
 
 /** SDP/ICE only. No pairing secret, credential or terminal traffic. */
 export async function startSignaling(port = 43821, listen = '127.0.0.1') {
@@ -11,7 +12,7 @@ export async function startSignaling(port = 43821, listen = '127.0.0.1') {
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws))
   })
   wss.on('connection', ws => {
-    let room: string | undefined, role: string | undefined, bytes = 0, count = 0
+    let room: string | undefined, role: 'host' | 'client' | undefined, bytes = 0, count = 0
     const timeout = setTimeout(() => ws.close(1008, 'join timeout'), 5000)
     ws.on('error', () => {})
     ws.on('message', (raw, binary) => {
@@ -19,26 +20,18 @@ export async function startSignaling(port = 43821, listen = '127.0.0.1') {
         if (binary || (bytes += Buffer.byteLength(raw.toString())) > 2 * 1024 * 1024 || ++count > 300) throw Error('budget')
         const m = JSON.parse(raw.toString())
         if (!room) {
-          if (m.type !== 'join' || !/^[a-f0-9]{48}$/.test(m.invite) || !['host', 'client'].includes(m.role)) throw Error('join')
-          const slots = rooms.get(m.invite) ?? new Map<string, WebSocket>()
-          if (slots.has(m.role)) throw Error('occupied')
-          room = m.invite; role = m.role
+          const joined = parseSignalJoin(m)
+          const slots = rooms.get(joined.invite) ?? new Map<string, WebSocket>()
+          if (slots.has(joined.role)) throw Error('occupied')
+          room = joined.invite; role = joined.role
           slots.set(role!, ws); rooms.set(room!, slots); clearTimeout(timeout)
           ws.send(JSON.stringify({ type: 'joined' }))
           if (slots.size === 2) slots.get('host')!.send(JSON.stringify({ type: 'peer-ready' }))
           return
         }
-        const d = m.data
-        if (m.type === 'candidate') {
-          if (typeof d?.candidate !== 'string' || d.candidate.length > 4096 || !/ udp /i.test(d.candidate)
-            || / typ relay(?: |$)/i.test(d.candidate) || !Number.isInteger(d.sdpMLineIndex) || typeof d.sdpMid !== 'string') throw Error('candidate')
-          if (d.usernameFragment !== undefined && (typeof d.usernameFragment !== 'string' || d.usernameFragment.length > 256)) throw Error('generation')
-        } else if (m.type === (role === 'host' ? 'offer' : 'answer')) {
-          if (d?.type !== m.type || typeof d.sdp !== 'string' || d.sdp.length > 100000 || !/^[a-f0-9]{64}$/.test(d.mac)) throw Error('sdp')
-          if (d.offerUfrag !== undefined && (typeof d.offerUfrag !== 'string' || d.offerUfrag.length > 256)) throw Error('generation')
-        } else throw Error('only SDP/ICE allowed')
+        const forwarded = parseSignalMessage(m, role!)
         const other = rooms.get(room)?.get(role === 'host' ? 'client' : 'host')
-        if (other?.readyState === WebSocket.OPEN) other.send(JSON.stringify({ type: m.type, data: d }))
+        if (other?.readyState === WebSocket.OPEN) other.send(JSON.stringify(forwarded))
       } catch { ws.close(1008, 'invalid signaling') }
     })
     ws.on('close', () => {

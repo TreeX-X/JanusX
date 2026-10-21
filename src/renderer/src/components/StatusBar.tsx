@@ -4,10 +4,9 @@ import { useAppStore } from '@/stores/app'
 import { useExperimentalStore } from '@/stores/experimental'
 import { useI18n } from '@/i18n/useI18n'
 import type { MobileHostStatus } from '../../../shared/ipc/remote'
+import { mobileRemoteSettings } from '@/lib/mobile-remote-settings'
+import remoteDefaults from '../../../shared/remote-defaults.json'
 // Note: .agents/notes/remote/android-pairing-handshake.md
-const savedRemote = (key: string, fallback: string) => {
-  try { return localStorage.getItem(`remote.${key}`) ?? fallback } catch { return fallback }
-}
 export function StatusBar() {
   const { t } = useI18n(); const terminals = useWorkspaceStore((s) => s.terminals); const active = useWorkspaceStore((s) => s.activeTerminalId); const load = useAppStore((s) => s.loadState)
   const [remote, setRemote] = useState<MobileHostStatus | null>(null); const [open, setOpen] = useState(false)
@@ -16,9 +15,10 @@ export function StatusBar() {
   const activeWorkspaceId = useWorkspaceStore(s => s.activeWorkspaceId)
   const [workspaceId, setWorkspaceId] = useState('')
   const [busy, setBusy] = useState(false)
-  const [network, setNetwork] = useState(() => savedRemote('network', 'lan'))
-  const [signalUrl, setSignalUrl] = useState(() => savedRemote('signalUrl', ''))
-  const [stunUrl, setStunUrl] = useState(() => savedRemote('stunUrl', 'stun:stun.l.google.com:19302'))
+  const [initialSettings] = useState(() => mobileRemoteSettings(key => localStorage.getItem(key)))
+  const [network, setNetwork] = useState(initialSettings.network)
+  const [signalUrl, setSignalUrl] = useState(initialSettings.signalUrl)
+  const [stunUrl, setStunUrl] = useState(initialSettings.stunUrl)
   const [localAddress, setLocalAddress] = useState('')
   useEffect(() => {
     try {
@@ -92,7 +92,7 @@ export function StatusBar() {
           {remote?.lanAddresses?.map(item => <option key={`${item.name}-${item.address}`} value={item.address}>{item.name} · {item.address}</option>)}
         </select>
       </label> : <label className="mb-2 block">{t('common:mobileRemote.signalUrl')}
-        <input className="mt-1 w-full rounded border border-[var(--shell-border)] bg-transparent p-1" disabled={busy || remote?.running} value={signalUrl} onChange={event => setSignalUrl(event.target.value)} placeholder="wss://signal.example.com/signal" spellCheck={false} />
+        <input aria-label={t('common:mobileRemote.signalUrl')} className="mt-1 w-full rounded border border-[var(--shell-border)] bg-transparent p-1" disabled={busy || remote?.running} value={signalUrl} onChange={event => setSignalUrl(event.target.value)} placeholder={remoteDefaults.signalUrl} spellCheck={false} />
       </label>}
       <p className="mb-2 text-[var(--shell-dim)]">{t(network === 'public' ? 'common:mobileRemote.publicHint' : 'common:mobileRemote.lanHint')}</p>
       <label className="mb-2 block">{t('common:mobileRemote.stunUrl')}

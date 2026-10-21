@@ -1,0 +1,23 @@
+{
+  "name": "janusx-cloudflare-signaling",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "login": "wrangler login",
+    "whoami": "wrangler whoami",
+    "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run --outdir .wrangler/test-bundle",
+    "typecheck": "wrangler types .wrangler/worker-configuration.d.ts && tsc -p tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "verify": "node verify.mjs"
+  },
+  "devDependencies": {
+    "miniflare": "5.20261019.1-beta",
+    "https-proxy-agent": "7.0.6",
+    "wrangler": "4.151.3",
+    "typescript": "5.9.3",
+    "ws": "8.21.0"
+  }
+}

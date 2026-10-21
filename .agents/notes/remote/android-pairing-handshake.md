@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-20",
-  "updated": "2026-10-21T06:34:49Z",
+  "updated": "2026-10-21T10:43:47Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
   "tags": ["remote", "android", "pairing", "verification"]
 }
@@ -15,7 +15,29 @@
 
 手机扫码后先连接信令，再交换经过二维码密钥认证的 SDP，建立 UDP DataChannel，最后提交设备申请。电脑收到申请后才显示批准按钮。`SIGNAL connected` 仅表示 WebSocket 打开；关闭电脑远程时手机收到信令断开，也不能证明此前建立过 P2P。主动重连产生的旧连接 CLOSED 日志不应混入新连接状态。
 
-## 当前直连重试与诊断
+## 真机反馈与下一步（2026-10-21）
+
+用户在 Pages 入口观察到信令入房、SDP 验签与候选应用成功。VPN 开启时三轮 UDP 检查均无应答，关闭 VPN 后报告连接成功，并确认手机发送输入可用；这是该次网络条件的用户反馈，不能据此确定加速器内部机制或覆盖其他 NAT/运营商。用户随后报告 Android 看不到返回内容，故连续输出与完整交互验收仍未通过，不能以“已连通”代替终端可用性。尚未确认是一直空白还是初始画面后停止更新，根因待沿电脑 PTY 输出、订阅终端 ID、回放/实时发送、手机接收和 WebView/xterm 绘制逐段定位。
+
+用户确认需要三项后续改进，本次只记录，不声明实现：
+
+- P0：修复 Android 输出不可见。区分输入被电脑接受的回执和终端实际输出；验证手机能看到启动、输入后的真实响应，以及重连回放。
+- P1：桌面持续显示连接进度，包括等待扫码、信令协商、UDP 打洞、等待批准、已授权和失败原因，不能只在最终审批时出现反馈。
+- P1：二维码显示剩余有效时间并在到期后自动刷新。当前有效期五分钟，expiresAt 已进入二维码及状态，但 UI 没有倒计时/自动刷新；不能直接以 stop/start 重建整条远程会话实现，刷新应保留已授权设备、现有连接和运行中的终端。新配对与已授权重连的有效期应明确区分。
+
+验收约束见[真实远程终端需求](./requirements/android-remote-terminal.md)。源码、配置、锁文件、测试和部署说明进入 Git；APK/AAB、构建缓存、运行日志、Wrangler OAuth、Android local.properties 与签名材料保留在忽略目录，不随源码上传。
+
+## 当前入口与版本记录
+
+当前免费入口已调整为 `wss://janusx-signal-entry.pages.dev/signal`。用户复制的 0.1.10 日志表明：App 系统 VPN 标记为 true，原 workers.dev 入口解析一个 IPv4，在 TLS 阶段超时；同一 App 对百度 TLS 成功并收到 HTTP 响应。证据指向该域名的 App 访问路径，未确定 DNS/VPN 的具体原因；本次不是已拿到证书后验证失败。Pages 高级模式通过 `SIGNAL_SERVICE` 服务绑定调用原 Worker，复用同一 Durable Object 和消息验证，不转发终端业务、不引入 TURN。2026-10-21 UTC 部署到已授权免费账号，稳定项目域名经电脑直连和代理分别通过八项 HTTPS/WSS 信令验证；本地九项 workerd 测试含服务绑定后真实握手/入房，桌面设置与信令十一项 Vitest 通过。证据 `artifacts/android-lab/pages-signaling-{direct,proxy}.json`。默认 JSON 及桌面旧官方完整地址迁移已更新，保留 LAN、自建地址/路径；现有 Android 0.1.10 默认包内仍是旧入口，电脑新二维码会覆盖，因此无需新 APK。手机新入口 WSS 与真实异网 UDP 尚待验证，不把电脑直连成功作为真机验收。
+
+0.1.10 修复手机只能看到最后一段诊断的可用性问题：顶部状态限制三行，连接日志从参数区的 200dp ScrollView 移入独立窗口，顶部「日志」可随时打开，信令检查时自动打开。日志窗口显示版本号、支持滚动/文本选择和不关闭窗口的「复制全部」，关闭重开保留本 Activity 最近约 24,000 字符的记录；检查开始记录版本，便于确认实际安装包。Android Build、十二项 Java 单测及 lintDebug 通过（0 errors、14 warnings）；最终 APK 上模拟器验证 HTTP 200 + WS 101 成功和 HTTP 200 + WS 426 拒绝两条路径，并验证早期/最终日志同时存在、复制按钮可点击、关闭重开保留历史。证据 `artifacts/android-lab/signal-log-view-{build.log,smoke.json,success.xml,rejected.xml}`。证书根因仍待真机复制本次 HTTPS 与证书详情，未通过显示修复宣称网络已通。
+
+0.1.9：真机回报 WSS 的 SSLPeerUnverifiedException，换加速器节点后仍失败，浏览器健康页正常；尚未取得手机证书详情或 App HTTPS 结果，不能据此确定代理绕过、证书替换或 DNS 错误。检查新增目标域名和有界的证书异常消息（含嵌套证书异常），WSS 失败同时展示本次 HTTPS 结果；仅证书异常允许显示消息，其他异常不输出请求上下文，保持默认信任与主机名校验。电脑经现有代理取得的证书为 CN=740288105.workers.dev、SAN=*.740288105.workers.dev/740288105.workers.dev、Let's Encrypt YE2 签发，有效至 2027-01-19，Node 默认验证通过；证据 `artifacts/android-lab/signal-public-certificate.json`，不代表手机实际收到同一证书。Android assembleDebug、十二项 Java 单测和 lintDebug（0 errors、14 warnings）通过，证据 `signal-certificate-build.log`；新版需真机再次检查。
+
+0.1.8 针对真机浏览器健康页可达、App 仍 SocketTimeoutException 的反馈新增「详情 → 检查信令网络」。根因尚未确定，不能由浏览器成功推断 App 未走代理或 WSS 一定可达。检查在 App 内先执行 HTTP/1.1 健康请求，再用独立连接池执行 WSS 握手，不加入房间、不发送配对凭据。HTTPS 的 EventListener 显示 DNS、TCP、TLS 和 HTTP 阶段；OkHttp 4.12 的 RealWebSocket 禁用 EventListener 和 network interceptor，因此 WSS 仅使用 DNS 包装和最终回调，明确保留 TCP/TLS/升级之间的未知，不伪造精确阶段。原建连错误也改为显示最后 DNS 进度及检查入口，移除统一归咎 LAN 地址的提示。系统默认网络 VPN 标记与 HTTP 代理类型只作线索，DIRECT 仍可能被 VPN 接管。停止 Activity、开始正式连接或重跑检查时取消旧检查，通过代次丢弃旧回调；不改变 UDP、证书校验或 VPN 路由。
+
+0.1.8 验证：Android Build 的 assembleDebug、十项 Java 单测及 lintDebug 通过（0 errors、14 warnings），APK v2 签名验证通过，副本 `artifacts/android-lab/JanusX-Android-0.1.8.apk`。模拟器通过 adb reverse 到本机 HTTP/WS 测试服务，分别验证 HTTP 200 + WebSocket 101 成功，以及 HTTP 200 + WebSocket 426 拒绝的区分；独立连接池与 UI 检查流程在最终 APK 上复测通过。证据 `artifacts/android-lab/signal-network-{build.log,smoke.json,success.log,rejected.log}`，测试脚本 `signal-network-smoke.cjs`。本机检查未覆盖公网 TLS、真实手机 VPN 路由或跨网 UDP，需用户运行新版检查取得 `NET` 日志。
 
 真机异网反馈为 SDP 已验证、local=2、srflx=1、remote=3，测试电脑是仓库开发版。当前 Windows 为该开发 Electron 路径配置了 Public 入站 UDP 放行；电脑向多个 STUN 目的地探测得到响应，并在同一探测 socket 观察到相同映射。以上只证明此次电脑 STUN 可达和手机收到候选，不证明所有候选已应用、手机 NAT 类型、无 CGNAT、或双方能互通。尚无真实手机的候选对检查统计，不能把故障归因确定为某侧防火墙或运营商。
 
@@ -27,7 +49,7 @@
 
 候选应用失败不再直接清理整条桌面链路，继续检查其他候选并独立计数。Android 区分 remote 收到、applied 成功、rejected 拒绝，重试时重置当前轮次计数；记录本地 IPv6 候选数，显式保留所有网络、Wi-Fi IPv6 和持续收集策略。双方诊断可报告候选对数量、检查请求、应答和成功数量，Android 在等待八秒及原生失败时读取统计，电脑在重试前读取；不记录候选地址、SDP 或密钥。零应答不能单独确定阻塞发生在哪一侧。辅助 nat-probe 也移除“公网映射排除 CGNAT”等过度结论。
 
-信令继续拒绝 TCP、relay 和业务消息，只允许有界的 ICE 代次元数据；真实传输仍需验证选中 UDP 非 relay 路径，不引入 TURN。公网信令长期方案与临时隧道区别见[部署说明](../../../scripts/remote-lab/signaling.md)，当前尚无已运营的公共默认入口。
+信令继续拒绝 TCP、relay 和业务消息，只允许有界的 ICE 代次元数据；真实传输仍需验证选中 UDP 非 relay 路径，不引入 TURN。公网信令长期方案与临时隧道区别见[部署说明](../../../scripts/remote-lab/signaling.md)，当前默认入口为已部署的 Cloudflare Workers，网络覆盖仍待真机验证。
 
 0.1.6 验证：`npx vitest run tests/unit/mobile-ice-retry.test.ts tests/unit/mobile-signaling.test.ts tests/unit/mobile-handshake.test.ts tests/unit/mobile-network.test.ts tests/unit/mobile-host-feature-gate.test.ts tests/unit/mobile-terminal-stream.test.ts tests/unit/workspace-remote-terminal-sync.test.ts tests/unit/experimental-features.test.ts --maxWorkers=2` 通过 39 项，覆盖 SDP 先于候选、原生失败/超时最多三轮、旧 ICE 代次丢弃、旧 SDP 操作迟到失败不关闭新 peer、IPv6/代次元数据转发及 TCP/relay/业务消息拒绝。TypeScript、变更生产 TS 的 ESLint、桌面构建和独立信令构建通过。Android Build 通过 APK、6 项 Java 单测和 lint（0 errors、15 warnings）。
 
@@ -36,6 +58,22 @@
 临时 Node 信令已重建并在原端口重启，Cloudflare 隧道及地址保持不变；当前 PID 以 `artifacts/remote-signal/quick-tunnel/runtime.json` 为准。公网验证 `node artifacts/remote-signal/quick-tunnel/verify-public.mjs wss://programme-columbus-efficient-snap.trycloudflare.com/signal` 通过七项，包含新增双向 IPv6 UDP 候选及 ICE 代次透传；证据为同目录 `public-verification.json`。真实手机异网、实际 IPv6 路径、受限 NAT、弱网和长期可靠性仍未验收，不将上述回环或公网信令结果当作真机 UDP 问题已解决。
 
 ## 实现与修复
+
+### Cloudflare 免费信令
+
+`scripts/remote-lab/cloudflare` 新增兼容现有首帧 join 协议的 Workers + SQLite Durable Object，与 Node 共用 `src/main/remote/signaling-protocol.ts` 白名单校验。邀请定位房间，SDP HMAC 仍由两端验证。保留角色唯一、五秒入房超时、大小/消息预算及离开通知，连接附件在休眠后恢复房间和预算；只转发 SDP/非 relay UDP 候选，不转发额外字段和业务内容。
+
+用户完成 OAuth 后已部署 `wss://janusx-signal.740288105.workers.dev/signal`，不再依赖本机信令或隧道进程。本机经代理八项公网检查通过，无代理 HTTPS 十五秒超时。随后用户报告手机健康检查显示 `JanusX signaling`，并授权维护双端默认入口；该报告只证明对应手机网络 HTTP 可达，不证明 WSS、UDP 或所有国内网络可用。免费额度、域名可达性与账号仍需维护；零云资源费用不等于零运营。部署、命令和边界见[说明](../../../scripts/remote-lab/cloudflare/README.md)。
+
+`npm --prefix scripts/remote-lab/cloudflare test` 在 workerd 八项通过，覆盖休眠恢复、预算、重复角色、释放重连和入房超时；Worker/仓库 TypeScript、独立 Node 信令构建及三个远程单测文件共十一项通过。公网代理证据在 `.wrangler/public-verification-proxy.json`，无代理失败在 `.wrangler/public-verification.json`。真实手机跨网 UDP 和长期连接未验收。
+
+### 0.1.7 双端默认入口
+
+`src/shared/remote-defaults.json` 提供信令与 STUN 默认值，桌面读取同一 JSON，Android Gradle 生成 BuildConfig，避免两端地址漂移。新桌面 profile 默认异网，启用创新开关后可直接生成二维码；明确保存的 LAN、自建地址和空 STUN 保留。旧空信令及 Quick Tunnel 地址迁移到部署入口，不改写已有二维码和配对凭据。旧 LAN profile 仍需切换异网。安卓初始详情不再显示 `10.0.2.2`，扫描时仍严格使用二维码的地址与 STUN，保留本机测试和自建服务能力；版本升级 0.1.7 / code 8。
+
+四项设置回归覆盖新配置、不可用存储、空地址填充、旧临时入口迁移及自定义/LAN/空 STUN 保留；相关远程回归此前三十九项继续通过。TypeScript、变更 TS/TSX 的 ESLint 和桌面构建通过；Android Build 通过 APK、七项 Java 单测与 lint（0 errors、14 warnings）。证据 `artifacts/android-lab/public-signal-build.log`；实际手机异网仍需新版双端扫码并确认选中 UDP 非 relay 路径。
+
+最终九个 Vitest 文件共四十三项通过，`JANUSX_SMOKE_RETRY=1` 本机 Electron + Android 模拟器联调十八项通过，证据 `artifacts/android-lab/desktop-smoke-3SYhHC/`。包含新 profile 的默认公网地址、故意阻断首轮后的第二轮原生 UDP、审批、真实 Claude 新建/输出、同终端重连及关闭开关保留进程。中间 `desktop-smoke-3vmsc1` 在测试夹具抢占尚未释放角色时失败；夹具改为等待电脑收到离开通知后再故意占房，不放宽生产角色唯一性。APK v2 签名验证通过，交付副本 `artifacts/android-lab/JanusX-Android-0.1.7.apk`。这些本机结果不替代手机真实跨网验收。Note 校验通过，保留全仓十七项既有跨仓链接诊断。
 
 0.1.3 修复桌面隐藏窗口的通信桥与资源定位。远程 preload 单独输出为 `out/preload/remote.cjs`，在 sandbox、contextIsolation 开启且 nodeIntegration 关闭的窗口运行。普通桌面继续使用原有 `index.mjs`。资源从应用根目录定位，避免 main 分块改变 `import.meta.dirname` 后指向错误路径；开发入口与 smoke 均从仓库根目录启动 Electron。桥加载和进程退出错误进入远程状态显示。
 

@@ -15,6 +15,13 @@ playwright-report/
 test-results/
 /artifacts/
 
+# Android delivery artifacts and local signing material (source is versioned).
+*.apk
+*.aab
+*.jks
+*.keystore
+key.properties
+
 # Tool caches
 __pycache__/
 .vite/

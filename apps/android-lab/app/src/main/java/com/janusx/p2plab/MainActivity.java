@@ -21,6 +21,9 @@ public final class MainActivity extends Activity implements LabTransport.Listene
     private static final int CAMERA_PERMISSION_REQUEST = 2049;
     private EditText signalUrl, invitation, stun, input;
     private TextView output, connectionStatus, terminalStatus;
+    private TextView logView;
+    private android.app.AlertDialog logDialog;
+    private final StringBuilder connectionLog = new StringBuilder();
     private TerminalView terminal;
     private Spinner terminalPicker;
     private Button startButton, sendButton;
@@ -29,6 +32,8 @@ public final class MainActivity extends Activity implements LabTransport.Listene
     private ArrayAdapter<String> terminalAdapter;
     private final java.util.ArrayList<Button> keyButtons = new java.util.ArrayList<>();
     private LabTransport transport;
+    private SignalNetworkCheck networkCheck;
+    private int networkCheckGeneration;
     private boolean destroyed;
     private int connectionGeneration;
     private boolean ready;
@@ -62,6 +67,8 @@ public final class MainActivity extends Activity implements LabTransport.Listene
         TextView title = new TextView(this);
         title.setText("JanusX · 远程终端 " + BuildConfig.VERSION_NAME); title.setTextSize(20); title.setTextColor(Color.WHITE); page.addView(title);
         connectionStatus = label(page, "未连接 · 扫描电脑二维码开始配对");
+        connectionStatus.setMaxLines(3);
+        connectionStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout connection = row(page);
         button(connection, "扫码配对", v -> scanPairing());
         button(connection, "连接", v -> connect());
@@ -69,12 +76,29 @@ public final class MainActivity extends Activity implements LabTransport.Listene
         LinearLayout details = new LinearLayout(this); details.setOrientation(LinearLayout.VERTICAL);
         ScrollView detailScroll = new ScrollView(this); detailScroll.addView(details); detailScroll.setVisibility(View.GONE);
         button(connection, "详情", v -> detailScroll.setVisibility(detailScroll.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
+        button(connection, "日志", v -> showConnectionLog());
         page.addView(detailScroll, new LinearLayout.LayoutParams(-1, dp(200)));
-        signalUrl = field(details, "信令地址", extra("signalUrl", "ws://10.0.2.2:43821/signal"));
+        signalUrl = field(details, "信令地址（扫码后自动填写）", extra("signalUrl", BuildConfig.DEFAULT_SIGNAL_URL));
         invitation = field(details, "粘贴电脑配对 JSON", extra("invite", getPreferences(0).getString("pairingPayload", "")));
         invitation.setInputType(129);
-        stun = field(details, "可选 STUN 地址", extra("stun", ""));
+        stun = field(details, "可选 STUN 地址", extra("stun", BuildConfig.DEFAULT_STUN_URL));
         button(details, "检查 UDP 路径", v -> { if (transport != null) transport.inspectPath(); });
+        button(details, "检查信令网络", v -> {
+            if (transport != null) { onStatus("请先断开，再检查信令网络"); return; }
+            stopNetworkCheck();
+            showConnectionLog();
+            onStatus("NET 开始检查 · Android " + BuildConfig.VERSION_NAME);
+            try {
+                final int generation = networkCheckGeneration;
+                networkCheck = new SignalNetworkCheck(this, text -> handler.post(() -> {
+                    if (!destroyed && generation == networkCheckGeneration) onStatus(text);
+                }));
+                networkCheck.start(signalUrl.getText().toString().trim());
+            } catch (IllegalArgumentException e) {
+                if (networkCheck != null) networkCheck.close();
+                onStatus("NET 地址无效，请检查信令地址");
+            }
+        });
         output = label(details, "连接详情"); output.setTextIsSelectable(true); output.setTextSize(11);
         LinearLayout sessionRow = row(page);
         terminalPicker = new Spinner(this);
@@ -226,6 +250,7 @@ public final class MainActivity extends Activity implements LabTransport.Listene
         return button;
     }
     private void connect() {
+        stopNetworkCheck();
         disconnect();
         try {
             pairingSecret = "";
@@ -266,7 +291,10 @@ public final class MainActivity extends Activity implements LabTransport.Listene
             else if (status.startsWith("PAIRING pending")) connectionStatus.setText("手机已连接 · 等待电脑批准");
             else if (status.startsWith("TERMINAL created")) terminalStatus.setText("Claude Code 已启动 · 正在同步输出");
             else if (!ready || !status.matches("^(ICE|PEER|GATHER|PATH|SDP|SIGNAL).*")) connectionStatus.setText(status);
-            String text = output.getText() + "\n" + status; output.setText(text.substring(Math.max(0, text.length()-6000)));
+            connectionLog.append(status).append('\n');
+            if (connectionLog.length() > 24000) connectionLog.delete(0, connectionLog.indexOf("\n", connectionLog.length() - 24000) + 1);
+            output.setText("完整连接记录请点击顶部「日志」，支持滚动查看和复制");
+            if (logView != null) logView.setText(connectionLog.toString());
         });
     }
     @Override public void onMessage(String message) {
@@ -318,6 +346,38 @@ public final class MainActivity extends Activity implements LabTransport.Listene
             if (type.equals("error") || (type.equals("result") && !data.optBoolean("ok"))) { creating = false; controls(); terminalStatus.setText("电脑返回错误：" + data.optString("message", data.optString("error"))); onStatus("DESKTOP error: " + data.optString("message", data.optString("error"))); }
         } catch (Exception e) { onStatus("RECV invalid application message"); }
     }
-    @Override public void onStop() { disconnect(); connectionStatus.setText("已暂停连接 · 返回后点击连接恢复"); super.onStop(); }
-    @Override public void onDestroy() { destroyed = true; disconnect(); if (terminal != null) terminal.destroy(); super.onDestroy(); }
+    private void stopNetworkCheck() {
+        networkCheckGeneration++;
+        if (networkCheck != null) { networkCheck.close(); networkCheck = null; }
+    }
+    @Override public void onStop() { stopNetworkCheck(); disconnect(); connectionStatus.setText("已暂停连接 · 返回后点击连接恢复"); super.onStop(); }
+    private void showConnectionLog() {
+        if (logDialog != null && logDialog.isShowing()) return;
+        ScrollView scroll = new ScrollView(this);
+        logView = new TextView(this);
+        logView.setTextSize(13);
+        logView.setTextColor(Color.WHITE);
+        logView.setPadding(dp(16), dp(12), dp(16), dp(12));
+        logView.setTextIsSelectable(true);
+        logView.setText(connectionLog.length() == 0 ? "暂无连接记录" : connectionLog.toString());
+        scroll.setBackgroundColor(Color.rgb(17, 21, 27));
+        scroll.addView(logView);
+        logDialog = new android.app.AlertDialog.Builder(this)
+            .setTitle("连接日志 · " + BuildConfig.VERSION_NAME)
+            .setView(scroll)
+            .setPositiveButton("关闭", null)
+            .setNeutralButton("复制全部", null)
+            .create();
+        logDialog.setOnDismissListener(dialog -> { logView = null; logDialog = null; });
+        logDialog.show();
+        logDialog.getWindow().setLayout(-1, (int) (getResources().getDisplayMetrics().heightPixels * 0.85));
+        logDialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener(view -> {
+            android.content.ClipboardManager clipboard = getSystemService(android.content.ClipboardManager.class);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("JanusX 连接日志", "Android " + BuildConfig.VERSION_NAME + "\n" + connectionLog));
+                Toast.makeText(this, "已复制完整连接日志", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    @Override public void onDestroy() { destroyed = true; if (logDialog != null) logDialog.dismiss(); disconnect(); if (terminal != null) terminal.destroy(); super.onDestroy(); }
 }

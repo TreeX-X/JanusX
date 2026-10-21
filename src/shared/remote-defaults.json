@@ -1,0 +1,4 @@
+{
+  "signalUrl": "wss://janusx-signal-entry.pages.dev/signal",
+  "stunUrl": "stun:stun.l.google.com:19302"
+}

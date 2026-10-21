@@ -5,6 +5,8 @@ final class ConnectionDiagnostics {
     private boolean signalConnected, joined, offerReceived;
     private int localUdp, mappedUdp, remoteUdp, applied, rejected, round, ipv6;
     private String checks = "";
+    private String signalStage = "尚未开始连接";
+    synchronized void signalStage(String stage) { signalStage = stage; }
     synchronized void connected() { signalConnected = true; }
     synchronized void joined() { joined = true; }
     synchronized void offer() {
@@ -27,7 +29,7 @@ final class ConnectionDiagnostics {
     synchronized String candidates() { return "UDP candidates local=" + localUdp + " srflx=" + mappedUdp + " remote=" + remoteUdp
         + " applied=" + applied + " rejected=" + rejected + " ipv6=" + ipv6 + " round=" + round + checks; }
     synchronized String timeoutHint() {
-        if (!signalConnected) return "信令未连通：异网需公网 wss:// 地址；局域网 IP 无法供蜂窝网络访问。检查 DNS、TLS、服务器和网络。";
+        if (!signalConnected) return "信令未连通：" + signalStage + "。请在详情点击「检查信令网络」；浏览器 HTTPS 可达不代表 App 的 WSS 可达。";
         if (!joined) return "信令已连接但未加入会话：检查信令服务版本与邀请，重新扫描电脑当前二维码。";
         if (!offerReceived) return "已加入信令但未收到电脑协商：确认电脑远程已开启，且双方使用同一公网信令服务和当前二维码。";
         return "SDP 已验证但 UDP 未连通（" + candidates() + "）："

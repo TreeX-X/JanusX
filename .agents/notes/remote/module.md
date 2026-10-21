@@ -32,7 +32,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-21T06:34:49Z",
+  "updated": "2026-10-21T10:43:47Z",
   "moduleState": "partial"
 }
 ---
@@ -44,6 +44,8 @@
 通过 CompanionGateway 校验远程会话操作，并通过 HostedProvider 适配 GitHub 与 GitLab 的 issue、review、检查及合并。网关负责上下文验证、动作令牌、去重与审计；托管适配通过现有凭据和本地工作树流程协作。远程创建终端仅允许 claude、codex、opencode，janus、pi、dsh 不因本地状态接入获得远控能力。
 
 ## Design
+
+配对握手专题维护 Android App 内 HTTPS/WSS 分别诊断、日志复制及其可观测边界。当前默认免费入口为 `wss://janusx-signal-entry.pages.dev/signal`，经服务绑定复用原 Worker/房间；电脑直连和代理信令验证通过，用户在手机关闭 VPN 后报告连通且输入可发送，但 Android 看不到返回内容，完整交互尚未验收。优先修复输出，再补桌面连接状态及二维码倒计时/无干扰自动刷新，详见[真机反馈](./android-pairing-handshake.md#真机反馈与下一步2026-10-21)和需求 AC-3/8/9/10。浏览器健康页成功不等于 App 的 WSS、VPN 路由或 UDP 已验证。
 
 模块覆盖已存在的受控网关与托管平台入口，不声明完整团队身份、服务端同步或 LaunchSurface 已实现。ToB 身份及传输文档保留原生命周期，其计划需要独立交付；下列历史 LAN 决策也不能替代对当前身份及授权实现的核验。远程对象是会话与工作流，不是整机桌面或任意键鼠控制。
 
@@ -61,7 +63,7 @@
 
 0.1.5 修复默认 LAN 信令无法供蜂窝网络访问的配置缺口：桌面可选择 LAN 网卡或公网 wss 信令、保存 STUN 设置，Android 区分信令/协商/UDP 失败；隐藏窗口容忍选中路径统计延迟，信令瞬断保留已打开通道。[配对握手](./android-pairing-handshake.md)维护原因、独立信令构建与验证边界。当前电脑已提供依赖后台进程的临时 Cloudflare 公网信令入口，并通过公网 WSS 协商与心跳测试；它不是产品默认公共服务，真实手机异网 UDP 可达性仍待验证。
 
-0.1.6 优先完善纯 UDP 直连，不引入 TURN：双方先发送签名 SDP 再发送候选，以 ICE ufrag 隔离旧轮次；电脑建连最多三轮，每轮 20 秒，手机保留失败轮次的信令并随新 offer 重建原生连接，避免首次 ICE/PEER FAILED 就终止全部尝试。Android 持续收集可用网络候选，记录 IPv6、候选实际应用和检查应答；快速重连立即释放旧 socket，尚未入房的 1008 拒绝可短暂重试。39 项桌面单测、6 项 Java 单测及最终 17 项本机联调通过，包含首轮阻断后连接成功和临时占房后的同终端重连；这些措施不声明已定位或解决真机异网失败。长期公网信令需由产品维护方运营固定入口并预置，避免每位用户配置；当前仅有临时测试地址，服务部署仍未完成。
+0.1.6 优先完善纯 UDP 直连，不引入 TURN：双方先发送签名 SDP 再发送候选，以 ICE ufrag 隔离旧轮次；电脑建连最多三轮，每轮 20 秒，手机保留失败轮次的信令并随新 offer 重建原生连接，避免首次 ICE/PEER FAILED 就终止全部尝试。Android 持续收集可用网络候选，记录 IPv6、候选实际应用和检查应答；快速重连立即释放旧 socket，尚未入房的 1008 拒绝可短暂重试。39 项桌面单测、6 项 Java 单测及最终 17 项本机联调通过，包含首轮阻断后连接成功和临时占房后的同终端重连；这些措施不声明已定位或解决真机异网失败。长期公网信令需由产品维护方运营固定入口并预置，避免每位用户配置；Cloudflare Workers signaling is deployed and bundled as the current default after the user reported phone health-check reachability; phone WSS and cross-network UDP remain unverified.
 
 [连接验证工具](./connection-lab.md)保留早期网络测试与中继讨论，[公网 Web 终端需求](./requirements/public-web-terminal-foundation.md)保留历史验收；模拟器测试不能替代真实跨网证据。CGNAT、双重 NAT 或一次失败不能单独证明所有 UDP 打洞都不可行，STUN 获得公网映射也不能证明没有 CGNAT。无中继方案无法保证任意网络可达；原生 App 不消除 NAT 与防火墙限制。
 
@@ -74,6 +76,8 @@ ToB 三部曲：[identity](./tob-identity.md)、[transport](./tob-transport.md)�
 Hosted 双适配以[orca-dual 纲](./requirements/orca-hosted-dual-github-gitlab.md)为目：[gitlab-config](./gitlab-instance-config.md)、[gitlab-reviews](./gitlab-provider-reviews.md)、[github-reviews](./hosted-github-reviews.md)、[automerge](./hosted-issues-comments-automerge.md)为目。
 
 ## Acceptance criteria
+
+Cloudflare 免费信令已部署，当前 Pages 入口复用原 Worker，兼容扫码与协商协议。新 profile 默认异网，保留明确的 LAN/自建配置，迁移旧官方及临时入口。电脑直连/代理公网信令已验证，用户报告手机关闭 VPN 后连通且输入可用；Android 输出不可见，因此 AC-3/AC-8 仍未验收，新增 AC-9 二维码有效期及 AC-10 桌面连接状态也尚未实现。当前状态见[配对握手](./android-pairing-handshake.md)和[部署说明](../../../scripts/remote-lab/cloudflare/README.md)。
 
 以下保留 2026-09-26 文档组织验收；数量是历史快照，勾选不证明团队路线全部交付。
 

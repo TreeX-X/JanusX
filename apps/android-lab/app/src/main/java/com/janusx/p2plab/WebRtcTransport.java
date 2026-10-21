@@ -20,7 +20,7 @@ public final class WebRtcTransport implements LabTransport {
     private final Listener listener;
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private final PeerConnectionFactory factory;
-    private final OkHttpClient http = new OkHttpClient.Builder().pingInterval(15, TimeUnit.SECONDS).build();
+    private final OkHttpClient http;
     private final List<IceCandidate> pending = new ArrayList<>();
     private final List<IceCandidate> outgoing = new ArrayList<>();
     private final ConnectionDiagnostics diagnostics = new ConnectionDiagnostics();
@@ -39,6 +39,13 @@ public final class WebRtcTransport implements LabTransport {
 
     public WebRtcTransport(Context context, Listener listener) {
         this.listener = listener;
+        http = new OkHttpClient.Builder().pingInterval(15, TimeUnit.SECONDS)
+            .dns(host -> {
+                diagnostics.signalStage("DNS 解析中");
+                List<java.net.InetAddress> addresses = okhttp3.Dns.SYSTEM.lookup(host);
+                diagnostics.signalStage("DNS 已完成，TCP/TLS、代理或 WebSocket 升级尚未确认");
+                return addresses;
+            }).build();
         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(context.getApplicationContext()).createInitializationOptions());
         factory = PeerConnectionFactory.builder().createPeerConnectionFactory();
     }
@@ -70,6 +77,7 @@ public final class WebRtcTransport implements LabTransport {
     }
 
     private void openSignal(String signalUrl) {
+        diagnostics.signalStage("开始连接，等待 DNS/TCP/TLS 或代理");
         socket = http.newWebSocket(new Request.Builder().url(signalUrl).build(), new WebSocketListener() {
             @Override public void onOpen(WebSocket ws, Response response) {
                 if (closed) { ws.close(1000, "cancelled"); return; }

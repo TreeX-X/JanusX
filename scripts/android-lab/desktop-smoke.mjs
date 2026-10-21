@@ -7,6 +7,7 @@ import { delimiter, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket from 'ws'
+const remoteDefaults = JSON.parse(await readFile(resolve('src/shared/remote-defaults.json'), 'utf8'))
 
 const artifacts = resolve('artifacts/android-lab')
 await mkdir(artifacts, { recursive: true })
@@ -74,7 +75,11 @@ try {
   await page.getByRole('button', { name: '开启手机远程', exact: true }).click()
   await expect(page.getByRole('combobox', { name: '授权工作区' })).toHaveValue(workspace.id)
   passed('Remote feature defaults off, direct IPC is gated, selected workspace is the active workspace')
+  await expect(page.getByLabel('连接环境', { exact: true })).toHaveValue('public')
+  await expect(page.getByLabel('公网信令地址', { exact: true })).toHaveValue(remoteDefaults.signalUrl)
+  passed('Fresh desktop defaults to deployed public signaling without user network configuration')
   await page.getByLabel('连接环境', { exact: true }).selectOption('public')
+  await page.getByLabel('公网信令地址', { exact: true }).fill('')
   await page.getByRole('button', { name: '开启并生成二维码', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('wss://')
   expect((await page.evaluate(() => window.electron.remote.status())).running).toBe(false)
@@ -214,6 +219,9 @@ try {
   passed('VT rendering fixture handles split erase/cursor sequences and Chinese/emoji, then restores real output')
   await tap('断开')
   if (process.env.JANUSX_SMOKE_RETRY === '1') {
+    // Wait for the original device's disconnect to reach the host before
+    // installing a separate occupied-role fixture. TCP teardown is asynchronous.
+    await until(async () => (await page.evaluate(() => window.electron.remote.status())).state.includes('手机已离开信令'), 'original signaling role released')
     // Hold the old room role deliberately to exercise native Android join retry.
     occupiedSocket = new WebSocket(`ws://127.0.0.1:${signaling.port}/signal`)
     await new Promise((resolve, reject) => {

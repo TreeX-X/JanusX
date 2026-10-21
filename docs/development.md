@@ -55,6 +55,16 @@ npm run dev
 
 更新或重新构建 sibling 后，在 JanusX 运行 `npm run prepackage` 刷新已安装副本；它核对 npm 发布文件清单，不会替你编译 sibling 源码。依赖声明变化时提交相应锁文件，并同步 CI 固定 revision。
 
+## 工作区文件归属
+
+源码放在 `src/`、`packages/` 和 `apps/`，自动化放在 `scripts/`，测试与固定 fixture 放在 `tests/`。贡献者说明由 `docs/` 维护，模块事实和验收记录由 `.agents/notes/` 维护；不要把临时报告、截图或手工测试文件放在根目录。
+
+`artifacts/` 收纳验证报告、截图及本地交付副本，`release/` 保留正式交付和校验清单。手工测试素材放在 `artifacts/manual-fixtures/`；需要跟随版本的测试样例应由测试引用并放入 `tests/fixtures/`。历史产物可归档到 `artifacts/archive/<批次>/`，同时记录原位置与归档位置。保留报告、日志、截图和必要的冻结基线，已结束测试生成的隔离 profile、重复暂存安装包及解包目录可以在核实后归档或清理。
+
+Android 源码和 Gradle 配置由 `apps/android-lab/` 维护，构建及验证工具由 `scripts/android-lab/` 维护；Cloudflare Worker、Pages 入口、依赖锁文件、测试及部署说明放在 `scripts/remote-lab/cloudflare/`，应随源码提交以便复现和维护。APK/AAB、构建缓存、日志、`local.properties`、Wrangler 登录状态和签名密钥不进入 Git；安装包按需要单独交付，不与源码混放。
+
+清理前核实路径、Git 跟踪状态、进程引用和工作树登记。`.cache` 可能承载正在运行的开发输出，`.codex-tmp` 可能包含 Git 工作树，`release/*/data` 与 `.janusX` 可能包含真实数据；不能仅凭目录名或忽略规则清空。保留当前 `out`、依赖、Android 工具链及正在使用的安装包。文件归档不是磁盘空间回收。
+
 ## 检查命令
 
 | 命令 | 用途 |
