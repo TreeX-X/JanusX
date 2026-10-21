@@ -231,6 +231,9 @@ export function MonacoViewer({ content, language, onChange, readOnly = false, on
     tabSize: 2,
     detectIndentation: false,
     minimap: { enabled: false },
+    // 竖线零容忍：缩进/括号参考线与 overview ruler 一律不画
+    guides: { indentation: false, bracketPairs: false, bracketPairsHorizontal: false, highlightActiveIndentation: false, highlightActiveBracketPair: false },
+    renderOverviewRuler: false,
     scrollBeyondLastLine: false,
     wordWrap: 'on' as const,
     lineNumbers: 'on' as const,

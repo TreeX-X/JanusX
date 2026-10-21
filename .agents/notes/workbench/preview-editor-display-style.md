@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-20",
-  "updated": "2026-10-21T05:40:11Z",
+  "updated": "2026-10-21T05:54:59Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -55,7 +55,7 @@
 正常编辑显示与差异显示同批适配：B 档排版同时作用于两种模式，A/C/D 的变更色带、指示条与计数属于差异呈现，普通编辑沿用同一排版与令牌基础。会话流文件改动卡与 TurnChangeIsland 的 diff 呈现与编辑器同源；文件树既有红绿 git 状态设计保持独立，不被本风格覆盖。
 
 - **A 纯主题 token（已落地）**：`src/shared/theme/definition.ts` 两主题 monaco diff 色重排——正文行 tint 降至 8%（alpha `0x14`）、gutter 色带提至 30%（`0x4D`）、词强调 32%（`0x52`，行:词 = 1:4），形成"色带在 gutter、正文薄纱"。
-- **B Monaco 选项（已落地）**：`MonacoViewer.tsx` `lineHeight: 24`、`tabSize: 2`（配 `detectIndentation: false` 保证打开即生效）同时作用于普通编辑与 diff；diff 启用 `hideUnchangedRegions`（enabled，reveal/minimum/context 均 20）折叠不变区。
+- **B Monaco 选项（已落地）**：`MonacoViewer.tsx` `lineHeight: 24`、`tabSize: 2`（配 `detectIndentation: false` 保证打开即生效）同时作用于普通编辑与 diff；diff 启用 `hideUnchangedRegions`（enabled，reveal/minimum/context 均 20）折叠不变区。竖线零容忍：文件编辑界面的竖线来源为 Monaco 默认缩进/括号参考线与 overview ruler，视觉复核确认后全部禁用（`guides` 全关 + `renderOverviewRuler: false`），planche 契约防回潮。
 - **C 装饰注入（已落地，竖条撤除）**：`MonacoViewer` diff 行号染色以 Monaco decoration API 实现（`getLineChanges()` + `onDidUpdateDiff` → `lineNumberClassName`，增绿删红，走 `--shell-diff-*` 令牌）。2px 变更竖条上线后经视觉复核**撤除**——文件预览界面不要竖线；变更信号由 gutter 色带、超淡行底色与行号染色承担。退出比较时主动清理装饰，避免残留到普通预览（模型在 diff 退出后仍被复用）。
 - **D 组件层（已落地）**：同源徽标 `shared/DiffCounts`（TurnChangeIsland 原 Counts 迁入共用；零变更隐藏、11px tabular、绿 `+N` 红 `−N`、`toLocaleString`）。落位**文件窗口外壳**：tab 内 per-file 常显 + 工具栏比较开关左侧跟随活动文件；数据取 git 变更统计（`git status` 行统计，随 fileTree 变更刷新），文件树红绿不被覆盖。
 

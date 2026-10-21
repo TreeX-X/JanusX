@@ -296,33 +296,38 @@ export default function App() {
           </div>
         </main>
 
-        {isEditorEmbedded && (
-          <section
-            ref={editorWorkspaceRef}
-            className="relative min-w-0 overflow-hidden border-l border-white/[0.07]"
-            aria-label="Embedded file editor"
-          >
-            <div
-              role="separator"
-              aria-label="Resize embedded editor"
-              aria-orientation="vertical"
-              aria-valuemin={EMBEDDED_EDITOR_MIN_WIDTH}
-              aria-valuemax={Math.round(editorMaxWidth)}
-              aria-valuenow={Math.round(editorColumnWidth)}
-              tabIndex={0}
-              className={dockStyles.resizeHandle}
-              data-resizing={editorResizing}
-              style={{ zIndex: 60 }}
-              onPointerDown={handleEditorResizeStart}
-              onPointerMove={handleEditorResizeMove}
-              onPointerUp={handleEditorResizeEnd}
-              onPointerCancel={handleEditorResizeEnd}
-              onLostPointerCapture={handleEditorResizeEnd}
-              onKeyDown={handleEditorResizeKeyDown}
-            />
-            <FileEditor />
-          </section>
-        )}
+        {/*-- 槽位常驻：关闭时留 0px 空壳占位，网格自动排布才不会把右侧 Panel 挤错轨道 --*/}
+        <section
+          ref={editorWorkspaceRef}
+          className={`relative min-w-0 overflow-hidden${isEditorEmbedded ? ' border-l border-white/[0.07]' : ''}`}
+          aria-label="Embedded file editor"
+          aria-hidden={!isEditorEmbedded}
+          {...(isEditorEmbedded ? {} : { inert: '' })}
+        >
+          {isEditorEmbedded && (
+            <>
+              <div
+                role="separator"
+                aria-label="Resize embedded editor"
+                aria-orientation="vertical"
+                aria-valuemin={EMBEDDED_EDITOR_MIN_WIDTH}
+                aria-valuemax={Math.round(editorMaxWidth)}
+                aria-valuenow={Math.round(editorColumnWidth)}
+                tabIndex={0}
+                className={dockStyles.resizeHandle}
+                data-resizing={editorResizing}
+                style={{ zIndex: 60 }}
+                onPointerDown={handleEditorResizeStart}
+                onPointerMove={handleEditorResizeMove}
+                onPointerUp={handleEditorResizeEnd}
+                onPointerCancel={handleEditorResizeEnd}
+                onLostPointerCapture={handleEditorResizeEnd}
+                onKeyDown={handleEditorResizeKeyDown}
+              />
+              <FileEditor />
+            </>
+          )}
+        </section>
         <RightDockLayoutProvider
           effectiveCollapsed={rightDockLayout.effectiveCollapsed}
           effectiveMaxWidth={rightDockLayout.effectiveMaxWidth}

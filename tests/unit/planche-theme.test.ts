@@ -177,6 +177,8 @@ describe('planche theme contract', () => {
     expect(hovers).not.toContain('diff-bar')
     expect(read('components/viewers/MonacoViewer.tsx')).toContain('lineNumberClassName')
     expect(read('components/viewers/MonacoViewer.tsx')).not.toContain('linesDecorationsClassName')
+    // 竖线零容忍：缩进/括号参考线禁用（文件编辑界面不得出现竖线）
+    expect(read('components/viewers/MonacoViewer.tsx')).toContain('indentation: false')
     // diff 令牌双主题都有定义（M1 后唯一事实源为 definition.ts，CSS 由脚本生成）
     const css = readFileSync(resolve(__dirname, '../../src/renderer/src/styles/themes.generated.css'), 'utf8')
     expect(css).toContain('--shell-diff-add: #4ec9b0')
