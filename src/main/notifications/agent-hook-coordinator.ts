@@ -66,7 +66,7 @@ export function getHookMatcher(payload: AgentHookPayload): string | undefined {
   return typeof matcher === 'string' && matcher.trim() ? matcher.trim() : undefined
 }
 
-// Note: Claude idle_prompt is a 60s-idle nudge, not a question — see .agents/notes/terminal/claude-idle-prompt-tab-status.md
+// Note: Claude idle_prompt is a 60s-idle nudge, not a question — see .agents/notes/terminal/terminal-status-display.md
 function isIdlePromptNotification(payload: AgentHookPayload): boolean {
   if (payload.source === 'opencode' || payload.event !== 'Notification') return false
   return getHookMatcher(payload) === 'idle_prompt'

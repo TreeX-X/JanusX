@@ -1,4 +1,4 @@
-// Note: P0 产物格式为 image/text 预览；新增格式只改本文件映射 — see .agents/notes/workbench/product-preview-p0.md
+// Note: P0 产物格式为 image/text 预览；新增格式只改本文件映射 — see .agents/notes/workbench/product-workspace.md
 // Note: 产物工作区 canonical kind mapping; Office rendering itself is served by
 // iOfficeAI/OfficeCLI (Apache-2.0, github.com/iOfficeAI/OfficeCLI) via the office watch pool.
 // See .agents/notes/workbench/product-workspace.md

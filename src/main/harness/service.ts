@@ -90,7 +90,7 @@ export class HarnessNoteService extends NoteService {
       classification: item.classification,
       diagnostics: item.diagnostics.map((d) => ({ code: d.code, message: d.message })),
     }))
-    // Note: coverage comes from portable receipts - see .agents/notes/agent/harness-portable-results.md
+    // Note: coverage comes from portable receipts - see .agents/notes/agent/harness-execution-adapter-s8.md
     if (index.repoId) {
       const overlay = await this.coverageOverlay(root, rev, entries, index.repoId)
       for (const node of Object.values(blueprint.nodes)) {

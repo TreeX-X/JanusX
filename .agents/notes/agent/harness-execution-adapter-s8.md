@@ -27,19 +27,20 @@
       }
     }
   },
-  "updated": "2026-10-08T03:25:17.738Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
-# JanusX harness execution adapter and legacy-lane closeout
-
+# JanusX harness execution adapter and portable results
 
 ## Problem
-
 The shared run kernel landed in janus-agentX (dispatch, baselines, leases, receipts, closeout), but JanusX has no execution entry: the C7 `execution-adapter.ts` never existed, so desktop runs cannot prepare, start, or close out tasks against the same C3 baselines the terminal kernel pins. Meanwhile three legacy lanes still fork project graphs: `appendAnalysis`, `applyAnalysisPatch`, `upsertRequirementCandidates`, and `setCursor` load the harness projection and then persist it through the unconditional legacy JSON writer, shadowing note files with divergent analyses, progress, candidates, and cursors.
 
-## Decision
+### Desktop projections of portable task evidence
+A desktop run list based only on local run files omits completed work from a shared checkout. Canvas acceptance checkboxes also describe prose rather than verified coverage. The graph and terminal can disagree after local state is removed or source code changes.
 
+
+## Decision
 `src/main/harness/execution-adapter.ts` owns the JanusX side of the run lifecycle, Electron-free with roots from callers so unit tests drive real temp checkouts. `prepareTaskRun` pins the baseline through `collectTaskBaseline` and opens a queued run via `dispatchRun`; unaccepted tasks, missing identities, unknown notes, and unauthorized closeouts refuse before any run record exists. `startTaskRun` reloads the run, re-collects the baseline, and starts only when contract and inputs still match, otherwise the kernel reports `STALE_BASELINE` and the run stays queued for explicit rebaseline. `collectLiveSnapshot` rebuilds the finish-time validity snapshot from current files with recomputed per-criterion hashes. Verify, receipt, finish, repair, pause, resume, cancel, takeover, rebaseline, mark, closeout, handoff, get, and list are thin root-first wrappers preserving dispatcher diagnostics.
 
 Lane closeout keeps one writable truth per lane. The four analyzer/candidate/cursor store methods throw `HARNESS_MANAGED` on project graph ids instead of writing shadow JSON. The analyzer detects project graphs once per session and skips all five persistence calls: analysis still runs in memory and Island events still publish, but no candidates are produced and the cursor is not persisted, so the next run rescans within its commit budget. Adopted conclusions enter notes only through the maintenance flow. The team lane needed no change: project metadata is already `HARNESS_READONLY` at the store.
@@ -52,14 +53,30 @@ Snapshot collection delegates to `harness-node`, so desktop and CLI resolve the 
 
 The shared snapshot path is verified by `npx vitest run tests/unit/harness-execution-adapter.test.ts tests/unit/harness-s9-acceptance.test.ts tests/unit/harness-run-handlers.test.ts tests/unit/harness-service.test.ts` with 22 passing checks. Typecheck, adapter lint and the package-boundary check pass.
 
-## Alternatives considered
+### Desktop projections of portable task evidence
+The execution adapter reads task results through the shared harness-node validator. Local runs retain their controls; portable task records use their Note URI as a read-only result reference. The panel displays execution and evidence validity separately, disables execution controls without local ownership and checks closeout through the same current-branch proof as the terminal.
 
+Graph projection rebuilds task completion and requirement acceptance from currently valid formal receipts. Checkbox marks do not establish completion. Project reads refresh source Notes, and coverage rechecks the checkout. Share snapshots include the selected tasks' referenced formal receipts, under the managed asset lock; they exclude local runs, leases and conversations and still pass the existing export leak gate.
+
+
+
+## Alternatives considered
 - Call the dispatcher directly from IPC handlers — strongest case is zero new modules, but every caller would reimplement baseline re-pinning and drift checks, and the first missed check executes a stale contract; the adapter pins once for all callers.
 - Persist analyzer output into notes automatically — strongest case is no lost analysis, but raw analysis is run record, not adopted decision; auto-writing it pollutes decision prose and breaks the adopted-only rule the unified design requires.
 - Ship IPC channels and renderer UI in the same commit — strongest case is end-to-end usability now, but backend-first then surface follows the S5 precedent and keeps this commit's contract small; IPC plus a run panel is the explicit follow-up.
 - Do nothing / reuse — keep execution terminal-only and analyzer forking shadow JSON; rejected because desktop runs stay impossible and every analyzer pass on a project graph silently diverges a second truth.
 
-## Consequences
+### Desktop projections of portable task evidence
+- Reuse local run lists: preserves inexpensive lookups, but a fresh checkout cannot show portable results.
+- Interpret checked acceptance boxes as completion: familiar and cheap, but prose edits cannot prove commands, review or current code validity.
+- Copy local runs into shares: retains operational detail, but exports checkout-specific ownership and introduces competing execution truth. Shares carry formal evidence only.
 
+
+## Consequences
 - **Gains**: 6 adapter checks pass (queued prepare with pinned baseline, F09 refusal set of draft/unknown/identity-less/unauthorized, `STALE_BASELINE` block on moved contracts with the run staying queued, live snapshot matching the pin, verify plus malformed-receipt plus unknown-receipt plus cancel plus handoff wiring, missing-run reads). 3 run-IPC checks pass (checkout-first resolution, prepare mapping with first-diagnostic failures and input validation, start/status/list/cancel/closeout/handoff wiring with lease-token passthrough). Contract suite pins all 15 harness channels and 16 preload methods. 2 lane checks pass (four guards with no shadow files, legacy analyzer writes untouched). 1 analyzer check passes (project graphs skip persistence yet still publish). Typecheck passes; 53 neighboring blueprint, maintenance, team, and harness checks pass; package-boundary check passes; touched sources lint clean; i18n 12 namespaces in sync.
 - **Costs and limits**: run surface covers prepare through handoff; verify, receipt, finish, repair, pause, resume, takeover, and rebaseline stay executor-side until evidence UX lands, and the panel has no component test (no tsx harness exists; coverage is handler mapping plus adapter integration). Project-graph analyzer sessions rescan within the commit batch cap on every trigger because cursors do not persist. Cross-checkout runs, task work contracts from roundtables, and the S9 cutover remain downstream. Revisit when the run panel needs start preconditions beyond baseline pinning or when analyzer cursors earn a `.local` home.
+
+### Desktop projections of portable task evidence
+The adapter integration test removes local state after verification, rebuilds a valid result and graph completion, exports referenced receipts, then changes acceptance and observes stale evidence. `npm run test:unit -- --run` with the harness adapter, run handlers, service, acceptance, IPC contract, store branch, maintenance apply and maintenance routing files passes 42 checks. Typecheck, package boundaries and i18n checks pass. Rendering continues to use the existing run panel and canvas components.
+
+Repeated evidence checks add file IO; large graphs with many receipt dependencies require performance measurement. A share carries evidence claims, not an assurance that the receiver's code matches. [Shared conversation control](../sessions/threads/project-conversation-controller.md) and [task contract adoption](./task-contract-adoption.md) now cover the new Note entry workflow. GUI model-driven execution and full Electron interaction acceptance remain incomplete. The standard remains a candidate.

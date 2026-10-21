@@ -6,10 +6,19 @@
   "lifecycle": "accepted",
   "created": "2026-09-26",
   "class": "architecture",
-  "tags": ["remote","hosted"],
+  "tags": [
+    "remote",
+    "hosted"
+  ],
   "relations": [
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/7822452e-cef7-4ef3-a138-2ae6abc84667"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/bda5aa81-dc65-4408-9544-60fdfdf8c836"}
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/636764b9-0105-4944-91f7-72fcbd3c4869"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bda5aa81-dc65-4408-9544-60fdfdf8c836"
+    }
   ],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a",
   "codeRefs": [
@@ -32,7 +41,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-21T15:38:35Z",
+  "updated": "2026-10-21T16:54:19Z",
   "moduleState": "partial"
 }
 ---
@@ -45,11 +54,11 @@
 
 ## Design
 
-配对握手专题维护 Android App 内 HTTPS/WSS 分别诊断、日志复制及其可观测边界。当前默认免费入口为 `wss://janusx-signal-entry.pages.dev/signal`，经服务绑定复用原 Worker/房间；用户在手机关闭 VPN 后报告连通且输入可发送，但终端从开始就空白，完整真机交互尚未验收。0.1.11 补充终端加载/脚本错误、启动超时重载、就绪后自动回放及同步恢复；桌面状态栏持续显示协商阶段，二维码显示倒计时，到期生成新邀请并保留已授权旧传输和终端。详见[配对体验改进](./android-pairing-handshake.md#0111-体验改进)和需求 AC-3/8/9/10。浏览器健康页成功不等于 App 的 WSS、VPN 路由或 UDP 已验证。
+v0.9.4 远程功能收口为局域网测试：桌面发布构建默认只使用内置信令，不开放公网信令或 STUN；开发构建保留跨网实现与原配置。Android 提供独立包名的 LAN 测试 APK，可与现有开发版共存。用户于 2026-10-22（北京时间）确认 Android 空白屏已经修复并经真机验证；手机端显示和界面设计优化、长期使用测试及进一步跨网开发移至 v0.9.5。构建开关、限制边界与验证证据见[配对握手](./android-pairing-handshake.md#v094-局域网测试发行与-v095-边界)。
 
 模块覆盖已存在的受控网关与托管平台入口，不声明完整团队身份、服务端同步或 LaunchSurface 已实现。ToB 身份及传输文档保留原生命周期，其计划需要独立交付；下列历史 LAN 决策也不能替代对当前身份及授权实现的核验。远程对象是会话与工作流，不是整机桌面或任意键鼠控制。
 
-用户后续提供的 `Unexpected token ?` 将空白故障指向 WebView 无法解析 Chrome 80 目标 bundle；0.1.12 改为 Chrome 58 语法构建并避免 globalThis 运行时依赖，保留首个脚本错误并记录实际引擎版本。本地 favicon 不再产生 CSP 假故障，详见配对握手专题的 WebView 兼容记录；真机输出仍需更新包复验。
+用户提供的 `Unexpected token ?` 将空白故障指向 WebView 无法解析 Chrome 80 目标 bundle；0.1.12 改为 Chrome 58 语法构建并避免 globalThis 运行时依赖，保留首个脚本错误并记录实际引擎版本。本地 favicon 不再产生 CSP 假故障，详见配对握手专题的 WebView 兼容记录。用户已确认空白故障修复；该确认不等于旋转、弱网、长时会话等完整验收。
 
 当前实现是 Android 原生 App + Electron 隐藏 WebRTC 主机：扫码载荷包含信令地址、临时邀请和配对密钥，电脑审批设备后才允许单工作区终端控制。业务使用有序 WebRTC DataChannel，信令只转发 SDP/UDP ICE，TURN 和业务中继被拒绝。电脑端通过现有 terminal manager 真实创建 Claude Code，输出序号回放、输入请求去重和断线保活已落地。旧浏览器、LAN/账号远控、web-test gateway 和 remote-lab 验证代码已移除；scripts/android-lab 仅保留 Android 构建与底层链路工具，尚未替代真实异网手机验收。
 
@@ -75,11 +84,11 @@
 
 ToB 三部曲：[identity](./tob-identity.md)、[transport](./tob-transport.md)、[lan-remote](./tob-lan-remote.md)按身份到传输到控制排序。
 
-Hosted 双适配以[orca-dual 纲](./requirements/orca-hosted-dual-github-gitlab.md)为目：[gitlab-config](./gitlab-instance-config.md)、[gitlab-reviews](./gitlab-provider-reviews.md)、[github-reviews](./hosted-github-reviews.md)、[automerge](./hosted-issues-comments-automerge.md)为目。
+Hosted 双适配以[orca-dual 纲](./requirements/orca-hosted-dual-github-gitlab.md)为目：[gitlab-config](./gitlab-provider-reviews.md)、[gitlab-reviews](./gitlab-provider-reviews.md)、[github-reviews](./hosted-github-reviews.md)、[automerge](./hosted-github-reviews.md)为目。
 
 ## Acceptance criteria
 
-Cloudflare 免费信令已部署，当前 Pages 入口复用原 Worker，兼容扫码与协商协议。新 profile 默认异网，保留明确的 LAN/自建配置，迁移旧官方及临时入口。电脑直连/代理公网信令已验证，用户报告手机关闭 VPN 后连通且输入可用；Android 输出不可见，因此 AC-3/AC-8 仍未验收，新增 AC-9 二维码有效期及 AC-10 桌面连接状态也尚未实现。当前状态见[配对握手](./android-pairing-handshake.md)和[部署说明](../../../scripts/remote-lab/cloudflare/README.md)。
+Cloudflare 免费信令保留用于开发构建，Pages 入口复用原 Worker；v0.9.4 发布构建不使用该入口。Android 空白屏修复已有用户真机确认，完整 AC-3/AC-8 与长期使用仍需补充验收。AC-9 二维码倒计时及自动刷新、AC-10 桌面连接状态已经实现并有单测/模拟器证据，完整真机验收不自动勾选。当前状态见[配对握手](./android-pairing-handshake.md)和[部署说明](../../../scripts/remote-lab/cloudflare/README.md)。
 
 以下保留 2026-09-26 文档组织验收；数量是历史快照，勾选不证明团队路线全部交付。
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-// Note: desktop entry to task runs incl. the xdo host — see .agents/notes/agent/desktop-xdo-executor.md
+// Note: desktop entry to task runs incl. the xdo host — see .agents/notes/agent/desktop-delegated-modes.md
 // Note: external runner backflow surface — see .agents/notes/agent/external-runner-backflow.md
 // Note: thread registry, activation, and close — see .agents/notes/sessions/threads/thread-registry-activation.md
 // Note: independent review and limited repair — see .agents/notes/agent/independent-review-repair.md

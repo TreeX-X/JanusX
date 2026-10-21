@@ -6,7 +6,11 @@
   "lifecycle": "accepted",
   "created": "2026-09-26",
   "class": "architecture",
-  "tags": ["session","workspace","worktree"],
+  "tags": [
+    "session",
+    "workspace",
+    "worktree"
+  ],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a",
   "codeRefs": [
     {
@@ -15,18 +19,41 @@
       "symbol": "AgentSessionRegistry",
       "role": "entry"
     },
-    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/ipc/session-handlers.ts","role":"implementation"}
+    {
+      "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+      "path": "src/main/ipc/session-handlers.ts",
+      "role": "implementation"
+    }
   ],
-  "interfaces": [{"name":"AgentSessionRegistry","direction":"provides"}],
+  "interfaces": [
+    {
+      "name": "AgentSessionRegistry",
+      "direction": "provides"
+    }
+  ],
   "relations": [
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/abb1ccb3-be21-5f64-9b55-de5089e621e9"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/d87e7a46-1d85-45e5-a635-63a6838d441c"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/70beb72a-424d-5e96-a0d0-8e1a29635220"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/640a69dd-bbea-4606-b51a-f9b545de37a5"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/97a21dee-2b5e-4cf8-8298-28263eeb02bb"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/cee742a2-d7ca-4a61-8021-e1e118534c96"}
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/abb1ccb3-be21-5f64-9b55-de5089e621e9"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/22f762b8-1b14-522d-a971-b11e2dfc9af6"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/70beb72a-424d-5e96-a0d0-8e1a29635220"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/640a69dd-bbea-4606-b51a-f9b545de37a5"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/97a21dee-2b5e-4cf8-8298-28263eeb02bb"
+    }
   ],
-  "updated": "2026-10-10T08:56:32.429Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "moduleState": "partial"
 }
 ---

@@ -415,7 +415,7 @@ export function JanusIsland({
 
   const maintenanceNeedsAttention = maintenanceTask?.status === 'failed' || maintenanceTask?.status === 'stale' || maintenanceTask?.status === 'proposal-ready'
 
-  // Notification projection (Note: 2026-09-13-island-notification-capsule.md):
+  // Notification projection (Note: island-hifi-optimized-alignment.md):
   // peek/expanded surfaces render from IslandNotification only; the former
   // per-kind title/subtitle/status chains live in islandNotifications.ts.
   const notifications = useMemo(() => assembleNotifications([

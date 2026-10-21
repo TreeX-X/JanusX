@@ -378,7 +378,7 @@
   padding: 13px var(--so-body-pad-x, 22px);
   backdrop-filter: blur(16px);
   /* 吃 --shell-canvas 令牌，不写死 #151517 — 见
-     .agents/notes/workbench/settings-footer-scrim-token.md */
+     .agents/notes/workbench/settings-layout.md */
   background: color-mix(in srgb, var(--shell-canvas) 90%, transparent);
 }
 

@@ -51,6 +51,7 @@ public final class WebRtcTransport implements LabTransport {
     }
 
     @Override public void connect(String signalUrl, String invitation, String stunUrl, String pairingSecret) {
+        RemoteScope.validate(signalUrl, stunUrl);
         if (closed || socket != null) throw new IllegalStateException("Create a new transport to reconnect");
         if (!signalUrl.startsWith("wss://") && !(BuildConfig.DEBUG && signalUrl.startsWith("ws://")))
             throw new IllegalArgumentException("Use wss:// (debug builds also support local ws://)");

@@ -1,17 +1,22 @@
 plugins { id 'com.android.application' }
 def remoteDefaults = new groovy.json.JsonSlurper().parse(rootProject.file('../../src/shared/remote-defaults.json'))
+def remoteScope = providers.gradleProperty('remoteScope').getOrElse('lan')
+if (!(remoteScope in ['lan', 'develop'])) throw new GradleException('remoteScope must be lan or develop')
+def lanOnly = remoteScope == 'lan'
 android {
     namespace 'com.janusx.p2plab'
     compileSdk 35
     buildToolsVersion '35.0.0'
     defaultConfig {
-        applicationId 'com.janusx.p2plab'
+        applicationId lanOnly ? 'com.janusx.p2plab.lan' : 'com.janusx.p2plab'
         minSdk 26
         targetSdk 35
-        versionCode 13
-        versionName '0.1.12'
-        buildConfigField 'String', 'DEFAULT_SIGNAL_URL', groovy.json.JsonOutput.toJson(remoteDefaults.signalUrl)
-        buildConfigField 'String', 'DEFAULT_STUN_URL', groovy.json.JsonOutput.toJson(remoteDefaults.stunUrl)
+        versionCode 14
+        versionName lanOnly ? '0.1.13-lan' : '0.1.13-dev'
+        buildConfigField 'boolean', 'LAN_ONLY', lanOnly.toString()
+        buildConfigField 'String', 'DEFAULT_SIGNAL_URL', groovy.json.JsonOutput.toJson(lanOnly ? '' : remoteDefaults.signalUrl)
+        buildConfigField 'String', 'DEFAULT_STUN_URL', groovy.json.JsonOutput.toJson(lanOnly ? '' : remoteDefaults.stunUrl)
+        resValue 'string', 'app_name', lanOnly ? 'JanusX LAN Test' : 'JanusX P2P Develop'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildFeatures { buildConfig true }

@@ -133,7 +133,7 @@ export function SessionPanel({ active = true }: { active?: boolean }) {
   const [allCounts, setAllCounts] = useState<{ all: number; archived: number } | null>(null)
   // Note: open-card live refresh follows the same session:event — debounced
   // so session update bursts reload the timeline once — see
-  // .agents/notes/sessions/records/session-timeline-live.md
+  // .agents/notes/sessions/records/session-timeline-v5.md
   const [timelineTick, setTimelineTick] = useState(0)
 
   useEffect(() => {
@@ -510,9 +510,9 @@ const SessionCard = memo(function SessionCard({
   const iconPreset = sessionEnginePreset(session.engine)
 
   // Note: expand motion retains visited bodies and animates grid rows; the
-  // closed body is inert — see .agents/notes/workbench/session-card-expand-motion.md
+  // closed body is inert — see .agents/notes/workbench/session-card-surface.md
   // Note: compact list identity and optional prompt preview — see
-  // .agents/notes/workbench/session-card-l1-summary.md
+  // .agents/notes/workbench/session-card-surface.md
 
   return (
     <div

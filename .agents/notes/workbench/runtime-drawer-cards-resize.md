@@ -27,7 +27,7 @@
       }
     }
   },
-  "updated": "2026-10-14T17:09:34Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/19cd1394-b2cb-4819-8fde-5f12de16574c"
 }
 ---
@@ -60,4 +60,4 @@ The first surface update passed all three `tests/e2e/terminal-usage.spec.ts` cas
 ## Consequences
 
 - **Gains**: Each terminal's context usage reads as a unit with its own bar and percentage, and the grid shows as many cards as the width allows. The user can pull the drawer up to compare all terminals and push it down to give the panes room, with a keyboard path on the handle.
-- **Costs and limits**: The chosen height lives in component state and is lost on reload; collapse and expand retain it within the mounted area. The handle is absent while collapsed. The pane reserve of 160px is a constant and not derived from the terminal's minimum rows, so a very short window can still leave the terminal cramped. Cards render inside the drawer only, so the sidebar and tab strip keep their existing status forms, owned by [terminal status ring](../terminal/terminal-status-ring.md) and [terminal status display](../terminal/terminal-status-display.md).
+- **Costs and limits**: The chosen height lives in component state and is lost on reload; collapse and expand retain it within the mounted area. The handle is absent while collapsed. The pane reserve of 160px is a constant and not derived from the terminal's minimum rows, so a very short window can still leave the terminal cramped. Cards render inside the drawer only, so the sidebar and tab strip keep their existing status forms, owned by [terminal status ring](../terminal/terminal-status-display.md) and [terminal status display](../terminal/terminal-status-display.md).

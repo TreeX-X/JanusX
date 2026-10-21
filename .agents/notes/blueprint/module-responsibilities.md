@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-08",
-  "updated": "2026-10-15T10:29:53.583Z",
+  "updated": "2026-10-21T16:03:27.872Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
   "codeRefs": [
     {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"scripts/verify-note-corpus.mjs","role":"entry"},
@@ -68,3 +68,6 @@ Notes 根目录只保留项目 module.md；职责目录由自己的 module.md �
 本次以仓库原文及本地共享索引校验为依据，全量检查身份、最近模块归属、父级循环、大小写冲突、相对链接和真实模块可达性。外仓未绑定及跨仓 Markdown 链接保留为明确诊断，不能视为已验证的外仓内容。原职责迁移验证中的数量、受保护文件与验收结果是当时快照，不是本次统计。
 
 本次验证：`node scripts/verify-note-corpus.mjs` 与 `node scripts/check-agent-notes.mjs` 均为 310 份 Note、零错误，共 19 个模块；分别保留 24 条外仓未绑定读取诊断与 17 条跨仓链接诊断。`npx vitest run tests/unit/note-corpus-navigation.test.ts tests/unit/agent-notes-check.test.ts tests/unit/note-relocations.test.ts --maxWorkers=2 --reporter=dot` 的 3 个文件、20 项测试通过；真实语料遍历覆盖新规划模块。逐份哈希核对确认原 309 个 UUID、created、类型和生命周期不变，里程碑除归属与维护时间外原字节一致，所有历史 Task 原字节一致，26 个既有改动文件中的原有编辑均保留。`git diff --check` 通过。此为文档与来源投影验证，未运行桌面界面或外仓内容验收。
+## 合并瘦身整理（2026-10-21）
+
+300 份维护文档（合并前 332）：16 簇同主题历史切片并入主题 Note，吸收 32 篇、幸存 24 篇，删除映射见 [note-consolidation.json](../../../docs/migrations/note-consolidation.json)（含 UUID、created、源哈希、幸存身份与理由）。被吸收 Note 的 Problem/Decision/Alternatives/Consequences 原文以 `###` 小节保留在幸存者对应章节下，未改写取舍文字；幸存者标题扩为覆盖合并后主题。合并当批修复全部活跃引用（关系、正文链接、代码反向注释）到幸存身份，模块入口补充缺失的成员反向链接，三篇跨仓关系补 `repositories` 显式声明。用户脏文件与未跟踪想法保持原样；readme 资产断链属未提交 wiki 删除的连带结果，随用户 wiki 处置再定。

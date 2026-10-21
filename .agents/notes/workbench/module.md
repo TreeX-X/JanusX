@@ -40,7 +40,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-21T05:54:59Z",
+  "updated": "2026-10-21T16:28:29Z",
   "moduleState": "partial"
 }
 ---
@@ -67,9 +67,11 @@
 
 [预览编辑窗口显示风格与外壳 UI 对齐方向](./preview-editor-display-style.md)记录 opencode 文件编辑显示调研：diff 与普通编辑显示同批向“行号色带 + 超淡行底色 + 不变区折叠”收敛（正常显示同批适配），与无色块设计语言同构。外壳 UI 对齐（滑动指示块 tab、文字 + 2px 强调条选中态、MonacoViewer 令牌化）与 A–D（正文薄纱/gutter 色带/词强调 1:4、行高 24/tab 2、不变区折叠、行号染色、同源 +N/−N 徽标）已落地，竖条与缩进参考线经视觉复核撤除/禁用、tab 关闭钮可见性与悬浮反馈补齐；文件树红绿 git 状态色保持独立。
 
+文件差异默认随容器宽度在合并／并排之间选择，手动选择持久保存；合并视图只显示一列行号，删除行显示旧行号，当前行显示当前行号，工具栏提供前后变更导航。具体布局、原生删除行边栏适配及浏览器回归见[单列 diff 行号](../terminal/monaco-diff-single-line-number.md)。
+
 右侧[工具区](./right-dock.md)由竖排图标统一控制，移除顶部工具 Tab、独立折叠按钮和未选中工具的小圆点。收起时悬停显示可操作的临时卡片，点击则转为常驻面板，再点当前图标收起。两种展示复用同一个工具实例：临时预览覆盖中部内容；点击后中部向左让位，卡片的圆角、间距、边框与阴影同步在 240ms 内退去，转为上下贴边的面板，避免遮挡终端右侧的 island；收起后布局只保留 48px 工具栏。
 
-通用设置的[主题选择](./settings-theme-preview.md)以预览小卡片替代下拉框。每张缩略界面读取对应主题令牌，点击即保存应用；原生单选支持键盘切换，选中状态以轻描边与勾标记表达。说明与卡片根据设置区域实际宽度重排，保存失败保留原主题并显示错误。
+通用设置的[主题选择](./settings-layout.md)以预览小卡片替代下拉框。每张缩略界面读取对应主题令牌，点击即保存应用；原生单选支持键盘切换，选中状态以轻描边与勾标记表达。说明与卡片根据设置区域实际宽度重排，保存失败保留原主题并显示错误。
 
 [设置布局](./settings-layout.md)以平铺分区、按需展开和一致的操作区组织配置。通用页管理偏好与开发环境，关于页集中版本、更新与 GitHub 求赞入口；通知关闭时收起关联字段，通知与 Agent 权限显示未保存状态；模型测试与保存位于底部。外部 CLI 参考 MCP 接入采用品牌、状态与操作组成的通栏列表，保留安装、检测及入口显隐语义。
 
@@ -81,7 +83,7 @@
 
 左侧“工作区”标题行不保留下方横线，40px 高度与中央 Tab 栏对齐，通过标题和列表留白区分导航层级；侧栏与内容之间的竖向边界保留。[底部用量栏](./runtime-drawer-cards-resize.md)收起时无贯穿横线，整行为支持键盘的展开按钮，圆角反馈集中到“用量”入口。展开时保留弱分隔与高度调整，卡片以浅底色和当前终端标记分组，避免重复描边；摘要布局按中部实际宽度收拢。
 
-侧栏项目与终端选中态使用中性底色，分支与终端采用单行名称，路径和启动类型移入悬浮提示；[终端分组与导航](../terminal/sidebar-terminal-hierarchy.md)拥有终端点击定位、跨项目恢复和 worktree 归属规则。项目[悬浮操作](../sessions/workspace-row-hover-reveal.md)预留固定按钮位，以淡入显示保持名称宽度和菜单锚点稳定。
+侧栏项目与终端选中态使用中性底色，分支与终端采用单行名称，路径和启动类型移入悬浮提示；[终端分组与导航](../terminal/terminal-sidebar-states.md)拥有终端点击定位、跨项目恢复和 worktree 归属规则。项目[悬浮操作](../sessions/workspace-row-hover-reveal.md)预留固定按钮位，以淡入显示保持名称宽度和菜单锚点稳定。
 
 右侧[工具区](./right-dock.md)使用中性选中态，工具入口位置固定；文件与会话搜索统一高度和间距。会话采用标题优先的轻量列表，短提示去重，展开后才抬升详情底色；Git 只显示非零变更统计，分组标题减少底色和小字。各工具宽度偏好与业务操作保留。展开和收起保留淡入淡出及滑动效果，退出时内容及当前卡片／面板外观保留至 320ms 动画结束，但立即禁用交互。常驻面板支持拖拽调整宽度，中部同步让位；减少动态效果偏好关闭动画。
 
@@ -99,15 +101,15 @@ Chat 会话删除确认框虽通过 portal 挂到 body，仍属于 island 的交
 
 2026-10-14 回归：修复前真实组件测试复现点击删除确认后 data-stage 变为 collapsed；修复后 `npx playwright test tests/e2e/chat-conversation-delete.spec.ts --project=island --workers=1 --output=artifacts/chat-delete/verified` 5 项通过，覆盖置顶／未置顶、取消／Esc／遮罩、Enter 删除末会话、删除进行中回复与保留另一会话回复。使用真实组件和会话控制器，持久化与流式 IPC 为测试替身；未另跑桌面删除持久化。`npm run typecheck` 与 `npm run build:app` 通过；JanusChat 范围 ESLint 为 0 错误、4 条既有中文字符串警告。
 
-槽位演进链（非重复，保留先后）：[island-slots](./requirements/island-rightdock-slots.md)、[right-dock](./right-dock.md)、[empty-collapse](./right-dock-empty-collapse.md)、[toggle-motion](./right-rail-toggle-motion.md)、[drawer-resize](./runtime-drawer-cards-resize.md)、[run-orb](./run-orb-budding.md)、[hifi-alignment](./island-hifi-optimized-alignment.md)、[capsule](./island-notification-capsule.md)；turn 双件[island](./turn-change-island.md)与[card](./turn-change-card-external-cli.md)同属本域。
+槽位演进链（非重复，保留先后）：[island-slots](./requirements/island-rightdock-slots.md)、[right-dock](./right-dock.md)、[empty-collapse](./right-rail-toggle-motion.md)、[toggle-motion](./right-rail-toggle-motion.md)、[drawer-resize](./runtime-drawer-cards-resize.md)、[run-orb](./run-orb-budding.md)、[hifi-alignment](./island-hifi-optimized-alignment.md)、[capsule](./island-hifi-optimized-alignment.md)；turn 双件[island](./turn-change-island.md)与[card](./turn-change-card-external-cli.md)同属本域。
 
 下拉副黑板（演示切片已落地）：岛胶囊下拉 ≥60px 让中部工作区下滑让位，副黑板在中央列上带长出，下拉手势 toggle（再下拉自动回收，另有图标收起控件）；中断代价判据与投影/借调分类见[下拉副黑板决策](./island-blackboard.md)。整窗宽覆盖与蓝图翻牌（`blueprintMode`）已否决并退役，蓝图入口只留工作台切换器；板面复用蓝图界面（画布交互 + 左详情槽，无右侧对话），文件钉已移除，下缘拖高收板保留；借调钉与多槽未做。
 
-产物语义：[workspace 重构](./product-workspace.md)、[notice-matrix](./product-notice-matrix.md)、[peek-race](./product-peek-width-and-close-race.md)、[preview-p0](./product-preview-p0.md)、[tour](./product-tour.md)、[landing](../desktop/landing-page.md)。
+产物语义：[workspace 重构](./product-workspace.md)、[notice-matrix](./product-workspace.md)、[peek-race](./product-workspace.md)、[preview-p0](./product-workspace.md)、[tour](./product-tour.md)、[landing](../desktop/landing-page.md)。
 
 Note 工具链三件各司其职：[drawer-toolbar](./note-drawer-markdown-toolbar.md)、[mechanical-gates](../blueprint/documents/note-mechanical-checks.md)、[rename-draftcard](./notecard-rename-draft-card.md)；[Markdown 独立 pane 与顶栏工具分组](./markdown-pane-entry.md)记录移出底部的已确定方向，以及终端解耦、保存与迁移建议，尚未实现。工作便签归属：[own-namespace implemented](../blueprint/documents/history/own-notes-namespace.md)与[own-namespace proposed](../blueprint/documents/history/own-notes-namespace-proposal.md)为生命周期对，成对保留。
 
-配套：[github-maintenance](../desktop/github-maintenance.md)、[markdown-assets](./markdown-preview-local-assets.md)、[experimental-preview](./experimental-preview-features.md)、[file-glyph](./drawer-markdown-file-glyph.md)、[reveal-race](./file-tree-reveal-race.md)、[share-import](../blueprint/workspaces/share-import.md)、[plugin-forms](./requirements/plugin-architecture-forms.md)、[plugin-debug](./requirements/plugin-import-debug.md)、[entry-nav](./entry-switch-navigation.md)、[f12-nav](./f12-navigation.md)。
+配套：[github-maintenance](../desktop/github-maintenance.md)、[markdown-assets](./markdown-preview-local-assets.md)、[experimental-preview](./experimental-preview-features.md)、[file-glyph](./note-drawer-markdown-toolbar.md)、[reveal-race](./file-tree-reveal-race.md)、[share-import](../blueprint/workspaces/share-import.md)、[plugin-forms](./requirements/plugin-architecture-forms.md)、[plugin-debug](./requirements/plugin-import-debug.md)、[entry-nav](./entry-switch-navigation.md)、[f12-nav](./f12-navigation.md)。
 
 外部工作流工具探索：[Grok Bot 衔接](./grok-bot-workflow-integration.md)仍在讨论；[Docker 面板入口](./docker-management-entry.md)于 2026-10-14 放弃 Portainer 接入、改为自研首版七项基本能力（连接状态、容器列表与启停、实时日志、容器终端、访问服务、Compose 分组），承载为新的 pane 内容类型；配套的[HTTP 请求 pane](./http-request-pane.md)同批设计。两者均未实现。
 

@@ -108,7 +108,16 @@ export function RightDock({
   const schedulePreview = (toolId: RightToolId) => {
     cancelPreviewTimer()
     if (!railOnly) return
-    previewTimer.current = setTimeout(() => setPreviewToolId(toolId), 220)
+    // Dwell guards entry into the rail, not navigation within a live card.
+    // Include its exit lifetime so re-entry reverses the fade without stalling.
+    if (motion.rendered && lastTransientRef.current) {
+      setPreviewToolId(toolId)
+      return
+    }
+    previewTimer.current = setTimeout(() => {
+      previewTimer.current = null
+      setPreviewToolId(toolId)
+    }, 220)
   }
   const scheduleDismiss = () => {
     cancelPreviewTimer()
@@ -128,9 +137,9 @@ export function RightDock({
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape') return
       const focusedInside = dockRef.current?.querySelector('#right-tool-panel')?.contains(document.activeElement)
-      dismissPreview()
       if (previewToolId && focusedInside && displayedToolId) document.getElementById(`right-tool-rail-${displayedToolId}`)?.focus()
-      cancelPreviewTimer()
+      // Restoring rail focus can request a preview; Escape must win over it.
+      dismissPreview()
     }
     const onOutside = (event: globalThis.PointerEvent) => {
       if (!dockRef.current?.contains(event.target as Node)) dismissPreview()
@@ -143,7 +152,7 @@ export function RightDock({
       document.removeEventListener('pointerdown', onOutside)
       window.removeEventListener('resize', dismissPreview)
     }
-  }, [previewToolId, displayedToolId, contentVisible, dismissPreview, cancelPreviewTimer])
+  }, [previewToolId, displayedToolId, contentVisible, dismissPreview])
   // Per-tool drag preference and responsive display width stay separate.
   // See .agents/notes/workbench/right-dock.md
   const minimum = rightToolPanelMinWidth(activeToolId)

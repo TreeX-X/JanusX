@@ -37,3 +37,7 @@
 ## Design
 
 记录只观察，不静默修改工作树；恢复要求用户明确操作。计数、列表和回合关联共享 sessionId，数量与时间双上限约束存储。会话界面只查阅对话与续接，不调用检查点服务，交互见 [职责入口](../records/module.md)；工作树创建、合并与删除见 [职责入口](../worktrees/module.md)。
+
+## Related documents
+
+[Session checkpoint expand panel](session-checkpoint-expand.md) 维护展开面板的订阅与状态呈现；[session-checkpoint-migration](session-checkpoint-migration.md) 记录检查点归属迁移；[count-truth](session-checkpoint-count-truth.md)、[retention](checkpoint-retention.md)、[safety](checkpoint-safety.md) 分别维护计数真值、保留上限与快照安全。

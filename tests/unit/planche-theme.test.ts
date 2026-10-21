@@ -181,7 +181,14 @@ describe('planche theme contract', () => {
     expect(read('components/viewers/MonacoViewer.tsx')).toContain('indentation: false')
     // 无工程上下文的 TS/JS 语义假错误不显示；标签条滚动条隐藏由滚轮控制
     expect(read('components/viewers/MonacoViewer.tsx')).toContain('noSemanticValidation: true')
+    // 黄框防回潮：Unicode 可疑字符高亮（全角标点金色边框盒）整项关闭
+    expect(read('components/viewers/MonacoViewer.tsx')).toContain(
+      'unicodeHighlight: { nonBasicASCII: false, invisibleCharacters: false, ambiguousCharacters: false }')
     expect(hovers).toContain('.filetab-strip')
+    // 标签条滚轮横向滚 + 选中 tab 自动入视口：文件窗口与工作台 pane 条同规
+    expect(shellEditor).toContain('attachWheelScrollX')
+    expect(shellEditor).toContain('revealStripItem')
+    expect(read('components/TerminalArea.tsx')).toContain('attachWheelScrollX')
     // diff 令牌双主题都有定义（M1 后唯一事实源为 definition.ts，CSS 由脚本生成）
     const css = readFileSync(resolve(__dirname, '../../src/renderer/src/styles/themes.generated.css'), 'utf8')
     expect(css).toContain('--shell-diff-add: #4ec9b0')

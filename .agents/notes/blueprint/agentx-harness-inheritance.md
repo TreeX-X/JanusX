@@ -6,16 +6,38 @@
   "lifecycle": "implemented",
   "created": "2026-10-04",
   "class": "architecture",
-  "tags": ["harness","agentX","janus","blueprint"],
+  "tags": [
+    "harness",
+    "agentX",
+    "janus",
+    "blueprint"
+  ],
   "codeRefs": [
-    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/harness/service.ts","role":"entry"},
-    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/llm/chat-orchestrator.ts","role":"implementation"}
+    {
+      "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+      "path": "src/main/harness/service.ts",
+      "role": "entry"
+    },
+    {
+      "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+      "path": "src/main/llm/chat-orchestrator.ts",
+      "role": "implementation"
+    }
   ],
   "relations": [
-    {"type":"related-to","target":"note://62b44166-82f0-41ff-838d-e2b02388ed06/ac75da81-9c0e-4ad2-964b-4919d924fe0e"}
+    {
+      "type": "related-to",
+      "target": "note://62b44166-82f0-41ff-838d-e2b02388ed06/ac75da81-9c0e-4ad2-964b-4919d924fe0e"
+    }
   ],
   "updated": "2026-10-08T09:06:56.496Z",
-  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd"
+  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f12d99b4-c116-48dc-96d9-e3ac74ae41cd",
+  "repositories": {
+    "primary": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+    "related": [
+      "62b44166-82f0-41ff-838d-e2b02388ed06"
+    ]
+  }
 }
 ---
 

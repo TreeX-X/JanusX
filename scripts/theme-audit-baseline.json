@@ -62,16 +62,16 @@
       "reason": "HTML/Office document canvas keeps its own page colors; only application chrome follows the theme."
     },
     {
-      "path": "src/renderer/src/components/StatusBar.tsx",
-      "key": "literal-color:bg-white",
+      "path": "src/renderer/src/components/StatusBar.module.css",
+      "key": "literal-color:#fff",
       "count": 1,
       "reason": "The pairing QR quiet zone keeps a theme-independent light backing for camera scan contrast."
     },
     {
-      "path": "src/renderer/src/components/StatusBar.tsx",
-      "key": "literal-color:text-white",
-      "count": 3,
-      "reason": "Mobile host action buttons keep white labels on fixed positive/destructive palette fills until the remote panel UI polish restyles them to theme tokens."
+      "path": "src/renderer/src/components/StatusBar.module.css",
+      "key": "literal-color:#525252",
+      "count": 1,
+      "reason": "The QR loading label stays readable against the fixed white scanning surface in both light and dark themes."
     }
   ],
   "legacy": {

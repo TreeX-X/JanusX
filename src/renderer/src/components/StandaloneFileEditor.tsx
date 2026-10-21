@@ -8,6 +8,7 @@ import { invalidateEditorFileCache, useEditorStore } from '@/stores/editor'
 import { useThemeStore } from '@/stores/theme'
 import { GitCompareArrows, PanelRightOpen, PanelRightClose, X, Pin, PinOff, RefreshCw, Save, Search } from 'lucide-react'
 import { isEditorDefinitionShortcut, isEditorFindShortcut, isMonacoKeyboardEvent, openEditorDefinition, openEditorFind, watchFindWidgetControls, type FindableEditor } from '@/lib/editor-find'
+import { attachWheelScrollX, revealStripItem } from '@/lib/wheel-scroll-x'
 import { useI18n } from '@/i18n/useI18n'
 import type { DefinitionTarget } from '@/lib/monaco-definition'
 
@@ -71,6 +72,16 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
   }, [])
 
   useEffect(() => () => unwatchFindControlsRef.current?.(), [])
+
+  // Note: 标签条横向滚动条隐藏，竖向滚轮换轴横向滚、选中 tab 自动入视口 — .agents/notes/workbench/preview-editor-display-style.md
+  useEffect(() => {
+    const strip = tabStripRef.current
+    return strip ? attachWheelScrollX(strip) : undefined
+  }, [])
+  useEffect(() => {
+    const strip = tabStripRef.current
+    if (strip) revealStripItem(strip, 'data-tab-id', activeFileId)
+  }, [activeFileId, openFiles])
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -213,7 +224,7 @@ export function StandaloneFileEditor({ embedded = false }: { embedded?: boolean 
   const canFind = activeFile?.viewType === 'code' || activeFile?.viewType === 'markdown' || activeFile?.viewType === 'html'
 
   return (
-    <div data-editor-window-state="ready" data-editor-host={embedded ? 'embedded' : 'floating'} aria-busy={transferring} className="h-full flex flex-col overflow-hidden" style={{ background: 'var(--shell-canvas)', color: 'var(--shell-text)' }}>
+    <div data-editor-window-state="ready" data-editor-host={embedded ? 'embedded' : 'floating'} aria-busy={transferring} className={`${embedded ? 'h-full' : 'h-screen'} flex flex-col overflow-hidden`} style={{ background: 'var(--shell-canvas)', color: 'var(--shell-text)' }}>
       <div
         {...(transferring ? { inert: '' } : {})}
         className="relative h-[38px] shrink-0 flex items-center gap-3 px-3 select-none"

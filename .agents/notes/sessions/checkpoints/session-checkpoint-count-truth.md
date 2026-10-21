@@ -7,13 +7,22 @@
   "created": "2026-09-22",
   "class": "bug-fix",
   "relations": [
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0"}
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/d216f355-f951-4f60-b209-7bb98b08dcbf"
+    }
   ],
   "extensions": {
     "r5Migration": {
       "sourceHash": "c35aeb2ee2efccf2bae9c651bc2cff71844e80bc920b96b94f7f0c9aadb77dc7",
-      "repairs": ["relations[0].reason","relations[1].reason"],
+      "repairs": [
+        "relations[0].reason",
+        "relations[1].reason"
+      ],
       "originalRelations": [
         {
           "type": "related-to",
@@ -33,7 +42,9 @@
       "originalBodyHash": "43134c059a1d53101085fccfa78278a80b82056d932919b64e030b766c074df1",
       "category": "formal",
       "reason": "Retains the source decision in implemented lifecycle; body documents Session checkpoint count and list share one truth. No age-based archival.",
-      "edits": ["Removed redundant Agent Note title prefix"],
+      "edits": [
+        "Removed redundant Agent Note title prefix"
+      ],
       "baseline": {
         "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
         "path": ".agents/notes/implemented/bug-fix/2026-09-22-session-checkpoint-count-truth.md",
@@ -42,7 +53,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/984f67da-38f0-455e-8903-2b0083c5b533"
 }
 ---

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-// Note: roundtable result card builds/applies native bundles — see .agents/notes/agent/roundtable-artifact-card-s5.md
+// Note: roundtable result card builds/applies native bundles — see .agents/notes/agent/roundtable-artifact-bundle-s5.md
 import { useI18n } from '@/i18n/useI18n'
 import { useBlueprintStore } from '@/stores/blueprint'
 import { useHarnessStore } from '@/stores/harness'

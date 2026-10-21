@@ -1,4 +1,4 @@
-// Note: desktop xdo self-review evidence — see .agents/notes/agent/desktop-xdo-executor.md
+// Note: desktop xdo self-review evidence — see .agents/notes/agent/desktop-delegated-modes.md
 // Note: host-executed evaluator plans — see .agents/notes/agent/independent-review-repair.md
 /**
  * @file Desktop xdo self-review prompt and strict JSON parsing (S8-JanusX host).

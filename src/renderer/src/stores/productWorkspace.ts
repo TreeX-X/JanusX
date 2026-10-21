@@ -139,7 +139,7 @@ export function createProductWorkspaceStore(
       set((state) => {
         const previousProducts = state.productsByWorkspace[workspaceId] ?? []
         const previousByPath = new Map(previousProducts.map((entry) => [entry.relPath, entry]))
-        // Notification matrix (Note: 2026-09-13-product-notice-matrix.md):
+        // Notification matrix (Note: product-workspace.md):
         // added = path never known before (island pops); modified-first = a
         // known-but-never-surfaced baseline file changed (tray row only);
         // already-surfaced files stay silent (revision refresh handles them).

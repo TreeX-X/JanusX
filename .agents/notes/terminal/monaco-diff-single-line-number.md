@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-19T01:43:20Z",
+  "updated": "2026-10-21T16:28:29Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -33,7 +33,9 @@
 The right-side preview editor enters diff mode against the git baseline, and the gutter shows old and new line numbers side by side in one column. Unchanged lines repeat the same number, shifted lines show mismatched pairs, and both numbers share one color. Readers parse this as duplicated chrome rather than an old-to-new mapping, and the wide gutter steals space from the narrow preview window.
 
 ## Decision
-The diff viewer renders one line-number column per visible pane. Wide containers use side-by-side panes, each with its own single column, matching the opencode split view. Narrow containers fall back to the true inline view with a single column, matching the opencode unified view. The fallback breakpoint, the true inline flag, and the slim gutter live in `MonacoViewer`, and the inserted and removed tints live in the shared `janusx-dark` theme so code, markdown, and html previews stay consistent. File-tree editing now defaults to the ordinary editor; these diff rules apply only after explicitly enabling HEAD comparison, as described in [file editor experience](../workbench/file-editor-experience.md).
+The diff viewer renders one line-number column per visible pane. By default, a ResizeObserver selects unified layout below 800px and side-by-side layout at larger widths. The diff toolbar offers Unified / Side by side and previous / next change; an explicit layout choice persists in localStorage and overrides resizing. Side-by-side labels identify HEAD and the current file. These rules apply to code, Markdown and HTML editors only after explicitly enabling HEAD comparison, as described in [file editor experience](../workbench/file-editor-experience.md).
+
+The former `useTrueInlineView` flag did not remove the old-number gutter. Unified layout now uses `compactMode: true` and disables true inline rendering so changed old rows remain above new rows. Unchanged and added rows keep current-file numbers. `lib/monaco-diff-line-numbers.ts` fills Monaco's native deleted-row margins with old-file numbers, using the original editor's line offsets to account for wrapping. It does not hide a gutter through CSS or replace native editing. Floating editor height uses the viewport; embedded editors use their host height.
 
 ## Alternatives considered
 - Keep forced inline with dual numbers and add a legend — strongest case is zero code churn, but the legend explains clutter instead of removing it, and the gutter stays wide in the 560px embedded window.
@@ -43,4 +45,10 @@ The diff viewer renders one line-number column per visible pane. Wide containers
 
 ## Consequences
 - **Gains**: `src/renderer/src/components/viewers/MonacoViewer.tsx` shows one number per pane, and narrow windows degrade to a single-column inline view instead of a dual-number gutter.
-- **Costs and limits**: side-by-side needs horizontal room and falls back below the breakpoint; true inline is an experimental Monaco flag and its rendering must be rechecked on Monaco upgrades. Without a width observer the breakpoint decision follows the initial layout.
+- **Costs and limits**: an explicitly chosen side-by-side layout stays active even in a narrow window. Deleted-number augmentation depends on Monaco's native deletion-margin DOM and must be rechecked on Monaco upgrades; subscriptions and pending animation frames are disposed when comparison ends. The diff engine, tokens, word highlights and edit model remain native.
+
+## Verification
+
+Browser regression: `npx playwright test tests/e2e/editor-preview.spec.ts --project=island --workers=1` covers 560px / wide layout, explicit choice across resize and reopening comparison, dark / planche screenshots, wrapped deleted lines, separated deletion blocks, addition-only / empty / identical files, navigation, preserved unsaved edits and Markdown scroll synchronization. Machine browser evidence is separate from a packaged desktop check, which was not run for this change.
+
+2026-10-22 result: all 5 browser tests passed; dark and planche screenshots inspected. `typecheck`, `typecheck:strict-unused`, scoped ESLint, `i18n:check`, and 20 tests in `planche-theme`, `editor-session`, `editor-routing` passed. `check:notes` reported 4 existing broken wiki asset links in `desktop/readme-presentation-plan.md` and `desktop/readme-showcase.md`; none were introduced by the diff UI change.

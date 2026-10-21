@@ -22,7 +22,7 @@
       }
     }
   },
-  "updated": "2026-10-09T08:32:56.860Z",
+  "updated": "2026-10-21T16:03:27.979Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bd612cd8-0676-4c46-98ba-81d1dc008505"
 }
 ---
@@ -39,7 +39,9 @@ noteX section 5 runs by hand: path depth, lifecycle and class closed sets, heade
 
 Later moves also resolve through [knowledge reorientation evidence](../../../../docs/migrations/note-knowledge-reorientation.json). The subsequent [Blueprint planning reorganization](../../../../docs/migrations/note-blueprint-planning.json) moves the continuing product direction into Blueprint and separates the current roadmap, personal workspace proposal and historical reading entry. All three reports preserve their original source paths; the checker follows the combined chain and rejects cycles, duplicate sources and target case collisions across reports. Corpus counts describe the actual current schema and remaining protected paths, rather than subtracting the historical deferred count. This supports archiving the three formerly protected knowledge drafts while retaining their IDs, creation dates and working-tree content. It does not relax the exact-hash exception for any source that remains protected.
 
-`scripts/check-skills-sync.mjs` compares shared `.claude` and `.codex` skill files with host paths normalized, including the shared WorkflowX v2 dispatch adapter. `check:notes` runs in `verify`; `check:skills-sync` is included by `verify:local`. The mechanical gate and relocation tests cover the real repository and invalid fixtures; corpus navigation tests independently check reachability.
+`合并吸收（2026-10-21 起）另立删除映射 [note-consolidation.json](../../../../docs/migrations/note-consolidation.json)：被吸收 Note 的 UUID、created 与源哈希留在清单里，事实与取舍原文并入幸存 Note 正文，`verify-note-corpus` 对映射内目标改为校验吸收记录一致、幸存目标身份正确、被吸收路径不再存在；引用方在合并当批已修复到幸存身份。原始迁移报告保持原字节，吸收身份不再要求活体存在。
+
+scripts/check-skills-sync.mjs` compares shared `.claude` and `.codex` skill files with host paths normalized, including the shared WorkflowX v2 dispatch adapter. `check:notes` runs in `verify`; `check:skills-sync` is included by `verify:local`. The mechanical gate and relocation tests cover the real repository and invalid fixtures; corpus navigation tests independently check reachability.
 
 ## Alternatives considered
 

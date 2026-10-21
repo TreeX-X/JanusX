@@ -1,5 +1,5 @@
 // Note: 灵动岛通知胶囊（一级展开 peek 与二级展开 expanded 通知面的统一内容模型）—
-// see .agents/notes/workbench/island-notification-capsule.md
+// see .agents/notes/workbench/island-hifi-optimized-alignment.md
 import type { KnowledgeRecallTrace } from '../../../../shared/knowledge'
 import type { ProductFileEntry } from '../../../../shared/product'
 import type { BlueprintMaintenanceTask } from '../../../../shared/janus/maintenance-types'
@@ -172,7 +172,7 @@ export function productNotification(
   now = Date.now(),
 ): IslandNotification | null {
   if (!entry) return null
-  // Notice matrix (Note: 2026-09-13-product-notice-matrix.md): added = new
+  // Notice matrix (Note: product-workspace.md): added = new
   // file (island pops); modified = baseline file changed for the first time
   // (tray row only, same success tier).
   const updated = entry.noticeKind === 'modified'

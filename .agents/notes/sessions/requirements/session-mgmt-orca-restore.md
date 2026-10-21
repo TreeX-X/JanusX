@@ -68,7 +68,7 @@
       }
     }
   },
-  "updated": "2026-10-12T08:18:39.265Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/dc1aca7c-408f-406d-add4-ba78d556b662"
 }
 ---
@@ -113,7 +113,7 @@ Restore points exist only for software-internal sessions. Every mutating interna
 - [x] AC-9: The card fold control renders borderless: no hairline frame on the chevron button, with hover/focus affordance and the 240ms rotation motion preserved.
 - [ ] AC-10: The L2 first-prompt block caps its display (line or character budget with surrogate-safe truncation) and offers an explicit expand-to-full affordance; unbounded first prompts never push the card open.
 
-AC-8 保留编号并按用户确认的三引擎范围修订；原“内部均交接”验收属于此前行为。执行侧由 `tests/e2e/desktop-session-continue.spec.ts` 的真实 IPC/PTY、模拟 CLI 演练覆盖（该演练对应 `workspace-session-checkpoint-continue.md` 的 AC-4 演练，不覆盖本需求 AC-4 的 L3 转录读取）；缺少 ID、Copy 参数及归档入口判断由 session-continue-resume 单测覆盖，历史与配置来源由 session-recovery 单测覆盖。具体运行结果归恢复 Note，不代表真实账户模型调用已验证。AC-9 仍由 planche-theme 的无边框钉选覆盖。AC-1 与 AC-2 按 [Session card L1 carries the v6 summary rows](../../workbench/session-card-l1-summary.md) 架构决策明确层级边界：L1 拥有引擎、状态、计数与新鲜度；L2 承载目录分支、受截断首 prompt 与最近轮次，与 AC-10 截断预算（四行 clamp、160 字符预算及展开入口已实现，Copy 始终复制全文）保持一致；本需求 AC-4（L3 prose 解析与容错）仍待独立验证，本文件 AC-4 保持未勾选，其余验收状态本轮不变。
+AC-8 保留编号并按用户确认的三引擎范围修订；原“内部均交接”验收属于此前行为。执行侧由 `tests/e2e/desktop-session-continue.spec.ts` 的真实 IPC/PTY、模拟 CLI 演练覆盖（该演练对应 `workspace-session-checkpoint-continue.md` 的 AC-4 演练，不覆盖本需求 AC-4 的 L3 转录读取）；缺少 ID、Copy 参数及归档入口判断由 session-continue-resume 单测覆盖，历史与配置来源由 session-recovery 单测覆盖。具体运行结果归恢复 Note，不代表真实账户模型调用已验证。AC-9 仍由 planche-theme 的无边框钉选覆盖。AC-1 与 AC-2 按 [Session card L1 carries the v6 summary rows](../../workbench/session-card-surface.md) 架构决策明确层级边界：L1 拥有引擎、状态、计数与新鲜度；L2 承载目录分支、受截断首 prompt 与最近轮次，与 AC-10 截断预算（四行 clamp、160 字符预算及展开入口已实现，Copy 始终复制全文）保持一致；本需求 AC-4（L3 prose 解析与容错）仍待独立验证，本文件 AC-4 保持未勾选，其余验收状态本轮不变。
 
 ## Risks
 

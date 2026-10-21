@@ -308,6 +308,7 @@
     "maximize": "Maximize"
   },
   "mobileRemote": {
+    "lanTestHint": "LAN test build: connect the phone and computer to the same local network. Public signaling and STUN are unavailable. Mobile UI and long-term stability are still under development.",
     "pairingHint": "Scan with your phone, then approve the connection here.",
     "connectionSettings": "Connection settings",
     "starting": "Starting…",

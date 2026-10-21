@@ -7,6 +7,7 @@ import { useI18n } from '@/i18n/useI18n'
 import type { MobileHostStatus } from '../../../shared/ipc/remote'
 import { mobileRemoteSettings } from '@/lib/mobile-remote-settings'
 import remoteDefaults from '../../../shared/remote-defaults.json'
+import { REMOTE_LAN_ONLY, REMOTE_SETTINGS_PREFIX } from '../../../shared/remote-scope'
 import styles from './StatusBar.module.css'
 // Note: .agents/notes/remote/android-pairing-handshake.md
 export function StatusBar() {
@@ -42,7 +43,7 @@ export function StatusBar() {
   }, [open])
   useEffect(() => {
     try {
-      for (const [key, value] of Object.entries({ network, signalUrl, stunUrl })) localStorage.setItem(`remote.${key}`, value)
+      for (const [key, value] of Object.entries({ network, signalUrl, stunUrl })) localStorage.setItem(`${REMOTE_SETTINGS_PREFIX}${key}`, value)
     } catch { /* The current configuration still works when storage is unavailable. */ }
   }, [network, signalUrl, stunUrl])
   const focused = active ? terminals.find((terminal) => terminal.id === active) : null
@@ -101,6 +102,7 @@ export function StatusBar() {
       </div>
       <div className={styles.body}>
         <p className={styles.intro}>{t('common:mobileRemote.pairingHint')}</p>
+        {REMOTE_LAN_ONLY && <p className={styles.hint}>{t('common:mobileRemote.lanTestHint')}</p>}
         <div role="status" className={styles.connectionStatus}>
           <span className={`${styles.statusDot} ${remote?.connectedDeviceId ? styles.connectedDot : ''}`} aria-hidden="true" />
           <span>{remote?.pending ? t('common:mobileRemote.approvalStatus') : remote?.state}</span>
@@ -122,7 +124,7 @@ export function StatusBar() {
           <span>{t('common:mobileRemote.network')}</span>
           <div className={styles.selectWrap}>
             <select aria-label={t('common:mobileRemote.network')} disabled={busy || remote?.running} value={network} onChange={event => setNetwork(event.target.value)}>
-              <option value="public">{t('common:mobileRemote.public')}</option>
+              {!REMOTE_LAN_ONLY && <option value="public">{t('common:mobileRemote.public')}</option>}
               <option value="lan">{t('common:mobileRemote.lan')}</option>
             </select><ChevronDown size={14} aria-hidden="true" />
           </div>
@@ -142,10 +144,10 @@ export function StatusBar() {
             <span>{t('common:mobileRemote.signalUrl')}</span>
             <input disabled={busy || remote?.running} value={signalUrl} onChange={event => setSignalUrl(event.target.value)} placeholder={remoteDefaults.signalUrl} spellCheck={false} />
           </label>}
-          <label className={styles.field}>
+          {!REMOTE_LAN_ONLY && <label className={styles.field}>
             <span>{t('common:mobileRemote.stunUrl')}</span>
             <input disabled={busy || remote?.running} value={stunUrl} onChange={event => setStunUrl(event.target.value)} placeholder="stun:stun.l.google.com:19302" spellCheck={false} />
-          </label>
+          </label>}
           <p className={styles.hint}>{t(network === 'public' ? 'common:mobileRemote.publicHint' : 'common:mobileRemote.lanHint')}</p>
           {remote?.signalUrl && <p className={styles.endpoint}>{t('common:mobileRemote.actualSignal', { url: remote.signalUrl })}</p>}
         </div>}

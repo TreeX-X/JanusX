@@ -6,7 +6,7 @@
   "lifecycle": "implemented",
   "created": "2026-10-03",
   "class": "simplification",
-  "updated": "2026-10-19T01:31:30Z",
+  "updated": "2026-10-21T17:13:38Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -35,7 +35,7 @@ Markdown 浅色编辑区当前使用固定浅色文字，已有图中可读性�
 
 成功录制将字幕与帧一起写入 manifest，并更新本功能的 latest 指针。合成只读取该 manifest 和公共样式，不执行录制脚本；背景、鼠标和整体播放速度可单独重合成。字幕模板只承担样式，编码工具从系统临时目录或 `SHOWCASE_GIFTOOLS` 加载。编码器按时间线采样调色板、逐帧读取原图，避免同时保留全部 1080p 帧。
 
-首图与演示共用 [showcase-background.png](../../../wiki/assets/readme/showcase-background.png)，源文件为同目录 SVG。底板为原创 macOS 壁纸感的雾银灰、烟青与少量香槟灰流动曲面；低饱和、中等明度兼顾经典黑与石板色，不随应用主题或帧内容改变，取色见 [brand-spec](../../../wiki/assets/readme/brand-spec.md)。`style.background.asset` 是合成器唯一背景来源，校验 1920×1080 尺寸；修改 SVG 后通过 `node wiki/assets/readme/render-hero.cjs` 生成底板和首图。10 条 README 功能 GIF 均已新 UI 重录，默认 planche 八条，dark 的会话与产物两条；`showcase/` 旧资产仅保留追溯。
+首图与演示共用 [showcase-background.png](https://github.com/TreeX-X/JanusX/blob/v0.9.3/wiki/assets/readme/showcase-background.png)，源文件为同目录 SVG。底板为原创 macOS 壁纸感的雾银灰、烟青与少量香槟灰流动曲面；低饱和、中等明度兼顾经典黑与石板色，不随应用主题或帧内容改变，取色见 [brand-spec](https://github.com/TreeX-X/JanusX/blob/v0.9.3/wiki/assets/readme/brand-spec.md)。`style.background.asset` 是合成器唯一背景来源，校验 1920×1080 尺寸；修改 SVG 后通过 `node wiki/assets/readme/render-hero.cjs` 生成底板和首图。10 条 README 功能 GIF 均已新 UI 重录，默认 planche 八条，dark 的会话与产物两条；`showcase/` 旧资产仅保留追溯。
 
 README 功能区采用核心左文右图、Worktree/产物并排、工具集成 2×2。全部新片从无损帧直接生成 1784×908 GIF 与同名海报，四边各留 12px，完整应用窗口为 1760×884；输出至 `wiki/assets/readme/features/`，功能图可点击放大。[compact-readme.mjs](../../../scripts/showcase/compact-readme.mjs) 默认跳过新 GIF 和全部静态图，仅显式 `--legacy-stills` 才覆盖旧静态衍生图。F/R/M/A/U0/C0 六组九张补图已验证并接入，H/B0 沿用现有首图与 B1 海报；当前 README 无图片占位引用。本轮不改首图或品牌动画。
 

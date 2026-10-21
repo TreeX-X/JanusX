@@ -5,7 +5,7 @@
   "kind": "note",
   "lifecycle": "accepted",
   "created": "2026-10-20",
-  "updated": "2026-10-21T15:38:35Z",
+  "updated": "2026-10-21T17:01:13Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b653bb34-279f-45db-92d1-313d1c6bcdf5",
   "tags": ["remote", "android", "pairing", "verification"]
 }
@@ -15,11 +15,27 @@
 
 手机扫码后先连接信令，再交换经过二维码密钥认证的 SDP，建立 UDP DataChannel，最后提交设备申请。电脑收到申请后才显示批准按钮。`SIGNAL connected` 仅表示 WebSocket 打开；关闭电脑远程时手机收到信令断开，也不能证明此前建立过 P2P。主动重连产生的旧连接 CLOSED 日志不应混入新连接状态。
 
-## 真机反馈与下一步（2026-10-21）
+## v0.9.4 局域网测试发行与 v0.9.5 边界
 
-用户在 Pages 入口观察到信令入房、SDP 验签与候选应用成功。VPN 开启时三轮 UDP 检查均无应答，关闭 VPN 后报告连接成功，并确认手机发送输入可用；这是该次网络条件的用户反馈，不能据此确定加速器内部机制或覆盖其他 NAT/运营商。用户随后确认 Android 终端区域从一开始就空白，故连续输出与完整交互真机验收仍未通过，不能以“已连通”代替终端可用性。后续脚本错误已在旧版 Chromium 复现并修复；实际手机仍需安装 0.1.12 复验。
+2026-10-22（北京时间），用户确认 Android 空白屏已修复且已经在真机验证。该结论是用户人工反馈，不是本轮模拟器推断；仅关闭空白故障，不自动完成持续交互、旋转、弱网或长期可靠性验收。手机端显示和界面设计优化、长期使用测试及后续跨网开发安排到 v0.9.5；远程功能本轮以局域网测试阶段收口。
 
-用户确认的三项改进已进入实现，真机仍需使用新版复测：
+用户选择发布构建只开局域网、开发构建保留跨网。桌面 `electron-vite build` 默认编译 `JANUSX_REMOTE_SCOPE=lan`，`electron-vite dev` 默认 `develop`；显式 `JANUSX_REMOTE_SCOPE=develop` 可构建保留跨网的开发产物。主进程和渲染端共享编译常量：LAN 界面不显示公网选项或 STUN，直接 IPC 也拒绝自定义信令及 STUN，仅启动内置信令并生成空 STUN 的二维码。LAN 设置写入 `remote.lan.*`，不读取或覆盖已有 `remote.*`，避免回到开发模式后丢失跨网设置。创新功能仍默认关闭，发布包不自动开启远程。
+
+Android Gradle 和 `scripts/android-lab/run.ps1` 默认 `lan`，通过 `-PremoteScope=develop` / `-RemoteScope develop` 保留开发模式。LAN 为 `0.1.13-lan` / code 14，包名 `com.janusx.p2plab.lan`、名称 `JanusX LAN Test`；开发包保留 `com.janusx.p2plab`，二者可同时安装，数据各自独立。LAN 无默认公网地址或 STUN，扫码/粘贴、网络诊断和实际传输均校验 `ws://` 私有 IPv4（含回环），拒绝公网地址、域名及 STUN。测试 APK 使用现有 debug 签名，不作为应用商店正式包。
+
+采用构建开关是为避免在大量未提交修改上拆分分支或删除跨网实现；本轮没有创建或切换 develop 分支。代价是需明确区分分发产物和测试范围；安装/联调脚本校验 APK 包名以避免选错。这里的局域网范围表示不开放公网信令和 STUN 穿透配置，不能阻止系统 VPN、私网路由或用户自行端口转发。后续恢复发布版跨网功能前需完成真实异网及长期使用验证。
+
+本轮验证：11 个远程相关 Vitest 文件共 54 项通过，TypeScript、变更生产 TS/TSX 的 ESLint、i18n、LAN/develop 桌面构建及 package boundary 通过。Android LAN/develop 的 Build 均完成 assembleDebug、13 项 Java 单测和 lint（0 errors、14 warnings）；日志为 `artifacts/android-lab/v094-{lan,android-develop}-build.log`。构建脚本按 Java 退出码判断成功，避免 Windows PowerShell 重定向时将 javac 的弃用提示误判为构建失败。发布准备同步了 electron-builder 开发依赖排除表，`exclusions:check` 通过；全仓 Note 校验仍有既存的 4 个 README 资源断链，没有本轮新增错误。
+
+`JANUSX_SMOKE_SCOPE=lan node scripts/android-lab/desktop-smoke.mjs` 在真实 Electron 与 Android 15 模拟器通过 18 项检查，证据 `artifacts/android-lab/desktop-smoke-nbK57p/report.json`。覆盖 LAN 界面及 IPC 拒绝跨网、二维码倒计时、审批、真实新建 Claude、输出绘制、本地 `/help` 响应、显示页同步、同 PTY 重连及关闭服务保留电脑终端。首轮 `desktop-smoke-7DabFc` 的停止断言仅匹配信令关闭/DATA CLOSED，内置信令停止实际报告 EOF 后经 ICE FAILED 断开；最终断言验证通道终止与控件禁用后通过。关闭远程时手机可能等待原生 UDP 断开检测，未宣称即时通知。最终已安装 LAN APK 另外拒绝公网二维码和携带 STUN 的私网二维码，证据 `artifacts/android-lab/v094-android-lan-boundary.json`。这些结果不代表实体手机局域网、镜头扫码、模型对话或长期使用验收。
+
+交付 APK `artifacts/android-lab/JanusX-Android-0.1.13-lan.apk` 已通过 v2 签名校验；此路径是本地产物，不代表已经上传外部 Release。桌面版本号本轮仍为 0.9.3，v0.9.4 安装包与公开发布尚未执行。
+
+## 真机反馈历史（2026-10-21）
+
+用户在 Pages 入口观察到信令入房、SDP 验签与候选应用成功。VPN 开启时三轮 UDP 检查均无应答，关闭 VPN 后报告连接成功，并确认手机发送输入可用；这是该次网络条件的用户反馈，不能据此确定加速器内部机制或覆盖其他 NAT/运营商。用户随后确认 Android 终端区域从一开始就空白，当时连续输出与完整交互真机验收未通过。后续脚本错误在旧版 Chromium 复现并修复；用户于 2026-10-22 确认空白已修复，当前边界见上节。
+
+用户确认的三项改进已经实现，空白故障的真机确认见上节，完整验收仍按需求逐项补充：
 
 - P0：修复 Android 输出不可见。区分输入被电脑接受的回执和终端实际输出；验证手机能看到启动、输入后的真实响应，以及重连回放。
 - P1：桌面持续显示连接进度，包括等待扫码、信令协商、UDP 打洞、等待批准、已授权和失败原因，不能只在最终审批时出现反馈。

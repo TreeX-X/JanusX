@@ -1,4 +1,4 @@
-// Note: desktop xdo host owns checks and self-review — see .agents/notes/agent/desktop-xdo-executor.md
+// Note: desktop xdo host owns checks and self-review — see .agents/notes/agent/desktop-delegated-modes.md
 // Note: evaluator tests precede the verdict — see .agents/notes/agent/independent-review-repair.md
 /**
  * @file Desktop verification and delegated execution host.

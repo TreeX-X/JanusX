@@ -3,7 +3,7 @@
 // Note: background creation, scoped deletion, and branch review — see
 // .agents/notes/sessions/worktrees/worktree-create-delete.md
 // Note: creation metadata plus local Ship diff/merge/abort — see
-// .agents/notes/sessions/worktrees/worktree-ship-merge.md
+// .agents/notes/sessions/worktrees/worktree-create-delete.md
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'

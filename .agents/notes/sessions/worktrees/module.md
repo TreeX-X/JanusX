@@ -42,3 +42,7 @@
 ## Design
 
 工作树从本地 Git 事实读取，路径归一后再作为选择和缓存键；切换只改变有效目录及对应视图。创建、删除、合并和推送保持各自明确操作。会话与快照通过作用目录和 sessionId 协作，不复制它们的持久化职责。
+
+## Related documents
+
+[Worktree create, delete and Ship merge](worktree-create-delete.md) 维护生命周期操作；[sidebar-scoping](worktree-sidebar-scoping.md) 维护侧栏行、文件树作用域与选择器；[path-avatar](worktree-path-avatar.md) 维护路径归一与悬停头像。

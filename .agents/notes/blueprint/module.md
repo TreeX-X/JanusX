@@ -6,10 +6,17 @@
   "lifecycle": "accepted",
   "created": "2026-10-03",
   "class": "architecture",
-  "tags": ["note","blueprint"],
+  "tags": [
+    "note",
+    "blueprint"
+  ],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a",
   "codeRefs": [
-    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/notes/note-provider.ts","role":"entry"},
+    {
+      "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+      "path": "src/main/notes/note-provider.ts",
+      "role": "entry"
+    },
     {
       "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
       "path": "src/main/blueprint/blueprint-composition.ts",
@@ -22,27 +29,62 @@
     }
   ],
   "interfaces": [
-    {"name":"NoteReadSnapshot","direction":"provides"},
-    {"name":"HarnessWorkspaceStatus","direction":"provides"}
+    {
+      "name": "NoteReadSnapshot",
+      "direction": "provides"
+    },
+    {
+      "name": "HarnessWorkspaceStatus",
+      "direction": "provides"
+    }
   ],
   "relations": [
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/46d65946-125b-56d0-b23e-05552f5b281e"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/6471d8f2-ee72-5a63-897c-0d8e44110eb6"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb026d42-c260-5e79-a66f-e455228d6eaf"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/66bf1be8-fad7-5c9c-8048-4bbe0b665950"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/1f21d390-171c-57ba-9b8b-cca02d74c39a"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/2b73dd7d-a2e0-50b4-aa75-31f0ed371ba2"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/553f17a8-e800-5e4a-ac55-ae454a51825b"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/11d8826d-52d7-58bb-99bd-49b6ba04dfaf"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/4ffa1606-df23-5880-a1a5-003ab5fac9e3"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/6b7c688e-278f-5878-b88f-2bbb9d766fae"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/2a6cd90c-60fa-5fdf-acc4-2989cdf5bdc2"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/8688b5ab-1f7f-5ff9-ba1b-ef75b7fd5917"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/0d703ca1-d703-451f-9ac6-15792c08f45d"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/dda0c41e-4581-4de5-af98-8fbdc2e768f5"},
-    {"type":"governed-by","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/47c7be36-5a48-4a27-aa86-d4f9dffb641c"}
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/46d65946-125b-56d0-b23e-05552f5b281e"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb026d42-c260-5e79-a66f-e455228d6eaf"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/66bf1be8-fad7-5c9c-8048-4bbe0b665950"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/553f17a8-e800-5e4a-ac55-ae454a51825b"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/4ffa1606-df23-5880-a1a5-003ab5fac9e3"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/6b7c688e-278f-5878-b88f-2bbb9d766fae"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/2a6cd90c-60fa-5fdf-acc4-2989cdf5bdc2"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/8688b5ab-1f7f-5ff9-ba1b-ef75b7fd5917"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/0d703ca1-d703-451f-9ac6-15792c08f45d"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/dda0c41e-4581-4de5-af98-8fbdc2e768f5"
+    },
+    {
+      "type": "governed-by",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/47c7be36-5a48-4a27-aa86-d4f9dffb641c"
+    }
   ],
-  "updated": "2026-10-10T06:13:02.987Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "moduleState": "partial"
 }
 ---

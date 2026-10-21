@@ -10,6 +10,7 @@ import { listRegisteredWorkspaces, resolveRegisteredWorkspace } from '../compani
 import type { MobileHostOptions, MobileHostStatus } from '../../shared/ipc/remote'
 import { configService } from '../config/service'
 import { lanAddresses, validateSignalUrl } from './network'
+import { REMOTE_LAN_ONLY } from '../../shared/remote-scope'
 
 // Note: .agents/notes/remote/android-pairing-handshake.md
 const BRIDGE = 'remote:transport'
@@ -136,6 +137,7 @@ export async function startMobileHost(input: MobileHostOptions): Promise<void> {
     await stopMobileHost()
     const activation = generation
     if (!(await configService.getExperimentalFeatures()).remoteControl) throw Error('请先在设置 → 创新功能中开启远程协作控制')
+    if (REMOTE_LAN_ONLY && (input.signalUrl.trim() || input.stunUrl.trim())) throw Error('此发布构建仅支持局域网测试，不支持公网信令或 STUN；请使用开发构建测试跨网')
     await resolveRegisteredWorkspace(workspacesRoot(), input.workspaceId)
     if (activation !== generation) throw Error('远程开启已取消')
     if (input.stunUrl && !/^stun:[^\s]+$/.test(input.stunUrl)) throw Error('只允许 STUN，不支持 TURN')

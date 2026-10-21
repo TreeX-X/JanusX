@@ -37,3 +37,7 @@
 ## Design
 
 项目会话按工作区及 viewRef 绑定，普通节点选择不重新创建对话；蓝图专用生命周期见 [行为与验收](../../blueprint/maintenance/tasks/blueprint-workspace-dialog.md)。Task 线程从本地 run 与 thread.json 派生列表，不建立第二份执行索引。执行与评估入口由 Agent 对话与执行模块负责，只有 Main 维护 Task 文档。
+
+## Related documents
+
+[persistent-task-threads](persistent-task-threads.md) 维护 Task run 线程持久化；[project-conversation-controller](project-conversation-controller.md) 维护项目对话激活；[thread-registry-activation](thread-registry-activation.md) 维护线程注册与确认关闭。

@@ -6,9 +6,16 @@
   "lifecycle": "accepted",
   "created": "2026-09-23",
   "class": "architecture",
-  "tags": ["blueprint","wiki","note-index"],
+  "tags": [
+    "blueprint",
+    "wiki",
+    "note-index"
+  ],
   "relations": [
-    {"type":"related-to","target":"note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/c61d7a4e-6f8b-4a2e-9d31-5c7e8b0f2a14"}
+    {
+      "type": "related-to",
+      "target": "note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/c61d7a4e-6f8b-4a2e-9d31-5c7e8b0f2a14"
+    }
   ],
   "extensions": {
     "r6Organization": {
@@ -31,7 +38,13 @@
     }
   },
   "updated": "2026-10-11T10:00:00.270Z",
-  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bc9c2ca8-e036-48ec-a35e-667d694460ca"
+  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bc9c2ca8-e036-48ec-a35e-667d694460ca",
+  "repositories": {
+    "primary": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+    "related": [
+      "d2499d5b-4ceb-4d46-aa3b-18e5c9b86034"
+    ]
+  }
 }
 ---
 

@@ -8,6 +8,11 @@ import { pathToFileURL } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
 import WebSocket from 'ws'
 const remoteDefaults = JSON.parse(await readFile(resolve('src/shared/remote-defaults.json'), 'utf8'))
+const remoteScope = process.env.JANUSX_SMOKE_SCOPE || 'lan'
+if (!['lan', 'develop'].includes(remoteScope)) throw Error('JANUSX_SMOKE_SCOPE must be lan or develop')
+const lanOnly = remoteScope === 'lan'
+const androidPackage = lanOnly ? 'com.janusx.p2plab.lan' : 'com.janusx.p2plab'
+const androidComponent = `${androidPackage}/com.janusx.p2plab.MainActivity`
 
 const artifacts = resolve('artifacts/android-lab')
 await mkdir(artifacts, { recursive: true })
@@ -75,6 +80,18 @@ try {
   await page.getByRole('button', { name: '开启手机远程', exact: true }).click()
   await expect(page.getByRole('combobox', { name: '授权工作区' })).toHaveValue(workspace.id)
   passed('Remote feature defaults off, direct IPC is gated, selected workspace is the active workspace')
+  if (lanOnly) {
+    await expect(page.getByLabel('连接环境', { exact: true })).toHaveValue('lan')
+    await expect(page.getByLabel('连接环境', { exact: true }).locator('option[value="public"]')).toHaveCount(0)
+    await page.getByRole('button', { name: '连接设置', exact: true }).click()
+    await expect(page.getByLabel('公网信令地址', { exact: true })).toHaveCount(0)
+    await expect(page.getByLabel('STUN 地址（UDP 映射）', { exact: true })).toHaveCount(0)
+    for (const options of [{ signalUrl: remoteDefaults.signalUrl, stunUrl: '' }, { signalUrl: '', stunUrl: remoteDefaults.stunUrl }]) {
+      const error = await page.evaluate(async options => { try { await window.electron.remote.start(options); return '' } catch (error) { return String(error) } }, { workspaceId: workspace.id, ...options })
+      expect(error).toContain('仅支持局域网测试')
+    }
+    passed('LAN release hides public/STUN controls and rejects public/STUN startup through main IPC')
+  } else {
   await expect(page.getByLabel('连接环境', { exact: true })).toHaveValue('public')
   await page.getByRole('button', { name: '连接设置', exact: true }).click()
   await expect(page.getByLabel('公网信令地址', { exact: true })).toHaveValue(remoteDefaults.signalUrl)
@@ -96,6 +113,7 @@ try {
   await page.getByLabel('连接环境', { exact: true }).selectOption('lan')
   await expect(page.getByLabel('手机可访问的电脑网卡', { exact: true })).not.toHaveValue('')
   passed('Public signal URL required, network/STUN settings persist, and local interface selection is available')
+  }
   if (process.env.JANUSX_SMOKE_QR === '1') {
     // Accelerate the five-minute main-process clock only in this isolated app.
     // Keep real WebRTC/Android clocks and production pairing code unchanged.
@@ -111,7 +129,8 @@ try {
       })
     })
   }
-  await page.evaluate(options => window.electron.remote.start(options), { workspaceId: workspace.id, signalUrl: `ws://127.0.0.1:${signaling.port}/signal`, stunUrl: '' })
+  if (lanOnly) await page.getByRole('button', { name: '开启并生成二维码', exact: true }).click()
+  else await page.evaluate(options => window.electron.remote.start(options), { workspaceId: workspace.id, signalUrl: `ws://127.0.0.1:${signaling.port}/signal`, stunUrl: '' })
   await expect(page.locator('footer span[role="status"]').filter({ hasText: '信令已就绪' })).toBeVisible({ timeout: 15000 })
   passed('Sandboxed CJS preload loaded; desktop joined signaling')
   if (process.env.JANUSX_SMOKE_RETRY === '1') {
@@ -152,23 +171,26 @@ try {
   execFileSync(join(tools, jdk, 'bin/javac.exe'), ['-encoding', 'UTF-8', '--class-path', core, '-d', decoder, 'scripts/android-lab/ReadPairingQr.java'])
   execFileSync(join(tools, jdk, 'bin/java.exe'), ['--class-path', core + delimiter + decoder, 'ReadPairingQr', join(root, 'qr.png'), join(root, 'qr.json')])
   const qr = JSON.parse(await readFile(join(root, 'qr.json'), 'utf8'))
-  qr.signalUrl = `ws://10.0.2.2:${signaling.port}/signal`
+  const signalPort = new URL(qr.signalUrl).port
+  qr.signalUrl = `ws://10.0.2.2:${signalPort}/signal`
   const quoted = "'" + JSON.stringify(qr).replaceAll("'", "'\\''") + "'"
+  const apkMetadata = JSON.parse(await readFile(resolve('apps/android-lab/app/build/outputs/apk/debug/output-metadata.json'), 'utf8'))
+  expect(apkMetadata.applicationId).toBe(androidPackage)
   adb('install', '-r', resolve('apps/android-lab/app/build/outputs/apk/debug/app-debug.apk'))
-  adb('shell', 'am', 'force-stop', 'com.janusx.p2plab')
+  adb('shell', 'am', 'force-stop', androidPackage)
   adb('logcat', '-c')
   const unreachableQr = { ...qr, signalUrl: 'ws://10.0.2.2:1/signal' }
   const unreachableQuoted = "'" + JSON.stringify(unreachableQr).replaceAll("'", "'\\''") + "'"
-  adb('shell', 'am', 'start', '-n', 'com.janusx.p2plab/.MainActivity', '--es', 'invite', unreachableQuoted, '--ez', 'autoconnect', 'true')
+  adb('shell', 'am', 'start', '-n', androidComponent, '--es', 'invite', unreachableQuoted, '--ez', 'autoconnect', 'true')
   await until(() => adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S').includes('SIGNAL failed'), 'unreachable signal diagnosed')
   const failedLog = adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S')
   expect(failedLog).toContain('信令未连通')
   expect(dumpUi()).toContain('信令未连通')
   await writeFile(join(root, 'unreachable-signal.log'), failedLog)
-  adb('shell', 'am', 'force-stop', 'com.janusx.p2plab')
+  adb('shell', 'am', 'force-stop', androidPackage)
   adb('logcat', '-c')
   passed('Android reports an unreachable signal before attempting UDP and keeps the actionable error visible')
-  adb('shell', 'am', 'start', '-n', 'com.janusx.p2plab/.MainActivity', '--es', 'invite', quoted, '--ez', 'autoconnect', 'true')
+  adb('shell', 'am', 'start', '-n', androidComponent, '--es', 'invite', quoted, '--ez', 'autoconnect', 'true')
   await until(async () => Boolean((await page.evaluate(() => window.electron.remote.status())).pending), 'Android pending approval', 45000)
   await expect(page.getByText('设备申请：Android', { exact: false })).toBeVisible({ timeout: 5000 })
   passed('Authenticated SDP, UDP DataChannel and pending approval appear automatically')
@@ -204,7 +226,7 @@ try {
   await expect(page.getByText('手机已连接 · 1 个远程终端', { exact: true })).toBeVisible()
   passed('Phone-created Claude terminal appears in desktop sidebar, terminal pane and live status')
   androidDevice = (await android.devices()).find(d => d.serial() === (process.env.ANDROID_SERIAL || 'emulator-5554'))
-  const webView = await androidDevice.webView({ pkg: 'com.janusx.p2plab' })
+  const webView = await androidDevice.webView({ pkg: androidPackage })
   const androidPage = await webView.page()
   await androidPage.waitForFunction(() => Boolean(window.mobileTerminal))
   await until(async () => /Claude\s*Code|Anthropic|Welcome|trust/i.test(await androidPage.locator('.xterm-rows').innerText()), 'actual ANSI screen painted on Android', 30000)
@@ -300,7 +322,7 @@ try {
     // installing a separate occupied-role fixture. TCP teardown is asynchronous.
     await until(async () => (await page.evaluate(() => window.electron.remote.status())).state.includes('手机已离开信令'), 'original signaling role released')
     // Hold the old room role deliberately to exercise native Android join retry.
-    occupiedSocket = new WebSocket(`ws://127.0.0.1:${signaling.port}/signal`)
+    occupiedSocket = new WebSocket(`ws://127.0.0.1:${signalPort}/signal`)
     await new Promise((resolve, reject) => {
       occupiedSocket.once('error', reject)
       occupiedSocket.once('close', code => reject(Error(`Room was not released: ${code}`)))
@@ -325,7 +347,7 @@ try {
   const beforeStopLog = adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S')
   await page.evaluate(() => window.electron.experimental.update({ remoteControl: false }))
   expect((await page.evaluate(() => window.electron.remote.status())).running).toBe(false)
-  await until(() => /Desktop left|SIGNAL closed|DATA CLOSED/.test(adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S').slice(beforeStopLog.length)), 'desktop stop visible on Android')
+  await until(() => /Desktop left|DATA CLOSED|ICE FAILED|PEER FAILED/.test(adb('logcat', '-d', '-s', 'JanusXP2P:I', '*:S').slice(beforeStopLog.length)), 'desktop stop visible on Android')
   expect(dumpUi()).toMatch(/text="新建 Claude"[^>]*enabled="false"/)
   expect((await page.evaluate(id => window.electron.terminal.replay(id), terminalId)).data.length).toBeGreaterThan(0)
   await page.reload()
@@ -343,7 +365,7 @@ try {
   await writeFile(join(root, 'android.log'), adb('logcat', '-d', '-s', 'JanusXP2P:I', 'AndroidRuntime:E', '*:S'))
   await writeFile(join(root, 'report.json'), JSON.stringify(report, null, 2))
   if (terminalId && page) await page.evaluate(id => window.electron.terminal.kill(id), terminalId).catch(() => {})
-  adb('shell', 'am', 'force-stop', 'com.janusx.p2plab')
+  adb('shell', 'am', 'force-stop', androidPackage)
   await androidDevice?.close()
   await app?.close()
   occupiedSocket?.terminate()

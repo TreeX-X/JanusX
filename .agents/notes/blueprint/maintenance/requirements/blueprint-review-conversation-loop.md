@@ -7,7 +7,7 @@
   "created": "2026-10-02",
   "class": "feature",
   "tags": ["blueprint","janus-chat","maintenance","approval","ux"],
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/a09981f4-1a94-42ce-9255-2e1127cfa37b"
 }
 ---
@@ -28,7 +28,7 @@
 
 用户通过后应应用本次审核的确切文件内容并刷新蓝图，不在批准后再次让模型生成正文。应用完成后仍应保留同一会话，允许继续讨论、再次整理、再次审批；下一次整理应读取已应用的 Note 状态，避免重复应用旧修改。无变更、生成失败或取消时应显示明确结果，保留讨论并允许后续重试。
 
-文件版本、源哈希、预览与事务一致性的规则由[文件审批决策](../blueprint-maintenance-approval-gap.md)持有；承载方式见[主动作栏决策](../blueprint-action-bar.md)。实施范围与验证证据见[文档审核循环实施](../tasks/blueprint-review-implementation.md)。
+文件版本、源哈希、预览与事务一致性的规则由[文件审批决策](../blueprint-maintenance-approval-gap.md)持有；承载方式见[主动作栏决策](../blueprint-dispatch-panel.md)。实施范围与验证证据见[文档审核循环实施](../tasks/blueprint-review-implementation.md)。
 
 ## Scope
 

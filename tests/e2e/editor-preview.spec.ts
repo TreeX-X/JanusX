@@ -29,6 +29,90 @@ test('editing is the default; opt-in HEAD comparison preserves edits and cursor'
   await expect(page.locator('.monaco-diff-editor')).toHaveCount(0)
 })
 
+test('narrow diff has one gutter, numbered deletions and persistent layout controls', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 560, height: 720 })
+  await page.evaluate(async () => {
+    const h = (window as any).previewHarness
+    h.baselines['code.ts'] = [
+      'const keep = 0',
+      `const removed = '${'long deleted text '.repeat(12)}'`,
+      'const removedToo = 1',
+      'const value = 1',
+      'const last = 0',
+    ].join('\n')
+    await h.open('code.ts', 'const keep = 0\nconst value = 2\nconst last = 0')
+  })
+  await page.getByRole('button', { name: '与 HEAD 比较' }).click()
+  const diff = page.locator('.monaco-diff-editor')
+  const inline = page.getByRole('button', { name: '合并', exact: true })
+  const split = page.getByRole('button', { name: '并排', exact: true })
+  await expect(inline).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(() => diff.locator('.editor.original').evaluate(el => el.getBoundingClientRect().width)).toBe(0)
+  await expect(diff.locator('.diff-deleted-line-number')).toHaveText(['2', '3', '4'])
+  // Wrapped old lines must advance following old numbers by their rendered height.
+  await expect.poll(() => diff.locator('.diff-deleted-line-number').evaluateAll(nodes =>
+    parseFloat((nodes[1] as HTMLElement).style.top) - parseFloat((nodes[0] as HTMLElement).style.top),
+  )).toBeGreaterThan(24)
+  await expect(diff.locator('.editor.modified .view-lines[data-mprt]')).toContainText('const value = 2')
+  await expect(page.getByRole('button', { name: '下一处变更' })).toBeEnabled()
+  await page.getByRole('button', { name: '下一处变更' }).click()
+  await page.screenshot({ path: testInfo.outputPath('diff-unified-dark.png') })
+  await split.click()
+  await expect(split).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(() => page.evaluate(() => (window as any).previewHarness.diffEditors()[0].getOriginalEditor().getLayoutInfo().width)).toBeGreaterThan(100)
+  await page.setViewportSize({ width: 1100, height: 720 })
+  await expect(split).toHaveAttribute('aria-pressed', 'true')
+  await inline.click()
+  await page.setViewportSize({ width: 560, height: 720 })
+  await page.setViewportSize({ width: 1100, height: 720 })
+  await expect(inline).toHaveAttribute('aria-pressed', 'true')
+  await page.evaluate(() => (window as any).previewHarness.setTheme('planche'))
+  await expect(diff.locator('.diff-deleted-line-number')).toHaveText(['2', '3', '4'])
+  await page.screenshot({ path: testInfo.outputPath('diff-unified-planche.png') })
+  await page.getByRole('button', { name: '与 HEAD 比较' }).click()
+  await expect(page.locator('.diff-deleted-line-number')).toHaveCount(0)
+  await page.getByRole('button', { name: '与 HEAD 比较' }).click()
+  await expect(inline).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('automatic diff layout follows width and handles separated deletions, additions and empty files', async ({ page }) => {
+  await page.evaluate(async () => {
+    const h = (window as any).previewHarness
+    const context = Array.from({ length: 55 }, (_, i) => `const keep${i} = ${i}`)
+    h.baselines['code.ts'] = ['const oldFirst = 1', ...context, 'const oldLast = 1'].join('\n')
+    await h.open('code.ts', context.join('\n'))
+  })
+  await page.getByRole('button', { name: '与 HEAD 比较' }).click()
+  await expect(page.getByRole('button', { name: '并排', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByText('原版本 · HEAD', { exact: true })).toBeVisible()
+  await page.setViewportSize({ width: 560, height: 720 })
+  await expect(page.getByRole('button', { name: '合并', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(() => page.locator('.diff-deleted-line-number').evaluateAll(nodes =>
+    nodes.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top).map(node => node.textContent),
+  )).toEqual(['1', '57'])
+  await page.getByRole('button', { name: '下一处变更' }).click()
+  await expect.poll(() => page.evaluate(() => (window as any).previewHarness.diffEditors()[0].getModifiedEditor().getPosition().lineNumber)).toBeGreaterThan(50)
+  await page.getByRole('button', { name: '上一处变更' }).click()
+  await expect.poll(() => page.evaluate(() => (window as any).previewHarness.diffEditors()[0].getModifiedEditor().getPosition().lineNumber)).toBeLessThan(5)
+  // Replace with a pure insertion, then an empty and finally identical file.
+  await page.evaluate(() => {
+    const h = (window as any).previewHarness
+    h.state().updateContent(h.state().activeFileId, h.baselines['code.ts'] + '\nconst added = 1')
+  })
+  await expect(page.locator('.diff-deleted-line-number')).toHaveCount(0)
+  await page.evaluate(() => {
+    const h = (window as any).previewHarness
+    h.state().updateContent(h.state().activeFileId, '')
+  })
+  await expect(page.locator('.diff-deleted-line-number')).toHaveCount(57)
+  await page.evaluate(() => {
+    const h = (window as any).previewHarness
+    h.state().updateContent(h.state().activeFileId, h.baselines['code.ts'])
+  })
+  await expect(page.getByRole('button', { name: '下一处变更' })).toBeDisabled()
+  await expect(page.locator('.diff-deleted-line-number')).toHaveCount(0)
+})
+
 test('custom dialog supports cancel, failed-save retry, multiple files and discard', async ({ page }, testInfo) => {
   await page.evaluate(async () => {
     const h = (window as any).previewHarness

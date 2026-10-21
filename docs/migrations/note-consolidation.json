@@ -1,0 +1,913 @@
+{
+  "schemaVersion": 1,
+  "baseline": "8e6a7af1b52bebc43a121278b43a80d01ab9e00c",
+  "created": "2026-10-21T15:37:53.642Z",
+  "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+  "purpose": "Note 合并吸收的删除映射证据；运行时只读 module.md 与 Note，不读取此清单。原始迁移报告保持原字节。",
+  "sources": [
+    {
+      "source": ".agents/notes/sessions/checkpoints/session-checkpoint-expand-content.md",
+      "id": "7f0d3ec5-50e4-46df-85b4-f0b75e589df0",
+      "created": "2026-09-22",
+      "sourceSha256": "7ba1ab0d5d812c42282207dfbb64dfd536de63d4d16a92d32f5030ce43bbe668",
+      "absorbedInto": ".agents/notes/sessions/checkpoints/session-checkpoint-expand.md",
+      "survivingId": "d216f355-f951-4f60-b209-7bb98b08dcbf",
+      "extensions": {
+        "r5Migration": {
+          "sourceHash": "3f3fd7291c6d9ef9f776af171a5dc036689d5ca72ee3f079bfd9330c68f2946e",
+          "repairs": [
+            "relations[0].reason",
+            "relations[1].reason"
+          ],
+          "originalRelations": [
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bb3ef36c-f74e-4589-98c7-601f8823d367",
+              "reason": "The migration assigns checkpoint detail, diff preview, and review-gated restore to session cards; this slice brings their expanded states to HiFi v3"
+            },
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/d216f355-f951-4f60-b209-7bb98b08dcbf",
+              "reason": "The subscription fix makes the expand button render the list; this slice makes the rendered list always show content"
+            }
+          ]
+        },
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-22-agent-note-session-checkpoint-expand-content-per-hifi-v3--7f0d3ec5.md",
+          "sourceHash": "16c9b4787f006c7ef0ad6c7375f12870ccbfa3d39e65639e4f9ef660682f9e71",
+          "originalBodyHash": "b363a131cff7771d4e567961b08bdd0c357bee3d8fcd114c254814d73914bf6a",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Session checkpoint expand content per HiFi v3. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-22-session-checkpoint-expand-content.md",
+            "sourceHash": "16c9b4787f006c7ef0ad6c7375f12870ccbfa3d39e65639e4f9ef660682f9e71",
+            "originalBodyHash": "b363a131cff7771d4e567961b08bdd0c357bee3d8fcd114c254814d73914bf6a"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/desktop/packaged-runtime-size.md",
+      "id": "210d9ec3-b3e9-5998-98c5-17d2ec4fcb34",
+      "created": "2026-09-20",
+      "sourceSha256": "2b2fa3b40fbc6f80b7d89126d14408b144dc41221c5fc4ce0441060422809372",
+      "absorbedInto": ".agents/notes/desktop/packaged-hoisted-deps.md",
+      "survivingId": "39f58575-dba9-584f-a285-a33a2c73cdc4",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-20-agent-note-packaged-node-modules-carries-the-production-closure-only--210d9ec3.md",
+          "sourceHash": "64528e0254e3930bc8728893144f840470c000584c994a34d8b4f8589f523f04",
+          "originalBodyHash": "b0741272b5d85bf37dfda03dc44f50d7cf0dc0d1e6d3eca52f764e16092a6649",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Packaged node_modules carries the production closure only. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: 2026-09-20-packaged-hoisted-deps.md -> ./2026-09-20-packaged-hoisted-deps--39f58575.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/bug-fix/2026-09-20-packaged-runtime-size.md",
+            "sourceHash": "8f834b73ec112974cb42d612477b0796d5ac92d486ff1bd2e3af738a422bdc81",
+            "originalBodyHash": "ca25bb0f6041600eab495cf34b4efb55274fe424acb00938d92e65fa7ea0de8e"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/remote/gitlab-instance-config.md",
+      "id": "9ed7f1d7-dc1d-4330-82a9-5a064831040f",
+      "created": "2026-09-21",
+      "sourceSha256": "44d55def6bf4d1b8e8a116085cf61b9a63a9b495d9bf68fc24efdb140ef3766e",
+      "absorbedInto": ".agents/notes/remote/gitlab-provider-reviews.md",
+      "survivingId": "640a69dd-bbea-4606-b51a-f9b545de37a5",
+      "extensions": {
+        "r5Migration": {
+          "sourceHash": "3ec101196bd4b99f68eb7a046c680c78d2c2da3f95ef648677c34660440c0049",
+          "repairs": [
+            "relations[0].reason"
+          ],
+          "originalRelations": [
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22",
+              "reason": "Self-hosted GitLab instance configuration for the session requirement"
+            }
+          ]
+        },
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-21-agent-note-self-hosted-gitlab-instance-configuration--9ed7f1d7.md",
+          "sourceHash": "9d505f95902efda4a97c21229284fb7e62217fbcb4134cf7e6277c3882ee2975",
+          "originalBodyHash": "b50b96aa063bb264c49fcaf4c6487d48a94ebf79a92c26d1a01ef7a87b123791",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Self-hosted GitLab instance configuration. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-21-gitlab-instance-config.md",
+            "sourceHash": "9d505f95902efda4a97c21229284fb7e62217fbcb4134cf7e6277c3882ee2975",
+            "originalBodyHash": "b50b96aa063bb264c49fcaf4c6487d48a94ebf79a92c26d1a01ef7a87b123791"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/remote/hosted-issues-comments-automerge.md",
+      "id": "cee742a2-d7ca-4a61-8021-e1e118534c96",
+      "created": "2026-09-21",
+      "sourceSha256": "44e90d688418284ba4d42134b76e5715f79c24ecf164b5b13c3853c6bb1ed5f2",
+      "absorbedInto": ".agents/notes/remote/hosted-github-reviews.md",
+      "survivingId": "97a21dee-2b5e-4cf8-8298-28263eeb02bb",
+      "extensions": {
+        "r5Migration": {
+          "sourceHash": "2db28c3d16da4f504eed58786aa6f5ca5f534e73d749cf65d0231faef7d846d1",
+          "repairs": [
+            "relations[0].reason"
+          ],
+          "originalRelations": [
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22",
+              "reason": "Issue tasks, review comments, and auto-merge for the session requirement"
+            }
+          ]
+        },
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-21-agent-note-hosted-issues-comments-and-auto-merge--cee742a2.md",
+          "sourceHash": "117ea1ef78ea42dfe3ae0b95dbf2864c7fcccc96e3bd0f3ddd4915f141b2015d",
+          "originalBodyHash": "009f2fa5403391524b570e13de397ff8d7e67121c0b62da6f33e5467acca1b2a",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Hosted issues, comments, and auto-merge. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-21-hosted-issues-comments-automerge.md",
+            "sourceHash": "117ea1ef78ea42dfe3ae0b95dbf2864c7fcccc96e3bd0f3ddd4915f141b2015d",
+            "originalBodyHash": "009f2fa5403391524b570e13de397ff8d7e67121c0b62da6f33e5467acca1b2a"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/blueprint/navigation/blueprint-canvas-zoom-range.md",
+      "id": "65b030fd-2a29-4ad8-8def-4a13982ee33a",
+      "created": "2026-09-26",
+      "sourceSha256": "a03308f447c29f970af511b14f8a31ea52bc13e9f08b43bd6466d2d4f89b7b7e",
+      "absorbedInto": ".agents/notes/blueprint/navigation/blueprint-canvas-controls.md",
+      "survivingId": "3007aefa-b643-4f1c-9fcb-4a65b3f7894f",
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/agent/roundtable-artifact-card-s5.md",
+      "id": "6471d8f2-ee72-5a63-897c-0d8e44110eb6",
+      "created": "2026-09-16",
+      "sourceSha256": "be609825875d0bf6f7c166048d43f0d734643a4d5c093efdd8a61fdb095666cf",
+      "absorbedInto": ".agents/notes/agent/roundtable-artifact-bundle-s5.md",
+      "survivingId": "46d65946-125b-56d0-b23e-05552f5b281e",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-16-agent-note-roundtable-artifact-card-with-blueprint-refresh--6471d8f2.md",
+          "sourceHash": "5ea0296f1581660d013f27dbeea19f67c1907f1f6738289f8bafa29137e563e8",
+          "originalBodyHash": "f00da12755a03ef006d4304c8dfb5bace8be0105fccf9bae9354148ff78730e6",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Roundtable artifact card with blueprint refresh. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: 2026-09-16-roundtable-artifact-bundle-s5.md -> ./2026-09-16-roundtable-artifact-bundle-s5--46d65946.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/architecture/2026-09-16-roundtable-artifact-card-s5.md",
+            "sourceHash": "95fe171879679323e3c24be87bf0f26df6591a06fba16177da98278ad9dd7200",
+            "originalBodyHash": "d794cb854c9af65def921d4a5032c24353dd5713412682a1e5e25238c4cdb442"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/session-card-l1-summary.md",
+      "id": "cca3e58f-6d9f-4057-a1eb-68e773a26313",
+      "created": "2026-10-06",
+      "sourceSha256": "2a490881c6cd7e118b0b501841a1afdbe99dee22d67c1b61b7df4552cd74dcff",
+      "absorbedInto": ".agents/notes/workbench/session-card-surface.md",
+      "survivingId": "764d5d26-8d0d-4307-9b77-af3e22e2ac11",
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/session-card-expand-motion.md",
+      "id": "106b60b4-5462-4242-b28b-030f6649a78b",
+      "created": "2026-10-06",
+      "sourceSha256": "4b3f8fde57930fdddea3b4694f77f81b73307c28e1a4978ff4d58c9d82ad87f1",
+      "absorbedInto": ".agents/notes/workbench/session-card-surface.md",
+      "survivingId": "764d5d26-8d0d-4307-9b77-af3e22e2ac11",
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/settings-theme-preview.md",
+      "id": "1e5964e7-2935-4985-8dc6-97156c26da0d",
+      "created": "2026-10-14",
+      "sourceSha256": "d5077811923639217b457675b718f507b92f67556591b3217d287137ac2c2df7",
+      "absorbedInto": ".agents/notes/workbench/settings-layout.md",
+      "survivingId": "35775a71-6b34-4a93-aaf5-55f6a65500b9",
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/settings-footer-scrim-token.md",
+      "id": "16ff77a0-0017-47cf-8e05-6b754d12aa5e",
+      "created": "2026-09-29",
+      "sourceSha256": "4eb9ff36c531d04dc093fbec40fd615eadd47c4a6d7391ad5048db4e1618a8cc",
+      "absorbedInto": ".agents/notes/workbench/settings-layout.md",
+      "survivingId": "35775a71-6b34-4a93-aaf5-55f6a65500b9",
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/terminal/terminal-status-ring.md",
+      "id": "fc9a87e5-4dcc-5e5b-9d79-f5a79b4ce21b",
+      "created": "2026-09-19",
+      "sourceSha256": "af35aa3ba608e6d72991fad3c905083ccbb560ecddcd8607efc4699cb80955b3",
+      "absorbedInto": ".agents/notes/terminal/terminal-status-display.md",
+      "survivingId": "27891818-004c-5bf2-a82a-34b838ce4884",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-19-agent-note-terminal-status-ring-in-the-sidebar--fc9a87e5.md",
+          "sourceHash": "a3bf8708260c70f8412255ecaa1533af1a209c50bb1f3aa04a52a716c813e8ea",
+          "originalBodyHash": "d2b91d60bf4f24671aa60e28b765865f3065cfe9cf8fa50cb9f63b8d24006a7e",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Terminal status ring in the sidebar. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: ./2026-09-12-terminal-status-display.md -> ./2026-09-12-terminal-status-display--27891818.md",
+            "Rebased Markdown destination: ./2026-09-12-terminal-status-display.md -> ./2026-09-12-terminal-status-display--27891818.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-19-terminal-status-ring.md",
+            "sourceHash": "4bea9d7edc0049a3d788175d95f16aaeb89d0ae338394a27a9effd1a38ec38a6",
+            "originalBodyHash": "6c06a08b46ff2926a527657510e6e02f0a400a30b3a191ddca993067a8061126"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/terminal/claude-idle-prompt-tab-status.md",
+      "id": "bb75d2cd-3c9e-51fd-bcaa-d484e7c3a1dc",
+      "created": "2026-09-14",
+      "sourceSha256": "a625bb5971cb7b81025ab77c2f8c5eec016ed4fa057111c8ce09cecf2d5c0e58",
+      "absorbedInto": ".agents/notes/terminal/terminal-status-display.md",
+      "survivingId": "27891818-004c-5bf2-a82a-34b838ce4884",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-14-agent-note-claude-idle-nudge-no-longer-stains-the-tab-orange--bb75d2cd.md",
+          "sourceHash": "18e5e69a643db250f643872e5112729b23a694ea08ccdaeef2af1bec5ca076e7",
+          "originalBodyHash": "6f0800c680458d1b50eabb3f8a700b1073096c15e93adeef5f3af27c1d6bfc48",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Claude idle nudge no longer stains the tab orange. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/bug-fix/2026-09-14-claude-idle-prompt-tab-status.md",
+            "sourceHash": "18e5e69a643db250f643872e5112729b23a694ea08ccdaeef2af1bec5ca076e7",
+            "originalBodyHash": "6f0800c680458d1b50eabb3f8a700b1073096c15e93adeef5f3af27c1d6bfc48"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/product-preview-p0.md",
+      "id": "99b3fb78-bfbb-5ef5-8d2c-22ce5bbadc5e",
+      "created": "2026-09-17",
+      "sourceSha256": "03fb5623522f8bafdd63254bf2912a7579f323d54db072cd6ce2e1266ca8a7f8",
+      "absorbedInto": ".agents/notes/workbench/product-workspace.md",
+      "survivingId": "034fb695-ff94-5476-b085-9818bcbef5c1",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-17-agent-note-p0--99b3fb78.md",
+          "sourceHash": "047db2561335f0c93e15fad752c755f42de6e545c72e1a6b8923f80a5f16b0e5",
+          "originalBodyHash": "894dca3698d7af36cc1e0195741e6455774f5ad7ed79c9fab146412289285054",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents 产物工作区 P0 预览格式扩展. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-17-product-preview-p0.md",
+            "sourceHash": "047db2561335f0c93e15fad752c755f42de6e545c72e1a6b8923f80a5f16b0e5",
+            "originalBodyHash": "894dca3698d7af36cc1e0195741e6455774f5ad7ed79c9fab146412289285054"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/product-notice-matrix.md",
+      "id": "c4b9de4e-36f2-5b20-b7e0-4227835253a4",
+      "created": "2026-09-13",
+      "sourceSha256": "ca6104fc57c53be47ad7d9415587ed6917624ac687412fc3740773d076cfd507",
+      "absorbedInto": ".agents/notes/workbench/product-workspace.md",
+      "survivingId": "034fb695-ff94-5476-b085-9818bcbef5c1",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-13-agent-note--c4b9de4e.md",
+          "sourceHash": "dddd2509493579df10d48b8c88762e521cee3a909cb2a56804e9a66a5c05b0fa",
+          "originalBodyHash": "bf021991bf5069f8464d90761d7e439cea72764026a91ee4ea2e4c3bb5c89673",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents 产物通知矩阵（新增/覆盖/基线修改三分）. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-13-product-notice-matrix.md",
+            "sourceHash": "dddd2509493579df10d48b8c88762e521cee3a909cb2a56804e9a66a5c05b0fa",
+            "originalBodyHash": "bf021991bf5069f8464d90761d7e439cea72764026a91ee4ea2e4c3bb5c89673"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/product-peek-width-and-close-race.md",
+      "id": "fd4aef5f-f428-569d-b592-152b147d547b",
+      "created": "2026-09-13",
+      "sourceSha256": "cf6c22b333dd33019e4108dc89348f24433acabc0ced32b3a45fb185aeb2f836",
+      "absorbedInto": ".agents/notes/workbench/product-workspace.md",
+      "survivingId": "034fb695-ff94-5476-b085-9818bcbef5c1",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-13-agent-note-peek--fd4aef5f.md",
+          "sourceHash": "6a1ec5aa9a67d6ab20d872eb927dbc4d74d6709d8f40dd6f20919d5e06a6dca5",
+          "originalBodyHash": "a911566d677a6f0f75bcd910c6f0a8c545aaca80ac77150b509c1ac327dacc17",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents 产物工作区关闭竞态修复与 peek 胶囊满宽对齐. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-13-product-peek-width-and-close-race.md",
+            "sourceHash": "6a1ec5aa9a67d6ab20d872eb927dbc4d74d6709d8f40dd6f20919d5e06a6dca5",
+            "originalBodyHash": "a911566d677a6f0f75bcd910c6f0a8c545aaca80ac77150b509c1ac327dacc17"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/terminal/cc-switch-cli-detect-install.md",
+      "id": "4814a657-5198-5e3f-9284-d0bfc600d43f",
+      "created": "2026-09-17",
+      "sourceSha256": "fe26595a6840be068e44ead4cb7f963760f88fbe8656ff44932ad9d003d2c66b",
+      "absorbedInto": ".agents/notes/terminal/cc-switch-multi-terminal.md",
+      "survivingId": "434babf4-fac2-5482-aeb8-3a091332ee09",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-17-agent-note-claude-code-version-detection-and-install-in-settings--4814a657.md",
+          "sourceHash": "5ce99aa6e3569a50cc097aa25bf3285caa30dbb4a48b4131472354ff3860d2cc",
+          "originalBodyHash": "eabe25047c8e8103df3d415a85c8b2f1aba5d7cfd7ef41080d36ef70a4a63733",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Claude Code version detection and install in Settings. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: ../../proposed/feature/2026-09-17-cc-switch-port.md -> ./2026-09-17-cc-switch-port--33cccd84.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-17-cc-switch-cli-detect-install.md",
+            "sourceHash": "403cde040f9bce6b13f1cfce9e3209e2c3526afee06f18207e4c89bd1bd5ace6",
+            "originalBodyHash": "4d846ec9fda2514df062deb4efcf67adaea33a3031b985eda31f5bfcb176cfb9"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/terminal/cc-switch-cli-matrix.md",
+      "id": "2b16ef61-0073-5589-a8ea-4061dc6c680b",
+      "created": "2026-09-17",
+      "sourceSha256": "416248fb15ddd149e9151b638f7f7a5e1b39cc07735cf7424ea1a4ec8e99bfa6",
+      "absorbedInto": ".agents/notes/terminal/cc-switch-multi-terminal.md",
+      "survivingId": "434babf4-fac2-5482-aeb8-3a091332ee09",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-17-agent-note-llm-side-multi-cli-matrix-with-sync-state--2b16ef61.md",
+          "sourceHash": "ea192896dcd1556312b5eb9e708d4711a901cf00af3673614604eb72913cba7b",
+          "originalBodyHash": "33358d51e491b8049edac91de597b31bb6bb9cfead1d1903860d66a7abc086df",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents LLM-side multi-CLI matrix with sync state. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: ../../archived/feature/2026-09-17-cc-switch-llm-sync.md -> ./2026-09-17-cc-switch-llm-sync--5773a79c.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-17-cc-switch-cli-matrix.md",
+            "sourceHash": "f51b69731a081819558c623bf9557c043b408fce830da7558efcca96240918b9",
+            "originalBodyHash": "825b241d42bd05664109bfc429a48ac85fd6e4c7a85541b4b826c22a515ab71b"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/terminal/cc-switch-pi-janus.md",
+      "id": "1866e39d-dca9-5783-a5c8-cefbf730075a",
+      "created": "2026-09-17",
+      "sourceSha256": "4d536294da3073a0162228554ed5d9c334f2907bc002a2b4860b8bfd2950b50a",
+      "absorbedInto": ".agents/notes/terminal/cc-switch-multi-terminal.md",
+      "survivingId": "434babf4-fac2-5482-aeb8-3a091332ee09",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-17-agent-note-pi-and-self-built-janus-lifecycle--1866e39d.md",
+          "sourceHash": "44e6d4dcc129a4670107ce6c9d6ee7fb55291637abd442c49d1638cf7773eb06",
+          "originalBodyHash": "9fa620450d4bf7cfedb7af069dac4c3ca6c10e1c387fa72fbb9b50ac9681db5f",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Pi and self-built Janus lifecycle. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-17-cc-switch-pi-janus.md",
+            "sourceHash": "44e6d4dcc129a4670107ce6c9d6ee7fb55291637abd442c49d1638cf7773eb06",
+            "originalBodyHash": "9fa620450d4bf7cfedb7af069dac4c3ca6c10e1c387fa72fbb9b50ac9681db5f"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/agent/maintenance-panel-shared-render-s6.md",
+      "id": "c0f3f75a-474f-5487-9426-c54c91759ac5",
+      "created": "2026-09-17",
+      "sourceSha256": "5b229af57c6e3bd6cc32150ad8ecce78ce9d59e710a4170d5a38d40e69b4c993",
+      "absorbedInto": ".agents/notes/agent/maintenance-discussion-unified-s6.md",
+      "survivingId": "cb026d42-c260-5e79-a66f-e455228d6eaf",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-17-agent-note-maintenance-panel-renders-shared-conversation-units--c0f3f75a.md",
+          "sourceHash": "aa257799912240065f2d739bbf7233e88cc9a123bccb360c9825b72c404bec78",
+          "originalBodyHash": "ef4f6fe7aa4c3a07fc53c3b667d96838e31af0fd29958164dd9cbacd96ceb4a8",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Maintenance panel renders shared conversation units. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/architecture/2026-09-17-maintenance-panel-shared-render-s6.md",
+            "sourceHash": "aa257799912240065f2d739bbf7233e88cc9a123bccb360c9825b72c404bec78",
+            "originalBodyHash": "ef4f6fe7aa4c3a07fc53c3b667d96838e31af0fd29958164dd9cbacd96ceb4a8"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/agent/maintenance-harness-bridge-s6.md",
+      "id": "1f21d390-171c-57ba-9b8b-cca02d74c39a",
+      "created": "2026-09-17",
+      "sourceSha256": "a639928bba6e1bc6d8a0092a03317d7c4cf47b7cca66bed2d1002a5dade0cd8d",
+      "absorbedInto": ".agents/notes/agent/maintenance-harness-apply-s6.md",
+      "survivingId": "66bf1be8-fad7-5c9c-8048-4bbe0b665950",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-17-agent-note-maintenance-to-harness-operation-bridge--1f21d390.md",
+          "sourceHash": "6a0c13fff34d149ddbf022bffe5d3133159a7c0307a5560c9293706453afe8dd",
+          "originalBodyHash": "a188034597384f846a7296ecc19076b4c69db0d33aac85206c48fcb0e42faef5",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Maintenance to harness operation bridge. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: 2026-09-17-maintenance-harness-apply-s6.md -> ./2026-09-17-maintenance-harness-apply-s6--66bf1be8.md",
+            "Rebased Markdown destination: 2026-09-17-maintenance-harness-guard-s6.md -> ./2026-09-17-maintenance-harness-guard-s6--2b73dd7d.md",
+            "Rebased Markdown destination: ../../proposed/architecture/2026-09-16-note-harness-implementation-contract.md -> ./2026-09-16-note-harness-implementation-contract--537de6bf.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/architecture/2026-09-17-maintenance-harness-bridge-s6.md",
+            "sourceHash": "fd8ead8ef16b1f67c0709c5b17417e9952ecd5884a2e4e2ec1c08381ed7b14f7",
+            "originalBodyHash": "0d39e7a7b179bff8119315c16979bcee5daf4cf1f053cc4875c1640d96347e25"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/agent/maintenance-harness-guard-s6.md",
+      "id": "2b73dd7d-a2e0-50b4-aa75-31f0ed371ba2",
+      "created": "2026-09-17",
+      "sourceSha256": "1987110c367615554eb467e3d01d8b2ad1a6c5e5989d0cfe3c2ebb51f96eaff6",
+      "absorbedInto": ".agents/notes/agent/maintenance-harness-apply-s6.md",
+      "survivingId": "66bf1be8-fad7-5c9c-8048-4bbe0b665950",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-17-agent-note-maintenance-harness-guard-for-project-graphs--2b73dd7d.md",
+          "sourceHash": "e48b60be610338df6c4af65ce5f3bd4985cc8718ebd66b1d0734ca27294e5518",
+          "originalBodyHash": "4796084bb068c33f74c39f75b8db159ba17e7f96177f0d200a5d347980a4c75b",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Maintenance harness guard for project graphs. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: 2026-09-17-maintenance-discussion-unified-s6.md -> ./2026-09-17-maintenance-discussion-unified-s6--cb026d42.md",
+            "Rebased Markdown destination: 2026-09-17-maintenance-harness-apply-s6.md -> ./2026-09-17-maintenance-harness-apply-s6--66bf1be8.md",
+            "Rebased Markdown destination: 2026-09-17-maintenance-harness-apply-s6.md -> ./2026-09-17-maintenance-harness-apply-s6--66bf1be8.md",
+            "Rebased Markdown destination: 2026-09-17-chat-turn-guard-domain-s6.md -> ./2026-09-17-chat-turn-guard-domain-s6--fd109997.md",
+            "Rebased Markdown destination: ../../proposed/architecture/2026-09-16-note-harness-implementation-contract.md -> ./2026-09-16-note-harness-implementation-contract--537de6bf.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/architecture/2026-09-17-maintenance-harness-guard-s6.md",
+            "sourceHash": "8bedaecdc92917177c486caf31e24ee92246bee51366c45e2e7b8009c0b4ec7b",
+            "originalBodyHash": "c7027870b174ed10169de3f9de0a31a9c20ce453e45667267780af64ae09d253"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/agent/desktop-implementation-history.md",
+      "id": "854981c7-ab43-521f-a379-020ce1549f12",
+      "created": "2026-09-19",
+      "sourceSha256": "cae2895c7be8aa96c4d8d110e85d96ef28ab024b4923133edc0eef9e93dd36df",
+      "absorbedInto": ".agents/notes/agent/desktop-task-implementation.md",
+      "survivingId": "958007ff-748f-57c1-ae16-b9b99a94c198",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-19-agent-note-durable-desktop-implementation-history--854981c7.md",
+          "sourceHash": "d3bebb9684028bea4cb396d61f5d31c62bd7273d53b150a78b2bc5b976e8df6f",
+          "originalBodyHash": "ff07548d9726cd5a1322a69f276c9783c2fd80246e8e1e553cff3a07eacf3e5b",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Durable desktop implementation history. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: 2026-09-18-harness-s9-readiness.md -> ./2026-09-18-harness-s9-readiness--28ce4fe4.md",
+            "Rebased Markdown destination: 2026-09-19-desktop-task-implementation.md -> ./2026-09-19-desktop-task-implementation--958007ff.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/architecture/2026-09-19-desktop-implementation-history.md",
+            "sourceHash": "026c4767a0241abb1bcce74972ba9f5a01ab42e8f25515f94cfea7f9ac0152e2",
+            "originalBodyHash": "c8858f6c99712784022b2099c1ea0f03444999469af09873d22a3b576990f55e"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/agent/desktop-xdo-executor.md",
+      "id": "b057b3f0-463e-544c-b6ea-f0d81106b1fa",
+      "created": "2026-09-18",
+      "sourceSha256": "c2b87e8541f173be21b41d68ac378010f963db23062c3af0dd08f3f9ab53a5ce",
+      "absorbedInto": ".agents/notes/agent/desktop-delegated-modes.md",
+      "survivingId": "fbac0251-beff-50d7-9363-18fa7e812781",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-18-agent-note-desktop-xdo-host-executes-checks-and-self-review--b057b3f0.md",
+          "sourceHash": "d615c0dcdb15c5cadae3ccf09551fce0089cfe92d01844509373c0553da37b3b",
+          "originalBodyHash": "102e0ae173dc1650cab522f319312290ce0e0095c297e5b215aadc9190ddf9b3",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Desktop xdo host executes checks and self-review. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: 2026-09-19-desktop-task-implementation.md -> ./2026-09-19-desktop-task-implementation--958007ff.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/architecture/2026-09-18-desktop-xdo-executor.md",
+            "sourceHash": "2f11d80b5fc0dc593bacde777d7c247e686ce756642fe5616d3a6ca6217aafdd",
+            "originalBodyHash": "360b9ac3b36e00edb1926c0da0f128017b2bb5135bac5edf5e3dd7b07ecfdc25"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/right-dock-empty-collapse.md",
+      "id": "9f855a20-5b26-5bcd-8fd8-225e93c1be62",
+      "created": "2026-09-16",
+      "sourceSha256": "29b724717cd083352e1bc59178e92e288f8c0b9cc2103a8276a0c3bb5358e6cf",
+      "absorbedInto": ".agents/notes/workbench/right-rail-toggle-motion.md",
+      "survivingId": "e76f4e20-d8e7-44dc-ae21-ab7387e6d12d",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-16-agent-note-right-dock-hides-panel-toggle-with-no-open-tools--9f855a20.md",
+          "sourceHash": "71e7eab1926d577094077ed1189b713cf9dfa9db2f038021a65ad7e13a9b8bc0",
+          "originalBodyHash": "25367c0c6f7e082012a43e745d5fd77debe2aae22465220a64e1637e7a46d986",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Right dock hides panel toggle with no open tools. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/bug-fix/2026-09-16-right-dock-empty-collapse.md",
+            "sourceHash": "71e7eab1926d577094077ed1189b713cf9dfa9db2f038021a65ad7e13a9b8bc0",
+            "originalBodyHash": "25367c0c6f7e082012a43e745d5fd77debe2aae22465220a64e1637e7a46d986"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/island-notification-capsule.md",
+      "id": "ada1e07a-7499-54dc-938f-bd43f714c98f",
+      "created": "2026-09-13",
+      "sourceSha256": "f6e02b0bb29835b8e56715e0b3928315a552da05d400602e3cf7d67f90c6c6f8",
+      "absorbedInto": ".agents/notes/workbench/island-hifi-optimized-alignment.md",
+      "survivingId": "e22d4cdb-c2aa-5a6c-ae54-945ea26e91ce",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-13-agent-note--ada1e07a.md",
+          "sourceHash": "36a0b8fb389b278df64567572100891d3542d1201f1455f41daaf46b8452be06",
+          "originalBodyHash": "c89031bbbd31b8915e5ccc87be726e710ad6e0cb5ba22bc2342d1dcfdf6431a9",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents 灵动岛一级展开重设计为通用通知胶囊. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-13-island-notification-capsule.md",
+            "sourceHash": "36a0b8fb389b278df64567572100891d3542d1201f1455f41daaf46b8452be06",
+            "originalBodyHash": "c89031bbbd31b8915e5ccc87be726e710ad6e0cb5ba22bc2342d1dcfdf6431a9"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/sessions/records/session-timeline-live.md",
+      "id": "2b60cc2c-4d6f-4676-b6be-582e36b7edbb",
+      "created": "2026-09-22",
+      "sourceSha256": "4d133ab80ada8e74e9984f26f5b5ea89b1e9999e035d7dbb9e31f84089212afd",
+      "absorbedInto": ".agents/notes/sessions/records/session-timeline-v5.md",
+      "survivingId": "e782007f-d07b-4f60-be32-63d1b22ec1f8",
+      "extensions": {
+        "r5Migration": {
+          "sourceHash": "69c69c5bb6604123846600602c3beaa94e2bd3b1c138be3083398353821e784f",
+          "repairs": [
+            "relations[0].reason",
+            "relations[1].reason"
+          ],
+          "originalRelations": [
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/cb7e75d4-4db1-4a7d-b321-6ea866df241c",
+              "reason": "Change events reach the summary list; this slice carries the same events into open timelines"
+            },
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/36a4c7d5-fc0f-4436-9fc0-f925ef8fc4f7",
+              "reason": "Durable per-turn prose needs a live timeline to surface in; this slice provides the refresh"
+            }
+          ]
+        },
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-22-agent-note-session-timeline-live-refresh-on-session-events--2b60cc2c.md",
+          "sourceHash": "58ac766f6b6055754150a86b69f1d6994d367a4dcfe3a21322e951524d471e61",
+          "originalBodyHash": "7fc472c341758a074071522db4838d848081b2dfd557d1cd8f417e0e5b6a2d01",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Session timeline live refresh on session events. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-22-session-timeline-live.md",
+            "sourceHash": "58ac766f6b6055754150a86b69f1d6994d367a4dcfe3a21322e951524d471e61",
+            "originalBodyHash": "7fc472c341758a074071522db4838d848081b2dfd557d1cd8f417e0e5b6a2d01"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/sessions/worktrees/worktree-file-tree-scope.md",
+      "id": "c58ff1db-a725-4c22-843e-df0b95e2934d",
+      "created": "2026-09-22",
+      "sourceSha256": "6efec6d41fe30cb3351d141a56e89b6abd3b5f79e6fa0a1ef85650c39435882c",
+      "absorbedInto": ".agents/notes/sessions/worktrees/worktree-sidebar-scoping.md",
+      "survivingId": "bda5aa81-dc65-4408-9544-60fdfdf8c836",
+      "extensions": {
+        "r5Migration": {
+          "sourceHash": "63d10102479f0b608e746db69614f83e8986a86509fda43e79d6a2385652f1c3",
+          "repairs": [
+            "relations[0].reason",
+            "relations[1].reason"
+          ],
+          "originalRelations": [
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bda5aa81-dc65-4408-9544-60fdfdf8c836",
+              "reason": "Worktree rows switch the active path while the file tree stays pinned to the workspace root"
+            },
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/636764b9-0105-4944-91f7-72fcbd3c4869",
+              "reason": "Worktree creation and deletion move the active path and need the same tree rescope"
+            }
+          ]
+        },
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-22-agent-note-worktree-switch-rescopes-the-file-tree-with-a-sweep--c58ff1db.md",
+          "sourceHash": "a72cc234c8c04669f0c0a715531a672c51be664187bdcd2f6a9afd19a7b09cd6",
+          "originalBodyHash": "672b4a060335ceb23cf0d578ade9182e18f3cc42c39810759e4a95811dfd40db",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Worktree switch rescopes the file tree with a sweep. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/bug-fix/2026-09-22-worktree-file-tree-scope.md",
+            "sourceHash": "a72cc234c8c04669f0c0a715531a672c51be664187bdcd2f6a9afd19a7b09cd6",
+            "originalBodyHash": "672b4a060335ceb23cf0d578ade9182e18f3cc42c39810759e4a95811dfd40db"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/sessions/worktrees/worktree-ship-merge.md",
+      "id": "7822452e-cef7-4ef3-a138-2ae6abc84667",
+      "created": "2026-09-21",
+      "sourceSha256": "bd40f737b34598fa15de2a7b7e6f99fd27eeeb27fcf068ba6025604a83974946",
+      "absorbedInto": ".agents/notes/sessions/worktrees/worktree-create-delete.md",
+      "survivingId": "636764b9-0105-4944-91f7-72fcbd3c4869",
+      "extensions": {
+        "r5Migration": {
+          "sourceHash": "d3b3ba2162e0422a661e05a3b3e468532a8fd3cb464f5ca305b0a0def95579cd",
+          "repairs": [
+            "relations[0].reason"
+          ],
+          "originalRelations": [
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/c23ebb35-2d89-4c56-8dee-03bb7e277a22",
+              "reason": "Local Ship merge flow for the session requirement"
+            }
+          ]
+        },
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-21-agent-note-local-ship-merge-flow-for-worktrees--7822452e.md",
+          "sourceHash": "56db3869779dd6200d85ebe04101fdd07ef912d2da786a6473f80331c67e698b",
+          "originalBodyHash": "1e7426372ee643cdf8abd7054359cba41c4119e480b75561ea0b0d9d058cd84a",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Local Ship merge flow for worktrees. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-21-worktree-ship-merge.md",
+            "sourceHash": "56db3869779dd6200d85ebe04101fdd07ef912d2da786a6473f80331c67e698b",
+            "originalBodyHash": "1e7426372ee643cdf8abd7054359cba41c4119e480b75561ea0b0d9d058cd84a"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/workbench/drawer-markdown-file-glyph.md",
+      "id": "77c7030e-fb80-5e57-9dfa-ad92cbc76540",
+      "created": "2026-09-21",
+      "sourceSha256": "93259a9b98b854ef2a097a76ebb15ed453cfbb2e6a9949ab172cf7b9908e965a",
+      "absorbedInto": ".agents/notes/workbench/note-drawer-markdown-toolbar.md",
+      "survivingId": "b327657e-4cf1-561a-98fd-d365d7edc259",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-21-agent-note-conventional-file-glyph-for-the-drawer-s-markdown-view--77c7030e.md",
+          "sourceHash": "6ecfd42e2c327156a33f3902c8b9b4723938c2bdcaa847acf159fc1c6834ed8f",
+          "originalBodyHash": "3e296bd7846f98c942be366f584cbf0ef10ae8e5efbfb868faaea6cc03a273e7",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Conventional file glyph for the drawer's Markdown view. No age-based archival.",
+          "edits": [
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-21-drawer-markdown-file-glyph.md",
+            "sourceHash": "88f379f181118f019122f9930c5d3e5740dfa0c6d610d7383d80e89174b3ad68",
+            "originalBodyHash": "83cae4b6e54e9824be214f9c7a24d2ae45d46963e169b3522d7f34ff2cf0f5e9"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/terminal/sidebar-terminal-hierarchy.md",
+      "id": "d87e7a46-1d85-45e5-a635-63a6838d441c",
+      "created": "2026-09-21",
+      "sourceSha256": "79fa14ec451caa5dbd65f68aca855669d6056810871a9f4d1d962d79e0f4c5db",
+      "absorbedInto": ".agents/notes/terminal/terminal-sidebar-states.md",
+      "survivingId": "22f762b8-1b14-522d-a971-b11e2dfc9af6",
+      "extensions": {
+        "r5Migration": {
+          "sourceHash": "f98046041c0d47a3ed8ff4eed1f964183a9ba17e82f129c9e44483efc7cbfcdc",
+          "repairs": [
+            "relations[0].reason"
+          ],
+          "originalRelations": [
+            {
+              "type": "related-to",
+              "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bda5aa81-dc65-4408-9544-60fdfdf8c836",
+              "reason": "Worktree sub-rows own the sidebar section that terminals now follow per worktree"
+            }
+          ]
+        },
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-21-agent-note-terminals-as-level-3-items-grouped-under-their-worktree--d87e7a46.md",
+          "sourceHash": "87ba147bf905f6a6c98520fc83fff2efbd866f3488270f76ee3a932fc483d1c3",
+          "originalBodyHash": "8d6811d185e9541e5c5ecbf5b1561a366bc6158f8a39eef9998c2d4db158c7df",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Terminals as level-3 items grouped under their worktree. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: ./2026-09-19-terminal-status-ring.md -> ./2026-09-19-terminal-status-ring--fc9a87e5.md",
+            "Removed redundant Agent Note title prefix"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/feature/2026-09-21-sidebar-terminal-hierarchy.md",
+            "sourceHash": "a4ee1e99fee173c54fbd71ceb78141b5c093d9127d0db580486603967b352dc1",
+            "originalBodyHash": "2c0afdcba0fcf415f61e5d48b04a01ad8848ef3adc0af3242e28182c851dad46"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/agent/harness-portable-results.md",
+      "id": "11d8826d-52d7-58bb-99bd-49b6ba04dfaf",
+      "created": "2026-09-18",
+      "sourceSha256": "56f491f99bad60148c393b8d2a35f1e7ca1a12dccd1bfede159238dba4752e6d",
+      "absorbedInto": ".agents/notes/agent/harness-execution-adapter-s8.md",
+      "survivingId": "553f17a8-e800-5e4a-ac55-ae454a51825b",
+      "extensions": {
+        "r6Organization": {
+          "sourcePath": ".agents/notes/2026-09-18-agent-note-desktop-projections-of-portable-task-evidence--11d8826d.md",
+          "sourceHash": "c7cc82db525028f5916fd5a106ef18ea9584cf35f8f47eb75c1e46bec02c8614",
+          "originalBodyHash": "235794cc715887e71b45e6a25b4747b1a53c1c835edbcfe9c330484346b830f5",
+          "category": "formal",
+          "reason": "Retains the source decision in implemented lifecycle; body documents Desktop projections of portable task evidence. No age-based archival.",
+          "edits": [
+            "Rebased Markdown destination: 2026-09-18-task-contract-adoption.md -> ./2026-09-18-task-contract-adoption--6b7c688e.md",
+            "Rebased Markdown destination: 2026-09-18-project-conversation-controller.md -> ./2026-09-18-project-conversation-controller--4ffa1606.md",
+            "Removed redundant Agent Note title prefix",
+            "Removed lifecycle duplicated by frontmatter"
+          ],
+          "baseline": {
+            "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
+            "path": ".agents/notes/implemented/architecture/2026-09-18-harness-portable-results.md",
+            "sourceHash": "9298ad11a4bb71120e1f640b39118f9505ee58d353052aeb7e4b59d5e6c8306a",
+            "originalBodyHash": "8d9a99944ebc1b347c4009a2f6aedec9181b0263cd1ab4b88265234ff4f34e46"
+          }
+        }
+      },
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    },
+    {
+      "source": ".agents/notes/blueprint/maintenance/blueprint-action-bar.md",
+      "id": "350594c4-3e53-4645-aeab-57e4adeffc36",
+      "created": "2026-09-30",
+      "sourceSha256": "e28ca05adeec06651a360f055f19d7069e8980d5bd92bf7d0ad72a82967bf49b",
+      "absorbedInto": ".agents/notes/blueprint/maintenance/blueprint-dispatch-panel.md",
+      "survivingId": "f013beaa-bff7-4656-b086-d4816608f905",
+      "reason": "同一主题的历史切片并入主题 Note；事实与取舍原文保留于幸存者正文。被吸收身份只在本清单与 Git 历史留存。"
+    }
+  ]
+}

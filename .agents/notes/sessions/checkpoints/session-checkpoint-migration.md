@@ -7,12 +7,17 @@
   "created": "2026-09-21",
   "class": "feature",
   "relations": [
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/d87e7a46-1d85-45e5-a635-63a6838d441c"}
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/22f762b8-1b14-522d-a971-b11e2dfc9af6"
+    }
   ],
   "extensions": {
     "r5Migration": {
       "sourceHash": "2acff95fff17418bba67bb204271d95217c14887eb2ef17400d63fb24aed818a",
-      "repairs": ["relations[0].reason"],
+      "repairs": [
+        "relations[0].reason"
+      ],
       "originalRelations": [
         {
           "type": "related-to",
@@ -27,7 +32,9 @@
       "originalBodyHash": "987e0cc6c01ca4d6d5bfae6dd37b389e0bdd63023357d8c598636b467089bc24",
       "category": "formal",
       "reason": "Retains the source decision in implemented lifecycle; body documents Session-owned checkpoints, standalone checkpoints tool retired. No age-based archival.",
-      "edits": ["Removed redundant Agent Note title prefix"],
+      "edits": [
+        "Removed redundant Agent Note title prefix"
+      ],
       "baseline": {
         "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
         "path": ".agents/notes/implemented/feature/2026-09-21-session-checkpoint-migration.md",
@@ -36,7 +43,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/984f67da-38f0-455e-8903-2b0083c5b533"
 }
 ---

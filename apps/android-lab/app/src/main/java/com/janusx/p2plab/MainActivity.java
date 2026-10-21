@@ -65,7 +65,8 @@ public final class MainActivity extends Activity implements LabTransport.Listene
         deviceId = getPreferences(0).getString("deviceId", "");
         if (deviceId.isEmpty()) { deviceId = java.util.UUID.randomUUID().toString().replace("-", ""); getPreferences(0).edit().putString("deviceId", deviceId).apply(); }
         TextView title = new TextView(this);
-        title.setText("JanusX · 远程终端 " + BuildConfig.VERSION_NAME); title.setTextSize(20); title.setTextColor(Color.WHITE); page.addView(title);
+        title.setText("JanusX · " + (BuildConfig.LAN_ONLY ? "局域网测试 " : "远程终端 ") + BuildConfig.VERSION_NAME); title.setTextSize(20); title.setTextColor(Color.WHITE); page.addView(title);
+        if (BuildConfig.LAN_ONLY) label(page, "手机与电脑请连接同一局域网；跨网功能仅在开发版提供");
         connectionStatus = label(page, "未连接 · 扫描电脑二维码开始配对");
         connectionStatus.setMaxLines(3);
         connectionStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -82,6 +83,7 @@ public final class MainActivity extends Activity implements LabTransport.Listene
         invitation = field(details, "粘贴电脑配对 JSON", extra("invite", getPreferences(0).getString("pairingPayload", "")));
         invitation.setInputType(129);
         stun = field(details, "可选 STUN 地址", extra("stun", BuildConfig.DEFAULT_STUN_URL));
+        if (BuildConfig.LAN_ONLY) { stun.setText(""); stun.setVisibility(View.GONE); }
         button(details, "检查 UDP 路径", v -> { if (transport != null) transport.inspectPath(); });
         button(details, "检查信令网络", v -> {
             if (transport != null) { onStatus("请先断开，再检查信令网络"); return; }
@@ -89,6 +91,7 @@ public final class MainActivity extends Activity implements LabTransport.Listene
             showConnectionLog();
             onStatus("NET 开始检查 · Android " + BuildConfig.VERSION_NAME);
             try {
+                RemoteScope.validate(signalUrl.getText().toString().trim(), "");
                 final int generation = networkCheckGeneration;
                 networkCheck = new SignalNetworkCheck(this, text -> handler.post(() -> {
                     if (!destroyed && generation == networkCheckGeneration) onStatus(text);
@@ -236,6 +239,7 @@ public final class MainActivity extends Activity implements LabTransport.Listene
         String stunUrl = qr.optString("stun", "");
         if (!stunUrl.isEmpty() && !stunUrl.matches("stun:[^\\s]+"))
             throw new IllegalArgumentException("STUN 地址无效");
+        RemoteScope.validate(url, stunUrl);
         return qr;
     }
     private String extra(String name, String fallback) { String value = getIntent().getStringExtra(name); return value == null ? fallback : value; }

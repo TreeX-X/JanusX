@@ -7,7 +7,10 @@
   "created": "2026-10-03",
   "class": "architecture",
   "relations": [
-    {"type":"depends-on","target":"note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/5f4f7a62-f209-47ce-9ea5-58cdbf34c480"}
+    {
+      "type": "depends-on",
+      "target": "note://d2499d5b-4ceb-4d46-aa3b-18e5c9b86034/5f4f7a62-f209-47ce-9ea5-58cdbf34c480"
+    }
   ],
   "work": {
     "scope": [
@@ -27,11 +30,26 @@
       }
     ],
     "acceptanceRefs": [
-      {"uri":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7","criterionId":"AC-2"},
-      {"uri":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7","criterionId":"AC-3"},
-      {"uri":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7","criterionId":"AC-4"},
-      {"uri":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7","criterionId":"AC-5"},
-      {"uri":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7","criterionId":"AC-6"}
+      {
+        "uri": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7",
+        "criterionId": "AC-2"
+      },
+      {
+        "uri": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7",
+        "criterionId": "AC-3"
+      },
+      {
+        "uri": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7",
+        "criterionId": "AC-4"
+      },
+      {
+        "uri": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7",
+        "criterionId": "AC-5"
+      },
+      {
+        "uri": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/2baf7439-f3a2-4bcf-a451-b922db598ea7",
+        "criterionId": "AC-6"
+      }
     ],
     "verification": [
       {
@@ -41,7 +59,11 @@
         "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
         "cwd": ".",
         "program": "npx",
-        "args": ["vitest","run","tests/unit/blueprint-architecture.test.ts"]
+        "args": [
+          "vitest",
+          "run",
+          "tests/unit/blueprint-architecture.test.ts"
+        ]
       },
       {
         "id": "V-2",
@@ -50,13 +72,22 @@
         "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
         "cwd": ".",
         "program": "npm",
-        "args": ["run","typecheck"]
+        "args": [
+          "run",
+          "typecheck"
+        ]
       }
     ],
     "review": "independent"
   },
   "updated": "2026-10-08T09:06:56.496Z",
-  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/17bbe20e-f05c-470c-aee1-3f92a86369ab"
+  "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/17bbe20e-f05c-470c-aee1-3f92a86369ab",
+  "repositories": {
+    "primary": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+    "related": [
+      "d2499d5b-4ceb-4d46-aa3b-18e5c9b86034"
+    ]
+  }
 }
 ---
 

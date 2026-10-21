@@ -61,7 +61,7 @@ interface JanusIslandExpandedShellProps extends Pick<JanusIslandProps,
   onOpenMaintenance: () => void
   onCancelMaintenance: (taskId: string) => void
   onOpenBlueprintWorkbench: () => void
-  /** Expanded-stage notification surface (Note: 2026-09-13-island-notification-capsule.md). */
+  /** Expanded-stage notification surface (Note: island-hifi-optimized-alignment.md). */
   notifications: IslandNotification[]
   bannerNotification: IslandNotification | null
   trayOpen: boolean

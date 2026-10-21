@@ -27,7 +27,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/0fc34aee-911c-44f3-b873-a1272d93631a"
 }
 ---
@@ -50,7 +50,7 @@ thread, and model endpoints restored together with history.
 
 `src/main/harness/task-thread.ts` persists one thread per run under
 `.agents/.local/runs/<runId>/thread.json` with atomic temp-plus-rename
-writes. Separate [implementation observations](../../agent/desktop-implementation-history.md) carry bounded model output, tool outcomes and baseline-matched recovery. Each thread carries the review model endpoint and one entry per
+writes. Separate [implementation observations](../../agent/desktop-task-implementation.md) carry bounded model output, tool outcomes and baseline-matched recovery. Each thread carries the review model endpoint and one entry per
 attempt with the tested manifest hash, check outcomes, review verdict,
 receipt id, and repair packet. `executeDesktopXdo` ensures the thread on
 entry, feeds the last attempts as review history, and records the attempt

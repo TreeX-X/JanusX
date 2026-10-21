@@ -7,7 +7,7 @@
   "created": "2026-10-02",
   "class": "feature",
   "tags": ["blueprint","janus-chat","notes","roundtable","execution","ux"],
-  "updated": "2026-10-12T03:38:45.000Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/a09981f4-1a94-42ce-9255-2e1127cfa37b"
 }
 ---
@@ -92,7 +92,7 @@ Vertex AI 适配器的 `listModels` 返回已配置模型的身份和能力，�
 
 [文档审核循环](./blueprint-review-conversation-loop.md)记录原审核交互的验证结果。本需求将取代其中普通对话只读、必须整理并批准才写的产品要求；来源一致性和事务正确性的目标应保留，直接写入协议由第一阶段实施记录持有。旧验收结果不应改写为本设计已通过。
 
-[圆桌到实施闭环](../../../agent/roundtable-chat-harness-loop.md)提供原生 Note、任务身份和证据回流的总体约束；[圆桌成果卡](../../../agent/roundtable-artifact-card-s5.md)与[任务采纳](../../../agent/task-contract-adoption.md)提供现有接点。第三阶段应复用已有能力并核实缺口，不把旧提案直接当成已交付功能。
+[圆桌到实施闭环](../../../agent/roundtable-chat-harness-loop.md)提供原生 Note、任务身份和证据回流的总体约束；[圆桌成果卡](../../../agent/roundtable-artifact-bundle-s5.md)与[任务采纳](../../../agent/task-contract-adoption.md)提供现有接点。第三阶段应复用已有能力并核实缺口，不把旧提案直接当成已交付功能。
 
 ## Alternatives considered
 

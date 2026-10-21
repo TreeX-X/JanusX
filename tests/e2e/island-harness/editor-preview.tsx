@@ -9,6 +9,7 @@ import { installElectronApiFallback } from '../../../src/renderer/src/lib/electr
 import { initI18n, changeLanguage } from '../../../src/renderer/src/i18n'
 import '../../../src/renderer/src/styles/globals.css'
 import '../../../src/renderer/src/styles/themes.generated.css'
+import '../../../src/renderer/src/styles/theme-hovers.css'
 import '../../../src/renderer/src/components/viewers/markdown-preview.css'
 
 const params = new URLSearchParams(location.search)
@@ -22,8 +23,10 @@ const markdown = Array.from({ length: 45 }, (_, index) =>
 ).join('')
 const files: Record<string, string> = { 'C:/fixture/notes.md': markdown, 'C:/fixture/code.ts': 'export const value = 2\n' }
 const harness = {
+  baselines: {} as Record<string, string>,
   baselineCalls: 0, saves: [] as string[], links: [] as string[], closed: 0, failSave: false,
   editors: () => monaco.editor.getEditors(),
+  diffEditors: () => monaco.editor.getDiffEditors(),
   state: () => useEditorStore.getState(),
   setTheme: (theme: 'dark' | 'planche') => useThemeStore.getState().applyExternal(theme),
   open: async (name: string, content?: string) => {
@@ -55,7 +58,7 @@ Object.assign(window.electron.file, {
 Object.assign(window.electron.git, {
   fileBaseline: async (_workspace: string, path: string) => {
     harness.baselineCalls++
-    return path.endsWith('missing.ts') ? { available: false } : { available: true, content: path.endsWith('.md') ? '# Original\n' : 'export const value = 1\n' }
+    return path.endsWith('missing.ts') ? { available: false } : { available: true, content: harness.baselines[path] ?? (path.endsWith('.md') ? '# Original\n' : 'export const value = 1\n') }
   },
 })
 Object.assign(window.electron.window, { confirmEditorClose: async () => { harness.closed++ } })

@@ -2,7 +2,17 @@
 
 Android 原生测试 App 已接入 JanusX 桌面配对与真实 Claude Code 终端；本目录的合成主机仅验证 WebRTC DataChannel 的 UDP 消息往返。仅使用 ICE/STUN，不配置 TURN，不中继业务消息，手机配对不依赖账号。
 
-## 手机扫码配对（0.1.12）
+## v0.9.4 局域网测试包（Android 0.1.13-lan）
+
+分发产物：`artifacts/android-lab/JanusX-Android-0.1.13-lan.apk`。这是 debug 签名的安卓测试包，应用名 `JanusX LAN Test`，包名 `com.janusx.p2plab.lan`，Android 8.0 及以上可安装。它与原开发测试 App 使用不同包名，可同时安装；已有开发版的数据和配对不受覆盖，新 App 需要重新扫码授权。
+
+手机与电脑连接同一局域网，电脑启用设置 → 创新功能 → 远程协作控制，再从底部手机入口生成局域网二维码并批准手机。LAN 版不提供公网信令或 STUN，拒绝跨网二维码；若使用电脑开发构建，应先选择「局域网」。桌面 `npm run build:app` 默认 LAN，`npm run dev` 默认保留跨网；显式 `$env:JANUSX_REMOTE_SCOPE='develop'` 可构建跨网开发产物，完成后用 `Remove-Item Env:JANUSX_REMOTE_SCOPE` 清除当前终端覆盖值。
+
+Android 构建、安装、联调默认 `-RemoteScope lan`。跨网开发使用 `Build -RemoteScope develop`，之后 Install/Smoke 也须传同一参数，桌面须使用 develop 构建。直接 Gradle 默认 LAN，开发构建加 `-PremoteScope=develop`。同一 `app-debug.apk` 输出位置会被最近一次构建替换；Install/Smoke 会核对包名并拒绝不匹配产物。LAN 和 develop 均复用原有实现，未通过拆分分支删除跨网代码。
+
+2026-10-22（北京时间）用户确认 Android 空白屏修复并经真机验证。手机显示和界面设计优化、长期使用测试安排到 v0.9.5；长期可靠性目前未测试。具体发行边界与证据见[配对握手](../../.agents/notes/remote/android-pairing-handshake.md#v094-局域网测试发行与-v095-边界)。
+
+## 跨网开发与兼容修复历史（0.1.12）
 
 安装 `apps/android-lab/app/build/outputs/apk/debug/app-debug.apk`，标题应显示版本 0.1.12，可覆盖安装旧测试版。重启更新后的电脑 dev，在设置 → 创新功能 → 远程协作控制中开启开关，再从底部手机远程入口生成新二维码；默认选择当前工作区，也可在开启前选择其他工作区。新配置默认异网并预填已部署的 Cloudflare 信令，无需自行部署或填写域名。旧配置保留明确的 LAN/自建地址选择，空地址和临时 Quick Tunnel 地址会填充或迁移到新入口；旧 LAN 配置需手动切换异网。手机点击「扫码配对」，允许相机权限，对准电脑二维码后在电脑批准。安卓初始地址与桌面共享默认配置，扫码内容始终覆盖初始值。
 

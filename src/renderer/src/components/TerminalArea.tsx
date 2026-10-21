@@ -61,6 +61,7 @@ import {
 } from '@/lib/workspace-pane'
 import { getPaneDropHint, midpointInsertIndex, paneDropHintLabel, SPLIT_RATIO_EQUAL, type PaneDropHint } from '@/lib/pane-drop-hint'
 import { startPaneTabDrag } from '@/lib/pane-tab-drag'
+import { attachWheelScrollX, revealStripItem } from '@/lib/wheel-scroll-x'
 import { getTerminalStatusVisual } from '@/lib/terminal-sidebar-visual'
 import { getTerminalPresetMeta } from '../../../shared/terminalLaunch'
 import {
@@ -824,6 +825,16 @@ function LeafPane({
       window.removeEventListener('blur', clear)
     }
   }, [])
+
+  /*-- 标签条滚动条隐藏，竖向滚轮换轴横向滚、选中 tab 自动入视口（与文件窗口 filetab 同规） --*/
+  useEffect(() => {
+    const strip = tabStripRef.current
+    return strip ? attachWheelScrollX(strip) : undefined
+  }, [])
+  useEffect(() => {
+    const strip = tabStripRef.current
+    if (strip) revealStripItem(strip, 'data-tab-id', activeTabId)
+  }, [activeTabId, leaf.tabs])
 
   /*-- 按指针 X 落在哪个 tab 中线左侧决定插入位；被拖 tab 先摘除再算 --*/
   const computeTabInsertIndex = useCallback((clientX: number, draggedId: string | null) => {

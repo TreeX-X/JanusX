@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useAssistantPendingCount } from '@/components/knowledge/useAssistantPendingCount'
-// Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/workbench/right-dock-empty-collapse.md
+// Note: rail-only is the normal empty state with no panel toggle — see .agents/notes/workbench/right-rail-toggle-motion.md
 import { Puzzle } from 'lucide-react'
 import { getRightToolDefinitions, isRightToolEnabled, rightToolLabel } from '@/right-tools/registry'
 import type { RightToolDefinition, RightToolId } from '@/right-tools/types'

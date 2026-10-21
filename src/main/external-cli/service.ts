@@ -26,8 +26,8 @@ import { ClaudeSettingsApplier, claudeSettingsApplier } from './settings-applier
 import { isModelTerminal, terminalModelUnsupported, terminalProjectors, type TerminalProjectors } from './terminal-projectors'
 import { ExternalCliSyncStateStore, externalCliSyncStateStore } from './sync-state'
 
-// Note: 外部 CLI 版本检测与安装编排入口 —— 见 .agents/notes/terminal/cc-switch-cli-detect-install.md
-// Note: LLM 多 CLI 管理（现有 LLM Provider 借给外部 CLI，含同步状态）走同一门面，原子备份与重读校验是硬性要求 —— 见 .agents/notes/terminal/cc-switch-cli-matrix.md
+// Note: 外部 CLI 版本检测与安装编排入口 —— 见 .agents/notes/terminal/cc-switch-multi-terminal.md
+// Note: LLM 多 CLI 管理（现有 LLM Provider 借给外部 CLI，含同步状态）走同一门面，原子备份与重读校验是硬性要求 —— 见 .agents/notes/terminal/cc-switch-multi-terminal.md
 export interface ExternalCliService {
   detect(toolId: ExternalCliToolId): Promise<ExternalCliDetectResult>
   latest(toolId: ExternalCliToolId): Promise<ExternalCliLatestResult>

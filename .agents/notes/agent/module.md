@@ -6,26 +6,71 @@
   "lifecycle": "accepted",
   "created": "2026-09-26",
   "class": "architecture",
-  "tags": ["agent","harness"],
+  "tags": [
+    "agent",
+    "harness"
+  ],
   "parent": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/b2e7f160-2d77-4cc4-8828-b9cf3e5d931a",
   "relations": [
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/4f9cb92a-9bf8-55be-b2a5-bf65e5124bee"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/82db94eb-97de-5c31-a47f-0723e8c4a9d3"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/10bb564c-beff-486e-8ba3-368da1017652"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/939f0bcf-10ec-555f-bd6c-7fdf041c8047"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/dec987d8-570e-57f0-9694-3e2475a5a532"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/90af6e6c-526e-58a8-b0c1-f524a24af92b"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/4ffa1606-df23-5880-a1a5-003ab5fac9e3"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/d9f1d453-d9cc-5fba-8655-6ac51f3cb75c"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/1645e12c-3b5f-4035-99ac-ba1fb8d02836"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/350594c4-3e53-4645-aeab-57e4adeffc36"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/f013beaa-bff7-4656-b086-d4816608f905"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/3efc89cf-3aa2-4e1e-829f-a0abc4319691"},
-    {"type":"governed-by","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/11d8826d-52d7-58bb-99bd-49b6ba04dfaf"},
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/be9da2fc-754c-490b-ae77-eddfb4dcd3d2"}
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/4f9cb92a-9bf8-55be-b2a5-bf65e5124bee"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/82db94eb-97de-5c31-a47f-0723e8c4a9d3"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/10bb564c-beff-486e-8ba3-368da1017652"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/939f0bcf-10ec-555f-bd6c-7fdf041c8047"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/dec987d8-570e-57f0-9694-3e2475a5a532"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/90af6e6c-526e-58a8-b0c1-f524a24af92b"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/4ffa1606-df23-5880-a1a5-003ab5fac9e3"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/d9f1d453-d9cc-5fba-8655-6ac51f3cb75c"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/1645e12c-3b5f-4035-99ac-ba1fb8d02836"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/f013beaa-bff7-4656-b086-d4816608f905"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3efc89cf-3aa2-4e1e-829f-a0abc4319691"
+    },
+    {
+      "type": "governed-by",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/553f17a8-e800-5e4a-ac55-ae454a51825b"
+    },
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/be9da2fc-754c-490b-ae77-eddfb4dcd3d2"
+    }
   ],
   "codeRefs": [
-    {"repoId":"972afef3-2fc7-49de-a3ee-7e041225d28c","path":"src/main/harness/execution-adapter.ts","role":"entry"},
+    {
+      "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
+      "path": "src/main/harness/execution-adapter.ts",
+      "role": "entry"
+    },
     {
       "repoId": "972afef3-2fc7-49de-a3ee-7e041225d28c",
       "path": "src/main/llm/janus-agent-ports.ts",
@@ -33,7 +78,7 @@
       "role": "implementation"
     }
   ],
-  "updated": "2026-10-16T09:17:14.782Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "moduleState": "partial"
 }
 ---
@@ -56,11 +101,11 @@ Janus 模型端口与两个对话入口共用上下文、最大输出额度检�
 
 循环主干：[loop-refactor](./agent-loop-refactor.md)、[chat-alignment](./janus-agent-chat-alignment.md)、[roundtable-loop](./roundtable-chat-harness-loop.md)、[turn-guard](./chat-turn-guard-domain-s6.md)、[loop-sanitize](./chat-system-mid-conversation.md)、[feedback-parity](./janus-chat-feedback-parity.md)；切除对[removal-plan](./history/legacy-loop-removal-plan.md)与[removal-执行](./legacy-loop-removal.md)成对保留，前者为后者的 cut-list 依据。
 
-产物与契约：[artifact-bundle](./roundtable-artifact-bundle-s5.md)、[artifact-card](./roundtable-artifact-card-s5.md)、[artifact-preview](./requirements/artifact-preview.md)、[task-contract](./task-contract-adoption.md)。
+产物与契约：[artifact-bundle](./roundtable-artifact-bundle-s5.md)、[artifact-card](./roundtable-artifact-bundle-s5.md)、[artifact-preview](./requirements/artifact-preview.md)、[task-contract](./task-contract-adoption.md)。
 
-S6 维护面五件套：[discussion](./maintenance-discussion-unified-s6.md)、[guard](./maintenance-harness-guard-s6.md)、[bridge](./maintenance-harness-bridge-s6.md)、[apply](./maintenance-harness-apply-s6.md)、[shared-render](./maintenance-panel-shared-render-s6.md)。
+S6 维护面五件套：[discussion](./maintenance-discussion-unified-s6.md)、[guard](./maintenance-harness-apply-s6.md)、[bridge](./maintenance-harness-apply-s6.md)、[apply](./maintenance-harness-apply-s6.md)、[shared-render](./maintenance-discussion-unified-s6.md)。
 
-主线与执行器：[repo-identity-S7](../blueprint/workspaces/harness-repo-identity-s7.md)、[execution-adapter-S8](./harness-execution-adapter-s8.md)、[portable-results](./harness-portable-results.md)、[s9-readiness](./harness-s9-readiness.md)、[undo](../blueprint/maintenance/harness-undo.md)、[xdo-executor](./desktop-xdo-executor.md)、[review-repair](./independent-review-repair.md)、[handoff-brief](./handoff-brief.md)、[verify-harden](../desktop/verify-pipeline-harden.md)、[notifications](./agent-notifications.md)。
+主线与执行器：[repo-identity-S7](../blueprint/workspaces/harness-repo-identity-s7.md)、[execution-adapter-S8](./harness-execution-adapter-s8.md)、[portable-results](./harness-execution-adapter-s8.md)、[s9-readiness](./harness-s9-readiness.md)、[undo](../blueprint/maintenance/harness-undo.md)、[xdo-executor](./desktop-delegated-modes.md)、[review-repair](./independent-review-repair.md)、[handoff-brief](./handoff-brief.md)、[verify-harden](../desktop/verify-pipeline-harden.md)、[notifications](./agent-notifications.md)。
 
 PI 运行时三篇为反转续接非重复：[context-recognition](../terminal/janus-pi-context-recognition.md)否决 hook 在先，[hook-management](../terminal/janus-pi-hook-management.md)声明理由过时并建 hook 在后，均以本域为父。
 

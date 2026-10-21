@@ -1,5 +1,42 @@
 import { expect, test } from '@playwright/test'
 
+test('an open hover card follows rail targets without another dwell delay', async ({ page }) => {
+  await page.goto('/tool-palette.html')
+  const shell = page.getByTestId('right-tool-panel-shell')
+  await page.locator('#right-tool-rail-files').click()
+  await expect(shell).toHaveAttribute('data-visible', 'false')
+  await page.mouse.move(400, 40)
+  // Fully release the original docked panel before testing the initial dwell.
+  await page.waitForTimeout(350)
+  await page.clock.install()
+  await page.clock.pauseAt(new Date())
+
+  await page.locator('#right-tool-rail-sessions').hover()
+  await page.clock.runFor(200)
+  await expect(shell).toHaveAttribute('aria-hidden', 'true')
+  await page.clock.runFor(40)
+  await expect(page.locator('#right-tool-panel-sessions')).toBeVisible()
+
+  // Each target gets only two frames, well below the initial 220ms dwell.
+  for (const id of ['git', 'files', 'sessions', 'git', 'sessions']) {
+    await page.locator(`#right-tool-rail-${id}`).hover()
+    await page.clock.runFor(32)
+    await expect(page.locator(`#right-tool-panel-${id}`)).toBeVisible()
+    await expect(page.locator(`#right-tool-rail-${id}`)).toHaveAttribute('data-visual-active', 'true')
+    await expect(shell).toHaveAttribute('data-visible', 'true')
+  }
+  // A pending leave cannot dismiss the next target, even during exit.
+  await page.mouse.move(400, 40)
+  await page.clock.runFor(200)
+  await expect(shell).toHaveAttribute('aria-hidden', 'true')
+  await page.locator('#right-tool-rail-git').hover()
+  await page.clock.runFor(32)
+  await expect(page.locator('#right-tool-panel-git')).toBeVisible()
+  await page.clock.runFor(240)
+  await expect(shell).toHaveAttribute('data-visible', 'true')
+  expect(await page.evaluate(() => (window as any).builtinExtensionFixture.state().active)).toBe('files')
+})
+
 for (const theme of ['planche', 'dark']) {
   test(`collapsed tools preview interactively and pin without remounting in ${theme}`, async ({ page }) => {
     await page.goto(`/tool-palette.html?theme=${theme}`)

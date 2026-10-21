@@ -188,7 +188,7 @@ function terminalPresetLabel(preset: Terminal['preset'], t: (key: string) => str
 }
 
 // Preset 图标走共享 TerminalPresetIcon；侧栏单独修正 Codex 在深色主题的对比度。
-// Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/terminal/terminal-status-ring.md
+// Note: status is a ring with per-state shape and motion; the label lives only in title/aria-label — see .agents/notes/terminal/terminal-status-display.md
 // 形态走共享 TerminalStatusLight（与中部 tab 同一盏灯），此处只保留 tooltip 与 20px 点击区。
 function TerminalStatusIndicator({ status }: { status: Terminal['status'] }) {
   const { t } = useI18n('terminal')
@@ -240,7 +240,7 @@ function worktreeDisplayName(path: string, branch: string | null): string {
 
 // Note: terminals are level-3 items grouped under their worktree (hi-fi:
 // design/session-mgmt-hifi.html `.terms` block follows each `.ws` row) — see
-// .agents/notes/terminal/sidebar-terminal-hierarchy.md
+// .agents/notes/terminal/terminal-sidebar-states.md
 /** Terminal cwd belongs to a worktree path across git/native spellings and case. */
 function isCwdWithinWorktree(cwd: string, base: string): boolean {
   const norm = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '')
@@ -542,7 +542,7 @@ function WorktreeSubList({
               aria-current={focused && isActiveWorkspace ? 'true' : undefined}
               onClick={(event) => {
                 event.stopPropagation()
-                // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/sessions/worktrees/worktree-file-tree-scope.md
+                // Note: worktree switch rescopes the file tree with a sweep — see .agents/notes/sessions/worktrees/worktree-sidebar-scoping.md
                 void switchActiveWorktree(workspaceId, worktree.path)
               }}
               onKeyDown={(event) => {

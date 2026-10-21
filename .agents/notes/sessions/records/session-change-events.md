@@ -7,12 +7,17 @@
   "created": "2026-09-22",
   "class": "bug-fix",
   "relations": [
-    {"type":"related-to","target":"note://972afef3-2fc7-49de-a3ee-7e041225d28c/7f0d3ec5-50e4-46df-85b4-f0b75e589df0"}
+    {
+      "type": "related-to",
+      "target": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/d216f355-f951-4f60-b209-7bb98b08dcbf"
+    }
   ],
   "extensions": {
     "r5Migration": {
       "sourceHash": "e3e1dd9b36ebd019b2dc918f6978100fb1fcab30cf9f52d135328e50c98c1802",
-      "repairs": ["relations[0].reason"],
+      "repairs": [
+        "relations[0].reason"
+      ],
       "originalRelations": [
         {
           "type": "related-to",
@@ -27,7 +32,9 @@
       "originalBodyHash": "66b4461799b4bdd982abf0fdbbd9c34728789af1fd7e9816b2ff4f7f86dca404",
       "category": "formal",
       "reason": "Retains the source decision in implemented lifecycle; body documents Session change events on conversation writes. No age-based archival.",
-      "edits": ["Removed redundant Agent Note title prefix"],
+      "edits": [
+        "Removed redundant Agent Note title prefix"
+      ],
       "baseline": {
         "revision": "d59d9a8808cf2e3a2f02520144d8371a20ebdf56",
         "path": ".agents/notes/implemented/bug-fix/2026-09-22-session-change-events.md",
@@ -36,7 +43,7 @@
       }
     }
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/0cb931e1-e33c-4e38-a9d9-9d652796d935"
 }
 ---

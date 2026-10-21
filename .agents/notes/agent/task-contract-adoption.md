@@ -30,7 +30,7 @@
       }
     }
   },
-  "updated": "2026-10-08T02:54:24.778Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/95ec5f71-33e3-4f71-aa05-d3e725c33b10"
 }
 ---
@@ -47,7 +47,7 @@ The task run panel reads the current task and offers a contract editor for draft
 
 The editor currently targets the selected primary repository. Scope and verification must remain in that repository. External acceptance references must resolve to accepted requirements or initiatives in the same repository; task-local criteria are included automatically. Requirement references determine implements relations, avoiding another independently edited coverage list. Required verification must include at least one concrete step. Placeholder scope or criteria, unknown criteria, escaping paths and malformed inputs are refused before writing. Execution readiness remains subject to the shared baseline validator.
 
-Entry points are the [adoption service](../../../src/main/harness/task-adoption.ts), [IPC handlers](../../../src/main/ipc/harness-handlers.ts), [contract editor](../../../src/renderer/src/components/janus/TaskContractEditor.tsx) and [run panel](../../../src/renderer/src/components/janus/HarnessRunPanel.tsx). Formal validity and closeout continue to use [portable task results](./harness-portable-results.md), not the adoption lifecycle or UI checkboxes.
+Entry points are the [adoption service](../../../src/main/harness/task-adoption.ts), [IPC handlers](../../../src/main/ipc/harness-handlers.ts), [contract editor](../../../src/renderer/src/components/janus/TaskContractEditor.tsx) and [run panel](../../../src/renderer/src/components/janus/HarnessRunPanel.tsx). Formal validity and closeout continue to use [portable task results](./harness-execution-adapter-s8.md), not the adoption lifecycle or UI checkboxes.
 
 ## Alternatives considered
 

@@ -59,7 +59,7 @@
     ],
     "review": "independent"
   },
-  "updated": "2026-10-08T09:06:56.496Z",
+  "updated": "2026-10-21T15:37:53.642Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/a09981f4-1a94-42ce-9255-2e1127cfa37b"
 }
 ---
@@ -72,7 +72,7 @@
 
 ## Scope
 
-实现采用[主动作栏](../blueprint-action-bar.md)的同栏审核视图与[文件审批](../blueprint-maintenance-approval-gap.md)的宿主预览事务。范围包括控制器整理请求、原文上下文传递、审核呈现与测试；手工编辑草稿和真实供应商质量评估不在本任务范围。
+实现采用[主动作栏](../blueprint-dispatch-panel.md)的同栏审核视图与[文件审批](../blueprint-maintenance-approval-gap.md)的宿主预览事务。范围包括控制器整理请求、原文上下文传递、审核呈现与测试；手工编辑草稿和真实供应商质量评估不在本任务范围。
 
 ## Acceptance criteria
 

@@ -1,4 +1,4 @@
-// Note: JanusX task execution lands on the neutral run kernel here — see .agents/notes/agent/desktop-xdo-executor.md
+// Note: JanusX task execution lands on the neutral run kernel here — see .agents/notes/agent/desktop-delegated-modes.md
 /**
  * @file Harness execution adapter (S8-JanusX)
  * @description JanusX-side entry to the neutral run kernel: prepare and start
@@ -48,7 +48,7 @@ import { join } from 'node:path'
 import { ensureTaskThread, loadTaskThread } from './task-thread'
 import { removeTaskTranscript } from './task-transcript'
 
-// Note: desktop and terminal read the same portable proof - see .agents/notes/agent/harness-portable-results.md
+// Note: desktop and terminal read the same portable proof - see .agents/notes/agent/harness-execution-adapter-s8.md
 function resultState(result: TaskResult, run?: HarnessRun): HarnessRunState {
   const execution = result.execution!
   return { runId: run?.runId ?? result.taskUri, taskUri: result.taskUri, mode: execution.mode, state: execution.state,

@@ -5,7 +5,7 @@ interface ImageViewerProps {
 }
 
 export function ImageViewer({ base64, mimeType, fileName }: ImageViewerProps) {
-  // Shared fit behavior: .agents/notes/workbench/product-preview-p0.md
+  // Shared fit behavior: .agents/notes/workbench/product-workspace.md
   const src = `data:${mimeType};base64,${base64}`
 
   return (

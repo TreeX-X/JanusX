@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-18",
-  "updated": "2026-10-19T11:41:57.150Z",
+  "updated": "2026-10-21T17:13:38Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/3a4dc304-70dd-49e4-b46a-ee2fc0fbc83e"
 }
 ---
@@ -76,7 +76,7 @@ README 结构与 10 条功能 GIF 已按用户要求落版，S1/S2/I/L/B1/B2/U/C
 
 动效只做一次眨眼或小幅视线变化，状态环若使用须与产品真实状态一致。SVG 无动画时仍保留完整形象；支持 reduced-motion，必要时提供 PNG 后备。链接放 Markdown 外层，不能依赖 img 内 SVG 的按钮可以点击。验收同时看 320px 窄屏、GitHub 明暗背景及静止帧。
 
-首版候选已按用户要求制作：[胶囊 SVG](../../../wiki/assets/readme/janus-header-capsule.svg)、动态预览页 (`design/Janus-README-Capsule-Preview.html`; local, untracked)、[明暗背景预览图](../../../wiki/assets/readme/janus-header-capsule-preview.png)。胶囊按软件 52×26、眼睛 8×10、眼距 3 的几何放大三倍，采用纸色墨线与朱红 X；8 秒循环内一次轻眨，减少动态时静止。字标随阅读背景适配，胶囊保持默认主题。XML 解析通过，Playwright 渲染并目视检查 1000px 与 375px 页面；尚未在 GitHub 线上验证。胶囊形象已获用户认可；随后已将胶囊与重新设计的 Star 邀请动画接入 README，实际实现见 readme-janus-header.md。上述胶囊独立预览保留作对照，其余功能演示改版仍待实施。
+首版候选已按用户要求制作：[胶囊 SVG](https://github.com/TreeX-X/JanusX/blob/v0.9.3/wiki/assets/readme/janus-header-capsule.svg)、动态预览页 (`design/Janus-README-Capsule-Preview.html`; local, untracked)、[明暗背景预览图](https://github.com/TreeX-X/JanusX/blob/v0.9.3/wiki/assets/readme/janus-header-capsule-preview.png)。胶囊按软件 52×26、眼睛 8×10、眼距 3 的几何放大三倍，采用纸色墨线与朱红 X；8 秒循环内一次轻眨，减少动态时静止。字标随阅读背景适配，胶囊保持默认主题。XML 解析通过，Playwright 渲染并目视检查 1000px 与 375px 页面；尚未在 GitHub 线上验证。胶囊形象已获用户认可；随后已将胶囊与重新设计的 Star 邀请动画接入 README，实际实现见 readme-janus-header.md。上述胶囊独立预览保留作对照，其余功能演示改版仍待实施。
 
 ## 演示素材与分镜清单
 
