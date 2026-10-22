@@ -214,7 +214,7 @@ export function Titlebar() {
           JanusX
         </span>
 
-        {/* 新版徽标：仅发现新版/下载中/已就绪时出现，已就绪点击直接重启安装 */}
+        {/* 更新状态入口：点击关于页查看进度、重试或选择安装。 */}
         <UpdaterBadge onOpenSettings={handleUpdaterBadgeClick} />
 
         {/* 隐藏的后缀代码（悬浮时滑出�?*/}

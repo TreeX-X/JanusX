@@ -51,4 +51,28 @@ describe('Windows publication gate', () => {
     })).toThrow('upload failed')
     expect(actions).toEqual(['create', 'upload'])
   })
+  it('replaces only after validation and preserves the release identity and other attachments', () => {
+    const { root } = fixture(); const calls: { command: string; args: string[] }[] = []
+    publishWin(root, (command: string, args: string[]) => { calls.push({ command, args }) }, { replaceExisting: true })
+    expect(calls[0].args).toContain('--portable')
+    expect(calls.slice(1).map(({ args }) => args[1])).toEqual(['edit', 'upload', 'edit'])
+    expect(calls[1].args).toContain('--draft=true')
+    expect(calls[2].args).toContain('--clobber')
+    expect(calls[2].args.slice(3, 7)).toEqual(releaseFiles(root).files)
+    expect(calls[3].args).toContain('--draft=false')
+  })
+  it('does not hide an existing release when replacement validation fails', () => {
+    const { root, directory, setup } = fixture(); const calls: string[] = []
+    writeFileSync(join(directory, setup), 'different')
+    expect(() => publishWin(root, (command: string) => { calls.push(command) }, { replaceExisting: true })).toThrow('hash and size')
+    expect(calls).toEqual([process.execPath])
+  })
+  it('keeps a replacement private if uploading fails', () => {
+    const { root } = fixture(); const actions: string[][] = []
+    expect(() => publishWin(root, (command: string, args: string[]) => {
+      if (command === 'gh') { actions.push(args); if (args[1] === 'upload') throw new Error('upload failed') }
+    }, { replaceExisting: true })).toThrow('upload failed')
+    expect(actions).toHaveLength(2)
+    expect(actions[0]).toContain('--draft=true')
+  })
 })

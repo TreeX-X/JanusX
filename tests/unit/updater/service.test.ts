@@ -9,7 +9,7 @@ vi.mock('electron-updater', async () => {
   // Match native ESM loading of the CommonJS package: autoUpdater is on default only.
   return { default: { autoUpdater: Object.assign(new EventEmitter(), {
     checkForUpdates: vi.fn(), downloadUpdate: vi.fn(), quitAndInstall: vi.fn(),
-    autoDownload: true, autoInstallOnAppQuit: true, logger: null,
+    autoDownload: true, autoInstallOnAppQuit: true, disableDifferentialDownload: false, logger: null,
   }) } }
 })
 
@@ -28,6 +28,7 @@ beforeEach(() => {
   autoUpdater.removeAllListeners()
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.disableDifferentialDownload = false
   vi.mocked(autoUpdater.checkForUpdates).mockImplementation(async () => {
     autoUpdater.emit('checking-for-update')
     autoUpdater.emit('update-available', info)
@@ -65,6 +66,7 @@ describe('user-controlled updater', () => {
     expect(state.releaseNotes).toBe('Fix session recovery')
     expect(autoUpdater.autoDownload).toBe(false)
     expect(autoUpdater.autoInstallOnAppQuit).toBe(false)
+    expect(autoUpdater.disableDifferentialDownload).toBe(true)
     expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled()
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
   })
@@ -77,7 +79,7 @@ describe('user-controlled updater', () => {
     expect((await service.downloadUpdate()).phase).toBe('downloaded')
     expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
-    expect(view.events.some(event => event.state.phase === 'downloading' && event.state.downloadPercent === 38)).toBe(true)
+    expect(view.events.some(event => event.state.phase === 'downloading' && event.state.downloadPercent === 37)).toBe(true)
     expect(view.state).toEqual(service.getState())
     expect(await service.quitAndInstall()).toEqual({ ok: true })
     expect(autoUpdater.quitAndInstall).toHaveBeenCalledWith(false, true)
@@ -96,6 +98,29 @@ describe('user-controlled updater', () => {
     expect(await service.downloadUpdate()).toMatchObject({ phase: 'downloaded', error: null, downloadPercent: 100 })
     expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(2)
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('waits for verified completion at 100%, rejects a bad checksum, and resets only on explicit retry', async () => {
+    const service = new UpdateService()
+    await service.checkForUpdates()
+    vi.mocked(autoUpdater.downloadUpdate).mockImplementationOnce(async () => {
+      autoUpdater.emit('download-progress', { percent: 99.9 })
+      expect(service.getState()).toMatchObject({ phase: 'downloading', downloadPercent: 99 })
+      autoUpdater.emit('download-progress', { percent: 100 })
+      expect(service.getState()).toMatchObject({ phase: 'downloading', downloadPercent: 100 })
+      expect(await service.quitAndInstall()).toEqual({ ok: false, error: 'not-downloaded' })
+      throw new Error('sha512 checksum mismatch')
+    })
+    expect(await service.downloadUpdate()).toMatchObject({ phase: 'error', error: 'sha512 checksum mismatch' })
+    expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+    vi.mocked(autoUpdater.downloadUpdate).mockImplementationOnce(async () => {
+      expect(service.getState()).toMatchObject({ phase: 'downloading', downloadPercent: 0, error: null })
+      autoUpdater.emit('update-downloaded', info)
+      return ['isolated-installer.exe']
+    })
+    expect(await service.downloadUpdate()).toMatchObject({ phase: 'downloaded', downloadPercent: 100 })
+    expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(2)
   })
 
   it('keeps a downloaded update installable after an actual failed metadata recheck', async () => {

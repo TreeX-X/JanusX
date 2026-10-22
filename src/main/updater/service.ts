@@ -166,6 +166,9 @@ export class UpdateService {
       const { autoUpdater } = updaterModule
       autoUpdater.autoDownload = false
       autoUpdater.autoInstallOnAppQuit = false
+      // 本地安装包可能与同版本的发布包不同；增量合并会在 100% 校验失败后重下全包。
+      // 直接下载完整安装包，仍由 electron-updater 校验 SHA512 后才允许安装。
+      autoUpdater.disableDifferentialDownload = true
       // 现场排障唯一依据：file transport 落 userData/logs，console 同步一份。
       autoUpdater.logger = log
       this.wireEvents(autoUpdater)
@@ -197,7 +200,10 @@ export class UpdateService {
       this.patch({ phase: 'up-to-date', availableVersion: null, downloadPercent: null, releaseNotes: null, error: null })
     })
     updater.on('download-progress', (progress) => {
-      const percent = typeof progress?.percent === 'number' ? Math.round(progress.percent) : null
+      // 100 只表示传输结束，update-downloaded 才表示校验完成、允许安装。
+      const percent = typeof progress?.percent === 'number' && Number.isFinite(progress.percent)
+        ? Math.max(0, Math.min(100, Math.floor(progress.percent)))
+        : null
       this.patch({ phase: 'downloading', downloadPercent: percent, error: null })
     })
     updater.on('update-downloaded', (info) => {

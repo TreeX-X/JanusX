@@ -206,7 +206,14 @@ function StatusLine({ state }: { state: UpdaterState | null }) {
         </>
       )
     case 'downloading':
-      return <div className={styles.status}>{t('settings:updater.downloading', { percent: state.downloadPercent ?? 0 })}</div>
+      return (
+        <div className={aboutStyles.downloadStatus}>
+          <div className={styles.status} role="status">
+            {state.downloadPercent === 100 ? t('settings:updater.verifying') : t('settings:updater.downloading', { percent: state.downloadPercent ?? 0 })}
+          </div>
+          <progress className={aboutStyles.downloadProgress} max={100} value={state.downloadPercent ?? 0} aria-label={t('settings:updater.download')} />
+        </div>
+      )
     case 'downloaded':
       return (
         <>

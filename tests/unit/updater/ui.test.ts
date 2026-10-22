@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, it } from 'vitest'
 import { chromium, type Browser, type Page } from '@playwright/test'
 import { build } from 'esbuild'
+import { readFileSync } from 'node:fs'
 import en from '../../../src/renderer/src/i18n/locales/en/settings.json'
 import zh from '../../../src/renderer/src/i18n/locales/zh-CN/settings.json'
 
@@ -42,7 +43,7 @@ beforeAll(async () => {
         openReleases:async()=>{},openRepository:async()=>{}
       }}
       i18n.use(initReactI18next).init({lng:window.language??'en',resources:{en:{settings:en},'zh-CN':{settings:zh}},interpolation:{escapeValue:false}}).then(()=>{
-        createRoot(document.getElementById('root')).render(<><UpdaterBadge onOpenSettings={()=>window.calls.push('open-settings')}/><UpdaterSettings/></>)
+        createRoot(document.getElementById('root')).render(<><header style={{height:38,display:'flex',alignItems:'center',gap:8,padding:'0 12px',borderBottom:'1px solid var(--shell-border)'}}><span>JanusX</span><UpdaterBadge onOpenSettings={()=>window.calls.push('open-settings')}/></header><main style={{padding:24}}><UpdaterSettings/></main></>)
       })
     ` },
     bundle: true, write: false, outfile: 'updater-test.js', jsx: 'automatic', format: 'iife',
@@ -53,6 +54,38 @@ beforeAll(async () => {
   })
   script = result.outputFiles.find(file => file.path.endsWith('.js'))!.text
   css = result.outputFiles.find(file => file.path.endsWith('.css'))!.text
+})
+
+it.each(['planche', 'dark'])('shows progress, verification, retry and readiness clearly in %s', async theme => {
+  const page = await browser.newPage({ viewport: { width: 520, height: 350 }, reducedMotion: 'reduce' })
+  try {
+    await mount(page, { language: 'zh-CN', initial: { phase: 'downloading', availableVersion: '0.9.4', downloadPercent: 42 } })
+    await page.addStyleTag({ content: readFileSync('src/renderer/src/styles/themes.generated.css', 'utf8') + '\nbody{margin:0;background:var(--shell-canvas);color:var(--shell-text);font:12px system-ui}' })
+    await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme)
+    const badge = page.locator('header button')
+    await expect.poll(() => badge.textContent()).toContain('42%')
+    expect(await page.getByRole('progressbar').getAttribute('value')).toBe('42')
+    expect(await badge.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    await badge.focus()
+    await page.keyboard.press('Enter')
+    expect(await page.evaluate(() => (window as any).calls)).toEqual(['open-settings'])
+    await page.screenshot({ path: `artifacts/updater-20261022/${theme}-downloading.png` })
+    await page.evaluate(() => (window as any).emitState({ downloadPercent: 100 }))
+    await expect.poll(() => badge.textContent()).toContain(zh.updater.verifying)
+    expect(await page.getByRole('status').textContent()).toBe(zh.updater.verifying)
+    expect(await page.getByRole('button', { name: zh.updater.restart, exact: true }).count()).toBe(0)
+    await page.screenshot({ path: `artifacts/updater-20261022/${theme}-verifying.png` })
+    await page.evaluate(() => (window as any).emitState({ phase: 'error', error: 'sha512 checksum mismatch' }))
+    await expect.poll(() => badge.textContent()).toBe(zh.updater.badge.retryLabel)
+    await page.getByRole('button', { name: zh.updater.retryDownload, exact: true }).waitFor()
+    await badge.click()
+    expect(await page.evaluate(() => (window as any).calls)).toEqual(['open-settings', 'open-settings'])
+    await page.screenshot({ path: `artifacts/updater-20261022/${theme}-failed.png` })
+    await page.evaluate(() => (window as any).emitState({ phase: 'downloaded', error: null }))
+    await expect.poll(() => badge.textContent()).toBe(zh.updater.badge.downloadedLabel)
+    await page.getByRole('button', { name: zh.updater.restart, exact: true }).waitFor()
+    await page.screenshot({ path: `artifacts/updater-20261022/${theme}-ready.png` })
+  } finally { await page.close() }
 })
 afterAll(async () => { await browser?.close() })
 

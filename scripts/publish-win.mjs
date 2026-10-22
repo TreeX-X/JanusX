@@ -27,17 +27,21 @@ export function releaseFiles(root, outputDirectory) {
   return { tag: `v${pkg.version}`, repo: `${config.publish.owner}/${config.publish.repo}`, prerelease, files: names.map((name) => join(directory, name)) }
 }
 
-export function publishWin(root = process.cwd(), run = (command, args) => execFileSync(command, args, { cwd: root, stdio: 'inherit' })) {
+export function publishWin(root = process.cwd(), run = (command, args) => execFileSync(command, args, { cwd: root, stdio: 'inherit' }), { replaceExisting = false } = {}) {
   run(process.execPath, [join(root, 'scripts/check-packaged-runtime.mjs'), '--portable'])
   const release = releaseFiles(root)
   const common = ['--repo', release.repo]
-  // A draft keeps partial uploads off the update feed. Never overwrite an
-  // existing release: gh create fails if this tag already has a release.
-  run('gh', ['release', 'create', release.tag, '--draft', '--verify-tag', '--title', release.tag, '--notes', '', ...(release.prerelease ? ['--prerelease'] : []), ...common])
-  run('gh', ['release', 'upload', release.tag, ...release.files, ...common])
+  // Replacement is an explicit maintainer exception. Keep the original notes
+  // and unrelated attachments, and hide the feed until all Windows files agree.
+  if (replaceExisting) {
+    run('gh', ['release', 'edit', release.tag, '--draft=true', ...common])
+  } else {
+    run('gh', ['release', 'create', release.tag, '--draft', '--verify-tag', '--title', release.tag, '--notes', '', ...(release.prerelease ? ['--prerelease'] : []), ...common])
+  }
+  run('gh', ['release', 'upload', release.tag, ...release.files, ...(replaceExisting ? ['--clobber'] : []), ...common])
   run('gh', ['release', 'edit', release.tag, '--draft=false', `--latest=${!release.prerelease}`, ...common])
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { publishWin() } catch (error) { console.error(error.message); process.exitCode = 1 }
+  try { publishWin(process.cwd(), undefined, { replaceExisting: process.argv.includes('--replace-existing') }) } catch (error) { console.error(error.message); process.exitCode = 1 }
 }

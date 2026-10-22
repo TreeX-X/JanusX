@@ -12,6 +12,11 @@ on:
         description: Existing version tag to build with the current runtime verifier
         required: true
         type: string
+      replace_existing:
+        description: Explicitly replace Windows assets of an existing release after validation
+        required: false
+        default: false
+        type: boolean
   push:
     tags:
       - 'v*'
@@ -130,6 +135,10 @@ jobs:
           if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
             Copy-Item -LiteralPath ../release-tooling/scripts/check-packaged-runtime.mjs -Destination scripts/check-packaged-runtime.mjs
           }
-          npm run publish:win
+          if ('${{ inputs.replace_existing }}' -eq 'true') {
+            npm run publish:win -- --replace-existing
+          } else {
+            npm run publish:win
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

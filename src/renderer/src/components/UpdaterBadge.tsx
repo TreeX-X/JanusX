@@ -1,8 +1,9 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { ArrowUpCircle, Download, Loader2 } from 'lucide-react'
+import { ArrowUpCircle, Download, Loader2, RotateCw } from 'lucide-react'
 import { useI18n } from '@/i18n/useI18n'
 import type { UpdaterState } from '../../../shared/ipc/updater'
 import { applyUpdaterEvent, resolveUpdaterBadge } from '@/lib/updater-badge'
+import styles from './UpdaterBadge.module.css'
 
 /**
  * 标题栏 JanusX 右侧的更新徽标：仅在有新版动作价值时出现。
@@ -31,11 +32,18 @@ export function UpdaterBadge({ onOpenSettings }: { onOpenSettings: () => void })
   const badge = resolveUpdaterBadge(state)
   if (!badge) return null
 
-  const title = badge.kind === 'available'
+  const verifying = badge.kind === 'downloading' && badge.percent === 100
+  const retry = state?.phase === 'error'
+  const title = retry ? t('settings:updater.badge.error') : verifying ? t('settings:updater.verifying') : badge.kind === 'available'
     ? t('settings:updater.badge.available', { version: badge.version ?? '' })
     : badge.kind === 'downloading'
       ? t('settings:updater.badge.downloading', { percent: badge.percent ?? 0 })
       : t('settings:updater.badge.downloaded', { version: badge.version ?? '' })
+  const label = retry ? t('settings:updater.badge.retryLabel')
+    : verifying ? t('settings:updater.verifying')
+      : badge.kind === 'available' ? t('settings:updater.badge.availableLabel')
+        : badge.kind === 'downloaded' ? t('settings:updater.badge.downloadedLabel')
+          : t('settings:updater.badge.downloadingLabel')
 
   const handleClick = (event: MouseEvent) => {
     event.stopPropagation()
@@ -48,17 +56,16 @@ export function UpdaterBadge({ onOpenSettings }: { onOpenSettings: () => void })
       title={title}
       aria-label={title}
       onClick={handleClick}
-      className="relative flex items-center justify-center w-5 h-5 rounded-full cursor-pointer hover:brightness-125 active:brightness-90"
-      style={{
-        background: badge.kind === 'downloaded' ? 'rgba(255,120,48,0.22)' : 'rgba(255,120,48,0.12)',
-        border: '1px solid rgba(255,120,48,0.55)',
-      }}
+      className={styles.badge}
+      data-state={retry ? 'error' : verifying ? 'verifying' : badge.kind}
     >
-      {badge.kind === 'available' && <Download size={11} color="#ff7830" aria-hidden="true" />}
-      {badge.kind === 'downloading' && <Loader2 size={11} color="#ff7830" className="animate-spin" aria-hidden="true" />}
-      {badge.kind === 'downloaded' && <ArrowUpCircle size={12} color="#ff7830" aria-hidden="true" />}
-      {badge.kind === 'downloaded' && (
-        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full animate-ping" style={{ background: '#ff7830' }} />
+      {retry ? <RotateCw size={12} aria-hidden="true" /> : badge.kind === 'available' && <Download size={12} aria-hidden="true" />}
+      {badge.kind === 'downloading' && <Loader2 size={12} className={styles.spinner} aria-hidden="true" />}
+      {badge.kind === 'downloaded' && <ArrowUpCircle size={12} aria-hidden="true" />}
+      <span>{label}</span>
+      {badge.kind === 'downloading' && !verifying && <span className={styles.percent}>{badge.percent ?? 0}%</span>}
+      {badge.kind === 'downloading' && (
+        <span className={styles.track} aria-hidden="true"><span style={{ width: `${badge.percent ?? 0}%` }} /></span>
       )}
     </button>
   )

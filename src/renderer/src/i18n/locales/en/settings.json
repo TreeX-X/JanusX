@@ -165,6 +165,7 @@
     "download": "Download update",
     "retryDownload": "Retry download",
     "downloading": "Downloading {{percent}}%",
+    "verifying": "Verifying installer…",
     "downloaded": "Version {{version}} is downloaded. Click Restart and install.",
     "restart": "Restart and install",
     "error": {
@@ -180,6 +181,11 @@
       "hint": "Checks shortly after launch and every 6 hours. Downloads and installation require your confirmation."
     },
     "badge": {
+      "availableLabel": "Update available",
+      "downloadingLabel": "Downloading",
+      "downloadedLabel": "Ready to install",
+      "retryLabel": "Download failed",
+      "error": "Update download failed, click to view and retry",
       "available": "New version {{version}} found, click to view",
       "downloading": "Downloading update {{percent}}%, click to view",
       "downloaded": "Version {{version}} is ready, click to view and install"
