@@ -48,7 +48,7 @@
   if (!hero || !stage || !context || !workspace) return;
 
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-  const compact = matchMedia('(max-width: 855px), (max-height: 620px)');
+  const compact = matchMedia('(max-width: 855px), (max-height: 768px)');
   const mouse = matchMedia('(hover: hover) and (pointer: fine)');
   const mask = document.createElement('canvas');
   mask.width = 520;
