@@ -5,7 +5,7 @@
   "kind": "idea",
   "lifecycle": "draft",
   "created": "2026-10-11",
-  "updated": "2026-10-23T12:48:00Z",
+  "updated": "2026-10-23T13:35:00Z",
   "module": "note://972afef3-2fc7-49de-a3ee-7e041225d28c/bdd26e4e-8207-4c1f-8ea3-21f450ee7570"
 }
 ---
@@ -20,7 +20,7 @@ Git Bash 应检测 Git for Windows 的 `bash.exe` 并在嵌入式 PTY 中启动�
 
 ## Agreed direction
 
-Windows 启动测试版 `0.9.4+win10fix.1` 取消打包层强制管理员清单，终端继承应用的调用者权限，普通桌面启动时不再自动提权。该候选用于验证 Windows 10 的 GPU 子进程创建失败，发布与启动验证见 [桌面分发记录](../desktop/reproducible-verification.md)。下文 2026-10-14 的固定提权记录描述原正式包，不代表此测试版行为。
+v0.9.4 的 Windows 启动修复取消打包层强制管理员清单，终端继承应用的调用者权限，普通桌面启动时不再自动提权。用户已确认候选包在故障 Windows 10 上可以打开，并授权同步到正式 v0.9.4；发布与启动验证见 [桌面分发记录](../desktop/reproducible-verification.md)。下文 2026-10-14 的固定提权记录描述替换前的包，不代表当前行为。
 
 用户已认可扩展现有第一个 Shell 卡片的方向。卡片保留 Shell 名称和图标，并显示当前默认 shell；点击主体直接启动默认项，始终可见的下拉箭头提供具体 shell 的临时选择。Git Bash 作为普通终端的 shell 选项，不新增与 Claude、Codex 并列的终端类型卡片。空白页卡片与已有终端的“新建终端”菜单提供一致的选择入口，创建后的终端显示实际 shell 名称。
 
